@@ -8968,6 +8968,11 @@ and the endurance run on the example passed. A partial coverage matrix cannot pa
       finding is fixed.
 - [ ] Context-free agents, given only published docs and package, install and set up controller,
       UI copy and agent, run the demo and recover a failure; every sticking point is fixed.
+- [ ] `etl-craft.dev` has a home page (owner, 2026-11-01): what etl-craft is, how to install
+      it, and links to the docs at `docs.etl-craft.dev` and the repository. It is a static page
+      served as the org's GitHub Pages site on the apex domain; the docs site stays separate.
+- [ ] The UI shows the running package version on every page (owner, 2026-11-01): one line at
+      the foot of the profile menu, linking to About, read from the version About already shows.
 
 ## After 0.9.0
 
