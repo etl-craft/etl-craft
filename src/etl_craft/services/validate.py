@@ -89,6 +89,7 @@ from etl_craft.services.lineage import (
     table_name,
 )
 from etl_craft.services.placement import Placement, placement
+from etl_craft.services.seeds import cast_rows, discover
 from etl_craft.services.source_columns import definition_problem, drift, warehouse_columns
 from etl_craft.services.stewardship_checks import graph_problems, sql_problems
 from etl_craft.services.trigger_validation import trigger_definition, trigger_graph_problems
@@ -189,6 +190,20 @@ def validate_snapshot(
                 f"could not compare source definitions with the warehouse: {error}; restore "
                 f"the warehouse connection and run validate again",
             )
+    try:
+        seeds = discover(config)
+        if seeds:
+            with (
+                open_warehouse(config, LocalLocker(engine, config)) as warehouse,
+                warehouse.connect() as warehouse_conn,
+            ):
+                for seed in seeds:
+                    try:
+                        cast_rows(warehouse_conn, seed)
+                    except EtlCraftError as error:
+                        report.fail(f"seed {seed.target}", str(error))
+    except (EtlCraftError, OSError) as error:
+        report.fail("seeds", str(error))
     return report
 
 

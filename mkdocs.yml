@@ -109,6 +109,7 @@ nav:
       - SQL tasks: guides/sql-tasks.md
       - SQL scripts: guides/sql-scripts.md
       - Stewardship uploads: guides/stewardship.md
+      - Seed tables: guides/seeds.md
       - Protecting human SCD edits: guides/human-overrides.md
       - Business rules: guides/business-rules.md
       - Python scripts: guides/python-scripts.md

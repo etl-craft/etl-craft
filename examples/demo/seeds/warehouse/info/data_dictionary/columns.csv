@@ -1,0 +1,6 @@
+COLUMN_NAME|DATA_TYPE|KEY_FLAG
+source_id|INTEGER|Y
+field_name|VARCHAR(100)|Y
+values_allowed|VARCHAR(255)|N
+description|VARCHAR(255)|N
+example|VARCHAR(255)|N

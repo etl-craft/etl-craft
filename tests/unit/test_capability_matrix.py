@@ -37,6 +37,7 @@ COVERED = {
 """Reads whose information a page shows through another read."""
 
 CONSOLE_ONLY = {
+    ActionName.SEED_APPLY: "deploy workflow applies the pinned bundle seed files",
     ActionName.BUNDLE_PUBLISH: "publishes a bundle built from the project directory on disk",
     ActionName.RENAME: "renames change config files in the project repository",
     ActionName.HEALTH: "an unauthenticated liveness probe; System health is the page for people",

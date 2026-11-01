@@ -116,6 +116,7 @@ from etl_craft.services.operations.requests import (
     ValidateInput,
     arguments,
 )
+from etl_craft.services.operations.seed_actions import SEED_ACTIONS
 from etl_craft.services.operations.upload_actions import UPLOAD_ACTIONS
 from etl_craft.services.operations.visibility import visible_result
 from etl_craft.services.rehash import RehashResult
@@ -182,8 +183,7 @@ _ROWS = (
            agent_models.AgentReply, ApiRole.AGENT, POST, f"{API}/agent/report", BY_ACTION),
     Action(ActionName.AGENT_LOG, agent_logs.upload, agent_models.AgentLog,
            agent_models.AgentReply, ApiRole.AGENT, POST, f"{API}/agent/log"),
-    *UPLOAD_ACTIONS,
-    # Sign-in: no role; the sign-in actions record their own row once the account is proven.
+    *UPLOAD_ACTIONS, *SEED_ACTIONS,
     Action(ActionName.LOGIN_METHODS, sessions.sign_in_methods, NoInput, sessions.SignInMethods,
            None, GET, f"{API}/login/methods"),
     Action(ActionName.LOGIN, sessions.sign_in, sessions.SignIn, sessions.Session, None, POST,
