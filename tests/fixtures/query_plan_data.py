@@ -15,6 +15,17 @@ DAY = f"({STAMP}+(d-1)*INTERVAL '1 day')"
 # Every run has its own task/attempt identity; completed days dominate the live working set.
 SEEDS = [
     (
+        "AUD_ERASURE_SUBJECTS",
+        "PROJECT_ID,TABLE_NAME,COLUMN_NAME,SUBJECT_KEY,KEY_HMAC,ACTIVE_FLAG,REASON,"
+        "CREATED_BY,CREATED_AT,LIFTED_BY,LIFTED_AT,LIFT_REASON",
+        f"1,'warehouse.plan.table_'||p,'person','private-'||p,"
+        "lpad((p*10+d)::text,64,'0'),CASE WHEN d=10 THEN 'Y' ELSE 'N' END,'request',"
+        f"'plan',{STAMP},CASE WHEN d=10 THEN NULL ELSE 'plan' END,"
+        f"CASE WHEN d=10 THEN NULL ELSE {STAMP} END,"
+        "CASE WHEN d=10 THEN NULL ELSE 'lifted' END",
+        "generate_series(1,:pipelines) p CROSS JOIN generate_series(1,10) d",
+    ),
+    (
         "AUD_SEED_LOADS",
         "PROJECT_ID,CATALOG_NAME,SCHEMA_NAME,TABLE_NAME,CONTENT_SHA256,SEED_LOAD_ID,STATUS,ERROR_MESSAGE,CREATED_BY,CREATED_AT",
         f"1,'warehouse','plan','table_'||p,repeat('a',64),p::text,'LOADED',NULL,'plan',{STAMP}",

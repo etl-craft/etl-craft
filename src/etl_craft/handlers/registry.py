@@ -22,6 +22,7 @@ from etl_craft.core.actor import SYSTEM_ACTOR
 from etl_craft.core.counts import Counts
 from etl_craft.core.definitions import Definition
 from etl_craft.core.errors import HandlerError
+from etl_craft.core.redaction import mask_text
 from etl_craft.core.uploads import UploadInfo, UploadWriter
 from etl_craft.engine.repository.offsets import StoredOffset
 from etl_craft.engine.task_store import LocalTaskStore, TaskIdentity, TaskStore
@@ -93,7 +94,7 @@ def format_task_log(result: HandlerResult) -> str | None:
         **result.variables,
     }
     lines = [f"{name} = {value}" for name, value in values.items() if value is not None]
-    return "\n".join(lines) or None
+    return mask_text("\n".join(lines)) or None
 
 
 Handler = Callable[[TaskContext, Engine | TaskStore], HandlerResult]
@@ -102,6 +103,7 @@ HANDLERS: dict[str, str] = {
     enums.Handler.SQL_SCRIPT: "etl_craft.handlers.sql_script:run",
     enums.Handler.SQL: "etl_craft.handlers.sql:run",
     enums.Handler.BUSINESS_RULES: "etl_craft.handlers.business_rules:run",
+    enums.Handler.ERASURE: "etl_craft.handlers.erasure:run",
     enums.Handler.FILE_VALIDATION: "etl_craft.handlers.file_validation:run",
     enums.Handler.PYTHON: "etl_craft.handlers.python_scripts:run",
     enums.Handler.EMAIL_ALERT: "etl_craft.handlers.email_alert:run",
@@ -134,7 +136,9 @@ def resolve_handler(name: str) -> Handler:
     return handler
 
 
-def task_store(context: TaskContext, backend: Engine | TaskStore) -> TaskStore:
+def task_store(
+    context: TaskContext, backend: Engine | TaskStore, *, with_warehouse: bool = True
+) -> TaskStore:
     """Bind local metadata access or retain the agent's HTTP-only task service."""
     if not isinstance(backend, Engine):
         return backend
@@ -149,6 +153,6 @@ def task_store(context: TaskContext, backend: Engine | TaskStore) -> TaskStore:
             context.attempt_id,
             context.owner,
         ),
-        LocalLocker(backend, context.config, with_warehouse=True),
+        LocalLocker(backend, context.config, with_warehouse=with_warehouse),
         definition=context._definition,
     )

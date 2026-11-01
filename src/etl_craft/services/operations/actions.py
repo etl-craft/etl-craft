@@ -85,6 +85,7 @@ from etl_craft.services.operations import (
 from etl_craft.services.operations.action_types import Action as Action
 from etl_craft.services.operations.agent_uploads import attempt_request
 from etl_craft.services.operations.context import OperationContext
+from etl_craft.services.operations.erasure_actions import ERASURE_ACTIONS
 from etl_craft.services.operations.permissions import (
     pipeline_access,
     project_not_found,
@@ -183,7 +184,7 @@ _ROWS = (
            agent_models.AgentReply, ApiRole.AGENT, POST, f"{API}/agent/report", BY_ACTION),
     Action(ActionName.AGENT_LOG, agent_logs.upload, agent_models.AgentLog,
            agent_models.AgentReply, ApiRole.AGENT, POST, f"{API}/agent/log"),
-    *UPLOAD_ACTIONS, *SEED_ACTIONS,
+    *UPLOAD_ACTIONS, *SEED_ACTIONS, *ERASURE_ACTIONS,
     Action(ActionName.LOGIN_METHODS, sessions.sign_in_methods, NoInput, sessions.SignInMethods,
            None, GET, f"{API}/login/methods"),
     Action(ActionName.LOGIN, sessions.sign_in, sessions.SignIn, sessions.Session, None, POST,
@@ -543,7 +544,6 @@ def _authorize_pipeline(
                     )
                 if policy.roles:
                     return True
-            # Aggregate reads filter their selections; bulk controls invoke CONTROL per object.
             if not codes and required == ApiRole.VIEWER and ctx.role is not None:
                 return True
     return False

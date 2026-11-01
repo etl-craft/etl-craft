@@ -16,6 +16,7 @@ from etl_craft.core.enums import ActionName, ActionOutcome, IcebergMaintenance
 from etl_craft.core.errors import MetadataError
 from etl_craft.core.faults import fault_point
 from etl_craft.core.text import is_safe_identifier, qualify
+from etl_craft.dialects.warehouse.base import REJECT_COLUMNS
 from etl_craft.dialects.warehouse.retention import rejects_statement, relation_kind
 from etl_craft.engine import locks, resource_locks
 from etl_craft.engine.audit import ActionRequest
@@ -23,7 +24,6 @@ from etl_craft.engine.queries import statement
 from etl_craft.engine.repository.config_rows import PIPELINES, read_rows
 from etl_craft.engine.repository.pipelines import current_project_id
 from etl_craft.handlers.resources import LocalLocker
-from etl_craft.handlers.sql.rejects import REJECT_AUDIT
 from etl_craft.services.archives import ArchiveSession
 from etl_craft.warehouse.connection import open_warehouse, warehouse_dialect
 
@@ -158,9 +158,7 @@ class WarehouseRetention:
                 "restore its audit ledger"
             )
         types = dialect.full_column_types(conn, table)
-        missing = {*REJECT_AUDIT, "REJECT_REASON", "REJECT_COLUMN"} - {
-            column.upper() for column in types
-        }
+        missing = set(REJECT_COLUMNS) - {column.upper() for column in types}
         if missing:
             raise MetadataError(
                 f"{table}: missing columns {sorted(missing)}; expected the package reject "

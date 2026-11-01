@@ -61,6 +61,7 @@ from etl_craft.execution.connections import probe_email_relay, probe_warehouse
 from etl_craft.handlers.mail import email_tls_problem
 from etl_craft.services.calendar_checks import DOCTOR_DAYS, holiday_lists_ending
 from etl_craft.services.cloning import cloning_problem
+from etl_craft.services.erasure import problems as erasure_problems
 from etl_craft.services.operations.accounts import has_admin
 from etl_craft.warehouse.connection import (
     build_warehouse_engine,
@@ -496,6 +497,7 @@ def _engine_state(config: ConnectorConfig, engine: Engine) -> list[Check]:
                 f"{path} is writable by group or others; restrict access with chmod go-w",
             )
         )
+    checks.extend(fail("Erasure coverage", p) for p in erasure_problems(engine, config))
     return checks
 
 

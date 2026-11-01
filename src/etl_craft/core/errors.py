@@ -52,6 +52,12 @@ class ExitCode(IntEnum):
 class EtlCraftError(Exception):
     """Base class of every error etl-craft raises; each subclass has its own exit status."""
 
+    def __str__(self) -> str:
+        """Keep registered values out of errors at every interface boundary."""
+        from etl_craft.core.redaction import mask_text
+
+        return mask_text(super().__str__())
+
     retryable: ClassVar[bool] = True
     exit_code: ClassVar[ExitCode] = ExitCode.UNEXPECTED
 

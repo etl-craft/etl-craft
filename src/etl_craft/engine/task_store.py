@@ -16,6 +16,7 @@ from etl_craft.core.actor import current_actor
 from etl_craft.core.business_rules import RULE_TEXT_LIMIT, table_result
 from etl_craft.core.definitions import Definition, using
 from etl_craft.core.enums import BusinessRuleLevel, RunStatus, SqlAction, YesNo
+from etl_craft.core.erasure import ErasureReport
 from etl_craft.core.errors import HandlerError, StaleTransitionError
 from etl_craft.core.items import ItemRecord, ItemState, ItemStore
 from etl_craft.core.ownership import ResourceLocker, attempt_holder
@@ -121,6 +122,10 @@ class RuleEnding:
 class TaskStore(ResourceLocker, ItemStore, Protocol):
     """The local and HTTP task backends expose the same bounded operations."""
 
+    def erasure(self) -> ErasureReport:
+        """Execute the admitted erasure without returning personal keys."""
+        ...
+
     def upload_files(self) -> tuple[UploadFile, ...]:
         """Read and verify the admitted files before exposing them to a script."""
         ...
@@ -176,6 +181,10 @@ class LocalTaskStore:
     locks: ResourceLocker
     definition: Definition | None = None
     _contracts: dict[str, TargetState] = field(default_factory=dict, compare=False)
+
+    def erasure(self) -> ErasureReport:
+        """Require local execution to pass its Engine DB directly to the handler."""
+        raise HandlerError("local ERASURE requires its Engine DB backend; use the task runner")
 
     def upload_files(self) -> tuple[UploadFile, ...]:
         """Use the same fenced storage stream as API-only agents."""

@@ -33,10 +33,19 @@ MAX_REASON = 4096
 
 def arguments(request: DataclassInstance) -> dict[str, Any]:
     """Return a request's fields for its audit row; the audit masks secret names."""
-    return {
-        f.name: getattr(request, f.name) if f.metadata.get("audit", True) else "[content omitted]"
-        for f in fields(request)
-    }
+    from etl_craft.core.redaction import mask, registering
+
+    private = [
+        getattr(request, f.name) for f in fields(request) if not f.metadata.get("audit", True)
+    ]
+    with registering(*(value for value in private if isinstance(value, str))):
+        result = {
+            f.name: getattr(request, f.name)
+            if f.metadata.get("audit", True)
+            else "[content omitted]"
+            for f in fields(request)
+        }
+        return {name: mask(value) for name, value in result.items()}
 
 
 def require_text(name: str, value: str | None, *, limit: int | None = None) -> None:

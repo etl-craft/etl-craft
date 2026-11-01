@@ -7,6 +7,7 @@ from etl_craft.core.errors import MetadataError
 from etl_craft.dialects.engine.tables import team_config
 
 CREDENTIAL_COLUMNS = {
+    "AUD_ERASURE_SUBJECTS": frozenset({"SUBJECT_KEY"}),
     "CFG_API_TOKENS": frozenset({"TOKEN_SHA256"}),
     "CFG_ACCOUNTS": frozenset({"PASSWORD_HASH"}),
 }

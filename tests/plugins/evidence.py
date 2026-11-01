@@ -113,8 +113,11 @@ class EvidenceRecorder:
 
     @pytest.hookimpl(optionalhook=True)
     def pytest_testnodedown(self, node, error) -> None:
+        if error:
+            self.record(f"<worker:{node.gateway.id}>", "error")
+            return
         collected = node.workeroutput.get("evidence_collected")
-        if error or not isinstance(collected, list):
+        if not isinstance(collected, list):
             self.record(f"<worker:{node.gateway.id}>", "error")
         elif self.collected and self.collected != collected:
             self.record("<worker-collection-mismatch>", "error")

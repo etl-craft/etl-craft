@@ -8,11 +8,25 @@ All notable changes are recorded here. The format follows
 
 ### Fixed
 
+- DuckDB over Iceberg loads lazy column metadata using the catalog's actual schema/table
+  spelling, preserving quoted mixed-case tables during native identifier lookup.
+
 - Large business-rule flag clears bind each key batch as one JSON value and use exact
   PostgreSQL active-key index probes even with fresh statistics and generic prepared plans.
   Batches retain the same size and atomic rollback.
 
 ### Security
+
+- Admins can register, preview, list and lift standing personal-data erasures with `erase`
+  (`--project`, `--table`, `--column`, `--value`, `--reason`, `--dry-run`, `--list`, `--lift`)
+  and `/api/v1/projects/{project}/erasure`. The admin page previews coverage before confirmation.
+  The `ERASURE` handler reapplies active entries using pinned column lineage, including renames,
+  history and rejects; expressions and unmanaged targets are reported without deletion.
+- Migration 0081 adds guarded `AUD_ERASURE_SUBJECTS` in SQLite and PostgreSQL. The only update
+  is one lift; raw identifiers stay in that private register and bound warehouse parameters.
+  Configure `Erasure.Hmac_secret` with a Secrets variable name. Rotating it breaks matching to
+  old HMAC audit identities. Shared operation-scoped value masking protects logs, errors and
+  result documents; this is the common core for later S7.C secret registration.
 
 - Pending Engine migrations now refuse normal login and UI startup with applied/required
   migration identities. Only local `migrate` may verify an admin password against the original

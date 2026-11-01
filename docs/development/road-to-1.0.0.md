@@ -173,7 +173,7 @@ item's text, or work done early under another item.
 | S7.AJ Required CI under ten minutes | Done | #269 | Complete PR suite once, explicit platform compatibility, fail-closed ownership and three clean execution-time runs |
 | S7.AC Table-level business rules | Done | #271 | Strict TABLE results on the existing run log, scoped checks and shared observation history; ROW flags unchanged |
 | S7.AD Python script kinds | Done | #270 | Explicit ingestion/utility contracts, nullable utility counts and safe unmanaged retry defaults |
-| S7.AE Pipeline samples | Planned | | Optional whole-pipeline CI sample cases; business rules remain the correctness check on real data |
+| S7.AE Pipeline samples | Moved after 0.9.0 | | Optional whole-pipeline CI sample cases; business rules remain the correctness check on real data |
 | S7.AF Config files are helpers | Done | #262 | Engine DB truth; partial, non-destructive config upserts; owner-approved plan/risk/release text accompanies code |
 | S7.AG Project migrations stay in their project | Done | #274 | Statement preflight, project-scoped row guards, team-table claims and doctor checks on both Engine DBs |
 | S7.A Web UI pages | Done | #277, #281, #282, #283, #284, #285, #286, #287, #290, #291, #292, #294, #295, #297, #298, slice 6f PR | Shell, sessions, settings, About and catalog (1); pipeline list, pipeline and run pages with capability-driven controls (2a); list schedule/run summaries, matrix, timeline, run now, bulk pause/resume, CSV (2b); search, recently viewed, live updates and stale notice (2c); attempt page with live log tail and download (3a); pipeline run log from the audit, CLI/API/page, SLA_BREACHED_AT (3b); run zip with manifest, CLI --zip, API and page download (3c); Pipeline Insights read, CLI, page and catalog tab (4); command console (5); task and run actions, items page, Reconcile, Refresh (6a); administration page and announcements (6b); system health, agents, scheduled runs and maintenance (6c); task page with statistics and offsets, Uploads page, grouped sidebar (6d); held and paused work, run filters by pool, agent and failure class (6e); catalog actions, Refresh all, task definition and Data panel, capability-matrix test (6f) |
@@ -183,12 +183,12 @@ item's text, or work done early under another item.
 | S7.M Stewardship uploads | Done (M2) | #296, #305 | Atomic receipts and safe stored names; processed layout, retention archives and verified reruns; crash recovery and guarded upload history |
 | S7.S Seed tables | Done | #308 | Typed pinned-bundle seeds replace reference tables until recorded stewardship handover |
 | S7.T Business calendars | Done | #276 | Shared holiday and weekend calendars for schedules, run dates, backfill and catch-up |
-| S7.U Personal-data erasure | Planned | | A standing erasure register and ERASURE tasks remove subjects after loads, outside managed writes |
+| S7.U Personal-data erasure | Done | #309 | Standing table/column erasure follows pinned lineage, with private keys and recoverable ERASURE tasks |
 | S7.V Empty replacements | Done | #275 | ALLOW_EMPTY can refuse an empty CREATE_TABLE or OVERWRITE_TABLE before changing its target |
 | S7.W Docs toolchain after MkDocs 1.x | Planned | | Evaluate Zensical against the API pages, navigation and published versions; migrate only when every requirement works |
 | S7.O Package and demo repositories | Planned | | A very small demo stays in package CI; Support Insights holds its project and supplies release evidence the package gate validates |
 | S7.P Obvious failures do not stop 1.0.0 | In progress | #173, #178 | Audit done (#173); the log-folder and port checks close their catalog rows (#178); item 4 keeps the catalog current |
-| S7.Q A generic ANSI SQL warehouse | Planned | | A `generic` dialect over SQLAlchemy for rare databases: ANSI SQL only, NULL-safe column comparison for merges, refusals for anything without an ANSI form |
+| S7.Q A generic ANSI SQL warehouse | Moved after 0.9.0 | | A `generic` dialect over SQLAlchemy for rare databases: ANSI SQL only, NULL-safe column comparison for merges, refusals for anything without an ANSI form |
 | S7.R Complete the test suite | In progress | #228 | Slice 1: recursive secret masking, merge crash windows and full-column/catalog upgrade guards; six-skill coverage audit remains after S7.A |
 | S7.N Faster complete pull-request CI | Done | #170 | Fail-closed collection/shard accounting, isolated schema templates and shared demo workers; complete checks in 6m33s-8m15s (owner-approved ten-minute target) |
 | S8.H Support Insights scenario coverage | Planned | | Deterministic mixed-quality generators, every-feature demonstrations, business-rule and stewardship cases, and runnable README coverage |
@@ -391,6 +391,13 @@ does not move worker work ahead of the metadata, account or operator-control cor
     implementing pull requests update `AGENTS.md`'s design rules to match.
 
 **Acceptance availability.**
+
+S7.U exercised erasure, lineage, SQL handlers, API and admin browser behavior on the local
+warehouses, with SQLite/PostgreSQL upgrades, actor guards and indexed query plans. Real
+process loss, resent rows, masking failures and twenty rounds of shared target-lock races
+were exercised. Static checks and strict docs passed. Cloud acceptance was unavailable:
+no cloud compute budget was authorized; the complete platform suite and wheel demos remain
+CI’s authority.
 
 S7.S exercised seeds, stewardship, API actions, upgrades, audit guards, query plans and
 retained handover evidence on SQLite and PostgreSQL; replacements and SCD shapes ran on all
@@ -922,6 +929,26 @@ passed on Snowflake (two cases) and Databricks (one case); the first Databricks 
 empty-history-page handling defect, which was corrected and verified. No cloud was unavailable.
 
 **Choices that differ from the item text.**
+
+- **S7.U owner decision (owner, 2026-11-01).** Register a table, column and exact key, not a
+  SUBJECT_TYPE; columns.csv stays unchanged. Immediate erasure runs in-process under the
+  shared target lock, upstream first. Each ERASURE task recomputes direct pass-through
+  coverage from pinned versions; expressions and unmanaged targets are reported with remedies.
+  The admin project routes are `/api/v1/projects/{project}/erasure`. Lift is the only row update;
+  re-registering creates another row. `Erasure.Hmac_secret` names the HMAC variable; rotating it
+  breaks matching to old audit identities. S7.U ships before S7.C with the owner's approval:
+  `core.redaction` supplies shared operation-scoped value masking; S7.C will register resolved
+  secrets into it. No Redaction setting or Sensitive_patterns work ships here; S7.C's Progress
+  row is unchanged. Agent erasure executes on the Engine DB host through the fenced attempt
+  report; raw register keys never travel to an agent. Pinned CFG target components retain
+  their native case; metadata lookup adapts regclass/DESCRIBE and Iceberg catalog spelling.
+  Each table uses one native-typed bound DELETE across all its direct identifier columns,
+  with reject ledgers checked for package shape and locked after their parent. Repeating erase
+  resumes its active entry without creating another. Passes snapshot active entries; a lift
+  affects later passes. The acceptance checklist is derived from the item's Change and the
+  owner's explicit tests, because the item has no separate Done when. The owner also moves
+  S7.Q and S7.AE
+  after 0.9.0; neither is needed by the S8 demo.
 
 - S7.S seed loads (owner, 2026-11-01): apply executes in-process, with no pipeline run
   or agent slot. It reuses CREATE_TABLE publication/recovery and the target mutation lock,
@@ -8021,33 +8048,6 @@ release candidate.
   stack.
 - *Done when.* Every row names a passing regression test, and none is open.
 
-### S7.Q A generic ANSI SQL warehouse
-
-Branch: `feat/dialects-generic-ansi`. After S5.X.
-
-- *Problem.* etl-craft targets PostgreSQL, Snowflake, Databricks, DuckDB and Trino, and adds no
-  further native dialects. In rare cases a team must still load into another database.
-- *Change.*
-  1. **A `generic` warehouse dialect.** It connects through SQLAlchemy from the profile's
-     `jdbc_url`; the team installs the database's driver, and engine code never imports it.
-  2. **Only ANSI SQL:**
-     - `INSERT … SELECT`, and `DELETE` with `INSERT` in one transaction to overwrite;
-     - `CREATE TABLE` from the declared columns, then `INSERT`;
-     - `DROP VIEW` and `CREATE VIEW` in one transaction;
-     - merges as `UPDATE … WHERE EXISTS` and `INSERT … WHERE NOT EXISTS`;
-     - `ALTER TABLE … ADD` for schema evolution;
-     - `ROW_ID` as `MAX() + 1` under the Engine DB target lock;
-     - `information_schema` for metadata reads.
-  3. **Merges compare columns NULL-safely** (`a = b OR (a IS NULL AND b IS NULL)`) instead of
-     storing a change hash, so `rehash` and hash versions do not apply. This is the one
-     exception to the merge-hash design rule, approved by the owner.
-  4. **No guessing.** Anything without an ANSI form is refused at `validate`, naming the task,
-     the parameter and the reason. One example is `REJECT_LIMIT`, which needs `TRY_CAST`.
-     There are no per-database SQL fragments or settings.
-- *Tests.* The warehouse action suite runs against PostgreSQL and DuckDB acting as `generic`
-  targets, with no new CI service. It covers the refusals.
-- *Done when.* A database with an ANSI SQL SQLAlchemy dialect runs every managed action
-  except the refused ones, with the same audit and failure messages.
 
 ### S7.R Complete the test suite
 
@@ -8259,48 +8259,6 @@ refreshes a report has no source position and no loaded rows.
 *Done when:* every Python task declares its kind, utility scripts carry no offset and no
 invented row counts, and ingestion scripts behave exactly as before.
 
-### S7.AE Pipeline samples
-
-Owner decision, 2026-10-26. Branch: `feat/services-pipeline-samples`. Samples are optional
-whole-pipeline tests, like dbt tests but through every step: mock source data goes in at the
-ingestion tasks and expected rows are compared at the end. They check wiring and regressions;
-they cannot prove the logic right for data nobody anticipated, which stays the job of business
-rules on real data.
-
-- *Command.* `etl-craft samples run [--pipeline P] [--case C] [--keep | --keep-on-failure]`.
-  It runs in CI before deploy and exits non-zero on any failed case, so the deploy job never
-  runs; nothing runs samples on a schedule or inside `config apply`. Projects may have samples
-  or not.
-- *Inputs.* `samples/<case>/inputs/<task_code>.csv`, one per ingestion task the case needs: the
-  file is written to that task's target table and the task is not run. Every other task runs for
-  real. A header-only file means no data. A case may give tables' starting state in
-  `given/<table>.csv` (merges into existing rows, event-wait signal rows). An ingestion task in
-  the run with no input file fails the case.
-- *Scope.* Nothing is tested in isolation: the case runs its pipeline end to end and then every
-  dependent pipeline (pipeline dependencies, triggered pipelines, and pipelines naming it in
-  `WATERMARK_SOURCE_PIPELINES`), each once, in dependency order, ignoring schedules.
-- *Expected.* `expected/<table>.csv` per table after the run and `expected/rules.csv` for rule
-  results. Declared columns only, typed from `columns.csv`, order-independent; engine columns
-  ignored. Numbered steps (`1/`, `2/`) run several loads in order.
-- *Isolation.* A throwaway SQLite Engine DB created by the command with the project's config
-  applied, and a separate warehouse connection, `Samples.Warehouse` in `craft-connector.yml`,
-  pointing to a sample database or catalog with the production schema names, created by the
-  team. No SQL is rewritten; SQL that names a database or catalog explicitly is refused in a
-  sample run with its file and line. `UTILITY` Python tasks (S7.AD) are skipped and reported;
-  email alerts are recorded, not sent.
-- *Every run starts clean.* Each run drops and recreates every table its pipelines touch in the
-  sample warehouse and creates a new Engine DB, whatever was left from an earlier run.
-- *After a run.* By default every table and the Engine DB are removed. `--keep` keeps them;
-  `--keep-on-failure` keeps them only when a case fails. The report names where they are kept.
-  Two runs against one sample warehouse collide; CI serializes them.
-- *Report.* Per case: pass or fail, per table missing, extra and differing rows with the
-  columns that differ, rule results, and the tasks and rules the case exercised. JSON output
-  for CI.
-- S8.C's CI runs the Support Insights samples before deploy; S8.H covers them.
-
-*Done when:* a case runs its pipelines and dependents end to end from input files, compares
-every expected table and rule result, starts clean every time, honours both keep options, and
-CI can gate a deploy on it.
 
 ### S7.AF Config files are helpers
 
@@ -9013,6 +8971,84 @@ These are possible enhancements after the first public release, shaped by user f
   locking, revalidation before deletion, dry-run counts and crash/concurrency tests. S6.A keeps
   its existing scope and never deletes target business rows; no fields or runtime behavior are
   introduced for this possibility now.
+
+### S7.Q A generic ANSI SQL warehouse
+
+Moved after 0.9.0 (owner, 2026-11-01). The S8 demo does not depend on this item.
+
+
+Branch: `feat/dialects-generic-ansi`. After S5.X.
+
+- *Problem.* etl-craft targets PostgreSQL, Snowflake, Databricks, DuckDB and Trino, and adds no
+  further native dialects. In rare cases a team must still load into another database.
+- *Change.*
+  1. **A `generic` warehouse dialect.** It connects through SQLAlchemy from the profile's
+     `jdbc_url`; the team installs the database's driver, and engine code never imports it.
+  2. **Only ANSI SQL:**
+     - `INSERT … SELECT`, and `DELETE` with `INSERT` in one transaction to overwrite;
+     - `CREATE TABLE` from the declared columns, then `INSERT`;
+     - `DROP VIEW` and `CREATE VIEW` in one transaction;
+     - merges as `UPDATE … WHERE EXISTS` and `INSERT … WHERE NOT EXISTS`;
+     - `ALTER TABLE … ADD` for schema evolution;
+     - `ROW_ID` as `MAX() + 1` under the Engine DB target lock;
+     - `information_schema` for metadata reads.
+  3. **Merges compare columns NULL-safely** (`a = b OR (a IS NULL AND b IS NULL)`) instead of
+     storing a change hash, so `rehash` and hash versions do not apply. This is the one
+     exception to the merge-hash design rule, approved by the owner.
+  4. **No guessing.** Anything without an ANSI form is refused at `validate`, naming the task,
+     the parameter and the reason. One example is `REJECT_LIMIT`, which needs `TRY_CAST`.
+     There are no per-database SQL fragments or settings.
+- *Tests.* The warehouse action suite runs against PostgreSQL and DuckDB acting as `generic`
+  targets, with no new CI service. It covers the refusals.
+- *Done when.* A database with an ANSI SQL SQLAlchemy dialect runs every managed action
+  except the refused ones, with the same audit and failure messages.
+
+
+### S7.AE Pipeline samples
+
+Moved after 0.9.0 (owner, 2026-11-01). The S8 demo does not depend on this item.
+
+
+Owner decision, 2026-10-26. Branch: `feat/services-pipeline-samples`. Samples are optional
+whole-pipeline tests, like dbt tests but through every step: mock source data goes in at the
+ingestion tasks and expected rows are compared at the end. They check wiring and regressions;
+they cannot prove the logic right for data nobody anticipated, which stays the job of business
+rules on real data.
+
+- *Command.* `etl-craft samples run [--pipeline P] [--case C] [--keep | --keep-on-failure]`.
+  It runs in CI before deploy and exits non-zero on any failed case, so the deploy job never
+  runs; nothing runs samples on a schedule or inside `config apply`. Projects may have samples
+  or not.
+- *Inputs.* `samples/<case>/inputs/<task_code>.csv`, one per ingestion task the case needs: the
+  file is written to that task's target table and the task is not run. Every other task runs for
+  real. A header-only file means no data. A case may give tables' starting state in
+  `given/<table>.csv` (merges into existing rows, event-wait signal rows). An ingestion task in
+  the run with no input file fails the case.
+- *Scope.* Nothing is tested in isolation: the case runs its pipeline end to end and then every
+  dependent pipeline (pipeline dependencies, triggered pipelines, and pipelines naming it in
+  `WATERMARK_SOURCE_PIPELINES`), each once, in dependency order, ignoring schedules.
+- *Expected.* `expected/<table>.csv` per table after the run and `expected/rules.csv` for rule
+  results. Declared columns only, typed from `columns.csv`, order-independent; engine columns
+  ignored. Numbered steps (`1/`, `2/`) run several loads in order.
+- *Isolation.* A throwaway SQLite Engine DB created by the command with the project's config
+  applied, and a separate warehouse connection, `Samples.Warehouse` in `craft-connector.yml`,
+  pointing to a sample database or catalog with the production schema names, created by the
+  team. No SQL is rewritten; SQL that names a database or catalog explicitly is refused in a
+  sample run with its file and line. `UTILITY` Python tasks (S7.AD) are skipped and reported;
+  email alerts are recorded, not sent.
+- *Every run starts clean.* Each run drops and recreates every table its pipelines touch in the
+  sample warehouse and creates a new Engine DB, whatever was left from an earlier run.
+- *After a run.* By default every table and the Engine DB are removed. `--keep` keeps them;
+  `--keep-on-failure` keeps them only when a case fails. The report names where they are kept.
+  Two runs against one sample warehouse collide; CI serializes them.
+- *Report.* Per case: pass or fail, per table missing, extra and differing rows with the
+  columns that differ, rule results, and the tasks and rules the case exercised. JSON output
+  for CI.
+- S8.C's CI runs the Support Insights samples before deploy; S8.H covers them.
+
+*Done when:* a case runs its pipelines and dependents end to end from input files, compares
+every expected table and rule result, starts clean every time, honours both keep options, and
+CI can gate a deploy on it.
 
 ## Appendix A: Defect traceability
 

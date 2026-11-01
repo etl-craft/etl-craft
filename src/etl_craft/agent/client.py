@@ -30,8 +30,10 @@ class AgentClient:
                 "`token create --role agent` credential"
             )
 
-    def call(self, name: ActionName, request: AgentRequest, *, timeout: float = 5) -> AgentReply:
-        """Send one bounded exchange without opening an Engine DB connection."""
+    def call(
+        self, name: ActionName, request: AgentRequest, *, timeout: float | None = 5
+    ) -> AgentReply:
+        """Send one exchange without opening an Engine DB connection."""
         action = ACTIONS[name]
         assert action.path is not None and action.method is not None
         message = Request(

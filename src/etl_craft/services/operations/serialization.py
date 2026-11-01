@@ -27,12 +27,16 @@ def to_json(obj: object) -> dict[str, Any]:
             f"cannot serialize {type(obj).__name__} as an operation document; "
             "pass a result returned by services.operations"
         )
-    return cast(dict[str, Any], _encode(obj))
+    from etl_craft.core.redaction import mask
+
+    return cast(dict[str, Any], mask(_encode(obj)))
 
 
 def encode(obj: object) -> object:
     """Return any request or result as JSON values, without requiring a document schema."""
-    return _encode(obj)
+    from etl_craft.core.redaction import mask
+
+    return mask(_encode(obj))
 
 
 def decode(hint: object, document: object) -> object:

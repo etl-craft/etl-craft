@@ -8,6 +8,11 @@ from etl_craft.core.definitions import Definition
 QUERIES = frozenset(
     {
         "pipeline_graph_tasks",
+        "catalog_task_parameters",
+        "sql_tasks",
+        "source_columns",
+        "active_tasks",
+        "active_task_dependency_edges",
         "pipeline_steps",
         "pipeline_task_dependencies",
         "task_parameters",

@@ -31,6 +31,7 @@ SECRET_KEYS = frozenset(
         "api_key",
         "credential",
         "private_key",
+        "subject_key",
     }
 )
 
@@ -86,6 +87,9 @@ def mask_arguments(arguments: Mapping[str, object]) -> dict[str, object]:
 
 
 def _mask_value(value: object) -> object:
+    from etl_craft.core.redaction import mask
+
+    value = mask(value)
     if isinstance(value, Mapping):
         return mask_arguments(value)
     if isinstance(value, list):
