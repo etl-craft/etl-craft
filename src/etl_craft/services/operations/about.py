@@ -60,5 +60,5 @@ def read_about(ctx: OperationContext, request: NoInput) -> About:
         __version__,
         controllers,
         license_name,
-        f"https://venkatcg00.github.io/etl-craft/{release_line}/",
+        f"https://docs.etl-craft.dev/{release_line}/",
     )

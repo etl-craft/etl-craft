@@ -3560,7 +3560,7 @@ Branch: `fix/engine-migration-hygiene` plus small branches as convenient.
 
 ### S2.L Regression suite and release
 
-**Status: done** (#90, #91, #92, #93). [0.2.0 is released](https://github.com/venkatcg00/etl-craft/releases/tag/v0.2.0).
+**Status: done** (#90, #91, #92, #93). [0.2.0 is released](https://github.com/etl-craft/etl-craft/releases/tag/v0.2.0).
 All 14 required suites passed from clean commit `63e1c6d`, with 2,118 passing test outcomes and
 no skips, including both complete cloud suites. Evidence and artifact checksums are in
 `release/evidence/0.2.0/`; the release gate passes on the release tag.
@@ -7009,7 +7009,7 @@ Branch: `feat/ui-*`, one per area. Served by `etl-craft ui` (S5.AE), and by
 through the S5.AA action table and its `/api/v1` route; pages only render read actions.
 
 **S7.A.0 Wireframes — owner approval before page code (owner, 2026-10-25).**
-The static [console wireframes](https://github.com/venkatcg00/etl-craft/blob/main/docs/development/ui-wireframes/README.md) are produced now while S6 is in
+The static [console wireframes](https://github.com/etl-craft/etl-craft/blob/main/docs/development/ui-wireframes/README.md) are produced now while S6 is in
 progress, so missing read actions are known before S6.B logs and S6.F metrics settle their
 outputs. No S7.A page is built until the owner approves these wireframes; merging this
 `docs(plan)` PR is that approval, not approval to invent missing actions. All navigation and
@@ -7632,7 +7632,7 @@ S5.S delivers the accounts, the login, the roles and the role check on every act
   Dockerfile lives in this repository.
   - Every release candidate's release workflow builds both images and smoke-tests them. It is not
     built in pull-request CI, so that CI stays under ten minutes.
-  - It is pushed to GitHub Container Registry (`ghcr.io/venkatcg00/etl-craft`) only from
+  - It is pushed to GitHub Container Registry (`ghcr.io/etl-craft/etl-craft`) only from
     1.0.0, with the PyPI release. Nothing is published to a registry before 1.0.0.
   - A Docker Hub mirror is optional at 1.0.0.
   - Until then, the demo repository builds its own image from the pinned candidate wheel.

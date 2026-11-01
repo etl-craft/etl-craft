@@ -34,9 +34,9 @@ dependencies = [
 etl-craft = "etl_craft.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/venkatcg00/etl-craft"
-Repository = "https://github.com/venkatcg00/etl-craft"
-Issues = "https://github.com/venkatcg00/etl-craft/issues"
+Homepage = "https://github.com/etl-craft/etl-craft"
+Repository = "https://github.com/etl-craft/etl-craft"
+Issues = "https://github.com/etl-craft/etl-craft/issues"
 
 [project.optional-dependencies]
 excel = ["openpyxl>=3.1.5,<4"]

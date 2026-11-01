@@ -237,7 +237,7 @@ def test_cli_health_about_and_catalog_share_streamed_api_bytes(
     about = json.loads(capsys.readouterr().out)
     assert about["server_version"]
     release_line = ".".join(about["package_version"].split(".")[:2])
-    assert about["docs_url"] == f"https://venkatcg00.github.io/etl-craft/{release_line}/"
+    assert about["docs_url"] == f"https://docs.etl-craft.dev/{release_line}/"
     folder = p.root / "catalog"
     folder.mkdir()
     (folder / ".etl-craft-catalog").write_text('{"project":"default"}')

@@ -1,7 +1,7 @@
 site_name: etl-craft
 site_description: Metadata-driven ETL orchestration engine
-site_url: https://venkatcg00.github.io/etl-craft/
-repo_url: https://github.com/venkatcg00/etl-craft
+site_url: https://docs.etl-craft.dev/
+repo_url: https://github.com/etl-craft/etl-craft
 repo_name: venkatcg00/etl-craft
 edit_uri: edit/main/docs/
 copyright: Apache License 2.0

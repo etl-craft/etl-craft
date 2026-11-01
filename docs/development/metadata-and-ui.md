@@ -312,7 +312,7 @@ script lineage is unknown unless explicitly declared, never fabricated from its 
 ## Wireframe approval before UI implementation
 
 Owner decision, 2026-10-25: S7.A.0 is reviewed while S6 is in progress. The
-[static console wireframes](https://github.com/venkatcg00/etl-craft/blob/main/docs/development/ui-wireframes/README.md)
+[static console wireframes](https://github.com/etl-craft/etl-craft/blob/main/docs/development/ui-wireframes/README.md)
 cover the navigation/page inventory below, S6.B log availability and S6.F metric needs.
 No S7.A page code precedes owner approval; merging that docs(plan) PR is the approval.
 Missing action-table reads are explicit gaps, not invented endpoints. Access is managed through
