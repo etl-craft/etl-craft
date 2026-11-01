@@ -271,6 +271,13 @@ All notable changes are recorded here. The format follows
 
 ### Added
 
+- `etl-craft seed apply [--project P]` and `POST /api/v1/projects/{project}/seeds` apply
+  declared, typed reference files from the pinned bundle, using managed replacement and target
+  locking without pipeline runs. Successful accepted-upload runs permanently hand their pinned
+  targets to stewardship; seed apply reports `LOCKED` without changing them. Migration 0080
+  adds append-only, actor-stamped `AUD_SEED_LOADS`, including checked, masked failure messages.
+  The Support Insights demo supplies five reference seeds and optional stewardship examples.
+
 - The browser catalog page has **Validate metadata**, **Rebuild catalog**, **Refresh lineage**
   and (admins) **Record catalog versions**, and before the first build it says so instead of
   failing. The Pipelines list has **Refresh all** for developers. A task page shows the task's

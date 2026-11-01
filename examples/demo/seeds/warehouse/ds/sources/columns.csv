@@ -1,0 +1,4 @@
+COLUMN_NAME|DATA_TYPE|KEY_FLAG
+source_id|INTEGER|Y
+source_code|VARCHAR(100)|N
+source_name|VARCHAR(100)|N

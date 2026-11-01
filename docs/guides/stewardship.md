@@ -160,3 +160,16 @@ committed before deleting any bytes or returning an upload id.
 Migration 0079 has not shipped in a release and now includes these storage columns and guards.
 Development Engine DBs that already applied its earlier form must be recreated; released
 versions upgrade through the normal migration path.
+
+
+## Reference tables seeded from a repository
+
+[Seed tables](seeds.md) load declared files from the pinned project bundle. After a successful
+run has taken an accepted upload, the seeds targeted by that run's pinned pipeline version
+report `LOCKED`. Future seed changes leave those tables alone and name the original upload
+and pipeline. Retargeting today's task does not add or remove a handover; failed and refused
+uploads do not create one. Send later corrections through the pipeline's Uploads page.
+
+A seed load runs in-process, with the same target lock and replacement code as `CREATE_TABLE`.
+It has its own seed load id and creates no pipeline run. This is separate from row and value
+protection and its explicit unlock operations.

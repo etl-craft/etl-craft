@@ -15,6 +15,12 @@ DAY = f"({STAMP}+(d-1)*INTERVAL '1 day')"
 # Every run has its own task/attempt identity; completed days dominate the live working set.
 SEEDS = [
     (
+        "AUD_SEED_LOADS",
+        "PROJECT_ID,CATALOG_NAME,SCHEMA_NAME,TABLE_NAME,CONTENT_SHA256,SEED_LOAD_ID,STATUS,ERROR_MESSAGE,CREATED_BY,CREATED_AT",
+        f"1,'warehouse','plan','table_'||p,repeat('a',64),p::text,'LOADED',NULL,'plan',{STAMP}",
+        "generate_series(1,:pipelines) p",
+    ),
+    (
         "AUD_CLONE_STATE",
         "MIRROR_ID,TABLE_NAME,SCHEMA_SHA256,INITIALIZED,COPIED_AT",
         f"'mirror-'||p,'table-'||p,'schema',1,{STAMP}",

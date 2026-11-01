@@ -40,6 +40,10 @@ INTEGER_NAMES = frozenset(
 )
 MOMENT = datetime(2026, 1, 1, tzinfo=UTC)
 VALUES = {
+    "after_ended": datetime(1970, 1, 1, tzinfo=UTC),
+    "content_sha256": "a" * 64,
+    "seed_load_id": "00000000-0000-0000-0000-000000000001",
+    "error_message": "seed failure",
     "stored_name": "1-plan.csv",
     "location": "file:///archive/plan/1-plan.csv",
     "window_start": MOMENT,

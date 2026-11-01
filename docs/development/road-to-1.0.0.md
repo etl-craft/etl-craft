@@ -181,7 +181,7 @@ item's text, or work done early under another item.
 | S7.AI Fixes from the 2026-10-27 audit | Done | #264 | Pool/attempt credentials, bounded SSO, publishing, sign-in, dependency bounds, setup and first-ending metrics. |
 | S7.AK Schema checker | Done | S7.AK PR | Optional per-project schedule plus an on-demand check that compare declared tables with the warehouse; Insights and the catalog show the last check |
 | S7.M Stewardship uploads | Done (M2) | #296, #305 | Atomic receipts and safe stored names; processed layout, retention archives and verified reruns; crash recovery and guarded upload history |
-| S7.S Seed tables | Planned | | Folder-addressed seed files replace their table on change until stewardship takes it over |
+| S7.S Seed tables | Done | #308 | Typed pinned-bundle seeds replace reference tables until recorded stewardship handover |
 | S7.T Business calendars | Done | #276 | Shared holiday and weekend calendars for schedules, run dates, backfill and catch-up |
 | S7.U Personal-data erasure | Planned | | A standing erasure register and ERASURE tasks remove subjects after loads, outside managed writes |
 | S7.V Empty replacements | Done | #275 | ALLOW_EMPTY can refuse an empty CREATE_TABLE or OVERWRITE_TABLE before changing its target |
@@ -391,6 +391,13 @@ does not move worker work ahead of the metadata, account or operator-control cor
     implementing pull requests update `AGENTS.md`'s design rules to match.
 
 **Acceptance availability.**
+
+S7.S exercised seeds, stewardship, API actions, upgrades, audit guards, query plans and
+retained handover evidence on SQLite and PostgreSQL; replacements and SCD shapes ran on all
+four local warehouses. Native stewardship of all three demo seed tables and real process loss
+between warehouse and audit commits were exercised. Target-lock races passed twenty rounds.
+Cloud acceptance was unavailable: no credentials or cloud budget were provided. The full
+CI suite and installed-wheel demos remain CI's authority.
 
 S7.AH exercises identity, offsets/events, dependency consumption, grants, reference updates,
 stale helper files, atomic refresh failures and recorded-log reads/retention on both Engine DBs.
@@ -915,6 +922,23 @@ passed on Snowflake (two cases) and Databricks (one case); the first Databricks 
 empty-history-page handling defect, which was corrected and verified. No cloud was unavailable.
 
 **Choices that differ from the item text.**
+
+- S7.S seed loads (owner, 2026-11-01): apply executes in-process, with no pipeline run
+  or agent slot. It reuses CREATE_TABLE publication/recovery and the target mutation lock,
+  reads the deployment's pinned bundle and explicitly sets its requesting actor.
+  `SEED_LOAD_ID` replaces the item's `RUN_ID`; one immutable outcome per table per apply
+  uses the UNCHANGED/LOADED/LOCKED/FAILED enum. The command returns after its loads finish.
+  Owner-approved migration 0080 adds nullable `ERROR_MESSAGE TEXT` in both dialects:
+  a CHECK requires it exactly for FAILED. One place constructs and masks the core.errors
+  message before both returning and storing it; no traceback is stored.
+  Lock decisions use successful recorded runs with accepted AUD_UPLOADS and targets from
+  those runs' pinned versions, resolved with warehouse identifier rules; today's retargeting
+  cannot add or remove a handover. Successful-reopen evidence is retained with uploads so
+  a repair cannot unlock a seed. Project route generation exposes
+  `POST /api/v1/projects/{project}/seeds`; registration lives in `seed_actions.py`, and
+  the capability matrix records its deploy-workflow CONSOLE_ONLY reason.
+  The current demo gets five seed tables and optional native DuckDB/PostgreSQL stewardship
+  examples; the full S8 SI_REFERENCE history flow remains S8 work.
 
 - S7.M stewardable pipelines (owner, 2026-10-31): `STEWARDABLE_FLAG` only lists a pipeline
   for uploads (and `CAN_UPLOAD` lets accounts send to it); a stewardable pipeline otherwise runs

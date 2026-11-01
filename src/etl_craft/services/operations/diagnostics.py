@@ -79,7 +79,11 @@ def validate_metadata(ctx: OperationContext, request: ValidateInput) -> validate
                 if row.pipeline_code in codes
             )
         report.findings = [
-            finding for finding in report.findings if finding.where.partition(".")[0] in codes
+            finding
+            for finding in report.findings
+            if finding.where.partition(".")[0] in codes
+            or finding.where == "seeds"
+            or finding.where.startswith("seed ")
         ]
         report.pipelines, report.tasks = len(codes), tasks
     return report

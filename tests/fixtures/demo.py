@@ -56,7 +56,7 @@ from fixtures.services import (
 
 REPO = Path(__file__).resolve().parents[2]
 DEMO = REPO / "examples" / "demo"
-SCHEMAS = ("lnd", "prs", "ds", "cdc", "pre_dm", "dm", "aud")
+SCHEMAS = ("lnd", "prs", "ds", "cdc", "pre_dm", "dm", "aud", "info")
 PASSWORD_VAR = "ETL_CRAFT_DEMO_SECRET"
 S3_VAR = "ETL_CRAFT_DEMO_S3_SECRET"
 ENGINES = ("sqlite", "postgres")
@@ -155,6 +155,12 @@ class Demo:
             },
             "Artifacts": {"Store": (self.root / ".etl-craft" / "artifacts").as_uri()},
         }
+        seeds = self.root / "seeds" / "warehouse"
+        if self.catalog != "warehouse":
+            seeds = seeds.rename(seeds.with_name(self.catalog))
+        if self.prefix:
+            for folder in list(seeds.iterdir()):
+                folder.rename(folder.with_name(self.prefix + folder.name))
         path = self.root / "craft-connector.yml"
         if self.cloud:
             # The account's own schema, to make the demo's schemas from.
@@ -330,6 +336,8 @@ class Demo:
                 run_script(conn, for_engine(engine).split_statements(sql))
         finally:
             engine.dispose()
+        self.ok("bundle", "publish")
+        self.ok("seed", "apply")
         self.ok("pipelines", "refresh")
 
     def close(self) -> None:

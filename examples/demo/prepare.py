@@ -53,8 +53,9 @@ def metadata(files: list[str]) -> None:
         else:
             destination.write_text(sql, encoding="utf-8")
     result = main(["--config", str(HERE / "craft-connector.yml"), "migrate"])
-    if result == 0:
-        result = main(["--config", str(HERE / "craft-connector.yml"), "pipelines", "refresh"])
+    for command in (("bundle", "publish"), ("seed", "apply"), ("pipelines", "refresh")):
+        if result == 0:
+            result = main(["--config", str(HERE / "craft-connector.yml"), *command])
     if result:
         raise SystemExit(result)
 

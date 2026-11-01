@@ -206,6 +206,7 @@ class ActionName(StrEnum):
 
     RENAME = "rename"
     BUNDLE_PUBLISH = "bundle publish"
+    SEED_APPLY = "seed apply"
     AGENT_DOCTOR = "agent doctor"
     AGENT_REGISTER = "agent register"
     AGENT_DEREGISTER = "agent deregister"

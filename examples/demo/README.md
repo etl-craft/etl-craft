@@ -358,3 +358,34 @@ and recreating the pipeline. The command preserves offsets, consumed events and 
 config CSVs and team SQL references afterward; stale old-code inserts are refused. Existing
 logs keep their paths. Metric series and generated catalog links use the new codes. Restore the
 original demo configuration before using the unchanged expected-results checks.
+
+
+## Repository reference seeds and stewardship
+
+`seeds/warehouse/` supplies `ds.agents`, `ds.support_areas`, `ds.customer_types`, `ds.sources`
+and `info.data_dictionary`. `prepare.py metadata` publishes the project and applies these
+files before refreshing the pipelines. The support-area SQL literal loader and the agent setup task are replaced by seed files. The dictionary keeps its source id, field name, allowed values, description and
+example; declared SQL types belong in column metadata.
+
+On the demo's native DuckDB warehouse (or native PostgreSQL), add the optional stewardship
+pipelines after loading the main metadata:
+
+```bash
+python prepare.py metadata metadata/seed_stewardship.sql
+etl-craft seed apply
+```
+
+The `SI_STEWARD_DS_AGENTS`, `SI_STEWARD_DS_SUPPORT_AREAS` and
+`SI_STEWARD_DS_CUSTOMER_TYPES` pipelines validate and merge pipe-delimited corrections. Give
+the steward `CAN_UPLOAD` on the chosen pipeline, upload a `data.csv` with that seed's header
+through the UI's Uploads page, and run or let the controller admit the recorded upload run.
+After it succeeds, `etl-craft seed apply` reports `LOCKED` for that table and names its upload.
+`ds.sources` and `info.data_dictionary` remain replaceable. Stewarded SCD protection currently
+requires native DuckDB/PostgreSQL; the optional metadata is not for Iceberg warehouses.
+
+A repository change is deployed with `validate`, `config apply`, `bundle publish`, then
+`seed apply` (with `--api` when using a server). Seed loads use the published bytes, return
+when all tables finish and write actor-stamped `AUD_SEED_LOADS` outcomes. A locked outcome
+exits 0; a failed load exits 1 and names the table and seed load id. The full S8
+`SI_REFERENCE` history pipeline remains in the roadmap; this demo retains its existing
+support mart and agent-history pipeline.

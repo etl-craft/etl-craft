@@ -165,15 +165,29 @@ def create_declared_target(
     name: str | None = None,
 ) -> None:
     """Declare business columns and the complete generated key in the CREATE statement."""
-    columns = [f"{name} {kind}" for name, kind in business]
-    columns.append("PIPELINE_RUN_ID BIGINT")
-    columns.extend(f"{name} {session.dialect.audit_column_type(name)}" for name in audit_columns)
     target = session.target if name is None else name
+    create_with_identity(session, declared_columns(session, business, audit_columns), target)
+
+
+def create_with_identity(session: Session, shape: dict[str, str], target: str) -> None:
+    """Create a complete declared table and ROW_ID without a later key alteration."""
+    columns = ", ".join(f"{name} {kind}" for name, kind in shape.items())
     for sql in session.dialect.identity_setup_sql(target):
         session.run(sql, step="create the ROW_ID sequence")
     session.run(
-        session.dialect.identity_table_ddl(target, ", ".join(columns), session.params),
+        session.dialect.identity_table_ddl(target, columns, session.params),
         step="create the target with an identity ROW_ID",
+    )
+
+
+def declared_columns(
+    session: Session, business: Sequence[tuple[str, str]], audit: tuple[str, ...]
+) -> dict[str, str]:
+    """Declare business and managed columns for setup targets and seed replacements."""
+    return (
+        dict(business)
+        | {"PIPELINE_RUN_ID": "BIGINT"}
+        | {name: session.dialect.audit_column_type(name) for name in audit}
     )
 
 

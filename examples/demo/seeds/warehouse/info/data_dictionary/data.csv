@@ -1,0 +1,3 @@
+source_id|field_name|values_allowed|description|example
+1|interaction_id|positive integers|Support interaction identity|1
+2|support_identifier|positive integers|Support event identity|1
