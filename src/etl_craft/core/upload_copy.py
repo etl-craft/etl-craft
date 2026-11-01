@@ -58,4 +58,5 @@ def verified_upload(root: Path, upload: UploadInfo, chunks: Iterator[bytes]) -> 
         upload.sha256,
         root / relative,
         actor_kind=upload.actor_kind,
+        stored_name=upload.stored_name,
     )

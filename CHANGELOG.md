@@ -43,6 +43,16 @@ All notable changes are recorded here. The format follows
 
 ### Changed
 
+- Stewardship uploads now commit their file and queue receipt atomically and recover orphan
+  files after crashes. Immutable `AUD_UPLOADS.STORED_NAME` appears beside the original name
+  in `uploads` text/JSON, the API and the Uploads page. Pending files use
+  `uploads/<PIPELINE_CODE>/`; ended runs move theirs to `processed_uploads/<PIPELINE_CODE>/`
+  and discard ended attempts' private input caches.
+- `Uploads.Archive_to` supports `file://` and explicit S5.F S3 Store/Profile destinations.
+  Existing `Retention.Run_history_days` archives ended files after verifying size and SHA-256;
+  reruns restore verified bytes through the shared local/agent reader. Archive location and
+  decision time remain in guarded `AUD_UPLOADS`; migration 0079 is corrected before release.
+
 - S7.A slice 1 adds the Jinja browser shell at `/ui`, profile, settings, About and authenticated
   project catalog, with shaded light/dark themes and a shared data-flow mark. `publish-docs`
   remains the interim one-project server.

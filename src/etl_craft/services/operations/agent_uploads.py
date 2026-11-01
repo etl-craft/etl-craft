@@ -2,13 +2,20 @@
 
 from collections.abc import Iterator
 from dataclasses import dataclass
+from urllib.parse import unquote, urlsplit
 
 from etl_craft.core.enums import ActionName, AgentStatus, ApiRole
-from etl_craft.core.errors import PermissionDeniedError, StaleTransitionError, UsageError
+from etl_craft.core.errors import (
+    ConfigurationError,
+    PermissionDeniedError,
+    StaleTransitionError,
+    UsageError,
+)
 from etl_craft.engine.agent_state import fence
 from etl_craft.engine.queries import statement
 from etl_craft.engine.task_store import TaskIdentity
 from etl_craft.engine.upload_files import stream_upload
+from etl_craft.engine.upload_storage import recorded_upload
 from etl_craft.services.operations.agent_models import AgentRenew, AgentRequest
 from etl_craft.services.operations.agents import check_agent
 from etl_craft.services.operations.context import OperationContext
@@ -64,7 +71,17 @@ def content(ctx: OperationContext, request: AgentUpload) -> Iterator[bytes]:
         request.attempt_id,
         owner,
     )
-    return stream_upload(ctx.engine, ctx.config, identity, request.upload_id)
+    try:
+        return stream_upload(ctx.engine, ctx.config, identity, request.upload_id)
+    except ConfigurationError as error:
+        upload = recorded_upload(ctx.engine, request.upload_id)
+        message = str(error).replace(str(ctx.config.host_dir), "(upload storage)")
+        if upload.archive_location is not None:
+            message = message.replace(upload.archive_location, "(recorded archive)")
+            address = urlsplit(upload.archive_location)
+            if address.scheme == "file":
+                message = message.replace(unquote(address.path), "(recorded archive)")
+        raise ConfigurationError(message) from error
 
 
 def attempt_request(ctx: OperationContext, name: ActionName, request: object) -> bool:

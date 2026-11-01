@@ -1,4 +1,5 @@
-SELECT u.UPLOAD_ID AS upload_id,u.ACCOUNT AS account,u.FILE_NAME AS file_name,
+SELECT u.UPLOAD_ID AS upload_id,u.ACCOUNT AS account,u.FILE_NAME AS file_name,u.STORED_NAME AS stored_name,
+ u.ARCHIVE_LOCATION AS archive_location,u.ARCHIVED_AT AS archived_at,
  u.SHA256 AS sha256,u.SIZE_BYTES AS size_bytes,u.PIPELINE_RUN_ID AS pipeline_run_id,
  u.STATUS AS status,u.REASON AS reason,u.UPLOADED_AT AS uploaded_at,
  u.TAKEN_AT AS taken_at,u.ENDED_AT AS ended_at,r.STATUS AS run_status

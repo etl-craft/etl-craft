@@ -104,13 +104,20 @@ class CancelWatch:
     """
 
     def __init__(
-        self, engine: Engine, pipeline_run_id: int, child: ChildOptions, task_id: int | None = None
+        self,
+        engine: Engine,
+        pipeline_run_id: int,
+        child: ChildOptions,
+        task_id: int | None = None,
+        *,
+        config: ConnectorConfig | None = None,
     ) -> None:
         """Watch ``pipeline_run_id`` at ``child``'s poll interval."""
         self.engine = engine
         self.pipeline_run_id = pipeline_run_id
         self.child = child
         self.task_id = task_id
+        self.config = config
         self.stop = threading.Event()
         self.done = threading.Event()
         self.thread = threading.Thread(
@@ -143,7 +150,9 @@ class CancelWatch:
                 from etl_craft.execution import control_flow
 
                 try:
-                    control_flow.advance(self.engine, self.pipeline_run_id, observed=True)
+                    control_flow.advance(
+                        self.engine, self.pipeline_run_id, observed=True, config=self.config
+                    )
                     aborted = self.task_id is not None and control_flow.abort_requested(
                         self.engine, self.pipeline_run_id, self.task_id
                     )

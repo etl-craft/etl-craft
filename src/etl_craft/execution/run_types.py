@@ -85,6 +85,9 @@ def default_hooks(config: ConnectorConfig, engine: Engine) -> RunHooks:
         from etl_craft.execution.trigger_waits import wake_child_waits
 
         if outcome.pipeline_run_id is not None:
+            from etl_craft.engine.upload_recovery import finish_run_files
+
+            finish_run_files(engine, config, outcome.pipeline_run_id)
             wake_child_waits(engine, outcome.pipeline_run_id)
 
     if not config.limits.enforce_sla and not config.artifacts.store:

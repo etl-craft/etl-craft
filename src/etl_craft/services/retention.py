@@ -38,12 +38,18 @@ def purge_history(
     archive: ArchiveSession | None = None,
 ) -> dict[str, int]:
     """Use the same category policy with verified snapshots when archiving is requested."""
+    from etl_craft.engine.upload_recovery import archive_uploads, recover_uploads
+
     with retaining():
+        if not dry_run:
+            recover_uploads(engine, config)
+        uploaded = archive_uploads(engine, config, now, dry_run=dry_run)
         counts = (
             plain_history(engine, config, now, dry_run=dry_run)
             if archive is None
             else archive.run(now)
         )
+        counts["upload_files"] = uploaded
         counts["AUD_PROJECT_BUNDLES"] = cleanup_bundles(engine, config, now, dry_run=dry_run)
         return counts
 

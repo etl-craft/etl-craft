@@ -8,6 +8,9 @@ from etl_craft.services.operations.context import OperationContext
 
 def admit_pending(ctx: OperationContext) -> None:
     """Take queued files together after a prior exclusive run ends or the controller restarts."""
+    from etl_craft.engine.upload_recovery import recover_uploads
+
+    recover_uploads(ctx.engine, ctx.config)
     with ctx.engine.connect() as conn:
         pipelines = tuple(conn.execute(statement(conn, "upload_queue_pipelines")).scalars())
     with acting_as(SYSTEM_ACTOR):

@@ -204,6 +204,9 @@ def mark_run(
             reason=reason,
             requested_by=who,
         )
+    from etl_craft.engine.upload_recovery import finish_run_files
+
+    finish_run_files(engine, config, run_id)
     message = f"{pipeline_code}: pipeline_run_id={run_id} marked {status} (was {run_status})"
     logger.warning("%s (by %s: %s)", message, who, reason)
     return Intervened(message, run_id)

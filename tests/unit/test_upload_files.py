@@ -17,19 +17,29 @@ pytestmark = pytest.mark.unit
 def file_info(path, name=None):
     data = path.read_bytes()
     return UploadFile(
-        1, "alice", name or path.name, len(data), hashlib.sha256(data).hexdigest(), path
+        1,
+        "alice",
+        name or path.name,
+        len(data),
+        hashlib.sha256(data).hexdigest(),
+        path,
+        stored_name="1-data.csv",
     )
 
 
 def test_copy_verifies_stream_before_publishing(tmp_path):
-    expected = UploadInfo(7, "alice", "input.csv", 4, hashlib.sha256(b"a|b\n").hexdigest())
+    expected = UploadInfo(
+        7, "alice", "input.csv", 4, hashlib.sha256(b"a|b\n").hexdigest(), stored_name="7-input.csv"
+    )
     copied = verified_upload(tmp_path, expected, iter([b"a|", b"b\n"]))
     assert copied.path.read_bytes() == b"a|b\n"
     assert copied.account == "alice"
 
 
 def test_hash_mismatch_publishes_no_script_input(tmp_path):
-    expected = UploadInfo(7, "alice", "input.csv", 4, hashlib.sha256(b"a|b\n").hexdigest())
+    expected = UploadInfo(
+        7, "alice", "input.csv", 4, hashlib.sha256(b"a|b\n").hexdigest(), stored_name="7-input.csv"
+    )
     with pytest.raises(HandlerError) as failure:
         verified_upload(tmp_path, expected, iter([b"a|c\n"]))
     for value in ("upload 7", expected.sha256, hashlib.sha256(b"a|c\n").hexdigest(), "restore"):

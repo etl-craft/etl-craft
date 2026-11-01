@@ -63,4 +63,6 @@ Auth:
 
 # Blanket stewardship upload ceiling; validation tasks may lower it.
 Uploads:
-  Max_file_mb: 50                      # value
+  Max_file_mb: 50
+  # Archive_to: file:///srv/etl-archive/uploads
+  # Or: {Store: s3://team-archive/uploads, Profile: archive}                      # value

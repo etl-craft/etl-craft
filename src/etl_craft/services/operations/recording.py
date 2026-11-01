@@ -67,6 +67,7 @@ def record_refusal(
                         "file_name": "(no file)",
                         "size_bytes": 0,
                         "sha256": None,
+                        "stored_name": None,
                         "status": UploadStatus.REFUSED,
                         "reason": str(mask_arguments({"reason": str(error)})["reason"]),
                         "now": request.requested_at,

@@ -320,6 +320,16 @@ def seeded_tables(db):
                 payload[key] = conn.execute(
                     text("SELECT BUSINESS_RULE_RUN_ID FROM AUD_BUSINESS_RULES_RUN_LOG")
                 ).scalar_one()
+            if table.upper() == "AUD_UPLOADS":
+                seeded = {
+                    "stored_name": "1-audit.csv",
+                    "sha256": "a" * 64,
+                    "archive_location": "file:///archive/1-audit.csv",
+                    "archived_at": datetime.now(UTC),
+                }
+                for column in columns:
+                    if column["name"].lower() in seeded:
+                        payload[column["name"]] = seeded[column["name"].lower()]
             if table.upper() == "AUD_ATTEMPT_LOG_CHUNKS":
                 # Part of the composite key, which the loop above can leave out.
                 name = next(c["name"] for c in columns if c["name"].lower() == "sequence_number")

@@ -1,5 +1,7 @@
 """The Uploads page in a real browser: choose a pipeline, upload a file, see its receipt."""
 
+import re
+
 import pytest
 from playwright.sync_api import expect, sync_playwright
 from sqlalchemy import text
@@ -39,5 +41,15 @@ def test_a_steward_uploads_a_file_and_sees_it_listed(site, tmp_path):
         page.get_by_role("button", name="Upload", exact=True).click()
         expect(page.locator("#upload-result")).to_contain_text("received")
         page.get_by_role("link", name="Reload to see its state").click()
-        expect(page.get_by_role("cell", name="corrections.csv")).to_be_visible()
+        expect(page.get_by_role("cell", name=re.compile(r"^corrections\.csv"))).to_be_visible()
+        expect(
+            page.get_by_role("cell", name=re.compile(r"^[0-9]+-corrections\.csv$"))
+        ).to_be_visible()
+        for scheme in ("light", "dark"):
+            page.emulate_media(color_scheme=scheme)
+            for width in (1280, 390):
+                page.set_viewport_size({"width": width, "height": 900})
+                page.screenshot(
+                    path=str(tmp_path / f"uploads-{scheme}-{width}.png"), full_page=True
+                )
         browser.close()

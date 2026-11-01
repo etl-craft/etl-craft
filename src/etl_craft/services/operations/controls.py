@@ -485,4 +485,6 @@ def _stop_probes(ctx: OperationContext, run_id: int, task_id: int | None) -> Non
     for holder in holders:
         reason = confirm(ctx.config, holder_tag(holder.holder_id))
         if reason is not None:
-            control_flow.advance(ctx.engine, run_id, observed=True, reason=reason)
+            control_flow.advance(
+                ctx.engine, run_id, observed=True, reason=reason, config=ctx.config
+            )

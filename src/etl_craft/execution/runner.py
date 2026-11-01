@@ -655,7 +655,9 @@ def _start_and_record(
         log_path,
     )
     with (
-        CancelWatch(engine, spec.pipeline_run_id, child, spec_task_id(engine, spec)) as stop,
+        CancelWatch(
+            engine, spec.pipeline_run_id, child, spec_task_id(engine, spec), config=config
+        ) as stop,
         leases.heartbeat(engine, "attempt", spec.attempt_id, owner, stop),
     ):
         result = run_child(
@@ -706,7 +708,7 @@ def _start_and_record(
         ),
     )
 
-    control_flow.after_exit(engine, spec.pipeline_run_id, reason=query_error)
+    control_flow.after_exit(engine, spec.pipeline_run_id, reason=query_error, config=config)
     return outcome
 
 

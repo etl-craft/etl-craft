@@ -141,6 +141,8 @@ def project_config(host: ConnectorConfig, path: Path) -> ConnectorConfig:
         "Retention",
     ):
         raw.pop(name, None)
+    if isinstance(raw.get("Uploads"), dict):
+        raw["Uploads"].pop("Archive_to", None)
     bootstrap = host._host_config_path or host.config_path
     try:
         pinned = parse_config(raw, bootstrap or path, agent=True)
@@ -163,6 +165,7 @@ def project_config(host: ConnectorConfig, path: Path) -> ConnectorConfig:
         cloning=pinned.cloning,
         auth=host.auth,
         retention=host.retention,
+        uploads=replace(pinned.uploads, archive_to=host.uploads.archive_to),
         deployment=host.deployment,
         sizing=host.sizing,
         api_address=host.api_address,

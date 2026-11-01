@@ -102,7 +102,7 @@ def settings_by_section() -> dict[str, frozenset[str]]:
         "Artifacts": ARTIFACT_KEYS,
         "Logs": LOG_KEYS,
         "Retention": RETENTION_KEYS,
-        "Uploads": frozenset({"Max_file_mb"}),
+        "Uploads": frozenset({"Max_file_mb", "Archive_to"}),
     }
 
 
@@ -245,7 +245,7 @@ def parse_config(raw: object, path: Path, *, agent: bool = False) -> ConnectorCo
         api_address=api_address,
     )
     config = ConnectorConfig(
-        uploads=parse_uploads(raw, path),
+        uploads=parse_uploads(raw, path, resolver),
         retention=parse_retention(raw, global_profile, path, resolver),
         deployment=deployment,
         api_address=api_address,

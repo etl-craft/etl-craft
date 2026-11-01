@@ -11,12 +11,12 @@
 <button type="submit" class="primary">Upload</button></form>
 <div id="upload-result" aria-live="polite"></div>
 <section class="panel" aria-labelledby="history-title"><h2 id="history-title">Recent files for {{ chosen }}</h2>
-<div class="scroll"><table class="list"><thead><tr><th scope="col">Upload</th><th scope="col">File</th><th scope="col">Uploaded by</th><th scope="col">Uploaded</th><th scope="col">State</th><th scope="col">Run</th><th scope="col">Reason</th></tr></thead><tbody>
-{% for f in files %}<tr><th scope="row">{{ f.upload_id }}</th><td>{{ f.file_name }} <span class="note">{{ "{:,}".format(f.size_bytes) }} bytes</span></td><td>{{ f.account }}</td><td>{{ f.uploaded_at|zoned(settings.timezone) }}</td>
+<div class="scroll"><table class="list"><thead><tr><th scope="col">Upload</th><th scope="col">File</th><th scope="col">Stored name</th><th scope="col">Uploaded by</th><th scope="col">Uploaded</th><th scope="col">State</th><th scope="col">Run</th><th scope="col">Reason</th></tr></thead><tbody>
+{% for f in files %}<tr><th scope="row">{{ f.upload_id }}</th><td>{{ f.file_name }} <span class="note">{{ "{:,}".format(f.size_bytes) }} bytes</span></td><td>{{ f.stored_name or "—" }}</td><td>{{ f.account }}</td><td>{{ f.uploaded_at|zoned(settings.timezone) }}</td>
 <td>{% if f.status == 'LOADED' %}<span class="status SUCCESS"><span aria-hidden="true">✓</span> Loaded</span>{% elif f.status in ('REFUSED', 'FAILED') %}<span class="status FAILED"><span aria-hidden="true">✕</span> {{ f.status|capitalize }}</span>{% elif f.pipeline_run_id %}<span class="status IN-PROGRESS"><span aria-hidden="true">▶</span> In run</span>{% else %}<span class="status QUEUED"><span aria-hidden="true">○</span> Queued</span>{% endif %}</td>
 <td>{% if f.pipeline_run_id %}<a href="{{ run_url(chosen, f.pipeline_run_id) }}">{{ f.pipeline_run_id }}</a>{% if f.run_status %} <span class="note">{{ f.run_status }}</span>{% endif %}{% else %}<span class="note">Waiting</span>{% endif %}</td>
 <td class="wrap">{{ f.reason or "" }}</td></tr>
-{% else %}<tr><td colspan="7">No files uploaded to {{ chosen }} yet.</td></tr>{% endfor %}
+{% else %}<tr><td colspan="8">No files uploaded to {{ chosen }} yet.</td></tr>{% endfor %}
 </tbody></table></div></section>
 {% endif %}
 {% endblock %}

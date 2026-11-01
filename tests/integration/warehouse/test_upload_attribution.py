@@ -206,7 +206,7 @@ def test_unsupported_stewarded_scd_is_refused_before_run_and_at_runtime(sql_worl
         assert expected in message
     from etl_craft.core.uploads import UploadInfo
 
-    upload = UploadInfo(1, "alice", "data.csv", 0, "0" * 64)
+    upload = UploadInfo(1, "alice", "data.csv", 0, "0" * 64, stored_name="1-data.csv")
     with pytest.raises(SqlGuardError) as failure:
         sql.run(replace(context, uploads=(upload,), upload_inputs=(upload,)), w.engine_db)
     for expected in ["pipeline P", "task protected_upload", "protected", "non-protected target"]:

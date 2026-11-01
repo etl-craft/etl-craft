@@ -14,6 +14,7 @@ from etl_craft.core.actor import SYSTEM_ACTOR, acting_as, current_actor
 from etl_craft.core.enums import AttemptStatus, ControlAction, ControlStatus, RunStatus
 from etl_craft.engine import controls, transitions
 from etl_craft.engine.queries import statement
+from etl_craft.engine.upload_recovery import finish_run_files
 from etl_craft.execution.leases import process_start
 from etl_craft.warehouse.connection import warehouse_dialect
 
@@ -131,10 +132,19 @@ def advance(
                 "engine-owned warehouse queries have ended; successful evidence is kept",
             )
 
+        if config is not None:
+            finish_run_files(engine, config, row.pipeline_run_id)
 
-def after_exit(engine: Engine, run_id: int, *, reason: str | None = None) -> None:
+
+def after_exit(
+    engine: Engine,
+    run_id: int,
+    *,
+    reason: str | None = None,
+    config: ConnectorConfig | None = None,
+) -> None:
     """Let an independently started task acknowledge controls without a pipeline scheduler."""
-    advance(engine, run_id, observed=True, reason=reason)
+    advance(engine, run_id, observed=True, reason=reason, config=config)
 
 
 @acting_as(SYSTEM_ACTOR)
