@@ -191,7 +191,8 @@ item's text, or work done early under another item.
 | S7.I The endurance run | Planned |  | 72-hour accelerated Support Insights candidate run, faults and bounded growth evidence after S8 is running |
 | S7.J Documentation to finish | In progress | #85, #227, #277 | Generated references and guides exist; supported public contracts, complete reference and recipes remain |
 | S7.L ETL Craft logo and CLI banner | In progress | #277 | Shared mark, favicon and theme assets exist; complete branding guidance and interactive banner contract remain |
-| S7.AL Pre-demo package gaps | Planned |  | Five slices: duplicate_count, stale docs, guarded-table test instructions, event-file validation opt-in and timeline waits |
+| S7.AL Pre-demo package gaps | Planned |  | Six slices: duplicate_count, stale docs, guarded-table test instructions, event-file validation opt-in, timeline waits and erasure snapshot bounds |
+| S7.AM Protection on every warehouse | In progress | #311 | Slice 1: atomic SCD1/SCD2 target merges; in-row protection/event recovery and full-provider acceptance follow in approved slices 2 and 3 |
 | S7.M Stewardship uploads | Done (M2) | #296, #305 | Atomic receipts and safe stored names; processed layout, retention archives and verified reruns; crash recovery and guarded upload history |
 | S7.S Seed tables | Done | #308 | Typed pinned-bundle seeds replace reference tables until recorded stewardship handover |
 | S7.T Business calendars | Done | #276 | Shared holiday and weekend calendars for schedules, run dates, backfill and catch-up |
@@ -949,6 +950,61 @@ empty-history-page handling defect, which was corrected and verified. No cloud w
 
 **Choices that differ from the item text.**
 
+- S7.AM slice 1 acceptance availability: SQL/SCD, replay, failure, stewardship, erasure and
+  allocation contracts passed on PostgreSQL, DuckDB, Trino/Iceberg and DuckDB/Iceberg. Unit
+  checks and twenty allocation-race rounds passed on both Engine DBs. Affected native/Iceberg
+  Snowflake and Delta/UniForm Databricks action, SCD lifecycle, composite-key and ROW_ID tests
+  passed. Databricks initially refused sessions before SQL; the owner restored availability
+  and acceptance then passed. Snowflake retry/fencing failures reproduced on unchanged main;
+  the completed-history lookup and fixture-initialization fixes passed the original modules
+  without increasing deadlines or weakening cancellation assertions. Engine DB SQL is unchanged.
+
+- **S7.AM protection design (owner, 2026-11-01).** Three implementation PRs are approved:
+  (1) single-MERGE SCD1/SCD2 builders, replay/count/ROW_ID proofs on every warehouse/format,
+  preserving current protection; (2) in-row protection and the Engine DB event log, recovery,
+  edit/upload/unlock/rehash/erasure/hard-delete integration and doctor, deleting side-table
+  authority/code, `atomic_protection` and its provider refusals; (3) every-provider acceptance,
+  one cloud try each, twenty concurrency rounds on both Engine DBs, security and docs.
+  S8's protection prerequisite is S7.AM complete, not slice 1 alone.
+  - Authoritative state is in `ETL_PROTECTION` canonical JSON, carrying its own format version,
+    plus `ETL_ROW_FINGERPRINT` and a cheaply filterable request-id column. Keep columns minimal;
+    format/revision stay in JSON unless a MERGE condition needs a column, with its reason in
+    Decisions. Per-cell actual writers and mixed-upload attribution, row/value unlock semantics,
+    typed hash/rehash rules and the PostgreSQL-before-15 transactional fallback are retained.
+  - No in-row outbox or metadata-only clear write. Approved `AUD_PROTECTION_EVENTS` is an
+    append-only, actor-guarded Engine DB table with PENDING, COMMITTED and ABANDONED status
+    rows and hashes only, never business values. Both dialect migrations/schemas, CHECK seeds,
+    actor-audit and query-plan coverage are required. Under the target lock, compute exact
+    events from staged effective values, append PENDING, run one target MERGE stamping request
+    ids, then append COMMITTED. Recover before the next target mutation, at controller start
+    and on provenance reads: rows carrying a PENDING request id mean COMMITTED; none means
+    ABANDONED; atomic MERGE has no partial target case. HARD_DELETE and ERASURE intents use
+    this same log, never a second intent store; their evidence must prove the physical-delete
+    outcome as well as the ordinary changed-row request-id case.
+  - No membership witness gates writes. Doctor compares locked-key hashes in the event log
+    with rows present and reports outside deletion with target, hashes and remedy. Warehouse
+    permissions are the trust boundary. No snapshot expiry is implicit.
+  - No conversion action or pre-0.9 compatibility shim: no release tag contains S5.O.3.
+    Refuse an old-side-table target, naming it and the remedy to back up, recreate and re-apply
+    locks; delete old side-table code. Prove DuckDB-over-Iceberg MERGE on the pinned version
+    first; if unavailable, stop with a design note instead of dropping that provider.
+  - Rejected alternative: multi-table writes followed by `rollback_to_snapshot`/RESTORE.
+    It still needs write-ahead intent, can discard intervening commits, exposes rows that later
+    vanish, and has no DuckDB-over-Iceberg form. Separate close/insert SCD2 statements are
+    replaced because they expose a crash window on Iceberg and Delta.
+  - S7.AL.6 owns the S7.U snapshot-retention gap: per-table physical persistence/expiry-bound
+    reporting in erase/ERASURE, doctor findings for no bounded expiry and the erasure guide.
+    It proposes no automatic expiry; an explicit optional expiry action requires a proposal.
+  Slice 1 Decisions: internal source-control columns avoid business-name collisions; computed
+  ROW_ID allocation stays inside the target mutation lock. Existing internal fault names after
+  a close/update now occur after the whole atomic MERGE on capable providers; older PostgreSQL
+  retains its original transactional statement boundaries. Existing protection remains native-only
+  in slice 1; the every-warehouse final requirement is not claimed implemented yet.
+  Snowflake lock verification uses an end-time lower bound at the server's current time, with
+  no upper bound, retaining running queries while omitting completed history. The maximum result
+  count, cancellation proof and test deadlines are unchanged. The fencing fixture waits for
+  connection initialization before observing the intended write, rather than its setup queries.
+
 - **Pre-demo audit owner decisions (owner, 2026-11-01).** S7.B, S7.C, S7.D, S7.E,
   S7.F, S7.G, S7.H, S7.I, S7.J, S7.L and S7.W all stay inside 0.9.0. Only S7.Q and
   S7.AE remain moved after 0.9.0. Their new Progress rows distinguish existing parts from
@@ -962,7 +1018,7 @@ empty-history-page handling defect, which was corrected and verified. No cloud w
   note is reviewed before its implementation item and slice order are assigned; this plan
   does not approve a storage design or add its columns. That implementation must merge before S8.
 - **S8 admission (owner, 2026-11-01).** Replace the old all-workstreams prerequisite with:
-  this pre-demo plan PR; every-warehouse protection after design approval; S7.AL.1
+  this pre-demo plan PR; S7.AM protection on every warehouse; S7.AL.1
   (`duplicate_count`); S7.AL.2 (stale docs); S7.F images/manifests; S5.AE close-out; S7.O.
   Every other 0.9.0 item runs alongside S8 and still closes before release. S5.AE close-out
   proves its gateway/agent/deployment contracts and tick instrumentation; S7.I owns the
@@ -8486,9 +8542,9 @@ shows real check states with their time.
 
 Owner, 2026-11-01. Branches: one implementation pull request per slice. These are package
 close-outs from the pre-demo audit, not workarounds in Support Insights. Slices 1 and 2 merge
-before S8 starts; slices 3–5 remain inside 0.9.0 and may run alongside S8. S7.AK remains the
-separate, completed Schema checker. Every-warehouse protection has its own design approval
-and subsequent implementation item; it is not hidden inside these five slices.
+before S8 starts; slices 3–6 remain inside 0.9.0 and may run alongside S8. S7.AK remains the
+separate, completed Schema checker. Every-warehouse protection is S7.AM, not hidden inside
+these six slices.
 
 #### S7.AL.1 Duplicate counts
 
@@ -8562,6 +8618,69 @@ and subsequent implementation item; it is not hidden inside these five slices.
 - **Done when.** Timeline durations and outcomes match the recorded wait rows, open waits are
   visibly open, controls remain accessible and no hidden project's waits leak into a read.
 
+#### S7.AL.6 Erasure on snapshot-versioned tables
+
+Owner addition, 2026-11-01: merged S7.U deletes current rows but old Iceberg and Delta
+snapshots can still expose their values until expiry. This sixth slice stays inside 0.9.0.
+
+- **Change.** `erase` and ERASURE results state per Iceberg/Delta table that erased rows remain
+  physically present until snapshot expiry, and show the configured bound where readable.
+  Doctor reports a table with erased subjects and no bounded expiry, naming the target and
+  remedy. The erasure guide explains time travel, retention bounds and warehouse permissions.
+  Never expire snapshots implicitly. An optional explicit expiry step may be proposed, not
+  built in this slice without approval.
+- **Tests.** Current-row erasure with old-snapshot visibility; configured and absent expiry
+  bounds; local/agent ERASURE and CLI/API result parity; doctor messages and a spy proving no
+  expiry/RESTORE/rollback statement runs as a side effect. Test every supported snapshot format.
+- **Done when.** Per-table outcomes and doctor distinguish logical deletion from physical
+  retention, expose a readable configured bound or its absence honestly, and the guide names
+  the remedy without suggesting old snapshots were silently removed.
+
+### S7.AM Protection on every warehouse
+
+Owner decision, 2026-11-01. Three separate PR slices; all must merge before S8. Reuse the
+target lock, hash contract, authenticated operations and actual uploader attribution.
+
+1. **Single-MERGE builders.** SCD1 updates/inserts and SCD2 closes/inserts mutate their target
+   with one MERGE on each supported warehouse/format. Keep current protection while this
+   foundation lands. PostgreSQL before 15 retains its same-transaction fallback. Prove the
+   pinned DuckDB-over-Iceberg MERGE first; stop with a note if it cannot execute.
+   - Tests: independently expected complete rows, unchanged rows, replay/counts, ROW_ID
+     uniqueness, composite keys, failure/process-loss boundaries and current protection;
+     every local warehouse and cloud formats, plus repeated concurrent writers on both Engine DBs.
+   - Done when target observations prove one atomic MERGE where supported, no SCD2 half-version
+     is exposed after process loss, retries converge and all existing protection tests pass.
+2. **In-row protection and event recovery.** Authoritative locks and per-cell provenance go
+   in `ETL_PROTECTION` JSON with its own format version, `ETL_ROW_FINGERPRINT` and a dedicated
+   filterable request id. No outbox, clear write or separate format/revision column unless
+   a MERGE condition needs it and Decisions explains why. Add append-only guarded
+   `AUD_PROTECTION_EVENTS`, hash-only PENDING/COMMITTED/ABANDONED status rows, migrations and
+   schemas in both dialects. Under the target lock stage exact events, append PENDING,
+   commit the stamped target MERGE, append COMMITTED. Recover before mutation, at controller
+   start and on provenance reads; stamp presence commits a pending request, none abandons it.
+   HARD_DELETE/ERASURE use the same log; prove their deletion outcome recovery too.
+   - Retain value/row unlocks, mixed-upload per-cell writers, hash/rehash semantics and the
+     PostgreSQL fallback. Integrate edits/uploads, rehash, erasure, hard deletes and doctor.
+     Doctor compares logged locked-key hashes to present rows; no membership witness gates
+     writes. Warehouse permissions are the trust boundary. Refuse old-side-table targets
+     naming backup/recreate/re-apply-locks; delete side-table code and `atomic_protection` plus
+     its provider refusals. There is no conversion action or pre-0.9 compatibility shim.
+   - Tests: both Engine DB upgrades, actor guards/CHECK seeds and indexed query plans;
+     every commit/crash/replay boundary, request-id lookup, outside deletions, no raw business
+     values in events, native old-target refusal and mixed writers through real operations.
+   - Done when data and protection change atomically, event recovery is idempotent for all
+     mutation kinds, locked data survives source reloads, and doctor gives actionable findings.
+3. **Provider acceptance.** Every supported warehouse/format, including Snowflake and
+   Databricks (one try each under AGENTS.md), twenty concurrency rounds on both Engine DBs,
+   security review, public guide/example/CHANGELOG and independent expected results.
+   - Done when every local contract passes; cloud outcomes/availability are recorded under
+     the existing owner policy, complete candidate cloud evidence remains S7.H, and docs
+     accurately describe all-provider protection, recovery, permissions and old-target remedy.
+
+**Rejected alternative.** Committing several tables then `rollback_to_snapshot`/RESTORE still
+requires intent logging, can discard later commits, exposes transient rows and has no
+DuckDB-over-Iceberg form. It is not a protection implementation strategy.
+
 ## Release candidate: the Support Insights example
 
 **Goal.** Prove 1.0.0 on a real project before it is released. The
@@ -8572,8 +8691,8 @@ the views match S8.F's reference queries, and every package feature has a tested
 Support Insights demonstration (S8.H), visible through the README and UI.**
 
 **Depends on (owner, 2026-11-01).** S8 starts when the pre-demo plan PR,
-stewardship protection on every warehouse (the implementation item follows approval of its
-design note), S7.AL slice 1 (`duplicate_count`), S7.AL slice 2 (stale docs), S7.F images and
+S7.AM protection on every warehouse, S7.AL slice 1 (`duplicate_count`),
+S7.AL slice 2 (stale docs), S7.F images and
 manifests, the S5.AE close-out and S7.O are merged. Every other 0.9.0 item runs alongside S8;
 all release checklist gates still apply before 0.9.0. The example is built against 1.0.0 release
 candidates (`1.0.0rc1`, `1.0.0rc2`, ...); a defect it finds is fixed in etl-craft, and a new release

@@ -112,7 +112,7 @@
       "engine_statements": 3,
       "engine_transactions": 3,
       "warehouse_connections": 1,
-      "warehouse_statements": 9
+      "warehouse_statements": 8
     },
     "SCD2_MERGE": {
       "engine_connections": 0,

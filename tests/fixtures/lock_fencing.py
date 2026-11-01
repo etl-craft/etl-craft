@@ -44,10 +44,12 @@ def start_old_write(world, sql, wait_seconds=20):
     """
     engine = build_warehouse_engine(world.config, session_tag=holder_tag(OLD))
     errors = []
+    initialized = threading.Event()
 
     def write():
         try:
             with engine.begin() as conn:
+                initialized.set()
                 conn.execute(text(sql))
         # The stopped statement's error is the evidence the tests look for.
         except Exception as error:
@@ -55,6 +57,7 @@ def start_old_write(world, sql, wait_seconds=20):
 
     thread = threading.Thread(target=write, daemon=True)
     thread.start()
+    assert initialized.wait(wait_seconds), f"the expired holder's connection never opened: {errors}"
     dialect = warehouse_dialect(world.config)
     deadline = time.monotonic() + wait_seconds
     while True:

@@ -8,6 +8,14 @@ All notable changes are recorded here. The format follows
 
 ### Fixed
 
+- SCD1 updates/inserts and SCD2 closes/successor inserts now use one target MERGE on supported
+  warehouse formats, including DuckDB over Iceberg. This removes the visible close-before-insert
+  crash window on Iceberg and Delta; replay preserves unchanged versions and counts. PostgreSQL
+  before 15 retains its same-transaction fallback. Existing native-only protection remains until
+  the next S7.AM slice; this change does not enable protected writes on other providers yet.
+- Snowflake lock cancellation omits completed query history while retaining running statements,
+  avoiding a slow history scan when releasing a failed task's target lock.
+
 - DuckDB over Iceberg loads lazy column metadata using the catalog's actual schema/table
   spelling, preserving quoted mixed-case tables during native identifier lookup.
 

@@ -18,6 +18,10 @@ aud: the Engine DB's own tables, cloned on its own schedule
 | `SUPPORT_EXPORT` | a slow export that overruns its time limit and its SLA |
 | `SUPPORT_BACKFILL` | a long backfill, to stop and resume |
 
+The SCD tasks publish their target changes with one MERGE, including closing and inserting
+SCD2 versions together on Iceberg. PostgreSQL before 15 uses one transaction instead.
+Retries preserve unchanged rows; staging and the Engine DB outcome remain separate commits.
+
 The data is synthetic and the same every time, so the results can be checked: some ratings are
 out of range, some calls run long, and one agent is unknown, for the business rules to find. The
 first `SUPPORT_DM` run fails on purpose: its `flaky_feed` is not ready the first time.

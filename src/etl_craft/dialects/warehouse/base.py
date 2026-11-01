@@ -746,10 +746,6 @@ class WarehouseDialect:
         """Inline the allocation only where INSERT may read its own target."""
         return None
 
-    def merge_source(self, target: str, stage: str, keys: tuple[str, ...]) -> str | None:
-        """Return a source carrying identifiers when the dialect can allocate within MERGE."""
-        return None
-
     def supports_insert_merge(self, conn: Connection) -> bool:
         """Whether one MERGE can update and insert source rows."""
         return True

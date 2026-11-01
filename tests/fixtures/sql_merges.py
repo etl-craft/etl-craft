@@ -104,6 +104,15 @@ def check_killed_merge(world, kind, point):
             process.kill()
             process.join(5)
     expire_leases(w.engine_db)
+    interrupted = merge_rows(w, target)
+    old_shape = sorted((r["id"], r["name"], r["active_flag"]) for r in before)
+    complete_shape = [(1, "new", "Y"), (2, "same", "Y"), (3, "add", "Y")]
+    if kind == "SCD2_MERGE":
+        complete_shape.append((1, "old", "N"))
+    assert sorted((r["id"], r["name"], r["active_flag"]) for r in interrupted) in (
+        old_shape,
+        sorted(complete_shape),
+    )
     w.run("merge", **params)
     rows = merge_rows(w, target)
     expected = [(1, "new", "Y"), (2, "same", "Y"), (3, "add", "Y")]
