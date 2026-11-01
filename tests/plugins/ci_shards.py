@@ -110,6 +110,8 @@ class Shard:
     @pytest.hookimpl(optionalhook=True)
     def pytest_testnodedown(self, node, error) -> None:
         """Take the complete pre-partition collection from each worker."""
+        if error:
+            return
         expected = node.workeroutput.get("ci_expected")
         if not error and isinstance(expected, list):
             if self.expected and self.expected != expected:

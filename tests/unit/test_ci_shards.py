@@ -675,3 +675,14 @@ def test_combined_engine_warehouse_cases_have_exactly_their_service_owner(engine
         if Expression.compile(ci.selection(profile)).evaluate(lambda name, **_: name in markers)
     ]
     assert actual == [ci.assigned_profile("case", list(markers))]
+
+
+def test_crashed_worker_without_output_does_not_hide_the_crash():
+    from plugins.ci_shards import Shard
+
+    shard = object.__new__(Shard)
+    shard.expected = ["test_one"]
+    shard.catalog = {"test_one": ["unit"]}
+    shard.pytest_testnodedown(SimpleNamespace(), "crashed")
+    assert shard.expected == ["test_one"]
+    assert shard.catalog == {"test_one": ["unit"]}
