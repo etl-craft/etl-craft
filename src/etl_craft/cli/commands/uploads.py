@@ -19,7 +19,12 @@ from etl_craft.core.enums import ActionName
 from etl_craft.core.errors import ExitCode, UsageError
 from etl_craft.services.operations.actions import invoke
 from etl_craft.services.operations.serialization import from_json
-from etl_craft.services.operations.uploads import UploadReceipt, UploadRequest, UploadSubmission
+from etl_craft.services.operations.uploads import (
+    UploadHistory,
+    UploadReceipt,
+    UploadRequest,
+    UploadSubmission,
+)
 
 
 def configure(parser: argparse.ArgumentParser) -> None:
@@ -70,8 +75,18 @@ def upload(args: argparse.Namespace, out: Output) -> int:
 def history(args: argparse.Namespace, out: Output) -> int:
     """Render the same upload records as the API."""
     result = call(args, ActionName.UPLOADS, UploadRequest(pipeline_code=args.pipeline_code))
-    out.result(result, args.output_format, text=lambda: out.line(str(result)))
+    assert isinstance(result, UploadHistory)
+    out.result(result, args.output_format, text=lambda: _history_text(out, result))
     return ExitCode.SUCCESS
+
+
+def _history_text(out: Output, result: UploadHistory) -> None:
+    out.line("UPLOAD  FILE  STORED_NAME  STATUS  RUN  REASON")
+    for row in result.uploads:
+        out.line(
+            f"{row['upload_id']}  {row['file_name']!r}  {row['stored_name']}  "
+            f"{row['status']}  {row['pipeline_run_id']}  {row['reason'] or '-'!r}"
+        )
 
 
 UPLOAD = Command("upload", "Upload one stewardship file.", upload, configure, (ActionName.UPLOAD,))

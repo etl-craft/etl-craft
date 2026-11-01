@@ -84,3 +84,36 @@ def test_direct_policy_cannot_accept_a_negative_period():
 
     with pytest.raises(ConfigurationError, match="Run_history_days"):
         Retention(run_history_days=-1)
+
+
+def test_upload_archive_reuses_retention_and_requires_explicit_s3_profile():
+    from etl_craft.config.loader import settings_by_section
+
+    raw = {
+        "Secrets": {"Source_type": "ENVIRONMENT"},
+        "Engine": {
+            "dev": {"Jdbc_url": "jdbc:sqlite:engine.db", "Auth_mode": "NONE", "Schema": "main"}
+        },
+        "Retention": {"Run_history_days": 7},
+        "Uploads": {"Archive_to": "file:///srv/archive"},
+    }
+    config = parse_config(raw, Path("craft-connector.yml"))
+    assert config.retention.run_history_days == 7
+    assert config.uploads.archive_to.store == "file:///srv/archive"
+    assert "Archive_to" in settings_by_section()["Uploads"]
+    raw["Uploads"] = {"Archive_to": "s3://bucket/archive"}
+    with pytest.raises(ConfigurationError, match="Profile"):
+        parse_config(raw, Path("craft-connector.yml"))
+
+
+@pytest.mark.parametrize("value", [False, 0, []])
+def test_upload_archive_rejects_false_values_instead_of_disabling_it(value):
+    raw = {
+        "Secrets": {"Source_type": "ENVIRONMENT"},
+        "Engine": {
+            "dev": {"Jdbc_url": "jdbc:sqlite:engine.db", "Auth_mode": "NONE", "Schema": "main"}
+        },
+        "Uploads": {"Archive_to": value},
+    }
+    with pytest.raises(ConfigurationError, match=r"Uploads\.Archive_to"):
+        parse_config(raw, Path("craft-connector.yml"))

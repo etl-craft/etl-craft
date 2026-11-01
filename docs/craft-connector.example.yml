@@ -269,3 +269,5 @@ Cloning:
 # Stewardship blanket ceiling; FILE_VALIDATION.MAX_FILE_MB may lower it.
 Uploads:
   Max_file_mb: 50
+  # Archive_to: file:///srv/etl-archive/uploads
+  # Or: {Store: s3://team-archive/uploads, Profile: archive}

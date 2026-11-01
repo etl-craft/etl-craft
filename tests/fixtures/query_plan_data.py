@@ -181,8 +181,8 @@ SEEDS = [
     ),
     (
         "AUD_UPLOADS",
-        "PIPELINE_ID,ACCOUNT,FILE_NAME,SHA256,SIZE_BYTES,PIPELINE_RUN_ID,STATUS,UPLOADED_AT,TAKEN_AT,ENDED_AT",
-        f"p,'plan','plan.csv',md5({RUN_ID}::text)||md5(p::text),1,{RUN_ID},'LOADED',{DAY},{DAY},{DAY}",
+        "PIPELINE_ID,ACCOUNT,FILE_NAME,STORED_NAME,SHA256,SIZE_BYTES,PIPELINE_RUN_ID,STATUS,UPLOADED_AT,TAKEN_AT,ENDED_AT",
+        f"p,'plan','plan.csv','1-plan.csv',md5({RUN_ID}::text)||md5(p::text),1,{RUN_ID},'LOADED',{DAY},{DAY},{DAY}",
         RUNS,
     ),
     (

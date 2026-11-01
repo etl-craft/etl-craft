@@ -229,7 +229,13 @@ def _run_schedule(
         stopped = _stopped_run(engine, run, scheduler, options)
         if stopped is not None:
             return stopped
-        return finalize(engine, run, options.hooks, scheduler.never_ready, scheduler.after_failure)
+        outcome = finalize(
+            engine, run, options.hooks, scheduler.never_ready, scheduler.after_failure
+        )
+        from etl_craft.engine.upload_recovery import finish_run_files
+
+        finish_run_files(engine, config, run.pipeline_run_id)
+        return outcome
 
 
 def _drive_scheduler(

@@ -403,7 +403,13 @@ def _cancel(ctx: OperationContext, request: AgentTask) -> AgentReply:
         controls.observe_exit(conn, request.attempt_id, queries_ended=request.queries_ended)
     from etl_craft.execution.control_flow import advance
 
-    advance(ctx.engine, row.pipeline_run_id, observed=True, reason=request.error_message)
+    advance(
+        ctx.engine,
+        row.pipeline_run_id,
+        observed=True,
+        reason=request.error_message,
+        config=ctx.config,
+    )
     return AgentReply()
 
 

@@ -73,8 +73,7 @@ The first upload creates an exclusive run. Files arriving during it wait durably
 names `waiting_behind_run_id`, with `pipeline_run_id` empty until admission. After that run ends,
 the controller takes all pending files into one run in upload-id order, including after restart.
 Validation checks each file separately and downstream tasks see only accepted files. If none
-passes, the run fails before loading. Original bytes remain under `uploads/{id}/content`;
-retention, archival and archive restoration belong to M2.
+passes, the run fails before loading. File retention and restoration are described below.
 
 Python loading scripts read `task.uploads`, retaining every row's `UPLOAD_ID`. Managed SQL writes
 must SELECT that column explicitly; `$$upload_ids` expands to bound ids of this run's accepted
@@ -95,3 +94,69 @@ files. Validation can read every file; downstream attempts cannot read refused f
 execution shares the same fenced read function. Both runners stream into a private cache and
 verify size and SHA-256 before any script sees the file. No host path or storage credential is
 sent to an agent.
+
+
+## Storage, retention and recovery
+
+An upload streams into `uploads/<PIPELINE_CODE>/.incoming/`, with the size limit and SHA-256
+checked as it arrives. The file is flushed and renamed to
+`uploads/<PIPELINE_CODE>/<STORED_NAME>` before its audit row and queue/run commit together.
+`STORED_NAME` is `<UPLOAD_ID>-<safe name>`, with characters outside `[A-Za-z0-9._-]` replaced
+by underscores (an empty label becomes `upload`), truncated to a 255-byte component including
+the id prefix. The full original label is retained separately. The stored name is recorded
+once and never changed.
+The original name remains a label. Folder codes are pinned by the immutable receipt request,
+so renaming a pipeline does not strand its earlier files. The CLI history, API and Uploads page show both names.
+
+The API, controller and local runners must see the same project storage directories
+(use a shared filesystem when these hosts differ); API-only agents need only the content route.
+Only queued files and files of runs that have not ended stay in the pipeline folder. When a
+run ends, including failure or cancellation, its files move by same-filesystem rename to
+`processed_uploads/<PIPELINE_CODE>/`; later queued files stay put. Folders are created when
+needed. Ended attempts' private upload caches are removed too; live attempts keep theirs. A retry inside a run reads its pending files; a rerun of an ended run reads its
+processed files. File reads always start from committed audit metadata and check SHA-256.
+A missing committed file fails with its upload id, expected locations and the remedy to
+upload again. Nothing reconstructs a path from the original client name.
+
+Use the existing retention period and the named archive destination:
+
+```yaml
+Retention:
+  Run_history_days: 90
+Uploads:
+  Max_file_mb: 50
+  Archive_to: file:///srv/etl-archive/uploads
+```
+
+For S3, `Archive_to` uses the same explicit Store/Profile shape as other object locations:
+
+```yaml
+Uploads:
+  Archive_to:
+    Store: s3://team-archive/uploads
+    Profile: archive
+```
+
+`Object_stores.archive` must exist and name its credential environment variables. No profile
+is guessed. The destination is host-owned configuration, including when a run uses a pinned
+bundle. `purge` and scheduled retention archive ended uploads older than
+`Retention.Run_history_days`; an unset period retains them. A configured period with no
+archive destination refuses deletion and names the missing setting. Audit rows and the run's
+validation evidence remain available after file archival.
+
+The audit records archive location and time before copying; the timestamp records that durable
+archive decision. Copies use `<destination>/<SHA256>/<PIPELINE_CODE>/<STORED_NAME>`. For S3,
+the recorded URI also retains the profile name, with no credentials. The local source is
+removed only after the archive's size and SHA-256 match. Reruns restore through the shared
+local/agent read path, checking the recorded digest before a script sees bytes. An unreachable,
+missing or changed archive fails with the upload, location, expected bytes and remedy.
+
+The controller removes uncommitted incoming/final leftovers at startup and logs each removal.
+It also finishes committed run-ending moves and archive writes interrupted by a crash; reads
+finish the same work. The source survives until its replacement is durable and verified, so
+an interrupted archive can leave two copies. A failed commit checks whether the row actually
+committed before deleting any bytes or returning an upload id.
+
+Migration 0079 has not shipped in a release and now includes these storage columns and guards.
+Development Engine DBs that already applied its earlier form must be recreated; released
+versions upgrade through the normal migration path.

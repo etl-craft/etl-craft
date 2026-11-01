@@ -193,6 +193,9 @@ def serve(ctx: OperationContext, stop: threading.Event) -> None:
             from etl_craft.controller.refresh import initialize
 
             initialize(ctx)
+            from etl_craft.engine.upload_recovery import recover_uploads
+
+            recover_uploads(ctx.engine, ctx.config)
             controller_id = controllers.start(ctx.engine)
             metrics.leader = True
             logger.info("controller_id=%s: controller active", controller_id)

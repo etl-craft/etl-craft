@@ -180,7 +180,7 @@ item's text, or work done early under another item.
 | S7.AH Renames keep identity | Done | #273 | Atomic attributed renames retain IDs, offsets, events and grants; stale config inserts refuse |
 | S7.AI Fixes from the 2026-10-27 audit | Done | #264 | Pool/attempt credentials, bounded SSO, publishing, sign-in, dependency bounds, setup and first-ending metrics. |
 | S7.AK Schema checker | Done | S7.AK PR | Optional per-project schedule plus an on-demand check that compare declared tables with the warehouse; Insights and the catalog show the last check |
-| S7.M Stewardship uploads | In progress (M1 of M2) | M1 PR | `STEWARDABLE_FLAG` lists a pipeline for uploads; one pipe-delimited CSV/TXT or XLSX file per upload; `FILE_VALIDATION` accepts files before `HAS_DATA` dependents load them; blanket and per-pipeline size limits |
+| S7.M Stewardship uploads | Done (M2) | #296, #305 | Atomic receipts and safe stored names; processed layout, retention archives and verified reruns; crash recovery and guarded upload history |
 | S7.S Seed tables | Planned | | Folder-addressed seed files replace their table on change until stewardship takes it over |
 | S7.T Business calendars | Done | #276 | Shared holiday and weekend calendars for schedules, run dates, backfill and catch-up |
 | S7.U Personal-data erasure | Planned | | A standing erasure register and ERASURE tasks remove subjects after loads, outside managed writes |
@@ -934,6 +934,38 @@ empty-history-page handling defect, which was corrected and verified. No cloud w
   are proven on all four local warehouses. One statement per upload in the same transaction
   supplies each writer to protection evidence. The approved attempt-only agent content route
   shares local execution's fenced storage reader and verifies SHA-256 before scripts.
+
+- S7.M M2 (owner, 2026-11-01): (1) `uploads/<PIPELINE_CODE>/` holds only queued
+  files or files of an unfinished run; folders are created on demand. (2) Every run ending
+  moves only its own files, on success, failure or cancellation; later queued files stay.
+  (3) Ended files use `processed_uploads/<PIPELINE_CODE>/` until existing retention archives
+  them to `Uploads.Archive_to`. (4) Stored names are `<UPLOAD_ID>-<safe original name>` using
+  `[A-Za-z0-9._-]`; client labels never become paths. (5) Immutable `STORED_NAME` is recorded
+  at receipt and shown in CLI/API/UI history; every local, agent and validator read uses the
+  recorded state/name and verifies SHA-256, restoring archived inputs for reruns.
+  (6) Receipt streams/fsyncs into `.incoming`, then inserts/queues and renames before one
+  Engine DB commit; duplicate admission holds the existing pipeline lock until commit.
+  A lost acknowledgement checks the committed row before returning an id or deleting bytes.
+  Startup removes/logs uncommitted leftovers; missing committed bytes refuse with a remedy.
+  (7) Endings and archive intent commit before moving/copying. Startup and reads finish
+  interrupted work; the source stays until verified publication, allowing two copies but
+  never removing both. Migration 0079 is corrected in place before its first release.
+  Choices that differ from the item text: existing `Retention.Run_history_days` supplies the
+  file cutoff; `ENDED_AT` retains the first ending across reruns and validation does not set it.
+  Archive time records the durable decision, with source deletion only after verification.
+  S3 uses the existing Store/Profile value shape and records the profile name in its URI;
+  archive keys include SHA-256. Upload audit, the immutable receipt request (which pins the
+  original folder code across pipeline renames), and actual validation evidence remain retained.
+  Receipt resolution and orphan cleanup wait behind the original admission transaction before
+  proving a row absent; archive reads are bounded by the recorded size plus one byte.
+  Ended attempts' private caches are discarded at ending, recovery and archival; live
+  attempts and canonical sources are kept.
+  Acceptance availability: SQLite/PostgreSQL upgrades, audit guards, indexed query plans,
+  atomic receipt/move/archive crash recovery and repeated admission races pass locally.
+  Ordinary stewardship flows and handler attribution pass on all four local warehouses;
+  archived reruns pass through real validation/loading on native DuckDB. API and browser
+  suites pass; file and explicitly profiled MinIO archives are covered. Cloud warehouse SQL
+  is unchanged, so no cloud acceptance is required for M2.
 
 - S7.A slice 6 (owner, 2026-10-30: 6a/6b/6c; announcements as planned). 6a puts the task and run
   actions on the pages through one generic confirmation (body, URL and extra fields per button).

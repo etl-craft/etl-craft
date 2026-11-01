@@ -503,3 +503,84 @@ def test_a_pending_timestamp_window_protects_its_run_range_and_attempt(scene):
     result = invoke(ctx, ActionName.PURGE, PurgeInput())
     assert result.counts["AUD_TASK_ATTEMPTS"] == 1
     assert result.counts["AUD_TASK_RUN_LOG"] == 1
+
+
+def test_archived_upload_keeps_receipt_run_and_validation_evidence(scene, tmp_path):
+    import hashlib
+    import json
+
+    from etl_craft.config.object_models import Artifacts
+    from etl_craft.core.upload_names import stored_name
+    from etl_craft.engine.upload_storage import recorded_upload
+
+    ctx, pipeline, _, run, task_run_id, attempt = scene
+    ctx = replace(
+        ctx,
+        config=replace(
+            ctx.config,
+            config_path=tmp_path / "craft-connector.yml",
+            uploads=replace(
+                ctx.config.uploads, archive_to=Artifacts((tmp_path / "archive").as_uri())
+            ),
+        ),
+    )
+    content = b"id|name\n1|old\n"
+    with ctx.engine.begin() as conn:
+        upload_id = insert(
+            conn,
+            "INSERT INTO AUD_ACTIONS (STARTED_AT,ENDED_AT,ACTOR,ACTOR_KIND,HOST,COMMAND,"
+            "ARGUMENTS,PIPELINE_ID,OUTCOME) VALUES (:old,:old,'system','SYSTEM','test','upload',"
+            ":arguments,:pipeline,'SUCCESS')",
+            "ACTION_ID",
+            old=OLD,
+            pipeline=pipeline,
+            arguments=json.dumps({"pipeline_code": "retention"}),
+        )
+        name = stored_name(upload_id, "old.csv")
+        conn.execute(
+            text(
+                "INSERT INTO AUD_UPLOADS "
+                "(UPLOAD_ID,PIPELINE_ID,ACCOUNT,FILE_NAME,STORED_NAME,SHA256,"
+                "SIZE_BYTES,PIPELINE_RUN_ID,STATUS,UPLOADED_AT,TAKEN_AT,ENDED_AT) "
+                "VALUES (:id,:pipeline,'steward','old.csv',:name,:sha,:size,:run,"
+                "'LOADED',:old,:old,:old)"
+            ),
+            {
+                "id": upload_id,
+                "pipeline": pipeline,
+                "name": name,
+                "sha": hashlib.sha256(content).hexdigest(),
+                "size": len(content),
+                "run": run,
+                "old": OLD,
+            },
+        )
+    processed = tmp_path / "processed_uploads/retention" / name
+    processed.parent.mkdir(parents=True)
+    processed.write_bytes(content)
+    cached = tmp_path / ".upload_inputs" / str(attempt) / str(upload_id) / "content"
+    cached.parent.mkdir(parents=True)
+    cached.write_bytes(content)
+    done = invoke(ctx, ActionName.PURGE, PurgeInput())
+    assert done.counts["upload_files"] == 1
+    assert not processed.exists() and not cached.exists()
+    assert count(ctx, "AUD_UPLOADS") == 1
+    assert count(ctx, "AUD_PIPELINES_RUN_LOG") == 1
+    assert count(ctx, "AUD_TASK_RUN_LOG") == 1
+    assert count(ctx, "AUD_TASK_ATTEMPTS") == 1
+    with ctx.engine.connect() as conn:
+        assert (
+            conn.execute(
+                text("SELECT ACTION_ID AS id FROM AUD_ACTIONS WHERE ACTION_ID=:id"),
+                {"id": upload_id},
+            ).scalar_one()
+            == upload_id
+        )
+        assert (
+            conn.execute(
+                text("SELECT TASK_RUN_ID AS id FROM AUD_TASK_ATTEMPTS WHERE ATTEMPT_ID=:id"),
+                {"id": attempt},
+            ).scalar_one()
+            == task_run_id
+        )
+    assert recorded_upload(ctx.engine, upload_id).archive_location is not None

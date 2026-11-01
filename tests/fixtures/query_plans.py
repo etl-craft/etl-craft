@@ -40,6 +40,8 @@ INTEGER_NAMES = frozenset(
 )
 MOMENT = datetime(2026, 1, 1, tzinfo=UTC)
 VALUES = {
+    "stored_name": "1-plan.csv",
+    "location": "file:///archive/plan/1-plan.csv",
     "window_start": MOMENT,
     "locked": MOMENT,
     "window_end": MOMENT,

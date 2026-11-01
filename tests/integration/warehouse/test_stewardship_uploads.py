@@ -186,6 +186,7 @@ def test_complete_upload_flow_keeps_each_stewards_account(upload_world):
     assert bob["waiting_behind_run_id"] == first["pipeline_run_id"]
     warmup = drive_upload(w, first["pipeline_run_id"])
     assert warmup.status == RunStatus.SUCCESS, warmup.message
+    assert not list((w.config.host_dir / ".upload_inputs").glob("**/content"))
     admit_pending(owner)
     with w.engine_db.connect() as conn:
         bound = (
@@ -203,6 +204,7 @@ def test_complete_upload_flow_keeps_each_stewards_account(upload_world):
     assert bound[0]["run_id"] != first["pipeline_run_id"]
     result = drive_upload(w, bound[0]["run_id"])
     assert result.status == RunStatus.SUCCESS, result.message
+    assert not list((w.config.host_dir / ".upload_inputs").glob("**/content"))
     with w.warehouse.connect() as conn:
         rows = (
             conn.execute(
@@ -280,6 +282,7 @@ def test_complete_protected_upload_flow_orders_files_and_locks_each_writer(uploa
         ).scalar_one()
     result = drive_upload(w, run_id)
     assert result.status == RunStatus.SUCCESS, result.message
+    assert not list((w.config.host_dir / ".upload_inputs").glob("**/content"))
     with w.warehouse.connect() as conn:
         rows = (
             conn.execute(
@@ -435,3 +438,79 @@ def test_a_marked_validation_does_not_release_unvalidated_files(upload_world):
         ).scalar_one()
     assert "FILE_VALIDATION has not accepted" in error
     assert w.rows(f"SELECT COUNT(*) FROM {w.name('landed')}") == [(0,)]
+
+
+@warehouses("duckdb")
+def test_archived_upload_reruns_through_real_validation_and_loading(upload_world, tmp_path):
+    from datetime import UTC, datetime, timedelta
+
+    from etl_craft.config.model import Retention
+    from etl_craft.config.object_models import Artifacts
+    from etl_craft.engine.upload_storage import recorded_upload
+    from etl_craft.execution.reruns import rerun_task
+    from etl_craft.services.retention import purge_history
+
+    w, owner = upload_world
+    w.config = replace(
+        w.config,
+        retention=Retention(run_history_days=1),
+        uploads=replace(w.config.uploads, archive_to=Artifacts((tmp_path / "archive").as_uri())),
+    )
+    owner = replace(owner, config=w.config)
+    receipt = submit(owner, "alice", b"id|name\n1|archived\n")
+    run_id = receipt["pipeline_run_id"]
+    result = drive_upload(w, run_id)
+    assert result.status == RunStatus.SUCCESS, result.message
+    with acting_as(SYSTEM_ACTOR):
+        with w.engine_db.begin() as conn:
+            conn.execute(
+                text("UPDATE AUD_UPLOADS SET ENDED_AT=:ended WHERE UPLOAD_ID=:id"),
+                {"ended": datetime.now(UTC) - timedelta(days=2), "id": receipt["upload_id"]},
+            )
+        counts = purge_history(w.engine_db, w.config, datetime.now(UTC), dry_run=False)
+        assert counts["upload_files"] == 1
+    upload = recorded_upload(w.engine_db, receipt["upload_id"])
+    assert not (w.config.host_dir / upload.relative(processed=True)).exists()
+    assert not list((w.config.host_dir / ".upload_inputs").glob("**/content"))
+    w.warehouse.dispose()
+    with acting_as(Actor("alice", ActorKind.USER)):
+        result = rerun_task(
+            w.engine_db,
+            w.config,
+            "P",
+            "validate_file",
+            "restore archived input",
+            with_downstream=True,
+            selector=RunSelector(run_id=run_id),
+        )
+    assert result.status == RunStatus.SUCCESS, result.message
+    assert not list((w.config.host_dir / ".upload_inputs").glob("**/content"))
+    with w.warehouse.connect() as conn:
+        rows = (
+            conn.execute(
+                text(
+                    f"SELECT name AS name,CREATED_BY AS creator,UPDATED_BY AS writer "
+                    f"FROM {w.name('uploaded')} WHERE id=1"
+                )
+            )
+            .mappings()
+            .all()
+        )
+    assert [dict(row) for row in rows] == [
+        {"name": "archived", "creator": "alice", "writer": "alice"}
+    ]
+    assert (w.config.host_dir / upload.relative(processed=True)).read_bytes() == (
+        b"id|name\n1|archived\n"
+    )
+    with w.engine_db.connect() as conn:
+        accepted_attempts = conn.execute(
+            text(
+                "SELECT COUNT(*) AS count FROM AUD_TASK_ATTEMPTS a "
+                "JOIN AUD_TASK_RUN_LOG tr ON tr.TASK_RUN_ID=a.TASK_RUN_ID "
+                "JOIN CFG_TASKS t ON t.TASK_ID=tr.TASK_ID "
+                "WHERE tr.PIPELINE_RUN_ID=:run AND t.TASK_CODE='validate_file' "
+                "AND a.STATUS='SUCCESS'"
+            ),
+            {"run": run_id},
+        ).scalar_one()
+    assert accepted_attempts == 2

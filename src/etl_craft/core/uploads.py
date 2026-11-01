@@ -22,6 +22,7 @@ class UploadInfo(UploadWriter):
     file_name: str
     size_bytes: int
     sha256: str
+    stored_name: str = field(kw_only=True)
     actor_kind: ActorKind = field(default=ActorKind.USER, kw_only=True)
 
 

@@ -1829,6 +1829,8 @@ def test_agent_start_returns_the_exact_recorded_microsecond_clock(agent_scene):
         "user-token",
         "pool-token",
         "refused-downstream",
+        "hash-mismatch",
+        "stalled",
     ],
 )
 def test_upload_content_is_fenced_to_its_attempt_and_run(agent_scene, refusal):
@@ -1851,14 +1853,24 @@ def test_upload_content_is_fenced_to_its_attempt_and_run(agent_scene, refusal):
         if refusal == "other-run":
             other = add_pipeline(conn, "Other")
             upload_run = transitions.create_run(conn, other, SYSTEM_ACTOR)
+        upload_id = conn.execute(
+            text(
+                "INSERT INTO AUD_ACTIONS (ACTOR,ACTOR_KIND,HOST,COMMAND,ARGUMENTS,OUTCOME) "
+                "VALUES ('person','USER','test','upload','{\"pipeline_code\":\"P\"}','SUCCESS') "
+                "RETURNING ACTION_ID AS action_id"
+            )
+        ).scalar_one()
         conn.execute(
             text(
                 "INSERT INTO AUD_UPLOADS "
-                "(UPLOAD_ID,PIPELINE_ID,ACCOUNT,FILE_NAME,SHA256,SIZE_BYTES,"
-                "PIPELINE_RUN_ID,STATUS,UPLOADED_AT) VALUES (901,:pipeline,'person','data.csv',"
+                "(UPLOAD_ID,PIPELINE_ID,ACCOUNT,FILE_NAME,STORED_NAME,SHA256,SIZE_BYTES,"
+                "PIPELINE_RUN_ID,STATUS,UPLOADED_AT) VALUES "
+                "(:upload,:pipeline,'person','data.csv',:stored_name,"
                 ":sha,8,:run,:status,:now)"
             ),
             {
+                "upload": upload_id,
+                "stored_name": f"{upload_id}-data.csv",
                 "pipeline": pipeline,
                 "run": upload_run,
                 "sha": sha256_hex(b"id|name\n"),
@@ -1871,24 +1883,57 @@ def test_upload_content_is_fenced_to_its_attempt_and_run(agent_scene, refusal):
                 text("UPDATE AUD_TASK_ATTEMPTS SET LEASE_EXPIRES_AT=:past"),
                 {"past": datetime.now(UTC) - timedelta(seconds=1)},
             )
-    folder = config.host_dir / "uploads" / "901"
+    folder = config.host_dir / "uploads" / "P"
     folder.mkdir(parents=True)
-    (folder / "content").write_bytes(b"id|name\n")
+    content = b"changed" if refusal == "hash-mismatch" else b"id|name\n"
+    (folder / f"{upload_id}-data.csv").write_bytes(content)
     if refusal == "wrong-attempt":
         attempt += 1
     if refusal == "user-token":
         headers = user
     if refusal == "pool-token":
         headers = pool
-    response = client.get(
-        f"/api/v1/agent/uploads/901/content?version={__version__}&attempt_id={attempt}",
-        headers=headers,
-    )
-    if refusal == "none":
+    url = f"/api/v1/agent/uploads/{upload_id}/content?version={__version__}&attempt_id={attempt}"
+    if refusal == "stalled":
+        import psutil
+
+        from etl_craft.engine import upload_files
+        from etl_craft.engine.upload_storage import storage_lock
+        from fixtures.races import paused_after
+
+        replies = []
+        path = str(folder / f"{upload_id}-data.csv")
+        with (
+            paused_after(
+                lambda: replies.append(client.get(url, headers=headers)),
+                owner=upload_files,
+                name="_require",
+                when=lambda *args, **kwargs: any(
+                    f.path == path for f in psutil.Process().open_files()
+                ),
+            ),
+            storage_lock(config, upload_id, wait_seconds=0.1),
+        ):
+            pass
+        response = replies[0]
+    else:
+        response = client.get(url, headers=headers)
+    if refusal == "hash-mismatch":
+        assert response.status_code == 409, response.text
+        for expected in [
+            str(upload_id),
+            "SHA-256",
+            sha256_hex(b"id|name\n"),
+            sha256_hex(content),
+            "upload the file again",
+        ]:
+            assert expected in response.text
+        assert str(config.host_dir) not in response.text
+    elif refusal in {"none", "stalled"}:
         assert response.status_code == 200, response.text
         assert response.content == b"id|name\n"
         assert str(config.host_dir) not in str(response.headers)
     else:
         assert response.status_code in {401, 403}, response.text
-        for expected in ["901", str(attempt), "run", "expected"]:
+        for expected in [str(upload_id), str(attempt), "run", "expected"]:
             assert expected in response.text
