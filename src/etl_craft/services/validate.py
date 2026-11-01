@@ -180,10 +180,12 @@ def validate_snapshot(
         try:
             with (
                 open_warehouse(config, LocalLocker(engine, config)) as warehouse,
-                warehouse.connect() as conn,
+                warehouse.connect() as warehouse_conn,
             ):
                 for table, columns in grouped.items():
-                    for message in drift(columns, warehouse_columns(conn, config, table), dialect):
+                    for message in drift(
+                        columns, warehouse_columns(warehouse_conn, config, table), dialect
+                    ):
                         report.fail(f"source {table}", f"schema drift: {message}")
         except (EtlCraftError, SQLAlchemyError) as error:
             report.fail(
@@ -205,9 +207,9 @@ def validate_snapshot(
                         report.fail(f"seed {seed.target}", str(error))
     except (EtlCraftError, OSError) as error:
         report.fail("seeds", str(error))
-    from etl_craft.services.erasure import problems
+    from etl_craft.services.erasure import problems_on
 
-    for message in problems(engine, config, check_coverage=False):
+    for message in problems_on(conn, engine, config, check_coverage=False):
         report.fail("erasure", message)
     return report
 

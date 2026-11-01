@@ -549,3 +549,25 @@ def test_short_identifier_does_not_change_its_derived_hmac(erasure_project):
         digest = conn.execute(text("SELECT KEY_HMAC FROM AUD_ERASURE_SUBJECTS")).scalar_one()
     assert all(table.key_hmac == digest for table in result.tables)
     assert act(ctx, ActionName.ERASURE_LIST).entries[0]["key_hmac"] == digest
+
+
+def test_rename_validates_active_erasure_entries_in_its_writer_transaction(erasure_project):
+    ctx = erasure_project
+    act(
+        ctx,
+        ActionName.ERASE,
+        table="ds.people",
+        column="person",
+        value="private-person-key",
+        reason="request",
+    )
+    result = act(
+        ctx,
+        ActionName.RENAME,
+        pipeline_code="ERASURE_TEST",
+        to="ERASURE_RENAMED",
+        reason="preserve the standing erasure",
+    )
+    assert result.pipeline_id is not None
+    entries = act(ctx, ActionName.ERASURE_LIST)
+    assert len(entries.entries) == 1

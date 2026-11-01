@@ -1,6 +1,6 @@
 """Read-only erasure checks for validation and doctor."""
 
-from sqlalchemy.engine import Engine
+from sqlalchemy.engine import Connection, Engine
 
 from etl_craft.config import ConnectorConfig
 from etl_craft.core.enums import Handler
@@ -17,12 +17,34 @@ from etl_craft.warehouse.connection import open_warehouse
 def problems(engine: Engine, config: ConnectorConfig, *, check_coverage: bool = True) -> list[str]:
     """Preflight active entries and report every lineage boundary without modifying data."""
     with engine.connect() as conn:
-        entries = tuple(
-            ErasureEntry(r.table_name, r.column_name, r.subject_key, r.key_hmac)
-            for r in conn.execute(statement(conn, "erasure_entries"), {"all_entries": False})
-        )
-        tasks = fetch_active_tasks(conn)
-    has_task = any(task.handler == Handler.ERASURE for task in tasks)
+        entries, has_task = _registered(conn)
+    return _checked(engine, config, entries, has_task, check_coverage)
+
+
+def problems_on(
+    conn: Connection, engine: Engine, config: ConnectorConfig, *, check_coverage: bool = True
+) -> list[str]:
+    """Check erasure entries in the caller's stable metadata transaction."""
+    entries, has_task = _registered(conn)
+    return _checked(engine, config, entries, has_task, check_coverage)
+
+
+def _registered(conn: Connection) -> tuple[tuple[ErasureEntry, ...], bool]:
+    entries = tuple(
+        ErasureEntry(r.table_name, r.column_name, r.subject_key, r.key_hmac)
+        for r in conn.execute(statement(conn, "erasure_entries"), {"all_entries": False})
+    )
+    tasks = fetch_active_tasks(conn)
+    return entries, any(task.handler == Handler.ERASURE for task in tasks)
+
+
+def _checked(
+    engine: Engine,
+    config: ConnectorConfig,
+    entries: tuple[ErasureEntry, ...],
+    has_task: bool,
+    check_coverage: bool,
+) -> list[str]:
     if not entries and not has_task:
         return []
     try:
