@@ -4,7 +4,7 @@ A metadata-driven ETL orchestration engine. Pipelines, tasks and their dependenc
 an Engine DB; etl-craft reads that metadata and runs it against one warehouse.
 The controller schedules and supervises the work.
 
-Documentation: <https://venkatcg00.github.io/etl-craft/>
+Documentation: <https://docs.etl-craft.dev/>
 
 > **0.1.0** is the first release. The previous implementation remains available at the
 > `archive/iteration-2` tag; the [changelog](CHANGELOG.md) lists what 0.1.0 holds.
@@ -16,7 +16,7 @@ pipelines on a SQLite Engine DB and a DuckDB warehouse, in about ten minutes. It
 to a local Mailpit, which the Quick Start starts with one `docker run`.
 
 ```bash
-git clone https://github.com/venkatcg00/etl-craft.git && cd etl-craft
+git clone https://github.com/etl-craft/etl-craft.git && cd etl-craft
 python -m venv .venv && . .venv/bin/activate
 pip install .                                   # extras: [trino], [databricks], [snowflake], [aws], [publish]
 cd examples/demo

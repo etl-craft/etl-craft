@@ -1536,7 +1536,7 @@ evidence.
   to end, locally verifiable authentication modes, and the demo's warehouse work on Databricks
   and Snowflake. The evidence is in `release/evidence/0.1.0/`.
 
-[Unreleased]: https://github.com/venkatcg00/etl-craft/compare/v0.3.0...HEAD
-[0.3.0]: https://github.com/venkatcg00/etl-craft/releases/tag/v0.3.0
-[0.2.0]: https://github.com/venkatcg00/etl-craft/releases/tag/v0.2.0
-[0.1.0]: https://github.com/venkatcg00/etl-craft/releases/tag/v0.1.0
+[Unreleased]: https://github.com/etl-craft/etl-craft/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/etl-craft/etl-craft/releases/tag/v0.3.0
+[0.2.0]: https://github.com/etl-craft/etl-craft/releases/tag/v0.2.0
+[0.1.0]: https://github.com/etl-craft/etl-craft/releases/tag/v0.1.0

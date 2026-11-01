@@ -254,7 +254,7 @@ host or prefix requires `--accept-new-url`; it does not silently replace links a
 `doctor` reports organization hosting without requiring tunnel credentials or its SDK.
 
 The complete example is [docs-site-proxy.yml](../examples/docs-site-proxy.yml). The repository's
-[NGINX example](https://github.com/venkatcg00/etl-craft/blob/main/deploy/catalog/nginx.conf) forwards requests to `127.0.0.1:8080` without removing their prefix;
+[NGINX example](https://github.com/etl-craft/etl-craft/blob/main/deploy/catalog/nginx.conf) forwards requests to `127.0.0.1:8080` without removing their prefix;
 it works for both a root URL and a URL beneath `/etl-craft/`. Pages, assets, robots and directory
 redirects retain that prefix. Configure the proxy to preserve the path, rather than strip it.
 NGINX's [proxy_pass and proxy_set_header documentation](https://nginx.org/en/docs/http/ngx_http_proxy_module.html)
@@ -279,7 +279,7 @@ untrusted users on the same host. An organization URL with `Allowed_ips` require
 
 ### Persistent serving and regeneration
 
-[The systemd unit](https://github.com/venkatcg00/etl-craft/blob/main/deploy/catalog/etl-craft-catalog.service) runs `publish-docs --port 8080` under systemd.
+[The systemd unit](https://github.com/etl-craft/etl-craft/blob/main/deploy/catalog/etl-craft-catalog.service) runs `publish-docs --port 8080` under systemd.
 Adjust its account, working directory and virtual environment to your installation, and make
 its configured secrets source readable by that account. For a purely local service add
 `--local-only`. Install the unit in the host's systemd unit directory, reload systemd and enable

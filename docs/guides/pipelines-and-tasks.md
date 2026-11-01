@@ -22,7 +22,7 @@ deleting it, and only active rows are read. Codes are unique among active rows, 
 pipeline's code can be used again. `CREATED_BY`, `CREATE_DATE`, `UPDATED_BY` and `UPDATED_DATE`
 are kept by database triggers, with the actor as the creator and updater.
 
-The demo's [`metadata/support_insights.sql`](https://github.com/venkatcg00/etl-craft/blob/main/examples/demo/metadata/support_insights.sql)
+The demo's [`metadata/support_insights.sql`](https://github.com/etl-craft/etl-craft/blob/main/examples/demo/metadata/support_insights.sql)
 writes five pipelines this way, and runs as written on SQLite and PostgreSQL.
 
 ## `CFG_PIPELINES`

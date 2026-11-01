@@ -298,7 +298,7 @@ MkDocs Material, laid out like Spark's documentation:
   - exit codes.
 - **Python API** (mkdocstrings), release notes, contributing.
 
-Published at <https://venkatcg00.github.io/etl-craft/>. The Docs workflow deploys it to
+Published at <https://docs.etl-craft.dev/>. The Docs workflow deploys it to
 GitHub Pages on every push to `main`, rebuilding every version each time, with no branch
 storing the pages: `dev` from `main`, `X.Y` from each release line's newest `vX.Y.Z` tag, and
 `latest` for the newest line, which becomes the default. mike assembles the versions and the

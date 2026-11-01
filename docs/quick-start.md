@@ -17,7 +17,7 @@ The release tests run these steps, as written here, from the built package.
 ## 1. Install etl-craft and get the demo
 
 ```bash
-git clone https://github.com/venkatcg00/etl-craft.git
+git clone https://github.com/etl-craft/etl-craft.git
 cd etl-craft
 python -m venv .venv && . .venv/bin/activate     # Windows: .venv\Scripts\activate
 pip install .

@@ -12,7 +12,7 @@ version.
 Do not open a public issue for a suspected vulnerability or include credentials, connection URLs,
 customer data, or proof-of-concept payloads in a public report.
 
-Report privately by emailing [venkatcg0@gmail.com](mailto:venkatcg0@gmail.com) with the subject
+Report privately by emailing [security@etl-craft.dev](mailto:security@etl-craft.dev) with the subject
 `[etl-craft security]`. Include the affected version or commit, a minimal reproduction, the
 security impact, and any suggested mitigation. You will receive an acknowledgement and an
 assessment when the report has been reviewed; this project does not make a response-time SLA.
