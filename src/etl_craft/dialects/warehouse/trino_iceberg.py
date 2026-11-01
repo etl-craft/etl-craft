@@ -57,17 +57,6 @@ class TrinoIcebergWarehouse(WarehouseDialect):
         """Read the previous committed snapshot under the target lock."""
         return f"(SELECT COALESCE(MAX(ROW_ID), 0) FROM {target})"
 
-    def merge_source(self, target: str, stage: str, keys: tuple[str, ...]) -> str:
-        """Allocate only new keys, preventing duplicate targets from multiplying source rows."""
-        match = " AND ".join(f"found.{key}=src.{key}" for key in keys)
-        missing = f"found.{keys[0]} IS NULL"
-        return (
-            f"(SELECT src.*, CASE WHEN {missing} THEN {self.row_id_base_sql(target)} + "
-            f"CAST(ROW_NUMBER() OVER (PARTITION BY {missing} ORDER BY NULL) AS BIGINT) "
-            f"END AS ROW_ID FROM {stage} src LEFT JOIN "
-            f"(SELECT DISTINCT {', '.join(keys)} FROM {target}) found ON {match})"
-        )
-
     def session_tag_args(self, tag: str) -> Mapping[str, Any]:
         """Label every query of the session through the client's source."""
         return {"source": tag}

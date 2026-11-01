@@ -344,9 +344,11 @@ is needed, and existing valid contracts require no rehash.
 
 ### Joined merge updates
 
-SCD1 updates read values directly from the deduplicated stage in one joined write. PostgreSQL,
-DuckDB and Snowflake use `UPDATE ... FROM`; Databricks and Trino use a matched `MERGE` update.
-SCD2 closes active versions by joining to the changed-key stage, then inserts their new versions.
+SCD1 updates and inserts use one target `MERGE`. SCD2 closes changed active versions and
+inserts their successors in one target `MERGE`, including on Iceberg and Delta, so a failed
+statement cannot publish only the closed versions. PostgreSQL before version 15 uses separate
+statements in one transaction instead. Staging, rejects and the later Engine DB outcome commit
+are separate from this target-statement guarantee; existing protection support is unchanged.
 Every merge-key column participates in the join. `PRESERVE_TARGET` still keeps target values
 where SCD1 source values are NULL and hashes the values actually stored; unchanged rows keep
 their audit fields. PostgreSQL indexes the stage's merge keys and runs `ANALYZE` before joined

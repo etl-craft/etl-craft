@@ -208,8 +208,8 @@ def test_query_description_is_exact_or_defers_to_ctas(sql_world):
     assert counter.result()["warehouse_statements"] == 0
 
 
-@warehouses("trino_iceberg")
-def test_trino_merges_compute_identifiers_in_one_mutation(sql_world):
+@warehouses("trino_iceberg", "duckdb_iceberg")
+def test_computed_merges_allocate_only_new_keys_in_one_mutation(sql_world):
     w = sql_world
     target = "computed_merge"
     w.setup(target, "SELECT 1 AS id, CAST('old' AS VARCHAR(20)) AS name", "SCD1_MERGE")
@@ -233,7 +233,13 @@ def test_trino_merges_compute_identifiers_in_one_mutation(sql_world):
         result = sql.run(context, w.engine_db)
     assert (result.insert_count, result.update_count) == (2, 2)
     with w.warehouse.connect() as conn:
-        rows = conn.execute(text(f"SELECT id,name,row_id FROM {w.name(target)}")).mappings().all()
+        rows = (
+            conn.execute(
+                text(f"SELECT id AS id,name AS name,row_id AS row_id FROM {w.name(target)}")
+            )
+            .mappings()
+            .all()
+        )
     assert {row["row_id"] for row in rows} == {1, 2, 5, 6, 7}
     assert sorted((row["id"], row["name"]) for row in rows) == [
         (1, "new"),

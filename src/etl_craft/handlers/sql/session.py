@@ -453,6 +453,15 @@ class Session:
         """
         if self.row_id_generated():
             return "", ""
+        base = self.row_id_base()
+        # ORDER BY NULL: Databricks rejects a window with no order.
+        return (
+            f", {ROW_ID_COLUMN}",
+            f", {base} + CAST(ROW_NUMBER() OVER (ORDER BY NULL) AS BIGINT)",
+        )
+
+    def row_id_base(self) -> str:
+        """Read the computed allocation base inside the target mutation lock."""
         base = self.dialect.row_id_base_sql(self.target)
         if base is None:
             base = str(
@@ -461,11 +470,7 @@ class Session:
                     step="largest ROW_ID",
                 )
             )
-        # ORDER BY NULL: Databricks rejects a window with no order.
-        return (
-            f", {ROW_ID_COLUMN}",
-            f", {base} + CAST(ROW_NUMBER() OVER (ORDER BY NULL) AS BIGINT)",
-        )
+        return base
 
     def check_target_format(self) -> None:
         """Refuse a format mismatch before creating or evolving an existing target."""

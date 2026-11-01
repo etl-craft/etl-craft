@@ -24,6 +24,7 @@ from fixtures.engine_db import apply_schema, sqlite_engine_db
 from fixtures.metadata import add_pipeline, start_run
 from fixtures.round_trips import count_round_trips
 from fixtures.scd_lifecycle import check_scd1_upgrade, check_scd_lifecycle
+from fixtures.single_merge import check_single_merge
 from fixtures.sql_evolution import check_evolution, check_interrupted_evolution
 from fixtures.sql_merges import check_composite_merge
 from fixtures.sql_rejects import check_rejects
@@ -814,10 +815,12 @@ def test_composite_merges(tmp_path, name, variables, table_format):
     schema = os.environ[f"ETL_CRAFT_TEST_{prefix}_SCHEMA"]
     w = cloud_world(tmp_path, name, fields, table_format, schema)
     suffix = uuid.uuid4().hex[:8]
-    targets = [f"etl_joined_{kind}_{suffix}" for kind in ("scd1", "scd2")]
+    targets = [f"etl_joined_{kind}_{suffix}" for kind in ("scd1", "scd2", "atomic1", "atomic2")]
     try:
         check_composite_merge(w, targets[0], "SCD1_MERGE")
         check_composite_merge(w, targets[1], "SCD2_MERGE")
+        check_single_merge(w, "SCD1_MERGE", targets[2])
+        check_single_merge(w, "SCD2_MERGE", targets[3])
     finally:
         for target in targets:
             w.execute(f"DROP TABLE IF EXISTS {w.name(target)}")

@@ -138,6 +138,9 @@ project, one CSV file per supported package-owned config table: copy the folder 
 `config/` is exactly what `etl-craft config export` writes once the migrations are applied, and
 the tests check both on SQLite and PostgreSQL.
 
+The [SQL merge guide](../guides/sql-tasks.md#joined-merge-updates) explains the single-target
+MERGE contract, including atomic SCD2 version publication and the older PostgreSQL fallback.
+
 [SQL source watermark](sql-watermark.md) shows an incremental external-source merge and an
 audited reload.
 

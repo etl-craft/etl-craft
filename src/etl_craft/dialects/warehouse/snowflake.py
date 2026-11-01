@@ -52,9 +52,11 @@ class SnowflakeWarehouse(WarehouseDialect):
         """Label every query of the session through its QUERY_TAG session parameter."""
         return {"session_parameters": {"QUERY_TAG": tag}}
 
+    # An end-time lower bound omits completed history while retaining running queries.
     _UNFINISHED = (
         "SELECT query_id AS query_id FROM TABLE(INFORMATION_SCHEMA.QUERY_HISTORY("
-        "RESULT_LIMIT => 10000)) WHERE query_tag = :tag AND execution_status NOT IN "
+        "END_TIME_RANGE_START => CURRENT_TIMESTAMP(), RESULT_LIMIT => 10000)) "
+        "WHERE query_tag = :tag AND execution_status NOT IN "
         "('SUCCESS', 'FAILED_WITH_ERROR', 'FAILED_WITH_INCIDENT', 'ABORTED')"
     )
 

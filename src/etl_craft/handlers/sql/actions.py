@@ -24,7 +24,8 @@ inserted, updated or deleted.
 
 A row counts as changed when its ``HASH_KEY``, an MD5 over ``MERGE_COMPARE_COLUMNS``, differs.
 Merge updates join the deduplicated stage using the warehouse's UPDATE FROM or matched MERGE
-strategy. SCD2 closes changed active versions, then inserts stage keys without an active version.
+strategy. SCD2 publishes closures and successors in one MERGE where supported, otherwise in
+one transaction.
 """
 
 from __future__ import annotations
@@ -304,10 +305,8 @@ def scd1_merge(session: Session, action: ActionContext) -> HandlerResult:
     target = session.target
     key_match = _key_match(task.merge_key)
     generated = session.row_id_generated()
-    merge_source = (
-        stage if generated else session.dialect.merge_source(target, stage, task.merge_key)
-    )
-    if session.dialect.supports_insert_merge(session.conn) and merge_source is not None:
+    merge_source = stage if generated else _numbered_merge_source(session, stage, task.merge_key)
+    if session.dialect.supports_insert_merge(session.conn):
         if new is None:
             new = session.count(
                 f"SELECT COUNT(*) FROM {stage} s WHERE NOT EXISTS "
@@ -401,51 +400,29 @@ def _scd1_update(
     return assignments, condition
 
 
+def _numbered_merge_source(session: Session, stage: str, keys: tuple[str, ...]) -> str:
+    """Use the existing target generator contract in an atomic merge source."""
+    from etl_craft.dialects.warehouse.merges import keyed_source
+
+    return keyed_source(session.target, stage, keys, session.row_id_base())
+
+
 def scd2_merge(session: Session, action: ActionContext) -> HandlerResult:
     """Close the active version of each changed key and insert a new active version.
 
     A key with no active version, new or left without one by an interrupted earlier run, gets
     one inserted, so a rerun converges.
     """
-    task = action.task
     stage, source, rejected, _ = _merge_stage(session, action, SqlAction.SCD2_MERGE)
     stage_columns = [name for name, _ in session.columns(stage)]
     target = session.target
-    key_match = _key_match(task.merge_key)
 
     condition = "t.HASH_KEY IS DISTINCT FROM s.HASH_KEY OR t.DELETE_FLAG = 'Y'"
     condition = edit_condition(action, tuple(stage_columns), condition)
-    closed = session.mutate(
-        session.dialect.update_from_stage(
-            target,
-            stage,
-            task.merge_key,
-            {
-                "ACTIVE_FLAG": "'N'",
-                "UPDATE_DATE": ":now",
-                "UPDATED_BY": writer_expression(action.uploads, "s.UPLOAD_ID"),
-                **(
-                    {"CREATED_BY": writer_expression(action.uploads, "s.UPLOAD_ID")}
-                    if action.uploads
-                    else {}
-                ),
-                "PIPELINE_RUN_ID": ":pipeline_run_id",
-                "TASK_RUN_ID": ":task_run_id",
-                "PIPELINE_ID": ":pipeline_id",
-            },
-            f"t.ACTIVE_FLAG = 'Y' AND ({condition})",
-        ),
-        action.stamp,
-        count_sql=f"SELECT COUNT(*) FROM {target} t JOIN {stage} s ON {key_match} "
-        f"WHERE t.ACTIVE_FLAG = 'Y' AND ({condition})",
-        step="close the active version of changed keys",
-    )
-    fault_point("sql.scd2.after_close")
-
-    no_active = f"NOT EXISTS (SELECT 1 FROM {target} t WHERE {key_match} AND t.ACTIVE_FLAG = 'Y')"
-    inserted = _insert_merge_rows(
-        session, action, stage_columns, f"FROM {stage} s WHERE {no_active}", step="insert new keys"
-    )
+    if session.dialect.supports_insert_merge(session.conn):
+        closed, inserted = _merge_versions(session, action, stage, stage_columns, condition)
+    else:
+        closed, inserted = _separate_versions(session, action, stage, stage_columns, condition)
     fault_point("sql.scd2.after_versions")
     fault_point("sql.scd2.after_insert")
     session.drop(stage)
@@ -457,6 +434,72 @@ def scd2_merge(session: Session, action: ActionContext) -> HandlerResult:
         update_count=closed,
         reject_count=rejected,
     )
+
+
+def _version_assignments(action: ActionContext) -> dict[str, str]:
+    return {
+        "ACTIVE_FLAG": "'N'",
+        "UPDATE_DATE": ":now",
+        "UPDATED_BY": writer_expression(action.uploads, "s.UPLOAD_ID"),
+        **(
+            {"CREATED_BY": writer_expression(action.uploads, "s.UPLOAD_ID")}
+            if action.uploads
+            else {}
+        ),
+        "PIPELINE_RUN_ID": ":pipeline_run_id",
+        "TASK_RUN_ID": ":task_run_id",
+        "PIPELINE_ID": ":pipeline_id",
+    }
+
+
+def _merge_versions(
+    session: Session, action: ActionContext, stage: str, columns: list[str], condition: str
+) -> tuple[int, int]:
+    from etl_craft.dialects.warehouse.merges import VersionMerge, numbered_source
+
+    merge = VersionMerge(session.target, stage, action.task.merge_key, tuple(columns), condition)
+    counts = session.run(merge.counts(), step="count version changes").one()
+    source = merge.source()
+    row_ids = None
+    if not session.row_id_generated():
+        _, values = session.row_id_insert_parts()
+        source = numbered_source(source, values.removeprefix(", "), merge.allocated)
+        row_ids = (", ROW_ID", f", s.{merge.allocated}")
+    insert = _merge_insert_parts(session, columns, row_ids, uploads=action.uploads)
+    session.run(
+        merge.statement(source, _version_assignments(action), insert),
+        action.stamp,
+        step="merge closed and new versions",
+    )
+    fault_point("sql.scd2.after_close")
+    return int(counts.closed), int(counts.inserted)
+
+
+def _separate_versions(
+    session: Session, action: ActionContext, stage: str, columns: list[str], condition: str
+) -> tuple[int, int]:
+    target = session.target
+    key_match = _key_match(action.task.merge_key)
+    closed = session.mutate(
+        session.dialect.update_from_stage(
+            target,
+            stage,
+            action.task.merge_key,
+            _version_assignments(action),
+            f"t.ACTIVE_FLAG = 'Y' AND ({condition})",
+        ),
+        action.stamp,
+        count_sql=f"SELECT COUNT(*) FROM {target} t JOIN {stage} s ON {key_match} "
+        f"WHERE t.ACTIVE_FLAG = 'Y' AND ({condition})",
+        step="close the active version of changed keys",
+    )
+    fault_point("sql.scd2.after_close")
+
+    no_active = f"NOT EXISTS (SELECT 1 FROM {target} t WHERE {key_match} AND t.ACTIVE_FLAG = 'Y')"
+    inserted = _insert_merge_rows(
+        session, action, columns, f"FROM {stage} s WHERE {no_active}", step="insert new keys"
+    )
+    return closed, inserted
 
 
 def _insert_merge_rows(
