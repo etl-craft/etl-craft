@@ -69,8 +69,7 @@
       "src/etl_craft/engine/repository/normalization.py": 2,
       "src/etl_craft/engine/repository/source_contracts.py": 1,
       "src/etl_craft/execution/retries.py": 2,
-      "src/etl_craft/services/docs_publish.py": 1,
-      "src/etl_craft/services/source_columns.py": 1
+      "src/etl_craft/services/docs_publish.py": 1
     },
     "cast": {
       "src/etl_craft/execution/event_probe.py": 1,
@@ -87,7 +86,6 @@
       "src/etl_craft/execution/pipeline.py": 2,
       "src/etl_craft/execution/scheduler.py": 37,
       "src/etl_craft/services/catalog/collect.py": 25,
-      "src/etl_craft/services/lineage.py": 35,
       "src/etl_craft/services/operations/status.py": 8
     },
     "inline-sql": {
@@ -113,7 +111,6 @@
     "type-ignore": {
       "src/etl_craft/execution/run_types.py": 1,
       "src/etl_craft/handlers/python_scripts.py": 1,
-      "src/etl_craft/services/lineage.py": 2,
       "src/etl_craft/warehouse/connection.py": 1
     }
   }

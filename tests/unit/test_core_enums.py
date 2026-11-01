@@ -141,6 +141,7 @@ EXPECTED = {
     enums.RefreshType: {"FULL", "INCREMENTAL"},
     enums.DependencyType: {"SUCCESS", "FAILURE", "ALWAYS", "HAS_DATA"},
     enums.Handler: {
+        "ERASURE",
         "FILE_VALIDATION",
         "PYTHON",
         "SQL",
@@ -202,6 +203,7 @@ EXPECTED = {
         "FINISHED",
     },
     enums.AgentReport: {
+        "ERASURE",
         "UPLOADS",
         "UPLOAD_VALIDATION",
         "BUNDLE",

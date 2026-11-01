@@ -21,6 +21,7 @@ from typing import Any
 import yaml
 
 from etl_craft.config.auth import WAREHOUSES, engine_for_jdbc_url
+from etl_craft.config.erasure import parse_erasure
 from etl_craft.config.loader_auth import AUTH_KEYS, parse_auth
 from etl_craft.config.loader_cloning import CLONING_KEYS, parse_cloning
 from etl_craft.config.loader_deployment import DEPLOYMENT_KEYS, parse_deployment
@@ -73,6 +74,7 @@ SECTIONS = (
     "Logs",
     "Retention",
     "Uploads",
+    "Erasure",
 )
 
 
@@ -103,6 +105,7 @@ def settings_by_section() -> dict[str, frozenset[str]]:
         "Logs": LOG_KEYS,
         "Retention": RETENTION_KEYS,
         "Uploads": frozenset({"Max_file_mb", "Archive_to"}),
+        "Erasure": frozenset({"Hmac_secret"}),
     }
 
 
@@ -246,6 +249,7 @@ def parse_config(raw: object, path: Path, *, agent: bool = False) -> ConnectorCo
     )
     config = ConnectorConfig(
         uploads=parse_uploads(raw, path, resolver),
+        erasure_hmac_secret=parse_erasure(raw, path, resolver),
         retention=parse_retention(raw, global_profile, path, resolver),
         deployment=deployment,
         api_address=api_address,

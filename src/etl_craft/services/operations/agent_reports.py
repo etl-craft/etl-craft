@@ -229,6 +229,8 @@ def report(ctx: OperationContext, request: AgentTask) -> AgentReply | Awaitable[
     if request.operation == AgentReport.LOCK:
         return _wait_lock(ctx, request)
     task = _context(ctx, request)
+    if request.operation == AgentReport.ERASURE:
+        return _erasure(ctx, task)
     store = _store(ctx, task)
     if (
         request.operation in {AgentReport.ITEMS, AgentReport.ITEM_EVENT, AgentReport.ITEM_PREPARE}
@@ -446,3 +448,27 @@ def _watermark(store: LocalTaskStore, task: TaskContext, request: AgentTask) -> 
         required(request.watermark_to, "watermark_to"),
     )
     return None
+
+
+def _erasure(ctx: OperationContext, task: TaskContext) -> AgentReply:
+    """Execute only the admitted ERASURE task; personal keys never cross the agent API."""
+    from etl_craft.core.erasure import ErasureEntry
+    from etl_craft.engine.run_definitions import for_run
+    from etl_craft.handlers.erasure import apply_entries
+
+    if task.handler != Handler.ERASURE:
+        raise PermissionDeniedError(
+            f"{task.pipeline_code}.{task.task_code}: handler={task.handler}; expected ERASURE; "
+            "use the ERASURE task's own live attempt credential"
+        )
+    store = _store(ctx, task)
+    holder = resource_locks.Holder(
+        store.identity.holder_id, task.owner or "", ctx.actor, task.attempt_id
+    )
+    with for_run(ctx.engine, task.pipeline_run_id), resource_locks.holder_scope(holder):
+        with ctx.engine.connect() as conn:
+            entries = tuple(
+                ErasureEntry(r.table_name, r.column_name, r.subject_key, r.key_hmac)
+                for r in conn.execute(statement(conn, "erasure_entries"), {"all_entries": False})
+            )
+        return AgentReply(apply_entries(ctx.engine, task.config, entries, store=store))

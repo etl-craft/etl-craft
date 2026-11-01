@@ -7,43 +7,24 @@ from collections.abc import Iterable
 from sqlalchemy import text
 from sqlalchemy.engine import Connection, Engine
 from sqlglot import exp
-from sqlglot.errors import SqlglotError
 
 from etl_craft.config import ConnectorConfig
 from etl_craft.config.targets import active_catalog
 from etl_craft.core.enums import Handler, RefreshType, SqlAction
 from etl_craft.core.errors import MetadataError
-from etl_craft.core.text import is_safe_identifier, is_safe_object_ref, qualify
-from etl_craft.engine.repository.source_columns import SourceColumn, fetch_source_columns
+from etl_craft.core.text import is_safe_object_ref, qualify
+from etl_craft.engine.repository.source_columns import (
+    SourceColumn,
+    fetch_source_columns,
+)
+from etl_craft.engine.repository.source_columns import (
+    definition_problem as definition_problem,
+)
 from etl_craft.engine.repository.tasks import fetch_task_parameters
 from etl_craft.engine.repository.validation import fetch_active_tasks
 from etl_craft.handlers.resources import LocalLocker
 from etl_craft.handlers.sql.spec import resolve_select
 from etl_craft.warehouse.connection import open_warehouse, warehouse_dialect
-
-
-def definition_problem(column: SourceColumn, dialect: str | None) -> str | None:
-    """Check definitions from either CSV files or project migrations."""
-    if not is_safe_object_ref(column.table_name):
-        return (
-            f"TABLE_NAME={column.table_name!r}: expected schema.table or "
-            f"database.schema.table; correct the source definition"
-        )
-    if not is_safe_identifier(column.column_name):
-        return (
-            f"COLUMN_NAME={column.column_name!r}: expected an unquoted SQL identifier; "
-            f"correct the source definition"
-        )
-    try:
-        kind = exp.DataType.build(column.data_type, dialect=dialect)
-        if kind.this == exp.DataType.Type.UNKNOWN:
-            raise ValueError("unknown type")
-    except (SqlglotError, ValueError) as error:
-        return (
-            f"DATA_TYPE={column.data_type!r}: expected a SQL type for "
-            f"{dialect or 'the warehouse'} ({error}); correct the source definition"
-        )
-    return None
 
 
 def nullable(value: object) -> str | None:

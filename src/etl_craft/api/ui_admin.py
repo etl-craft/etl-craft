@@ -5,6 +5,7 @@ CLI sends, so the action table checks the role and records the request.
 """
 
 from collections.abc import Callable
+from urllib.parse import quote
 
 from fastapi import FastAPI, Request
 from fastapi.responses import Response
@@ -31,6 +32,7 @@ TABS: dict[str, tuple[ActionName, Callable[[str | None], object]]] = {
     "projects": (ActionName.PROJECT_LIST, lambda _: ProjectIdentity(reason=LISTING)),
     "pools": (ActionName.POOL_LIST, lambda _: PoolIdentity(reason=LISTING)),
     "announcements": (ActionName.ANNOUNCE_LIST, lambda _: AnnouncementFilter(all=True)),
+    "erasure": (ActionName.ERASURE_LIST, lambda _: NoInput()),
 }
 
 
@@ -51,7 +53,7 @@ def add_admin_pages(app: FastAPI, ctx: OperationContext) -> None:
         project = request.query_params.get("project") or None
         found = (
             None
-            if tab == "access" and project is None
+            if tab in {"access", "erasure"} and project is None
             else invoke(caller, action, request_for(project))
         )
         return render(
@@ -59,6 +61,7 @@ def add_admin_pages(app: FastAPI, ctx: OperationContext) -> None:
             "admin.html",
             values
             | {
+                "erasure_api": f"/api/v1/projects/{quote(project or '', safe='')}/erasure",
                 "title": f"Administration · {tab.capitalize()} · etl-craft",
                 "view": "admin",
                 "tab": tab,

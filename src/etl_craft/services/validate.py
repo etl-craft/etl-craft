@@ -103,6 +103,7 @@ FULL_REPLACE = frozenset({SqlAction.CREATE_TABLE, SqlAction.OVERWRITE_TABLE})
 
 KNOWN_PARAMETERS: dict[str, frozenset[str]] = {
     Handler.FILE_VALIDATION: file_validation.PARAMETERS,
+    Handler.ERASURE: frozenset(),
     Handler.EVENT_WAIT: event_wait.PARAMETERS,
     Handler.RUN_PIPELINE: run_pipeline.PARAMETERS,
     Handler.SQL: SQL_PARAMETERS,
@@ -204,6 +205,10 @@ def validate_snapshot(
                         report.fail(f"seed {seed.target}", str(error))
     except (EtlCraftError, OSError) as error:
         report.fail("seeds", str(error))
+    from etl_craft.services.erasure import problems
+
+    for message in problems(engine, config, check_coverage=False):
+        report.fail("erasure", message)
     return report
 
 

@@ -389,3 +389,11 @@ when all tables finish and write actor-stamped `AUD_SEED_LOADS` outcomes. A lock
 exits 0; a failed load exits 1 and names the table and seed load id. The full S8
 `SI_REFERENCE` history pipeline remains in the roadmap; this demo retains its existing
 support mart and agent-history pipeline.
+
+## Personal-data erasure
+
+Use the [erasure guide](../../docs/guides/erasure.md) to configure `Erasure.Hmac_secret` and
+register the first managed table and identifier column. Preview the tables and counts before
+applying. Place an `ERASURE` task after relevant loads to delete identifiers a source resends.
+The demo does not set an erasure secret or register real people. External source systems stay
+under the source team's control; expression and unmanaged lineage boundaries need further entries.

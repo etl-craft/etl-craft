@@ -40,6 +40,9 @@ INTEGER_NAMES = frozenset(
 )
 MOMENT = datetime(2026, 1, 1, tzinfo=UTC)
 VALUES = {
+    "all_entries": False,
+    "subject_key": "private-test-value",
+    "key_hmac": "a" * 64,
     "after_ended": datetime(1970, 1, 1, tzinfo=UTC),
     "content_sha256": "a" * 64,
     "seed_load_id": "00000000-0000-0000-0000-000000000001",

@@ -1937,3 +1937,113 @@ def test_upload_content_is_fenced_to_its_attempt_and_run(agent_scene, refusal):
         assert response.status_code in {401, 403}, response.text
         for expected in [str(upload_id), str(attempt), "run", "expected"]:
             assert expected in response.text
+
+
+def test_only_a_live_erasure_attempt_can_request_host_erasure(agent_scene):
+    attempt = claim(agent_scene, handler="ERASURE")
+    answer = post(agent_scene, "report", attempt_id=attempt, operation="ERASURE")
+    # No HMAC setting is configured: the live request reaches the shared preflight.
+    assert answer.status_code != 200
+    assert "Hmac_secret" in answer.text
+    db, _, _, _, _, _ = agent_scene
+    with db.engine.begin() as conn:
+        conn.execute(
+            text("UPDATE AUD_TASK_ATTEMPTS SET LEASE_EXPIRES_AT=:past WHERE ATTEMPT_ID=:id"),
+            {"past": datetime.now(UTC) - timedelta(seconds=1), "id": attempt},
+        )
+    refused = post(agent_scene, "report", attempt_id=attempt, operation="ERASURE")
+    assert refused.status_code == 409
+
+
+def test_a_sql_attempt_cannot_invoke_the_erasure_handler(agent_scene):
+    attempt = claim(agent_scene, handler="SQL")
+    answer = post(agent_scene, "report", attempt_id=attempt, operation="ERASURE")
+    assert answer.status_code == 403
+    assert "expected ERASURE" in answer.text
+
+
+def test_host_erasure_binds_locks_and_sessions_to_the_fenced_attempt(agent_scene, monkeypatch):
+    from etl_craft.core.erasure import ErasureReport
+    from etl_craft.engine import resource_locks
+    from etl_craft.handlers import erasure
+
+    attempt = claim(agent_scene, handler="ERASURE")
+    seen = []
+
+    def applied(engine, config, entries, *, store):
+        holder = resource_locks.current_holder("fallback")
+        assert holder.attempt_id == attempt
+        assert holder.holder_id == store.identity.holder_id
+        assert holder.owner == store.identity.owner
+        assert resource_locks.holder_tag(holder.holder_id) == store.session_tag
+        holder_row = holder.parameters()
+        assert holder_row["attempt_id"] == attempt
+        store.state()
+        seen.append(holder.holder_id)
+        return ErasureReport()
+
+    monkeypatch.setattr(erasure, "apply_entries", applied)
+    answer = post(agent_scene, "report", attempt_id=attempt, operation="ERASURE")
+    assert answer.status_code == 200, answer.text
+    assert len(seen) == 1
+
+
+def test_host_erasure_reads_only_the_attempts_project_register(agent_scene, monkeypatch):
+    from etl_craft.core.erasure import ErasureReport
+    from etl_craft.engine.queries import statement
+    from etl_craft.engine.repository.pipelines import current_project_id, selected_project
+    from etl_craft.handlers import erasure
+
+    db, client, headers, _, _, _ = agent_scene
+    with db.engine.begin() as conn:
+        project = conn.execute(
+            text(
+                "INSERT INTO CFG_PROJECTS (PROJECT_CODE,PROJECT_NAME,DEFAULT_POOL) "
+                "VALUES ('tenant','Tenant','default') RETURNING PROJECT_ID AS project_id"
+            )
+        ).scalar_one()
+        for identity, digest in ((1, "a" * 64), (project, "b" * 64)):
+            conn.execute(
+                text(
+                    "INSERT INTO AUD_ERASURE_SUBJECTS "
+                    "(PROJECT_ID,TABLE_NAME,COLUMN_NAME,SUBJECT_KEY,KEY_HMAC,REASON,"
+                    "CREATED_BY,CREATED_AT) VALUES "
+                    "(:project,'warehouse.ds.people','person',:key,:digest,'request','owner',:now)"
+                ),
+                {
+                    "project": identity,
+                    "key": f"private-{identity}",
+                    "digest": digest,
+                    "now": datetime.now(UTC),
+                },
+            )
+    with selected_project(project), db.engine.begin() as conn:
+        pipeline = add_pipeline(conn, "TENANT_ERASURE", project_id=project)
+        task = add_task(conn, pipeline, "ERASE", handler="ERASURE")
+        run = transitions.create_run(conn, pipeline, SYSTEM_ACTOR)
+        summary = transitions.find_or_create_task_run(conn, task, run).task_run_id
+        attempt = transitions.queue_attempt(conn, summary, SYSTEM_ACTOR)
+    claimed = client.post(
+        "/api/v1/agent/claim",
+        headers=headers,
+        json={"version": __version__, "free_kinds": ["warehouse"]},
+    )
+    assert claimed.status_code == 200, claimed.text
+    assert claimed.json()["data"]["task"]["attempt_id"] == attempt
+
+    def applied(engine, config, entries, *, store):
+        assert current_project_id() == project
+        assert [entry.key_hmac for entry in entries] == ["b" * 64]
+        with engine.connect() as conn:
+            rows = (
+                conn.execute(statement(conn, "erasure_entries"), {"all_entries": False})
+                .mappings()
+                .all()
+            )
+        assert {row["key_hmac"] for row in rows} == {"b" * 64}
+        return ErasureReport()
+
+    monkeypatch.setattr(erasure, "apply_entries", applied)
+    answer = post(agent_scene, "report", attempt_id=attempt, operation="ERASURE")
+    assert answer.status_code == 200, answer.text
+    assert "private-" not in answer.text

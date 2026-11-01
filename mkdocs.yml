@@ -102,6 +102,7 @@ nav:
   - Quick Start: quick-start.md
   - Guides:
       - guides/index.md
+      - Personal-data erasure: guides/erasure.md
       - Pipelines and tasks: guides/pipelines-and-tasks.md
       - Configuration files: guides/configuration-files.md
       - Configuration migrations: guides/configuration-migrations.md

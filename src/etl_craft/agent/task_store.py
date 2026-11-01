@@ -10,6 +10,7 @@ from etl_craft import __version__
 from etl_craft.agent.client import AgentClient
 from etl_craft.config import ConnectorConfig
 from etl_craft.core.enums import ActionName, AgentReport
+from etl_craft.core.erasure import ErasureReport
 from etl_craft.core.errors import ServerError
 from etl_craft.core.items import ItemRecord, ItemState
 from etl_craft.core.upload_copy import verified_upload
@@ -38,6 +39,14 @@ class RemoteTaskStore:
     held: set[int] = field(default_factory=set)
     contracts: dict[str, TargetState] = field(default_factory=dict)
     files_dir: Path = field(default_factory=Path.cwd)
+
+    def erasure(self) -> ErasureReport:
+        """Return only the host's HMAC/count report for this fenced task."""
+        # The supervisor owns the task deadline while the host finishes its deletion pass.
+        reply = self.client.call(
+            ActionName.AGENT_REPORT, self.request(AgentReport.ERASURE), timeout=None
+        )
+        return from_json(ErasureReport, reply.data)
 
     def upload_files(self) -> tuple[UploadFile, ...]:
         """Stream and hash-check each file before giving a script its local cache path."""

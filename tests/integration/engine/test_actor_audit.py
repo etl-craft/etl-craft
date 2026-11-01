@@ -271,7 +271,11 @@ def seeded_tables(db):
                 if (
                     column.get("identity")
                     or column.get("autoincrement")
-                    or (column.get("primary_key") and lower not in values)
+                    or (
+                        column.get("primary_key")
+                        and lower not in values
+                        and table.upper() != "AUD_ERASURE_SUBJECTS"
+                    )
                 ):
                     continue
                 if (
@@ -297,6 +301,8 @@ def seeded_tables(db):
                     )
                 if table.upper() == "AUD_BUSINESS_RULES_RESULTS" and lower == "status":
                     value = "REPORT"
+                if table.upper() == "AUD_ERASURE_SUBJECTS":
+                    value = {"key_hmac": "a" * 64, "active_flag": "Y"}.get(lower, value)
                 if table.upper() == "AUD_SEED_LOADS" and lower == "status":
                     value = "LOADED"
                 if table.upper() == "AUD_UPLOADS" and lower == "status":
@@ -713,6 +719,7 @@ def test_nested_action_secrets_never_reach_audit_logs_cli_or_api(engine_db, log_
     secret = "nested-password-never-public"
     url_secret = "url-password-never-public"
     arguments = {
+        "AUD_ERASURE_SUBJECTS": [{"SUBJECT_KEY": secret, "KEY_HMAC": "a" * 64}],
         "connections": [
             {
                 "password": secret,

@@ -89,7 +89,7 @@ def test_the_graph_walks_across_tasks_both_ways():
 
 
 def test_cache_key_changes_with_catalog_and_parser_version(monkeypatch):
-    from etl_craft.services import lineage
+    from etl_craft.handlers import lineage
 
     key = lineage.lineage_key("SELECT x FROM sales.t", "sales.out", "postgres", "one")
     assert key != lineage.lineage_key("SELECT x FROM sales.t", "sales.out", "postgres", "two")
@@ -146,3 +146,14 @@ def test_schema_order_changes_cache_key():
     assert lineage_key("SELECT * FROM raw.orders", "s.t", "duckdb", schemas=first) != lineage_key(
         "SELECT * FROM raw.orders", "s.t", "duckdb", schemas=second
     )
+
+
+def test_nested_expression_is_not_a_direct_pass_through():
+    traced = extract(
+        "WITH hidden AS (SELECT MD5(person) AS token FROM raw.people) "
+        "SELECT token AS customer FROM hidden",
+        "ds.people",
+        dialect="postgres",
+    )
+    assert any(e.source_object == "raw.people" and e.source_column == "person" for e in traced)
+    assert all(e.transformation != "copy" for e in traced)

@@ -156,7 +156,8 @@ class ApiClient:
             data = json.dumps({k: v for k, v in body.items() if v is not None}).encode()
         request = Request(url, data=data, headers=headers, method=method)
         try:
-            response: HTTPResponse = open_request(request, timeout=60)
+            timeout = None if method == HttpMethod.POST and path.endswith("/erasure") else 60
+            response: HTTPResponse = open_request(request, timeout=timeout)
         except HTTPError:
             raise  # an answer from the server; _open turns it into the server's own error
         except (URLError, OSError) as error:

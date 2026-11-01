@@ -190,7 +190,7 @@ def test_docs_version_records_a_version_only_when_the_text_changes(project, caps
 
 
 def test_catalog_and_parser_changes_invalidate_stored_lineage(project, monkeypatch):
-    from etl_craft.services import lineage
+    from etl_craft.handlers import lineage
 
     engine, config = project
     monkeypatch.setattr(lineage, "dialect_and_catalog", lambda config: ("postgres", "one"))
@@ -254,7 +254,7 @@ def test_table_versions_ignore_cache_recomputation_and_close_on_retirement(
     from datetime import timedelta
 
     from etl_craft.core.time import as_utc
-    from etl_craft.services import lineage
+    from etl_craft.handlers import lineage
 
     engine, config = project
     first = collect(engine, config)
@@ -299,7 +299,7 @@ def test_history_selectors_read_stored_versions_without_computing(
     def no_compute(*args, **kwargs):
         raise AssertionError("history must not compute lineage")
 
-    monkeypatch.setattr("etl_craft.services.lineage.resolve_select", no_compute)
+    monkeypatch.setattr("etl_craft.handlers.lineage.resolve_select", no_compute)
     for selector in (
         ("--as-of", first_time),
         ("--as-of", "2026-10-13T08:30:00"),

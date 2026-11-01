@@ -271,3 +271,7 @@ Uploads:
   Max_file_mb: 50
   # Archive_to: file:///srv/etl-archive/uploads
   # Or: {Store: s3://team-archive/uploads, Profile: archive}
+
+# Standing erasure HMAC: store the variable name, never its value.
+# Erasure:
+#   Hmac_secret: ETL_ERASURE_HMAC

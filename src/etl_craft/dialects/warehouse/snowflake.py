@@ -16,6 +16,7 @@ from etl_craft.config.auth import warehouse_by_key
 from etl_craft.core.enums import AuthMode, FailureClass, TableFormat
 from etl_craft.core.errors import SqlGuardError
 from etl_craft.core.failures import Failure
+from etl_craft.dialects.business_rules import quote_output_key
 from etl_craft.dialects.failure_evidence import driver_error, sqlstate
 from etl_craft.dialects.warehouse.base import (
     Presented,
@@ -156,6 +157,10 @@ class SnowflakeWarehouse(WarehouseDialect):
             f"AND ({' OR '.join(matches)})) relation WHERE position IS NOT NULL"
         )
         return query, parameters
+
+    def erasure_metadata_table(self, table: str) -> str:
+        """Preserve resolved physical case in DESCRIBE rather than folding it again."""
+        return ".".join(quote_output_key(p, self.sqlglot_dialect) for p in table.split("."))
 
     def read_metadata(self, conn: Connection, table: str) -> TableMetadata:
         """DESCRIBE supplies complete types, nullability and identity defaults together."""

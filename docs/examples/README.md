@@ -214,3 +214,9 @@ For a pipeline or task code change, use `etl-craft rename --project P --pipeline
 --reason "Clearer code"` (add `--task OLD` for a task). See
 [Renaming pipelines and tasks](../guides/configuration-files.md#renaming-pipelines-and-tasks).
 Update the example's CSV files and team SQL references after the command; do not replace its IDs.
+
+## Standing personal-data erasure
+
+The [erasure guide](../guides/erasure.md) shows the `Erasure.Hmac_secret` variable reference,
+admin preview/register/list/lift commands and placement of ordinary `ERASURE` tasks after loads.
+Register at the earliest managed warehouse table; external sources are outside erasure's scope.

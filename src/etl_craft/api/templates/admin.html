@@ -14,7 +14,25 @@
 <nav class="tabs" aria-label="Administration">{% for t in tabs %}<a href="/ui/admin?tab={{ t }}" {% if t == tab %}aria-current="page"{% endif %}>{{ t|capitalize }}</a>{% endfor %}</nav>
 <div id="admin-result" aria-live="polite"></div>
 
-{% if tab == "accounts" %}
+{% if tab == "erasure" %}
+<form method="get" class="panel"><input type="hidden" name="tab" value="erasure"><label>Project<select name="project" required>{% for p in projects %}<option value="{{ p.project }}" {% if project and p.project == project.project %}selected{% endif %}>{{ p.project }}</option>{% endfor %}</select></label><button type="submit">Select project</button></form>
+{% if found %}
+<section class="panel" aria-labelledby="erasure-title"><h2 id="erasure-title">Personal-data erasure</h2>
+<p>Register the first warehouse table where the identifier enters. Preview shows tables, counts and lineage boundaries. External source systems are never changed.</p>
+<div class="scroll"><table class="list"><thead><tr><th scope="col">Table</th><th scope="col">Column</th><th scope="col">Key HMAC</th><th scope="col">State</th></tr></thead><tbody>
+{% for e in found.entries %}<tr><th scope="row">{{ e.table_name }}</th><td>{{ e.column_name }}</td><td class="wrap">{{ e.key_hmac }}</td><td>{{ "Active" if e.active_flag == "Y" else "Lifted" }}</td></tr>{% else %}<tr><td colspan="4">No erasure entries.</td></tr>{% endfor %}
+</tbody></table></div></section>
+<form class="panel" method="post" data-api-form data-erasure data-show-result data-url="{{ erasure_api }}">
+<h2>Register or lift an erasure</h2>
+{{ text("table", "First table (catalog.schema.table)", True) }}
+{{ text("column", "Identifier column", True) }}
+<label>Identifier value (private)<input name="value" type="password" required autocomplete="off" spellcheck="false" aria-describedby="erasure-help"></label>
+{{ reason() }}
+<p id="erasure-help">Preview first. Confirmation names the table and column; it never displays the identifier value.</p>
+<div class="dialog-buttons"><button type="submit" data-dry-run aria-describedby="erasure-help">Preview erasure</button><button type="submit" data-confirm="Erase" data-erasure-apply class="danger" disabled>Register and erase</button><button type="submit" data-confirm="Lift" data-erasure-lift>Lift entry</button></div>
+</form>
+{% endif %}
+{% elif tab == "accounts" %}
 <section class="panel" aria-labelledby="accounts-title"><h2 id="accounts-title">Accounts</h2>
 <div class="scroll"><table class="list"><thead><tr><th scope="col">Account</th><th scope="col">Kind</th><th scope="col">Role</th><th scope="col">State</th><th scope="col">Failed sign-ins</th><th scope="col">Last sign-in</th><th scope="col">Actions</th></tr></thead><tbody>
 {% for a in found.accounts %}<tr><th scope="row">{{ a.name }}</th><td>{{ a.kind }}</td><td>{{ a.role }}</td>

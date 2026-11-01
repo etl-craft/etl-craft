@@ -33,6 +33,12 @@ if TYPE_CHECKING:
     from etl_craft.config import CloningConfig, ConnectionProfile
     from etl_craft.config.targets import WarehouseUrl
 
+REJECT_AUDIT = ("PIPELINE_RUN_ID", "PIPELINE_ID", "TASK_RUN_ID", "CREATE_DATE", "CREATED_BY")
+"""Actor and run stamps on the engine's reject ledgers."""
+REJECT_COLUMNS = (*REJECT_AUDIT, "REJECT_REASON", "REJECT_COLUMN")
+"""Required private columns that distinguish a reject ledger from a business table."""
+
+
 SurrogateKey = Literal["identity", "sequence", "computed"]
 
 
@@ -479,6 +485,14 @@ class WarehouseDialect:
             f"WHERE {where} ORDER BY ordinal_position",
             {"table": name, "schema": schema, "catalog": catalog},
         )
+
+    def erasure_table(self, conn: Connection, table: str) -> str:
+        """Resolve the physical spelling for an already normalized erasure identity."""
+        return table
+
+    def erasure_metadata_table(self, table: str) -> str:
+        """Adapt a resolved native identity to this dialect's metadata reader."""
+        return table
 
     def read_metadata(self, conn: Connection, table: str) -> TableMetadata:
         """Read ordered types and nullability from the dialect's metadata source."""

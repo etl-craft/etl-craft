@@ -14,7 +14,7 @@ class NoRedirects(HTTPRedirectHandler):
         return None
 
 
-def open_request(request: Request, timeout: float) -> HTTPResponse:
-    """Send one bounded request without following redirects."""
+def open_request(request: Request, timeout: float | None) -> HTTPResponse:
+    """Send one request with the caller's deadline, without following redirects."""
     response: HTTPResponse = build_opener(NoRedirects()).open(request, timeout=timeout)
     return response
