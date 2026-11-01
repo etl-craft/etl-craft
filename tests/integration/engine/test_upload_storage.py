@@ -374,6 +374,8 @@ def test_missing_committed_file_names_upload_paths_and_remedy(upload_api):
     assert "upload the file again" in str(failure.value)
 
 
+@pytest.mark.connections
+@pytest.mark.parametrize("empty_engine_db", ["sqlite", "postgresql"], indirect=True)
 def test_s3_archive_uses_explicit_profile_and_restores_verified_bytes(upload_api, monkeypatch):
     from urllib.parse import urlsplit
     from uuid import uuid4
