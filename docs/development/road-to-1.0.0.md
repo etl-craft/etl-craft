@@ -131,6 +131,7 @@ item's text, or work done early under another item.
 | S5.S Accounts, login and roles | Done | #203, #204, #205, #206, #207 | Account identities, local and server sign-in with refresh tokens, one service-role policy, explicit actors with an `etl-craft` writer on every run, and a local installation operating a server over HTTPS; every action has one implementation that the CLI, the API and later the UI call |
 | S5.O.3 SCD human override protection | Done | #208 | Native PostgreSQL/DuckDB protection, admin edits/unlocks and column provenance; cloud acceptance unavailable on its try |
 | S5.Q Scoped operator controls | Done | #209, #210, #211 | Isolated manual selections, scoped holds/stop/abort, durable recovery/restart preparation, one-run pause permission, selected bulk outcomes and shared capabilities |
+| S5.Q.4 Recorded run-parameter overrides | Planned | | Separate engine follow-up retained from S7.A: immutable per-run overrides, CLI first, then shared API/UI |
 | S5.T Resource discovery and deployment profiles | Done | #212 | `core/resources.py` measures affinity, cgroup v1/v2 quotas and memory limits; `Deployment.Profile` sizes `run` and `server` slots, server threads and the Engine DB pool within written ceilings; doctor/setup report measurements, sizes, fallbacks and the PostgreSQL connection budget |
 | S5.V Team-owned config tables | Done | #213 | Fixed package ownership, unrestricted team config, retained read-only team history and collision preflight; Databricks acceptance unavailable on its try |
 | S5.U Robustness before the cluster | Done | #176, #182, #183, #184 | Engine DB restarts ridden out; SLA breach writes retried; no single-writer guess; timing tests verified under load; subprocess code measured by coverage |
@@ -180,6 +181,17 @@ item's text, or work done early under another item.
 | S7.AH Renames keep identity | Done | #273 | Atomic attributed renames retain IDs, offsets, events and grants; stale config inserts refuse |
 | S7.AI Fixes from the 2026-10-27 audit | Done | #264 | Pool/attempt credentials, bounded SSO, publishing, sign-in, dependency bounds, setup and first-ending metrics. |
 | S7.AK Schema checker | Done | S7.AK PR | Optional per-project schedule plus an on-demand check that compare declared tables with the warehouse; Insights and the catalog show the last check |
+| S7.B Users, roles and identities | In progress | #203–#207, #231, #261, #263, #264, #277 | Accounts, fixed roles, scoped grants, pool-bound agents and browser sign-in exist; custom roles, bindings and access explain remain |
+| S7.C Redaction | In progress | #228, #309 | Recursive name masking and shared operation-scoped value masking exist; resolved-secret registration and Sensitive_patterns remain |
+| S7.D Alert channels | Planned |  | Signed webhooks, Slack-shaped bodies and channel delivery evidence remain; email is already supported |
+| S7.E Secrets providers | In progress | #84, #120 | Environment/file resolution exists; secret managers, task declarations and fenced secret delivery remain |
+| S7.F Packaging and deployment | In progress | #227, #231 | Three roles and ui/all extras exist; role images, release smoke checks and Compose/Kubernetes manifests remain |
+| S7.G Compatibility policy | Planned |  | 0.9.0 compatibility policy, rolling mixed-version contracts and public-surface cleanup remain |
+| S7.H Cloud acceptance | In progress | #104–#110, #208, #231, #236, #247 | Native/Iceberg and managed-engine contracts exist; complete candidate evidence and unavailable provider cases remain |
+| S7.I The endurance run | Planned |  | 72-hour accelerated Support Insights candidate run, faults and bounded growth evidence after S8 is running |
+| S7.J Documentation to finish | In progress | #85, #227, #277 | Generated references and guides exist; supported public contracts, complete reference and recipes remain |
+| S7.L ETL Craft logo and CLI banner | In progress | #277 | Shared mark, favicon and theme assets exist; complete branding guidance and interactive banner contract remain |
+| S7.AL Pre-demo package gaps | Planned |  | Five slices: duplicate_count, stale docs, guarded-table test instructions, event-file validation opt-in and timeline waits |
 | S7.M Stewardship uploads | Done (M2) | #296, #305 | Atomic receipts and safe stored names; processed layout, retention archives and verified reruns; crash recovery and guarded upload history |
 | S7.S Seed tables | Done | #308 | Typed pinned-bundle seeds replace reference tables until recorded stewardship handover |
 | S7.T Business calendars | Done | #276 | Shared holiday and weekend calendars for schedules, run dates, backfill and catch-up |
@@ -191,6 +203,13 @@ item's text, or work done early under another item.
 | S7.Q A generic ANSI SQL warehouse | Moved after 0.9.0 | | A `generic` dialect over SQLAlchemy for rare databases: ANSI SQL only, NULL-safe column comparison for merges, refusals for anything without an ANSI form |
 | S7.R Complete the test suite | In progress | #228 | Slice 1: recursive secret masking, merge crash windows and full-column/catalog upgrade guards; six-skill coverage audit remains after S7.A |
 | S7.N Faster complete pull-request CI | Done | #170 | Fail-closed collection/shard accounting, isolated schema templates and shared demo workers; complete checks in 6m33s-8m15s (owner-approved ten-minute target) |
+| S8.A The project layout | Planned | | Project, generators, bootstrap and measured k3d deployment in Support Insights |
+| S8.B Pipelines | Planned | | Client, reference, stewardship, maintenance and DM pipelines with independent expected rows |
+| S8.C Configuration through CI | Planned | | Secretless local DuckDB validation and developer-token deployment of one pinned project commit |
+| S8.D Views | Planned | | Fact and data-metrics views reconciled with independent reference queries |
+| S8.E The CI pipelines | Planned | | Validate, deploy and manual/pre-release full-stack workflows |
+| S8.F Acceptance checks | Planned | | Rows, provenance, faults, UI and memory checks against the candidate |
+| S8.G The release gate | Planned | | Validate demo wheel/commit/scenario evidence through S7.O without running the external demo in package CI |
 | S8.H Support Insights scenario coverage | Planned | | Deterministic mixed-quality generators, every-feature demonstrations, business-rule and stewardship cases, and runnable README coverage |
 
 ### Handover notes
@@ -930,6 +949,64 @@ empty-history-page handling defect, which was corrected and verified. No cloud w
 
 **Choices that differ from the item text.**
 
+- **Pre-demo audit owner decisions (owner, 2026-11-01).** S7.B, S7.C, S7.D, S7.E,
+  S7.F, S7.G, S7.H, S7.I, S7.J, S7.L and S7.W all stay inside 0.9.0. Only S7.Q and
+  S7.AE remain moved after 0.9.0. Their new Progress rows distinguish existing parts from
+  unbuilt work; a partial implementation or a collected test is not completed acceptance.
+  S7.H and S7.R remain separate, and no release-checklist gates are merged or removed.
+  The audit's proposals to defer other finish items are not taken.
+- **Every-warehouse stewardship (owner, 2026-11-01).** SCD human-value and row protection,
+  uploader attribution, provenance, unlock and recovery must work on every supported
+  warehouse, including Iceberg and Delta. Earlier native-only limits in S5.O.3/S7.M handovers
+  and S8 are superseded requirements, not final supported scope. An in-row protection design
+  note is reviewed before its implementation item and slice order are assigned; this plan
+  does not approve a storage design or add its columns. That implementation must merge before S8.
+- **S8 admission (owner, 2026-11-01).** Replace the old all-workstreams prerequisite with:
+  this pre-demo plan PR; every-warehouse protection after design approval; S7.AL.1
+  (`duplicate_count`); S7.AL.2 (stale docs); S7.F images/manifests; S5.AE close-out; S7.O.
+  Every other 0.9.0 item runs alongside S8 and still closes before release. S5.AE close-out
+  proves its gateway/agent/deployment contracts and tick instrumentation; S7.I owns the
+  actual candidate endurance result once S8 runs, avoiding a circular start dependency.
+- **S8 text corrections (owner, 2026-11-01).** Use existing `ScriptTask.warehouse()` scopes,
+  not a new `task.write` helper. Gamma's walkthrough uses S8.B's keyed SQL object signal,
+  not FILE EVENT_WAIT. Secretless PR validation names a local DuckDB warehouse profile and
+  bootstraps its schemas/source shapes for seed casts. The dedupe oracle is latest per key
+  per batch, with SCD2 versions retained across batches, not every within-batch source version.
+- **Pre-demo gap identity (owner, 2026-11-01).** The five package-gap slices are S7.AL.
+  S7.AK already names the merged Schema checker; its item and references retain that identity.
+- **Follow-up ownership (owner, 2026-11-01).** No promise from the pre-demo audit is dropped.
+  Completed historical slice promises retain their original item/PR; remaining work is assigned
+  below. Assigning an owner does not silently authorize new public surface or mark work done.
+
+  | Promise retained from handover | Owning item and close-out |
+  |---|---|
+  | Event-file opt-in validation | S7.AL.4; an ordinary pipeline explicitly asks its validator to check event files |
+  | Timeline gate/event-wait segments | S7.AL.5; expose recorded waits and render them distinctly |
+  | Per-run parameter overrides, removed from S7.A | S5.Q.4 is the separate engine item: recorded per-run overrides, CLI first, then shared API/UI; not part of the S7.A page close-out |
+  | Pipeline-limited catalog filtering | S7.A close-out; retain safe whole-project refusal until filtering has permission and leakage tests |
+  | Full public Python contracts, recipes and complete references | S7.J; S7.AL.2 closes the specifically listed reference defects first |
+  | Resolved-secret masking after S7.U | S7.C; register secrets into the shared core, without a second masking mechanism |
+  | Task secrets, provider integrations and declared secret delivery | S7.E; S7.C owns the shared masking boundary |
+  | Custom action-set roles, scoped bindings and access explain | S7.B; existing built-in roles/grants stay until its guarded upgrade |
+  | Agent delivery and role layouts left by S5.AE | Agent delivery is built in S5.C #231; S7.F supplies layouts and S5.AE records gateway close-out before S8 |
+  | Managed automatic token issuance not exercised with issuer credentials | S5.I owns the contract; S7.H owns live candidate acceptance and unavailable-provider follow-through |
+  | Earlier protection/cloning/cancellation cloud acceptance waivers | S7.H; a PR-time waiver is not candidate cloud evidence; every-warehouse protection also needs new acceptance |
+  | Reference load gate deferred after S8 | S6.G; retain the owner-approved timing and all load budgets |
+  | Actual accelerated candidate endurance, tick percentile and bounded growth | S7.I after S8 is running; old frozen-soak acceptance is not this result |
+  | Full SI_REFERENCE history, Kafka broker example and independent scenario oracles | S8.B/S8.H; seeds/offset unit tests are not full demo evidence |
+  | Complete feature-to-scenario manifest and pinned external-demo evidence | S7.O implements package validation; S8.E/S8.G/S8.H produce and consume the results |
+  | Six-skill coverage audit and missing regression traceability | S7.R.2; keep it separate from S7.H and complete before candidate acceptance |
+  | Open retention-budget and unreproduced Iceberg obvious-failure risks | S7.P keeps triage current; S6.A/S6.G own retention/budget evidence, S7.R owns missing regression coverage |
+  | Cold/warm complete-CI evidence as features accumulate | S7.N/S7.AJ retain the full gate and measurement contract; no repeated PR suite is added |
+  | Rolling compatibility and additive post-0.9 migrations | S7.G; the earlier same-release-only rule is superseded by the recorded compatibility decision |
+  | Branding/banner and post-MkDocs toolchain evaluation | S7.L and S7.W respectively, both still inside 0.9.0 |
+  | First read of very large attempt logs and per-attempt local cancellation grace | S6.B and S5.B respectively own these existing bounded-scope follow-ups |
+  | First-public homepage and profile-menu version checklist entries | S7.J owns homepage/release navigation; S7.A owns the shared profile-menu version line |
+
+  Acceptance availability: this is a plan-only reconciliation of the read-only pre-demo audit.
+  Documentation validation is required; no runtime capability, warehouse acceptance or release
+  result is claimed by these Progress additions.
+
 - **S7.U owner decision (owner, 2026-11-01).** Register a table, column and exact key, not a
   SUBJECT_TYPE; columns.csv stays unchanged. Immediate erasure runs in-process under the
   shared target lock, upstream first. Each ERASURE task recomputes direct pass-through
@@ -980,6 +1057,8 @@ empty-history-page handling defect, which was corrected and verified. No cloud w
   browser page. CAN_UPLOAD is a permission, not a deployment role; S7.Y delegation supersedes
   the item's admin-only grants. SQL writes explicitly retain UPLOAD_ID, use bound per-row
   account expressions, and reject unknown ids before mutation. Upload ids define merge order.
+  **Superseded provider limit (owner, 2026-11-01):** the following native-only limit
+  describes the implementation before the every-warehouse protection follow-up.
   Stewarded SCD uploads are supported only where S5.O.3 protection is supported (native
   PostgreSQL/DuckDB); ordinary full flows and SCD attribution through the real SQL actions
   are proven on all four local warehouses. One statement per upload in the same transaction
@@ -2056,7 +2135,9 @@ empty-history-page handling defect, which was corrected and verified. No cloud w
 - S5.O.3 uses the owner-approved initial admin boundary: human admins edit and unlock;
   authenticated admin service integrations write without creating or releasing human locks.
   Scoped stewardship remains S7.M. The owner selected warehouse-side protection/provenance
-  committed with business writes; native PostgreSQL and DuckDB are supported, while other
+  committed with business writes. **Superseded provider limit (owner, 2026-11-01):**
+  the following describes the old implementation, not the required final scope:
+  native PostgreSQL and DuckDB are supported, while other
   warehouses refuse protected edits. Two per-target warehouse evidence tables store hashes,
   locks and actual writers, with no Engine DB migration or business-value mirror. Outside
   writes are unsupported and detected against physical-version fingerprints; historical
@@ -5033,6 +5114,20 @@ contract when S5.C lands. S7.A.2 exposes these operations in the workflow-monito
 - *Done when.* An operator can control the selected pipeline or task independently, see the
   actual outcome and an actionable reason for any remaining limitation, without losing audit
   history or unintentionally affecting other work.
+
+#### S5.Q.4 Recorded run-parameter overrides
+
+Owner-assigned follow-up from S7.A, 2026-11-01. This is a separate engine item, not page-only
+state: record the accepted parameter overrides immutably with the run's pinned definition,
+so retries, agents and recovery use the same values after metadata changes. The CLI contract
+comes first; the API and run-now UI call the same operation. Select the public input shape
+with the owner before implementation rather than inventing a flag in the page.
+
+Tests cover absent overrides, explicit values, refused names/types, role/project scope,
+duplicate submission, retries and agent/restart replay against the original pinned values.
+Done when the recorded run can explain each effective value and every interface uses it,
+without modifying today's configuration or another run. This remains inside 0.9.0 and may
+run alongside S8; it is not a prerequisite for the demo's fixed configured parameters.
 
 ### S5.T Resource discovery and deployment profiles
 
@@ -8387,6 +8482,86 @@ project:
 *Done when:* a project can be checked on a schedule, on demand, both or neither, and Insights
 shows real check states with their time.
 
+### S7.AL Pre-demo package gaps
+
+Owner, 2026-11-01. Branches: one implementation pull request per slice. These are package
+close-outs from the pre-demo audit, not workarounds in Support Insights. Slices 1 and 2 merge
+before S8 starts; slices 3–5 remain inside 0.9.0 and may run alongside S8. S7.AK remains the
+separate, completed Schema checker. Every-warehouse protection has its own design approval
+and subsequent implementation item; it is not hidden inside these five slices.
+
+#### S7.AL.1 Duplicate counts
+
+- **Change.** Add `duplicate_count` to `core/counts.py` and the shared handler/attempt/task
+  summaries, warehouse audit mirrors, metrics, API and JSON output that carry counts.
+  S8.B's dedupe and S8.D's Data Metrics view need `DUPLICATE_COUNT`, not a script-side count.
+  Count source rows removed by the per-key, per-batch dedupe step after load rejects, once per
+  attempt; do not count unchanged target rows, prior SCD2 versions or refused rows as duplicates.
+  Preserve unknown versus zero for actions that do not measure duplicates. Engine DB additions
+  require a new migration in both dialects and matching schemas, actor guards and query fixtures.
+- **Tests.** Independently compute input, rejects, survivors and duplicates on every warehouse;
+  cover SCD1/SCD2, ties, unchanged inputs, retries and mixed rejects. Check identical count
+  documents through the CLI/API and summaries, plus the Data Metrics projection. Run both
+  Engine DB upgrade, actor-audit and query-plan modules for the new guarded columns.
+- **Done when.** Counts agree with the independent oracle and S8's latest-per-key-per-batch
+  policy; attempt/task summaries, metrics, mirrors and API/JSON retain the same value, including
+  zero/unknown; retries do not double-count; docs and CHANGELOG describe the contract.
+
+#### S7.AL.2 Stale docs and generated references
+
+- **Change.** Correct project route prefixes in `human-overrides.md`, `run-control.md`,
+  `running-tasks.md` and the demo README. Remove obsolete remote-mode instructions from
+  `doctor-and-setup.md`, `examples/demo/README.md` and `prepare.py`. Replace the nonexistent
+  `etl-craft control` instruction in `browser-ui.md` with the real scoped commands.
+  Include all five accepted managed Engine fields (`Managed_provider`, `Account`, `Instance`,
+  `Workspace_url`, `Endpoint`) in the generated settings reference. Render each CLI subcommand's
+  own options. Reconcile contradictory `[Unreleased]` instructions from superseded changes;
+  keep released historical notes intact and do not restore removed aliases or behavior.
+- **Tests.** Check documented operational routes against the action table and real project
+  routes, preserving the upload aliases that actually exist. Check rendered managed-setting
+  and nested-command content against loader/parser inventories. Exercise the corrected demo
+  and guide commands where meaningful; strict docs and content checks must pass.
+- **Done when.** The listed instructions use current registered commands/routes, no live demo
+  instruction names the removed seed/mode, every accepted managed field and nested CLI option
+  appears in the rendered reference, and Unreleased describes the final shipped behavior.
+
+#### S7.AL.3 Guarded-table touched suites
+
+- **Change.** Add `test_actor_audit.py` to AGENTS.md's required touched-suite list when a new
+  guarded Engine DB table or its guards/CHECK columns change, alongside upgrades and query
+  plans. Name the need for valid CHECK seeds and query-plan seed rows/typed parameters.
+- **Tests.** Documentation-only rule: no runtime test is added merely to mirror its wording;
+  review it against the existing migration, actor-audit and query-plan procedures.
+- **Done when.** The rule explicitly requires all three modules for a new guarded table,
+  including CHECK seeds, without adding an unconditional repeated CI job or weakening a gate.
+
+#### S7.AL.4 FILE_VALIDATION for event-arrived files
+
+- **Change.** An ordinary pipeline may explicitly ask its FILE_VALIDATION task to validate
+  files admitted by a successful file event wait in that exact run. Reuse the reader, per-file
+  validation boundary and recorded event consumption; do not invent uploads/uploader identities
+  for source files. No opt-in means existing behavior. Only accepted files reach dependent
+  loads; retries retain exact admitted bytes/identity and validation decisions on local and
+  agent execution. Select the minimal public opt-in contract with the owner before code;
+  this item authorizes the capability, not an unnamed flag or parameter.
+- **Tests.** Accepted and refused event files, mixed files, no files, no opt-in, changed bytes,
+  retries/recovery and agent/local parity; refuse another run's files and any bypass of real
+  validation. Messages name the file, value, expectation and remedy; no failed file is loaded.
+- **Done when.** The explicit opt-in validates only this run's recorded files, acceptance
+  controls downstream access, unchanged upload workflows still pass, and the CLI/config/guide
+  contract and failure/recovery evidence are documented.
+
+#### S7.AL.5 Timeline gate and event waits
+
+- **Change.** Extend the shared run read with recorded gate/event-wait intervals and outcomes,
+  then render distinct queue, gate, event and execution segments in S7.A's timeline. Use the
+  run's recorded waits, not today's dependency config or inferred gaps between timestamps.
+- **Tests.** Explicit-time fixtures cover open/satisfied/refused/overridden/timed-out waits,
+  retries, repairs, overlapping waits and runs with none. Check project/run visibility, shared
+  API documents and browser labels/keyboard access on desktop/mobile; do not use sleeps.
+- **Done when.** Timeline durations and outcomes match the recorded wait rows, open waits are
+  visibly open, controls remain accessible and no hidden project's waits leak into a read.
+
 ## Release candidate: the Support Insights example
 
 **Goal.** Prove 1.0.0 on a real project before it is released. The
@@ -8396,8 +8571,11 @@ today, and its project is deployed by CI. **1.0.0 is released only when every pi
 the views match S8.F's reference queries, and every package feature has a tested and documented
 Support Insights demonstration (S8.H), visible through the README and UI.**
 
-**Depends on.** Every workstream of 0.2.0 to 0.9 merged and every defect in
-[Appendix A](#appendix-a-defect-traceability) closed. The example is built against 1.0.0 release
+**Depends on (owner, 2026-11-01).** S8 starts when the pre-demo plan PR,
+stewardship protection on every warehouse (the implementation item follows approval of its
+design note), S7.AL slice 1 (`duplicate_count`), S7.AL slice 2 (stale docs), S7.F images and
+manifests, the S5.AE close-out and S7.O are merged. Every other 0.9.0 item runs alongside S8;
+all release checklist gates still apply before 0.9.0. The example is built against 1.0.0 release
 candidates (`1.0.0rc1`, `1.0.0rc2`, ...); a defect it finds is fixed in etl-craft, and a new release
 candidate is cut, never worked around in the example.
 
@@ -8504,7 +8682,7 @@ Every Airflow task maps to an etl-craft task; nothing in the example runs Spark 
 | `SI_REFERENCE` (deploy after `seed apply`, or detached stewardship trigger; no daily schedule) | `ds_*_to_dwh`, `info_data_dictionary_to_dwh` | SQL `SCD2_MERGE` for the four `ds` tables and dictionary | reference-history triggers |
 | | `<table>_deletes_to_dwh` (one per copy) | SQL `DELETE_ROWS` (soft), selecting `dwh` keys absent from the source | the triggers' `D` rows |
 | `SI_CLIENT_ALPHA` (every 15 min outside the maintenance hour; `OVERLAP_POLICY=SKIP`) | `alpha_source_to_lnd` | PYTHON (`SCRIPT_KIND=INGESTION`) `mongo_to_lnd.py`: reads documents after the stored offset, writes `lnd.client_alpha_cs_data`, returns the new offset | `client_alpha_check_new_data`, `client_alpha_branch`, `client_alpha_source_to_lnd` |
-| | `alpha_lnd_to_prs` (depends on the ingestion with `HAS_DATA`) | SQL `SCD2_MERGE` on `source_system_identifier`, `MERGE_DEDUPE_ORDER` on the source timestamp, so `prs` keeps every version of a source record | `client_alpha_lnd_to_prs` (insert, update and duplicate counts) |
+| | `alpha_lnd_to_prs` (depends on the ingestion with `HAS_DATA`) | SQL `SCD2_MERGE` on `source_system_identifier`, `MERGE_DEDUPE_ORDER` on the source timestamp, so `prs` keeps the latest version per key per batch and retains SCD2 versions across batches | `client_alpha_lnd_to_prs` (insert, update and duplicate counts) |
 | | `alpha_prs_to_cdc` | SQL `OVERWRITE_TABLE` with `$$pipeline_run_id` and `ACTIVE_FLAG = 'Y'` (the versions `prs` opened in this run) | `client_alpha_prs_to_cdc` |
 | | `alpha_preods_delete` | SQL `DELETE_ROWS`, `HARD_DELETE = true`: selects Alpha's keys from `pre_ods.customer_support_stage` | replacement of Alpha's stage rows |
 | | `alpha_cdc_to_preods` (depends on the delete with `SUCCESS`) | SQL `APPEND_TABLE` into `pre_ods.customer_support_stage`: joins `ds` lookups, maps codes and writes the source column | the transform half of `client_alpha_cdc_to_predm` |
@@ -8535,7 +8713,7 @@ Rules for building them:
 2. Alpha and Gamma replace their landing table's rows every run; Beta's one fan-out task
    writes disjoint item-key-tagged rows to one landing table, replacing only that item's batch
    so retries preserve successful partitions. Each returns its appropriate ScriptResult;
-   Gamma uses recorded event-file consumption instead of an independent offset. If the scripting helper cannot replace, record a package
+   Gamma uses recorded keyed SQL signal consumption instead of an independent offset. If the scripting helper cannot replace, record a package
    gap under rule 1. The layers (owner, 22 October 2026): LND overwrite, PRS SCD2, CDC
    overwrite, PRE_ODS, business rules, ODS SCD1 and normalized, DM SCD2 as one flattened wide
    table. All clients share `pre_ods.customer_support_stage`, with a source column. Each client
@@ -8555,7 +8733,7 @@ Rules for building them:
    16 MiB-per-reader batches within the 256 MiB agent/task pod. Refuse a fifth partition until
    metadata/budget is deliberately revised. AUD_TASK_ITEMS records partition keys/outcomes;
    retry runs only failed partitions and preserves successful item rows/partition offsets.
-   Use S5.AK short `task.write` scopes for each item, not one transaction around fan_out.
+   Use short `ScriptTask.warehouse()` scopes for each item, not one transaction around fan_out.
    Three ingestion and nine warehouse one-slot agents match S8.A; SQL/rules/DM use warehouse.
 5. All three clients stop at ODS; delete every `<client>_ods_to_dm` task/dependency. Schedule
    Alpha/Beta with `*/15 0-1,3-23 * * *`, Gamma with `*/5 0-1,3-23 * * *`, all UTC; reserve
@@ -8564,7 +8742,7 @@ Rules for building them:
    drain active writers. Release holds after maintenance; SKIP schedule alone does not drain
    active runs or stop an event that becomes satisfied. A wait's original deadline still applies.
    Gamma's 55-minute deadline avoids indefinite idle runs while overlapping ticks skip; a
-   no-file wait and its SUCCESS-only downstream chain end SKIPPED, never a failed baseline.
+   no-signal wait and its SUCCESS-only downstream chain end SKIPPED, never a failed baseline.
    Failure-alert tasks use FAILURE edges so a skipped wait sends no failure alert.
 6. SI_DM runs every six hours at 00:00/06:00/12:00/18:00 UTC, on committed ODS writes using
    `WATERMARK_TYPE=TIMESTAMP`, `WATERMARK_COLUMN=ods_changed_at` (the SELECT aliases the
@@ -8626,6 +8804,10 @@ admin commands outside config CI. Grant command input is not a project config fi
 - **Pull requests:** `validate.yml` runs on a GitHub-hosted runner, with no secrets. Install
   the candidate wheel, migrate an empty Engine DB, run `config plan`, `config apply` and
   `validate` against the project in the same demo commit.
+  Select an explicit secretless local DuckDB warehouse profile for this job, bootstrap its
+  schemas and declared source shapes, and validate the same seed files against that warehouse.
+  The local profile needs no Trino or deployment credentials; an empty Engine DB alone is not
+  the seed-cast validation environment.
 - **Push to `main`, filtered to `project/**`:** `deploy.yml` runs on a self-hosted runner
   container in the demo cluster, in a GitHub environment with required reviewers. It runs
   `validate`, `config apply --api`, `bundle publish --api`, `seed apply --api`, then
@@ -8792,6 +8974,8 @@ Every slice updates its runnable README walkthroughs and tests in the same examp
    writes, so S8.H's feature inventory names the SCD2 target that demonstrates SCD2 protection. Machine-originated writes alone
    create no human locks; ordinary non-SCD tables have no such overwrite protection. This
    corrects warehouse records, not the MongoDB, Kafka or MinIO source systems.
+   Protection must work on every supported warehouse, including S8's Trino/Iceberg target
+   (owner, 2026-11-01); the earlier native-only implementation limit is superseded.
 4. Maintain a feature-to-scenario coverage matrix in the example README for every package
    feature through 1.0.0, not only the source-error table below. Derive the inventory from the
    roadmap and published CLI, API, config, JSON and warehouse contracts. Link the owning roadmap
@@ -8827,7 +9011,7 @@ The source-error cases below are a minimum, not the full feature-coverage matrix
 
 | The source | etl-craft handles it with | The check |
 |---|---|---|
-| replays a batch, or sends a key twice | merges with `MERGE_DEDUPE_ORDER`; retry-safe appends | rows equal the distinct source records |
+| replays a batch, or sends a key twice | merges with `MERGE_DEDUPE_ORDER`; retry-safe appends | rows equal the latest record per key per batch; prior batches retain SCD2 history |
 | sends records late or out of order | SCD2 history; ingestion UPDATE_DATE and S7.X bounded timestamp windows | a late row lands once, in the right version |
 | adds, drops or retypes a column | S5.N source definitions: `validate` names the drift; `SCHEMA_EVOLUTION` takes added columns | `validate` reports the change before the run; the run then succeeds, or fails naming the column |
 | sends values that do not fit: bad dates, text in numbers, over-long text, NULL keys | S5.K rejects with `REJECT_LIMIT` | the injected bad rows, and only those, are in `__rejects` with reasons |
@@ -8840,7 +9024,7 @@ The source-error cases below are a minimum, not the full feature-coverage matrix
 | Alpha remains in progress while Beta finishes and DM starts | S7.X attempt-fenced timestamp window; no client run gate | Alpha is excluded from the first DM window and reaches the next exactly once; Gamma idle wait does not pin it |
 | one Beta partition fails | S5.AK fan-out and S5.AH partition offsets | successful item keys/rows stay; only failed partitions retry |
 | a task needed a value from an earlier task that wasn't data, an event or an offset | Owner watch item, 2026-10-28: only if Support Insights demonstrates the need, let later tasks in the same run read `ScriptResult.variables`, with a size cap; no XCom | record the demo case and prove the smallest data-movement fix; no implementation in S7.AJ |
-| Gamma receives no object before its deadline | S5.M FILE EVENT_WAIT with SKIP timeout | run and downstream work SKIPPED, no failure alert |
+| Gamma receives no object before its deadline | S5.AI keyed SQL EVENT_WAIT on `lnd.gamma_object_events` with SKIP timeout | run and downstream work SKIPPED, no failure alert |
 | sends timestamps without zones, or across a DST change | typed `CAST` to the declared type; UTC audit times | run dates and event times match the generator's truth |
 | resends corrected history | backfills/reopened runs with fresh engine UPDATE_DATE and S7.X windows | next SI_DM window reflects the correction once, regardless of old source run ID |
 
