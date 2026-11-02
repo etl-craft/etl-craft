@@ -86,3 +86,6 @@ def initialize(ctx: OperationContext) -> None:
             if project.project_code != ctx.config.project:
                 scoped = project_settings(scoped, ActionName.CLONE, RefreshInput())
             initialize_missing(scoped)
+            from etl_craft.services.protection import startup
+
+            startup(scoped.engine, scoped.config)

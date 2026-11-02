@@ -102,7 +102,8 @@ def test_attacker_shaped_key_is_bound_and_deletes_only_it(erasure_project, erasu
     statements = []
 
     def recorded(conn, cursor, statement, parameters, context, executemany):
-        if "DELETE FROM" in statement.upper():
+        upper = statement.upper()
+        if "DELETE FROM" in upper or ("MERGE INTO" in upper and "THEN DELETE" in upper):
             statements.append((statement, parameters))
 
     event.listen(Engine, "before_cursor_execute", recorded)

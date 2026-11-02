@@ -584,3 +584,56 @@ def test_archived_upload_keeps_receipt_run_and_validation_evidence(scene, tmp_pa
             == task_run_id
         )
     assert recorded_upload(ctx.engine, upload_id).archive_location is not None
+
+
+def test_pending_protection_pins_creator_until_recovery_then_retains_only_event_ids(scene):
+    from etl_craft.core.enums_protection import ProtectionEvidence, ProtectionKind, ProtectionStatus
+    from etl_craft.core.protection import ProtectionEvent, ProtectionReport
+    from etl_craft.engine.protection_events import append, read
+
+    ctx, _, _, _, _, attempt = scene
+    target = '"warehouse"."main"."protected"'
+    with ctx.engine.begin() as conn:
+        request = append(
+            conn,
+            target,
+            ProtectionReport(
+                ProtectionStatus.PENDING,
+                (ProtectionEvent(ProtectionKind.WRITE, "a" * 32, ("name",), ("b" * 32,)),),
+            ),
+            attempt,
+        )
+    preview = invoke(ctx, ActionName.PURGE, PurgeInput(dry_run=True))
+    assert preview.counts["AUD_TASK_ATTEMPTS"] == 0
+    invoke(ctx, ActionName.PURGE, PurgeInput())
+    assert count(ctx, "AUD_TASK_ATTEMPTS") == 1
+    assert count(ctx, "AUD_PROTECTION_EVENTS") == 1
+    with ctx.engine.begin() as conn:
+        append(
+            conn,
+            target,
+            ProtectionReport(
+                ProtectionStatus.ABANDONED,
+                request_id=request,
+                evidence=ProtectionEvidence.STAMP_ABSENT,
+            ),
+            None,
+        )
+    purged = invoke(ctx, ActionName.PURGE, PurgeInput())
+    assert purged.counts["AUD_TASK_ATTEMPTS"] == 1
+    assert count(ctx, "AUD_TASK_ATTEMPTS") == 0
+    with ctx.engine.connect() as conn:
+        rows = (
+            conn.execute(
+                text(
+                    "SELECT ATTEMPT_ID AS attempt_id,REQUEST_ID AS request_id,STATUS AS status "
+                    "FROM AUD_PROTECTION_EVENTS ORDER BY EVENT_ID"
+                )
+            )
+            .mappings()
+            .all()
+        )
+        assert not read(conn, target).records
+    assert len(rows) == 2
+    assert all(row["attempt_id"] == attempt and row["request_id"] == request for row in rows)
+    assert rows[-1]["status"] == ProtectionStatus.ABANDONED

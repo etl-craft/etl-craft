@@ -44,6 +44,12 @@ Every execution reapplies all active project entries, including rows a source ha
 Its attempt result records table counts keyed by HMAC. Immediate erase is an in-process action,
 without an invented pipeline run. Neither path changes the managed write actions.
 
+Erasure shares the guarded hash-only `AUD_PROTECTION_EVENTS` intent log with protected writes
+and hard deletes. On capable warehouses it deletes exact matching row identities with one
+target MERGE; PostgreSQL before 15 uses a transactional DELETE. In SCD2 history a different
+identifier on another version of the same business key is retained. After a crash, recovery
+commits a pending deletion only when every recorded affected row identity is absent.
+
 Lineage stops at expressions, hashes, aggregates, surrogate keys and Python writers. Unmanaged
 SQL_SCRIPT and team-written targets are reported and never touched. Results, previews and
 `doctor` name boundaries and their remedy: keep the identifier out of that table, or register

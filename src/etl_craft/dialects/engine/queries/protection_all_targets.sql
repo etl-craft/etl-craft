@@ -1,0 +1,8 @@
+WITH RECURSIVE targets(target_id) AS (
+ SELECT MIN(TARGET_ID) FROM AUD_PROTECTION_EVENTS WHERE PROJECT_ID=:project_id
+ UNION ALL
+ SELECT (SELECT MIN(e.TARGET_ID) FROM AUD_PROTECTION_EVENTS e
+ WHERE e.PROJECT_ID=:project_id AND e.TARGET_ID>t.target_id)
+ FROM targets t WHERE t.target_id IS NOT NULL
+)
+SELECT target_id AS target_id FROM targets WHERE target_id IS NOT NULL

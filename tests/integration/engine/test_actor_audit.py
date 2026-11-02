@@ -178,6 +178,7 @@ def seeded_tables(db):
             conn, attempt, AttemptStatus.SUCCESS, ALICE, owner="audit-fixture"
         )
         values = {
+            "upload_id": 1,
             "bundle_id": "a" * 64,
             "manifest": "{}",
             "attempt_id": attempt,
@@ -303,6 +304,13 @@ def seeded_tables(db):
                     value = "REPORT"
                 if table.upper() == "AUD_ERASURE_SUBJECTS":
                     value = {"key_hmac": "a" * 64, "active_flag": "Y"}.get(lower, value)
+                if table.upper() == "AUD_PROTECTION_EVENTS":
+                    value = {
+                        "status": "COMMITTED",
+                        "kind": "WRITE",
+                        "column_names": "[]",
+                        "value_hashes": "[]",
+                    }.get(lower, value)
                 if table.upper() == "AUD_SEED_LOADS" and lower == "status":
                     value = "LOADED"
                 if table.upper() == "AUD_UPLOADS" and lower == "status":

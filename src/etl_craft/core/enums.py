@@ -555,17 +555,6 @@ class YesNo(StrEnum):
         return cls.YES if value else cls.NO
 
 
-class ProtectionEvent(StrEnum):
-    """Warehouse evidence for protection and value attribution."""
-
-    ENABLE = "ENABLE"
-    BASELINE = "BASELINE"
-    WRITE = "WRITE"
-    DELETE = "DELETE"
-    LOCK = "LOCK"
-    UNLOCK = "UNLOCK"
-
-
 class ControlAcknowledgement(StrEnum):
     """Independent, append-only physical observations from an owning agent."""
 
@@ -719,6 +708,8 @@ class AgentReport(StrEnum):
     STATE = "STATE"
     TARGET = "TARGET"
     PUBLISH = "PUBLISH"
+    PROTECTION_READ = "PROTECTION_READ"
+    PROTECTION_EVENT = "PROTECTION_EVENT"
     WATERMARK = "WATERMARK"
     ITEMS = "ITEMS"
     ITEM_EVENT = "ITEM_EVENT"

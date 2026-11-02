@@ -8,11 +8,14 @@ All notable changes are recorded here. The format follows
 
 ### Fixed
 
+- Trino target-lock handoff accepts its exact already-finished-query cancellation response,
+  while still requiring a separate check that no tagged warehouse statements remain running.
+
 - SCD1 updates/inserts and SCD2 closes/successor inserts now use one target MERGE on supported
   warehouse formats, including DuckDB over Iceberg. This removes the visible close-before-insert
   crash window on Iceberg and Delta; replay preserves unchanged versions and counts. PostgreSQL
-  before 15 retains its same-transaction fallback. Existing native-only protection remains until
-  the next S7.AM slice; this change does not enable protected writes on other providers yet.
+  before 15 retains its same-transaction fallback. In-row protection and Engine DB intent
+  recovery now extend the protection contract to the supported warehouse providers.
 - Snowflake lock cancellation omits completed query history while retaining running statements,
   avoiding a slow history scan when releasing a failed task's target lock.
 
@@ -64,6 +67,33 @@ All notable changes are recorded here. The format follows
   lookups by code should filter on `ETL_CRAFT_PROJECT`, as the updated examples do.
 
 ### Changed
+
+- Stewardship uploads accept optional BOOLEAN `LOCKED`: FALSE releases the key's row and value
+  locks while writing values; TRUE, NULL or absent locks as before. `UploadReader.rows(schema=...)`
+  validates boolean file columns. Protection events retain server-verified `UPLOAD_ID`, and
+  provenance reports upload attribution and derived unlock reasons. Managed merges reserve
+  `LOCKED`: validate/refresh refuse a target business column with that name or a nonboolean
+  staged control, naming the rename or CAST remedy.
+
+- Stewardable merge targets with a business type lacking a canonical scalar hash are refused
+  by validate, refresh and first protection activation, with the target/column/type and scalar
+  cast remedy. Ordinary nested-column merges remain supported with an inactive NULL row
+  fingerprint. Recovery adds one Engine DB lookup and no warehouse reads when no intent is
+  pending; ordinary merges keep their warehouse statement budgets.
+
+- SCD protection now keeps per-cell locks and writers in `ETL_PROTECTION`,
+  `ETL_ROW_FINGERPRINT` and `ETL_PROTECTION_REQUEST_ID` on the target, with one target MERGE
+  per mutation on capable warehouses and the transactional PostgreSQL-before-15 fallback.
+  Migration 0082 adds guarded hash-only `AUD_PROTECTION_EVENTS`; recovery resolves pending
+  mutations before writes, at controller startup and on provenance reads. Doctor reports
+  externally deleted locked keys. Old side-table targets require backup, recreation and
+  re-application of locks. The internal agent-report protocol adds bounded, fenced
+  `PROTECTION_READ` and `PROTECTION_EVENT`; no setting, CLI flag or route is added.
+  Merge-shaped seeds initialize their row fingerprints before stewardship handover.
+  `UPLOAD_ID` remains file provenance, retained rather than editable in human-value operations;
+  adding that nullable provenance column does not invalidate a protected business contract.
+  Unresolved intents pin creator history until recovery; finalized event identifiers survive
+  ordinary attempt-history expiry without blocking configured retention.
 
 - Stewardship uploads now commit their file and queue receipt atomically and recover orphan
   files after crashes. Immutable `AUD_UPLOADS.STORED_NAME` appears beside the original name
@@ -334,8 +364,8 @@ All notable changes are recorded here. The format follows
 - `Uploads.Max_file_mb` (`uploads.max_file_mb`, default 50) and the optional `excel` extra
   (`openpyxl>=3.1.5,<4`). Upload bytes and workbook expansion are bounded before scripts run.
 - Per-row upload attribution through managed SQL actions, later-upload-wins merge ordering,
-  and human SCD protection on native PostgreSQL/DuckDB. Iceberg/Trino refuse protected SCD
-  upload pipelines during validate and refresh; ordinary upload targets remain supported.
+  and human SCD protection through atomic target mutations on supported warehouses, including
+  Iceberg/Trino upload pipelines.
 - Attempt-token-only `GET /api/v1/agent/uploads/{upload_id}/content` for API-only agents,
   with live-lease/run admission and SHA-256 verification shared with local execution.
 
@@ -786,13 +816,6 @@ All notable changes are recorded here. The format follows
   Migration `0037` adds `AUD_PIPELINES_RUN_LOG.TASK_SELECTION` and `EXCLUSIVE_RUN` on both
   Engine DBs. Run JSON adds `selected_task_ids`, `ignore_dependencies` and `exclusive_run`.
 
-- Shared SCD value edit, provenance and unlock services and HTTP routes under
-  `/api/v1/pipelines/{code}/tasks/{task}/values`. Human admin inserts protect their row;
-  edits protect changed values. ETL and authenticated service integrations respect those
-  locks, with effective hashes/counts and independent column attribution. Only human admins
-  may unlock. Native PostgreSQL and DuckDB commit data and warehouse-side evidence together;
-  other warehouses refuse protected edits. Unobserved writes and replacement paths fail
-  explicitly. No Engine DB migration or new dependency is required.
 
 - A local installation operates a server: `--server https://<host>` (or `ETL_CRAFT_SERVER`)
   sends `status`, `explain`, `history`, `logs`, `whoami`, `run` (a run, `--backfill` or

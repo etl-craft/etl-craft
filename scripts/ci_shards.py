@@ -27,10 +27,10 @@ SERVICE_MARKERS = {
 SHARDS = {
     "coverage": 1,
     "browser": 1,
-    "measured-coverage": 3,
+    "measured-coverage": 4,
     "engine": 5,
     "warehouse-local": 1,
-    "warehouse-iceberg": 2,
+    "warehouse-iceberg": 3,
     "e2e": 1,
 }
 VALIDATIONS = {"package-ubuntu-latest", "package-macos-latest"}

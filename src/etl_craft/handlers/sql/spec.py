@@ -66,6 +66,7 @@ from etl_craft.dialects.query_analysis import read_only_problem
 from etl_craft.dialects.warehouse.base import STORAGE_PARAMETERS
 from etl_craft.engine.repository.offsets import StoredOffset
 from etl_craft.handlers.registry import TaskContext
+from etl_craft.handlers.sql.upload_controls import check_keys as check_upload_keys
 from etl_craft.handlers.sql.watermarks import Watermark, read_watermark, source_pipelines
 from etl_craft.warehouse.connection import warehouse_dialect
 
@@ -213,6 +214,7 @@ def read_sql_task(context: TaskContext, stored: StoredOffset | None = None) -> S
     dedupe_order = None
     if action in MERGES:
         compare = _columns(params, "MERGE_COMPARE_COLUMNS", action, context)
+        check_upload_keys(f"{context.pipeline_code}.{context.task_code}", merge_key, compare)
         dedupe_order = _dedupe_order(params.get("MERGE_DEDUPE_ORDER"))
     else:
         for name in ("MERGE_COMPARE_COLUMNS", "MERGE_DEDUPE_ORDER"):
@@ -222,7 +224,6 @@ def read_sql_task(context: TaskContext, stored: StoredOffset | None = None) -> S
                 )
     if action not in KEYED and params.get("MERGE_KEY"):
         raise SqlGuardError(f"MERGE_KEY does not apply to SQL_ACTION={action}")
-    setup_for = read_setup_for(params.get("SETUP_FOR"), action)
     reject_limit = _reject_limit(params.get("REJECT_LIMIT"), action)
     if flags["SKIP_REJECTS_OVER_LIMIT"] and reject_limit is None:
         raise SqlGuardError(
@@ -241,7 +242,7 @@ def read_sql_task(context: TaskContext, stored: StoredOffset | None = None) -> S
         allow_empty=flags["ALLOW_EMPTY"],
         preserve_target=flags["PRESERVE_TARGET"],
         hard_delete=flags["HARD_DELETE"],
-        setup_for=setup_for,
+        setup_for=read_setup_for(params.get("SETUP_FOR"), action),
         secure_view=flags["SECURE_VIEW"],
         reject_limit=reject_limit,
         skip_rejects_over_limit=flags["SKIP_REJECTS_OVER_LIMIT"],

@@ -16,23 +16,23 @@ from etl_craft.services.operations import OperationContext
 from etl_craft.services.operations.uploads import UploadRequest, receive
 from fixtures.actions import act
 from fixtures.engine_db import profile_block
-from fixtures.metadata import add_dependency, add_task
+from fixtures.metadata import add_dependency, add_source_column, add_task
 from fixtures.sql_warehouse import warehouses
 
 VALIDATOR = """
 from etl_craft.scripting import PermanentError
 
 def validate(task):
-    rows = task.reader.rows()
+    rows = task.reader.rows(schema={"LOCKED": bool})
     header = next(rows, None)
-    if header != ("id", "name"):
+    if header not in (("id", "name"), ("id", "name", "LOCKED")):
         raise PermanentError(
             f"row 1 header={header!r}; expected id|name with a pipe separator; "
             "upload a corrected file"
         )
     seen = set()
     for number, row in enumerate(rows, 2):
-        if len(row) != 2 or not row[0].isdigit() or int(row[0]) in seen:
+        if len(row) != len(header) or not row[0].isdigit() or int(row[0]) in seen:
             raise PermanentError(
                 f"row {number} value={row!r}; expected a unique integer id and name; "
                 "upload a corrected file"
@@ -44,16 +44,22 @@ def validate(task):
 @pytest.fixture
 def upload_world(sql_world, request):
     w = sql_world
+    kind = getattr(request, "param", "APPEND_TABLE")
+    if isinstance(kind, tuple):
+        kind, engine_kind = kind
+        if engine_kind == "postgresql":
+            from fixtures.scd_protection import use_postgres_engine
+
+            use_postgres_engine(w, request)
     root = w.config.project_dir
     (root / "validation_scripts").mkdir()
     (root / "python_scripts").mkdir()
     (root / "validation_scripts/check.py").write_text(VALIDATOR)
     source, target = w.name("landed"), w.name("uploaded")
     w.execute(
-        f"CREATE TABLE {source} (id INTEGER,name VARCHAR,UPLOAD_ID BIGINT,"
+        f"CREATE TABLE {source} (id INTEGER,name VARCHAR,LOCKED BOOLEAN,UPLOAD_ID BIGINT,"
         "CREATED_BY VARCHAR,UPDATED_BY VARCHAR)"
     )
-    kind = getattr(request, "param", "APPEND_TABLE")
     if kind == "APPEND_TABLE":
         w.execute(
             f"CREATE TABLE {target} (id INTEGER,name VARCHAR,UPLOAD_ID BIGINT,"
@@ -67,7 +73,7 @@ def upload_world(sql_world, request):
     loader = """
 import csv
 from sqlalchemy import text
-from etl_craft.scripting import ScriptResult
+from etl_craft.scripting import ScriptResult, UploadReader
 
 def run(task):
     written = 0
@@ -77,25 +83,26 @@ def run(task):
                 text("DELETE FROM SOURCE_TABLE WHERE UPLOAD_ID=:upload"),
                 {"upload": upload.upload_id},
             )
-            with upload.path.open(newline="", encoding="utf-8") as stream:
-                rows = csv.reader(stream, delimiter="|")
-                next(rows)
-                for row in rows:
-                    conn.execute(text(
-                        "INSERT INTO SOURCE_TABLE (id,name,UPLOAD_ID,CREATED_BY,UPDATED_BY) "
-                        "VALUES (:id,:name,:upload,:account,:account)"
-                    ), {
-                        "id": int(row[0]), "name": row[1],
-                        "upload": upload.upload_id, "account": upload.account,
-                    })
-                    written += 1
+            rows = UploadReader(upload, "CSV").rows(schema={"LOCKED": bool})
+            header = next(rows)
+            for row in rows:
+                values = dict(zip(header, row))
+                conn.execute(text(
+                    "INSERT INTO SOURCE_TABLE (id,name,LOCKED,UPLOAD_ID,CREATED_BY,UPDATED_BY) "
+                    "VALUES (:id,:name,:locked,:upload,:account,:account)"
+                ), {
+                    "id": int(values["id"]), "name": values["name"],
+                    "locked": values.get("LOCKED"),
+                    "upload": upload.upload_id, "account": upload.account,
+                })
+                written += 1
     return ScriptResult(row_count=written)
 """.replace("SOURCE_TABLE", source)
     (root / "python_scripts/load.py").write_text(loader)
     config_file = {
         "Secrets": {"Source_type": "ENVIRONMENT"},
         "Orchestration": {"Project": "default", "Task_timeout_seconds": 60},
-        "Engine": {"dev": profile_block(w.config.engine, "main")},
+        "Engine": {"dev": profile_block(w.config.engine, w.config.engine.schema or "main")},
         "Warehouse": {
             "Name": {
                 "duckdb": "DuckDB",
@@ -113,8 +120,26 @@ def run(task):
         w.engine_db, w.config, SYSTEM_ACTOR, role=ApiRole.ADMIN, project="default", project_id=1
     )
     for name in ("alice", "bob"):
-        act(owner, ActionName.ACCOUNT_ADD, name=name, role=ApiRole.ADMIN, oidc_subject=name)
+        act(
+            owner,
+            ActionName.ACCOUNT_ADD,
+            name=name,
+            role=ApiRole.ADMIN,
+            password="correct horse battery",
+        )
     with w.engine_db.begin() as conn:
+        for position, (column, data_type) in enumerate(
+            (
+                ("id", "INTEGER"),
+                ("name", "VARCHAR"),
+                ("LOCKED", "BOOLEAN"),
+                ("UPLOAD_ID", "BIGINT"),
+                ("CREATED_BY", "VARCHAR"),
+                ("UPDATED_BY", "VARCHAR"),
+            ),
+            1,
+        ):
+            add_source_column(conn, source, column, data_type, position)
         transitions.finalize_pipeline_run(conn, w.pipeline_run_id, RunStatus.SUCCESS)
         validation = add_task(
             conn,
@@ -149,7 +174,8 @@ def run(task):
             ),
             TARGET_OBJECT=f"{w.schema}.uploaded",
             SELECT_QUERY=(
-                f"SELECT id,name,UPLOAD_ID FROM {source} WHERE UPLOAD_ID IN ($$upload_ids)"
+                f"SELECT id,name,UPLOAD_ID{',LOCKED' if kind != 'APPEND_TABLE' else ''} "
+                f"FROM {source} WHERE UPLOAD_ID IN ($$upload_ids)"
             ),
         )
         add_dependency(conn, w.pipeline_id, load, validation, "HAS_DATA")
@@ -263,15 +289,15 @@ def test_bad_stewardship_file_never_reaches_a_project_table(upload_world):
         )
 
 
-@warehouses("duckdb", "postgres")
+@warehouses("duckdb", "postgres", "duckdb_iceberg", "trino_iceberg")
 @pytest.mark.parametrize("upload_world", ["SCD1_MERGE", "SCD2_MERGE"], indirect=True)
 def test_complete_protected_upload_flow_orders_files_and_locks_each_writer(upload_world):
     from etl_craft.controller.uploads import admit_pending
 
     w, owner = upload_world
     warmup = submit(owner, "alice", b"id|name\n0|warmup\n")
-    alice = submit(owner, "alice", b"id|name\n1|first\n2|only alice\n")
-    bob = submit(owner, "bob", b"id|name\n1|newest\n3|only bob\n")
+    alice = submit(owner, "alice", b"id|name|LOCKED\n1|first|false\n2|only alice|true\n")
+    bob = submit(owner, "bob", b"id|name|LOCKED\n1|newest|true\n3|only bob|true\n")
     result = drive_upload(w, warmup["pipeline_run_id"])
     assert result.status == RunStatus.SUCCESS, result.message
     admit_pending(owner)
@@ -319,23 +345,6 @@ def test_complete_protected_upload_flow_orders_files_and_locks_each_writer(uploa
             .all()
         )
     assert accounts == ["alice", "bob"]
-
-
-@warehouses("duckdb_iceberg", "trino_iceberg")
-@pytest.mark.parametrize("upload_world", ["SCD1_MERGE", "SCD2_MERGE"], indirect=True)
-def test_validate_and_refresh_refuse_unsupported_protected_upload_targets(upload_world):
-    from etl_craft.services.validate import validate
-
-    w, owner = upload_world
-    checked = validate(w.engine_db, w.config, "P")
-    messages = " ".join(f"{f.where}: {f.message}" for f in checked.findings)
-    for expected in ["P.apply", "uploaded", "unsupported", "non-protected target"]:
-        assert expected in messages
-    refreshed = act(owner, ActionName.PIPELINE_REFRESH, pipeline_code="P")
-    assert refreshed.failed
-    messages = " ".join(str(row) for row in refreshed.refreshes)
-    for expected in ["P.apply", "uploaded", "unsupported", "non-protected target"]:
-        assert expected in messages
 
 
 def test_one_refused_file_does_not_prevent_another_file_loading(upload_world):
@@ -514,3 +523,492 @@ def test_archived_upload_reruns_through_real_validation_and_loading(upload_world
             {"run": run_id},
         ).scalar_one()
     assert accepted_attempts == 2
+
+
+@warehouses("duckdb")
+@pytest.mark.parametrize("upload_world", ["SCD1_MERGE", "SCD2_MERGE"], indirect=True)
+def test_api_edit_and_cli_upload_keep_each_cells_actual_human_writer(
+    upload_world, monkeypatch, capsys, tmp_path
+):
+    import json
+
+    from fastapi.testclient import TestClient
+
+    from etl_craft.api.app import create_app
+    from etl_craft.cli import main
+    from etl_craft.engine.migrations import mark_packaged_migrations_applied
+
+    w, owner = upload_world
+    with w.engine_db.begin() as conn:
+        mark_packaged_migrations_applied(conn)
+    tokens = {}
+    for name in ("alice", "bob"):
+        tokens[name] = act(
+            owner, ActionName.LOGIN, name=name, password="correct horse battery"
+        ).access_token
+    with w.engine_db.begin() as conn:
+        mark_packaged_migrations_applied(conn)
+    with TestClient(create_app(owner)) as client:
+        alice = {"Authorization": "Bearer " + tokens["alice"]}
+        uploaded = client.post(
+            "/api/v1/projects/default/uploads?pipeline_code=P",
+            headers=alice,
+            files={"file": ("data.csv", b"id|name\n1|Initial\n", "text/csv")},
+        )
+        assert uploaded.status_code == 200, uploaded.text
+        first = uploaded.json()
+        assert drive_upload(w, first["pipeline_run_id"]).status == RunStatus.SUCCESS
+        edited = client.post(
+            "/api/v1/projects/default/values",
+            headers=alice,
+            json={
+                "pipeline_code": "P",
+                "task_code": "apply",
+                "key": {"id": 1},
+                "values": {"name": "Corrected"},
+                "reason": "correct",
+            },
+        )
+        assert edited.status_code == 200, edited.text
+        assert w.rows(f"SELECT UPLOAD_ID FROM {w.name('uploaded')} WHERE ACTIVE_FLAG='Y'") == [
+            (first["upload_id"],)
+        ]
+        path = tmp_path / "data.csv"
+        path.write_bytes(b"id|name\n1|From Bob\n")
+        refreshed = act(owner, ActionName.PIPELINE_REFRESH, pipeline_code="P")
+        assert not refreshed.failed, refreshed
+        monkeypatch.setenv("ETL_CRAFT_TOKEN", tokens["bob"])
+        assert (
+            main(
+                [
+                    "--config",
+                    str(w.config.config_path),
+                    "upload",
+                    "--project",
+                    "default",
+                    "--pipeline-code",
+                    "P",
+                    str(path),
+                    "--format",
+                    "json",
+                ]
+            )
+            == 0
+        )
+        second = json.loads(capsys.readouterr().out)
+        assert drive_upload(w, second["pipeline_run_id"]).status == RunStatus.SUCCESS
+        evidence = client.post(
+            "/api/v1/projects/default/values/provenance",
+            headers=alice,
+            json={"pipeline_code": "P", "task_code": "apply", "key": {"id": 1}},
+        )
+        assert evidence.status_code == 200, evidence.text
+        cells = {r["column_name"]: r for r in evidence.json()["records"]}
+        assert cells["id"]["writer"] == "alice"
+        assert cells["name"]["writer"] == "bob"
+        assert cells["name"]["locked"]
+        assert "upload_id" not in cells
+        refused = client.post(
+            "/api/v1/projects/default/values",
+            headers=alice,
+            json={
+                "pipeline_code": "P",
+                "task_code": "apply",
+                "key": {"id": 1},
+                "values": {"upload_id": 999},
+                "reason": "cannot forge provenance",
+            },
+        )
+        assert refused.status_code == 400 and "managed" in refused.text
+        assert w.rows(f"SELECT UPLOAD_ID FROM {w.name('uploaded')} WHERE ACTIVE_FLAG='Y'") == [
+            (second["upload_id"],)
+        ]
+
+
+@warehouses("duckdb", "postgres", "trino_iceberg")
+@pytest.mark.parametrize("upload_world", ["SCD1_MERGE", "SCD2_MERGE"], indirect=True)
+def test_first_upload_refuses_nested_target_before_any_target_write(upload_world):
+    from fixtures.single_merge import target_mutations
+
+    w, owner = upload_world
+    kind = "ARRAY(INTEGER)" if w.kind == "trino_iceberg" else "INTEGER[]"
+    w.execute(f"ALTER TABLE {w.name('uploaded')} ADD COLUMN numbers {kind}")
+    before = w.rows(f"SELECT * FROM {w.name('uploaded')}")
+    upload = submit(owner, "alice", b"id|name\n1|Manual\n")
+    with target_mutations(w, "uploaded") as statements:
+        outcome = drive_upload(w, upload["pipeline_run_id"])
+    assert outcome.status == RunStatus.FAILED
+    with w.engine_db.connect() as conn:
+        attempts = (
+            conn.execute(
+                text(
+                    "SELECT ERROR_MESSAGE AS error_message,LOG_PATH AS log_path "
+                    "FROM AUD_TASK_ATTEMPTS WHERE STATUS='FAILED'"
+                )
+            )
+            .mappings()
+            .all()
+        )
+        assert conn.execute(text("SELECT COUNT(*) FROM AUD_PROTECTION_EVENTS")).scalar_one() == 0
+    assert len(attempts) == 1
+    from pathlib import Path
+
+    for part in (
+        w.name("uploaded"),
+        "numbers",
+        kind,
+        "canonical scalar hash",
+        "cast it to a scalar type in the SELECT",
+    ):
+        assert part.upper() in attempts[0]["error_message"].upper(), attempts
+        assert part.upper() in Path(attempts[0]["log_path"]).read_text(encoding="utf-8").upper()
+    assert statements == []
+    assert w.rows(f"SELECT * FROM {w.name('uploaded')}") == before
+
+
+@warehouses("duckdb", "postgres", "trino_iceberg", "duckdb_iceberg")
+@pytest.mark.parametrize("upload_world", ["SCD1_MERGE", "SCD2_MERGE"], indirect=True)
+def test_upload_false_releases_row_and_cells_and_true_relocks(
+    upload_world, monkeypatch, capsys, tmp_path
+):
+    import json
+    import os
+    from pathlib import Path
+
+    from fastapi.testclient import TestClient
+
+    from etl_craft.api.app import create_app
+    from etl_craft.cli import main
+    from etl_craft.engine.migrations import mark_packaged_migrations_applied
+    from fixtures.round_trips import database
+
+    w, owner = upload_world
+    with w.engine_db.begin() as conn:
+        mark_packaged_migrations_applied(conn)
+    token = act(
+        owner, ActionName.LOGIN, name="alice", password="correct horse battery"
+    ).access_token
+    with w.engine_db.begin() as conn:
+        mark_packaged_migrations_applied(conn)
+    headers = {"Authorization": "Bearer " + token}
+    monkeypatch.setenv("ETL_CRAFT_TOKEN", token)
+    with TestClient(create_app(owner)) as client:
+        response = client.post(
+            "/api/v1/projects/default/uploads?pipeline_code=P",
+            headers=headers,
+            files={"file": ("initial.csv", b"id|name\n1|first\n2|other\n", "text/csv")},
+        )
+        assert response.status_code == 200, response.text
+        initial = response.json()
+        result = drive_upload(w, initial["pipeline_run_id"])
+        assert result.status == RunStatus.SUCCESS, result.message
+        # An upload releases an administrator's deliberate row and cell lock too.
+        edited = client.post(
+            "/api/v1/projects/default/values",
+            headers=headers,
+            json={
+                "pipeline_code": "P",
+                "task_code": "apply",
+                "key": {"id": 1},
+                "values": {"name": "admin"},
+                "reason": "correct",
+                "row_lock": True,
+            },
+        )
+        assert edited.status_code == 200, edited.text
+        refreshed = act(owner, ActionName.PIPELINE_REFRESH, pipeline_code="P")
+        assert not refreshed.failed, refreshed.refreshes[0].findings
+        path = tmp_path / "release.csv"
+        path.write_bytes(b"id|name|LOCKED\n1|admin|false\n2|changed|true\n3|new|false\n4|null|\n")
+        assert (
+            main(
+                [
+                    "--config",
+                    str(w.config.config_path),
+                    "upload",
+                    "--project",
+                    "default",
+                    "--pipeline-code",
+                    "P",
+                    str(path),
+                    "--format",
+                    "json",
+                ]
+            )
+            == 0
+        )
+        second = json.loads(capsys.readouterr().out)
+        instrumentation = tmp_path / "instrumentation"
+        instrumentation.mkdir()
+        records = tmp_path / "statements.jsonl"
+        (instrumentation / "sitecustomize.py").write_text(
+            "from fixtures.round_trips import install_child_counter\n"
+            f"install_child_counter({str(records)!r}, {database(w.engine_db.url)!r})\n"
+        )
+        monkeypatch.setenv(
+            "PYTHONPATH", os.pathsep.join((str(instrumentation), str(Path(__file__).parents[2])))
+        )
+        result = drive_upload(w, second["pipeline_run_id"])
+        events = [json.loads(line) for line in records.read_text().splitlines()]
+        target = w.name("uploaded").upper()
+        statements = [
+            row["query"].upper()
+            for row in events
+            if row["kind"] == "warehouse"
+            and row["measure"] == "statements"
+            and any(
+                row["query"].upper().startswith(f"OTHER: {verb} {target} ")
+                for verb in ("MERGE INTO", "UPDATE", "INSERT INTO", "DELETE FROM")
+            )
+        ]
+        assert len(statements) == 1 and statements[0].startswith("OTHER: MERGE INTO "), statements
+        assert result.status == RunStatus.SUCCESS, result.message
+        states = {
+            row[0]: json.loads(row[1])
+            for row in w.rows(
+                f"SELECT id AS id,ETL_PROTECTION AS protection FROM {w.name('uploaded')} "
+                "WHERE ACTIVE_FLAG='Y'"
+            )
+        }
+        assert not any(c["locked"] for c in states[1]["cells"].values())
+        assert not any(c["locked"] for c in states[3]["cells"].values())
+        assert states[2]["cells"]["name"]["locked"]
+        assert states[4]["cells"]["*"]["locked"]
+        assert "locked" not in states[1]["cells"]
+        with w.engine_db.connect() as conn:
+            events = (
+                conn.execute(
+                    text(
+                        "SELECT KIND AS kind,UPLOAD_ID AS upload_id,CREATED_BY AS actor,"
+                        "TARGET_ID AS target_id,KEY_HASH AS key_hash,COLUMN_NAMES AS column_names,"
+                        "VALUE_HASHES AS value_hashes,REQUEST_ID AS request_id,STATUS AS status "
+                        "FROM AUD_PROTECTION_EVENTS "
+                        "WHERE UPLOAD_ID=:upload"
+                    ),
+                    {"upload": second["upload_id"]},
+                )
+                .mappings()
+                .all()
+            )
+        assert any(e["kind"] == "UNLOCK" for e in events)
+        assert all(e["actor"] == "alice" for e in events)
+        assert "admin" not in str(events) and "changed" not in str(events)
+        evidence = act(
+            owner, ActionName.DATA_PROVENANCE, pipeline_code="P", task_code="apply", key={"id": 1}
+        )
+        assert any(
+            event["reason"] == f"upload {second['upload_id']}: LOCKED=false"
+            and event["actor"] == "alice"
+            for event in evidence.history
+        )
+        # Same value must acquire a lock without manufacturing an SCD2 version.
+        versions_before = w.rows(f"SELECT COUNT(*) FROM {w.name('uploaded')} WHERE id=1")[0][0]
+        response = client.post(
+            "/api/v1/projects/default/uploads?pipeline_code=P",
+            headers=headers,
+            files={"file": ("relock.csv", b"id|name|LOCKED\n1|admin|TRUE\n", "text/csv")},
+        )
+        assert response.status_code == 200, response.text
+        result = drive_upload(w, response.json()["pipeline_run_id"])
+        assert result.status == RunStatus.SUCCESS, result.message
+        assert w.rows(f"SELECT COUNT(*) FROM {w.name('uploaded')} WHERE id=1") == [
+            (versions_before,)
+        ]
+        raw = w.rows(
+            f"SELECT ETL_PROTECTION FROM {w.name('uploaded')} WHERE id=1 AND ACTIVE_FLAG='Y'"
+        )
+        assert json.loads(raw[0][0])["cells"]["name"]["locked"]
+        with w.engine_db.connect() as conn:
+            kind = conn.execute(
+                text(
+                    "SELECT PARAMETER_VALUE AS kind FROM CFG_TASK_PARAMETERS "
+                    "WHERE TASK_ID=:task AND PARAMETER_NAME='SETUP_FOR'"
+                ),
+                {"task": w.tasks["setup_uploaded"]},
+            ).scalar_one()
+        with w.engine_db.connect() as conn:
+            counts = (
+                conn.execute(
+                    text(
+                        "SELECT t.INSERT_COUNT AS inserted,t.UPDATE_COUNT AS updated "
+                        "FROM AUD_TASK_RUN_LOG t JOIN CFG_TASKS c ON c.TASK_ID=t.TASK_ID "
+                        "WHERE t.PIPELINE_RUN_ID=:run AND c.TASK_CODE='apply'"
+                    ),
+                    {"run": second["pipeline_run_id"]},
+                )
+                .mappings()
+                .one()
+            )
+        assert counts["inserted"] == (3 if kind == "SCD2_MERGE" else 2)
+        assert counts["updated"] == 1
+        reloaded = w.run(
+            "source_reload",
+            SQL_ACTION=kind,
+            TARGET_OBJECT="uploaded",
+            SELECT_QUERY="SELECT 3 AS id,'source' AS name,CAST(NULL AS BIGINT) AS UPLOAD_ID",
+            MERGE_KEY="id",
+            MERGE_COMPARE_COLUMNS="name",
+        )
+        assert reloaded.update_count == 1
+        assert w.rows(f"SELECT name FROM {w.name('uploaded')} WHERE id=3 AND ACTIVE_FLAG='Y'") == [
+            ("source",)
+        ]
+
+
+@warehouses("duckdb", "postgres", "trino_iceberg", "duckdb_iceberg")
+@pytest.mark.parametrize("upload_world", ["SCD1_MERGE"], indirect=True)
+def test_upload_schema_refuses_invalid_locked_value_without_target_write(upload_world):
+    w, owner = upload_world
+    uploaded = submit(owner, "alice", b"id|name|LOCKED\n1|bad|maybe\n")
+    result = drive_upload(w, uploaded["pipeline_run_id"])
+    assert result.status == RunStatus.FAILED
+    with w.engine_db.connect() as conn:
+        reason = conn.execute(
+            text("SELECT REASON AS reason FROM AUD_UPLOADS WHERE UPLOAD_ID=:id"),
+            {"id": uploaded["upload_id"]},
+        ).scalar_one()
+    for part in (
+        str(uploaded["upload_id"]),
+        "row 2",
+        "LOCKED",
+        "maybe",
+        "true",
+        "false",
+        "NULL",
+        "corrected file",
+    ):
+        assert part in reason, reason
+    assert w.rows(f"SELECT COUNT(*) FROM {w.name('uploaded')}") == [(0,)]
+
+
+@warehouses("duckdb", "postgres", "trino_iceberg", "duckdb_iceberg")
+@pytest.mark.parametrize("upload_world", ["SCD1_MERGE", "SCD2_MERGE"], indirect=True)
+def test_staged_locked_text_is_refused_before_target_write(upload_world):
+    w, owner = upload_world
+    with w.engine_db.begin() as conn:
+        conn.execute(
+            text(
+                "UPDATE CFG_TASK_PARAMETERS SET PARAMETER_VALUE=replace(PARAMETER_VALUE,"
+                "',LOCKED ',',CAST(LOCKED AS VARCHAR) AS LOCKED ') "
+                "WHERE PARAMETER_NAME='SELECT_QUERY'"
+            )
+        )
+    uploaded = submit(owner, "alice", b"id|name|LOCKED\n1|valid file|true\n")
+    result = drive_upload(w, uploaded["pipeline_run_id"])
+    assert result.status == RunStatus.FAILED
+    with w.engine_db.connect() as conn:
+        message = conn.execute(
+            text(
+                "SELECT ERROR_MESSAGE AS message FROM AUD_TASK_RUN_LOG "
+                "WHERE PIPELINE_RUN_ID=:run AND STATUS='FAILED'"
+            ),
+            {"run": uploaded["pipeline_run_id"]},
+        ).scalar_one()
+    found_type = "CHARACTER VARYING" if w.kind == "postgres" else "VARCHAR"
+    for part in ("P.apply", "LOCKED", found_type, "BOOLEAN", "CAST", "landing"):
+        assert part in message, message
+    assert w.rows(f"SELECT COUNT(*) FROM {w.name('uploaded')}") == [(0,)]
+    with w.engine_db.connect() as conn:
+        assert conn.execute(text("SELECT COUNT(*) FROM AUD_PROTECTION_EVENTS")).scalar_one() == 0
+
+
+@warehouses("duckdb", "postgres", "trino_iceberg", "duckdb_iceberg")
+@pytest.mark.parametrize("upload_world", ["SCD1_MERGE", "SCD2_MERGE"], indirect=True)
+def test_service_upload_false_neither_creates_nor_releases_locks(upload_world):
+    import json
+
+    from fastapi.testclient import TestClient
+
+    from etl_craft.api.app import create_app
+    from etl_craft.core.enums import ApiRole
+    from etl_craft.engine.migrations import mark_packaged_migrations_applied
+
+    w, owner = upload_world
+    human = submit(owner, "alice", b"id|name\n1|human\n")
+    result = drive_upload(w, human["pipeline_run_id"])
+    assert result.status == RunStatus.SUCCESS, result.message
+    with w.engine_db.begin() as conn:
+        mark_packaged_migrations_applied(conn)
+    token = act(owner, ActionName.TOKEN_CREATE, name="robot", role=ApiRole.ADMIN)
+    with TestClient(create_app(owner)) as client:
+        response = client.post(
+            "/api/v1/projects/default/uploads?pipeline_code=P",
+            headers={"Authorization": "Bearer " + token.token},
+            files={
+                "file": ("service.csv", b"id|name|LOCKED\n1|robot|false\n2|new|true\n", "text/csv")
+            },
+        )
+        assert response.status_code == 200, response.text
+        result = drive_upload(w, response.json()["pipeline_run_id"])
+        assert result.status == RunStatus.SUCCESS, result.message
+    rows = w.rows(
+        f"SELECT id,name,ETL_PROTECTION FROM {w.name('uploaded')} WHERE ACTIVE_FLAG='Y' ORDER BY id"
+    )
+    assert rows[0][1] == "human"
+    assert json.loads(rows[0][2])["cells"]["*"]["locked"]
+    assert rows[1][1] == "new"
+    assert not any(cell["locked"] for cell in json.loads(rows[1][2])["cells"].values())
+    with w.engine_db.connect() as conn:
+        assert (
+            conn.execute(
+                text(
+                    "SELECT COUNT(*) FROM AUD_PROTECTION_EVENTS "
+                    "WHERE UPLOAD_ID=:upload AND KIND='UNLOCK'"
+                ),
+                {"upload": response.json()["upload_id"]},
+            ).scalar_one()
+            == 0
+        )
+
+
+@warehouses("duckdb")
+@pytest.mark.parametrize(
+    "upload_world", [("SCD2_MERGE", "sqlite"), ("SCD2_MERGE", "postgresql")], indirect=True
+)
+@pytest.mark.parametrize(
+    "point", ["before_pending", "after_pending", "after_merge", "after_committed"]
+)
+def test_false_upload_unlock_events_recover_with_the_same_merge(upload_world, monkeypatch, point):
+    import json
+
+    from fixtures.lock_fencing import expire_leases
+
+    w, owner = upload_world
+    initial = submit(owner, "alice", b"id|name\n1|initial\n")
+    assert drive_upload(w, initial["pipeline_run_id"]).status == RunStatus.SUCCESS
+    uploaded = submit(owner, "bob", b"id|name|LOCKED\n1|released|false\n")
+    monkeypatch.setenv("ETL_CRAFT_FAULT", "protection." + point + ":kill")
+    result = drive_upload(w, uploaded["pipeline_run_id"])
+    assert result.status == RunStatus.FAILED
+    monkeypatch.delenv("ETL_CRAFT_FAULT")
+    expire_leases(w.engine_db)
+    for _ in range(2):
+        act(owner, ActionName.DATA_PROVENANCE, pipeline_code="P", task_code="apply", key={"id": 1})
+    with w.engine_db.connect() as conn:
+        rows = (
+            conn.execute(
+                text(
+                    "SELECT KIND AS kind,STATUS AS status,UPLOAD_ID AS upload_id "
+                    "FROM AUD_PROTECTION_EVENTS "
+                    "WHERE UPLOAD_ID=:upload ORDER BY EVENT_ID"
+                ),
+                {"upload": uploaded["upload_id"]},
+            )
+            .mappings()
+            .all()
+        )
+    state = json.loads(
+        w.rows(f"SELECT ETL_PROTECTION FROM {w.name('uploaded')} WHERE id=1 AND ACTIVE_FLAG='Y'")[
+            0
+        ][0]
+    )
+    if point == "before_pending":
+        assert not rows
+    else:
+        assert any(row["kind"] == "UNLOCK" for row in rows)
+        finals = [row for row in rows if row["status"] != "PENDING"]
+        assert len(finals) == 1
+        assert finals[0]["status"] == ("ABANDONED" if point == "after_pending" else "COMMITTED")
+    assert any(cell["locked"] for cell in state["cells"].values()) == (
+        point in {"before_pending", "after_pending"}
+    )

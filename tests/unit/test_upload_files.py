@@ -168,3 +168,50 @@ def test_text_fields_are_bounded_by_the_file_ceiling_not_csvs_small_default(tmp_
     upload = file_info(path)
     check_file(upload, "CSV", 1024 * 1024)
     assert list(UploadReader(upload, "CSV").rows()) == [("id", "value"), ("1", value)]
+
+
+@pytest.mark.parametrize(("value", "expected"), [(" true ", True), ("FALSE", False), ("", None)])
+def test_upload_schema_types_declared_booleans_without_changing_other_fields(
+    tmp_path, value, expected
+):
+    path = tmp_path / "data.csv"
+    path.write_text(f"id|LOCKED\n1|{value}\n", encoding="utf-8")
+    reader = UploadReader(file_info(path), "CSV")
+    assert list(reader.rows(schema={"LOCKED": bool})) == [("id", "LOCKED"), ("1", expected)]
+    assert list(reader.rows()) == [("id", "LOCKED"), ("1", value)]
+
+
+@pytest.mark.parametrize("value", ["maybe", "1", "0", "NULL", "yes"])
+def test_boolean_upload_schema_reports_the_file_row_column_value_and_remedy(tmp_path, value):
+    path = tmp_path / "data.csv"
+    path.write_text(f"id|LOCKED\n1|{value}\n", encoding="utf-8")
+    with pytest.raises(HandlerError) as refusal:
+        list(UploadReader(file_info(path), "CSV").rows(schema={"LOCKED": bool}))
+    for part in (
+        "upload 1",
+        "data.csv",
+        "row 2",
+        "LOCKED",
+        repr(value),
+        "true, false",
+        "corrected file",
+    ):
+        assert part in str(refusal.value)
+
+
+@pytest.mark.parametrize("value", [True, False, None, "true", 1])
+def test_workbook_boolean_schema_requires_boolean_cells_not_text_or_numbers(tmp_path, value):
+    import openpyxl
+
+    path = tmp_path / "data.xlsx"
+    book = openpyxl.Workbook()
+    book.active.append(("id", "LOCKED"))
+    book.active.append((1, value))
+    book.save(path)
+    book.close()
+    reader = UploadReader(file_info(path), "XLSX")
+    if value is None or isinstance(value, bool):
+        assert list(reader.rows(schema={"LOCKED": bool})) == [("id", "LOCKED"), (1, value)]
+    else:
+        with pytest.raises(HandlerError, match="boolean cells or empty"):
+            list(reader.rows(schema={"LOCKED": bool}))

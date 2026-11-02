@@ -192,3 +192,31 @@ ORDER BY ACTOR, STARTED_AT;
 The last registered pool is retained; earlier pools do not retain authority. Use a distinct
 pool-bound token per agent. Existing token expiry is preserved; `never` in token list means
 it needs an explicit rotation policy.
+
+## Protection reports
+
+The internal `POST /api/v1/agent/report` protocol supports `PROTECTION_READ` and
+`PROTECTION_EVENT`. Agents and servers must run the same package version; the normal
+protocol-version refusal applies. No extra endpoint, credential, setting or CLI flag is needed.
+
+Each report is bound to its live attempt and fencing credential, its admitted target and
+its current Engine DB target lock. Actor and project are derived on the server. An event
+contains only kind, key hash, column names, value hashes and status; unknown fields are refused.
+PENDING allocates a request id on the server, which the target MERGE stamps on changed rows.
+Normal finalization is creator-only. Recovery can finalize a previous attempt's intent only
+after that attempt is terminal or reconciled LOST, reporting stamp presence/absence, or
+complete keyed-row absence for HARD_DELETE/ERASURE. The status keeps the creator and records
+the recovering attempt and actor separately.
+
+Batches contain at most 256 events, with at most 128 column names and corresponding hashes
+per event. Oversized lists are refused, never truncated. Reads return at most 256 records
+with an event-id cursor; callers follow every page. Both task stores use these same limits
+and the same fenced event implementation. Recovery runs where warehouse access exists,
+including agents, before mutation and on provenance reads. Controller startup logs an
+inaccessible project once and defers its recovery until the next mutation.
+
+Upload-caused PENDING protection reports carry the receipt's `upload_id` as a claim. The server
+verifies it against the attempt's run and the successful pinned FILE_VALIDATION task before
+storing it; it derives the uploader from AUD_UPLOADS. Upload writes and LOCKED=false UNLOCK
+intents share that id. Finalization and recovery retain the original verified id; callers
+cannot replace it. Non-upload mutation kinds must omit it. No raw business value is accepted.

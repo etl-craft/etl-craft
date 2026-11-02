@@ -1,5 +1,6 @@
 """Explain the resolved query catalog with non-NULL, typed representative bindings."""
 
+import json
 import re
 from contextlib import contextmanager, nullcontext
 from datetime import UTC, datetime
@@ -41,6 +42,11 @@ INTEGER_NAMES = frozenset(
 MOMENT = datetime(2026, 1, 1, tzinfo=UTC)
 VALUES = {
     "all_entries": False,
+    "lock_owner": "plan-owner",
+    "continuation": False,
+    "events": json.dumps(
+        [{"kind": "WRITE", "key_hash": "a" * 32, "columns": '["id"]', "hashes": "[null]"}]
+    ),
     "subject_key": "private-test-value",
     "key_hmac": "a" * 64,
     "after_ended": datetime(1970, 1, 1, tzinfo=UTC),
@@ -198,6 +204,26 @@ def bindings(sql, name=""):
         "item_insert": {"key": "one", "number": 1, "report_id": "plan-report"},
         "event_consumed_keys": {"keys": ["key_1", "key_2"]},
     }.get(name, {})
+    if name.startswith("protection_"):
+        overrides |= {
+            "target": '"warehouse"."plan"."table_1"',
+            "cursor": 0,
+            "page_size": 257,
+            "request_id": "00000000-0000-0000-0000-000000000011",
+            "current_request": "00000000-0000-0000-0000-000000000011",
+            "key_hash": "a" * 32,
+            "columns": '["id"]',
+            "hashes": '["' + "b" * 32 + '"]',
+            "kind": "KEY",
+            "status": "PENDING",
+            "recovering_attempt": 1,
+            "upload_id": 1,
+            "validator_id": 1,
+            "pipeline_run_id": 1,
+            "recovery_actor": "plan",
+        }
+        if name == "protection_insert":
+            overrides |= {"status": "COMMITTED", "key_hash": None, "columns": "[]", "hashes": "[]"}
     parameters = text(sql).compile().params
     values = {}
     for name in parameters:

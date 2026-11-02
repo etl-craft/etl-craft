@@ -2,35 +2,18 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import ClassVar
-
 from sqlalchemy.engine import Engine
 
 from etl_craft.config import ConnectorConfig
 from etl_craft.config.targets import active_catalog
 from etl_craft.core.enums import SqlAction
 from etl_craft.core.errors import HandlerError
+from etl_craft.core.hashing import RehashResult as RehashResult
 from etl_craft.core.text import is_safe_identifier, qualify, split_object_ref
 from etl_craft.engine import locks
 from etl_craft.engine.queries import statement
-from etl_craft.engine.repository.hash_versions import save_hash_version
 from etl_craft.engine.repository.tasks import fetch_task_parameters
 from etl_craft.handlers.resources import LocalLocker
-from etl_craft.handlers.sql.protection import refuse_replacement
-from etl_craft.handlers.sql.session import Session
-from etl_craft.warehouse.connection import open_warehouse, warehouse_dialect
-
-
-@dataclass(frozen=True)
-class RehashResult:
-    """The validated target, row count and statement, whether applied or only planned."""
-
-    SCHEMA: ClassVar[str] = "etl-craft/rehash/1"
-    target: str
-    rows: int
-    sql: str
-    dry_run: bool
 
 
 def rehash(
@@ -69,33 +52,6 @@ def rehash(
                 "Configure matching compare columns before rehashing"
             )
         columns = next(iter(contracts))
-        with (
-            open_warehouse(config, LocalLocker(engine, config)) as warehouse,
-            warehouse.begin() as conn,
-        ):
-            session = Session(
-                conn,
-                warehouse_dialect(config),
-                catalog=catalog,
-                action="REHASH",
-                target_object=target,
-                task_run_id=0,
-                params={},
-            )
-            if not dry_run:
-                refuse_replacement(session)
-            shape = {name.lower() for name, _ in session.target_columns()}
-            if "hash_key" not in shape:
-                raise HandlerError(
-                    f"{qualified} does not exist or lacks HASH_KEY; "
-                    "rehash requires an existing merge target"
-                )
-            expression = session.hash(list(columns), columns)
-            sql = f"UPDATE {session.target} SET HASH_KEY = {expression}"
-            count = session.count(f"SELECT COUNT(*) FROM {session.target}", step="rows to rehash")
-            if not dry_run:
-                session.run(sql, step="recompute every stored hash")
-        if not dry_run:
-            with engine.begin() as conn:
-                save_hash_version(conn, qualified, 2)
-    return RehashResult(qualified, count, sql, dry_run)
+        from etl_craft.handlers.rehash import rehash_target
+
+        return rehash_target(engine, config, target, columns, dry_run=dry_run)

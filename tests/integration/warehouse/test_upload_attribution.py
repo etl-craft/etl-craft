@@ -7,7 +7,6 @@ import pytest
 from etl_craft.core.errors import SqlGuardError
 from etl_craft.core.uploads import UploadWriter
 from etl_craft.handlers import sql
-from fixtures.sql_warehouse import warehouses
 
 
 def apply_upload_action(w, context):
@@ -175,56 +174,3 @@ def test_append_rows_name_each_upload_account(sql_world):
         (1, "alice", "alice"),
         (2, "bob", "bob"),
     ]
-
-
-@warehouses("duckdb_iceberg", "trino_iceberg")
-@pytest.mark.parametrize("kind", ["SCD1_MERGE", "SCD2_MERGE"])
-def test_unsupported_stewarded_scd_is_refused_before_run_and_at_runtime(sql_world, kind):
-    from sqlalchemy import text
-
-    from etl_craft.handlers.sql.protection import Protection
-    from etl_craft.handlers.sql.session import Session
-    from etl_craft.handlers.sql.spec import read_sql_task
-    from etl_craft.services.stewardship_checks import sql_problems
-
-    w = sql_world
-    w.setup("protected", "SELECT 1 AS id,'x' AS name,1 AS UPLOAD_ID", kind)
-    context = w.task(
-        "protected_upload",
-        SQL_ACTION=kind,
-        TARGET_OBJECT="protected",
-        SELECT_QUERY="SELECT 1 AS id,'x' AS name,1 AS UPLOAD_ID",
-        MERGE_KEY="id",
-        MERGE_COMPARE_COLUMNS="name",
-        MERGE_DEDUPE_ORDER="UPLOAD_ID ASC",
-    )
-    with w.engine_db.begin() as conn:
-        conn.execute(text("UPDATE CFG_PIPELINES SET STEWARDABLE_FLAG='Y'"))
-        problems = sql_problems(conn, context, read_sql_task(context))
-    message = " ".join(problems)
-    for expected in ["P.protected_upload", "protected", "unsupported", "non-protected target"]:
-        assert expected in message
-    from etl_craft.core.uploads import UploadInfo
-
-    upload = UploadInfo(1, "alice", "data.csv", 0, "0" * 64, stored_name="1-data.csv")
-    with pytest.raises(SqlGuardError) as failure:
-        sql.run(replace(context, uploads=(upload,), upload_inputs=(upload,)), w.engine_db)
-    for expected in ["pipeline P", "task protected_upload", "protected", "non-protected target"]:
-        assert expected in str(failure.value)
-    with w.warehouse.begin() as conn:
-        session = Session(
-            conn,
-            sql.task_dialect(context),
-            catalog=w.catalog,
-            action=kind,
-            target_object=read_sql_task(context).target_object,
-            task_run_id=context.task_run_id,
-            params=context.task_params,
-        )
-        try:
-            with pytest.raises(SqlGuardError, match="protected writes unsupported") as failure:
-                Protection(session, read_sql_task(context)).acquire()
-            assert "native PostgreSQL or DuckDB" in str(failure.value)
-            assert "protected" in str(failure.value)
-        finally:
-            session.sweep()

@@ -341,3 +341,12 @@ Every run uses the version that last passed `etl-craft pipelines refresh`. A scr
 that version's verified copy, with the project directory as its working directory, so relative
 paths it writes land in the project directory and the copy stays unchanged. Read the version's
 own files through `task.config.project_dir`; bytecode is not written into the cache.
+
+For stewardship files, import `UploadReader` from `etl_craft.scripting` and stream
+`UploadReader(upload, "CSV").rows(schema={"LOCKED": bool})`. The header is preserved; the optional
+column becomes bool or None. CSV accepts trimmed case-insensitive true/false or empty NULL;
+XLSX accepts boolean cells or empty NULL. Other values fail with upload, row, column and remedy.
+Only bool schemas are supported. Without `schema`, the reader returns its original raw values.
+Carry the typed control into a BOOLEAN landing column and explicitly SELECT it beside UPLOAD_ID.
+See the [reference loader](../examples/python_scripts/reference_upload.py) and
+[validator](../examples/validation_scripts/reference.py), and the [stewardship guide](stewardship.md).

@@ -220,14 +220,46 @@ def _credential_context(ctx: OperationContext) -> OperationContext:
     return ctx
 
 
+def _protection_report(ctx: OperationContext, request: AgentTask) -> AgentReply:
+    """Parse and fence both operations before the common local event service."""
+    from etl_craft.core.actor import SYSTEM_ACTOR, acting_as
+
+    target = required(request.target, "target")
+    try:
+        task = _context(ctx, request)
+    except (StaleTransitionError, PermissionDeniedError) as error:
+        raise type(error)(
+            f"attempt {request.attempt_id}, target {target}: "
+            "live-attempt/token/admitted-target/lock check "
+            f"failed: {error}; stop this writer and obtain its "
+            "current admitted attempt and target lock"
+        ) from error
+    from etl_craft.engine.run_definitions import for_run
+
+    store = _store(ctx, task)
+    with for_run(ctx.engine, task.pipeline_run_id), acting_as(SYSTEM_ACTOR):
+        if request.operation == AgentReport.PROTECTION_READ:
+            return AgentReply(store.protection_read(target, request.protection_cursor))
+        return AgentReply(
+            store.protection_event(target, required(request.protection, "protection"))
+        )
+
+
 def report(ctx: OperationContext, request: AgentTask) -> AgentReply | Awaitable[AgentReply]:
     """Apply this token's bounded task operation; no route accepts SQL or another task's ids."""
     check_agent(ctx, request)
     ctx = _credential_context(ctx)
-    if request.operation in {AgentReport.END, AgentReport.CANCEL}:
-        return {AgentReport.END: _end, AgentReport.CANCEL: _cancel}[request.operation](ctx, request)
-    if request.operation == AgentReport.LOCK:
-        return _wait_lock(ctx, request)
+    direct: dict[
+        AgentReport, Callable[[OperationContext, AgentTask], AgentReply | Awaitable[AgentReply]]
+    ] = {
+        AgentReport.END: _end,
+        AgentReport.CANCEL: _cancel,
+        AgentReport.LOCK: _wait_lock,
+        AgentReport.PROTECTION_READ: _protection_report,
+        AgentReport.PROTECTION_EVENT: _protection_report,
+    }
+    if request.operation in direct:
+        return direct[request.operation](ctx, request)
     task = _context(ctx, request)
     if request.operation == AgentReport.ERASURE:
         return _erasure(ctx, task)
@@ -256,7 +288,7 @@ def report(ctx: OperationContext, request: AgentTask) -> AgentReply | Awaitable[
     if request.operation in progress:
         return AgentReply(progress[request.operation]())
     match request.operation:
-        case AgentReport.LOCK | AgentReport.UNLOCK:
+        case AgentReport.UNLOCK:
             return _lock(ctx, task, request)
         case AgentReport.START:
             return _start(ctx, task, request)

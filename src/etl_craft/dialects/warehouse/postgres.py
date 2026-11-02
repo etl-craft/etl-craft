@@ -60,7 +60,6 @@ class PostgresWarehouse(WarehouseDialect):
 
     spec = warehouse_by_key("postgres")
     dml_rowcounts = True
-    atomic_protection = True
     metadata_types_complete = True
     sqlglot_dialect = "postgres"
     secure_view = "security_barrier"

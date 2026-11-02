@@ -51,6 +51,9 @@ AUDIT_COLUMN_TYPES: dict[str, str] = {
     "TASK_RUN_ID": "BIGINT",
     "PIPELINE_ID": "BIGINT",
     "HASH_KEY": "VARCHAR(32)",
+    "ETL_PROTECTION": "VARCHAR",
+    "ETL_ROW_FINGERPRINT": "VARCHAR(32)",
+    "ETL_PROTECTION_REQUEST_ID": "VARCHAR(36)",
     "CREATE_DATE": "TIMESTAMP WITH TIME ZONE",
     "UPDATE_DATE": "TIMESTAMP WITH TIME ZONE",
     "CREATED_BY": "VARCHAR(255)",
@@ -145,8 +148,6 @@ class WarehouseDialect:
     """Embedded query execution ends with the owning task process."""
 
     single_writer: bool = False
-    atomic_protection: bool = False
-    """Whether business writes and protection evidence share one atomic transaction."""
     # The type values are cast to before hashing.
     string_type: str = "VARCHAR"
     # The case unquoted identifiers fold to ("lower" or "upper"), or None where the database
@@ -447,7 +448,9 @@ class WarehouseDialect:
         """Return the keyword that alters a table this dialect created."""
         return "ALTER TABLE"
 
-    def key_counts(self, stage: str, keys: tuple[str, ...], target: str | None = None) -> str:
+    def key_counts(
+        self, stage: str, keys: tuple[str, ...], target: str | None = None, *, locked: bool = False
+    ) -> str:
         """Count invalid and duplicate keys against the same staged snapshot."""
         listed = ", ".join(f"{key} AS k{i}" for i, key in enumerate(keys))
         grouped = ", ".join(keys)
@@ -459,10 +462,18 @@ class WarehouseDialect:
                 f", (SELECT COUNT(*) FROM {stage} s WHERE NOT EXISTS "
                 f"(SELECT 1 FROM {target} t WHERE {match})) AS new_keys"
             )
+        control = ""
+        if locked:
+            value = f"(SELECT LOCKED FROM {stage} LIMIT 1)"
+            kind = {
+                "postgres": f"CAST(pg_typeof({value}) AS VARCHAR)",
+                "snowflake": f"SPLIT_PART(SYSTEM$TYPEOF({value}), '[', 1)",
+            }.get(self.sqlglot_dialect or "", f"TYPEOF({value})")
+            control = f", {kind} AS locked_type"
         return (
             "SELECT COALESCE(SUM(n), 0) AS source_rows, "
             f"COALESCE(SUM(CASE WHEN {nulls} THEN n ELSE 0 END), 0) AS null_keys, "
-            f"COALESCE(SUM(CASE WHEN n > 1 THEN 1 ELSE 0 END), 0) AS duplicate_keys {new} "
+            f"COALESCE(SUM(CASE WHEN n > 1 THEN 1 ELSE 0 END), 0) AS duplicate_keys {new}{control} "
             f"FROM (SELECT {listed}, COUNT(*) AS n FROM {stage} GROUP BY {grouped}) counted"
         )
 
@@ -632,7 +643,7 @@ class WarehouseDialect:
 
     def audit_column_type(self, column: str) -> str:
         """Return the DDL type of an engine-managed audit column."""
-        return AUDIT_COLUMN_TYPES[column]
+        return self.string_type if column == "ETL_PROTECTION" else AUDIT_COLUMN_TYPES[column]
 
     def audit_column_contract(self, column: str) -> str:
         """Return an engine column's type as its storage format reports it."""
@@ -676,6 +687,11 @@ class WarehouseDialect:
         """Render supported scalar values independently of session output formats."""
         kind = kind.upper()
         base = re.split(r"[ (]", kind)[0]
+        if "[" in kind or re.search(r"\bARRAY\b", kind):
+            raise SqlGuardError(
+                f"MERGE_COMPARE_COLUMNS includes {value} ({kind}): unsupported "
+                "canonical type; cast to a scalar type in the SELECT"
+            )
         if base in {"FLOAT", "FLOAT4", "FLOAT8", "DOUBLE", "REAL", "BINARY_FLOAT", "BINARY_DOUBLE"}:
             raise SqlGuardError(
                 f"MERGE_COMPARE_COLUMNS includes {value} ({kind}): floats have no stable text "

@@ -192,7 +192,7 @@ item's text, or work done early under another item.
 | S7.J Documentation to finish | In progress | #85, #227, #277 | Generated references and guides exist; supported public contracts, complete reference and recipes remain |
 | S7.L ETL Craft logo and CLI banner | In progress | #277 | Shared mark, favicon and theme assets exist; complete branding guidance and interactive banner contract remain |
 | S7.AL Pre-demo package gaps | Planned |  | Six slices: duplicate_count, stale docs, guarded-table test instructions, event-file validation opt-in, timeline waits and erasure snapshot bounds |
-| S7.AM Protection on every warehouse | In progress | #311 | Slice 1: atomic SCD1/SCD2 target merges; in-row protection/event recovery and full-provider acceptance follow in approved slices 2 and 3 |
+| S7.AM Protection on every warehouse | In progress | #311, #312 | Slices 1–2: atomic SCD merges, in-row locks/provenance and guarded intent recovery; full-provider acceptance remains slice 3 |
 | S7.M Stewardship uploads | Done (M2) | #296, #305 | Atomic receipts and safe stored names; processed layout, retention archives and verified reruns; crash recovery and guarded upload history |
 | S7.S Seed tables | Done | #308 | Typed pinned-bundle seeds replace reference tables until recorded stewardship handover |
 | S7.T Business calendars | Done | #276 | Shared holiday and weekend calendars for schedules, run dates, backfill and catch-up |
@@ -958,6 +958,125 @@ empty-history-page handling defect, which was corrected and verified. No cloud w
   and acceptance then passed. Snowflake retry/fencing failures reproduced on unchanged main;
   the completed-history lookup and fixture-initialization fixes passed the original modules
   without increasing deadlines or weakening cancellation assertions. Engine DB SQL is unchanged.
+
+- S7.AM slice 2 acceptance availability: native PostgreSQL, DuckDB, Trino/Iceberg and
+  DuckDB/Iceberg protection, SQL/SCD, upload, erasure, seed handover and hash contracts passed.
+  Both Engine DBs passed upgrade/actor/query-plan and recovery checks, including twenty
+  concurrency rounds. Unit, API and browser suites and static/docs checks passed.
+  Native Snowflake and Databricks protection checks passed for SCD1 and SCD2; Snowflake's
+  uppercase-column lock comparison was corrected after its first run exposed it. Full cloud
+  format/provider acceptance remains slice 3, with no local warehouse omitted. The Support
+  Insights reference seeds hand over to the real stewardship pipelines and then report LOCKED.
+  Optional LOCKED controls passed real API/CLI uploads on all four local warehouses, including
+  same-value releases/relocks and mixed-row SCD counts; received-upload crash recovery passed
+  every boundary on both Engine DBs. Both native cloud protection checks passed again with
+  the final single-matched-UPDATE shape.
+
+- **S7.AM recovery protocol (owner, 2026-11-02).** Choices that differ from the item
+  text: the internal `POST /api/v1/agent/report` protocol gains PROTECTION_READ and
+  PROTECTION_EVENT, not a user route, setting or flag. Both local and remote stores use the
+  same fenced event implementation. Every report requires a live attempt, its fencing token,
+  its admitted target and its current Engine DB target lock. Project and actor are
+  server-derived; PENDING allocates the request id on the server. Events accept hashes and
+  column names only, with no business-value field. Batches and column lists have shared limits;
+  reads page with a cursor and oversized input is refused rather than truncated.
+  - Normal finalization remains creator-only. Evidence-based recovery by the current fenced
+    target-lock holder may finalize another attempt's PENDING request only after that creator
+    is terminal or reconciled LOST. An expired but unreconciled creator is refused, as is a
+    live creator; the refusal names both attempts. Reconcile first, never adopt an expired lease.
+  - Ordinary mutations recover COMMITTED when their request stamp is observed, ABANDONED
+    otherwise. HARD_DELETE and ERASURE recover COMMITTED only when every affected key is
+    absent, ABANDONED otherwise. Recovery sends only those two statuses with the evidence.
+    Status rows retain the creating attempt and request id, separately recording the
+    recovering attempt and recovery actor. Repeated finalization is an idempotent append.
+    Engine recovery explicitly uses the system actor.
+  - Recovery runs wherever warehouse access exists, including agents, before mutation and on
+    provenance reads. At controller start accessible project targets recover through the same
+    implementation; an inaccessible warehouse is logged once per project and deferred until
+    the next mutation, without failing controller startup. Agent and server ship together;
+    older servers use the existing protocol-version refusal, with no compatibility shim.
+  - Slice 2 sizing before implementation: thirteen direct production dependency sites cover
+    the four warehouse capability declarations, dialect/handler protection, SQL dispatch,
+    seed/session, value operations, rehash, stewardship checks and target upgrades. Mandatory
+    additional sites are the merge builders, erasure, controller, doctor, task stores/protocol,
+    paired migration/schema guards and query plans. Migration 0082 adds the event log.
+    The dedicated stamp is ETL_PROTECTION_REQUEST_ID; format and revision remain in JSON.
+    Recovery finalizes intents in creation order under the target lock, keeping pending
+    reads bounded by the last finalized request rather than rescanning all historical events.
+    Erasure records exact selected row identities (ROW_ID when available plus the selected
+    identifier columns), using NULL-safe matches, so an unmatched SCD2 version with the same
+    business key is retained. A further hash-only whole-business-key event is emitted only
+    when every version of that key is selected; doctor can then distinguish an authenticated
+    erasure from outside deletion. Recovery checks each event's own typed key-column shape.
+    Each upload file commits and finalizes before the next file, preventing later stamps from
+    hiding a committed but unfinalized earlier file. Existing unprotected targets can add the
+    three nullable columns with upgrade-targets and initialize fingerprints with rehash;
+    targets carrying old side tables remain refused rather than converted.
+    Typed fingerprints cover business values plus canonical protection state, excluding the
+    request stamp and ordinary audit/hash columns so rehash preserves existing attribution.
+    The command audit is recorded before execution and names columns, never values; the
+    server-allocated mutation id is returned and lives in the event log, rather than placing
+    an empty or invented id in the command request. Seed-created merge rows initialize an
+    unattributed canonical state and typed fingerprints before the first protected write.
+    UPLOAD_ID is read-only file provenance, not a protected business value: adding its nullable
+    column on the first upload does not change the business contract or invalidate fingerprints.
+    Human edits retain its current value; actual per-cell business writers stay in row metadata.
+    Other protected business-shape changes are refused before DDL.
+    Event creator/recoverer ids are immutable historical identifiers without foreign keys to
+    expiring attempt rows. Retention pins the creating attempt only while its request is
+    unresolved; after a final status, normal run-history expiry proceeds and event ids remain.
+    Recovery refuses missing creator history rather than treating absence as a terminal state.
+    Owner decision, 2026-11-02, CI follow-up: ordinary SCD merges retain nested columns
+    outside MERGE_COMPARE_COLUMNS; unsupported whole-row fingerprints remain NULL while
+    protection is inactive. First edit, lock or upload refuses unsupported business types
+    before any target write, naming target/column/type and the scalar-cast remedy. Validate
+    and refresh use that same canonical-type check for declared stewardable merge targets.
+    Canonical nested fingerprints are a possible later item, not part of this implementation.
+    Ordinary merges add no warehouse round trips: one fenced Engine DB query detects pending
+    work and established protection. Warehouse recovery reads run only for pending requests.
+    Normal protected merges add only the PENDING and COMMITTED append statements; their
+    fencing checks are part of those statements. Exact budgets remain exact; the PR lists
+    every old/new budget and what its extra query pays for. The real first-upload refusal
+    test also exposed Trino's cancellation/listing race: an exact provider response that the
+    selected query has already finished is accepted, while the common fence still proves
+    that no tagged statement remains running before handing over the target lock.
+    Common event persistence/fencing sits in
+    the Engine DB layer beneath the services entry point, preserving the import direction.
+
+- **S7.AM upload control (owner, 2026-11-02).** Choices that differ from the item text:
+  optional BOOLEAN `LOCKED` flows through file validation and landing into the explicit merge
+  SELECT, but never into target business columns, hashes or comparison columns. TRUE, NULL
+  and absence retain USER locking; FALSE releases all value locks and the row lock on the key
+  in the same MERGE. Releasing row scope is intentional: an uploader already has authority
+  to replace locked values, and keeping row scope would prevent the requested unlocked reload.
+  Service uploads neither create nor release locks. SCD2 keeps the existing unlock semantics:
+  the current key's state is inherited by future versions, without rewriting closed history.
+  - `UploadReader.rows(schema={"LOCKED": bool})` is the shared upload-schema check. Only bool
+    is implemented: trimmed case-insensitive CSV true/false or empty NULL; native XLSX booleans
+    or empty NULL. Other values fail with upload, row, column, value, allowed values and remedy.
+    Merge staging requires an actual BOOLEAN type; validate and refresh use the same type
+    refusal and reserve target business column LOCKED with a rename remedy.
+  - Nullable `AUD_PROTECTION_EVENTS.UPLOAD_ID` identifies every upload-caused write or unlock.
+    The server derives it from the run's accepted receipt and successful pinned validator;
+    claimed agent ids are never trusted without that verification. A CHECK limits non-NULL
+    ids to upload event kinds. Final/recovery rows retain the verified original id. Provenance
+    joins AUD_UPLOADS to derive uploader and `upload <id>: LOCKED=false`, with no reason column.
+    PENDING and normal final rows use that verified uploader as actor; recovery keeps its
+    deliberately selected recovery actor. Upload ids and LOCKED never manufacture a business
+    change or an SCD2 version: lock-only changes use conditional assignments in the same
+    matched UPDATE, including DuckDB/Iceberg's single-UPDATE restriction.
+    No upload-id index is added: recovery filters target/request, and provenance joins the
+    existing upload primary key rather than filtering events by upload id. FALSE uses the
+    existing target MERGE and intent appends, adding no warehouse statement.
+
+- **S7.AM budgets and CI (owner, 2026-11-02).** Actual staged LOCKED type inspection
+  shares the existing key-count query, including empty stages; ordinary SCD1/SCD2 retain
+  exact five/six warehouse-statement budgets. Provider type expressions stay in dialects.
+  Measured coverage shards increase from three to four and Iceberg shards from two to three,
+  balanced with existing measured durations; collection, markers and the 90% gate are unchanged.
+  Installed-demo jobs are capped at two concurrently to retain the existing twenty-runner limit.
+  Main already exceeded the execution limit before this slice; merge still requires a measured
+  execution path below 600 seconds.
 
 - **S7.AM protection design (owner, 2026-11-01).** Three implementation PRs are approved:
   (1) single-MERGE SCD1/SCD2 builders, replay/count/ROW_ID proofs on every warehouse/format,

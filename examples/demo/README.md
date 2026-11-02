@@ -163,10 +163,10 @@ curl --fail-with-body "$SERVER/api/v1/values/unlock" \
   -d '{"pipeline_code":"SUPPORT_DM","task_code":"agents","key":{"agent_code":"A01"},"columns":["agent_name"],"reason":"Use source spelling again"}'
 ```
 
-The next `SUPPORT_DM` run restores `Ann`. This opt-in walkthrough uses native DuckDB or
-PostgreSQL; protection refuses the Iceberg/cloud variants. It creates no automatic file-upload
-flow. See [the full protection contract](../../docs/guides/human-overrides.md), including
-backing up warehouse-side evidence with the business tables.
+The next `SUPPORT_DM` run restores `Ann`. This opt-in walkthrough uses the same in-row
+protection on every supported warehouse. It creates no automatic file-upload flow.
+See [the full protection contract](../../docs/guides/human-overrides.md), including
+backing up the Engine DB event log with the business tables.
 
 ## Run an individual SQL task
 
@@ -371,8 +371,8 @@ and `info.data_dictionary`. `prepare.py metadata` publishes the project and appl
 files before refreshing the pipelines. The support-area SQL literal loader and the agent setup task are replaced by seed files. The dictionary keeps its source id, field name, allowed values, description and
 example; declared SQL types belong in column metadata.
 
-On the demo's native DuckDB warehouse (or native PostgreSQL), add the optional stewardship
-pipelines after loading the main metadata:
+Add the optional stewardship pipelines on the demo's configured warehouse after loading
+the main metadata:
 
 ```bash
 python prepare.py metadata metadata/seed_stewardship.sql
@@ -384,8 +384,8 @@ The `SI_STEWARD_DS_AGENTS`, `SI_STEWARD_DS_SUPPORT_AREAS` and
 the steward `CAN_UPLOAD` on the chosen pipeline, upload a `data.csv` with that seed's header
 through the UI's Uploads page, and run or let the controller admit the recorded upload run.
 After it succeeds, `etl-craft seed apply` reports `LOCKED` for that table and names its upload.
-`ds.sources` and `info.data_dictionary` remain replaceable. Stewarded SCD protection currently
-requires native DuckDB/PostgreSQL; the optional metadata is not for Iceberg warehouses.
+`ds.sources` and `info.data_dictionary` remain replaceable. Stewarded SCD protection uses
+the target's own metadata columns and supports the Iceberg and cloud warehouse variants.
 
 A repository change is deployed with `validate`, `config apply`, `bundle publish`, then
 `seed apply` (with `--api` when using a server). Seed loads use the published bytes, return
@@ -401,3 +401,10 @@ register the first managed table and identifier column. Preview the tables and c
 applying. Place an `ERASURE` task after relevant loads to delete identifiers a source resends.
 The demo does not set an erasure secret or register real people. External source systems stay
 under the source team's control; expression and unmanaged lineage boundaries need further entries.
+
+Reference stewardship files may append optional `LOCKED` to their pipe-delimited header.
+Use true/false (case-insensitive) or empty NULL. The sample validator checks it with
+`rows(schema={"LOCKED": bool})`; the loader retains it as BOOLEAN in landing and the merge
+SELECT carries it explicitly. FALSE writes without locking and releases existing row and
+value locks on that key. TRUE, NULL or absence locks as before. Service uploads do not release
+locks. The control never becomes a column of the stewarded target.

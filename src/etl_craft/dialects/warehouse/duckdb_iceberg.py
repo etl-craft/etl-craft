@@ -32,7 +32,6 @@ class DuckDBIcebergWarehouse(DuckDBWarehouse):
 
     views = False
 
-    atomic_protection = False
     spec = warehouse_by_key("duckdb_iceberg")
     replace_strategy: ReplaceStrategy = "copy_and_restore"
     single_writer = False
