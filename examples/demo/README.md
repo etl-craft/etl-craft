@@ -163,10 +163,10 @@ curl --fail-with-body "$SERVER/api/v1/values/unlock" \
   -d '{"pipeline_code":"SUPPORT_DM","task_code":"agents","key":{"agent_code":"A01"},"columns":["agent_name"],"reason":"Use source spelling again"}'
 ```
 
-The next `SUPPORT_DM` run restores `Ann`. This opt-in walkthrough uses native DuckDB or
-PostgreSQL; protection refuses the Iceberg/cloud variants. It creates no automatic file-upload
-flow. See [the full protection contract](../../docs/guides/human-overrides.md), including
-backing up warehouse-side evidence with the business tables.
+The next `SUPPORT_DM` run restores `Ann`. This opt-in walkthrough uses the same in-row
+protection on every supported warehouse. It creates no automatic file-upload flow.
+See [the full protection contract](../../docs/guides/human-overrides.md), including
+backing up the Engine DB event log with the business tables.
 
 ## Run an individual SQL task
 
@@ -384,8 +384,8 @@ The `SI_STEWARD_DS_AGENTS`, `SI_STEWARD_DS_SUPPORT_AREAS` and
 the steward `CAN_UPLOAD` on the chosen pipeline, upload a `data.csv` with that seed's header
 through the UI's Uploads page, and run or let the controller admit the recorded upload run.
 After it succeeds, `etl-craft seed apply` reports `LOCKED` for that table and names its upload.
-`ds.sources` and `info.data_dictionary` remain replaceable. Stewarded SCD protection currently
-requires native DuckDB/PostgreSQL; the optional metadata is not for Iceberg warehouses.
+`ds.sources` and `info.data_dictionary` remain replaceable. Stewarded SCD protection uses
+the target's own metadata columns and supports the Iceberg and cloud warehouse variants.
 
 A repository change is deployed with `validate`, `config apply`, `bundle publish`, then
 `seed apply` (with `--api` when using a server). Seed loads use the published bytes, return

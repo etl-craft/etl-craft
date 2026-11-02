@@ -89,3 +89,31 @@ class VersionMerge:
             f"WHEN MATCHED THEN UPDATE SET {updated} "
             f"WHEN NOT MATCHED AND s.{self.inserting} THEN INSERT ({columns}) VALUES ({values})"
         )
+
+
+def matched_merge(
+    target: str, source: str, assignments: Mapping[str, str], keys: tuple[str, ...] = ("ROW_ID",)
+) -> str:
+    """Publish a matched target update in one atomic statement."""
+    updated = ", ".join(f"{column}={value}" for column, value in assignments.items())
+    match = " AND ".join(f"t.{c}=s.{c}" for c in keys)
+    return (
+        f"MERGE INTO {target} t USING {source} s ON {match} WHEN MATCHED THEN UPDATE SET {updated}"
+    )
+
+
+def delete_merge(
+    target: str, source: str, keys: tuple[str, ...], *, null_safe: bool = False
+) -> str:
+    """Delete each matched target row with one source row per key."""
+    operator = " IS NOT DISTINCT FROM " if null_safe else "="
+    match = " AND ".join(f"t.{c}{operator}s.{c}" for c in keys)
+    return f"MERGE INTO {target} t USING {source} s ON {match} WHEN MATCHED THEN DELETE"
+
+
+def rehash_source(target: str, expression: str, metadata: str, fingerprint: str) -> str:
+    """Hash maintenance changes no business or ordinary audit value."""
+    return (
+        f"(SELECT t.ROW_ID AS ROW_ID,{expression} AS new_hash,{metadata} AS protection,"
+        f"{fingerprint} AS fingerprint FROM {target} t)"
+    )

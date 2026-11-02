@@ -1,7 +1,8 @@
 """Bound identifier equality and row-level DELETE without exposing parameter values."""
 
-from sqlalchemy import text
-from sqlalchemy.engine import Engine
+from dataclasses import dataclass
+
+from sqlalchemy.engine import Connection, Engine
 from sqlalchemy.exc import SQLAlchemyError
 from sqlglot import Dialect, exp, parse_one
 from sqlglot.errors import SqlglotError
@@ -49,58 +50,71 @@ def selection_columns(
     return tuple(column for column in selection.columns if column in existing)
 
 
-def count_or_delete(
-    warehouse: Engine,
-    dialect: WarehouseDialect,
-    selection: ErasureSelection,
-    *,
-    dry_run: bool,
-) -> int | None:
-    """Commit one supported row deletion; never emulate DELETE with a rewrite."""
-    entry = selection.entry
-    table, value = entry.table, entry.value
-    selected = selection_columns(warehouse, dialect, selection)
-    if not selected:
-        return None
-    try:
-        with warehouse.begin() as conn:
-            native = dialect.erasure_table(conn, table)
-            target = ".".join(
-                quote_output_key(p, dialect.sqlglot_dialect) for p in native.split(".")
-            )
-            types = dialect.full_column_types(conn, dialect.erasure_metadata_table(native))
-            missing = {column.lower() for column in selected} - types.keys()
-            if missing:
-                raise HandlerError(
-                    f"{table}: missing type metadata for {sorted(missing)}; expected complete "
-                    "column types; restore the warehouse metadata and retry erasure"
-                )
-            predicate = " OR ".join(
-                f"{quote_output_key(column, dialect.sqlglot_dialect)}="
-                f"CAST(:erasure_value AS {types[column.lower()]})"
-                for column in selected
-            )
-            count = int(
-                conn.execute(
-                    text(f"SELECT COUNT(*) FROM {target} WHERE {predicate}"),
-                    {"erasure_value": value},
-                ).scalar_one()
-            )
-            if not dry_run:
-                conn.execute(
-                    text(f"DELETE FROM {target} WHERE {predicate}"),
-                    {"erasure_value": value},
-                )
-            return count
-    except SQLAlchemyError as error:
+@dataclass(frozen=True)
+class ErasureDelete:
+    """Resolved SQL and physical columns; the personal key remains a bound parameter."""
+
+    target: str
+    native: str
+    predicate: str
+    types: dict[str, str]
+
+    @property
+    def count(self) -> str:
+        """Count the exact deletion predicate without materializing personal values."""
+        return f"SELECT COUNT(*) FROM {self.target} WHERE {self.predicate}"
+
+    def hashes(self, expression: str) -> str:
+        """Project only the typed business-key fingerprint of each affected row."""
+        return (
+            f"SELECT DISTINCT {expression} AS key_hash FROM {self.target} t WHERE {self.predicate}"
+        )
+
+    def fully_selected_hashes(
+        self, expression: str, keys: tuple[str, ...], dialect: WarehouseDialect
+    ) -> str:
+        """Identify business keys whose every physical version is being erased."""
+        match = " AND ".join(
+            f"other.{quote_output_key(c, dialect.sqlglot_dialect)} IS NOT DISTINCT FROM "
+            f"t.{quote_output_key(c, dialect.sqlglot_dialect)}"
+            for c in keys
+        )
+        return (
+            self.hashes(expression) + f" AND NOT EXISTS (SELECT 1 FROM {self.target} other "
+            f"WHERE {match} AND ({self.predicate}) IS NOT TRUE)"
+        )
+
+    def statement(self, keys: tuple[str, ...], dialect: WarehouseDialect, conn: Connection) -> str:
+        """One MERGE deletes the selected keys, with PostgreSQL's pre-15 DELETE fallback."""
+        from etl_craft.dialects.warehouse.merges import delete_merge
+
+        if not dialect.supports_insert_merge(conn):
+            return f"DELETE FROM {self.target} WHERE {self.predicate}"
+        quoted = tuple(quote_output_key(c, dialect.sqlglot_dialect) for c in keys)
+        source = f"(SELECT DISTINCT {', '.join(quoted)} FROM {self.target} WHERE {self.predicate})"
+        return delete_merge(self.target, source, quoted, null_safe=True)
+
+
+def deletion_plan(
+    conn: Connection, dialect: WarehouseDialect, table: str, selected: tuple[str, ...]
+) -> ErasureDelete:
+    """Resolve a case-aware predicate using only declared types and quoted identifiers."""
+    native = dialect.erasure_table(conn, table)
+    target = ".".join(quote_output_key(p, dialect.sqlglot_dialect) for p in native.split("."))
+    types = dialect.full_column_types(conn, dialect.erasure_metadata_table(native))
+    missing = {column.lower() for column in selected} - types.keys()
+    if missing:
         raise HandlerError(
-            f"{table} columns {selected}, entry {entry.key_hmac}: "
-            f"row-level deletion failed ({type(error).__name__}); "
-            "expected a table supporting "
-            "transactional DELETE (Iceberg format version 2 or later); correct the table's "
-            "format/permissions or restore its connection and retry erasure. "
-            "Parameters are withheld"
-        ) from None
+            f"{table}: missing type metadata for {sorted(missing)}; "
+            "expected complete column types; restore warehouse "
+            "metadata and retry erasure"
+        )
+    predicate = " OR ".join(
+        f"{quote_output_key(column, dialect.sqlglot_dialect)}=CAST(:erasure_value "
+        f"AS {types[column.lower()]})"
+        for column in selected
+    )
+    return ErasureDelete(target, native, f"({predicate})", types)
 
 
 def column_identity(value: str, dialect: WarehouseDialect) -> str:

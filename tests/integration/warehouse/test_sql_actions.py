@@ -322,6 +322,9 @@ def test_setup_table_takes_the_audit_columns_of_the_real_writer(sql_world):
         "updated_by",
         "delete_flag",
         "active_flag",
+        "etl_protection",
+        "etl_row_fingerprint",
+        "etl_protection_request_id",
         "row_id",
     ]
     # An existing table is left as it is, rows and all.

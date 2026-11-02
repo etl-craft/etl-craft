@@ -192,6 +192,7 @@ def serve(ctx: OperationContext, stop: threading.Event) -> None:
         with acting_as(ctx.actor), leadership(ctx.engine, ctx.config) as leader:
             from etl_craft.controller.refresh import initialize
 
+            reconcile(ctx.engine)
             initialize(ctx)
             from etl_craft.engine.upload_recovery import recover_uploads
 

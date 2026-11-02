@@ -9,39 +9,22 @@ from sqlalchemy import text
 from etl_craft.core.actor import Actor
 from etl_craft.core.enums import ActionName, ActorKind, ApiRole
 from etl_craft.core.errors import HandlerError, PermissionDeniedError, UsageError
-from etl_craft.services.operations import OperationContext
 from fixtures.actions import act
+from fixtures.scd_protection import prepare, use_postgres_engine
 from fixtures.sql_warehouse import warehouses
-
-
-def prepare(w, kind, compare="name|amount"):
-    source = "SELECT 1 AS id, CAST('Source' AS VARCHAR(30)) AS name, 10 AS amount"
-    w.setup("protected", source, kind)
-    params = {
-        "SQL_ACTION": kind,
-        "TARGET_OBJECT": "protected",
-        "SELECT_QUERY": source,
-        "MERGE_KEY": "id",
-        "MERGE_COMPARE_COLUMNS": compare,
-    }
-    w.run("load", **params)
-    ctx = OperationContext(
-        w.engine_db, w.config, Actor("alice", ActorKind.USER), role=ApiRole.ADMIN
-    )
-    return ctx, params
 
 
 def current(w):
     with w.warehouse.connect() as conn:
         return [
-            dict(r)
+            {k.lower(): v for k, v in r.items()}
             for r in conn.execute(
                 text(f"SELECT * FROM {w.name('protected')} WHERE active_flag = 'Y' ORDER BY id")
             ).mappings()
         ]
 
 
-@warehouses("duckdb", "postgres")
+@warehouses("duckdb", "postgres", "trino_iceberg", "duckdb_iceberg")
 @pytest.mark.parametrize("kind", ["SCD1_MERGE", "SCD2_MERGE"])
 def test_value_locks_effective_hashes_provenance_and_unlock(sql_world, kind):
     w = sql_world
@@ -113,7 +96,7 @@ def test_value_locks_effective_hashes_provenance_and_unlock(sql_world, kind):
         )
 
 
-@warehouses("duckdb", "postgres")
+@warehouses("duckdb", "postgres", "trino_iceberg", "duckdb_iceberg")
 @pytest.mark.parametrize("kind", ["SCD1_MERGE", "SCD2_MERGE"])
 def test_human_insert_row_lock_delete_revival_and_service_writer(sql_world, kind):
     w = sql_world
@@ -180,7 +163,7 @@ def test_human_insert_row_lock_delete_revival_and_service_writer(sql_world, kind
         )
 
 
-@warehouses("duckdb", "postgres")
+@warehouses("duckdb", "postgres", "trino_iceberg", "duckdb_iceberg")
 def test_roles_validation_and_unobserved_writes_fail_closed(sql_world):
     w = sql_world
     ctx, params = prepare(w, "SCD1_MERGE")
@@ -242,7 +225,7 @@ def test_roles_validation_and_unobserved_writes_fail_closed(sql_world):
     assert current(w)[0]["name"] == "Human"
 
 
-@warehouses("duckdb", "postgres")
+@warehouses("duckdb", "postgres", "trino_iceberg", "duckdb_iceberg")
 def test_protected_replacement_and_atomic_evidence_rollback(sql_world, monkeypatch):
     w = sql_world
     ctx, params = prepare(w, "SCD2_MERGE")
@@ -266,10 +249,10 @@ def test_protected_replacement_and_atomic_evidence_rollback(sql_world, monkeypat
             )
 
     def fail(point):
-        if point == "sql.protection.before_evidence":
+        if point == "protection.after_pending":
             raise HandlerError("injected evidence failure")
 
-    monkeypatch.setattr("etl_craft.handlers.sql.protection.fault_point", fail)
+    monkeypatch.setattr("etl_craft.handlers.protection_recovery.fault_point", fail)
     with pytest.raises(HandlerError, match="injected evidence failure"):
         act(
             ctx,
@@ -289,24 +272,7 @@ def test_protected_replacement_and_atomic_evidence_rollback(sql_world, monkeypat
     )
 
 
-@warehouses("trino_iceberg", "duckdb_iceberg")
-def test_nonatomic_warehouses_refuse_protection(sql_world):
-    w = sql_world
-    ctx, _params = prepare(w, "SCD1_MERGE")
-    with pytest.raises(HandlerError, match=r"protected writes unsupported.*atomic"):
-        act(
-            ctx,
-            ActionName.DATA_EDIT,
-            pipeline_code="P",
-            task_code="load",
-            key={"id": 1},
-            values={"name": "Human"},
-            reason="fix",
-        )
-    assert current(w)[0]["name"] == "Source"
-
-
-@warehouses("duckdb", "postgres")
+@warehouses("duckdb", "postgres", "trino_iceberg", "duckdb_iceberg")
 @pytest.mark.parametrize("kind", ["SCD1_MERGE", "SCD2_MERGE"])
 @pytest.mark.parametrize("engine_kind", ["sqlite", "postgresql"])
 def test_edit_and_unlock_race_with_etl(sql_world, kind, request, engine_kind):
@@ -356,7 +322,7 @@ def test_edit_and_unlock_race_with_etl(sql_world, kind, request, engine_kind):
     assert current(w)[0]["name"] == "Source"
 
 
-@warehouses("duckdb", "postgres")
+@warehouses("duckdb", "postgres", "trino_iceberg", "duckdb_iceberg")
 def test_service_writes_respect_human_values_and_row_locks(sql_world):
     w = sql_world
     ctx, _params = prepare(w, "SCD2_MERGE")
@@ -403,7 +369,7 @@ def test_service_writes_respect_human_values_and_row_locks(sql_world):
     assert current(w) == before
 
 
-@warehouses("duckdb", "postgres")
+@warehouses("duckdb", "postgres", "trino_iceberg", "duckdb_iceberg")
 @pytest.mark.parametrize("engine_kind", ["sqlite", "postgresql"])
 def test_values_api_uses_human_credentials_and_shared_role_policy(sql_world, request, engine_kind):
     from fastapi.testclient import TestClient
@@ -470,7 +436,15 @@ def test_values_api_uses_human_credentials_and_shared_role_policy(sql_world, req
         arguments = audit["arguments"]
         if isinstance(arguments, str):
             arguments = json.loads(arguments)
-        assert response.json()["request_id"] == arguments["request_id"]
+        assert "request_id" not in arguments
+        with w.engine_db.connect() as conn:
+            assert (
+                conn.execute(
+                    text("SELECT COUNT(*) FROM AUD_PROTECTION_EVENTS WHERE REQUEST_ID=:request"),
+                    {"request": response.json()["request_id"]},
+                ).scalar_one()
+                >= 2
+            )
         assert "O'Connor" not in json.dumps(arguments)
         assert current(w)[0]["name"] == "O'Connor"
         assert current(w)[0].get("UPDATED_BY", current(w)[0].get("updated_by")) == "alice"
@@ -517,7 +491,7 @@ def test_values_api_uses_human_credentials_and_shared_role_policy(sql_world, req
         assert current(w)[0]["name"] == "Source"
 
 
-@warehouses("duckdb", "postgres")
+@warehouses("duckdb", "postgres", "trino_iceberg", "duckdb_iceberg")
 def test_noncompare_edits_null_values_and_historical_tampering(sql_world):
     w = sql_world
     ctx, params = prepare(w, "SCD2_MERGE", compare="amount")
@@ -547,48 +521,22 @@ def count_versions(w, active):
         ).scalar_one()
 
 
-@warehouses("duckdb", "postgres")
-def test_evidence_cannot_be_a_task_target_and_partial_restore_fails(sql_world):
+@warehouses("duckdb", "postgres", "trino_iceberg", "duckdb_iceberg")
+def test_legacy_side_tables_are_refused_before_any_write(sql_world):
+    from hashlib import sha256
+
     w = sql_world
-    ctx, params = prepare(w, "SCD1_MERGE")
-    act(
-        ctx,
-        ActionName.DATA_EDIT,
-        pipeline_code="P",
-        task_code="load",
-        key={"id": 1},
-        values={"name": "Human"},
-        reason="fix",
-    )
-    journal = next(t for t in w.tables() if t.startswith("etl_protection_"))
-    with pytest.raises(HandlerError, match="reserved SCD protection evidence"):
-        w.run(
-            "destroy_evidence",
-            SQL_ACTION="CREATE_TABLE",
-            TARGET_OBJECT=journal,
-            SELECT_QUERY="SELECT 1 AS id",
-        )
-    snapshot = next(t for t in w.tables() if t.startswith("etl_fingerprints_"))
-    w.execute(f"DROP TABLE {w.name(snapshot)}")
-    with pytest.raises(HandlerError, match=r"incomplete protection evidence.*restore"):
+    _, params = prepare(w, "SCD1_MERGE")
+    identity = f"{w.catalog}.{w.schema}.protected".lower()
+    legacy = "etl_protection_" + sha256(identity.encode()).hexdigest()[:20]
+    w.execute(f"CREATE TABLE {w.name(legacy)} (id INTEGER)")
+    before = current(w)
+    with pytest.raises(HandlerError, match=r"back up.*recreate.*re-apply"):
         w.run("load", **params)
-    assert current(w)[0]["name"] == "Human"
+    assert current(w) == before
 
 
-def use_postgres_engine(w, request):
-    from fixtures.engine_db import apply_schema
-    from fixtures.metadata import add_pipeline, start_run
-
-    db = request.getfixturevalue("postgres_database")
-    apply_schema(db.engine)
-    w.config = replace(w.config, engine=db.config.engine)
-    w.engine_db = db.engine
-    with db.engine.begin() as conn:
-        w.pipeline_id = add_pipeline(conn, "P")
-        w.pipeline_run_id = start_run(conn, w.pipeline_id)
-
-
-@warehouses("duckdb", "postgres")
+@warehouses("duckdb", "postgres", "trino_iceberg", "duckdb_iceberg")
 def test_manual_edit_refuses_conflicting_merge_lifecycles(sql_world):
     from fixtures.metadata import add_pipeline, add_task
 
@@ -617,4 +565,128 @@ def test_manual_edit_refuses_conflicting_merge_lifecycles(sql_world):
             values={"name": "Human"},
             reason="fix",
         )
+    assert current(w)[0]["name"] == "Source"
+
+
+@warehouses("duckdb", "postgres", "trino_iceberg", "duckdb_iceberg")
+@pytest.mark.parametrize("kind", ["SCD1_MERGE", "SCD2_MERGE"])
+def test_edit_unlock_and_reload_each_use_one_target_merge_with_hash_only_events(sql_world, kind):
+    from fixtures.single_merge import target_mutations
+
+    w = sql_world
+    ctx, params = prepare(w, kind)
+    secret = "private-business-value"
+    with target_mutations(w, "protected") as statements:
+        act(
+            ctx,
+            ActionName.DATA_EDIT,
+            pipeline_code="P",
+            task_code="load",
+            key={"id": 1},
+            values={"name": secret},
+            reason="correct",
+        )
+    assert len(statements) == 1 and statements[0].startswith("MERGE INTO "), statements
+    with target_mutations(w, "protected") as statements:
+        act(
+            ctx,
+            ActionName.DATA_UNLOCK,
+            pipeline_code="P",
+            task_code="load",
+            key={"id": 1},
+            columns=("name",),
+            reason="return",
+        )
+    assert len(statements) == 1 and statements[0].startswith("MERGE INTO "), statements
+    with target_mutations(w, "protected") as statements:
+        w.run("load", **params)
+    assert len(statements) == 1 and statements[0].startswith("MERGE INTO "), statements
+    with w.engine_db.connect() as conn:
+        events = conn.execute(text("SELECT * FROM AUD_PROTECTION_EVENTS")).mappings().all()
+    assert events and secret not in str(events)
+    assert not any(t.startswith(("etl_protection_", "etl_fingerprints_")) for t in w.tables())
+
+
+@warehouses("duckdb", "postgres", "trino_iceberg", "duckdb_iceberg")
+def test_doctor_reports_outside_deletion_without_gating_writes(sql_world):
+    from etl_craft.services.protection import problems
+
+    w = sql_world
+    ctx, params = prepare(w, "SCD1_MERGE")
+    act(
+        ctx,
+        ActionName.DATA_EDIT,
+        pipeline_code="P",
+        task_code="load",
+        key={"id": 1},
+        values={"name": "Manual"},
+        reason="correct",
+    )
+    w.execute(f"DELETE FROM {w.name('protected')} WHERE id=1")
+    findings = problems(w.engine_db, w.config)
+    assert len(findings) == 1
+    assert "protected" in findings[0] and "1 locked key hashes" in findings[0]
+    assert "restore" in findings[0] and "permissions" in findings[0]
+    w.run("load", **params)
+    assert current(w)[0]["name"] == "Source"
+
+
+@warehouses("duckdb", "postgres", "trino_iceberg", "duckdb_iceberg")
+def test_protected_shape_change_is_refused_before_ddl(sql_world):
+    w = sql_world
+    ctx, params = prepare(w, "SCD1_MERGE")
+    act(
+        ctx,
+        ActionName.DATA_EDIT,
+        pipeline_code="P",
+        task_code="load",
+        key={"id": 1},
+        values={"name": "Manual"},
+        reason="correct",
+    )
+    before = current(w)
+    with pytest.raises(HandlerError, match=r"new columns.*extra.*recorded contract.*re-apply"):
+        w.run(
+            "load",
+            **{
+                **params,
+                "SCHEMA_EVOLUTION": "true",
+                "SELECT_QUERY": params["SELECT_QUERY"] + ",1 AS extra",
+            },
+        )
+    assert "extra" not in w.columns("protected")
+    assert current(w) == before
+
+
+@warehouses("postgres")
+@pytest.mark.parametrize("kind", ["SCD1_MERGE", "SCD2_MERGE"])
+def test_pre15_transactional_fallback_carries_in_row_columns(sql_world, monkeypatch, kind):
+    from etl_craft.dialects.warehouse.postgres import PostgresWarehouse
+    from etl_craft.services.rehash import rehash
+
+    monkeypatch.setattr(PostgresWarehouse, "supports_insert_merge", lambda self, conn: False)
+    w = sql_world
+    ctx, params = prepare(w, kind)
+    act(
+        ctx,
+        ActionName.DATA_EDIT,
+        pipeline_code="P",
+        task_code="load",
+        key={"id": 1},
+        values={"name": "Manual"},
+        reason="correct",
+    )
+    w.run("load", **{**params, "SELECT_QUERY": params["SELECT_QUERY"].replace("10 AS", "20 AS")})
+    assert [(r["name"], r["amount"]) for r in current(w)] == [("Manual", 20)]
+    rehash(w.engine_db, w.config, f"{w.schema}.protected")
+    act(
+        ctx,
+        ActionName.DATA_UNLOCK,
+        pipeline_code="P",
+        task_code="load",
+        key={"id": 1},
+        columns=("name",),
+        reason="return",
+    )
+    w.run("load", **params)
     assert current(w)[0]["name"] == "Source"

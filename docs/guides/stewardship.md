@@ -82,11 +82,11 @@ for each staged row's upload, refuses missing or foreign ids before mutation, an
 `CREATED_BY`/`UPDATED_BY` from that mapping. Loading scripts must also stamp their own landing
 rows with each upload's account. Later uploads win for overlapping keys.
 
-Stewarded SCD1/SCD2 uploads are supported only on native PostgreSQL and DuckDB, where S5.O.3
-human-write protection is supported. Each upload's merge and protection evidence run in order
-inside the same transaction. Validate and refresh refuse protected SCD upload targets on
-DuckDB/Iceberg and Trino; use a supported warehouse or a non-protected ordinary target.
-Ordinary upload flows and per-row SQL attribution are supported on all four local warehouses.
+Stewarded SCD1/SCD2 uploads use in-row human-write protection on every supported warehouse.
+Each file's merge writes values, per-cell writers and locks in one target MERGE, then finalizes
+its hash-only Engine DB intent before the next file. PostgreSQL before 15 retains its
+transactional fallback. See [human overrides](human-overrides.md#atomicity-outside-writers-and-recovery)
+for recovery, warehouse permissions and the old-side-table target remedy.
 
 API-only agents fetch bytes through `GET /api/v1/agent/uploads/{upload_id}/content`, passing
 `version` and `attempt_id`. Only the owning attempt token with a live lease can read its run's

@@ -34,9 +34,11 @@ import contextlib
 import logging
 from collections.abc import Callable
 
-from etl_craft.core.enums import RunStatus, SqlAction
+from etl_craft.core.actor import Actor
+from etl_craft.core.enums import ActorKind, RunStatus, SqlAction
 from etl_craft.core.errors import SqlGuardError
 from etl_craft.core.faults import fault_point
+from etl_craft.core.protection import PROTECTION_COLUMNS
 from etl_craft.core.text import sha256_hex
 from etl_craft.core.uploads import UploadWriter
 from etl_craft.dialects.warehouse.metadata import projection_names
@@ -44,6 +46,14 @@ from etl_craft.dialects.warehouse.uploads import actor_parts, writer_expression
 from etl_craft.handlers.registry import HandlerResult
 from etl_craft.handlers.sql.context import ActionContext
 from etl_craft.handlers.sql.creation import create_table, setup_table
+from etl_craft.handlers.sql.deletes import delete_rows
+from etl_craft.handlers.sql.protection import ProtectionRequest
+from etl_craft.handlers.sql.protection_columns import (
+    baseline,
+    business_columns,
+    fingerprint,
+    metadata_result,
+)
 from etl_craft.handlers.sql.rejects import screen
 from etl_craft.handlers.sql.replacement import cleanup, recover_overwrite
 from etl_craft.handlers.sql.session import Session
@@ -54,7 +64,6 @@ from etl_craft.handlers.sql.tables import (
     check_or_evolve,
     check_stage_columns,
     check_target_audit,
-    check_update_precision,
     dedupe,
     refuse_empty,
     refuse_null_keys,
@@ -288,6 +297,16 @@ def _merge_stage(
         stage = session.protection.stage(stage)
     if not hashed:
         add_hash_key(session, stage, task.merge_compare_columns)
+    if session.protection is not None:
+        request = session.protection.request or ProtectionRequest.create(
+            Actor(action.user, ActorKind.SYSTEM), f"ETL {task.action}"
+        )
+        condition = edit_condition(
+            action,
+            tuple(c for c, _ in session.columns(stage)),
+            "t.HASH_KEY IS DISTINCT FROM s.HASH_KEY OR t.DELETE_FLAG='Y'",
+        )
+        stage = session.protection.prepare(stage, request, condition)
     session.prepare_update_stage(stage, task.merge_key)
     return stage, source, rejected, int(counts.new_keys) if count_target else None
 
@@ -300,7 +319,11 @@ def scd1_merge(session: Session, action: ActionContext) -> HandlerResult:
     """
     task = action.task
     stage, source, rejected, new = _merge_stage(session, action, SqlAction.SCD1_MERGE)
-    stage_columns = [name for name, _ in session.columns(stage)]
+    if metadata_only := metadata_result(session, stage, source, rejected):
+        return metadata_only
+    stage_columns = [
+        name for name, _ in session.columns(stage) if name.upper() not in PROTECTION_COLUMNS
+    ]
     assignments, condition = _scd1_update(session, action, stage_columns)
     target = session.target
     key_match = _key_match(task.merge_key)
@@ -397,7 +420,24 @@ def _scd1_update(
     )
     if action.uploads:
         assignments["CREATED_BY"] = writer_expression(action.uploads, "s.UPLOAD_ID")
+    business = business_columns(stage_columns)
+    baseline(session, task, business)
+    assignments.update(_protection_assignments(session, business, preserve=task.preserve_target))
     return assignments, condition
+
+
+def _protection_assignments(
+    session: Session, columns: tuple[str, ...], *, preserve: bool = False
+) -> dict[str, str]:
+    if session.protection is not None:
+        return {name: f"s.{name}" for name in PROTECTION_COLUMNS}
+    return {
+        "ETL_PROTECTION": ":protection_baseline",
+        "ETL_ROW_FINGERPRINT": fingerprint(
+            session, columns, "s", ":protection_baseline", preserve=preserve
+        ),
+        "ETL_PROTECTION_REQUEST_ID": "NULL",
+    }
 
 
 def _numbered_merge_source(session: Session, stage: str, keys: tuple[str, ...]) -> str:
@@ -414,9 +454,14 @@ def scd2_merge(session: Session, action: ActionContext) -> HandlerResult:
     one inserted, so a rerun converges.
     """
     stage, source, rejected, _ = _merge_stage(session, action, SqlAction.SCD2_MERGE)
-    stage_columns = [name for name, _ in session.columns(stage)]
+    if metadata_only := metadata_result(session, stage, source, rejected):
+        return metadata_only
+    stage_columns = [
+        name for name, _ in session.columns(stage) if name.upper() not in PROTECTION_COLUMNS
+    ]
     target = session.target
 
+    baseline(session, action.task, business_columns(stage_columns))
     condition = "t.HASH_KEY IS DISTINCT FROM s.HASH_KEY OR t.DELETE_FLAG = 'Y'"
     condition = edit_condition(action, tuple(stage_columns), condition)
     if session.dialect.supports_insert_merge(session.conn):
@@ -449,6 +494,7 @@ def _version_assignments(action: ActionContext) -> dict[str, str]:
         "PIPELINE_RUN_ID": ":pipeline_run_id",
         "TASK_RUN_ID": ":task_run_id",
         "PIPELINE_ID": ":pipeline_id",
+        "ETL_PROTECTION_REQUEST_ID": ":protection_request_id",
     }
 
 
@@ -465,6 +511,9 @@ def _merge_versions(
         _, values = session.row_id_insert_parts()
         source = numbered_source(source, values.removeprefix(", "), merge.allocated)
         row_ids = (", ROW_ID", f", s.{merge.allocated}")
+    session.bindings["protection_request_id"] = (
+        session.protection.request_id if session.protection else None
+    )
     insert = _merge_insert_parts(session, columns, row_ids, uploads=action.uploads)
     session.run(
         merge.statement(source, _version_assignments(action), insert),
@@ -479,6 +528,9 @@ def _separate_versions(
     session: Session, action: ActionContext, stage: str, columns: list[str], condition: str
 ) -> tuple[int, int]:
     target = session.target
+    session.bindings["protection_request_id"] = (
+        session.protection.request_id if session.protection else None
+    )
     key_match = _key_match(action.task.merge_key)
     closed = session.mutate(
         session.dialect.update_from_stage(
@@ -524,12 +576,27 @@ def _merge_insert_parts(
     """Share inserted business and audit values between INSERT and MERGE."""
     row_id_columns, row_id_values = session.row_id_insert_parts() if row_ids is None else row_ids
     writer = writer_expression(uploads, "s.UPLOAD_ID")
+    business = business_columns(columns)
+    if session.protection is not None:
+        metadata = ", s.ETL_PROTECTION, s.ETL_ROW_FINGERPRINT, s.ETL_PROTECTION_REQUEST_ID"
+    else:
+        types = session.hash_types(session.target)
+        session.bindings.setdefault("protection_baseline", "")
+        # The caller supplies the merge contract before constructing its insertion.
+        hashed = session.dialect.hash_expression(
+            [
+                *(f"s.{c}" for c in business),
+                f"CAST(:protection_baseline AS {session.dialect.string_type})",
+            ],
+            [*(types[c] for c in business), "VARCHAR"],
+        )
+        metadata = f", :protection_baseline, {hashed}, NULL"
     return (
         f"{', '.join(columns)}, PIPELINE_RUN_ID, PIPELINE_ID, TASK_RUN_ID, "
         "CREATE_DATE, CREATED_BY, UPDATE_DATE, UPDATED_BY, DELETE_FLAG, "
-        f"ACTIVE_FLAG{row_id_columns}",
+        f"ACTIVE_FLAG{row_id_columns}, {', '.join(PROTECTION_COLUMNS)}",
         f"{', '.join(f's.{column}' for column in columns)}, :pipeline_run_id, :pipeline_id, "
-        f":task_run_id, :now, {writer}, :now, {writer}, 'N', 'Y'{row_id_values}",
+        f":task_run_id, :now, {writer}, :now, {writer}, 'N', 'Y'{row_id_values}{metadata}",
     )
 
 
@@ -564,78 +631,6 @@ def drop_table(session: Session, action: ActionContext) -> HandlerResult:
     session.clear_hash_version = True
     session.run(f"DROP TABLE {session.target}", step="drop the target")
     return HandlerResult()
-
-
-def delete_rows(session: Session, action: ActionContext) -> HandlerResult:
-    """Hard delete matching keys, or deactivate and flag their current live rows."""
-    task = action.task
-    stage = action.build_stage(session)
-    counts = session.run(
-        session.dialect.key_counts(stage, task.merge_key), step="NULL merge keys"
-    ).one()
-    source = int(counts.source_rows)
-    target = session.target
-    require_target(session)
-    refuse_null_keys(session, stage, task.merge_key, int(counts.null_keys))
-    if not task.hard_delete:
-        have = {name.lower() for name, _ in session.target_columns()}
-        missing = [
-            c
-            for c in (
-                "PIPELINE_RUN_ID",
-                "PIPELINE_ID",
-                "TASK_RUN_ID",
-                "DELETE_FLAG",
-                "ACTIVE_FLAG",
-                "UPDATE_DATE",
-                "UPDATED_BY",
-            )
-            if c.lower() not in have
-        ]
-        if missing:
-            raise SqlGuardError(
-                f"{target} lacks {', '.join(missing)}, which a soft DELETE_ROWS sets; run a "
-                "SETUP_TABLE task for it, add the columns, or set HARD_DELETE=true"
-            )
-        check_identity_types(session)
-        check_update_precision(session)
-    if session.protection is not None:
-        stage = session.protection.stage(stage, delete=True)
-    key_match = _key_match(task.merge_key)
-    # A soft delete leaves rows already flagged as they were, with their first UPDATE_DATE.
-    live = "" if task.hard_delete else " AND t.ACTIVE_FLAG = 'Y' AND t.DELETE_FLAG = 'N'"
-    count_sql = (
-        f"SELECT COUNT(*) FROM {target} t WHERE EXISTS (SELECT 1 FROM {stage} s WHERE {key_match})"
-        f"{live}"
-    )
-    mutation, q = session.mutation_target()
-    match = _key_match(task.merge_key, q)
-    if task.hard_delete:
-        delete_count = session.mutate(
-            f"DELETE FROM {mutation} WHERE EXISTS (SELECT 1 FROM {stage} s WHERE {match})",
-            {},
-            count_sql=count_sql,
-            step="delete the rows",
-        )
-    else:
-        upload_value = f"(SELECT MAX(s.UPLOAD_ID) FROM {stage} s WHERE {match})"
-        writer = writer_expression(action.uploads, upload_value)
-        upload_assignment = (
-            f"UPLOAD_ID = {upload_value}, CREATED_BY = {writer}, " if action.uploads else ""
-        )
-        delete_count = session.mutate(
-            f"UPDATE {mutation} SET DELETE_FLAG = 'Y', ACTIVE_FLAG = 'N', UPDATE_DATE = :now, "
-            f"PIPELINE_RUN_ID = :pipeline_run_id, PIPELINE_ID = :pipeline_id, "
-            f"TASK_RUN_ID = :task_run_id, "
-            f"{upload_assignment}UPDATED_BY = {writer} "
-            f"WHERE EXISTS (SELECT 1 FROM {stage} s WHERE {match}) "
-            f"AND {q}.ACTIVE_FLAG = 'Y' AND {q}.DELETE_FLAG = 'N'",
-            action.stamp,
-            count_sql=count_sql,
-            step="flag the rows deleted",
-        )
-    session.drop(stage)
-    return HandlerResult(source_count=source, delete_count=delete_count)
 
 
 def create_view(session: Session, action: ActionContext) -> HandlerResult:

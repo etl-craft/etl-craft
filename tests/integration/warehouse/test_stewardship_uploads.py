@@ -113,7 +113,13 @@ def run(task):
         w.engine_db, w.config, SYSTEM_ACTOR, role=ApiRole.ADMIN, project="default", project_id=1
     )
     for name in ("alice", "bob"):
-        act(owner, ActionName.ACCOUNT_ADD, name=name, role=ApiRole.ADMIN, oidc_subject=name)
+        act(
+            owner,
+            ActionName.ACCOUNT_ADD,
+            name=name,
+            role=ApiRole.ADMIN,
+            password="correct horse battery",
+        )
     with w.engine_db.begin() as conn:
         transitions.finalize_pipeline_run(conn, w.pipeline_run_id, RunStatus.SUCCESS)
         validation = add_task(
@@ -263,7 +269,7 @@ def test_bad_stewardship_file_never_reaches_a_project_table(upload_world):
         )
 
 
-@warehouses("duckdb", "postgres")
+@warehouses("duckdb", "postgres", "duckdb_iceberg", "trino_iceberg")
 @pytest.mark.parametrize("upload_world", ["SCD1_MERGE", "SCD2_MERGE"], indirect=True)
 def test_complete_protected_upload_flow_orders_files_and_locks_each_writer(upload_world):
     from etl_craft.controller.uploads import admit_pending
@@ -319,23 +325,6 @@ def test_complete_protected_upload_flow_orders_files_and_locks_each_writer(uploa
             .all()
         )
     assert accounts == ["alice", "bob"]
-
-
-@warehouses("duckdb_iceberg", "trino_iceberg")
-@pytest.mark.parametrize("upload_world", ["SCD1_MERGE", "SCD2_MERGE"], indirect=True)
-def test_validate_and_refresh_refuse_unsupported_protected_upload_targets(upload_world):
-    from etl_craft.services.validate import validate
-
-    w, owner = upload_world
-    checked = validate(w.engine_db, w.config, "P")
-    messages = " ".join(f"{f.where}: {f.message}" for f in checked.findings)
-    for expected in ["P.apply", "uploaded", "unsupported", "non-protected target"]:
-        assert expected in messages
-    refreshed = act(owner, ActionName.PIPELINE_REFRESH, pipeline_code="P")
-    assert refreshed.failed
-    messages = " ".join(str(row) for row in refreshed.refreshes)
-    for expected in ["P.apply", "uploaded", "unsupported", "non-protected target"]:
-        assert expected in messages
 
 
 def test_one_refused_file_does_not_prevent_another_file_loading(upload_world):
@@ -514,3 +503,103 @@ def test_archived_upload_reruns_through_real_validation_and_loading(upload_world
             {"run": run_id},
         ).scalar_one()
     assert accepted_attempts == 2
+
+
+@warehouses("duckdb")
+@pytest.mark.parametrize("upload_world", ["SCD1_MERGE", "SCD2_MERGE"], indirect=True)
+def test_api_edit_and_cli_upload_keep_each_cells_actual_human_writer(
+    upload_world, monkeypatch, capsys, tmp_path
+):
+    import json
+
+    from fastapi.testclient import TestClient
+
+    from etl_craft.api.app import create_app
+    from etl_craft.cli import main
+    from etl_craft.engine.migrations import mark_packaged_migrations_applied
+
+    w, owner = upload_world
+    with w.engine_db.begin() as conn:
+        mark_packaged_migrations_applied(conn)
+    tokens = {}
+    for name in ("alice", "bob"):
+        tokens[name] = act(
+            owner, ActionName.LOGIN, name=name, password="correct horse battery"
+        ).access_token
+    with w.engine_db.begin() as conn:
+        mark_packaged_migrations_applied(conn)
+    with TestClient(create_app(owner)) as client:
+        alice = {"Authorization": "Bearer " + tokens["alice"]}
+        uploaded = client.post(
+            "/api/v1/projects/default/uploads?pipeline_code=P",
+            headers=alice,
+            files={"file": ("data.csv", b"id|name\n1|Initial\n", "text/csv")},
+        )
+        assert uploaded.status_code == 200, uploaded.text
+        first = uploaded.json()
+        assert drive_upload(w, first["pipeline_run_id"]).status == RunStatus.SUCCESS
+        edited = client.post(
+            "/api/v1/projects/default/values",
+            headers=alice,
+            json={
+                "pipeline_code": "P",
+                "task_code": "apply",
+                "key": {"id": 1},
+                "values": {"name": "Corrected"},
+                "reason": "correct",
+            },
+        )
+        assert edited.status_code == 200, edited.text
+        assert w.rows(f"SELECT UPLOAD_ID FROM {w.name('uploaded')} WHERE ACTIVE_FLAG='Y'") == [
+            (first["upload_id"],)
+        ]
+        path = tmp_path / "data.csv"
+        path.write_bytes(b"id|name\n1|From Bob\n")
+        refreshed = act(owner, ActionName.PIPELINE_REFRESH, pipeline_code="P")
+        assert not refreshed.failed, refreshed
+        monkeypatch.setenv("ETL_CRAFT_TOKEN", tokens["bob"])
+        assert (
+            main(
+                [
+                    "--config",
+                    str(w.config.config_path),
+                    "upload",
+                    "--project",
+                    "default",
+                    "--pipeline-code",
+                    "P",
+                    str(path),
+                    "--format",
+                    "json",
+                ]
+            )
+            == 0
+        )
+        second = json.loads(capsys.readouterr().out)
+        assert drive_upload(w, second["pipeline_run_id"]).status == RunStatus.SUCCESS
+        evidence = client.post(
+            "/api/v1/projects/default/values/provenance",
+            headers=alice,
+            json={"pipeline_code": "P", "task_code": "apply", "key": {"id": 1}},
+        )
+        assert evidence.status_code == 200, evidence.text
+        cells = {r["column_name"]: r for r in evidence.json()["records"]}
+        assert cells["id"]["writer"] == "alice"
+        assert cells["name"]["writer"] == "bob"
+        assert cells["name"]["locked"]
+        assert "upload_id" not in cells
+        refused = client.post(
+            "/api/v1/projects/default/values",
+            headers=alice,
+            json={
+                "pipeline_code": "P",
+                "task_code": "apply",
+                "key": {"id": 1},
+                "values": {"upload_id": 999},
+                "reason": "cannot forge provenance",
+            },
+        )
+        assert refused.status_code == 400 and "managed" in refused.text
+        assert w.rows(f"SELECT UPLOAD_ID FROM {w.name('uploaded')} WHERE ACTIVE_FLAG='Y'") == [
+            (second["upload_id"],)
+        ]

@@ -51,6 +51,9 @@ AUDIT_COLUMN_TYPES: dict[str, str] = {
     "TASK_RUN_ID": "BIGINT",
     "PIPELINE_ID": "BIGINT",
     "HASH_KEY": "VARCHAR(32)",
+    "ETL_PROTECTION": "VARCHAR",
+    "ETL_ROW_FINGERPRINT": "VARCHAR(32)",
+    "ETL_PROTECTION_REQUEST_ID": "VARCHAR(36)",
     "CREATE_DATE": "TIMESTAMP WITH TIME ZONE",
     "UPDATE_DATE": "TIMESTAMP WITH TIME ZONE",
     "CREATED_BY": "VARCHAR(255)",
@@ -145,8 +148,6 @@ class WarehouseDialect:
     """Embedded query execution ends with the owning task process."""
 
     single_writer: bool = False
-    atomic_protection: bool = False
-    """Whether business writes and protection evidence share one atomic transaction."""
     # The type values are cast to before hashing.
     string_type: str = "VARCHAR"
     # The case unquoted identifiers fold to ("lower" or "upper"), or None where the database
@@ -632,7 +633,7 @@ class WarehouseDialect:
 
     def audit_column_type(self, column: str) -> str:
         """Return the DDL type of an engine-managed audit column."""
-        return AUDIT_COLUMN_TYPES[column]
+        return self.string_type if column == "ETL_PROTECTION" else AUDIT_COLUMN_TYPES[column]
 
     def audit_column_contract(self, column: str) -> str:
         """Return an engine column's type as its storage format reports it."""

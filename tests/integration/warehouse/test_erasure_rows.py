@@ -2,6 +2,8 @@
 
 from dataclasses import replace
 
+import pytest
+
 from etl_craft.core.erasure import ErasureEntry
 from etl_craft.handlers.erasure import apply_entries
 
@@ -185,7 +187,8 @@ def test_numeric_identifier_uses_native_bound_equality(sql_world, monkeypatch):
     assert w.rows(f"SELECT person FROM {w.name('numeric_people')}") == [(2,)]
 
 
-def test_quoted_native_identifier_keeps_its_physical_case(sql_world, monkeypatch):
+@pytest.mark.parametrize("column_name", ["PersonKey", "Person Key"])
+def test_quoted_native_identifier_keeps_its_physical_case(sql_world, monkeypatch, column_name):
     w = sql_world
     monkeypatch.setenv("ERASURE_HMAC", "test-hmac-secret")
     config = replace(w.config, erasure_hmac_secret="ERASURE_HMAC")
@@ -206,9 +209,41 @@ def test_quoted_native_identifier_keeps_its_physical_case(sql_world, monkeypatch
             TARGET_OBJECT=quoted,
             SCRIPT_FILE="python_scripts/quoted.py",
         )
-    w.execute(f'CREATE TABLE {quoted} AS SELECT 1 AS "PersonKey" UNION ALL SELECT 2')
+    w.execute(f'CREATE TABLE {quoted} AS SELECT 1 AS "{column_name}" UNION ALL SELECT 2')
     table = identity(config, quoted)
-    column = column_identity('"PersonKey"', warehouse_dialect(config))
+    column = column_identity(f'"{column_name}"', warehouse_dialect(config))
     report = apply_entries(w.engine_db, config, (ErasureEntry(table, column, "1", "a" * 64),))
     assert sum(t.rows for t in report.tables) == 1
-    assert w.rows(f'SELECT "PersonKey" FROM {quoted}') == [(2,)]
+    assert w.rows(f'SELECT "{column_name}" FROM {quoted}') == [(2,)]
+
+
+def test_erasure_matches_the_identifier_in_each_scd2_version_without_erasing_other_people(
+    sql_world, monkeypatch
+):
+    from etl_craft.core.enums import ActionName
+    from etl_craft.services.protection import problems
+    from fixtures.actions import act
+    from fixtures.scd_protection import prepare
+
+    w = sql_world
+    monkeypatch.setenv("ERASURE_HMAC", "test-hmac-secret")
+    w.config = replace(w.config, erasure_hmac_secret="ERASURE_HMAC")
+    owner, _ = prepare(w, "SCD2_MERGE")
+    act(
+        owner,
+        ActionName.DATA_EDIT,
+        pipeline_code="P",
+        task_code="load",
+        key={"id": 1},
+        values={"name": "Different person"},
+        reason="correct",
+    )
+    first = ErasureEntry(w.name("protected"), "name", "Source", "a" * 64)
+    report = apply_entries(w.engine_db, w.config, (first,))
+    assert sum(t.rows for t in report.tables if t.table == w.name("protected")) == 1
+    assert w.rows(f"SELECT name FROM {w.name('protected')}") == [("Different person",)]
+    assert problems(w.engine_db, w.config) == []
+    second = ErasureEntry(w.name("protected"), "name", "Different person", "b" * 64)
+    apply_entries(w.engine_db, w.config, (second,))
+    assert w.rows(f"SELECT COUNT(*) FROM {w.name('protected')}") == [(0,)]
+    assert problems(w.engine_db, w.config) == []

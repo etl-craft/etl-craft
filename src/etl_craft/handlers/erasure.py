@@ -24,12 +24,13 @@ from etl_craft.core.errors import ConfigurationError, HandlerError
 from etl_craft.core.faults import fault_point
 from etl_craft.core.redaction import mask_text, registering
 from etl_craft.dialects.business_rules import quote_output_key
-from etl_craft.dialects.warehouse.erasure import count_or_delete, resolved_column, selection_columns
+from etl_craft.dialects.warehouse.erasure import resolved_column, selection_columns
 from etl_craft.engine import locks
 from etl_craft.engine.queries import statement
 from etl_craft.engine.repository.normalization import object_identity
 from etl_craft.engine.repository.tasks import fetch_all_task_parameters
 from etl_craft.engine.task_store import TaskStore
+from etl_craft.handlers.erasure_delete import count_or_delete
 from etl_craft.handlers.erasure_lineage import boundaries, project_graph
 from etl_craft.handlers.lineage import COPY, TaskLineage, collect, table_name
 from etl_craft.handlers.registry import HandlerResult, TaskContext, task_store
@@ -281,7 +282,7 @@ def apply_entries(
                     if store is not None:
                         store.state()
                     count = count_or_delete(
-                        warehouse, warehouse_dialect(config), selection, dry_run=dry_run
+                        engine, warehouse, config, selection, dry_run=dry_run, store=store
                     )
                     if count is not None:
                         tables.append(

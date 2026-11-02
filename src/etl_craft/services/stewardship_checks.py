@@ -65,12 +65,6 @@ def sql_problems(conn: Connection, context: TaskContext, spec: SqlTask) -> list[
         return []
     dialect = task_dialect(context)
     where = f"{context.pipeline_code}.{context.task_code}, target {spec.target_object}"
-    if spec.action in MERGES and not dialect.atomic_protection:
-        return [
-            f"{where}: stewarded {spec.action} protection is unsupported on "
-            f"{dialect.spec.display_name}; expected atomic S5.O.3 human protection; "
-            "use native PostgreSQL or DuckDB, or a non-protected target"
-        ]
     problems = []
     if spec.action in WRITERS | {SqlAction.DELETE_ROWS}:
         names = output_columns(spec.select_sql or "", dialect=dialect.sqlglot_dialect)

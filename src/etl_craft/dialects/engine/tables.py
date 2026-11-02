@@ -26,6 +26,7 @@ AUDIT_TABLES = frozenset(
     {
         "AUD_UPLOADS",
         "AUD_SEED_LOADS",
+        "AUD_PROTECTION_EVENTS",
         "AUD_ERASURE_SUBJECTS",
         "AUD_CLONE_STATE",
         "AUD_CLONE_CHANGES",

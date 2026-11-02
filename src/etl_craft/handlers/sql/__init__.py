@@ -32,12 +32,14 @@ from etl_craft.handlers.sql.context import ActionContext
 from etl_craft.handlers.sql.protection import (
     Protection,
     ProtectionRequest,
-    evidence_names,
     for_task,
+    legacy_names,
     refuse_evidence_target,
+    refuse_legacy,
 )
 from etl_craft.handlers.sql.session import Session
-from etl_craft.handlers.sql.spec import MERGES, SqlTask, read_sql_task
+from etl_craft.handlers.sql.spec import MERGES as MERGES
+from etl_craft.handlers.sql.spec import SqlTask, read_sql_task
 from etl_craft.handlers.sql.watermarks import source_pipelines
 from etl_craft.warehouse.connection import open_warehouse, task_warehouse_dialect, warehouse_task
 
@@ -58,9 +60,7 @@ def run(context: TaskContext, engine_db: Engine | TaskStore) -> HandlerResult:
         task.source,
         dialect.spec.display_name,
     )
-    logger.debug("the SELECT:\n%s", task.select_sql)
-    # Hold through warehouse commit: a computed ROW_ID base must include the previous insert.
-    # Generated keys still share mutation ordering with replacement and hash upgrades.
+    # Keep computed ROW_ID allocation and every target write under the same lock.
     lock = locks.target(task.target_object, catalog)
     with (
         store.hold(lock.key, lock.name, 30),
@@ -88,7 +88,7 @@ def run(context: TaskContext, engine_db: Engine | TaskStore) -> HandlerResult:
                 f"{context.pipeline_code}.{context.task_code}: recorded start is NULL; "
                 "expected the Engine DB attempt start; start the task through etl-craft run"
             )
-        with warehouse.begin() as conn:
+        with warehouse.connect() as conn:
             session = Session(
                 conn,
                 dialect,
@@ -98,6 +98,11 @@ def run(context: TaskContext, engine_db: Engine | TaskStore) -> HandlerResult:
                 task_run_id=context.task_run_id,
                 params=context.task_params,
             )
+            session.protection_store = store
+            from etl_craft.handlers.protection_recovery import recover
+
+            refuse_legacy(session)
+            recover(session, store)
             session.uploads, session.bindings = context.uploads, writer_parameters(context.uploads)
             action = ActionContext(
                 task=task,
@@ -109,6 +114,10 @@ def run(context: TaskContext, engine_db: Engine | TaskStore) -> HandlerResult:
                 uploads=context.uploads,
             )
             outcome = _apply(session, action)
+            conn.commit()
+        from etl_craft.handlers.protection_recovery import committed
+
+        committed(store, session.target, session.protection_requests)
         if task.action == SqlAction.SCD1_MERGE:
             fault_point("sql.scd1.after_commit")
         elif task.action == SqlAction.SCD2_MERGE:
@@ -151,7 +160,7 @@ def _apply(session: Session, action: ActionContext) -> HandlerResult | SqlGuardE
     task = action.task
     refuse_evidence_target(session)
     try:
-        session.prime_target(evidence_names(session))
+        session.prime_target(legacy_names(session))
         if (
             task.action
             in {
@@ -169,15 +178,6 @@ def _apply(session: Session, action: ActionContext) -> HandlerResult | SqlGuardE
         session.protection = for_task(session, task)
         result = ACTIONS[task.action](session, action)
         if session.protection is not None:
-            context = action.context
-            session.protection.finish(
-                ProtectionRequest(
-                    Actor(action.user, ActorKind.SYSTEM),
-                    f"ETL {task.action}",
-                    f"task-run:{context.task_run_id}/attempt:{context.attempt}",
-                    action.now,
-                )
-            )
             result = replace(
                 result,
                 variables={
@@ -201,32 +201,16 @@ def _checked_dialect(context: TaskContext, task: SqlTask) -> WarehouseDialect:
     if context.config.warehouse is None:
         raise ConfigurationError("a SQL task needs a Warehouse section in craft-connector.yml")
     dialect = task_dialect(context)
-    problem = (
-        dialect.unsupported_storage_problem(context.task_params)
-        or dialect.task_storage_problem(context.task_params)
-        or _unprotected_upload(context, task, dialect)
-    )
+    problem = dialect.unsupported_storage_problem(
+        context.task_params
+    ) or dialect.task_storage_problem(context.task_params)
     if problem is not None:
         raise SqlGuardError(problem)
     return dialect
 
 
-def _unprotected_upload(
-    context: TaskContext, task: SqlTask, dialect: WarehouseDialect
-) -> str | None:
-    """Refuse an uploaded merge where human-write protection cannot commit with the data."""
-    if context.uploads and task.action in MERGES and not dialect.atomic_protection:
-        return (
-            f"pipeline {context.pipeline_code}, task {context.task_code}: target "
-            f"{task.target_object}: protected writes unsupported on {dialect.spec.display_name}; "
-            "expected atomic data and evidence commits; use native PostgreSQL or DuckDB, "
-            "or a non-protected target"
-        )
-    return None
-
-
 def _uploaded_merge(session: Session, action: ActionContext) -> HandlerResult:
-    """Apply each uploader's statement and human evidence in one warehouse transaction."""
+    """Commit each uploader's atomic target mutation before finalizing its hash-only intent."""
     context = action.context
     inputs = context.upload_inputs
     if tuple(u.upload_id for u in inputs) != tuple(u.upload_id for u in action.uploads):
@@ -235,13 +219,7 @@ def _uploaded_merge(session: Session, action: ActionContext) -> HandlerResult:
             "expected the run's recorded upload ids and accounts; reload the admitted task"
         )
     guard = Protection(session, action.task)
-    try:
-        guard.acquire()
-    except SqlGuardError as error:
-        raise SqlGuardError(
-            f"pipeline {context.pipeline_code}, task {context.task_code}: {error}; "
-            "or use a non-protected target"
-        ) from error
+    guard.acquire()
     full = action.build_stage(session)
     if existing := for_task(session, action.task):
         guard = existing
@@ -251,6 +229,7 @@ def _uploaded_merge(session: Session, action: ActionContext) -> HandlerResult:
         guard.enable(ProtectionRequest.create(SYSTEM_ACTOR, "enable upload protection"))
     session.protection = guard
     results = []
+    protected_rows = protected_values = 0
     columns = ", ".join(name for name, _ in session.columns(full))
     for i, upload in enumerate(inputs):
         staged = session.scratch("upload")
@@ -258,6 +237,13 @@ def _uploaded_merge(session: Session, action: ActionContext) -> HandlerResult:
             staged,
             f"SELECT {columns} FROM {full} WHERE UPLOAD_ID=:upload_id_{i}",
             step=f"stage upload {upload.upload_id}",
+        )
+        if i:
+            guard = Protection(session, action.task)
+            guard.check()
+            session.protection = guard
+        guard.request = ProtectionRequest(
+            Actor(upload.account, upload.actor_kind), f"upload {upload.upload_id}", "", action.now
         )
         results.append(
             ACTIONS[action.task.action](
@@ -270,14 +256,15 @@ def _uploaded_merge(session: Session, action: ActionContext) -> HandlerResult:
                 ),
             )
         )
-        guard.finish(
-            ProtectionRequest(
-                Actor(upload.account, upload.actor_kind),
-                f"upload {upload.upload_id}",
-                f"upload:{upload.upload_id}/attempt:{context.attempt_id}",
-                action.now,
-            )
-        )
+        protected_rows += guard.prevented_rows
+        protected_values += guard.prevented_values
+        session.conn.commit()
+        from etl_craft.handlers.protection_recovery import committed
+
+        assert session.protection_store is not None
+        committed(session.protection_store, session.target, session.protection_requests)
+        session.protection_requests.clear()
+    guard.prevented_rows, guard.prevented_values = protected_rows, protected_values
     return _uploaded_counts(results, guard)
 
 

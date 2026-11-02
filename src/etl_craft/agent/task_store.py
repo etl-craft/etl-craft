@@ -13,6 +13,7 @@ from etl_craft.core.enums import ActionName, AgentReport
 from etl_craft.core.erasure import ErasureReport
 from etl_craft.core.errors import ServerError
 from etl_craft.core.items import ItemRecord, ItemState
+from etl_craft.core.protection import ProtectionPage, ProtectionReport
 from etl_craft.core.upload_copy import verified_upload
 from etl_craft.core.uploads import UploadFile, UploadInfo
 from etl_craft.engine.alerts import AlertState
@@ -39,6 +40,40 @@ class RemoteTaskStore:
     held: set[int] = field(default_factory=set)
     contracts: dict[str, TargetState] = field(default_factory=dict)
     files_dir: Path = field(default_factory=Path.cwd)
+
+    def protection_read(self, target: str, cursor: int = 0) -> ProtectionPage:
+        """Only the server's fenced store can expose this target's immutable event pages."""
+        from etl_craft.core.protection import validate_cursor
+
+        validate_cursor(cursor)
+        return from_json(
+            ProtectionPage,
+            self.call(
+                replace(
+                    self.request(AgentReport.PROTECTION_READ),
+                    target=target,
+                    protection_cursor=cursor,
+                )
+            ),
+        )
+
+    def protection_event(self, target: str, report: ProtectionReport) -> str:
+        """Use the same bounds as the local store before sending hash-only evidence."""
+        report.__post_init__()
+        result = self.call(
+            replace(
+                self.request(AgentReport.PROTECTION_EVENT),
+                target=target,
+                protection=report,
+            )
+        )
+        if not isinstance(result, str):
+            raise ServerError(
+                f"attempt {self.attempt_id}, target {target}: invalid "
+                "protection request id; upgrade agent and server "
+                "together"
+            )
+        return result
 
     def erasure(self) -> ErasureReport:
         """Return only the host's HMAC/count report for this fenced task."""

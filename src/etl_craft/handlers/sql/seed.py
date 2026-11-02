@@ -5,8 +5,10 @@ from datetime import UTC, datetime
 from sqlalchemy import text
 
 from etl_craft.core.enums import SqlAction
+from etl_craft.core.protection_state import RowProtection
 from etl_craft.handlers.sql.creation import replace_select
 from etl_craft.handlers.sql.protection import refuse_replacement
+from etl_craft.handlers.sql.protection_columns import business_columns
 from etl_craft.handlers.sql.session import Session
 from etl_craft.handlers.sql.tables import AUDIT_COLUMNS, check_column_names, declared_columns
 
@@ -42,7 +44,16 @@ def replace_seed(
         "ACTIVE_FLAG": "'Y'",
         "DELETE_FLAG": "'N'",
     }
+    session.bindings = {"now": datetime.now(UTC), "actor": actor}
     if merge:
+        session.bindings["protection_baseline"] = RowProtection(None).encoded()
+        values["ETL_PROTECTION"] = ":protection_baseline"
+        business = business_columns(tuple(name for name, _ in columns))
+        types = {name.lower(): kind for name, kind in columns}
+        values["ETL_ROW_FINGERPRINT"] = session.dialect.hash_expression(
+            [*business, f"CAST(:protection_baseline AS {session.dialect.string_type})"],
+            [*(types[name] for name in business), "VARCHAR"],
+        )
         values["HASH_KEY"] = session.dialect.hash_expression(
             list(merge[1]),
             [{column.lower(): kind for column, kind in columns}[name] for name in merge[1]],
@@ -52,7 +63,6 @@ def replace_seed(
         for name, kind in shape.items()
         if name not in dict(columns)
     )
-    session.bindings = {"now": datetime.now(UTC), "actor": actor}
     shaped = session.create_scratch(
         session.scratch("seed_shape"),
         f"SELECT {', '.join(projection)} FROM {stage}",

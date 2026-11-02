@@ -61,4 +61,9 @@ for `FAILED`. The command exits 0 for loaded, unchanged and locked tables, and 1
 load failed. Request and validation refusals retain their usual error exit codes.
 
 The [Support Insights demo](https://github.com/etl-craft/etl-craft/tree/main/examples/demo) seeds its reference tables and
-includes optional native DuckDB/PostgreSQL stewardship pipelines to demonstrate the handover.
+includes optional stewardship pipelines to demonstrate the handover on supported warehouses.
+
+
+Merge-shaped seeds initialize unprotected row metadata and typed fingerprints, so their first
+steward upload can establish locks. A nullable `UPLOAD_ID` added by the upload workflow is
+file provenance and does not change the protected business contract.

@@ -1,0 +1,8 @@
+SELECT e.EVENT_ID AS event_id,e.REQUEST_ID AS request_id,e.ATTEMPT_ID AS attempt_id,
+ e.KIND AS kind,e.KEY_HASH AS key_hash,e.COLUMN_NAMES AS column_names,e.VALUE_HASHES AS value_hashes,
+ e.STATUS AS status,e.CREATED_BY AS created_by,e.CREATED_AT AS created_at,
+ e.RECOVERING_ATTEMPT_ID AS recovering_attempt_id,e.RECOVERY_ACTOR AS recovery_actor FROM AUD_PROTECTION_EVENTS e
+WHERE e.PROJECT_ID=:project_id AND e.TARGET_ID=:target AND e.KEY_HASH=:key_hash
+AND (e.REQUEST_ID=:current_request OR EXISTS (SELECT 1 FROM AUD_PROTECTION_EVENTS f
+ WHERE f.PROJECT_ID=e.PROJECT_ID AND f.REQUEST_ID=e.REQUEST_ID AND f.STATUS='COMMITTED'))
+ORDER BY e.EVENT_ID DESC LIMIT 100

@@ -25,6 +25,7 @@ from collections.abc import Sequence
 
 from etl_craft.core.enums import SqlAction
 from etl_craft.core.errors import SqlGuardError
+from etl_craft.core.protection import PROTECTION_COLUMNS
 from etl_craft.core.text import as_subquery
 from etl_craft.handlers.sql.session import ROW_ID_COLUMN, Session
 
@@ -44,6 +45,7 @@ AUDIT_COLUMNS: dict[str, tuple[str, ...]] = {
         "UPDATED_BY",
         "DELETE_FLAG",
         "ACTIVE_FLAG",
+        *PROTECTION_COLUMNS,
     ),
     SqlAction.SCD2_MERGE: (
         "PIPELINE_ID",
@@ -55,6 +57,7 @@ AUDIT_COLUMNS: dict[str, tuple[str, ...]] = {
         "UPDATED_BY",
         "DELETE_FLAG",
         "ACTIVE_FLAG",
+        *PROTECTION_COLUMNS,
     ),
 }
 """The audit columns each action adds after ``PIPELINE_RUN_ID``, in order."""
@@ -308,6 +311,11 @@ def check_or_evolve(session: Session, stage: str, action: str, *, schema_evoluti
         raise SqlGuardError(
             f"the SELECT returns new column(s) {', '.join(new)} that {session.target} does not "
             "have; set SCHEMA_EVOLUTION=true to add them"
+        )
+    if session.protection is not None and any(c.lower() != "upload_id" for c in new):
+        raise SqlGuardError(
+            f"{session.target}: new columns {new} differ from the protected business shape; "
+            "expected the recorded contract; back up, recreate the target, and re-apply locks"
         )
     evolve(session, [(name, stage_types[name.lower()]) for name in new])
 

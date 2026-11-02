@@ -313,12 +313,15 @@ etl-craft rehash --target sales.customers
 ```
 
 The command reads the active merge tasks for that qualified target; they must declare one
-common ordered `MERGE_COMPARE_COLUMNS` list. Dry-run validates the types and prints the UPDATE
-and row count without changing hashes or their version. Rehash updates every row in one warehouse
-statement, including inactive SCD2 history, and changes only `HASH_KEY`. It then records version 2
-in `AUD_TARGET_HASH_VERSION`. Target locks coordinate SQL writes and rehashing. The warehouse
-and Engine DB commit separately: if publication fails after the warehouse update, rerun rehash;
-merges stay refused until the version is recorded. Dropping or replacing a target clears its
+common ordered `MERGE_COMPARE_COLUMNS` list. Dry-run validates the types and prints the
+planned mutation and row count without changing hashes or their version. Rehash uses one
+target MERGE (a transactional UPDATE on PostgreSQL before 15), including inactive SCD2 history.
+It changes `HASH_KEY` and the engine-managed protection fingerprint/request stamp, preserving
+business values, ordinary audit columns and existing per-cell locks and writers. Hash-only
+PENDING intent precedes the warehouse commit; COMMITTED and version 2 in
+`AUD_TARGET_HASH_VERSION` are recorded together afterwards. If the process dies between
+commits, recovery reads the request stamp and publishes the version before another mutation.
+Target locks coordinate SQL writes and rehashing. Dropping or replacing a target clears its
 recorded hash version.
 
 ### Correcting an existing repeated compare column

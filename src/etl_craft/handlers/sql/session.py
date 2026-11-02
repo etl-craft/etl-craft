@@ -27,10 +27,11 @@ from etl_craft.core.errors import HandlerError, SqlGuardError
 from etl_craft.core.text import qualify, split_object_ref
 from etl_craft.core.uploads import UploadWriter
 from etl_craft.dialects.warehouse import WarehouseDialect
-from etl_craft.dialects.warehouse.metadata import ddl_tables, projection_names
+from etl_craft.dialects.warehouse.metadata import TableMetadata, ddl_tables, projection_names
 from etl_craft.engine.repository.offsets import StoredOffset
 
 if TYPE_CHECKING:
+    from etl_craft.engine.task_store import TaskStore
     from etl_craft.handlers.sql.protection import Protection
 
 logger = logging.getLogger(__name__)
@@ -61,6 +62,8 @@ class Session:
         self.task_run_id = task_run_id
         self.params = params
         self.protection: Protection | None = None
+        self.protection_store: TaskStore | None = None
+        self.protection_requests: list[str] = []
         self.uploads: tuple[UploadWriter, ...] = ()
         self.bindings: dict[str, object] = {}
         database, self.schema, self.table = split_object_ref(target_object)
@@ -165,12 +168,17 @@ class Session:
             except SQLAlchemyError as error:
                 raise self._failure(f"read the columns of {name}", error) from error
             logger.info("read the columns of %s (%.2fs)", name, time.monotonic() - started)
-            self._metadata[key] = found.columns
-            if found.generated is not None:
-                self._generators[key] = found.generated
-            if found.table_format is not None:
-                self._formats[key] = found.table_format
+            self.cache_metadata(name, found)
         return self._metadata[key]
+
+    def cache_metadata(self, name: str, found: TableMetadata) -> None:
+        """Keep dialect-resolved physical spelling for case-aware maintenance reads."""
+        key = name.lower()
+        self._metadata[key] = found.columns
+        if found.generated is not None:
+            self._generators[key] = found.generated
+        if found.table_format is not None:
+            self._formats[key] = found.table_format
 
     # Statements
 
