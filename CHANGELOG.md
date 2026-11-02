@@ -6,8 +6,10 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
-
 ### Fixed
+
+- Trino target-lock handoff accepts its exact already-finished-query cancellation response,
+  while still requiring a separate check that no tagged warehouse statements remain running.
 
 - SCD1 updates/inserts and SCD2 closes/successor inserts now use one target MERGE on supported
   warehouse formats, including DuckDB over Iceberg. This removes the visible close-before-insert
@@ -65,6 +67,12 @@ All notable changes are recorded here. The format follows
   lookups by code should filter on `ETL_CRAFT_PROJECT`, as the updated examples do.
 
 ### Changed
+
+- Stewardable merge targets with a business type lacking a canonical scalar hash are refused
+  by validate, refresh and first protection activation, with the target/column/type and scalar
+  cast remedy. Ordinary nested-column merges remain supported with an inactive NULL row
+  fingerprint. Recovery adds one Engine DB lookup and no warehouse reads when no intent is
+  pending; ordinary merges keep their warehouse statement budgets.
 
 - SCD protection now keeps per-cell locks and writers in `ETL_PROTECTION`,
   `ETL_ROW_FINGERPRINT` and `ETL_PROTECTION_REQUEST_ID` on the target, with one target MERGE

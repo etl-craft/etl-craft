@@ -603,3 +603,44 @@ def test_api_edit_and_cli_upload_keep_each_cells_actual_human_writer(
         assert w.rows(f"SELECT UPLOAD_ID FROM {w.name('uploaded')} WHERE ACTIVE_FLAG='Y'") == [
             (second["upload_id"],)
         ]
+
+
+@warehouses("duckdb", "postgres", "trino_iceberg")
+@pytest.mark.parametrize("upload_world", ["SCD1_MERGE", "SCD2_MERGE"], indirect=True)
+def test_first_upload_refuses_nested_target_before_any_target_write(upload_world):
+    from fixtures.single_merge import target_mutations
+
+    w, owner = upload_world
+    kind = "ARRAY(INTEGER)" if w.kind == "trino_iceberg" else "INTEGER[]"
+    w.execute(f"ALTER TABLE {w.name('uploaded')} ADD COLUMN numbers {kind}")
+    before = w.rows(f"SELECT * FROM {w.name('uploaded')}")
+    upload = submit(owner, "alice", b"id|name\n1|Manual\n")
+    with target_mutations(w, "uploaded") as statements:
+        outcome = drive_upload(w, upload["pipeline_run_id"])
+    assert outcome.status == RunStatus.FAILED
+    with w.engine_db.connect() as conn:
+        attempts = (
+            conn.execute(
+                text(
+                    "SELECT ERROR_MESSAGE AS error_message,LOG_PATH AS log_path "
+                    "FROM AUD_TASK_ATTEMPTS WHERE STATUS='FAILED'"
+                )
+            )
+            .mappings()
+            .all()
+        )
+        assert conn.execute(text("SELECT COUNT(*) FROM AUD_PROTECTION_EVENTS")).scalar_one() == 0
+    assert len(attempts) == 1
+    from pathlib import Path
+
+    for part in (
+        w.name("uploaded"),
+        "numbers",
+        kind,
+        "canonical scalar hash",
+        "cast it to a scalar type in the SELECT",
+    ):
+        assert part.upper() in attempts[0]["error_message"].upper(), attempts
+        assert part.upper() in Path(attempts[0]["log_path"]).read_text(encoding="utf-8").upper()
+    assert statements == []
+    assert w.rows(f"SELECT * FROM {w.name('uploaded')}") == before

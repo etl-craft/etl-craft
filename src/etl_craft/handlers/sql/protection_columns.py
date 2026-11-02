@@ -1,6 +1,10 @@
 """The in-row column contract shared by ordinary merges, protected writes and rehash."""
 
+from collections.abc import Mapping
+
+from etl_craft.core.errors import SqlGuardError
 from etl_craft.core.protection_state import RowProtection
+from etl_craft.dialects.warehouse import WarehouseDialect
 from etl_craft.handlers.registry import HandlerResult
 from etl_craft.handlers.sql.session import Session
 from etl_craft.handlers.sql.spec import SqlTask
@@ -14,6 +18,21 @@ def business_columns(columns: list[str] | tuple[str, ...]) -> tuple[str, ...]:
     )
 
 
+def type_problems(dialect: WarehouseDialect, target: str, types: Mapping[str, str]) -> list[str]:
+    """Check every business value using the same canonical contract as its fingerprint."""
+    problems = []
+    for column in business_columns(tuple(types)):
+        kind = types[column]
+        try:
+            dialect.canonical_text(column, kind)
+        except SqlGuardError:
+            problems.append(
+                f"{target}, column {column}, type {kind}: protection requires a canonical "
+                "scalar hash for every business column; cast it to a scalar type in the SELECT"
+            )
+    return problems
+
+
 def contract(task: SqlTask, columns: tuple[str, ...]) -> list[object]:
     """Describe the merge action, keys, comparison and business columns."""
     return [str(task.action), list(task.merge_key), list(task.merge_compare_columns), list(columns)]
@@ -25,9 +44,24 @@ def fingerprint(
     """Hash typed business values together with canonical protection state."""
     types = session.hash_types(session.target)
     values = [f"COALESCE({alias}.{c}, t.{c})" if preserve else f"{alias}.{c}" for c in columns]
-    return session.dialect.hash_expression(
-        [*values, f"CAST({metadata} AS {session.dialect.string_type})"],
-        [*(types[c.lower()] for c in columns), "VARCHAR"],
+    return typed_fingerprint(
+        session.dialect, session.target, {c: types[c] for c in columns}, values, metadata
+    )
+
+
+def typed_fingerprint(
+    dialect: WarehouseDialect,
+    target: str,
+    types: Mapping[str, str],
+    values: list[str],
+    metadata: str,
+) -> str:
+    """Leave unsupported unactivated targets un-fingerprinted; activation refuses them."""
+    if type_problems(dialect, target, types):
+        return "NULL"
+    return dialect.hash_expression(
+        [*values, f"CAST({metadata} AS {dialect.string_type})"],
+        [*types.values(), "VARCHAR"],
     )
 
 

@@ -142,6 +142,7 @@ class ProtectionPage:
 
     records: tuple[ProtectionRecord, ...]
     cursor: int | None
+    active: bool | None = None
 
     def __post_init__(self) -> None:
         """Reject oversized pages before their contents reach a caller."""

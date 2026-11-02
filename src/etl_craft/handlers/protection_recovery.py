@@ -15,12 +15,13 @@ from etl_craft.engine.task_store import TaskStore
 from etl_craft.handlers.sql.session import Session
 
 
-def records(store: TaskStore, target: str) -> tuple[ProtectionRecord, ...]:
+def records(session: Session, store: TaskStore) -> tuple[ProtectionRecord, ...]:
     """Follow every bounded page; never turn a partial history into a recovery decision."""
     result: list[ProtectionRecord] = []
     cursor = 0
     while True:
-        page = store.protection_read(target, cursor)
+        page = store.protection_read(session.target, cursor)
+        session.protection_active = page.active
         result.extend(page.records)
         if page.cursor is None:
             return tuple(result)
@@ -29,7 +30,7 @@ def records(store: TaskStore, target: str) -> tuple[ProtectionRecord, ...]:
 
 def recover(session: Session, store: TaskStore) -> tuple[ProtectionRecord, ...]:
     """Resolve each unfinished request under the caller's existing target lock."""
-    history = records(store, session.target)
+    history = records(session, store)
     final = {r.request_id for r in history if r.status != ProtectionStatus.PENDING}
     pending: dict[str, list[ProtectionRecord]] = defaultdict(list)
     for record in history:
@@ -61,7 +62,7 @@ def recover(session: Session, store: TaskStore) -> tuple[ProtectionRecord, ...]:
                 evidence=evidence,
             ),
         )
-    return records(store, session.target) if pending else history
+    return records(session, store) if pending else history
 
 
 def _stamped(session: Session, request_id: str) -> bool:

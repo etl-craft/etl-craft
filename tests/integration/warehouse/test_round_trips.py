@@ -265,3 +265,52 @@ def test_computed_merges_allocate_only_new_keys_in_one_mutation(sql_world):
         SELECT_QUERY="SELECT 2 AS id, CAST('changed' AS VARCHAR(20)) AS name",
     )
     assert (matched.insert_count, matched.update_count) == (0, 1)
+
+
+@pytest.mark.parametrize("kind", ["SCD1_MERGE", "SCD2_MERGE"])
+def test_protected_merge_adds_only_two_event_appends_without_pending_recovery(sql_world, kind):
+    from collections import Counter
+
+    from sqlalchemy import event
+
+    from etl_craft.core.enums import ActionName
+    from fixtures.actions import act
+    from fixtures.scd_protection import prepare
+
+    w = sql_world
+    ctx, params = prepare(w, kind)
+    with count_round_trips(w.engine_db) as ordinary:
+        w.run(
+            "load", **{**params, "SELECT_QUERY": params["SELECT_QUERY"].replace("10 AS", "11 AS")}
+        )
+    act(
+        ctx,
+        ActionName.DATA_EDIT,
+        pipeline_code="P",
+        task_code="load",
+        key={"id": 1},
+        values={"name": "Manual"},
+        reason="correct",
+    )
+    queries = Counter()
+
+    def record(conn, cursor, statement, parameters, context, many):
+        queries[context.execution_options.get("etl_craft_query", "other")] += 1
+
+    event.listen(w.engine_db, "before_cursor_execute", record)
+    try:
+        with count_round_trips(w.engine_db) as protected:
+            w.run(
+                "load",
+                **{**params, "SELECT_QUERY": params["SELECT_QUERY"].replace("10 AS", "12 AS")},
+            )
+    finally:
+        event.remove(w.engine_db, "before_cursor_execute", record)
+    assert protected.counts["engine_statements"] == ordinary.counts["engine_statements"] + 2, (
+        queries
+    )
+    assert queries["protection_fenced_read"] == 1
+    assert queries["protection_append_pending"] == 1
+    assert queries["protection_append_final"] == 1
+    assert queries["protection_request"] == 0
+    assert queries["protection_first_pending"] == 0

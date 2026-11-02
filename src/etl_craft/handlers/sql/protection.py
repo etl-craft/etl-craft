@@ -18,7 +18,12 @@ from etl_craft.core.protection_state import RowProtection
 from etl_craft.core.text import sha256_hex
 from etl_craft.dialects.warehouse.merges import matched_merge
 from etl_craft.dialects.warehouse.protection import ProtectionSql, bound_relation
-from etl_craft.handlers.sql.protection_columns import business_columns, contract, fingerprint
+from etl_craft.handlers.sql.protection_columns import (
+    business_columns,
+    contract,
+    fingerprint,
+    type_problems,
+)
 from etl_craft.handlers.sql.session import Session
 from etl_craft.handlers.sql.spec import SqlTask
 from etl_craft.handlers.sql.tables import check_target_audit
@@ -56,6 +61,8 @@ def refuse_legacy(session: Session) -> None:
 def exists(session: Session) -> bool:
     """Detect activated in-row protection without interpreting business values."""
     refuse_legacy(session)
+    if session.protection_active is False:
+        return False
     if "etl_protection" not in {c.lower() for c, _ in session.target_columns()}:
         return False
     row = session.run(
@@ -99,6 +106,10 @@ class Protection:
         """Bind the admitted business shape and typed hash expressions."""
         self.session, self.task = session, task
         columns = tuple(c for c, _ in check_target_audit(session, task.action))
+        if problems := type_problems(
+            session.dialect, session.target, session.hash_types(session.target)
+        ):
+            raise SqlGuardError("; ".join(problems))
         self.business = business_columns(columns)
         names = {c.lower(): c for c in columns}
         self.key_columns = tuple(names[c.lower()] for c in task.merge_key)

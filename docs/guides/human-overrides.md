@@ -155,3 +155,11 @@ cost when choosing protected targets.
 For an existing unprotected merge target from an earlier version, run `etl-craft upgrade-targets`
 to add missing engine-managed columns, then `etl-craft rehash` to initialize fingerprints
 before enabling protection. This path does not convert a target with old protection side tables.
+
+Protection requires a canonical scalar hash for every business column, including columns
+outside `MERGE_COMPARE_COLUMNS`. Ordinary unprotected merges can retain nested columns;
+their whole-row fingerprint stays NULL when a business type cannot be hashed. The first edit,
+lock or upload is refused before writing that target, naming its column and type: cast the
+value to a scalar type in the SELECT. No locked column is omitted from the fingerprint.
+`validate` and pipeline refresh report the same problem earlier for declared columns of
+stewardable merge targets.

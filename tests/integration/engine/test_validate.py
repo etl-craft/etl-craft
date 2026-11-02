@@ -809,3 +809,51 @@ def test_a_pipeline_that_takes_uploads_needs_one_validation_task(project):
         _validated_upload_pipeline(conn, root, validators=0)
     messages = [message for _, _, message in found(validate(engine, config))]
     assert any("FILE_VALIDATION tasks=0 on a pipeline that takes uploads" in m for m in messages)
+
+
+@pytest.mark.parametrize("entrypoint", ["validate", "refresh"])
+def test_stewardable_nested_merge_columns_fail_early_in_validate_and_refresh(project, entrypoint):
+    from etl_craft.core.actor import SYSTEM_ACTOR
+    from etl_craft.core.enums import ActionName, ApiRole, RunStatus
+    from etl_craft.services.operations import OperationContext
+    from fixtures.actions import act
+    from fixtures.metadata import add_source_column
+
+    engine, config, root = project
+    raw = yaml.safe_load(config.config_path.read_text())
+    raw["Artifacts"] = {"Store": (root / "store").as_uri()}
+    config.config_path.write_text(yaml.safe_dump(raw, sort_keys=False))
+    config = load_config(config.config_path)
+    with engine.begin() as conn:
+        pipeline = _validated_upload_pipeline(conn, root)
+        add_task(
+            conn,
+            pipeline,
+            "merge",
+            SQL_ACTION="SCD1_MERGE",
+            TARGET_OBJECT="main.people",
+            SELECT_QUERY="SELECT 1 AS id, 'a' AS name, ARRAY[1,2] AS numbers, 1 AS UPLOAD_ID",
+            MERGE_KEY="id",
+            MERGE_COMPARE_COLUMNS="name",
+            MERGE_DEDUPE_ORDER="UPLOAD_ID ASC",
+        )
+        add_source_column(conn, "main.people", "numbers", "INTEGER[]", 1)
+    if entrypoint == "validate":
+        report = validate(engine, config)
+        assert report.failed
+        messages = [finding.message for finding in report.findings]
+    else:
+        ctx = OperationContext(
+            engine, config, SYSTEM_ACTOR, role=ApiRole.ADMIN, project="default", project_id=1
+        )
+        result = act(ctx, ActionName.PIPELINE_REFRESH).refreshes[0]
+        assert result.status == RunStatus.FAILED
+        messages = [finding.message for finding in result.findings]
+    for part in (
+        "main.people",
+        "numbers",
+        "INTEGER[]",
+        "canonical scalar hash",
+        "cast it to a scalar type in the SELECT",
+    ):
+        assert any(part in message for message in messages), messages

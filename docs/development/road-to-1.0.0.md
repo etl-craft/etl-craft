@@ -1022,6 +1022,20 @@ empty-history-page handling defect, which was corrected and verified. No cloud w
     expiring attempt rows. Retention pins the creating attempt only while its request is
     unresolved; after a final status, normal run-history expiry proceeds and event ids remain.
     Recovery refuses missing creator history rather than treating absence as a terminal state.
+    Owner decision, 2026-11-02, CI follow-up: ordinary SCD merges retain nested columns
+    outside MERGE_COMPARE_COLUMNS; unsupported whole-row fingerprints remain NULL while
+    protection is inactive. First edit, lock or upload refuses unsupported business types
+    before any target write, naming target/column/type and the scalar-cast remedy. Validate
+    and refresh use that same canonical-type check for declared stewardable merge targets.
+    Canonical nested fingerprints are a possible later item, not part of this implementation.
+    Ordinary merges add no warehouse round trips: one fenced Engine DB query detects pending
+    work and established protection. Warehouse recovery reads run only for pending requests.
+    Normal protected merges add only the PENDING and COMMITTED append statements; their
+    fencing checks are part of those statements. Exact budgets remain exact; the PR lists
+    every old/new budget and what its extra query pays for. The real first-upload refusal
+    test also exposed Trino's cancellation/listing race: an exact provider response that the
+    selected query has already finished is accepted, while the common fence still proves
+    that no tagged statement remains running before handing over the target lock.
     Common event persistence/fencing sits in
     the Engine DB layer beneath the services entry point, preserving the import direction.
 

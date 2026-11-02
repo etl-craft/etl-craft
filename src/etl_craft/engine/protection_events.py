@@ -12,7 +12,7 @@ from etl_craft.config import ConnectorConfig
 from etl_craft.core.actor import current_actor
 from etl_craft.core.enums import AttemptStatus
 from etl_craft.core.enums_protection import ProtectionEvidence, ProtectionKind, ProtectionStatus
-from etl_craft.core.errors import PermissionDeniedError, UsageError
+from etl_craft.core.errors import PermissionDeniedError, StaleTransitionError, UsageError
 from etl_craft.core.protection import (
     MAX_PROTECTION_EVENTS,
     ProtectionEvent,
@@ -78,6 +78,37 @@ def read(conn: Connection, target: str, cursor: int = 0) -> ProtectionPage:
     )
 
 
+def fenced_read(
+    conn: Connection, target: str, fencing: dict[str, object], cursor: int = 0
+) -> ProtectionPage:
+    """Check the live attempt/lock and pending work in one Engine DB round trip."""
+    validate_cursor(cursor)
+    rows = (
+        conn.execute(
+            statement(conn, "protection_fenced_read"),
+            {**_scope(target), **fencing, "cursor": cursor, "page_size": MAX_PROTECTION_EVENTS + 1},
+        )
+        .mappings()
+        .all()
+    )
+    where = f"attempt {fencing['attempt_id']}, target {target}"
+    if not rows[0]["live_attempt"]:
+        raise StaleTransitionError(
+            f"{where}: live-attempt/token check failed; stop this writer and obtain a fresh attempt"
+        )
+    if not rows[0]["lock_owned"]:
+        raise StaleTransitionError(
+            f"{where}: target-lock check failed; acquire its live lock before reporting"
+        )
+    events = [row for row in rows if row["event_id"] is not None]
+    result = _records(events[:MAX_PROTECTION_EVENTS])
+    return ProtectionPage(
+        result,
+        result[-1].event_id if len(events) > MAX_PROTECTION_EVENTS else None,
+        bool(rows[0]["protection_active"]),
+    )
+
+
 def history(
     conn: Connection, target: str, key_hash: str, request_id: str | None
 ) -> tuple[ProtectionRecord, ...]:
@@ -119,6 +150,42 @@ def _records(rows: Sequence[RowMapping]) -> tuple[ProtectionRecord, ...]:
         )
         for r in rows
     )
+
+
+def append_fenced(
+    conn: Connection, target: str, report: ProtectionReport, fencing: dict[str, object]
+) -> str | None:
+    """Append ordinary owned outcomes with their fence in the same atomic statement."""
+    report.__post_init__()
+    if report.evidence is not None:
+        return None
+    request = report.request_id or str(uuid4())
+    events = [
+        {
+            "kind": e.kind,
+            "key_hash": e.key_hash,
+            "columns": json.dumps(e.columns),
+            "hashes": json.dumps(e.value_hashes),
+        }
+        for e in report.events
+    ]
+    params = {
+        **_scope(target),
+        **fencing,
+        "request_id": request,
+        "events": json.dumps(events),
+        "continuation": report.request_id is not None,
+        "status": report.status,
+        "actor": current_actor().name,
+        "now": datetime.now(UTC),
+    }
+    name = (
+        "protection_append_pending"
+        if report.status == ProtectionStatus.PENDING
+        else "protection_append_final"
+    )
+    inserted = conn.execute(statement(conn, name), params).all()
+    return request if inserted else None
 
 
 def append(

@@ -71,3 +71,31 @@ def test_uppercase_warehouse_labels_match_canonical_cell_names():
     assert "THEN t.NAME" in stage
     assert "p.column_name IN ('*', 'name')" in prevented
     assert "p.column_name = 'NAME'" not in stage
+
+
+@pytest.mark.parametrize(
+    "kind",
+    [
+        "INTEGER[]",
+        "VARCHAR(20)[]",
+        "TIMESTAMP[]",
+        "INTEGER ARRAY",
+        "ARRAY(INTEGER)",
+        "STRUCT(name VARCHAR)",
+        "DOUBLE",
+    ],
+)
+def test_protection_type_check_names_every_unsupported_business_column(kind):
+    from etl_craft.dialects.warehouse.duckdb import DuckDBWarehouse
+    from etl_craft.handlers.sql.protection_columns import type_problems
+
+    problems = type_problems(DuckDBWarehouse(), "main.people", {"id": "BIGINT", "details": kind})
+    assert len(problems) == 1
+    for part in (
+        "main.people",
+        "details",
+        kind,
+        "canonical scalar hash",
+        "cast it to a scalar type in the SELECT",
+    ):
+        assert part in problems[0]

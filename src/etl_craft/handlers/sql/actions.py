@@ -580,16 +580,8 @@ def _merge_insert_parts(
     if session.protection is not None:
         metadata = ", s.ETL_PROTECTION, s.ETL_ROW_FINGERPRINT, s.ETL_PROTECTION_REQUEST_ID"
     else:
-        types = session.hash_types(session.target)
         session.bindings.setdefault("protection_baseline", "")
-        # The caller supplies the merge contract before constructing its insertion.
-        hashed = session.dialect.hash_expression(
-            [
-                *(f"s.{c}" for c in business),
-                f"CAST(:protection_baseline AS {session.dialect.string_type})",
-            ],
-            [*(types[c] for c in business), "VARCHAR"],
-        )
+        hashed = fingerprint(session, business, "s", ":protection_baseline")
         metadata = f", :protection_baseline, {hashed}, NULL"
     return (
         f"{', '.join(columns)}, PIPELINE_RUN_ID, PIPELINE_ID, TASK_RUN_ID, "

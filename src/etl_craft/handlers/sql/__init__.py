@@ -99,10 +99,7 @@ def run(context: TaskContext, engine_db: Engine | TaskStore) -> HandlerResult:
                 params=context.task_params,
             )
             session.protection_store = store
-            from etl_craft.handlers.protection_recovery import recover
-
-            refuse_legacy(session)
-            recover(session, store)
+            _recover_protection(session, store)
             session.uploads, session.bindings = context.uploads, writer_parameters(context.uploads)
             action = ActionContext(
                 task=task,
@@ -126,6 +123,15 @@ def run(context: TaskContext, engine_db: Engine | TaskStore) -> HandlerResult:
             raise outcome
         _publish(session, store)
     return replace(outcome, offset=session.watermark_to) if task.watermark is not None else outcome
+
+
+def _recover_protection(session: Session, store: TaskStore) -> None:
+    """Share the catalog read with ordinary mutations before inspecting pending work."""
+    from etl_craft.handlers.protection_recovery import recover
+
+    session.prime_target(legacy_names(session))
+    refuse_legacy(session)
+    recover(session, store)
 
 
 def _publish(session: Session, store: TaskStore) -> None:
@@ -160,7 +166,6 @@ def _apply(session: Session, action: ActionContext) -> HandlerResult | SqlGuardE
     task = action.task
     refuse_evidence_target(session)
     try:
-        session.prime_target(legacy_names(session))
         if (
             task.action
             in {
@@ -259,6 +264,7 @@ def _uploaded_merge(session: Session, action: ActionContext) -> HandlerResult:
         protected_rows += guard.prevented_rows
         protected_values += guard.prevented_values
         session.conn.commit()
+
         from etl_craft.handlers.protection_recovery import committed
 
         assert session.protection_store is not None

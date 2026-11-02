@@ -690,3 +690,65 @@ def test_pre15_transactional_fallback_carries_in_row_columns(sql_world, monkeypa
     )
     w.run("load", **params)
     assert current(w)[0]["name"] == "Source"
+
+
+@warehouses("duckdb", "postgres", "trino_iceberg")
+@pytest.mark.parametrize("kind", ["SCD1_MERGE", "SCD2_MERGE"])
+@pytest.mark.parametrize("row_lock", [False, True])
+def test_nested_business_column_refuses_first_edit_or_lock_without_target_writes(
+    sql_world, kind, row_lock
+):
+    from fixtures.single_merge import target_mutations
+
+    w = sql_world
+    ctx, params = prepare(w, kind, compare="name")
+    w.run(
+        "load",
+        **{
+            **params,
+            "SELECT_QUERY": (
+                f"SELECT id,name,amount,ARRAY[1,2] AS numbers FROM {w.name('protected')} WHERE 1=0"
+            ),
+            "SCHEMA_EVOLUTION": "true",
+        },
+    )
+    params = {
+        **params,
+        "SELECT_QUERY": f"SELECT id,CAST('Nested' AS VARCHAR(30)) AS name,amount,numbers "
+        f"FROM {w.name('protected')} WHERE ACTIVE_FLAG='Y'",
+    }
+    w.run("load", **params)
+    before = w.rows(f"SELECT * FROM {w.name('protected')}")
+    assert w.rows(
+        f"SELECT ETL_ROW_FINGERPRINT FROM {w.name('protected')} WHERE ACTIVE_FLAG='Y'"
+    ) == [(None,)]
+    with target_mutations(w, "protected") as statements, pytest.raises(HandlerError) as refusal:
+        act(
+            ctx,
+            ActionName.DATA_EDIT,
+            pipeline_code="P",
+            task_code="load",
+            key={"id": 1},
+            values={"name": "Manual"},
+            row_lock=row_lock,
+            reason="correct",
+        )
+    message = str(refusal.value)
+    for part in (
+        w.name("protected"),
+        "numbers",
+        "type",
+        "canonical scalar hash",
+        "cast it to a scalar type in the SELECT",
+    ):
+        assert part in message, message
+    assert statements == []
+    assert w.rows(f"SELECT * FROM {w.name('protected')}") == before
+    with w.engine_db.connect() as conn:
+        assert conn.execute(text("SELECT COUNT(*) FROM AUD_PROTECTION_EVENTS")).scalar_one() == 0
+    w.run("load", **params)
+    assert w.rows(f"SELECT * FROM {w.name('protected')}") == before
+    act(ctx, ActionName.REHASH, target=w.name("protected"))
+    assert w.rows(
+        f"SELECT ETL_ROW_FINGERPRINT FROM {w.name('protected')} WHERE ACTIVE_FLAG='Y'"
+    ) == [(None,)]

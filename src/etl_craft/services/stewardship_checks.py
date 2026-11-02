@@ -7,10 +7,13 @@ from sqlalchemy.engine import Connection
 from etl_craft.core.enums import DependencyType, Handler, SqlAction, YesNo
 from etl_craft.dialects.engine import for_engine
 from etl_craft.dialects.query_analysis import output_columns
+from etl_craft.engine.protection_events import target_identity
 from etl_craft.engine.queries import statement
+from etl_craft.engine.repository.source_columns import fetch_source_columns
 from etl_craft.engine.repository.validation import ActiveTask, DependencyEdge
 from etl_craft.handlers.registry import TaskContext
 from etl_craft.handlers.sql import task_dialect
+from etl_craft.handlers.sql.protection_columns import type_problems
 from etl_craft.handlers.sql.spec import MERGES, WRITERS, SqlTask
 
 
@@ -66,6 +69,14 @@ def sql_problems(conn: Connection, context: TaskContext, spec: SqlTask) -> list[
     dialect = task_dialect(context)
     where = f"{context.pipeline_code}.{context.task_code}, target {spec.target_object}"
     problems = []
+    if spec.action in MERGES:
+        target = target_identity(context.config, spec.target_object)[0]
+        types = {
+            column.column_name.lower(): column.data_type
+            for column in fetch_source_columns(conn)
+            if target_identity(context.config, column.table_name)[0] == target
+        }
+        problems.extend(type_problems(dialect, spec.target_object, types))
     if spec.action in WRITERS | {SqlAction.DELETE_ROWS}:
         names = output_columns(spec.select_sql or "", dialect=dialect.sqlglot_dialect)
         if names is None or "upload_id" not in {name.lower() for name in names}:

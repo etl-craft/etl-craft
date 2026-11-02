@@ -216,37 +216,33 @@ class LocalTaskStore:
 
     def protection_read(self, target: str, cursor: int = 0) -> ProtectionPage:
         """Share one fenced event-store implementation with the HTTP provider."""
-        from etl_craft.engine.protection_events import read
+        from etl_craft.engine.protection_events import fenced_read
 
         with self.engine.begin() as conn:
-            canonical = self._protection_fence(conn, target)
-            return read(conn, canonical, cursor)
+            canonical, fencing = self._protection_scope(conn, target)
+            return fenced_read(conn, canonical, fencing, cursor)
 
     def protection_event(self, target: str, report: ProtectionReport) -> str:
         """Never append an event for an unfenced target or another live creator."""
-        from etl_craft.engine.protection_events import append
+        from etl_craft.engine.protection_events import append, append_fenced
 
         with self.engine.begin() as conn:
+            canonical, fencing = self._protection_scope(conn, target)
+            if request := append_fenced(conn, canonical, report, fencing):
+                return request
             canonical = self._protection_fence(conn, target)
             from etl_craft.engine.protection_events import target_identity
 
             physical = target_identity(self.config, target)[1]
             return append(conn, canonical, report, self.identity.attempt_id, physical)
 
-    def _protection_fence(self, conn: Connection, target: str) -> str:
+    def _protection_scope(self, conn: Connection, target: str) -> tuple[str, dict[str, object]]:
         from etl_craft.core.errors import PermissionDeniedError
         from etl_craft.engine.protection_events import target_identity
         from etl_craft.engine.repository.tasks import fetch_task_parameters
 
         identity = self.identity
         where = f"attempt {identity.attempt_id}, target {target}"
-        try:
-            self._assert(conn)
-        except StaleTransitionError as error:
-            raise StaleTransitionError(
-                f"{where}: live-attempt/token check failed; stop "
-                "this writer and obtain a fresh attempt"
-            ) from error
         catalog = active_catalog(self.config)
         canonical, physical = target_identity(self.config, target)
         key = locks.target(physical, catalog).key
@@ -268,19 +264,33 @@ class LocalTaskStore:
                     "use only this attempt's admitted target"
                 )
             holder_id, owner = identity.holder_id, identity.owner or ""
+        return canonical, {
+            "attempt_id": identity.attempt_id,
+            "task_run_id": identity.task_run_id,
+            "owner": identity.owner or "",
+            "key": key,
+            "holder": holder_id,
+            "lock_owner": owner,
+        }
+
+    def _protection_fence(self, conn: Connection, target: str) -> str:
+        where = f"attempt {self.identity.attempt_id}, target {target}"
+        try:
+            self._assert(conn)
+        except StaleTransitionError as error:
+            raise StaleTransitionError(
+                f"{where}: live-attempt/token check failed; "
+                "stop this writer and obtain a fresh attempt"
+            ) from error
+        canonical, fencing = self._protection_scope(conn, target)
         owned = conn.execute(
             statement(conn, "resource_lock_owned"),
-            {
-                "key": key,
-                "holder": holder_id,
-                "owner": owner,
-            },
+            {"key": fencing["key"], "holder": fencing["holder"], "owner": fencing["lock_owner"]},
         ).scalar_one_or_none()
         if owned is None:
             raise StaleTransitionError(
                 f"{where}: target-lock check failed; acquire its live lock before reporting"
             )
-
         return canonical
 
     def erasure(self) -> ErasureReport:

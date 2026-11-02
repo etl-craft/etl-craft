@@ -677,6 +677,11 @@ class WarehouseDialect:
         """Render supported scalar values independently of session output formats."""
         kind = kind.upper()
         base = re.split(r"[ (]", kind)[0]
+        if "[" in kind or re.search(r"\bARRAY\b", kind):
+            raise SqlGuardError(
+                f"MERGE_COMPARE_COLUMNS includes {value} ({kind}): unsupported "
+                "canonical type; cast to a scalar type in the SELECT"
+            )
         if base in {"FLOAT", "FLOAT4", "FLOAT8", "DOUBLE", "REAL", "BINARY_FLOAT", "BINARY_DOUBLE"}:
             raise SqlGuardError(
                 f"MERGE_COMPARE_COLUMNS includes {value} ({kind}): floats have no stable text "

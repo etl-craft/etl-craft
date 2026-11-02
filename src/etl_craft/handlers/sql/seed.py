@@ -8,7 +8,7 @@ from etl_craft.core.enums import SqlAction
 from etl_craft.core.protection_state import RowProtection
 from etl_craft.handlers.sql.creation import replace_select
 from etl_craft.handlers.sql.protection import refuse_replacement
-from etl_craft.handlers.sql.protection_columns import business_columns
+from etl_craft.handlers.sql.protection_columns import business_columns, typed_fingerprint
 from etl_craft.handlers.sql.session import Session
 from etl_craft.handlers.sql.tables import AUDIT_COLUMNS, check_column_names, declared_columns
 
@@ -50,9 +50,12 @@ def replace_seed(
         values["ETL_PROTECTION"] = ":protection_baseline"
         business = business_columns(tuple(name for name, _ in columns))
         types = {name.lower(): kind for name, kind in columns}
-        values["ETL_ROW_FINGERPRINT"] = session.dialect.hash_expression(
-            [*business, f"CAST(:protection_baseline AS {session.dialect.string_type})"],
-            [*(types[name] for name in business), "VARCHAR"],
+        values["ETL_ROW_FINGERPRINT"] = typed_fingerprint(
+            session.dialect,
+            session.target,
+            {c: types[c] for c in business},
+            list(business),
+            ":protection_baseline",
         )
         values["HASH_KEY"] = session.dialect.hash_expression(
             list(merge[1]),

@@ -62,6 +62,7 @@ class Session:
         self.task_run_id = task_run_id
         self.params = params
         self.protection: Protection | None = None
+        self.protection_active: bool | None = None
         self.protection_store: TaskStore | None = None
         self.protection_requests: list[str] = []
         self.uploads: tuple[UploadWriter, ...] = ()

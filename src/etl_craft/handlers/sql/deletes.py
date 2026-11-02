@@ -108,7 +108,7 @@ def _hard(session: Session, action: ActionContext, stage: str, count_sql: str) -
 def _soft(session: Session, action: ActionContext, stage: str, count_sql: str) -> int:
     task = action.task
     request = None
-    if "etl_protection_request_id" in {c.lower() for c, _ in session.target_columns()}:
+    if session.protection is not None:
         request = _intent(
             session,
             action,

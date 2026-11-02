@@ -106,6 +106,8 @@ def _statement(session: Session, columns: tuple[str, ...], original: set[str]) -
 def _check(session: Session) -> None:
     business = business_columns(tuple(c for c, _ in session.target_columns()))
     hashed = fingerprint(session, business, "t", "t.ETL_PROTECTION")
+    if hashed == "NULL" and session.protection_active is False:
+        return
     if session.count(
         f"SELECT COUNT(*) FROM {session.target} t WHERE "
         "ETL_PROTECTION IS NOT NULL AND (ETL_ROW_FINGERPRINT "

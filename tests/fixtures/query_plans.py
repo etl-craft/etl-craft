@@ -1,5 +1,6 @@
 """Explain the resolved query catalog with non-NULL, typed representative bindings."""
 
+import json
 import re
 from contextlib import contextmanager, nullcontext
 from datetime import UTC, datetime
@@ -41,6 +42,11 @@ INTEGER_NAMES = frozenset(
 MOMENT = datetime(2026, 1, 1, tzinfo=UTC)
 VALUES = {
     "all_entries": False,
+    "lock_owner": "plan-owner",
+    "continuation": False,
+    "events": json.dumps(
+        [{"kind": "WRITE", "key_hash": "a" * 32, "columns": '["id"]', "hashes": "[null]"}]
+    ),
     "subject_key": "private-test-value",
     "key_hmac": "a" * 64,
     "after_ended": datetime(1970, 1, 1, tzinfo=UTC),
