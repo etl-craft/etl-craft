@@ -14,7 +14,9 @@ from etl_craft.handlers.sql.tables import ENGINE_COLUMNS
 def business_columns(columns: list[str] | tuple[str, ...]) -> tuple[str, ...]:
     """Exclude engine-owned fields from the admitted business shape."""
     return tuple(
-        c.lower() for c in columns if c.lower() not in ENGINE_COLUMNS and c.lower() != "upload_id"
+        c.lower()
+        for c in columns
+        if c.lower() not in ENGINE_COLUMNS and c.lower() not in {"upload_id", "locked"}
     )
 
 

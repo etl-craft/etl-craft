@@ -119,6 +119,7 @@ class Protection:
         self.prevented_rows = self.prevented_values = 0
         self.row_lock = False
         self.business_changes = False
+        self.mutating_rows = 0
         self.request: ProtectionRequest | None = None
         self.request_id: str | None = None
         self.state_table = session.scratch("lock_state")
@@ -136,6 +137,7 @@ class Protection:
             {c: hashed((c,)) for c in self.business},
             fingerprint(session, self.business, "t", "t.ETL_PROTECTION"),
         )
+        self.unlocking: set[str] = set()
         self.activating = False
         self.enabled = False
         self.loaded = False
@@ -240,20 +242,26 @@ class Protection:
             (column, s.dialect.string_type if kind == "VARCHAR" else kind)
             for column, kind in columns
         )
-        empty = ", ".join(f"CAST(NULL AS {kind}) AS {column}" for column, kind in columns)
-        name = s.create_scratch(
-            name, f"SELECT {empty} WHERE 1=0", step="stage bounded protection metadata"
-        )
+        if not rows:
+            empty = ", ".join(f"CAST(NULL AS {kind}) AS {column}" for column, kind in columns)
+            return s.create_scratch(
+                name, f"SELECT {empty} WHERE 1=0", step="stage bounded protection metadata"
+            )
         for start in range(0, len(rows), 64):
             batch = rows[start : start + 64]
             params = {
                 f"v_{i}_{j}": value for i, row in enumerate(batch) for j, value in enumerate(row)
             }
-            s.run(
-                f"INSERT INTO {name} {bound_relation(columns, len(batch))}",
-                params,
-                step="bind protection metadata",
-            )
+            body = bound_relation(columns, len(batch))
+            if start == 0:
+                previous = s.bindings
+                s.bindings = previous | params
+                try:
+                    name = s.create_scratch(name, body, step="stage bounded protection metadata")
+                finally:
+                    s.bindings = previous
+            else:
+                s.run(f"INSERT INTO {name} {body}", params, step="bind protection metadata")
         return name
 
     def stage(self, stage: str, *, delete: bool = False) -> str:
@@ -292,12 +300,19 @@ class Protection:
         same = condition.replace("t.", "p.").replace("s.", "t.")
         selected = (
             "TRUE"
-            if self.row_lock or self.activating
+            if self.row_lock
+            or self.activating
+            or (
+                self.request is not None
+                and self.request.upload_id is not None
+                and self.request.actor.kind == ActorKind.USER
+            )
             else f"NOT EXISTS (SELECT 1 FROM {s.target} p WHERE {key}{active} AND NOT ({same}))"
         )
+        locked = "t.LOCKED" if "locked" in {c.lower() for c, _ in s.columns(stage)} else "NULL"
         return (
             s.run(
-                f"SELECT {self.sql.key_hash} AS key_hash{cells},NOT "
+                f"SELECT {self.sql.key_hash} AS key_hash,{locked} AS upload_locked{cells},NOT "
                 f"EXISTS (SELECT 1 FROM {s.target} p WHERE {key}{active} "
                 f"AND NOT ({same})) AS mutating FROM {stage} t WHERE "
                 f"{selected}",
@@ -312,65 +327,9 @@ class Protection:
         if not self.loaded:
             self._load(stage)
         incoming = self._incoming(stage, condition)
-        changed: dict[str, dict[str, str]] = {}
-        events = []
-        for row in incoming:
-            key = str(row["key_hash"])
-            hashes = {c: str(row[f"cell_{i}"]) for i, c in enumerate(self.business)}
-            old = self.states.get(key)
-            names = tuple(
-                c for c, h in hashes.items() if old is None or old.cells[c].get("value_hash") != h
-            )
-            if (
-                names
-                or row["mutating"]
-                or self.activating
-                or (request.actor.kind == ActorKind.USER and (old is None or self.row_lock))
-            ):
-                events.append(
-                    ProtectionEvent(
-                        ProtectionKind.KEY,
-                        key,
-                        self.key_columns,
-                        tuple(hashes.get(c.lower()) for c in self.key_columns),
-                    )
-                )
-            if names:
-                changed[key] = hashes
-                kind = (
-                    ProtectionKind.LOCK
-                    if request.actor.kind == ActorKind.USER
-                    else ProtectionKind.WRITE
-                )
-                events.append(ProtectionEvent(kind, key, names, tuple(hashes[c] for c in names)))
-            if not names and self.activating and not row["mutating"]:
-                changed[key] = hashes
-                events.append(
-                    ProtectionEvent(
-                        ProtectionKind.ENABLE,
-                        key,
-                        self.key_columns,
-                        (None,) * len(self.key_columns),
-                    )
-                )
-            if not names and row["mutating"]:
-                changed[key] = hashes
-                events.append(
-                    ProtectionEvent(
-                        ProtectionKind.VERSION,
-                        key,
-                        self.key_columns,
-                        (None,) * len(self.key_columns),
-                    )
-                )
-            if request.actor.kind == ActorKind.USER and (old is None or self.row_lock):
-                changed[key] = hashes
-                events.append(ProtectionEvent(ProtectionKind.LOCK, key, ("*",), (None,)))
-        self.business_changes = any(
-            e.kind in {ProtectionKind.LOCK, ProtectionKind.WRITE, ProtectionKind.VERSION}
-            and e.columns != ("*",)
-            for e in events
-        )
+        from etl_craft.handlers.sql.protection_events import plan
+
+        events, changed = plan(self, incoming, request)
         if events:
             self.request_id = self.pending(events)
         return self._stage_metadata(stage, incoming, changed, request)
@@ -389,11 +348,18 @@ class Protection:
             state = self.states.get(key) or RowProtection(self.contract)
             if key in changed:
                 assert self.request_id is not None
+                operation = replace(request, request_id=self.request_id)
+                if key in self.unlocking:
+                    operation = replace(
+                        operation, reason=f"upload {request.upload_id}: LOCKED=false"
+                    )
+                    state.unlocked((), operation)
                 state.changed(
                     changed[key],
-                    replace(request, request_id=self.request_id),
+                    operation,
                     inserted=key not in self.states,
                     row_lock=self.row_lock,
+                    locked=key not in self.unlocking,
                 )
             metadata.append(
                 (key, state.encoded(), self.request_id if key in changed else self.stamps.get(key))
@@ -422,7 +388,13 @@ class Protection:
 
         store = self.session.protection_store
         assert store is not None
-        request = pending(store, self.session.target, events, self.session.protection_requests)
+        request = pending(
+            store,
+            self.session.target,
+            events,
+            self.session.protection_requests,
+            self.request.upload_id if self.request else None,
+        )
         assert request is not None
         return request
 
@@ -487,17 +459,7 @@ class Protection:
                 for start in range(0, len(names), MAX_PROTECTION_COLUMNS)
             ]
         )
-        state.revision += 1
-        for column in names:
-            state.cells[column].update(
-                locked=False,
-                actor=request.actor.name,
-                actor_kind=request.actor.kind,
-                happened_at=request.now.isoformat(),
-                request_id=self.request_id,
-                reason=request.reason,
-                revision=state.revision,
-            )
+        state.unlocked(columns, replace(request, request_id=self.request_id))
         s = self.session
         table = self._table(
             s.scratch("unlocked"),

@@ -64,16 +64,19 @@ def sql_problems(conn: Connection, context: TaskContext, spec: SqlTask) -> list[
     pipeline = conn.execute(
         statement(conn, "stewardship_pipeline"), {"pipeline_id": context.pipeline_id}
     ).one()
+    definitions = fetch_source_columns(conn) if spec.action in MERGES else []
+    from etl_craft.services.upload_columns import problems as control_problems
+
+    problems = control_problems(context, spec, definitions) if spec.action in MERGES else []
     if pipeline.stewardable_flag != YesNo.YES:
-        return []
+        return problems
     dialect = task_dialect(context)
     where = f"{context.pipeline_code}.{context.task_code}, target {spec.target_object}"
-    problems = []
     if spec.action in MERGES:
         target = target_identity(context.config, spec.target_object)[0]
         types = {
             column.column_name.lower(): column.data_type
-            for column in fetch_source_columns(conn)
+            for column in definitions
             if target_identity(context.config, column.table_name)[0] == target
         }
         problems.extend(type_problems(dialect, spec.target_object, types))

@@ -7,7 +7,7 @@ import csv
 import importlib
 import struct
 import zipfile
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from types import ModuleType
@@ -30,8 +30,23 @@ class UploadReader:
     encoding: str = "utf-8"
     sheet_name: str = ""
 
-    def rows(self) -> Iterator[tuple[object, ...]]:
-        """Yield text fields or saved workbook values without loading a whole file."""
+    def rows(
+        self, schema: Mapping[str, type[object]] | None = None
+    ) -> Iterator[tuple[object, ...]]:
+        """Yield the header and rows, optionally checking ``schema={"LOCKED": bool}``.
+
+        CSV booleans are trimmed, case-insensitive true/false; empty means None.
+        XLSX requires native boolean cells or empty cells. Missing schema columns are
+        optional. Other values fail with the upload, row, column and remedy. Only bool
+        schemas are supported; without a schema, values retain their original types.
+        """
+        if schema is not None:
+            yield from self._typed_rows(schema)
+            return
+        yield from self._raw_rows()
+
+    def _raw_rows(self) -> Iterator[tuple[object, ...]]:
+        """Keep text fields and workbook values unchanged without an explicit schema."""
         if self.file_format == UploadFormat.XLSX:
             yield from self._workbook()
         else:
@@ -46,6 +61,47 @@ class UploadReader:
                     f"{self.encoding} pipe-delimited text ({error}); expected RFC 4180 "
                     "quoting with | separators; upload a corrected file"
                 ) from error
+
+    def _typed_rows(self, schema: Mapping[str, type[object]]) -> Iterator[tuple[object, ...]]:
+        if any(kind is not bool for kind in schema.values()):
+            raise HandlerError(
+                f"upload {self.upload.upload_id}: schema={schema!r}; expected bool fields only; "
+                "declare boolean columns with bool and validate other types in the script"
+            )
+        rows = self._raw_rows()
+        header = next(rows, None)
+        if header is None:
+            return
+        positions = {i: str(name) for i, name in enumerate(header) if name in schema}
+        yield header
+        for number, row in enumerate(rows, 2):
+            values = list(row)
+            for index, column in positions.items():
+                if self.file_format == UploadFormat.XLSX and index >= len(values):
+                    values.extend([None] * (index + 1 - len(values)))
+                if index < len(values):
+                    values[index] = self._boolean(values[index], number, column)
+            yield tuple(values)
+
+    def _boolean(self, value: object, number: int, column: str) -> bool | None:
+        if value is None or isinstance(value, bool):
+            return value
+        if self.file_format != UploadFormat.XLSX and isinstance(value, str):
+            text = value.strip().lower()
+            if text == "":
+                return None
+            if text in {"true", "false"}:
+                return text == "true"
+        allowed = (
+            "boolean cells or empty (NULL)"
+            if self.file_format == UploadFormat.XLSX
+            else "true, false (case-insensitive), or empty (NULL)"
+        )
+        raise HandlerError(
+            f"upload {self.upload.upload_id} {self.upload.file_name!r}, row {number}, "
+            f"column {column}: value={value!r}; expected {allowed}; "
+            "correct the boolean value and upload a corrected file"
+        )
 
     def _workbook(self) -> Iterator[tuple[object, ...]]:
         excel = _excel(self.upload)

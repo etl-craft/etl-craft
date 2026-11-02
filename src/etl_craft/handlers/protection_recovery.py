@@ -124,7 +124,11 @@ def committed(store: TaskStore, target: str, requests: list[str]) -> None:
 
 
 def pending(
-    store: TaskStore, target: str, events: Iterable[ProtectionEvent], requests: list[str]
+    store: TaskStore,
+    target: str,
+    events: Iterable[ProtectionEvent],
+    requests: list[str],
+    upload_id: int | None = None,
 ) -> str | None:
     """Durably stage all bounded hash batches before permitting a warehouse mutation."""
     from itertools import islice
@@ -139,6 +143,7 @@ def pending(
                 ProtectionStatus.PENDING,
                 batch,
                 request,
+                upload_id=upload_id,
             ),
         )
     if request is not None:

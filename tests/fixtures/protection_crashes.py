@@ -27,7 +27,7 @@ def mutate(config, kind, target, point, context=None):
 
         with acting_as(ctx.actor):
             apply_entries(engine, config, (ErasureEntry(target, "id", "1", "a" * 64),))
-    elif kind in {"hard_delete", "upload", "reload"}:
+    elif kind in {"hard_delete", "reload"}:
         from contextlib import nullcontext
 
         from etl_craft.core.actor import acting_as

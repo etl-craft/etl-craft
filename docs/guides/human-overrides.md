@@ -45,10 +45,11 @@ curl --fail-with-body "$SERVER/api/v1/values/unlock" \
   -d '{"pipeline_code":"SALES","task_code":"customers","key":{"customer_id":42},"columns":["name"],"reason":"Return ownership to the feed"}'
 ```
 
-Edits and unlocks require admin. Provenance reads require viewer. Service accounts with admin
+These edit and unlock endpoints require admin. Provenance reads require viewer. Service accounts with admin
 may use the write endpoint for automated integrations, with their own identity and no automatic
-locks; only USER admins may request a row lock or unlock. Scoped stewardship permissions and
-file uploads are separate features.
+locks; only USER admins may request a row lock or unlock through these endpoints. A permitted
+USER steward can also release row and value locks through an upload with `LOCKED=FALSE`;
+[stewardship permissions](stewardship.md) govern those files.
 
 Supply exactly the non-NULL key columns. Key and engine-managed columns cannot be edited.
 An insert supplies every business column; an update retains omitted columns. Values are bound
@@ -62,7 +63,8 @@ state, request ID, current per-column records and at most 100 recent events for 
 `writer`/`writer_kind` describe the value's writer; `actor` describes the event's requester,
 including an unlock. Pre-existing values have an explicitly unknown writer (`null`); actor
 strings on the business table are never interpreted as proof. An untracked target returns
-`enabled: false`. Evidence remains readable by key after deletion.
+`enabled: false`. Evidence remains readable by key after deletion. Upload history includes the
+verified `upload_id` and a derived `reason`, including `upload <id>: LOCKED=false` for releases.
 
 ## Python service
 
@@ -163,3 +165,8 @@ lock or upload is refused before writing that target, naming its column and type
 value to a scalar type in the SELECT. No locked column is omitted from the fingerprint.
 `validate` and pipeline refresh report the same problem earlier for declared columns of
 stewardable merge targets.
+
+Stewards can also release an existing row lock and all value locks through a USER upload row
+with optional BOOLEAN `LOCKED=FALSE`. Its uploaded values still belong to that uploader.
+TRUE, NULL or an absent column locks as usual; service-account uploads never release locks.
+See [stewardship](stewardship.md) for file validation and landing requirements.

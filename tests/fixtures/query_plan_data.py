@@ -15,19 +15,6 @@ DAY = f"({STAMP}+(d-1)*INTERVAL '1 day')"
 # Every run has its own task/attempt identity; completed days dominate the live working set.
 SEEDS = [
     (
-        "AUD_PROTECTION_EVENTS",
-        "PROJECT_ID,TARGET_ID,REQUEST_ID,ATTEMPT_ID,KIND,KEY_HASH,COLUMN_NAMES,VALUE_HASHES,STATUS,CREATED_BY,CREATED_AT",
-        """1,'"warehouse"."plan"."table_'||p||'"',"""
-        "'00000000-0000-0000-0000-'||lpad((p*10+d)::text,12,'0'),"
-        "CASE WHEN p%2=0 THEN NULL ELSE ((p-1)*:days+d-1)*:tasks+1 END,'KEY',"
-        "CASE WHEN s=1 THEN repeat('a',32) END,"
-        """CASE WHEN s=1 THEN '["id"]' ELSE '[]' END,"""
-        """CASE WHEN s=1 THEN '["'||repeat('b',32)||'"]' ELSE '[]' END,"""
-        f"CASE WHEN s=1 THEN 'PENDING' ELSE 'COMMITTED' END,'plan',{STAMP}",
-        "generate_series(1,:pipelines) p CROSS JOIN generate_series(1,10) d "
-        "CROSS JOIN generate_series(1,2) s WHERE d<10 OR s=1 ORDER BY d,p,s",
-    ),
-    (
         "AUD_ERASURE_SUBJECTS",
         "PROJECT_ID,TABLE_NAME,COLUMN_NAME,SUBJECT_KEY,KEY_HMAC,ACTIVE_FLAG,REASON,"
         "CREATED_BY,CREATED_AT,LIFTED_BY,LIFTED_AT,LIFT_REASON",
@@ -214,6 +201,19 @@ SEEDS = [
         "PIPELINE_ID,ACCOUNT,FILE_NAME,STORED_NAME,SHA256,SIZE_BYTES,PIPELINE_RUN_ID,STATUS,UPLOADED_AT,TAKEN_AT,ENDED_AT",
         f"p,'plan','plan.csv','1-plan.csv',md5({RUN_ID}::text)||md5(p::text),1,{RUN_ID},'LOADED',{DAY},{DAY},{DAY}",
         RUNS,
+    ),
+    (
+        "AUD_PROTECTION_EVENTS",
+        "PROJECT_ID,TARGET_ID,REQUEST_ID,ATTEMPT_ID,KIND,KEY_HASH,COLUMN_NAMES,VALUE_HASHES,STATUS,CREATED_BY,CREATED_AT,UPLOAD_ID",
+        """1,'"warehouse"."plan"."table_'||p||'"',"""
+        "'00000000-0000-0000-0000-'||lpad((p*10+d)::text,12,'0'),"
+        "CASE WHEN p%2=0 THEN NULL ELSE ((p-1)*:days+d-1)*:tasks+1 END,'KEY',"
+        "CASE WHEN s=1 THEN repeat('a',32) END,"
+        """CASE WHEN s=1 THEN '["id"]' ELSE '[]' END,"""
+        """CASE WHEN s=1 THEN '["'||repeat('b',32)||'"]' ELSE '[]' END,"""
+        f"CASE WHEN s=1 THEN 'PENDING' ELSE 'COMMITTED' END,'plan',{STAMP},((p-1)*:days+d)",
+        "generate_series(1,:pipelines) p CROSS JOIN generate_series(1,10) d "
+        "CROSS JOIN generate_series(1,2) s WHERE d<10 OR s=1 ORDER BY d,p,s",
     ),
     (
         "AUD_CONTROL_REQUESTS",

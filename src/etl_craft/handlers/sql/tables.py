@@ -137,12 +137,17 @@ def _plain(name: str) -> str:
 
 def create_target_shape(session: Session, stage: str, audit_columns: tuple[str, ...]) -> None:
     """Create the target, empty: the stage's columns, ``PIPELINE_RUN_ID``, ``audit_columns``."""
+    columns = [
+        name
+        for name, _ in session.columns(stage)
+        if name.lower() != "locked" or "ETL_PROTECTION" not in audit_columns
+    ]
     if session.dialect.identity_in_create:
         types = session.column_types(stage)
-        business = [(name, types[name.lower()]) for name, _ in session.columns(stage)]
+        business = [(name, types[name.lower()]) for name in columns]
         create_declared_target(session, business, audit_columns)
         return
-    parts = [f"s.{name}" for name, _ in session.columns(stage)]
+    parts = [f"s.{name}" for name in columns]
     parts.append("CAST(NULL AS BIGINT) AS PIPELINE_RUN_ID")
     parts.extend(
         f"CAST(NULL AS {session.dialect.audit_column_type(column)}) AS {column}"
@@ -188,7 +193,11 @@ def declared_columns(
 ) -> dict[str, str]:
     """Declare business and managed columns for setup targets and seed replacements."""
     return (
-        dict(business)
+        {
+            name: kind
+            for name, kind in business
+            if name.lower() != "locked" or "ETL_PROTECTION" not in audit
+        }
         | {"PIPELINE_RUN_ID": "BIGINT"}
         | {name: session.dialect.audit_column_type(name) for name in audit}
     )
@@ -256,6 +265,11 @@ def check_target_audit(session: Session, action: str) -> list[tuple[str, str]]:
     """Refuse an absent target or missing action-managed columns before any write."""
     audit = audit_columns(session, action)
     target_columns = require_target(session)
+    if action in {SqlAction.SCD1_MERGE, SqlAction.SCD2_MERGE}:
+        from etl_craft.handlers.sql.upload_controls import target_problem
+
+        if problem := target_problem(session.target, dict(target_columns)):
+            raise SqlGuardError(problem)
     required = ("PIPELINE_RUN_ID", *audit)
     have = {name.lower() for name, _ in target_columns}
     missing_audit = [column for column in required if column.lower() not in have]
@@ -278,7 +292,12 @@ def check_or_evolve(session: Session, stage: str, action: str, *, schema_evoluti
     required = ("PIPELINE_RUN_ID", *audit_columns(session, action))
     managed = {column.lower() for column in required} | {ROW_ID_COLUMN.lower()}
     stage_columns = [
-        (name, kind) for name, kind in session.columns(stage) if name.upper() != "HASH_KEY"
+        (name, kind)
+        for name, kind in session.columns(stage)
+        if name.upper() != "HASH_KEY"
+        and not (
+            action in {SqlAction.SCD1_MERGE, SqlAction.SCD2_MERGE} and name.lower() == "locked"
+        )
     ]
     stage_names = [name for name, _ in stage_columns]
     stage_set = {name.lower() for name in stage_names}

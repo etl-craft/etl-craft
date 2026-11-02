@@ -214,3 +214,9 @@ with an event-id cursor; callers follow every page. Both task stores use these s
 and the same fenced event implementation. Recovery runs where warehouse access exists,
 including agents, before mutation and on provenance reads. Controller startup logs an
 inaccessible project once and defers its recovery until the next mutation.
+
+Upload-caused PENDING protection reports carry the receipt's `upload_id` as a claim. The server
+verifies it against the attempt's run and the successful pinned FILE_VALIDATION task before
+storing it; it derives the uploader from AUD_UPLOADS. Upload writes and LOCKED=false UNLOCK
+intents share that id. Finalization and recovery retain the original verified id; callers
+cannot replace it. Non-upload mutation kinds must omit it. No raw business value is accepted.

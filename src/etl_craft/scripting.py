@@ -26,6 +26,14 @@ which the engine records as the task's source, target and insert counts, and, wh
 the new offset, which the engine stores for the next run. A script that needs neither the offset
 nor ``INPUT_PARAMS`` may define ``run()`` without a parameter. Everything it prints or logs goes
 to the task attempt's log.
+
+Stewardship validation and loading scripts use ``UploadReader.rows(schema={"LOCKED": bool})``
+to check an optional boolean file column. CSV accepts trimmed, case-insensitive true/false or
+empty NULL; XLSX accepts native boolean cells or empty NULL. Values become bool or None,
+while headers and other columns stay unchanged. Invalid cells name the upload, row, column,
+value, allowed values and remedy. Only bool schemas are supported; omitting schema keeps raw
+values. Carry LOCKED into a BOOLEAN landing column and select it explicitly beside UPLOAD_ID;
+it controls USER locks and is never stored as a merge target's business column.
 """
 
 from __future__ import annotations

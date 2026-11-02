@@ -217,6 +217,9 @@ def bindings(sql, name=""):
             "kind": "KEY",
             "status": "PENDING",
             "recovering_attempt": 1,
+            "upload_id": 1,
+            "validator_id": 1,
+            "pipeline_run_id": 1,
             "recovery_actor": "plan",
         }
         if name == "protection_insert":

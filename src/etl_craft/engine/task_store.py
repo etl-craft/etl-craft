@@ -264,9 +264,22 @@ class LocalTaskStore:
                     "use only this attempt's admitted target"
                 )
             holder_id, owner = identity.holder_id, identity.owner or ""
+        validators = (
+            [
+                row["task_id"]
+                for row in self.definition.rows["CFG_TASKS"]
+                if row["pipeline_id"] == identity.pipeline_id
+                and row["handler"] == Handler.FILE_VALIDATION
+                and row["active_flag"] == YesNo.YES
+            ]
+            if self.definition is not None
+            else []
+        )
         return canonical, {
             "attempt_id": identity.attempt_id,
             "task_run_id": identity.task_run_id,
+            "pipeline_run_id": identity.pipeline_run_id,
+            "validator_id": validators[0] if len(validators) == 1 else None,
             "owner": identity.owner or "",
             "key": key,
             "holder": holder_id,

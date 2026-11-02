@@ -371,8 +371,8 @@ and `info.data_dictionary`. `prepare.py metadata` publishes the project and appl
 files before refreshing the pipelines. The support-area SQL literal loader and the agent setup task are replaced by seed files. The dictionary keeps its source id, field name, allowed values, description and
 example; declared SQL types belong in column metadata.
 
-On the demo's native DuckDB warehouse (or native PostgreSQL), add the optional stewardship
-pipelines after loading the main metadata:
+Add the optional stewardship pipelines on the demo's configured warehouse after loading
+the main metadata:
 
 ```bash
 python prepare.py metadata metadata/seed_stewardship.sql
@@ -401,3 +401,10 @@ register the first managed table and identifier column. Preview the tables and c
 applying. Place an `ERASURE` task after relevant loads to delete identifiers a source resends.
 The demo does not set an erasure secret or register real people. External source systems stay
 under the source team's control; expression and unmanaged lineage boundaries need further entries.
+
+Reference stewardship files may append optional `LOCKED` to their pipe-delimited header.
+Use true/false (case-insensitive) or empty NULL. The sample validator checks it with
+`rows(schema={"LOCKED": bool})`; the loader retains it as BOOLEAN in landing and the merge
+SELECT carries it explicitly. FALSE writes without locking and releases existing row and
+value locks on that key. TRUE, NULL or absence locks as before. Service uploads do not release
+locks. The control never becomes a column of the stewarded target.

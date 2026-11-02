@@ -1,7 +1,8 @@
 SELECT e.EVENT_ID AS event_id,e.REQUEST_ID AS request_id,e.ATTEMPT_ID AS attempt_id,
  e.KIND AS kind,e.KEY_HASH AS key_hash,e.COLUMN_NAMES AS column_names,e.VALUE_HASHES AS value_hashes,
  e.STATUS AS status,e.CREATED_BY AS created_by,e.CREATED_AT AS created_at,
- e.RECOVERING_ATTEMPT_ID AS recovering_attempt_id,e.RECOVERY_ACTOR AS recovery_actor FROM AUD_PROTECTION_EVENTS e
+ e.RECOVERING_ATTEMPT_ID AS recovering_attempt_id,e.RECOVERY_ACTOR AS recovery_actor,e.UPLOAD_ID AS upload_id,u.ACCOUNT AS uploader
+FROM AUD_PROTECTION_EVENTS e LEFT JOIN AUD_UPLOADS u ON u.UPLOAD_ID=e.UPLOAD_ID
 WHERE e.PROJECT_ID=:project_id AND e.TARGET_ID=:target AND e.STATUS='PENDING'
  AND e.EVENT_ID>=COALESCE((SELECT p.EVENT_ID FROM AUD_PROTECTION_EVENTS p
  WHERE p.PROJECT_ID=:project_id AND p.TARGET_ID=:target AND p.REQUEST_ID=(

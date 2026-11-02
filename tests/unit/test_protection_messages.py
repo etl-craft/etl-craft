@@ -99,3 +99,19 @@ def test_protection_type_check_names_every_unsupported_business_column(kind):
         "cast it to a scalar type in the SELECT",
     ):
         assert part in problems[0]
+
+
+@pytest.mark.parametrize("upload_id", [0, -1, True, 2**63, "raw-value"])
+def test_upload_event_identity_must_be_a_positive_bounded_integer(upload_id):
+    event = ProtectionEvent(ProtectionKind.UNLOCK, "a" * 32, ("name",), ("b" * 32,))
+    with pytest.raises(UsageError, match="accepted upload identity"):
+        ProtectionReport(ProtectionStatus.PENDING, (event,), upload_id=upload_id)
+
+
+@pytest.mark.parametrize(
+    "kind", [ProtectionKind.REHASH, ProtectionKind.HARD_DELETE, ProtectionKind.ERASURE]
+)
+def test_engine_mutation_cannot_claim_upload_provenance(kind):
+    event = ProtectionEvent(kind, "a" * 32, ("name",), ("b" * 32,))
+    with pytest.raises(UsageError, match="non-upload event kind"):
+        ProtectionReport(ProtectionStatus.PENDING, (event,), upload_id=42)

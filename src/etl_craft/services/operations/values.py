@@ -10,6 +10,7 @@ from typing import ClassVar
 
 from etl_craft.config.targets import active_catalog
 from etl_craft.core.enums import ActionName, ActorKind, Handler
+from etl_craft.core.enums_protection import ProtectionKind
 from etl_craft.core.errors import PermissionDeniedError, SqlGuardError, UsageError
 from etl_craft.core.governance import check_reason
 from etl_craft.core.time import as_utc
@@ -278,7 +279,15 @@ def _result(
                     "column_name": column,
                     "value_hash": hashed,
                     "event_kind": event.kind,
-                    "actor": record.created_by,
+                    "actor": record.uploader or record.created_by,
+                    "upload_id": record.upload_id,
+                    "reason": (
+                        f"upload {record.upload_id}: LOCKED=false"
+                        if record.upload_id is not None and event.kind == ProtectionKind.UNLOCK
+                        else f"upload {record.upload_id}"
+                        if record.upload_id is not None
+                        else None
+                    ),
                     "happened_at": as_utc(record.created_at),
                     "request_id": record.request_id,
                     "revision": record.event_id,

@@ -68,6 +68,13 @@ All notable changes are recorded here. The format follows
 
 ### Changed
 
+- Stewardship uploads accept optional BOOLEAN `LOCKED`: FALSE releases the key's row and value
+  locks while writing values; TRUE, NULL or absent locks as before. `UploadReader.rows(schema=...)`
+  validates boolean file columns. Protection events retain server-verified `UPLOAD_ID`, and
+  provenance reports upload attribution and derived unlock reasons. Managed merges reserve
+  `LOCKED`: validate/refresh refuse a target business column with that name or a nonboolean
+  staged control, naming the rename or CAST remedy.
+
 - Stewardable merge targets with a business type lacking a canonical scalar hash are refused
   by validate, refresh and first protection activation, with the target/column/type and scalar
   cast remedy. Ordinary nested-column merges remain supported with an inactive NULL row
@@ -809,13 +816,6 @@ All notable changes are recorded here. The format follows
   Migration `0037` adds `AUD_PIPELINES_RUN_LOG.TASK_SELECTION` and `EXCLUSIVE_RUN` on both
   Engine DBs. Run JSON adds `selected_task_ids`, `ignore_dependencies` and `exclusive_run`.
 
-- Shared SCD value edit, provenance and unlock services and HTTP routes under
-  `/api/v1/pipelines/{code}/tasks/{task}/values`. Human admin inserts protect their row;
-  edits protect changed values. ETL and authenticated service integrations respect those
-  locks, with effective hashes/counts and independent column attribution. Only human admins
-  may unlock. Native PostgreSQL and DuckDB commit data and warehouse-side evidence together;
-  other warehouses refuse protected edits. Unobserved writes and replacement paths fail
-  explicitly. No Engine DB migration or new dependency is required.
 
 - A local installation operates a server: `--server https://<host>` (or `ETL_CRAFT_SERVER`)
   sends `status`, `explain`, `history`, `logs`, `whoami`, `run` (a run, `--backfill` or

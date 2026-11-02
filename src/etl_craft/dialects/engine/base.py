@@ -217,6 +217,7 @@ class EngineDialect(ABC):
             "protection_activation",
             "protection_request",
             "protection_first_pending",
+            "protection_verified_upload",
         ):
             marker = "{{" + fragment + "}}"
             if marker in sql:

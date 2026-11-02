@@ -16,17 +16,23 @@ def run(task):
         conn.execute(
             text(
                 f"CREATE TABLE IF NOT EXISTS {target} "
-                f"({', '.join(column + ' VARCHAR(100)' for column in columns)},UPLOAD_ID BIGINT)"
+                f"({', '.join(column + ' VARCHAR(100)' for column in columns)},"
+                "UPLOAD_ID BIGINT,LOCKED BOOLEAN)"
             )
         )
         conn.execute(text(f"DELETE FROM {target}"))
         for upload in task.uploads:
-            rows = UploadReader(upload, "CSV").rows()
-            next(rows)
+            rows = UploadReader(upload, "CSV").rows(schema={"LOCKED": bool})
+            header = next(rows)
             for row in rows:
+                values = dict(zip(header, row, strict=True))
+                locked = values.pop("LOCKED", None)
                 conn.execute(
-                    text(f"INSERT INTO {target} ({names},UPLOAD_ID) VALUES ({bindings},:upload)"),
-                    dict(zip(columns, row, strict=True)) | {"upload": upload.upload_id},
+                    text(
+                        f"INSERT INTO {target} ({names},UPLOAD_ID,LOCKED) "
+                        f"VALUES ({bindings},:upload,:locked)"
+                    ),
+                    values | {"upload": upload.upload_id, "locked": locked},
                 )
                 written += 1
     return ScriptResult(row_count=written)

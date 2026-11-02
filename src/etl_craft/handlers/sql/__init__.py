@@ -248,7 +248,11 @@ def _uploaded_merge(session: Session, action: ActionContext) -> HandlerResult:
             guard.check()
             session.protection = guard
         guard.request = ProtectionRequest(
-            Actor(upload.account, upload.actor_kind), f"upload {upload.upload_id}", "", action.now
+            Actor(upload.account, upload.actor_kind),
+            f"upload {upload.upload_id}",
+            "",
+            action.now,
+            upload.upload_id,
         )
         results.append(
             ACTIONS[action.task.action](

@@ -967,6 +967,10 @@ empty-history-page handling defect, which was corrected and verified. No cloud w
   uppercase-column lock comparison was corrected after its first run exposed it. Full cloud
   format/provider acceptance remains slice 3, with no local warehouse omitted. The Support
   Insights reference seeds hand over to the real stewardship pipelines and then report LOCKED.
+  Optional LOCKED controls passed real API/CLI uploads on all four local warehouses, including
+  same-value releases/relocks and mixed-row SCD counts; received-upload crash recovery passed
+  every boundary on both Engine DBs. Both native cloud protection checks passed again with
+  the final single-matched-UPDATE shape.
 
 - **S7.AM recovery protocol (owner, 2026-11-02).** Choices that differ from the item
   text: the internal `POST /api/v1/agent/report` protocol gains PROTECTION_READ and
@@ -1038,6 +1042,32 @@ empty-history-page handling defect, which was corrected and verified. No cloud w
     that no tagged statement remains running before handing over the target lock.
     Common event persistence/fencing sits in
     the Engine DB layer beneath the services entry point, preserving the import direction.
+
+- **S7.AM upload control (owner, 2026-11-02).** Choices that differ from the item text:
+  optional BOOLEAN `LOCKED` flows through file validation and landing into the explicit merge
+  SELECT, but never into target business columns, hashes or comparison columns. TRUE, NULL
+  and absence retain USER locking; FALSE releases all value locks and the row lock on the key
+  in the same MERGE. Releasing row scope is intentional: an uploader already has authority
+  to replace locked values, and keeping row scope would prevent the requested unlocked reload.
+  Service uploads neither create nor release locks. SCD2 keeps the existing unlock semantics:
+  the current key's state is inherited by future versions, without rewriting closed history.
+  - `UploadReader.rows(schema={"LOCKED": bool})` is the shared upload-schema check. Only bool
+    is implemented: trimmed case-insensitive CSV true/false or empty NULL; native XLSX booleans
+    or empty NULL. Other values fail with upload, row, column, value, allowed values and remedy.
+    Merge staging requires an actual BOOLEAN type; validate and refresh use the same type
+    refusal and reserve target business column LOCKED with a rename remedy.
+  - Nullable `AUD_PROTECTION_EVENTS.UPLOAD_ID` identifies every upload-caused write or unlock.
+    The server derives it from the run's accepted receipt and successful pinned validator;
+    claimed agent ids are never trusted without that verification. A CHECK limits non-NULL
+    ids to upload event kinds. Final/recovery rows retain the verified original id. Provenance
+    joins AUD_UPLOADS to derive uploader and `upload <id>: LOCKED=false`, with no reason column.
+    PENDING and normal final rows use that verified uploader as actor; recovery keeps its
+    deliberately selected recovery actor. Upload ids and LOCKED never manufacture a business
+    change or an SCD2 version: lock-only changes use conditional assignments in the same
+    matched UPDATE, including DuckDB/Iceberg's single-UPDATE restriction.
+    No upload-id index is added: recovery filters target/request, and provenance joins the
+    existing upload primary key rather than filtering events by upload id. FALSE uses the
+    existing target MERGE and intent appends, adding no warehouse statement.
 
 - **S7.AM protection design (owner, 2026-11-01).** Three implementation PRs are approved:
   (1) single-MERGE SCD1/SCD2 builders, replay/count/ROW_ID proofs on every warehouse/format,

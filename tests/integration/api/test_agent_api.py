@@ -2232,3 +2232,24 @@ def test_protection_reports_derive_project_from_the_admitted_run(agent_scene):
     assert {r["project_id"] for r in rows if r["request_id"] == request} == {project}
     assert {r["created_by"] for r in rows if r["request_id"] == request} == {SYSTEM_ACTOR.name}
     assert [r["status"] for r in rows if r["request_id"] == default_request] == ["PENDING"]
+
+
+def test_protection_agent_cannot_invent_an_accepted_upload(agent_scene):
+    scene, attempt, key = protected_claim(agent_scene)
+    assert (
+        post(scene, "report", attempt_id=attempt, operation="LOCK", lock_key=key).status_code == 200
+    )
+    intent = protection_intent() | {"upload_id": 999999}
+    response = post(
+        scene,
+        "report",
+        attempt_id=attempt,
+        operation="PROTECTION_EVENT",
+        target="main.people",
+        protection=intent,
+    )
+    assert response.status_code == 403, response.text
+    for part in (str(attempt), "people", "999999", "verified accepted", "FILE_VALIDATION"):
+        assert part in response.text, response.text
+    with scene[0].engine.connect() as conn:
+        assert conn.execute(text("SELECT COUNT(*) FROM AUD_PROTECTION_EVENTS")).scalar_one() == 0

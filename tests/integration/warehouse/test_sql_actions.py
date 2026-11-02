@@ -830,3 +830,23 @@ def test_etl_merge_stamps_engine_writer_instead_of_warehouse_login(customers, ac
         ).all()
     assert rows
     assert all(row.created_by == "etl-craft" and row.updated_by == "etl-craft" for row in rows)
+
+
+@pytest.mark.parametrize("kind", ["SCD1_MERGE", "SCD2_MERGE"])
+def test_merge_setup_and_reload_never_store_the_locked_control(sql_world, kind):
+    w = sql_world
+    source = "SELECT 1 AS id,CAST('value' AS VARCHAR(30)) AS name,CAST(FALSE AS BOOLEAN) AS LOCKED"
+    w.setup("control", source, kind)
+    assert "locked" not in w.columns("control")
+    params = {
+        "SQL_ACTION": kind,
+        "TARGET_OBJECT": "control",
+        "SELECT_QUERY": source,
+        "MERGE_KEY": "id",
+        "MERGE_COMPARE_COLUMNS": "name",
+    }
+    first = w.run("control_load", **params)
+    second = w.run("control_load", **params)
+    assert first.insert_count == 1
+    assert second.insert_count == second.update_count == 0
+    assert "locked" not in w.columns("control")

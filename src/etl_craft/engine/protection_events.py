@@ -147,6 +147,8 @@ def _records(rows: Sequence[RowMapping]) -> tuple[ProtectionRecord, ...]:
             as_utc(r["created_at"]).isoformat(),
             r["recovering_attempt_id"],
             r["recovery_actor"],
+            r["upload_id"],
+            r["uploader"],
         )
         for r in rows
     )
@@ -175,6 +177,7 @@ def append_fenced(
         "request_id": request,
         "events": json.dumps(events),
         "continuation": report.request_id is not None,
+        "upload_id": report.upload_id,
         "status": report.status,
         "actor": current_actor().name,
         "now": datetime.now(UTC),
@@ -222,6 +225,12 @@ def append(
         )
         if creator.final_status is not None:
             return request_id
+    if report.status == ProtectionStatus.PENDING and report.upload_id is not None:
+        raise PermissionDeniedError(
+            f"attempt {attempt_id}, target {target}, upload {report.upload_id}: "
+            "expected this run's verified accepted upload; finish FILE_VALIDATION "
+            "and use only the uploads admitted to this task"
+        )
     if report.status == ProtectionStatus.PENDING:
         for event in report.events:
             _insert(conn, scope, report, event, attempt_id, None)
@@ -310,6 +319,7 @@ def _insert(
         {
             **scope,
             "attempt_id": creator,
+            "upload_id": None if previous is None else previous.upload_id,
             "kind": kind,
             "key_hash": None if event is None else event.key_hash,
             "columns": json.dumps(() if event is None else event.columns),

@@ -178,6 +178,7 @@ def seeded_tables(db):
             conn, attempt, AttemptStatus.SUCCESS, ALICE, owner="audit-fixture"
         )
         values = {
+            "upload_id": 1,
             "bundle_id": "a" * 64,
             "manifest": "{}",
             "attempt_id": attempt,

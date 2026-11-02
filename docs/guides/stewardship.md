@@ -41,12 +41,12 @@ from etl_craft.scripting import PermanentError, ValidationTask
 
 
 def validate(task: ValidationTask) -> None:
-    rows = task.reader.rows()
+    rows = task.reader.rows(schema={"LOCKED": bool})
     header = next(rows, None)
-    if header != ("id", "name"):
+    if header not in (("id", "name"), ("id", "name", "LOCKED")):
         raise PermanentError(f"row 1 header={header!r}; expected id|name; upload a corrected file")
     for number, row in enumerate(rows, 2):
-        if len(row) != 2 or not str(row[0]).isdigit():
+        if len(row) != len(header) or not str(row[0]).isdigit():
             raise PermanentError(
                 f"row {number} value={row!r}; expected integer id and name; upload a corrected file"
             )
@@ -81,6 +81,26 @@ files. Set `MERGE_DEDUPE_ORDER=UPLOAD_ID ASC` on stewardship merges. The engine 
 for each staged row's upload, refuses missing or foreign ids before mutation, and stamps
 `CREATED_BY`/`UPDATED_BY` from that mapping. Loading scripts must also stamp their own landing
 rows with each upload's account. Later uploads win for overlapping keys.
+
+Optional `LOCKED` controls each USER upload row. Declare it as BOOLEAN in landing, carry it
+through the loading script and select it explicitly in the merge SELECT, alongside `UPLOAD_ID`.
+TRUE, NULL or an absent column locks as before. FALSE writes the uploaded values without new
+locks and releases every existing value lock and the row lock on that key, including an
+administrator's locks. A later upload wins, including its control: TRUE after FALSE locks again.
+For SCD2, the release follows the current key into later versions. Service-account uploads
+create no locks; their FALSE never releases existing locks. `LOCKED` is never stored in the
+merge target, compared or hashed; rename any target business column with that name.
+
+`UploadReader.rows(schema={"LOCKED": bool})` checks this optional file column. CSV accepts trimmed,
+case-insensitive `true`/`false`, or empty for NULL. XLSX accepts native boolean cells or empty
+cells, never strings or numbers. Any other value refuses validation with upload, row, column,
+value and remedy. The merge engine requires an actual BOOLEAN SQL column and never parses text:
+use `CAST(LOCKED AS BOOLEAN)` in the SELECT or a boolean landing column. Omit the schema argument
+for the reader's original untyped values. Only bool schemas are currently supported.
+
+The hash-only event audit retains the verified `UPLOAD_ID` for upload writes and unlocks.
+Provenance derives the uploader from its receipt and reports releases as
+`upload <id>: LOCKED=false`; it never accepts a caller-supplied uploader or reason.
 
 Stewarded SCD1/SCD2 uploads use in-row human-write protection on every supported warehouse.
 Each file's merge writes values, per-cell writers and locks in one target MERGE, then finalizes

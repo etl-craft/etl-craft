@@ -164,3 +164,69 @@ def test_recovery_refuses_missing_creator_history(engine_db):
                 1000,
             )
         assert len(read(conn, TARGET).records) == 1
+
+
+def test_guarded_event_upload_identity_check_and_null_non_upload_events(engine_db):
+    from sqlalchemy.exc import IntegrityError
+
+    with acting_as(ACTOR), engine_db.engine.begin() as conn:
+        attempt = creator(conn)
+        ids = (
+            conn.execute(
+                text(
+                    "SELECT p.PIPELINE_ID AS pipeline_id,p.PIPELINE_RUN_ID AS run_id "
+                    "FROM AUD_PIPELINES_RUN_LOG p JOIN AUD_TASK_RUN_LOG t "
+                    "ON t.PIPELINE_RUN_ID=p.PIPELINE_RUN_ID JOIN AUD_TASK_ATTEMPTS a "
+                    "ON a.TASK_RUN_ID=t.TASK_RUN_ID WHERE a.ATTEMPT_ID=:attempt"
+                ),
+                {"attempt": attempt},
+            )
+            .mappings()
+            .one()
+        )
+        upload = conn.execute(
+            text(
+                "INSERT INTO AUD_UPLOADS (PIPELINE_ID,ACCOUNT,FILE_NAME,STORED_NAME,SHA256,"
+                "SIZE_BYTES,PIPELINE_RUN_ID,STATUS,UPLOADED_AT) "
+                "VALUES (:pipeline,'steward','file.csv','file.csv',:hash,1,:run,'QUEUED',:now) "
+                "RETURNING UPLOAD_ID AS upload_id"
+            ),
+            {
+                "pipeline": ids["pipeline_id"],
+                "run": ids["run_id"],
+                "hash": "a" * 64,
+                "now": datetime.now(UTC),
+            },
+        ).scalar_one()
+    insert = text(
+        "INSERT INTO AUD_PROTECTION_EVENTS (PROJECT_ID,TARGET_ID,REQUEST_ID,KIND,KEY_HASH,"
+        "COLUMN_NAMES,VALUE_HASHES,STATUS,CREATED_BY,CREATED_AT,UPLOAD_ID) "
+        "VALUES (1,:target,:request,:kind,:key,'[]','[]','PENDING','steward',:now,:upload)"
+    )
+    for kind in (ProtectionKind.REHASH, ProtectionKind.HARD_DELETE, ProtectionKind.ERASURE):
+        with acting_as(ACTOR), pytest.raises(IntegrityError), engine_db.engine.begin() as conn:
+            conn.execute(
+                insert,
+                {
+                    "target": TARGET,
+                    "request": "check-" + kind,
+                    "kind": kind,
+                    "key": "a" * 32,
+                    "now": datetime.now(UTC),
+                    "upload": upload,
+                },
+            )
+    with acting_as(ACTOR), engine_db.engine.begin() as conn:
+        request = append(
+            conn, TARGET, ProtectionReport(ProtectionStatus.PENDING, (EVENT,)), attempt
+        )
+        assert (
+            conn.execute(
+                text(
+                    "SELECT UPLOAD_ID AS upload_id FROM AUD_PROTECTION_EVENTS "
+                    "WHERE REQUEST_ID=:request"
+                ),
+                {"request": request},
+            ).scalar_one()
+            is None
+        )

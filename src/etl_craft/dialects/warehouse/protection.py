@@ -41,7 +41,9 @@ class ProtectionSql:
         selection = ", ".join(f"s.{column}" for column in columns)
         if not delete:
             selection = ", ".join(
-                f"CASE WHEN {lock} AND p.column_name = '{column.lower()}') "
+                f"s.{column}"
+                if column.lower() == "locked"
+                else f"CASE WHEN {lock} AND p.column_name = '{column.lower()}') "
                 f"THEN t.{column} ELSE "
                 + (f"COALESCE(s.{column}, t.{column})" if preserve else f"s.{column}")
                 + f" END AS {column}"
@@ -69,6 +71,7 @@ class ProtectionSql:
             f"(SELECT 1 FROM ({state}) p WHERE p.key_hash = {key} AND p.locked "
             f"AND p.column_name IN ('*', '{column.lower()}'))"
             for column in columns
+            if column.lower() != "locked"
         )
 
     def invalid_keys(self, keys: tuple[str, ...], *, scd2: bool) -> str:

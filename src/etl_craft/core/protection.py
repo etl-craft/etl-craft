@@ -89,9 +89,35 @@ class ProtectionReport:
     events: tuple[ProtectionEvent, ...] = ()
     request_id: str | None = None
     evidence: ProtectionEvidence | None = None
+    upload_id: int | None = None
 
     def __post_init__(self) -> None:
         """Require bounded intents or one existing request's final status."""
+        if self.upload_id is not None and (
+            not isinstance(self.upload_id, int)
+            or isinstance(self.upload_id, bool)
+            or not 0 < self.upload_id < 2**63
+        ):
+            raise UsageError(
+                "protection upload_id: expected a positive accepted upload identity; "
+                "use only an upload admitted to this attempt's run"
+            )
+        if self.upload_id is not None and any(
+            event.kind
+            not in {
+                ProtectionKind.ENABLE,
+                ProtectionKind.KEY,
+                ProtectionKind.VERSION,
+                ProtectionKind.WRITE,
+                ProtectionKind.LOCK,
+                ProtectionKind.UNLOCK,
+            }
+            for event in self.events
+        ):
+            raise UsageError(
+                "protection upload_id: found a non-upload event kind; expected upload "
+                "writes or unlocks only; omit upload_id for engine and operator work"
+            )
         if self.request_id is not None:
             try:
                 UUID(self.request_id)
@@ -113,7 +139,9 @@ class ProtectionReport:
                 "evidence; expected a nonempty hash-only batch; "
                 "correct the report"
             )
-        if self.status != ProtectionStatus.PENDING and (not self.request_id or self.events):
+        if self.status != ProtectionStatus.PENDING and (
+            not self.request_id or self.events or self.upload_id is not None
+        ):
             raise UsageError(
                 "protection final status: found missing request "
                 "id or new events; expected an existing request "
@@ -134,6 +162,8 @@ class ProtectionRecord:
     created_at: str
     recovering_attempt_id: int | None = None
     recovery_actor: str | None = None
+    upload_id: int | None = None
+    uploader: str | None = None
 
 
 @dataclass(frozen=True)

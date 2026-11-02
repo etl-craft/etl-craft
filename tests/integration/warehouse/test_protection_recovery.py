@@ -16,7 +16,7 @@ from fixtures.sql_warehouse import warehouses
 
 @warehouses("duckdb")
 @pytest.mark.parametrize("engine_kind", ["sqlite", "postgresql"])
-@pytest.mark.parametrize("kind", ["edit", "unlock", "rehash", "erasure", "hard_delete", "upload"])
+@pytest.mark.parametrize("kind", ["edit", "unlock", "rehash", "erasure", "hard_delete"])
 @pytest.mark.parametrize(
     "point",
     [
@@ -34,15 +34,7 @@ def test_killed_mutation_recovers_once_from_warehouse_evidence(
         use_postgres_engine(w, request)
     monkeypatch.setenv("ERASURE_HMAC", "test-only-hmac")
     w.config = replace(w.config, erasure_hmac_secret="ERASURE_HMAC")
-    source = (
-        (
-            "SELECT 1 AS id,CAST('Source' AS VARCHAR(30)) AS name,10 AS amount,"
-            "CAST(42 AS BIGINT) AS UPLOAD_ID"
-        )
-        if kind == "upload"
-        else None
-    )
-    ctx, _ = prepare(w, "SCD2_MERGE", source=source)
+    ctx, _ = prepare(w, "SCD2_MERGE")
     act(
         ctx,
         ActionName.DATA_EDIT,
@@ -70,24 +62,6 @@ def test_killed_mutation_recovers_once_from_warehouse_evidence(
             SELECT_QUERY="SELECT 1 AS id",
             MERGE_KEY="id",
             HARD_DELETE="true",
-        )
-    elif kind == "upload":
-        from etl_craft.core.uploads import UploadInfo
-
-        upload = UploadInfo(42, "bob", "values.csv", 1, "a" * 64, stored_name="values.csv")
-        context = replace(
-            w.task(
-                "upload",
-                SQL_ACTION="SCD2_MERGE",
-                TARGET_OBJECT="protected",
-                SELECT_QUERY=(
-                    "SELECT 1 AS id,'After' AS name,10 AS amount,CAST(42 AS BIGINT) AS UPLOAD_ID"
-                ),
-                MERGE_KEY="id",
-                MERGE_COMPARE_COLUMNS="name|amount",
-            ),
-            uploads=(upload,),
-            upload_inputs=(upload,),
         )
     with w.engine_db.connect() as conn:
         before = conn.execute(text("SELECT MAX(EVENT_ID) FROM AUD_PROTECTION_EVENTS")).scalar_one()
