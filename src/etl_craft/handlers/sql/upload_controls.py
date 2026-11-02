@@ -3,12 +3,12 @@
 from collections.abc import Mapping
 
 from etl_craft.core.errors import SqlGuardError
-from etl_craft.handlers.sql.session import Session
 
 
 def boolean_problem(task: str, kind: str) -> str | None:
     """Use one strict SQL-type check for validation, refresh and staged rows."""
-    if kind.upper() in {"BOOL", "BOOLEAN"}:
+    kind = kind.upper()
+    if kind in {"BOOL", "BOOLEAN"}:
         return None
     return (
         f"{task}: staged LOCKED type={kind}; expected BOOLEAN; CAST LOCKED AS BOOLEAN "
@@ -24,14 +24,6 @@ def target_problem(target: str, columns: Mapping[str, str]) -> str | None:
             "rename the target column and update its declared columns and SELECT"
         )
     return None
-
-
-def check_stage(session: Session, stage: str, task: str) -> None:
-    """Read actual staged types; never parse a string control value in the merge engine."""
-    if "locked" not in {c.lower() for c, _ in session.columns(stage)}:
-        return
-    if problem := boolean_problem(task, session.hash_types(stage)["locked"]):
-        raise SqlGuardError(problem)
 
 
 def check_keys(task: str, keys: tuple[str, ...], compared: tuple[str, ...]) -> None:

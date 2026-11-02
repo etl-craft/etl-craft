@@ -69,7 +69,7 @@ from etl_craft.handlers.sql.tables import (
     refuse_null_keys,
     require_target,
 )
-from etl_craft.handlers.sql.upload_controls import check_stage as check_upload_stage
+from etl_craft.handlers.sql.upload_controls import boolean_problem
 
 logger = logging.getLogger(__name__)
 
@@ -280,20 +280,25 @@ def _merge_stage(
     else:
         stage = action.build_stage(session)
     count_target = session.target if hashed and kind == SqlAction.SCD1_MERGE else None
-    if task.reject_limit is None:
-        counts = session.run(
-            session.dialect.key_counts(stage, task.merge_key, count_target), step="NULL merge keys"
-        ).one()
-        source, rejected = int(counts.source_rows), None
-    else:
+    source, rejected = None, None
+    if task.reject_limit is not None:
         source = session.count(f"SELECT COUNT(*) FROM {stage}", step="source rows")
         stage, rejected = screen(session, stage, task, source, action.stamp)
-        counts = session.run(
-            session.dialect.key_counts(stage, task.merge_key), step="NULL merge keys"
-        ).one()
+        count_target = None
+    locked = any(c.lower() == "locked" for c, _ in session.columns(stage))
+    counts = session.run(
+        session.dialect.key_counts(stage, task.merge_key, count_target, locked=locked),
+        step="NULL merge keys",
+    ).one()
+    source = int(counts.source_rows) if source is None else source
+    if locked and (
+        problem := boolean_problem(
+            f"{action.context.pipeline_code}.{action.context.task_code}", str(counts.locked_type)
+        )
+    ):
+        raise SqlGuardError(problem)
     refuse_null_keys(session, stage, task.merge_key, int(counts.null_keys))
     stage = dedupe(session, stage, task.merge_key, task.dedupe_order, int(counts.duplicate_keys))
-    check_upload_stage(session, stage, f"{action.context.pipeline_code}.{action.context.task_code}")
     check_or_evolve(session, stage, kind, schema_evolution=task.schema_evolution)
     if session.protection is not None and action.respect_protection:
         stage = session.protection.stage(stage)

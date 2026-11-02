@@ -8,6 +8,7 @@ from test_cloud_sql_actions import close_world, cloud_world
 
 from etl_craft.core.actor import Actor, ActorKind
 from etl_craft.core.enums import ActionName, ApiRole, TableFormat
+from etl_craft.core.errors import HandlerError
 from etl_craft.services.operations import OperationContext
 from fixtures.actions import act
 from fixtures.cloud import DATABRICKS_VARS, SNOWFLAKE_VARS, require_variables
@@ -39,7 +40,10 @@ def test_protected_edits_reload_unlock_and_per_cell_writers(tmp_path, provider, 
         for kind in ("SCD1_MERGE", "SCD2_MERGE"):
             target = "etl_protected_" + uuid4().hex[:10]
             targets.append(target)
-            source = "SELECT 1 AS id,CAST('Source' AS VARCHAR(30)) AS name,10 AS amount"
+            source = (
+                "SELECT 1 AS id,CAST('Source' AS VARCHAR(30)) AS name,10 AS amount,"
+                "CAST(NULL AS BOOLEAN) AS LOCKED"
+            )
             w.setup(target, source, kind)
             task = "load_" + target
             params = {
@@ -66,6 +70,23 @@ def test_protected_edits_reload_unlock_and_per_cell_writers(tmp_path, provider, 
             w.run(task, **params)
             rows = w.rows(f"SELECT name,amount FROM {w.name(target)} WHERE ACTIVE_FLAG='Y'")
             assert rows == [("Source", 10)]
+            empty = w.run(task, **{**params, "SELECT_QUERY": source + " WHERE 1=0"})
+            assert empty.insert_count == empty.update_count == 0
+            with (
+                target_mutations(w, target) as statements,
+                pytest.raises(HandlerError, match=r"staged LOCKED type=.*expected BOOLEAN"),
+            ):
+                w.run(
+                    task,
+                    **{
+                        **params,
+                        "SELECT_QUERY": source.replace(
+                            "CAST(NULL AS BOOLEAN)", "CAST('true' AS VARCHAR(10))"
+                        ),
+                    },
+                )
+            assert statements == []
+            assert w.rows(f"SELECT name,amount FROM {w.name(target)} WHERE ACTIVE_FLAG='Y'") == rows
     finally:
         for target in targets:
             w.execute(f"DROP TABLE IF EXISTS {w.name(target)}")

@@ -1069,6 +1069,15 @@ empty-history-page handling defect, which was corrected and verified. No cloud w
     existing upload primary key rather than filtering events by upload id. FALSE uses the
     existing target MERGE and intent appends, adding no warehouse statement.
 
+- **S7.AM budgets and CI (owner, 2026-11-02).** Actual staged LOCKED type inspection
+  shares the existing key-count query, including empty stages; ordinary SCD1/SCD2 retain
+  exact five/six warehouse-statement budgets. Provider type expressions stay in dialects.
+  Measured coverage shards increase from three to four and Iceberg shards from two to three,
+  balanced with existing measured durations; collection, markers and the 90% gate are unchanged.
+  Installed-demo jobs are capped at two concurrently to retain the existing twenty-runner limit.
+  Main already exceeded the execution limit before this slice; merge still requires a measured
+  execution path below 600 seconds.
+
 - **S7.AM protection design (owner, 2026-11-01).** Three implementation PRs are approved:
   (1) single-MERGE SCD1/SCD2 builders, replay/count/ROW_ID proofs on every warehouse/format,
   preserving current protection; (2) in-row protection and the Engine DB event log, recovery,

@@ -185,6 +185,7 @@ jobs:
     timeout-minutes: 90
     strategy:
       fail-fast: false
+      max-parallel: 2
       matrix: ${{ fromJSON(needs.prepare.outputs.e2e) }}
     env:
       ETL_CRAFT_CI_DIAGNOSTICS: ${{ github.workspace }}/dist/demo-diagnostics

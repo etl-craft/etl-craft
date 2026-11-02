@@ -4,9 +4,11 @@ import copy
 import json
 import subprocess
 import threading
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+import yaml
 
 from fixtures.scripts import load
 from plugins.ci_shards import partitions
@@ -424,7 +426,10 @@ def test_only_one_linux_python_combination_measures_project_coverage(tmp_path, m
 def test_pull_request_matrix_fits_runner_concurrency_limits():
     plan = ci.matrix()
     # Browser follows package, which follows static: these phases cannot overlap.
-    ordinary = sum(len(rows) for family, rows in plan.items() if family != "browser")
+    workflow = yaml.safe_load(Path(".github/workflows/ci.yml").read_text(encoding="utf-8"))
+    demo_limit = workflow["jobs"]["e2e"]["strategy"]["max-parallel"]
+    ordinary = sum(len(rows) for family, rows in plan.items() if family not in {"browser", "e2e"})
+    ordinary += min(len(plan["e2e"]), demo_limit)
     peak = ordinary + max(len(ci.VALIDATIONS), len(plan["browser"]), 1)
     assert peak <= 20
     mac = sum(row.get("os") == "macos-latest" for rows in plan.values() for row in rows)

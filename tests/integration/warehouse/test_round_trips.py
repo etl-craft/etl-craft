@@ -314,3 +314,51 @@ def test_protected_merge_adds_only_two_event_appends_without_pending_recovery(sq
     assert queries["protection_append_final"] == 1
     assert queries["protection_request"] == 0
     assert queries["protection_first_pending"] == 0
+
+
+@pytest.mark.parametrize("kind", ["SCD1_MERGE", "SCD2_MERGE"])
+def test_optional_upload_control_keeps_the_ordinary_merge_statement_budget(sql_world, kind):
+    w = sql_world
+    source = "SELECT 1 AS id,CAST('value' AS VARCHAR(30)) AS name"
+    w.setup("typed_control", source, kind)
+    params = {
+        "SQL_ACTION": kind,
+        "TARGET_OBJECT": "typed_control",
+        "MERGE_KEY": "id",
+        "MERGE_COMPARE_COLUMNS": "name",
+    }
+    w.run("plain_control", SELECT_QUERY=source, **params)
+    with count_round_trips(w.engine_db) as ordinary:
+        w.run("plain_control", SELECT_QUERY=source, **params)
+    with count_round_trips(w.engine_db) as typed:
+        w.run("plain_control", SELECT_QUERY=source + ",CAST(FALSE AS BOOLEAN) AS LOCKED", **params)
+    assert typed.counts["warehouse_statements"] == ordinary.counts["warehouse_statements"], (
+        typed.queries
+    )
+    assert typed.counts["engine_statements"] == ordinary.counts["engine_statements"]
+
+
+@pytest.mark.parametrize("kind", ["SCD1_MERGE", "SCD2_MERGE"])
+@pytest.mark.parametrize("empty", [False, True])
+@pytest.mark.parametrize("control_type", ["BOOLEAN", "VARCHAR(10)"])
+def test_staged_control_type_is_checked_even_without_rows(sql_world, kind, empty, control_type):
+    from etl_craft.core.errors import HandlerError
+
+    w = sql_world
+    shape = "SELECT 1 AS id,CAST('value' AS VARCHAR(30)) AS name"
+    w.setup("control_types", shape, kind)
+    source = shape + f",CAST(NULL AS {control_type}) AS LOCKED" + (" WHERE 1=0" if empty else "")
+    params = {
+        "SQL_ACTION": kind,
+        "TARGET_OBJECT": "control_types",
+        "SELECT_QUERY": source,
+        "MERGE_KEY": "id",
+        "MERGE_COMPARE_COLUMNS": "name",
+    }
+    if control_type == "BOOLEAN":
+        result = w.run("control_types", **params)
+        assert result.insert_count == (0 if empty else 1)
+    else:
+        with pytest.raises(HandlerError, match=r"staged LOCKED type=.*expected BOOLEAN"):
+            w.run("control_types", **params)
+        assert w.rows(f"SELECT COUNT(*) FROM {w.name('control_types')}") == [(0,)]

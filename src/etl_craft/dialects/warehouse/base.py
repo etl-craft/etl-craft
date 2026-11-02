@@ -448,7 +448,9 @@ class WarehouseDialect:
         """Return the keyword that alters a table this dialect created."""
         return "ALTER TABLE"
 
-    def key_counts(self, stage: str, keys: tuple[str, ...], target: str | None = None) -> str:
+    def key_counts(
+        self, stage: str, keys: tuple[str, ...], target: str | None = None, *, locked: bool = False
+    ) -> str:
         """Count invalid and duplicate keys against the same staged snapshot."""
         listed = ", ".join(f"{key} AS k{i}" for i, key in enumerate(keys))
         grouped = ", ".join(keys)
@@ -460,10 +462,18 @@ class WarehouseDialect:
                 f", (SELECT COUNT(*) FROM {stage} s WHERE NOT EXISTS "
                 f"(SELECT 1 FROM {target} t WHERE {match})) AS new_keys"
             )
+        control = ""
+        if locked:
+            value = f"(SELECT LOCKED FROM {stage} LIMIT 1)"
+            kind = {
+                "postgres": f"CAST(pg_typeof({value}) AS VARCHAR)",
+                "snowflake": f"SPLIT_PART(SYSTEM$TYPEOF({value}), '[', 1)",
+            }.get(self.sqlglot_dialect or "", f"TYPEOF({value})")
+            control = f", {kind} AS locked_type"
         return (
             "SELECT COALESCE(SUM(n), 0) AS source_rows, "
             f"COALESCE(SUM(CASE WHEN {nulls} THEN n ELSE 0 END), 0) AS null_keys, "
-            f"COALESCE(SUM(CASE WHEN n > 1 THEN 1 ELSE 0 END), 0) AS duplicate_keys {new} "
+            f"COALESCE(SUM(CASE WHEN n > 1 THEN 1 ELSE 0 END), 0) AS duplicate_keys {new}{control} "
             f"FROM (SELECT {listed}, COUNT(*) AS n FROM {stage} GROUP BY {grouped}) counted"
         )
 

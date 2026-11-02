@@ -2049,7 +2049,7 @@ def test_host_erasure_reads_only_the_attempts_project_register(agent_scene, monk
     assert "private-" not in answer.text
 
 
-def protected_claim(scene, project_id=None):
+def protected_claim(scene, project_id=None, *, validation=None):
     from etl_craft.config.targets import active_catalog
     from etl_craft.engine import locks
     from etl_craft.engine.repository.pipelines import selected_project
@@ -2058,7 +2058,27 @@ def protected_claim(scene, project_id=None):
     with selected_project(project_id), db.engine.begin() as conn:
         pipeline = add_pipeline(conn, "PROTECTED", project_id=project_id)
         task = add_task(conn, pipeline, "write", TARGET_OBJECT="main.people")
+        validator = (
+            add_task(conn, pipeline, "validate", "FILE_VALIDATION")
+            if validation is not None
+            else None
+        )
         run = transitions.create_run(conn, pipeline, SYSTEM_ACTOR)
+        if validator is not None:
+            checked = transitions.find_or_create_task_run(conn, validator, run).task_run_id
+            if validation:
+                accepted = transitions.queue_attempt(conn, checked, SYSTEM_ACTOR)
+                transitions.claim_attempt(
+                    conn,
+                    accepted,
+                    SYSTEM_ACTOR,
+                    owner="validator",
+                    lease_expires_at=datetime.now(UTC) + timedelta(seconds=60),
+                )
+                transitions.finish_attempt(
+                    conn, accepted, AttemptStatus.SUCCESS, SYSTEM_ACTOR, owner="validator"
+                )
+            transitions.finish_task_run(conn, checked, status="SUCCESS")
         summary = transitions.find_or_create_task_run(conn, task, run).task_run_id
         attempt = transitions.queue_attempt(conn, summary, SYSTEM_ACTOR)
     reply = client.post(
@@ -2253,3 +2273,85 @@ def test_protection_agent_cannot_invent_an_accepted_upload(agent_scene):
         assert part in response.text, response.text
     with scene[0].engine.connect() as conn:
         assert conn.execute(text("SELECT COUNT(*) FROM AUD_PROTECTION_EVENTS")).scalar_one() == 0
+
+
+@pytest.mark.parametrize("case", ["accepted", "refused", "foreign_run", "unvalidated"])
+def test_agent_upload_event_uses_only_its_verified_receipt_and_uploader(agent_scene, case):
+    scene, attempt, key = protected_claim(agent_scene, validation=case != "unvalidated")
+    db = scene[0]
+    with db.engine.begin() as conn:
+        identity = (
+            conn.execute(
+                text(
+                    "SELECT t.PIPELINE_RUN_ID AS run_id,p.PIPELINE_ID AS pipeline_id "
+                    "FROM AUD_TASK_ATTEMPTS a JOIN AUD_TASK_RUN_LOG t "
+                    "ON t.TASK_RUN_ID=a.TASK_RUN_ID "
+                    "JOIN AUD_PIPELINES_RUN_LOG p ON p.PIPELINE_RUN_ID=t.PIPELINE_RUN_ID "
+                    "WHERE a.ATTEMPT_ID=:attempt"
+                ),
+                {"attempt": attempt},
+            )
+            .mappings()
+            .one()
+        )
+        pipeline, run = identity["pipeline_id"], identity["run_id"]
+        if case == "foreign_run":
+            pipeline = add_pipeline(conn, "OTHER_RECEIPT")
+            run = transitions.create_run(conn, pipeline, SYSTEM_ACTOR)
+        upload = conn.execute(
+            text(
+                "INSERT INTO AUD_UPLOADS (PIPELINE_ID,ACCOUNT,FILE_NAME,STORED_NAME,SHA256,"
+                "SIZE_BYTES,PIPELINE_RUN_ID,STATUS,UPLOADED_AT) "
+                "VALUES (:pipeline,'person','data.csv','data.csv',:hash,1,:run,:status,:now) "
+                "RETURNING UPLOAD_ID AS upload_id"
+            ),
+            {
+                "pipeline": pipeline,
+                "run": run,
+                "status": "REFUSED" if case == "refused" else "QUEUED",
+                "hash": "a" * 64,
+                "now": datetime.now(UTC),
+            },
+        ).scalar_one()
+    locked = post(scene, "report", attempt_id=attempt, operation="LOCK", lock_key=key)
+    assert locked.status_code == 200, locked.text
+    response = post(
+        scene,
+        "report",
+        attempt_id=attempt,
+        operation="PROTECTION_EVENT",
+        target="main.people",
+        protection=protection_intent() | {"upload_id": upload},
+    )
+    if case == "accepted":
+        assert response.status_code == 200, response.text
+        request = response.json()["data"]
+        final = post(
+            scene,
+            "report",
+            attempt_id=attempt,
+            operation="PROTECTION_EVENT",
+            target="main.people",
+            protection={"status": "COMMITTED", "request_id": request},
+        )
+        assert final.status_code == 200, final.text
+        with db.engine.connect() as conn:
+            rows = (
+                conn.execute(
+                    text(
+                        "SELECT UPLOAD_ID AS upload_id,CREATED_BY AS actor "
+                        "FROM AUD_PROTECTION_EVENTS"
+                    )
+                )
+                .mappings()
+                .all()
+            )
+        assert len(rows) == 2
+        assert all(row["upload_id"] == upload and row["actor"] == "person" for row in rows)
+    else:
+        assert response.status_code == 403, response.text
+        assert "verified accepted upload" in response.text
+        with db.engine.connect() as conn:
+            assert (
+                conn.execute(text("SELECT COUNT(*) FROM AUD_PROTECTION_EVENTS")).scalar_one() == 0
+            )
