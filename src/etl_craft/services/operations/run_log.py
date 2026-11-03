@@ -211,6 +211,7 @@ def _ending(row: AuditRow) -> dict[str, object]:
         "exit": row.exit_code,
         "rows": row.rows_written,
         "rejects": row.reject_count or None,
+        "duplicates": row.duplicate_count,
         "seconds": seconds,
         "failure": None if row.error_message is None else row.failure_class,
         "error": row.error_message,

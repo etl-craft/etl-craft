@@ -10,6 +10,7 @@ from sqlalchemy import text
 
 from etl_craft.config import CloningConfig
 from etl_craft.core.actor import current_actor
+from etl_craft.core.counts import Counts
 from etl_craft.core.enums import CloningScope, FailureClass
 from etl_craft.core.errors import CloningError, ConfigurationError
 from etl_craft.core.failures import Failure
@@ -140,13 +141,23 @@ def test_attempt_retryability_is_cloned_as_boolean(sql_world):
             )
             transitions.record_attempt_failure(conn, attempt, Failure(kind, "HandlerError"))
             transitions.finish_attempt(
-                conn, attempt, "FAILED", current_actor(), owner="typed-agent"
+                conn,
+                attempt,
+                "FAILED",
+                current_actor(),
+                owner="typed-agent",
+                counts=Counts(duplicate_count=0 if kind == FailureClass.TRANSIENT else None),
             )
     clone(world.engine_db, cloning(world, CloningScope.AUD))
     assert world.rows(
-        f"SELECT attempt_number, retryable FROM {world.name('AUD_TASK_ATTEMPTS')} "
+        f"SELECT attempt_number, retryable, duplicate_count FROM {world.name('AUD_TASK_ATTEMPTS')} "
         "ORDER BY attempt_number"
-    ) == [(1, False), (2, True)]
+    ) == [(1, False, None), (2, True, 0)]
+
+    # The Data Metrics view reads the task summary, not the sum of its attempts.
+    assert world.rows(
+        f"SELECT duplicate_count FROM {world.name('AUD_TASK_RUN_LOG')} WHERE task_run_id={summary}"
+    ) == [(0,)]
 
 
 def test_team_configuration_is_not_read_or_mirrored(sql_world):

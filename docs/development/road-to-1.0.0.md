@@ -191,7 +191,7 @@ item's text, or work done early under another item.
 | S7.I The endurance run | Planned |  | 72-hour accelerated Support Insights candidate run, faults and bounded growth evidence after S8 is running |
 | S7.J Documentation to finish | In progress | #85, #227, #277 | Generated references and guides exist; supported public contracts, complete reference and recipes remain |
 | S7.L ETL Craft logo and CLI banner | In progress | #277 | Shared mark, favicon and theme assets exist; complete branding guidance and interactive banner contract remain |
-| S7.AL Pre-demo package gaps | Planned |  | Six slices: duplicate_count, stale docs, guarded-table test instructions, event-file validation opt-in, timeline waits and erasure snapshot bounds |
+| S7.AL Pre-demo package gaps | In progress | #314 | Slice 1 reports duplicate counts through audit, metrics and inspection. Slices 2–6 remain. |
 | S7.AM Protection on every warehouse | Done | #311, #312, #313 | Atomic SCD merges, in-row protection and recovery, private audit identities and provider acceptance |
 | S7.M Stewardship uploads | Done (M2) | #296, #305 | Atomic receipts and safe stored names; processed layout, retention archives and verified reruns; crash recovery and guarded upload history |
 | S7.S Seed tables | Done | #308 | Typed pinned-bundle seeds replace reference tables until recorded stewardship handover |
@@ -1187,6 +1187,15 @@ empty-history-page handling defect, which was corrected and verified. No cloud w
   not FILE EVENT_WAIT. Secretless PR validation names a local DuckDB warehouse profile and
   bootstraps its schemas/source shapes for seed casts. The dedupe oracle is latest per key
   per batch, with SCD2 versions retained across batches, not every within-batch source version.
+- **S7.AL.1 duplicate counts.** Use the existing post-reject merge key query. Each
+  accepted stewardship file is a separate dedupe batch. Sum the rows it removes across
+  files in the attempt, excluding later-file wins. Unmeasured actions and historical
+  rows retain NULL. The task summary takes the current attempt's counts and the S8 Data
+  Metrics projection reads that summary from the audit mirror.
+  Acceptance availability: the shared dedupe oracle passed on Snowflake native and
+  Iceberg, and Databricks Delta and UniForm. The exact local merge budget assertions
+  remain unchanged.
+
 - **Pre-demo gap identity (owner, 2026-11-01).** The five package-gap slices are S7.AL.
   S7.AK already names the merged Schema checker; its item and references retain that identity.
 - **Follow-up ownership (owner, 2026-11-01).** No promise from the pre-demo audit is dropped.

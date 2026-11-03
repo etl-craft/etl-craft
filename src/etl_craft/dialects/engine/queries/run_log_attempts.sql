@@ -5,7 +5,7 @@ SELECT t.TASK_CODE AS task_code, tr.TASK_RUN_ID AS task_run_id, tr.STATUS AS tas
        a.QUEUED_AT AS queued_at, a.NOT_BEFORE AS not_before, a.CLAIMED_AT AS claimed_at,
        a.STARTED_AT AS started_at, a.ENDED_AT AS ended_at, a.OWNER_ID AS owner_id,
        a.HOST AS host, a.PID AS pid, a.POOL AS pool, a.EXIT_CODE AS exit_code,
-       a.ROWS_WRITTEN AS rows_written, a.REJECT_COUNT AS reject_count,
+       a.ROWS_WRITTEN AS rows_written, a.REJECT_COUNT AS reject_count, a.DUPLICATE_COUNT AS duplicate_count,
        a.ERROR_MESSAGE AS error_message, a.FAILURE_CLASS AS failure_class,
        a.REQUESTED_BY AS requested_by, a.REQUESTED_BY_KIND AS requested_by_kind,
        a.CANCEL_REQUESTED_AT AS cancel_requested_at,

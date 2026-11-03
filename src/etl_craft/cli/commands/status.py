@@ -79,7 +79,15 @@ def _text_status(out: Output, done: StatusView) -> None:
             out.line(f"{task.task_code}: {task.explanation.next_action}")
     if done.pipeline.paused is not None:
         out.line(done.pipeline.paused.describe())
-    headers = ("TASK", "STATUS", "ATTEMPTS", "ROWS_WRITTEN", "REJECTED", "DURATION_SECONDS")
+    headers = (
+        "TASK",
+        "STATUS",
+        "ATTEMPTS",
+        "ROWS_WRITTEN",
+        "REJECTED",
+        "DUPLICATES",
+        "DURATION_SECONDS",
+    )
     out.rows([(*headers, "ERROR")])
     out.rows(
         (
@@ -88,6 +96,7 @@ def _text_status(out: Output, done: StatusView) -> None:
             t.attempts,
             t.rows_written,
             t.reject_count,
+            t.duplicate_count,
             t.duration_seconds,
             t.error,
         )

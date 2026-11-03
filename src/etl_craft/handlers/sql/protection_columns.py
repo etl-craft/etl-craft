@@ -2,6 +2,7 @@
 
 from collections.abc import Mapping
 
+from etl_craft.core.counts import Counts
 from etl_craft.core.errors import SqlGuardError
 from etl_craft.core.protection_state import RowProtection
 from etl_craft.dialects.warehouse import WarehouseDialect
@@ -74,9 +75,7 @@ def baseline(session: Session, task: SqlTask, columns: tuple[str, ...]) -> str:
     return value
 
 
-def metadata_result(
-    session: Session, stage: str, source: int, rejected: int | None
-) -> HandlerResult | None:
+def metadata_result(session: Session, stage: str, counts: Counts) -> HandlerResult | None:
     """Keep a same-value row lock from manufacturing a new business version."""
     guard = session.protection
     if guard is None or not guard.request_id or guard.business_changes:
@@ -84,9 +83,10 @@ def metadata_result(
     guard.metadata_only(stage)
     session.drop(stage)
     return HandlerResult(
-        source_count=source,
+        source_count=counts.source_count,
         target_count=session.count(f"SELECT COUNT(*) FROM {session.target}", step="target rows"),
         insert_count=0,
         update_count=0,
-        reject_count=rejected,
+        reject_count=counts.reject_count,
+        duplicate_count=counts.duplicate_count,
     )

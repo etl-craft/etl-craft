@@ -281,7 +281,14 @@ def _uploaded_merge(session: Session, action: ActionContext) -> HandlerResult:
 def _uploaded_counts(results: list[HandlerResult], guard: Protection) -> HandlerResult:
     """Sum per-file changes while reporting the final target size once."""
     counts = {}
-    for name in ("source_count", "insert_count", "update_count", "delete_count", "reject_count"):
+    for name in (
+        "source_count",
+        "insert_count",
+        "update_count",
+        "delete_count",
+        "reject_count",
+        "duplicate_count",
+    ):
         values = [getattr(result, name) for result in results]
         counts[name] = None if any(value is None for value in values) else sum(values)
     return HandlerResult(

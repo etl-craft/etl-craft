@@ -95,6 +95,7 @@
     <dl class="facts">
       <dt>Rows read</dt><dd>{{ task_run.source_count if task_run.source_count is not none else "Not recorded" }}</dd>
       <dt>Rows written</dt><dd>{{ task_run.rows_written if task_run.rows_written is not none else "Not recorded" }}</dd>
+      <dt>Duplicates</dt><dd>{{ task_run.duplicate_count if task_run.duplicate_count is not none else "Not recorded" }}</dd>
       <dt>Rejects</dt><dd>{{ task_run.reject_count if task_run.reject_count is not none else "Not recorded" }}</dd>
       {% if task_run.watermark_from or task_run.watermark_to %}<dt>Window</dt><dd>{{ task_run.watermark_from or "start" }} to {{ task_run.watermark_to or "now" }}</dd>{% endif %}
     </dl>

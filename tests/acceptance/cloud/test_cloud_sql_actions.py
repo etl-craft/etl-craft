@@ -27,7 +27,7 @@ from fixtures.scd_lifecycle import check_scd1_upgrade, check_scd_lifecycle
 from fixtures.single_merge import check_single_merge
 from fixtures.sql_evolution import check_evolution, check_interrupted_evolution
 from fixtures.sql_merges import check_composite_merge
-from fixtures.sql_rejects import check_rejects
+from fixtures.sql_rejects import check_dedupe_counts, check_rejects
 from fixtures.sql_replacement import check_replacement_failure
 from fixtures.sql_row_ids import check_row_id_generation
 from fixtures.sql_warehouse import SqlWorld
@@ -580,8 +580,9 @@ def walk_rejects(w):
     target = f"etl_craft_rejects_{uuid.uuid4().hex[:8]}"
     try:
         check_rejects(w, target)
+        check_dedupe_counts(w, target + "_dedupe", "SCD2_MERGE")
     finally:
-        for name in (target, target + "__rejects"):
+        for name in (target, target + "__rejects", target + "_dedupe", target + "_dedupe__rejects"):
             w.execute(f"DROP TABLE IF EXISTS {w.name(name)}")
         close_world(w)
 

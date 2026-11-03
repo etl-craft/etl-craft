@@ -121,6 +121,16 @@ def test_complete_protected_upload_flow_orders_files_and_locks_each_writer(uploa
     from etl_craft.controller.uploads import admit_pending
 
     w, owner = upload_world
+    with w.engine_db.begin() as conn:
+        conn.execute(
+            text(
+                "UPDATE CFG_TASK_PARAMETERS "
+                "SET PARAMETER_VALUE=PARAMETER_VALUE || ' UNION ALL ' || "
+                "PARAMETER_VALUE || ' AND id=2' "
+                "WHERE PARAMETER_NAME='SELECT_QUERY' AND TASK_ID IN "
+                "(SELECT TASK_ID FROM CFG_TASKS WHERE TASK_CODE='apply')"
+            )
+        )
     warmup = submit(owner, "alice", b"id|name\n0|warmup\n")
     alice = submit(owner, "alice", b"id|name|LOCKED\n1|first|false\n2|only alice|true\n")
     bob = submit(owner, "bob", b"id|name|LOCKED\n1|newest|true\n3|only bob|true\n")
@@ -169,6 +179,16 @@ def test_complete_protected_upload_flow_orders_files_and_locks_each_writer(uploa
             )
             .scalars()
             .all()
+        )
+        assert (
+            conn.execute(
+                text(
+                    "SELECT r.duplicate_count FROM AUD_TASK_RUN_LOG r JOIN CFG_TASKS t "
+                    "ON r.task_id=t.task_id WHERE r.pipeline_run_id=:run AND t.task_code='apply'"
+                ),
+                {"run": run_id},
+            ).scalar_one()
+            == 1
         )
     assert accounts == ["alice", "bob"]
 

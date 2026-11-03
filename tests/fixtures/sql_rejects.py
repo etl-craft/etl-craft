@@ -85,3 +85,37 @@ def check_rejects(w, target, merge="SCD1_MERGE"):
     retry = "SELECT CAST(2 AS BIGINT) AS id, '2026-02-30' AS order_date, 'Delhi' AS city"
     assert w.run("load", **params, SELECT_QUERY=retry, REJECT_LIMIT="1").reject_count == 1
     assert set_aside(w, target) == [("2", "2026-02-30", "order_date", "does not cast to date", run)]
+
+
+def check_dedupe_counts(w, target, kind):
+    """Count only excess rows among accepted rows in each source batch."""
+    w.setup(target, SHAPE, kind)
+    params = {
+        **MERGE,
+        "TARGET_OBJECT": target,
+        "SQL_ACTION": kind,
+        "MERGE_DEDUPE_ORDER": "order_date DESC",
+        "REJECT_LIMIT": "2",
+    }
+    source = MESSY.replace("SELECT 2,", "SELECT 3,") + " UNION ALL SELECT 3, '2026-01-02', 'Goa'"
+    result = w.run("load", **params, SELECT_QUERY=source)
+    assert (result.source_count, result.insert_count, result.reject_count) == (7, 3, 2)
+    assert result.duplicate_count == 2
+    assert loaded(w, target) == [
+        (1, date(2026, 1, 31), "Pune"),
+        (3, date(2026, 1, 3), "Goa"),
+        (4, date(2026, 1, 4), "Leh"),
+    ]
+    assert [row[3] for row in set_aside(w, target)] == [
+        "does not cast to date",
+        "null in merge_key",
+    ]
+
+    replay = w.run("load", **params, SELECT_QUERY=source)
+    assert (replay.insert_count, replay.update_count, replay.duplicate_count) == (0, 0, 2)
+    assert len(loaded(w, target)) == 3
+
+    unique = "SELECT CAST(1 AS BIGINT) AS id, '2026-01-31' AS order_date, 'Pune' AS city"
+    assert w.run("load", **params, SELECT_QUERY=unique).duplicate_count == 0
+    unmeasured = {k: v for k, v in params.items() if k != "MERGE_DEDUPE_ORDER"}
+    assert w.run("load", **unmeasured, SELECT_QUERY=unique).duplicate_count is None

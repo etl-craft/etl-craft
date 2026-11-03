@@ -181,6 +181,7 @@ upgrade and stay in their existing audit rows until retention expires them.
 | `SOURCE_COUNT`, `TARGET_COUNT`, `INSERT_COUNT`, `UPDATE_COUNT`, `DELETE_COUNT` | the counts the task reported |
 | `ROWS_WRITTEN` | the rows the attempt inserted, updated or deleted; a `HAS_DATA` dependency is met when it is above 0 |
 | `REJECT_COUNT` | the rows a SQL task with `REJECT_LIMIT` set aside in `<target>__rejects` |
+| `DUPLICATE_COUNT` | rows removed by configured merge dedupe after load rejects |
 | `TASK_LOG` | the values the task reported, one `NAME = value` per line, then the end of its log file |
 
 A task whose process ends without reporting an outcome (it crashed, was killed, or ran out of

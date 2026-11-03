@@ -33,6 +33,7 @@ class LastRun:
     update_count: int | None = None
     delete_count: int | None = None
     reject_count: int | None = None
+    duplicate_count: int | None = None
     error_message: str | None = None
 
 
@@ -131,6 +132,7 @@ def fetch_catalog_tasks(conn: Connection) -> list[TaskRow]:
                 update_count=r.update_count,
                 delete_count=r.delete_count,
                 reject_count=r.reject_count,
+                duplicate_count=r.duplicate_count,
                 error_message=r.error_message,
             )
             if r.run_status is not None
@@ -198,6 +200,7 @@ class TaskRunSummary:
     update_count: int | None
     delete_count: int | None
     reject_count: int | None
+    duplicate_count: int | None
     error_message: str | None
     watermark_from: str | None = None
     watermark_to: str | None = None

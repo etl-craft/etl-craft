@@ -38,7 +38,9 @@ def scene(engine_db):
     with acting_as(OWNER), engine_db.engine.begin() as conn:
         sales = add_pipeline(conn, "SALES")
         load = add_task(conn, sales, "LOAD")
-        loaded = sales_run(conn, sales, load, RunStatus.SUCCESS, Counts(10, 9, 7, 2, 0, None, 1))
+        loaded = sales_run(
+            conn, sales, load, RunStatus.SUCCESS, Counts(10, 9, 7, 2, 0, None, 1, duplicate_count=0)
+        )
         failed = sales_run(conn, sales, load, RunStatus.FAILED, Counts())
         old = sales_run(conn, sales, load, RunStatus.SUCCESS, Counts(100, 100, 100, 0, 0))
         conn.execute(
@@ -107,8 +109,10 @@ def test_attempt_task_and_failure_panels_keep_unreported_counts_unmeasured(scene
         2,
         1,
     )
+    assert load.duplicates == 0
     extract = next(t for t in view.tasks if t.task_code == "EXTRACT")
     assert extract.source_rows is None and extract.inserted is None
+    assert extract.duplicates is None
     failures = {(f.pipeline_code, f.task_code, f.status): f.attempts for f in view.failures}
     assert failures == {("ORDERS", "EXTRACT", "FAILED"): 1, ("SALES", "LOAD", "FAILED"): 1}
 
@@ -150,20 +154,53 @@ def test_cli_prints_the_same_document_as_the_api(metadata_project, monkeypatch, 
     from etl_craft.cli import main
 
     p = metadata_project
-    ctx, _, _ = seed(p.engine, p.config)
+    ctx, orders_run, _ = seed(p.engine, p.config)
+    with acting_as(OWNER), p.engine.begin() as conn:
+        pipeline = add_pipeline(conn, "SALES")
+        task = add_task(conn, pipeline, "DEDUPED")
+        loaded = sales_run(conn, pipeline, task, RunStatus.SUCCESS, Counts(duplicate_count=0))
     token = act(ctx, ActionName.TOKEN_CREATE, name="reader", role=ApiRole.VIEWER).token
     monkeypatch.chdir(p.root)
     monkeypatch.setenv("ETL_CRAFT_TOKEN", token)
     assert main(["insights", "--format", "json"]) == 0
     printed = json.loads(capsys.readouterr().out)
-    served = TestClient(create_app(ctx)).get(
-        "/api/v1/projects/default/insights", headers={"Authorization": f"Bearer {token}"}
-    )
+    client = TestClient(create_app(ctx))
+    headers = {"Authorization": f"Bearer {token}"}
+    served = client.get("/api/v1/projects/default/insights", headers=headers)
     assert served.status_code == 200
     assert printed["schema"] == served.json()["schema"] == "etl-craft/insights/1"
     assert printed["total"] == served.json()["total"]
     assert main(["insights"]) == 0
     assert "ORDERS" in capsys.readouterr().out
+
+    assert printed["tasks"] == served.json()["tasks"]
+    counts = {task["task_code"]: task["duplicates"] for task in printed["tasks"]}
+    assert counts["DEDUPED"] == 0 and counts["EXTRACT"] is None
+
+    for code, run_id, task_code, value in (
+        ("ORDERS", orders_run, "EXTRACT", None),
+        ("SALES", loaded, "DEDUPED", 0),
+    ):
+        args = ["status", "--pipeline-code", code, "--run-id", str(run_id), "--format", "json"]
+        assert main(args) == 0
+        cli = json.loads(capsys.readouterr().out)
+        status = client.get(
+            "/api/v1/projects/default/status",
+            params={"pipeline_code": code, "run_id": run_id},
+            headers=headers,
+        )
+        assert status.status_code == 200, status.text
+        task = next(t for t in cli["tasks"] if t["task_code"] == task_code)
+        remote = next(t for t in status.json()["tasks"] if t["task_code"] == task_code)
+        assert task["duplicate_count"] == remote["duplicate_count"] == value
+        summary = remote["explanation"]["task"]
+        assert summary["duplicate_count"] == value
+        for attempt in summary["attempts"]:
+            response = client.get(
+                f"/api/v1/projects/default/attempts/{attempt['attempt_id']}", headers=headers
+            )
+            assert response.status_code == 200, response.text
+            assert response.json()["duplicate_count"] == attempt["duplicate_count"] == value
 
 
 def test_generated_catalog_snapshot_matches_the_live_read(scene, engine_db, tmp_path):

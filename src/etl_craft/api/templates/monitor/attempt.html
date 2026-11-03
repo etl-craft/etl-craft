@@ -15,6 +15,7 @@
   <dt>Started</dt><dd>{{ attempt.started_at|zoned(settings.timezone) }}</dd>
   <dt>Ended</dt><dd id="attempt-ended">{{ attempt.ended_at|zoned(settings.timezone) }}</dd>
   <dt>Requested by</dt><dd>{{ attempt.requested_by or "The engine" }}</dd>
+  <dt>Duplicates</dt><dd>{{ attempt.duplicate_count if attempt.duplicate_count is not none else "Not recorded" }}</dd>
   <dt>Rows written</dt><dd>{{ attempt.rows_written if attempt.rows_written is not none else "None" }}{% if attempt.reject_count %} · {{ attempt.reject_count }} rejected{% endif %}</dd>
 </dl>
 {% if attempt.error_message %}<section class="panel" aria-labelledby="error-title"><h2 id="error-title">Error</h2><pre class="log">{{ attempt.error_message }}</pre>{% if attempt.failure_source or attempt.failure_code %}<p class="note">{{ attempt.failure_source or "" }} {{ attempt.failure_code or "" }}{% if attempt.retryable %} · retryable{% endif %}</p>{% endif %}</section>{% endif %}
