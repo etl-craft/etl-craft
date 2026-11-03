@@ -73,7 +73,7 @@ def pytest_runtest_makereport(item, call):
     temporary = item.funcargs.get("tmp_path")
     if target is None or temporary is None or not report.failed:
         return
-    project = temporary / "support-insights"
+    project = temporary / "small-demo"
     if not (project / "craft-connector.yml").is_file():
         return
     try:

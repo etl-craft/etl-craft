@@ -14,9 +14,9 @@ and catch-up policies. You can also use any scheduler that runs a command. Run t
 
 ```cron
 # crontab: the clients at 05:00, the data mart after them, the catalog at 02:00
-0 5 * * *  cd /srv/etl-craft && .venv/bin/etl-craft run --pipeline-code CLIENT_ALPHA
-0 5 * * *  cd /srv/etl-craft && .venv/bin/etl-craft run --pipeline-code CLIENT_BETA
-30 5 * * * cd /srv/etl-craft && .venv/bin/etl-craft run --pipeline-code SUPPORT_DM
+0 5 * * *  cd /srv/etl-craft && .venv/bin/etl-craft run --pipeline-code SOURCE_A
+0 5 * * *  cd /srv/etl-craft && .venv/bin/etl-craft run --pipeline-code SOURCE_B
+30 5 * * * cd /srv/etl-craft && .venv/bin/etl-craft run --pipeline-code DEMO
 0 2 * * *  cd /srv/etl-craft && .venv/bin/etl-craft generate-docs
 ```
 
@@ -25,7 +25,7 @@ in the project directory. A systemd timer works the same way.
 
 - **Order between pipelines comes from the metadata**, not the schedule. A pipeline that depends
   on another waits for a running upstream (up to `Orchestration.Gate_wait_minutes`, an hour unless set) and judges its last finished run, so
-  `SUPPORT_DM` above starts only on fresh client runs, and is recorded `SKIPPED` otherwise. See
+  `DEMO` above starts only on fresh client runs, and is recorded `SKIPPED` otherwise. See
   [Dependencies on other pipelines](../guides/dependencies.md#dependencies-on-other-pipelines).
 - **Start each pipeline from one scheduler entry.** Only one run of a pipeline is in progress at
   a time; running it again resumes that run once its previous supervisor has released ownership.

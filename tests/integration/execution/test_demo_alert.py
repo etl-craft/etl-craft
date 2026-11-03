@@ -13,11 +13,11 @@ from etl_craft.engine.repository.dependencies import fetch_pipeline_graph
 
 @pytest.mark.parametrize("quality_status", [RunStatus.SUCCESS, RunStatus.FAILED, RunStatus.SKIPPED])
 def test_demo_alert_waits_for_quality_even_when_any_summary_finishes(engine_db, quality_status):
-    path = Path(__file__).parents[3] / "examples/demo/metadata/support_insights.sql"
+    path = Path(__file__).parents[3] / "examples/demo/metadata/demo.sql"
     with engine_db.engine.begin() as conn:
         run_script(conn, engine_db.dialect.split_statements(path.read_text()))
         pipeline = conn.execute(
-            text("SELECT PIPELINE_ID AS id FROM CFG_PIPELINES WHERE PIPELINE_CODE='SUPPORT_DM'")
+            text("SELECT PIPELINE_ID AS id FROM CFG_PIPELINES WHERE PIPELINE_CODE='DEMO'")
         ).scalar_one()
         data = fetch_pipeline_graph(conn, pipeline)
     graph = build_graph(data.tasks, data.same_pipeline_edges)

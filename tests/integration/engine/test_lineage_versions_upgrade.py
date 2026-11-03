@@ -154,9 +154,7 @@ def test_demo_lineage_graph_and_documentation_survive_the_cache_reset(
     with db.engine.begin() as conn:
         from etl_craft.engine.queries import run_script
 
-        statements = db.dialect.split_statements(
-            (project / "metadata/support_insights.sql").read_text()
-        )
+        statements = db.dialect.split_statements((project / "metadata/demo.sql").read_text())
         # This schema predates placement and table rules; neither changes its lineage graph.
         placement = [sql for sql in statements if "MAX_PARALLEL_TASKS" in sql]
         assert len(placement) == 1

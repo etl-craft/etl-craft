@@ -98,6 +98,12 @@ Warehouses are optional extras. Core bundles none. `all` is core plus the UI, fo
 
 ### Changed
 
+- Keep the package Quick Start and installed-wheel tests on a small demo; the full
+  Support Insights project now starts in its own public repository. The installed
+  artifact and warehouse matrix is unchanged.
+- Remove the obsolete 0.4 soak runner and instructions. S7.I supplies the replacement
+  endurance runner for the S8 deployment.
+
 - Stewardship uploads accept optional BOOLEAN `LOCKED`: FALSE releases the key's row and value
   locks while writing values; TRUE, NULL or absent locks as before. `UploadReader.rows(schema=...)`
   validates boolean file columns. Protection events retain server-verified `UPLOAD_ID`, and

@@ -90,7 +90,7 @@ def test_demo_traces_every_task_before_warehouse_exists(engine_db, tmp_path, mon
     )
     migrations = project / "migrations"
     migrations.mkdir()
-    shutil.copy(project / "metadata/support_insights.sql", migrations / "0001_demo.sql")
+    shutil.copy(project / "metadata/demo.sql", migrations / "0001_demo.sql")
     from etl_craft.engine.migrations import mark_packaged_migrations_applied
 
     with engine_db.engine.begin() as conn:

@@ -21,7 +21,7 @@ DEMO_SQL = sorted(
     for name in set(
         re.findall(
             r"'SCRIPT_FILE', '(sql_scripts/[^']+)'",
-            (DEMO / "metadata" / "support_insights.sql").read_text("utf-8"),
+            (DEMO / "metadata" / "demo.sql").read_text("utf-8"),
         )
     )
 )

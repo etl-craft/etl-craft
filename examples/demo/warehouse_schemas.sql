@@ -7,4 +7,3 @@ CREATE SCHEMA IF NOT EXISTS cdc;     -- history of changes: agents' teams over t
 CREATE SCHEMA IF NOT EXISTS pre_dm;  -- every client in one shape
 CREATE SCHEMA IF NOT EXISTS dm;      -- the data mart: the support fact and summaries
 CREATE SCHEMA IF NOT EXISTS aud;     -- the Engine DB's tables, cloned on its own schedule
-CREATE SCHEMA IF NOT EXISTS info;    -- repository-owned reference dictionary

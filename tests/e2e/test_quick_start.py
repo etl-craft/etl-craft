@@ -106,7 +106,7 @@ def test_the_quick_start_runs_as_written(tmp_path):
         assert count > 0
         assert conn.execute(
             "SELECT VERSION FROM SCHEMA_MIGRATIONS WHERE SOURCE='PROJECT'"
-        ).fetchall() == [("0001_support_insights.sql",)]
+        ).fetchall() == [("0001_demo.sql",)]
     repeated = subprocess.run(
         [str(python), "prepare.py", "metadata"],
         cwd=project,
@@ -119,9 +119,9 @@ def test_the_quick_start_runs_as_written(tmp_path):
     assert repeated.returncode == 0, repeated.stderr
     with sqlite3.connect(project / "engine.db") as conn:
         assert conn.execute("SELECT COUNT(*) FROM AUD_METADATA_CHANGES").fetchone()[0] == count
-    migration = project / "migrations" / "0001_support_insights.sql"
+    migration = project / "migrations" / "0001_demo.sql"
     original = migration.read_bytes()
-    seed = project / "metadata" / "support_insights.sql"
+    seed = project / "metadata" / "demo.sql"
     seed.write_text(seed.read_text() + "\n-- edited seed\n")
     refused = subprocess.run(
         [str(python), "prepare.py", "metadata"],

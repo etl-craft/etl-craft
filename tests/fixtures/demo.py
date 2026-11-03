@@ -1,4 +1,4 @@
-"""The Support Insights demo, from ``examples/demo``, run by an installed ``etl-craft``.
+"""The small package demo, from ``examples/demo``, run by an installed ``etl-craft``.
 
 ``installed_cli(installer)`` installs the wheel under test (``ETL_CRAFT_TEST_WHEEL``, set by
 ``scripts/run_suite.py --wheel``) into a clean virtual environment, with pip or with uv, once
@@ -56,7 +56,7 @@ from fixtures.services import (
 
 REPO = Path(__file__).resolve().parents[2]
 DEMO = REPO / "examples" / "demo"
-SCHEMAS = ("lnd", "prs", "ds", "cdc", "pre_dm", "dm", "aud", "info")
+SCHEMAS = ("lnd", "prs", "ds", "cdc", "pre_dm", "dm", "aud")
 PASSWORD_VAR = "ETL_CRAFT_DEMO_SECRET"
 S3_VAR = "ETL_CRAFT_DEMO_S3_SECRET"
 ENGINES = ("sqlite", "postgres")
@@ -143,7 +143,7 @@ class Demo:
                     "Host": smtp.host,
                     "Port": smtp.port,
                     "From_address": "etl-craft@example.com",
-                    "From_name": "Support Insights",
+                    "From_name": "Small package",
                     "Tls_mode": "NONE",
                 },
             },
@@ -333,7 +333,7 @@ class Demo:
         os.environ.setdefault("ETL_CRAFT_DEMO_PRIVACY_HMAC", "test-only-demo-privacy")
         return load_config(self.root / "craft-connector.yml")
 
-    def seed(self, name: str = "support_insights.sql") -> None:
+    def seed(self, name: str = "demo.sql") -> None:
         """Load a metadata file of the demo's, with email addresses of this demo's own."""
         sql = (self.root / "metadata" / name).read_text(encoding="utf-8")
         sql = sql.replace("@example.com", f"+{self.tag}@example.com")

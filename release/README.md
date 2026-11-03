@@ -6,6 +6,11 @@ has passing evidence recorded on the commit being released.
 Run `make regressions` before recording evidence: every stabilization defect must have
 a named, collected test in `regressions.toml`.
 
+The installed-wheel suites and the Quick Start use the small package project in
+`examples/demo`, on both Engine DBs and all four local warehouses. Pip and uv
+installation and wheel/sdist checks remain required PR checks. S7.I supplies the
+72-hour endurance runner for the S8 deployment; the retired 0.4 soak is not reused.
+
 ## Recording evidence
 
 ```bash
@@ -108,33 +113,6 @@ a new database, runs `doctor`/`reconcile` and verifies recovery without losing o
 committed work. It does not repeat a sustained benchmark in CI. See
 [Operations](../docs/deploying/operations.md) for schema/role/store backups, managed snapshots,
 restore order and the supported non-rolling upgrade procedure.
-
-## The soak
-
-Release 0.4's gate runs the demo for seven days under `etl-craft controller`, with no external scheduling, while the server is killed with SIGKILL at random times. `scripts/soak.py` prepares and
-runs it against a built wheel:
-
-```bash
-python scripts/soak.py setup ~/etl-craft-soak/0.4.0 --wheel dist/etl_craft-0.4.0-py3-none-any.whl
-~/etl-craft-soak/0.4.0/venv/bin/python scripts/soak.py run ~/etl-craft-soak/0.4.0 --days 7
-~/etl-craft-soak/0.4.0/venv/bin/python scripts/soak.py check ~/etl-craft-soak/0.4.0
-```
-
-Use the script from the same checkout as the wheel. For account-enabled wheels, `setup`
-requires an interactive terminal to create and sign in the first admin. Provision a SERVICE
-account token for that Engine DB and provide it as `ETL_CRAFT_TOKEN` for the long-running
-`run` and `check` commands; a person's default 12-hour session is too short for a multi-day soak.
-Existing frozen deployments continue using their pinned wheel and script.
-
-`setup` installs the wheel into its own environment, copies `examples/demo`, and schedules
-`CLIENT_ALPHA`, `CLIENT_BETA` and `SUPPORT_DM` every 15 minutes. `run` kills the server every 20
-to 180 minutes, starts it again, and appends a check to `report.jsonl` every half hour; started
-again after an interruption, it continues until the same end. Run it where it outlives your
-session, for example `systemd-run --user --unit etl-craft-soak -- systemd-inhibit --what=sleep
-...`. The final check, in `soak-result.json`, passes when every due tick has exactly one run, no
-run stays unfinished or fails unexpectedly, no task run succeeds twice, every append target holds
-exactly the rows each task run inserted, and `etl-craft explain` answers for every task state the
-soak reached. Mailpit (`make services-up`) receives the demo's alerts.
 
 ## Checking the gate
 

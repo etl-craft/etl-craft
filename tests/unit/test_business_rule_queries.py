@@ -76,7 +76,7 @@ def test_demo_rules_return_the_configured_fact_key():
     import re
     from pathlib import Path
 
-    path = Path(__file__).parents[2] / "examples/demo/metadata/support_insights.sql"
+    path = Path(__file__).parents[2] / "examples/demo/metadata/demo.sql"
     rules = path.read_text().split("INSERT INTO CFG_BUSINESS_RULES", 1)[1]
     queries = re.findall(r"'(SELECT [^']*)'", rules)
     assert queries

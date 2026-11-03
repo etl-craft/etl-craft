@@ -14,7 +14,7 @@ Configure `Warehouse` in `craft-connector.yml` for your PostgreSQL database, the
 The repository walkthrough below uses DuckDB for local analytics.
 
 From nothing to five pipelines running, checked, traced and documented, in about ten minutes. You
-run the Support Insights demo from the repository's `examples/demo`: two clients' support
+run the small package demo from the repository's `examples/demo`: two clients' support
 interactions landed, parsed and built into a small data mart, with business rules, alerts, a
 failure on purpose and a retry. The Engine DB is a SQLite file and the warehouse a DuckDB file,
 both created beside the demo's `craft-connector.yml`.
@@ -69,27 +69,27 @@ etl-craft validate
   migrations and running `etl-craft migrate`. In your own project, author these migrations
   directly and review them like code; plain SQL connections cannot edit Engine DB rows.
 - `validate` checks all of it without running anything:
-  `checked 5 pipeline(s) and 27 task(s): 0 failed, 0 warning(s)`.
+  `checked 5 pipeline(s) and 25 task(s): 0 failed, 0 warning(s)`.
 
 ## 4. Run the pipelines
 
 ```bash
-etl-craft run --pipeline-code CLIENT_ALPHA
-etl-craft run --pipeline-code CLIENT_BETA
-etl-craft run --pipeline-code SUPPORT_DM      # fails at flaky_feed, on purpose
-etl-craft run --pipeline-code SUPPORT_DM
+etl-craft run --pipeline-code SOURCE_A
+etl-craft run --pipeline-code SOURCE_B
+etl-craft run --pipeline-code DEMO      # fails at flaky_feed, on purpose
+etl-craft run --pipeline-code DEMO
 ```
 
 Each run prints its tasks in dependency waves, each in a process of its own, then a summary:
 
 ```text
-CLIENT_ALPHA: pipeline_run_id=1 SUCCESS
-CLIENT_BETA: pipeline_run_id=2 SUCCESS
-SUPPORT_DM: pipeline_run_id=3 FAILED — 1 task(s) did not succeed: flaky_feed (FAILED); skipped because of the failure: interactions, setup_fact, fact, quality, area_summary, source_counts, drop_source_counts
-SUPPORT_DM: pipeline_run_id=4 SUCCESS
+SOURCE_A: pipeline_run_id=1 SUCCESS
+SOURCE_B: pipeline_run_id=2 SUCCESS
+DEMO: pipeline_run_id=3 FAILED — 1 task(s) did not succeed: flaky_feed (FAILED); skipped because of the failure: interactions, setup_fact, fact, quality, area_summary, source_counts, drop_source_counts
+DEMO: pipeline_run_id=4 SUCCESS
 ```
 
-`SUPPORT_DM` waits for both clients' pipelines. Its `flaky_feed` is not ready the first time, so
+`DEMO` waits for both clients' pipelines. Its `flaky_feed` is not ready the first time, so
 the tasks that need it are skipped, the run fails and exits `1`, and the alerts in Mailpit say
 so. The next run finds the feed and succeeds on the same client runs. Each task attempt has its
 own log under `logs/`.
@@ -97,8 +97,8 @@ own log under `logs/`.
 ## 5. Look at what happened
 
 ```bash
-etl-craft history --pipeline-code SUPPORT_DM --all
-etl-craft graph --pipeline-code SUPPORT_DM
+etl-craft history --pipeline-code DEMO --all
+etl-craft graph --pipeline-code DEMO
 etl-craft lineage --table dm.support_fact --column rating --upstream
 etl-craft generate-docs
 ```
@@ -108,14 +108,14 @@ etl-craft generate-docs
 
     ```text
     dm.support_fact.rating
-      <- pre_dm.interactions.rating  [copy]  (SUPPORT_DM.fact)
-        <- prs.alpha_interactions.rating  [copy]  (SUPPORT_DM.interactions)
-          <- lnd.client_alpha.rating  [CAST(a.rating AS INT)]  (CLIENT_ALPHA.parse)
-          <- lnd.client_alpha.rating  [CAST(a.rating AS INT)]  (CLIENT_ALPHA.setup_prs)
-        <- prs.beta_interactions.rating  [copy]  (SUPPORT_DM.interactions)
-          <- lnd.client_beta.score  [CAST(b.score AS INT)]  (CLIENT_BETA.parse)
-          <- lnd.client_beta.score  [CAST(b.score AS INT)]  (CLIENT_BETA.setup_prs)
-      <- pre_dm.interactions.rating  [copy]  (SUPPORT_DM.setup_fact)
+      <- pre_dm.interactions.rating  [copy]  (DEMO.fact)
+        <- prs.alpha_interactions.rating  [copy]  (DEMO.interactions)
+          <- lnd.client_alpha.rating  [CAST(a.rating AS INT)]  (SOURCE_A.parse)
+          <- lnd.client_alpha.rating  [CAST(a.rating AS INT)]  (SOURCE_A.setup_prs)
+        <- prs.beta_interactions.rating  [copy]  (DEMO.interactions)
+          <- lnd.client_beta.score  [CAST(b.score AS INT)]  (SOURCE_B.parse)
+          <- lnd.client_beta.score  [CAST(b.score AS INT)]  (SOURCE_B.setup_prs)
+      <- pre_dm.interactions.rating  [copy]  (DEMO.setup_fact)
     ```
 
     Each table is written by two tasks: its `SETUP_TABLE` task creates it from the SELECT, and

@@ -199,7 +199,7 @@ item's text, or work done early under another item.
 | S7.U Personal-data erasure | Done | #309 | Standing table/column erasure follows pinned lineage, with private keys and recoverable ERASURE tasks |
 | S7.V Empty replacements | Done | #275 | ALLOW_EMPTY can refuse an empty CREATE_TABLE or OVERWRITE_TABLE before changing its target |
 | S7.W Docs toolchain after MkDocs 1.x | Planned | | Evaluate Zensical against the API pages, navigation and published versions; migrate only when every requirement works |
-| S7.O Package and demo repositories | Planned | | A very small demo stays in package CI; Support Insights holds its project and supplies release evidence the package gate validates |
+| S7.O Package and demo repositories | In progress | #317 | Slices 1–2: small package demo and public Support Insights seed; slice 3 evidence validation remains |
 | S7.P Obvious failures do not stop 1.0.0 | In progress | #173, #178 | Audit done (#173); the log-folder and port checks close their catalog rows (#178); item 4 keeps the catalog current |
 | S7.Q A generic ANSI SQL warehouse | Moved after 0.9.0 | | A `generic` dialect over SQLAlchemy for rare databases: ANSI SQL only, NULL-safe column comparison for merges, refusals for anything without an ANSI form |
 | S7.R Complete the test suite | In progress | #228 | Slice 1: recursive secret masking, merge crash windows and full-column/catalog upgrade guards; six-skill coverage audit remains after S7.A |
@@ -411,6 +411,13 @@ does not move worker work ahead of the metadata, account or operator-control cor
     implementing pull requests update `AGENTS.md`'s design rules to match.
 
 **Acceptance availability.**
+
+S7.O slices 1–2 passed unit and affected Engine DB, seed, lineage, alert, catalog and
+Iceberg-isolation checks locally. The reduced installed-wheel fixture, Quick Start as
+written, event delivery and headless controller lifecycle passed. Static checks and
+strict docs passed; the complete installed-artifact matrix remains CI's authority.
+The new public demo repository contains only initial sources, not S8 acceptance evidence.
+Cloud runs and CI timing were excluded by owner direction.
 
 S7.U exercised erasure, lineage, SQL handlers, API and admin browser behavior on the local
 warehouses, with SQLite/PostgreSQL upgrades, actor guards and indexed query plans. Real
@@ -949,6 +956,19 @@ passed on Snowflake (two cases) and Databricks (one case); the first Databricks 
 empty-history-page handling defect, which was corrected and verified. No cloud was unavailable.
 
 **Choices that differ from the item text.**
+
+- **S7.O slices 1–2 (owner, 2026-11-03).** One combined PR replaces the two
+  planned slice branches. Support Insights is the new public repository
+  `etl-craft/support-insights`, default branch `main`; the old repository remains
+  read-only and is neither transferred nor archived. Only the retained generators,
+  generator UI, legacy SQL reference sources and license are copied from its master.
+  The former package project's domain content seeds `project/`; S8 builds its
+  deployment and CI later. Slice 3's release evidence remains outstanding.
+  S7.N's timing re-measurement in S7.O's Done when is waived: agents do not time CI.
+  scripts/soak.py was deleted instead of taking a project directory. The small demo can't
+  run it, and S7.I's endurance runner targets the S8 deployment. S7.I may reuse its code
+  from git history. S7.I's section already describes the S8 deployment and does not
+  assume soak.py; its text is unchanged.
 
 - S7.AM slice 1 acceptance availability: SQL/SCD, replay, failure, stewardship, erasure and
   allocation contracts passed on PostgreSQL, DuckDB, Trino/Iceberg and DuckDB/Iceberg. Unit
@@ -8303,7 +8323,7 @@ S8.G.
        new location. No package contract is dropped.
   2. **The full demo lives in its own repository** (after slice 1).
      - Move the Support Insights domain content that slice 1 removed from `examples/demo` into
-       the Support Insights repository's `etl-craft` branch as its starting point (S8).
+       the Support Insights repository's `main` branch as its starting point (S8).
      - The Quick Start runs the small demo, as written, in package CI. The README links to the
        demo repository for the full walkthrough.
      - The endurance run (S7.I) runs on the Support Insights deployment. `scripts/soak.py` takes a
@@ -8892,7 +8912,7 @@ DuckDB-over-Iceberg form. It is not a protection implementation strategy.
 ## Release candidate: the Support Insights example
 
 **Goal.** Prove 1.0.0 on a real project before it is released. The
-[Support Insights platform](https://github.com/venkatcg00/Supports-Insights-Docker) is rebuilt on
+[Support Insights platform](https://github.com/etl-craft/support-insights) is rebuilt on
 etl-craft: everything etl-craft can do replaces what Airflow, PySpark and hand-written SQL do there
 today, and its project is deployed by CI. **1.0.0 is released only when every pipeline runs,
 the views match S8.F's reference queries, and every package feature has a tested and documented
@@ -8907,8 +8927,8 @@ candidates (`1.0.0rc1`, `1.0.0rc2`, ...); a defect it finds is fixed in etl-craf
 candidate is cut, never worked around in the example.
 
 **Where it lives.** Two repositories in total (S7.O): this package and Support Insights.
-The Support Insights repository's `etl-craft` branch replaces its `master` once this stage
-passes. It holds the demo code, deployment, acceptance checks and the etl-craft project in
+The new public Support Insights repository uses `main` as its default branch. It holds the
+demo code, deployment, acceptance checks and the etl-craft project in
 `project/`: `craft-connector.yml`, `config/`, `sql_scripts/`, `python_scripts/`,
 `validation_scripts/`, `migrations/` and `seeds/`.
 
@@ -8937,7 +8957,7 @@ never runs the demo itself.
 ### S8.A The project layout
 
 ```
-Supports-Insights-Docker/
+support-insights/
 ├── project/                          the etl-craft project directory
 │   ├── craft-connector.yml           secrets as variable names
 │   ├── config/                       one CSV per CFG_ table
