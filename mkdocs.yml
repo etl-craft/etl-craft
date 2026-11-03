@@ -129,6 +129,7 @@ nav:
       - Running a task and reading its logs: guides/running-tasks.md
       - "Stepping in: mark, cancel, pause, backfill, rerun and bypasses": guides/run-control.md
   - Deploying:
+      - Cluster layouts: deploying/cluster.md
       - deploying/index.md
       - The project directory: deploying/project-layout.md
       - Pinned project bundles: deploying/project-bundles.md

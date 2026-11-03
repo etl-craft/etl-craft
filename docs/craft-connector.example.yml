@@ -160,11 +160,19 @@ Warehouse:
   # the connection. Table_format: NATIVE (the default) | ICEBERG; a task's
   # TABLE_FORMAT parameter overrides it. Both may sit here, for every profile,
   # or inside a profile, as below.
-  # Profile: prod
   dev:
-    Name: DuckDB                       # value
-    Jdbc_url: jdbc:duckdb:warehouse.duckdb  # value — relative to this file
-    Schema: main                       # value — must already exist; cloning writes here
+    Name: Postgres                     # value
+    Table_format: NATIVE               # value — always NATIVE: Postgres has no Iceberg tables
+    Jdbc_url: jdbc:postgresql://localhost:5432/analytics  # value
+    Schema: etl_craft                  # value — must already exist; cloning writes here
+    User: etl_craft                    # value
+    Auth_mode: PASSWORD                # value
+    Secret: WAREHOUSE_SECRET           # environment variable holding the password
+  # For local analytics, install etl-craft[duckdb] and use this dev profile instead.
+  # dev:
+  #   Name: DuckDB                       # value
+  #   Jdbc_url: jdbc:duckdb:warehouse.duckdb  # value — relative to this file
+  #   Schema: main                       # value — must already exist; cloning writes here
   sit:
     Name: Postgres                     # value
     Table_format: NATIVE               # value — always NATIVE: Postgres has no Iceberg tables

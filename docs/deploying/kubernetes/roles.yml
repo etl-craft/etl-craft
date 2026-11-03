@@ -1,0 +1,175 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: etl-craft-controller
+spec:
+  replicas: 1
+  selector:
+    matchLabels: &id001
+      app: etl-craft-controller
+  template:
+    metadata:
+      labels: *id001
+      annotations:
+        prometheus.io/scrape: 'true'
+        prometheus.io/path: /metrics
+        prometheus.io/port: '8730'
+    spec:
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 65
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: controller
+        image: etl-craft-project:1.0.0rc1
+        args:
+        - controller
+        - --no-ui
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: '2'
+            memory: 1536Mi
+        volumeMounts:
+        - name: project
+          mountPath: /project/artifacts
+        - name: config
+          mountPath: /project/craft-connector.yml
+          subPath: engine.yml
+          readOnly: true
+        - name: state
+          mountPath: /state
+        - name: tmp
+          mountPath: /tmp
+        envFrom:
+        - secretRef:
+            name: etl-craft-engine
+        ports:
+        - name: http
+          containerPort: 8730
+        readinessProbe: &id002
+          httpGet:
+            path: /health
+            port: 8730
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 6
+        livenessProbe: *id002
+      volumes:
+      - name: project
+        persistentVolumeClaim:
+          claimName: etl-craft-project
+      - name: config
+        configMap:
+          name: etl-craft-config
+      - name: state
+        emptyDir: {}
+      - name: tmp
+        emptyDir: {}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: etl-craft-ui
+spec:
+  replicas: 2
+  selector:
+    matchLabels: &id001
+      app: etl-craft-ui
+  template:
+    metadata:
+      labels: *id001
+      annotations:
+        prometheus.io/scrape: 'true'
+        prometheus.io/path: /metrics
+        prometheus.io/port: '8730'
+    spec:
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 65
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: ui
+        image: etl-craft-project:1.0.0rc1
+        args:
+        - ui
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: '2'
+            memory: 1024Mi
+        volumeMounts:
+        - name: project
+          mountPath: /project/artifacts
+        - name: config
+          mountPath: /project/craft-connector.yml
+          subPath: engine.yml
+          readOnly: true
+        - name: state
+          mountPath: /state
+        - name: tmp
+          mountPath: /tmp
+        envFrom:
+        - secretRef:
+            name: etl-craft-engine
+        ports:
+        - name: http
+          containerPort: 8730
+        readinessProbe: &id002
+          httpGet:
+            path: /health
+            port: 8730
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 6
+        livenessProbe: *id002
+      volumes:
+      - name: project
+        persistentVolumeClaim:
+          claimName: etl-craft-project
+      - name: config
+        configMap:
+          name: etl-craft-config
+      - name: state
+        emptyDir: {}
+      - name: tmp
+        emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: etl-craft-ui
+spec:
+  selector:
+    app: etl-craft-ui
+  ports:
+  - name: http
+    port: 8730
+    targetPort: http
+  sessionAffinity: None

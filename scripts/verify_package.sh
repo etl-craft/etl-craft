@@ -120,7 +120,7 @@ for bounds in lower caps; do
     uv venv --quiet --python "$python_bin" "$work/$bounds"
     constraints=()
     if [[ "$bounds" == lower ]]; then constraints=(--requirement "$work/lower.txt" --resolution lowest-direct); fi
-    uv pip install --quiet --python "$work/$bounds/bin/python" "${constraints[@]}" "$wheel[all,publish]"
+    uv pip install --quiet --python "$work/$bounds/bin/python" "${constraints[@]}" "$wheel[all,aws,databricks,duckdb,excel,publish,snowflake,trino]"
     uv pip check --python "$work/$bounds/bin/python"
     check_install "$work/$bounds" "all extras: $bounds"
 done

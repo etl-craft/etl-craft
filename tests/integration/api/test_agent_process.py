@@ -63,6 +63,8 @@ def test_agent_runs_its_pinned_bundle_without_engine_or_store_credentials(
                 assert [(r.key, r.rows) for r in items] == [("first", 4), ("second", 3)]
         assert row.owner_id == str(token.metadata.token_id)
         assert row.target_count == 7
+        code, output = p.run("agent", "health", "--project-dir", str(agent_dir))
+        assert code == 0, output
         assert "project copy ran" in "".join(r.content for r in logs)
         agent.signal(signal.SIGTERM)
         assert agent.wait(timeout=40) == 0, agent.output

@@ -737,8 +737,6 @@ name = "etl-craft"
 version = "0.3.0"
 source = { editable = "." }
 dependencies = [
-    { name = "duckdb" },
-    { name = "duckdb-engine" },
     { name = "psutil" },
     { name = "psycopg", extra = ["binary"] },
     { name = "pyyaml" },
@@ -749,17 +747,10 @@ dependencies = [
 
 [package.optional-dependencies]
 all = [
-    { name = "boto3" },
-    { name = "databricks-sql-connector" },
-    { name = "databricks-sqlalchemy" },
     { name = "fastapi" },
     { name = "jinja2" },
-    { name = "openpyxl" },
     { name = "pydantic" },
-    { name = "snowflake-sqlalchemy" },
-    { name = "sqlalchemy" },
     { name = "starlette" },
-    { name = "trino", extra = ["sqlalchemy"] },
     { name = "uvicorn" },
 ]
 aws = [
@@ -769,6 +760,10 @@ databricks = [
     { name = "databricks-sql-connector" },
     { name = "databricks-sqlalchemy" },
     { name = "sqlalchemy" },
+]
+duckdb = [
+    { name = "duckdb" },
+    { name = "duckdb-engine" },
 ]
 excel = [
     { name = "openpyxl" },
@@ -793,7 +788,7 @@ ui = [
 
 [package.dev-dependencies]
 dev = [
-    { name = "etl-craft", extra = ["aws", "databricks", "snowflake", "trino", "ui"] },
+    { name = "etl-craft", extra = ["aws", "databricks", "duckdb", "snowflake", "trino", "ui"] },
     { name = "httpx2" },
     { name = "import-linter" },
     { name = "mypy" },
@@ -825,9 +820,9 @@ requires-dist = [
     { name = "boto3", marker = "extra == 'aws'", specifier = ">=1.28,<2" },
     { name = "databricks-sql-connector", marker = "extra == 'databricks'", specifier = ">=4.5.0,<5" },
     { name = "databricks-sqlalchemy", marker = "extra == 'databricks'", specifier = ">=2,<3" },
-    { name = "duckdb", specifier = ">=1.5.5,<2" },
-    { name = "duckdb-engine", specifier = ">=0.13,<1" },
-    { name = "etl-craft", extras = ["ui", "aws", "databricks", "snowflake", "trino", "excel"], marker = "extra == 'all'", editable = "." },
+    { name = "duckdb", marker = "extra == 'duckdb'", specifier = ">=1.5.5,<2" },
+    { name = "duckdb-engine", marker = "extra == 'duckdb'", specifier = ">=0.13,<1" },
+    { name = "etl-craft", extras = ["ui"], marker = "extra == 'all'", editable = "." },
     { name = "fastapi", marker = "extra == 'ui'", specifier = ">=0.115,<1" },
     { name = "jinja2", marker = "extra == 'ui'", specifier = ">=3.1,<4" },
     { name = "ngrok", marker = "extra == 'publish'", specifier = ">=1.4,<2" },
@@ -845,11 +840,11 @@ requires-dist = [
     { name = "uvicorn", marker = "extra == 'ui'", specifier = ">=0.35,<1" },
     { name = "watchdog", specifier = ">=6,<7" },
 ]
-provides-extras = ["excel", "ui", "all", "aws", "databricks", "publish", "snowflake", "trino"]
+provides-extras = ["duckdb", "excel", "ui", "all", "aws", "databricks", "publish", "snowflake", "trino"]
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "etl-craft", extras = ["aws", "databricks", "ui", "snowflake", "trino"], editable = "." },
+    { name = "etl-craft", extras = ["aws", "databricks", "duckdb", "ui", "snowflake", "trino"], editable = "." },
     { name = "httpx2", specifier = "==2.16.0" },
     { name = "import-linter", specifier = ">=2.1" },
     { name = "mypy", specifier = ">=1.11" },

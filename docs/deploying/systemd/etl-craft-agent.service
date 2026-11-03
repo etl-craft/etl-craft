@@ -1,0 +1,18 @@
+[Unit]
+Description=etl-craft agent
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+User=etl-craft
+Group=etl-craft
+WorkingDirectory=/srv/etl-craft/agent
+EnvironmentFile=/etc/etl-craft/agent.env
+ExecStart=/opt/etl-craft/bin/etl-craft agent
+Restart=on-failure
+TimeoutStopSec=310
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

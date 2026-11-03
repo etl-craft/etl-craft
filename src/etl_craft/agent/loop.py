@@ -17,6 +17,7 @@ from pathlib import Path
 
 from etl_craft import __version__
 from etl_craft.agent.client import AgentClient
+from etl_craft.agent.renewal import renewal_marker
 from etl_craft.agent.task_store import RemoteTaskStore
 from etl_craft.config import ConnectorConfig
 from etl_craft.config.project import project_config
@@ -160,6 +161,7 @@ class AgentLoop:
 
     def serve(self) -> None:
         """Stay outbound-only; retain processes only while their conservative lease permits."""
+        renewal_marker(self.config.host_dir).unlink(missing_ok=True)
         registered = self.client.call(
             ActionName.AGENT_REGISTER,
             AgentRegister(
@@ -399,6 +401,7 @@ class AgentLoop:
                 )
                 acknowledged.append(int(item["command_id"]))
         self.commands = tuple(acknowledged)
+        renewal_marker(self.config.host_dir).touch()
         if acknowledged:
             self.wake.set()
 

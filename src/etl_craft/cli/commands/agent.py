@@ -20,7 +20,7 @@ from etl_craft.services.operations.requests import NoInput
 
 
 def _configure(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("operation", choices=("drain", "resume", "stop"), nargs="?")
+    parser.add_argument("operation", choices=("drain", "resume", "stop", "health"), nargs="?")
     parser.add_argument("--agent-id", type=int)
     parser.add_argument("--project-dir", type=Path, help="This agent's project directory.")
     parser.add_argument("--pool", default="default")
@@ -40,6 +40,11 @@ def _configure(parser: argparse.ArgumentParser) -> None:
 
 
 def _run(args: argparse.Namespace, out: Output) -> int:
+    if args.operation == "health":
+        from etl_craft.agent.renewal import require_recent_renewal
+
+        require_recent_renewal(_config_path(args).parent)
+        return ExitCode.SUCCESS
     if not args.api:
         raise UsageError(
             "agent requires --api or ETL_CRAFT_API; agents never connect to the Engine DB"
@@ -57,12 +62,7 @@ def _run(args: argparse.Namespace, out: Output) -> int:
             text=lambda: out.rows((("Agent", args.agent_id, args.operation),)),
         )
         return ExitCode.SUCCESS
-    if args.project_dir is not None and args.config is not None:
-        raise UsageError("choose --project-dir or --config, not both")
-    path = resolve_config_path(
-        args.config if args.project_dir is None else args.project_dir / "craft-connector.yml"
-    )
-    config = load_config(path, agent=True)
+    config = load_config(_config_path(args), agent=True)
     selected = ceilings(config)
     selected = replace(
         selected,
@@ -99,6 +99,14 @@ def _run(args: argparse.Namespace, out: Output) -> int:
             stop,
         ).serve()
     return ExitCode.SUCCESS
+
+
+def _config_path(args: argparse.Namespace) -> Path:
+    if args.project_dir is not None and args.config is not None:
+        raise UsageError("choose --project-dir or --config, not both")
+    return resolve_config_path(
+        args.config if args.project_dir is None else args.project_dir / "craft-connector.yml"
+    )
 
 
 def _list(args: argparse.Namespace, out: Output) -> int:

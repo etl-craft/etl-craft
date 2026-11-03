@@ -59,7 +59,7 @@ def test_the_quick_start_runs_as_written(tmp_path):
     if only not in (None, "duckdb"):
         pytest.skip(f"the Quick Start's warehouse is DuckDB; this run covers {only}")
     require("mailpit_smtp")
-    cli = installed_cli("pip", tmp_path / "venvs", extras="trino")
+    cli = installed_cli("pip", tmp_path / "venvs", extras="duckdb")
     python = cli.with_name(cli.name.replace("etl-craft", "python"))
     project = tmp_path / "demo"
     shutil.copytree(

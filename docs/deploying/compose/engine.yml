@@ -1,0 +1,23 @@
+Secrets:
+  Source_type: ENVIRONMENT
+Orchestration:
+  Project: default
+  Api_address: 0.0.0.0:8730
+Deployment:
+  Profile: CONTROLLER_AGENTS
+Engine:
+  dev:
+    Jdbc_url: jdbc:postgresql://postgres:5432/etl_craft
+    User: etl_craft
+    Auth_mode: PASSWORD
+    Secret: ENGINE_PASSWORD
+    Schema: public
+Warehouse:
+  Name: DuckDB
+  dev:
+    Jdbc_url: jdbc:duckdb:warehouse.duckdb
+    Schema: main
+Docs_site:
+  Trusted_proxies: [172.28.87.254/32]
+Artifacts:
+  Store: file:///project/artifacts

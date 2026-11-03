@@ -124,8 +124,8 @@ after it is green.
   every check re-sends the whole session.
 - Write the run's output to a log file and read it once, after the run ends.
 - After `gh pr merge --auto`, end the session; don't wait for CI at all.
-- Where an item needs CI results (timing runs, a failure to read), use `gh run watch
-  --exit-status`, then read the job logs once.
+- Agents do not measure or report CI time. The ten-minute limit is the owner's to watch; a required job that fails is read once from its log.
+  Run Snowflake and Databricks at the same time, never one after the other.
 - When a required local suite could not run (`AGENTS.md`, "Validation"), leave the pull
   request unmerged with the reason in it, and do not turn on auto-merge. A cloud suite that was
   unavailable on its one try does not hold the merge: record it and merge.

@@ -26,9 +26,9 @@ Every role refuses to start unless the applied Engine DB migration names and che
 its installed package. Apply pending migrations with `etl-craft migrate`; an older package
 against a newer schema must be upgraded. No automatic migration runs at process startup.
 
-The `ui` extra includes FastAPI, uvicorn, Pydantic and Jinja2. `etl-craft[all]` adds `ui` and
-every warehouse extra (including AWS support). The former `server` extra is removed without
-an alias. UI pages are delivered separately; this role serves the shared HTTP actions.
+The `ui` extra includes FastAPI, uvicorn, Pydantic and Jinja2. `etl-craft[all]` resolves to
+the same packages as `etl-craft[ui]`. Install warehouse extras separately. The former `server`
+extra is removed without an alias. UI pages are delivered separately; this role serves the shared HTTP actions.
 
 `Orchestration.Api_address` defaults to `127.0.0.1:8730`. Set it to a `host:port`, or
 `[IPv6-address]:port`. For a team URL, place a TLS reverse proxy in front of the listener.

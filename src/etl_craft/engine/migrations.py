@@ -125,7 +125,11 @@ def read_stream(source: str, directory: Path, dialect: str = "") -> Stream:
 
 
 def migration_streams(
-    engine: Engine, project_dir: Path | str | None = None, project_default: Path | None = None
+    engine: Engine,
+    project_dir: Path | str | None = None,
+    project_default: Path | None = None,
+    *,
+    package_only: bool = False,
 ) -> list[Stream]:
     """Return the packaged ENGINE stream, followed by the PROJECT stream when there is one."""
     package_dir = for_engine(engine).migrations_dir()
@@ -135,6 +139,8 @@ def migration_streams(
             "installed etl-craft package is missing its SQL files"
         )
     streams = [read_stream(ENGINE, package_dir, for_engine(engine).name)]
+    if package_only:
+        return streams
     project = resolve_project_migrations_dir(project_dir, project_default)
     if project is None:
         return streams
@@ -272,6 +278,7 @@ def pending_migrations(
     *,
     project_default: Path | None = None,
     connection: Connection | None = None,
+    package_only: bool = False,
 ) -> list[str]:
     """Return the migrations ``migrate`` would apply, without applying any.
 
@@ -281,7 +288,11 @@ def pending_migrations(
     return [
         f"{migration.source.lower()}/{migration.version}"
         for migration in pending_files(
-            engine, project_dir, project_default=project_default, connection=connection
+            engine,
+            project_dir,
+            project_default=project_default,
+            connection=connection,
+            package_only=package_only,
         )
     ]
 
@@ -292,11 +303,14 @@ def pending_files(
     *,
     project_default: Path | None = None,
     connection: Connection | None = None,
+    package_only: bool = False,
 ) -> list[MigrationFile]:
     """Return the files ``migrate`` would apply, in order, after verifying the applied ones."""
-    streams = migration_streams(engine, project_dir, project_default)
+    streams = migration_streams(engine, project_dir, project_default, package_only=package_only)
     with nullcontext(connection) if connection is not None else engine.connect() as conn:
         ledger = _load_ledger(conn)
+    if package_only:
+        ledger = {key: checksum for key, checksum in ledger.items() if key[0] == ENGINE}
     verify_ledger(ledger, streams)
     return [
         migration
