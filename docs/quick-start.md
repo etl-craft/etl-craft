@@ -6,11 +6,10 @@ analytical warehouse, install `etl-craft[duckdb]`.
 
 ```bash
 pip install etl-craft
-# Configure Warehouse in craft-connector.yml for your PostgreSQL database.
-etl-craft setup
-etl-craft login
-etl-craft validate
 ```
+
+Configure `Warehouse` in `craft-connector.yml` for your PostgreSQL database, then run
+`etl-craft setup`, `etl-craft login` and `etl-craft validate`.
 
 The repository walkthrough below uses DuckDB for local analytics.
 

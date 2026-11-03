@@ -63,7 +63,7 @@ ENGINES = ("sqlite", "postgres")
 WAREHOUSES = ("duckdb", "postgres", "duckdb_iceberg", "trino_iceberg")
 
 
-def installed_cli(installer: str, root: Path, extras: str = "trino") -> Path:
+def installed_cli(installer: str, root: Path, extras: str = "duckdb,trino") -> Path:
     """Install the wheel under test into a new virtual environment; return its ``etl-craft``."""
     wheel = os.environ.get("ETL_CRAFT_TEST_WHEEL")
     if not wheel:
