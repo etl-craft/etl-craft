@@ -39,7 +39,7 @@ def ui(ctx: OperationContext, request: NoInput) -> None:
             "etl-craft ui dependencies are missing; expected the ui extra; "
             "install `etl-craft[ui]` on this host"
         )
-    check_package_schema(ctx)
+    check_package_schema(ctx, package_only=True)
     if not for_engine(ctx.engine).supports_api_replicas:
         raise ConfigurationError(
             f"{ctx.config.config_path}: Engine.Jdbc_url={ctx.config.engine.jdbc_url!r}; "
@@ -49,9 +49,11 @@ def ui(ctx: OperationContext, request: NoInput) -> None:
     check_notifications(ctx.config, ctx.engine)
 
 
-def check_package_schema(ctx: OperationContext, connection: Connection | None = None) -> None:
+def check_package_schema(
+    ctx: OperationContext, connection: Connection | None = None, *, package_only: bool = False
+) -> None:
     """Require the existing migration ledger to match this package before using it."""
-    require_current_schema(ctx, connection)
+    require_current_schema(ctx, connection, package_only=package_only)
 
     if connection is not None:
         require_guards(connection)
@@ -79,7 +81,7 @@ def readiness(ctx: OperationContext) -> Health:
                 "readiness connection is busy; expected a free probe session; retry another UI copy"
             )
         with for_engine(ctx.engine).session_connection(ctx.engine, ctx.config) as conn:
-            check_package_schema(ctx, connection=conn)
+            check_package_schema(ctx, connection=conn, package_only=True)
         return probe(ctx)
 
 

@@ -26,7 +26,7 @@ spec:
           type: RuntimeDefault
       containers:
       - name: controller
-        image: ghcr.io/etl-craft/etl-craft:1.0.0rc1
+        image: etl-craft-project:1.0.0rc1
         args:
         - controller
         - --no-ui
@@ -45,7 +45,7 @@ spec:
             memory: 1536Mi
         volumeMounts:
         - name: project
-          mountPath: /project
+          mountPath: /project/artifacts
         - name: config
           mountPath: /project/craft-connector.yml
           subPath: engine.yml
@@ -108,7 +108,7 @@ spec:
           type: RuntimeDefault
       containers:
       - name: ui
-        image: ghcr.io/etl-craft/etl-craft:1.0.0rc1-ui
+        image: etl-craft-project:1.0.0rc1
         args:
         - ui
         securityContext:
@@ -126,7 +126,7 @@ spec:
             memory: 1024Mi
         volumeMounts:
         - name: project
-          mountPath: /project
+          mountPath: /project/artifacts
         - name: config
           mountPath: /project/craft-connector.yml
           subPath: engine.yml

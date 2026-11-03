@@ -1,11 +1,11 @@
 x-backend: &backend
-  image: ghcr.io/etl-craft/etl-craft:${ETL_CRAFT_VERSION:?Set ETL_CRAFT_VERSION}
+  image: ${ETL_CRAFT_PROJECT_IMAGE:?Set ETL_CRAFT_PROJECT_IMAGE}
   environment:
     ENGINE_PASSWORD: ${ENGINE_PASSWORD:?Set ENGINE_PASSWORD}
     ETL_CRAFT_TOKEN: ${CONTROLLER_TOKEN:-}
   read_only: true
   volumes:
-    - project:/project
+    - project:/project/artifacts
     - ./engine.yml:/project/craft-connector.yml:ro
   tmpfs: ["/tmp:mode=1777", "/state:uid=10001,gid=10001,mode=0700"]
   networks: [backend]
@@ -38,7 +38,7 @@ services:
     command: [controller, --no-ui]
   ui:
     <<: *backend
-    image: ghcr.io/etl-craft/etl-craft:${ETL_CRAFT_VERSION:?Set ETL_CRAFT_VERSION}-ui
+    image: ${ETL_CRAFT_PROJECT_IMAGE:?Set ETL_CRAFT_PROJECT_IMAGE}
     command: [ui]
     networks: [backend, edge]
     deploy:
@@ -56,7 +56,7 @@ services:
         aliases: [etl-craft.test]
         ipv4_address: 172.28.87.254
   agent:
-    image: ghcr.io/etl-craft/etl-craft:${ETL_CRAFT_VERSION:?Set ETL_CRAFT_VERSION}
+    image: ${ETL_CRAFT_PROJECT_IMAGE:?Set ETL_CRAFT_PROJECT_IMAGE}
     command: [agent]
     environment:
       ETL_CRAFT_API: https://etl-craft.test
@@ -66,7 +66,6 @@ services:
     networks: [edge]
     depends_on: [proxy]
     volumes:
-      - agent:/project
       - ./agent.yml:/project/craft-connector.yml:ro
       - ./tls/ca.pem:/etc/etl-craft/ca.pem:ro
     tmpfs: ["/tmp:mode=1777", "/state:uid=10001,gid=10001,mode=0700"]
@@ -86,4 +85,3 @@ networks:
 volumes:
   engine: {}
   project: {}
-  agent: {}

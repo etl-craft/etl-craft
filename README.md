@@ -11,6 +11,9 @@ Documentation: <https://docs.etl-craft.dev/>
 
 ## Try it
 
+PostgreSQL is the default warehouse in the example configuration. For local analytics,
+install the DuckDB extra with `pip install etl-craft[duckdb]`.
+
 The [Quick Start](docs/quick-start.md) runs the Support Insights demo (`examples/demo`): five
 pipelines on a SQLite Engine DB and a DuckDB warehouse, in about ten minutes. It sends its alerts
 to a local Mailpit, which the Quick Start starts with one `docker run`.

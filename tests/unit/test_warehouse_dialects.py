@@ -889,3 +889,32 @@ def test_snowflake_keeps_login_isolation_without_a_setup_statement():
         assert engine.dialect._on_connect_isolation_level is None
     finally:
         engine.dispose()
+
+
+@pytest.mark.parametrize(
+    "extra,jdbc",
+    [
+        ("duckdb", "jdbc:duckdb:warehouse.duckdb"),
+        ("trino", TRINO),
+        ("snowflake", SNOWFLAKE),
+        ("databricks", DATABRICKS),
+    ],
+)
+def test_missing_warehouse_driver_names_project_extra_and_remedy(extra, jdbc, monkeypatch):
+    from sqlalchemy.exc import NoSuchModuleError
+
+    config = replace(
+        config_for(profile("NONE", "jdbc:duckdb:warehouse.duckdb")),
+        warehouse=profile("NONE", jdbc),
+        project="missing_driver_project",
+    )
+
+    def missing_driver(*args, **kwargs):
+        raise NoSuchModuleError(extra)
+
+    monkeypatch.setattr(connection, "create_engine", missing_driver)
+    with pytest.raises(ConfigurationError) as caught:
+        connection.build_warehouse_engine(config)
+    message = str(caught.value)
+    assert "missing_driver_project" in message
+    assert f"{extra} warehouse" in message and f"Install etl-craft[{extra}]" in message

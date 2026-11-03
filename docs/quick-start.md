@@ -2,7 +2,17 @@
 
 A trial needs a running PostgreSQL warehouse or the DuckDB extra. For PostgreSQL, install
 `etl-craft` and supply your connection under `Warehouse` in `craft-connector.yml`. For a local
-analytical warehouse, install `etl-craft[duckdb]`. The walkthrough below uses DuckDB.
+analytical warehouse, install `etl-craft[duckdb]`.
+
+```bash
+pip install etl-craft
+# Configure Warehouse in craft-connector.yml for your PostgreSQL database.
+etl-craft setup
+etl-craft login
+etl-craft validate
+```
+
+The repository walkthrough below uses DuckDB for local analytics.
 
 From nothing to five pipelines running, checked, traced and documented, in about ten minutes. You
 run the Support Insights demo from the repository's `examples/demo`: two clients' support

@@ -129,7 +129,7 @@ def test_deployment_examples_use_the_cli_and_configuration_inventories(monkeypat
     parser = build_parser()
     compose = yaml.safe_load((deployment / "compose/compose.yml").read_text())
     for service in compose["services"].values():
-        if service["image"].startswith("ghcr.io/etl-craft/etl-craft:"):
+        if service["image"].startswith("${ETL_CRAFT_PROJECT_IMAGE:"):
             parser.parse_args(service["command"])
             probe = service["healthcheck"]["test"]
             if probe[:2] == ["CMD", "etl-craft"]:

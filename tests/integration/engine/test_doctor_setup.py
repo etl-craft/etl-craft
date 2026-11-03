@@ -7,6 +7,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 from sqlalchemy import text
+from sqlalchemy.exc import NoSuchModuleError
 
 from etl_craft.cli import main
 from etl_craft.config import ConnectionProfile, EmailProfile
@@ -349,3 +350,19 @@ def test_doctor_reports_a_holiday_list_that_ends_within_sixty_days(config, empty
         f"the holiday list ends on {last.isoformat()}, within 60 days; add the next year's "
         "holidays to calendar_holidays.csv",
     )
+
+
+def test_validate_and_doctor_refuse_a_missing_warehouse_extra(cli_project, monkeypatch, capsys):
+    from etl_craft.warehouse import connection
+
+    def missing_driver(*args, **kwargs):
+        raise NoSuchModuleError("duckdb")
+
+    monkeypatch.setenv("ETL_CRAFT_CONFIG", str(cli_project.config.config_path))
+    monkeypatch.setattr(connection, "create_engine", missing_driver)
+    for command in ("validate", "doctor"):
+        assert main([command]) != ExitCode.SUCCESS
+        output = capsys.readouterr()
+        message = output.out + output.err
+        assert "default" in message and "duckdb warehouse" in message
+        assert "Install etl-craft[duckdb]" in message

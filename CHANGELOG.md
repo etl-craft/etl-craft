@@ -15,6 +15,8 @@ Warehouses are optional extras. Core bundles none. `all` is core plus the UI, fo
 - `etl-craft agent health` checks the local timestamp of the last successful API renewal
   without credentials or a listening port. Headless controllers serve `/health` and
   internal `/metrics` and return 404 for other paths.
+- Standalone UI startup and readiness verify the installed package against the Engine DB
+  migration ledger. Run project migrations from the project image before rolling the roles.
 
 - Report post-reject merge duplicates in task and attempt counts, inspection, metrics and audit mirrors.
 

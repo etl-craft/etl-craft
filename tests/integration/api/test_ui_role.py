@@ -16,7 +16,7 @@ from sqlalchemy import text
 from etl_craft import __version__
 from etl_craft.config.loader import SECTIONS
 from etl_craft.core.actor import Actor, ActorKind
-from etl_craft.core.enums import ActionName, ApiRole
+from etl_craft.core.enums import ActionName, ApiRole, AuthMode
 from etl_craft.services.operations import OperationContext
 from fixtures.actions import act
 
@@ -151,11 +151,14 @@ def test_controller_no_ui_serves_only_health_and_private_value_free_metrics(
     assert "etl_craft_controller_tick_duration_seconds_count" in response.text
     private = (
         business_value,
-        resolve_secret(p.config, p.config.engine) if p.config.engine.secret_var else "",
+        resolve_secret(p.config, p.config.engine)
+        if p.config.engine.auth_mode == AuthMode.PASSWORD
+        else "",
         p.config.engine.jdbc_url,
         os.environ.get("ETL_CRAFT_TOKEN", ""),
     )
-    assert all(item not in response.text for item in private if item)
+    labels = re.findall(r'="([^"]*)"', response.text)
+    assert all(item not in label for label in labels for item in private if item)
     controller.signal(signal.SIGTERM)
     assert controller.wait() == 0, controller.output
 
@@ -239,6 +242,35 @@ def test_ui_missing_extra_is_refused_and_plain_controller_keeps_health_only(
         rows = conn.execute(text("SELECT COMMAND AS command FROM AUD_ACTIONS")).all()
         assert any(row.command == "ui" for row in rows)
         assert conn.execute(text("SELECT COUNT(*) AS n FROM AUD_CONTROLLERS")).scalar_one() == 0
+
+
+@pytest.mark.parametrize(
+    "empty_engine_db",
+    [pytest.param("postgresql", marks=pytest.mark.engine_postgres)],
+    indirect=True,
+)
+@pytest.mark.parametrize("mismatch", [False, True])
+def test_ui_readiness_without_project_migration_files(cli_project, mismatch):
+    p = cli_project
+    migrations = p.config.project_dir / "migrations"
+    migrations.mkdir(exist_ok=True)
+    migration = migrations / "0001_readiness.sql"
+    migration.write_text("SELECT 1;")
+    code, output = p.run("migrate")
+    assert code == 0, output
+    migrations.rename(migrations.with_name("offline-migrations"))
+
+    _, url = start_listener(p, "ui")
+    if mismatch:
+        with p.engine.begin() as conn:
+            conn.execute(
+                text("UPDATE SCHEMA_MIGRATIONS SET CHECKSUM=:checksum WHERE SOURCE='ENGINE'"),
+                {"checksum": "0" * 64},
+            )
+    response = httpx.get(url + "/health", timeout=5)
+    assert response.status_code == (503 if mismatch else 200), response.text
+    if mismatch:
+        assert "package version" in response.text and "etl-craft migrate" in response.text
 
 
 @pytest.mark.parametrize(

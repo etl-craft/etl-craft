@@ -8,23 +8,25 @@ your workload needs. Use the same package version for every role.
 | `ghcr.io/etl-craft/etl-craft:<version>` | `controller --no-ui`, `agent`, `run` |
 | `ghcr.io/etl-craft/etl-craft:<version>-ui` | `ui`, all-in-one `controller`, or any base role |
 
-The base image includes every supported warehouse driver, S3 access and Excel upload support
-so agents can take work from any project in their pool. The UI image adds the HTTP and browser
-dependencies. Both run as UID/GID 10001 with `etl-craft` as the entrypoint. Mount writable
-volumes at `/project`, `/state` and `/tmp`. The project volume holds project state, logs and
-pending or processed uploads. Keep container root filesystems read-only.
+The base image contains the application and PostgreSQL client. The UI image adds the HTTP
+and browser dependencies. Both run as UID/GID 10001 with `etl-craft` as the entrypoint.
+The release workflow publishes exact version tags after the release gate and smoke tests pass.
 
-Pull the exact version. The release workflow publishes those tags after the release gate and
-deployment smoke checks pass. For a local build, use the wheel produced by this repository:
+Build one project image from the matching UI image for a split deployment. Put the project
+files under `project/` in the build context and create an empty `wheels/` directory.
+Keep credentials out of the context. Use the [project Dockerfile](Dockerfile):
 
 ```sh
-uv build --wheel
-docker build --target base -t etl-craft:local .
-docker build --target ui -t etl-craft:local-ui .
+docker build -f Dockerfile --build-arg BASE_IMAGE=ghcr.io/etl-craft/etl-craft:<version>-ui \
+  -t etl-craft-project:<version> .
 ```
 
-Keep one wheel in `dist/` for the build. The context excludes project credentials and other
-workspace files. The image does not need build-time secrets.
+PostgreSQL uses the client already in the base. For DuckDB, pass
+`--build-arg 'ETL_CRAFT_REQUIREMENT=etl-craft[duckdb]==<version>'` to the same build.
+Use the appropriate extra for another warehouse. For a locally built version, put its
+wheel in `wheels/`. Mount configuration and writable storage at runtime. Keep root
+filesystems read-only. The example agent stores its bootstrap and renewal marker in a
+writable volume, separate from the baked project.
 
 ## Single-host Compose
 
@@ -33,7 +35,7 @@ Use the [Compose template](compose/compose.yml), [host configuration](compose/en
 directory. The template runs PostgreSQL, a headless controller, two UI copies, one outbound
 agent and an HTTPS proxy. It is separate from the repository's development services.
 
-1. Set `ETL_CRAFT_VERSION` to the published version and `ENGINE_PASSWORD` to a secret. Provide
+1. Set `ETL_CRAFT_PROJECT_IMAGE` to the project image tag and `ENGINE_PASSWORD` to a secret. Provide
    `tls/server.pem`, `tls/server.key` and `tls/ca.pem` for `etl-craft.test`, or update the
    proxy name and the agent API URL together. The template binds the TLS port to loopback.
 2. Start PostgreSQL. Initialize the database using a one-shot UI image container and the
@@ -69,8 +71,8 @@ manifest](kubernetes/agent.yml). Replace the version tags and provide:
 - A Secret named `etl-craft-engine` with `ENGINE_PASSWORD` and the host service
   `ETL_CRAFT_TOKEN` for the controller and UI. Give the agent its own Secret
   `etl-craft-agent-token` containing only `ETL_CRAFT_TOKEN`. The agent opens no port.
-- A shared read/write claim named `etl-craft-project` for the controller and UI project files,
-  logs and uploads. Use an RWX volume if the pods can run on different nodes. Configure a
+- A shared read/write claim named `etl-craft-project` for the controller and UI artifact store.
+  Use an RWX volume if the pods can run on different nodes. Configure a
   durable [artifact store](project-bundles.md) and [log store](operations.md) reachable from
   every role that reads or writes them. An agent retrieves pinned files through the API and
   uses its own writable bootstrap and temporary volumes.
@@ -107,3 +109,16 @@ mount the project and stores with access for that account, and give each agent i
 bootstrap directory and token. Keep the systemd environment files root-readable only. Put
 Engine DB credentials only in the controller and UI environment files. The agent environment
 needs `ETL_CRAFT_API`, its own `ETL_CRAFT_TOKEN` and any separately authorized warehouse settings.
+
+### Run migrations before rolling the roles
+
+Run `etl-craft migrate` from the project image before rolling the roles. Use a
+Kubernetes Job or a Compose one-off container with the project configuration and
+migration credentials. Wait for that command to succeed before rolling out the
+new images.
+
+Standalone UI startup and `/health` verify the packaged Engine DB migrations
+against the installed package. These checks need no project migration files.
+PostgreSQL commits each project migration and its ledger entry together. Until
+that commit, UI copies see the previous consistent state. A failed migration
+rolls back both the change and its ledger entry.

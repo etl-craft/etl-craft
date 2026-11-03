@@ -93,7 +93,7 @@ from etl_craft.services.seeds import cast_rows, discover
 from etl_craft.services.source_columns import definition_problem, drift, warehouse_columns
 from etl_craft.services.stewardship_checks import graph_problems, sql_problems
 from etl_craft.services.trigger_validation import trigger_definition, trigger_graph_problems
-from etl_craft.warehouse.connection import open_warehouse
+from etl_craft.warehouse.connection import build_warehouse_engine, open_warehouse
 
 ROWS_REPORTED = frozenset(WRITERS)
 """The SQL actions that report the rows in their target, which a ``HAS_DATA`` edge needs."""
@@ -160,7 +160,9 @@ class _Metadata:
 
 
 def validate(engine: Engine, config: ConnectorConfig, pipeline_code: str | None = None) -> Report:
-    """Check every active pipeline, or only ``pipeline_code``; return every finding."""
+    """Check the warehouse driver and metadata without running tasks."""
+    if config.warehouse is not None:
+        build_warehouse_engine(config).dispose()
     with read_snapshot(engine) as conn:
         return validate_snapshot(conn, engine, config, pipeline_code)
 

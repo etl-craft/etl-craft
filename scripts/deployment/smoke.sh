@@ -4,6 +4,7 @@ set -euo pipefail
 root=$(cd "$(dirname "$0")/../.." && pwd)
 : "${ETL_CRAFT_VERSION:?Set the exact built image version}"
 export COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-etl-craft-deploy-test}"
+export ETL_CRAFT_PROJECT_IMAGE="etl-craft-project:$ETL_CRAFT_VERSION"
 export ENGINE_PASSWORD="$(openssl rand -hex 24)"
 export SMOKE_ADMIN_PASSWORD="Aa!$(openssl rand -hex 24)"
 unset CONTROLLER_TOKEN AGENT_TOKEN
@@ -18,6 +19,7 @@ cleanup() {
     unlink "$scratch/tls/server.pem"
     unlink "$scratch/tls/ca.pem"
     rmdir "$scratch/tls"
+    rm -rf "$scratch/build"
     for file in "$scratch"/*; do unlink "$file"; done
     rmdir "$scratch"
 }
@@ -27,6 +29,14 @@ openssl req -new -x509 -newkey rsa:2048 -nodes -days 1 -subj /CN=etl-craft.test 
     -addext 'subjectAltName=DNS:etl-craft.test,DNS:etl-craft-ui-tls' \
     -keyout "$scratch/tls/server.key" -out "$scratch/tls/server.pem" >/dev/null 2>&1
 cp "$scratch/tls/server.pem" "$scratch/tls/ca.pem"
+mkdir -p "$scratch/build/wheels"
+cp -R "$root/scripts/deployment/project" "$scratch/build/project"
+uv build --wheel --out-dir "$scratch/build/wheels" "$root"
+docker build -f "$root/docs/deploying/Dockerfile" \
+    --build-arg "BASE_IMAGE=ghcr.io/etl-craft/etl-craft:$ETL_CRAFT_VERSION-ui" \
+    --build-arg "ETL_CRAFT_REQUIREMENT=etl-craft[duckdb]==$ETL_CRAFT_VERSION" \
+    -t "$ETL_CRAFT_PROJECT_IMAGE" "$scratch/build"
+rm -r "$scratch/build"
 compose up -d --wait postgres
 credentials=$(compose run --rm -T --no-deps -e SMOKE_ADMIN_PASSWORD --entrypoint python ui - \
     < "$root/scripts/deployment/bootstrap.py")

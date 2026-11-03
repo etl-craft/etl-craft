@@ -159,6 +159,13 @@ jobs:
           image="ghcr.io/etl-craft/etl-craft:$ETL_CRAFT_VERSION"
           docker build --target base --tag "$image" .
           docker build --target ui --tag "$image-ui" .
+          for spec in "$image:280000000" "$image-ui:295000000"; do
+            tag=${spec%:*}
+            cap=${spec##*:}
+            size=$(docker image inspect --format '{{.Size}}' "$tag")
+            echo "$tag: $size bytes (limit $cap)"
+            test "$size" -le "$cap"
+          done
       - name: Install pinned k3d and kubectl
         run: |
           tools="$RUNNER_TEMP/deployment-bin"
@@ -167,12 +174,12 @@ jobs:
             https://github.com/k3d-io/k3d/releases/download/v5.9.0/k3d-linux-amd64 \
             --output "$tools/k3d"
           curl --fail --silent --show-error --location --retry 3 \
-            https://dl.k8s.io/release/v1.32.2/bin/linux/amd64/kubectl --output "$tools/kubectl"
+            https://dl.k8s.io/release/v1.37.2/bin/linux/amd64/kubectl --output "$tools/kubectl"
           (
             cd "$tools"
             sha256sum -c <<'SHA'
           06d8f25bc3a971c4eb29e0ff08429b180402db0f4dec838c9eac427e296800a0  k3d
-          4f6a959dcc5b702135f8354cc7109b542a2933c46b808b248a214c1f69f817ea  kubectl
+          c04487523e7aa7d1493f7808174c899db93d7a9cf57531420cd76b9bd415f8f4  kubectl
           SHA
           )
           chmod +x "$tools/k3d" "$tools/kubectl"

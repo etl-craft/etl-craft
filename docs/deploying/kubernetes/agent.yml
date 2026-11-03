@@ -22,7 +22,7 @@ spec:
           type: RuntimeDefault
       containers:
       - name: agent
-        image: ghcr.io/etl-craft/etl-craft:1.0.0rc1
+        image: etl-craft-project:1.0.0rc1
         args:
         - agent
         securityContext:
@@ -39,10 +39,8 @@ spec:
             cpu: '2'
             memory: 1024Mi
         volumeMounts:
-        - name: project
-          mountPath: /project
         - name: config
-          mountPath: /project/craft-connector.yml
+          mountPath: /state/craft-connector.yml
           subPath: agent.yml
           readOnly: true
         - name: state
@@ -50,6 +48,8 @@ spec:
         - name: tmp
           mountPath: /tmp
         env:
+        - name: ETL_CRAFT_CONFIG
+          value: /state/craft-connector.yml
         - name: ETL_CRAFT_API
           valueFrom:
             configMapKeyRef:
@@ -76,8 +76,6 @@ spec:
           failureThreshold: 3
         livenessProbe: *id003
       volumes:
-      - name: project
-        emptyDir: {}
       - name: config
         configMap:
           name: etl-craft-config

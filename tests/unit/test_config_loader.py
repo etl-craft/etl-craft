@@ -52,13 +52,13 @@ def _minimal(**sections) -> dict:
     return raw
 
 
-def test_the_shipped_example_loads_for_dev_with_nothing_set():
+def test_the_shipped_example_loads_postgres_for_dev(monkeypatch):
+    monkeypatch.setenv("WAREHOUSE_SECRET", "example-password")
     config = load_config(EXAMPLE)
     assert config.engine.jdbc_url == "jdbc:sqlite:etl-craft-engine.db"
     assert config.engine.auth_mode == "NONE"
     assert config.warehouse is not None
-    # A relative DuckDB file is found beside the config file.
-    assert config.warehouse.jdbc_url == f"jdbc:duckdb:{EXAMPLE.parent / 'warehouse.duckdb'}"
+    assert config.warehouse.jdbc_url == "jdbc:postgresql://localhost:5432/analytics"
     assert config.warehouse_table_format == "NATIVE"
     assert config.email is None
     assert config.cloning.enabled is False

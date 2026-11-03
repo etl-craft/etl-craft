@@ -23,11 +23,13 @@ cleanup_cluster() {
     k3d cluster delete "$cluster"
 }
 trap cleanup_cluster EXIT
-image="ghcr.io/etl-craft/etl-craft:$ETL_CRAFT_VERSION"
-k3d image import --cluster "$cluster" "$image" "$image-ui" nginx:stable-alpine
+image="$ETL_CRAFT_PROJECT_IMAGE"
 docker network connect "$network" "$postgres"
 address=$(docker inspect -f '{{with index .NetworkSettings.Networks "'"$network"'"}}{{.IPAddress}}{{end}}' "$postgres")
 node="k3d-$cluster-server-0"
+platform=$(docker image inspect --format '{{.Os}}/{{.Architecture}}' "$image")
+docker image save --platform "$platform" "$image" nginx:stable-alpine |
+    docker exec -i "$node" ctr -n k8s.io images import -
 apply_manifest() {
     local manifest
     manifest=$(cat)
@@ -35,7 +37,7 @@ apply_manifest() {
     printf '%s\n' "$manifest" | kubectl apply --server-side -f -
 }
 docker exec "$node" mkdir -p /etl-craft-smoke
-docker exec "$ui" tar -C /project -cf - artifacts migrations |
+docker exec "$ui" tar -C /project/artifacts -cf - . |
     docker exec -i "$node" tar -C /etl-craft-smoke -xf -
 docker exec "$node" chown -R 10001:10001 /etl-craft-smoke
 apply_manifest <<YAML
@@ -141,10 +143,24 @@ apply_agent() {
         "volumes":[{"name":"ca","configMap":{"name":"smoke-ca"}}]
       }}}}' | apply_manifest
 }
-sed "s/:1.0.0rc1/:$ETL_CRAFT_VERSION/g" "$root/docs/deploying/kubernetes/roles.yml" |
+sed "s|etl-craft-project:1.0.0rc1|$image|g" "$root/docs/deploying/kubernetes/roles.yml" |
     apply_manifest
-sed "s/:1.0.0rc1/:$ETL_CRAFT_VERSION/g" "$root/docs/deploying/kubernetes/agent.yml" |
+sed "s|etl-craft-project:1.0.0rc1|$image|g" "$root/docs/deploying/kubernetes/agent.yml" |
     apply_agent
+# Kubernetes must refuse to start an agent whose Secret lacks the token key.
+kubectl create secret generic smoke-missing-token --from-literal=unrelated=unused \
+    --dry-run=client -o yaml | apply_manifest
+sed -e "s|etl-craft-project:1.0.0rc1|$image|g" \
+    -e 's/^  name: agent$/  name: agent-missing-token/' \
+    -e 's/app: agent$/app: agent-missing-token/' \
+    -e 's/etl-craft-agent-token/smoke-missing-token/' \
+    "$root/docs/deploying/kubernetes/agent.yml" | apply_agent
+kubectl wait --for='jsonpath={.status.containerStatuses[0].state.waiting.reason}=CreateContainerConfigError' \
+    pod -l app=agent-missing-token --timeout=60s
+kubectl get pod -l app=agent-missing-token \
+    -o 'jsonpath={.items[0].status.containerStatuses[0].state.waiting.message}' |
+    grep -F ETL_CRAFT_TOKEN
+kubectl delete deployment agent-missing-token
 for workload in deployment/etl-craft-controller deployment/etl-craft-ui \
     deployment/smoke-proxy deployment/agent; do
     kubectl rollout status "$workload" --timeout=180s
@@ -174,7 +190,7 @@ ctx = OperationContext(engine, config, Actor("smoke-host", ActorKind.SERVICE), r
 invoke(ctx, ActionName.AGENT_CONTROL, AgentControl(agent_id=int(sys.argv[1]), command=AgentCommand.DRAIN))
 engine.dispose()
 PY
-sed -e "s/:1.0.0rc1/:$ETL_CRAFT_VERSION/g" \
+sed -e "s|etl-craft-project:1.0.0rc1|$image|g" \
     -e 's/^  name: agent$/  name: agent-two/' \
     -e 's/app: agent$/app: agent-two/' \
     -e 's/etl-craft-agent-token/etl-craft-agent-two-token/' \

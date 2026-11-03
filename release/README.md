@@ -189,3 +189,11 @@ The publishing job requires the evidence gate, catalog scale, chaos, compatibili
 image smoke jobs to succeed. It loads the tested images and pushes only the exact version
 and its `-ui` tag to GHCR. Branch and PR runs do not push images. PyPI publishing and
 announcements are separate.
+
+The first successful gated push creates the GHCR package. GitHub initially makes it private.
+In the organization package settings, set visibility to Public and verify anonymous pulls
+of both exact-version tags before announcing them.
+
+The release build enforces uncompressed image limits of 280 MB for core and 295 MB
+for UI. The current measured images are 262.4 MB and 278.0 MB. These limits include
+about five percent headroom, rounded up to the next 5 MB.

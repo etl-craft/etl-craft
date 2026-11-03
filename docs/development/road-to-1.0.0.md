@@ -1216,6 +1216,26 @@ empty-history-page handling defect, which was corrected and verified. No cloud w
   - Scale agents with one Deployment and token Secret per agent. Token identity owns
     the registration, so a second live process cannot share it. Use Secret environment
     references to keep token files out of the task filesystem.
+  - Choices that differ from the item text: gated GHCR publishing starts before 0.9.0;
+    `all` resolves to core plus UI, with each warehouse extra installed separately;
+    the headless controller also serves `/metrics`; standalone UI readiness certifies
+    package compatibility using the Engine DB ledger without reading project files.
+  - Decisions: PostgreSQL is the documented default and DuckDB the local analytical
+    alternative. Both are configured in the team-owned connector, with no code default.
+    PostgreSQL commits a project migration and its ledger entry together. UI readiness
+    needs no separate project migration state because it sees the previous consistent
+    state until commit. Run migrations from the project image before rolling roles.
+  - S5.AE acceptance: `test_two_ui_processes_share_sessions_runs_refresh_and_revocation`
+    and `test_controller_no_ui_serves_only_health_and_private_value_free_metrics` cover
+    split role serving. `test_agent_runs_its_pinned_bundle_without_engine_or_store_credentials`
+    and `test_expired_lease_cannot_be_renewed_or_report_success` cover API-only execution
+    and fencing. The installed wheel test `test_it_installs_and_runs` checks the extras;
+    `test_api_address_flag_and_environment_have_no_controller_alias` checks the CLI flag.
+    The headless controller test checks the tick histogram on `/metrics`, which S7.I reads.
+  - Acceptance availability: local Compose and k3d server-side dry runs and applied roles
+    completed the demo on distinct agent credentials. The missing-token pod was refused.
+    A Trino project image executed a query against the development Trino service.
+    No warehouse SQL changed, so cloud runs were outside this acceptance scope.
 - **Pre-demo gap identity (owner, 2026-11-01).** The five package-gap slices are S7.AL.
   S7.AK already names the merged Schema checker; its item and references retain that identity.
 - **Follow-up ownership (owner, 2026-11-01).** No promise from the pre-demo audit is dropped.

@@ -1,6 +1,7 @@
 """Every installed dependency has a finite tested compatibility range."""
 
 import importlib.util
+import re
 import tomllib
 from pathlib import Path
 
@@ -23,5 +24,7 @@ def test_dependency_bounds_install_matrix():
     assert any(row.startswith("psycopg[binary]>=") for row in bounds)
     script = (root / "scripts/verify_package.sh").read_text()
     assert "for bounds in lower caps" in script
-    assert '"$wheel[all,publish]"' in script
+    extras = re.search(r"\"\$wheel\[([^]]+)\]\"", script)
+    assert extras is not None
+    assert set(extras[1].split(",")) | {"ui"} == project["optional-dependencies"].keys()
     assert "uv pip check" in script
