@@ -18,7 +18,7 @@ to a local Mailpit, which the Quick Start starts with one `docker run`.
 ```bash
 git clone https://github.com/etl-craft/etl-craft.git && cd etl-craft
 python -m venv .venv && . .venv/bin/activate
-pip install .                                   # extras: [trino], [databricks], [snowflake], [aws], [publish]
+pip install ".[duckdb]"
 cd examples/demo
 python prepare.py warehouse && etl-craft setup && python prepare.py metadata
 etl-craft run --pipeline-code CLIENT_ALPHA

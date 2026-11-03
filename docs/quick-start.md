@@ -1,5 +1,9 @@
 # Quick Start
 
+A trial needs a running PostgreSQL warehouse or the DuckDB extra. For PostgreSQL, install
+`etl-craft` and supply your connection under `Warehouse` in `craft-connector.yml`. For a local
+analytical warehouse, install `etl-craft[duckdb]`. The walkthrough below uses DuckDB.
+
 From nothing to five pipelines running, checked, traced and documented, in about ten minutes. You
 run the Support Insights demo from the repository's `examples/demo`: two clients' support
 interactions landed, parsed and built into a small data mart, with business rules, alerts, a
@@ -20,12 +24,11 @@ The release tests run these steps, as written here, from the built package.
 git clone https://github.com/etl-craft/etl-craft.git
 cd etl-craft
 python -m venv .venv && . .venv/bin/activate     # Windows: .venv\Scripts\activate
-pip install .
+pip install ".[duckdb]"
 cd examples/demo
 ```
 
-`etl-craft --version` checks the install. DuckDB and SQLite need nothing more; the other
-warehouses are extras, such as `pip install ".[trino]"`.
+`etl-craft --version` checks the install. The DuckDB extra supplies the warehouse driver, and Python supplies SQLite.
 
 ## 2. Start Mailpit
 

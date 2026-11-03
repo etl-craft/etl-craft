@@ -6,6 +6,8 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+Warehouses are optional extras. Core bundles none. `all` is core plus the UI, for a single machine.
+
 ### Added
 
 - Publish exact-version headless and UI images to GHCR after tagged release validation.
