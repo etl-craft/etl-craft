@@ -493,6 +493,10 @@ def _engine_state(config: ConnectorConfig, engine: Engine) -> list[Check]:
                 f"{path} is writable by group or others; restrict access with chmod go-w",
             )
         )
+    from etl_craft.engine.privacy import problems as privacy_problems
+
+    with engine.connect() as conn:
+        checks.extend(fail("Privacy history", p) for p in privacy_problems(conn, config))
     checks.extend(fail("Erasure coverage", p) for p in erasure_problems(engine, config))
     checks.extend(fail("Protection membership", p) for p in protection_problems(engine, config))
     return checks

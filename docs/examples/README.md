@@ -220,6 +220,6 @@ Update the example's CSV files and team SQL references after the command; do not
 
 ## Standing personal-data erasure
 
-The [erasure guide](../guides/erasure.md) shows the `Erasure.Hmac_secret` variable reference,
+The [erasure guide](../guides/erasure.md) shows the `Privacy.Hmac_secret` variable reference,
 admin preview/register/list/lift commands and placement of ordinary `ERASURE` tasks after loads.
 Register at the earliest managed warehouse table; external sources are outside erasure's scope.

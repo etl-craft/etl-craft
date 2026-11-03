@@ -88,7 +88,7 @@ class PostgresWarehouse(WarehouseDialect):
             return None
         adapters = driver.adapters
         info = adapters.types.get(getattr(column, "type_code", None))
-        if info is None:
+        if info is None or getattr(column, "type_code", None) == getattr(info, "array_oid", None):
             return None
         name = str(info.name)
         if name in {"varchar", "bpchar"}:

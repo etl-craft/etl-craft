@@ -220,3 +220,16 @@ verifies it against the attempt's run and the successful pinned FILE_VALIDATION 
 storing it; it derives the uploader from AUD_UPLOADS. Upload writes and LOCKED=false UNLOCK
 intents share that id. Finalization and recovery retain the original verified id; callers
 cannot replace it. Non-upload mutation kinds must omit it. No raw business value is accepted.
+
+Protection reports carry typed warehouse MD5 fingerprints only in transient request bodies.
+The host converts them to domain-separated HMAC-SHA-256 identities before audit persistence;
+responses and persisted logs never echo those MD5s. `Privacy.Hmac_secret` stays on the host,
+including when agent bootstrap and pinned configuration name different secret variables.
+
+`PROTECTION_READ` accepts optional `protection_candidates` only for a PENDING HARD_DELETE or
+ERASURE request: its server request id, exact column shape, at most 256 candidate hashes and
+an event cursor. The ordinary live-attempt, admitted-target and held-lock fence applies;
+the creating attempt must be terminal or reconciled LOST. The host returns matched event
+ids for that request and a page cursor, never HMACs or unrelated keys.
+The agent scans only non-NULL protection rows, restarts an interrupted scan, and finalizes
+only after complete evidence. Stamped writes use the existing request-id recovery path.

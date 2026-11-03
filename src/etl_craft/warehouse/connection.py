@@ -123,6 +123,7 @@ def build_warehouse_engine(
             raise
         return dbapi_connection
 
+    engine_kwargs.setdefault("hide_parameters", True)
     engine_kwargs.setdefault("isolation_level", None)
     engine_kwargs.setdefault("pool_pre_ping", _TASK_ENGINES.get() is None)
     if profile.auth_mode in credentials.MINTED_AUTH_MODES:

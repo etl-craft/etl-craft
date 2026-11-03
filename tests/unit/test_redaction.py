@@ -54,3 +54,22 @@ def test_agent_erasure_waits_for_host_without_transmitting_a_key():
     assert sent["request"].operation == AgentReport.ERASURE
     assert sent["request"].attempt_id == 7
     assert sent["timeout"] is None
+
+
+def test_registered_values_are_masked_through_the_complete_exception_chain():
+    import traceback
+
+    from etl_craft.core.redaction import registering
+
+    secret = "-".join(("private", "fingerprint"))
+    try:
+        with registering(secret):
+            try:
+                raise LookupError("driver echoed " + secret)
+            except LookupError as cause:
+                raise AssertionError("outer failure") from cause
+    except AssertionError as error:
+        assert secret not in "".join(traceback.format_exception(error))
+        assert "[REDACTED]" in str(error.__cause__)
+    else:
+        pytest.fail("expected the original error to propagate")

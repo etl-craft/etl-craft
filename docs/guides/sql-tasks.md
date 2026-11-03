@@ -285,7 +285,7 @@ SCD1 and SCD2 must not share a target, even though their audit column sets match
 
 ### Human corrections
 
-Native PostgreSQL and DuckDB SCD targets can retain authorized human corrections across ETL
+SCD targets on every supported warehouse and format can retain authorized human corrections across ETL
 refreshes, with row/value locks and independent column provenance. See
 [Protecting human SCD edits](human-overrides.md) for the admin service/API, effective hashes,
 delete behavior and the atomicity/outside-writer contract. Ordinary non-SCD tables gain no locks.

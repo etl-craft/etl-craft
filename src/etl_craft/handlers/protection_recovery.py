@@ -11,6 +11,7 @@ from etl_craft.core.protection import (
     ProtectionRecord,
     ProtectionReport,
 )
+from etl_craft.dialects.warehouse.protection import recovery_candidates
 from etl_craft.engine.task_store import TaskStore
 from etl_craft.handlers.sql.session import Session
 
@@ -84,29 +85,62 @@ def _absent(session: Session, records: list[ProtectionRecord]) -> bool:
     for record in records:
         assert record.event is not None
         groups[record.event.columns].append(record)
-    return all(_keys_absent(session, group) for group in groups.values())
+    outcomes = [(len(group), _keys_absent(session, group)) for group in groups.values()]
+    if any(absent for _, absent in outcomes) and any(not absent for _, absent in outcomes):
+        from etl_craft.core.errors import SqlGuardError
+
+        matching = sum(count for count, absent in outcomes if not absent)
+        raise SqlGuardError(
+            f"request {records[0].request_id}: {matching} deletion keys matched across "
+            "inconsistent key shapes; expected all or none after an atomic delete; "
+            "restore a consistent warehouse backup before retrying recovery"
+        )
+    return all(absent for _, absent in outcomes)
 
 
 def _keys_absent(session: Session, records: list[ProtectionRecord]) -> bool:
-    for start in range(0, len(records), MAX_PROTECTION_EVENTS):
-        batch = records[start : start + MAX_PROTECTION_EVENTS]
-        first = batch[0].event
-        assert first is not None
-        from etl_craft.dialects.business_rules import quote_output_key
+    from etl_craft.core.errors import SqlGuardError
+    from etl_craft.core.protection import ProtectionCandidates
+    from etl_craft.dialects.business_rules import quote_output_key
 
-        hashed = session.hash(
-            [f"t.{quote_output_key(c, session.dialect.sqlglot_dialect)}" for c in first.columns],
-            first.columns,
+    first = records[0]
+    assert first.event is not None
+    columns = first.event.columns
+    hashed = session.hash(
+        [f"t.{quote_output_key(c, session.dialect.sqlglot_dialect)}" for c in columns], columns
+    )
+    store = session.protection_store
+    assert store is not None
+    matched: set[int] = set()
+    from itertools import chain
+
+    with session.run(
+        recovery_candidates(session.target, hashed),
+        step="recover protected deletion candidates",
+    ) as rows:
+        pages = rows.scalars().partitions(MAX_PROTECTION_EVENTS)
+        for candidates in chain((next(pages, ()),), pages):
+            cursor = 0
+            while True:
+                result = store.protection_match(
+                    session.target,
+                    ProtectionCandidates(
+                        first.request_id, columns, tuple(str(value) for value in candidates), cursor
+                    ),
+                )
+                matched.update(result.matched)
+                if result.cursor is None:
+                    break
+                cursor = result.cursor
+            if len(matched) == len(records):
+                break
+    if matched and len(matched) != len(records):
+        raise SqlGuardError(
+            f"request {first.request_id}: {len(matched)} of {len(records)} deletion keys "
+            "matched; expected all or none after an atomic delete; restore a consistent "
+            "warehouse backup before retrying recovery"
         )
-        binds = {f"key_{i}": r.event.key_hash for i, r in enumerate(batch) if r.event}
-        placeholders = ",".join(f":{name}" for name in binds)
-        if session.run(
-            f"SELECT COUNT(*) FROM {session.target} t WHERE {hashed} IN ({placeholders})",
-            binds,
-            step="recover protection deletion outcome",
-        ).scalar_one():
-            return False
-    return True
+    return not matched
 
 
 def committed(store: TaskStore, target: str, requests: list[str]) -> None:

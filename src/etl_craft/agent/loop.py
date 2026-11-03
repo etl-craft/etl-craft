@@ -270,7 +270,11 @@ class AgentLoop:
         path = folder / "craft-connector.yml"
         path.write_bytes(store.bundle_file("craft-connector.yml"))
         pinned = project_config(self.config, path)
-        return child_environment(self.config) | child_environment(pinned)
+        environment = child_environment(self.config) | child_environment(pinned)
+        for name in (self.config.privacy_hmac_secret, pinned.privacy_hmac_secret):
+            if name is not None:
+                environment.pop(name, None)
+        return environment
 
     def _start(self, work: Work, started: float) -> None:
         attempt_id = int(str(work.task["attempt_id"]))

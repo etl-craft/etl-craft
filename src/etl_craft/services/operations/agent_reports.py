@@ -239,6 +239,8 @@ def _protection_report(ctx: OperationContext, request: AgentTask) -> AgentReply:
     store = _store(ctx, task)
     with for_run(ctx.engine, task.pipeline_run_id), acting_as(SYSTEM_ACTOR):
         if request.operation == AgentReport.PROTECTION_READ:
+            if request.protection_candidates is not None:
+                return AgentReply(store.protection_match(target, request.protection_candidates))
             return AgentReply(store.protection_read(target, request.protection_cursor))
         return AgentReply(
             store.protection_event(target, required(request.protection, "protection"))

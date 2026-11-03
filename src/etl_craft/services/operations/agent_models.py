@@ -9,7 +9,7 @@ from etl_craft.core.enums import AgentCommand, AgentReport, AgentStatus, Attempt
 from etl_craft.core.errors import UsageError
 from etl_craft.core.failures import Failure
 from etl_craft.core.items import ItemRecord
-from etl_craft.core.protection import ProtectionReport
+from etl_craft.core.protection import ProtectionCandidates, ProtectionReport
 from etl_craft.engine.repository.offsets import StoredOffset
 from etl_craft.engine.task_store import RuleEnding, TargetPublication
 from etl_craft.engine.timestamp_windows import WindowDefinition
@@ -64,7 +64,10 @@ class AgentTask(AgentRequest):
     item_keys: tuple[str, ...] = ()
     target: str | None = None
     publication: TargetPublication | None = None
-    protection: ProtectionReport | None = None
+    protection: ProtectionReport | None = field(default=None, repr=False, metadata={"audit": False})
+    protection_candidates: ProtectionCandidates | None = field(
+        default=None, repr=False, metadata={"audit": False}
+    )
     protection_cursor: int = 0
     watermark_from: str | None = None
     watermark_to: str | None = None

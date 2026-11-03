@@ -45,10 +45,12 @@ VALUES = {
     "lock_owner": "plan-owner",
     "continuation": False,
     "events": json.dumps(
-        [{"kind": "WRITE", "key_hash": "a" * 32, "columns": '["id"]', "hashes": "[null]"}]
+        [{"kind": "WRITE", "key_hash": "a" * 64, "columns": '["id"]', "hashes": "[null]"}]
     ),
     "subject_key": "private-test-value",
     "key_hmac": "a" * 64,
+    "key_hashes": json.dumps(["a" * 64]),
+    "key_check": "c" * 64,
     "after_ended": datetime(1970, 1, 1, tzinfo=UTC),
     "content_sha256": "a" * 64,
     "seed_load_id": "00000000-0000-0000-0000-000000000001",
@@ -211,9 +213,9 @@ def bindings(sql, name=""):
             "page_size": 257,
             "request_id": "00000000-0000-0000-0000-000000000011",
             "current_request": "00000000-0000-0000-0000-000000000011",
-            "key_hash": "a" * 32,
+            "key_hash": "a" * 64,
             "columns": '["id"]',
-            "hashes": '["' + "b" * 32 + '"]',
+            "hashes": '["' + "b" * 64 + '"]',
             "kind": "KEY",
             "status": "PENDING",
             "recovering_attempt": 1,

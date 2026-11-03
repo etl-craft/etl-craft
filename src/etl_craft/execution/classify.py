@@ -6,7 +6,7 @@ from sqlalchemy.exc import DBAPIError
 
 from etl_craft.config import ConnectorConfig
 from etl_craft.core.enums import FailureClass
-from etl_craft.core.errors import EtlCraftError, PermanentError, TransientError
+from etl_craft.core.errors import EtlCraftError, HandlerError, PermanentError, TransientError
 from etl_craft.core.failures import Failure
 from etl_craft.dialects.failure_evidence import classify
 from etl_craft.warehouse.connection import warehouse_dialect
@@ -25,6 +25,9 @@ def classify_failure(
             return Failure(FailureClass.PERMANENT, type(error).__name__)
         if isinstance(error, TransientError):
             return Failure(FailureClass.TRANSIENT, type(error).__name__)
+        if isinstance(error, HandlerError) and error.failure_evidence is not None:
+            evidence = error.failure_evidence
+            return replace(evidence, kind=FailureClass.UNKNOWN) if script else evidence
         if isinstance(error, DBAPIError) or error.__cause__ is None:
             break
         error = error.__cause__

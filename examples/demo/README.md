@@ -375,6 +375,8 @@ Add the optional stewardship pipelines on the demo's configured warehouse after 
 the main metadata:
 
 ```bash
+# Generate once for a new project and retain this value.
+export ETL_CRAFT_DEMO_PRIVACY_HMAC="$(python -c 'import secrets; print(secrets.token_hex(32))')"
 python prepare.py metadata metadata/seed_stewardship.sql
 etl-craft seed apply
 ```
@@ -396,10 +398,10 @@ support mart and agent-history pipeline.
 
 ## Personal-data erasure
 
-Use the [erasure guide](../../docs/guides/erasure.md) to configure `Erasure.Hmac_secret` and
+Use the [erasure guide](../../docs/guides/erasure.md) to configure `Privacy.Hmac_secret` and
 register the first managed table and identifier column. Preview the tables and counts before
 applying. Place an `ERASURE` task after relevant loads to delete identifiers a source resends.
-The demo does not set an erasure secret or register real people. External source systems stay
+The demo uses the shared privacy secret above and registers no real people. External source systems stay
 under the source team's control; expression and unmanaged lineage boundaries need further entries.
 
 Reference stewardship files may append optional `LOCKED` to their pipe-delimited header.
@@ -408,3 +410,9 @@ Use true/false (case-insensitive) or empty NULL. The sample validator checks it 
 SELECT carries it explicitly. FALSE writes without locking and releases existing row and
 value locks on that key. TRUE, NULL or absence locks as before. Service uploads do not release
 locks. The control never becomes a column of the stewarded target.
+
+Generate that privacy secret once and retain it for later shells; do not regenerate it for
+an existing project. Stewardship protection requires `ETL_CRAFT_DEMO_PRIVACY_HMAC` in the
+process environment, referenced by `Privacy.Hmac_secret`. Use the same value for the API,
+controller and local commands. Agents do not need it.
+Changing it is refused because rotation is unsupported. Never commit the value.

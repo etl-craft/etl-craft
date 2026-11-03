@@ -170,3 +170,28 @@ Stewards can also release an existing row lock and all value locks through a USE
 with optional BOOLEAN `LOCKED=FALSE`. Its uploaded values still belong to that uploader.
 TRUE, NULL or an absent column locks as usual; service-account uploads never release locks.
 See [stewardship](stewardship.md) for file validation and landing requirements.
+
+## Private audit identities and deletion
+
+Configure `Privacy.Hmac_secret` with the name of a project secret variable before activating
+protection or using erasure. Rehash and deletion operations that append protection events
+also require it. The host converts typed warehouse fingerprints to HMAC-SHA-256
+under separate key/value domains before recording events. Keys also bind the target, and
+values bind the target and column, preventing matching against unrelated live values.
+Agents never receive the secret.
+The immutable project key check refuses rotation: restore the original secret if it differs
+from the one the history uses. The former `Erasure.Hmac_secret` setting has no alias.
+
+Ordinary hard deletion respects human locks; unlock the key before deleting it. Personal-data
+erasure overrides locks so corrected identifiers are removed too. Provenance retains the
+erasure event, without a stale row lock, and doctor accounts for authenticated deletion.
+See [erasure](erasure.md#human-locks-and-physical-retention) for Iceberg/Delta time-travel
+retention and the S7.AL.6 follow-up; no snapshot is implicitly expired.
+
+Pending deletion recovery scans only rows with non-NULL protection state, once per key shape,
+using bounded warehouse cursor batches.
+The fenced host matches transient candidate fingerprints against that request alone and
+returns event identities, never hashes. A complete scan with no match commits the intent;
+all keys present abandons it. A mixed result refuses recovery with the request and count;
+an interrupted scan appends no outcome and the next recovery starts again. This work runs
+only for pending HARD_DELETE/ERASURE intents and adds no ordinary merge round trips.

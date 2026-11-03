@@ -193,3 +193,24 @@ uploads do not create one. Send later corrections through the pipeline's Uploads
 A seed load runs in-process, with the same target lock and replacement code as `CREATE_TABLE`.
 It has its own seed load id and creates no pipeline run. This is separate from row and value
 protection and its explicit unlock operations.
+
+## Project privacy secret
+
+Before enabling stewardship protection, name the shared project secret in configuration:
+
+```yaml
+Privacy:
+  Hmac_secret: ETL_PRIVACY_HMAC
+```
+
+Only the variable name is stored. The host resolves it; agents never receive it. Protection
+events retain domain-separated keyed identities, not offline-matchable warehouse fingerprints.
+Missing or changed secrets are refused by validation, doctor and activation; restore the
+original secret because rotation is unsupported in 0.9.0. Erasure shares the secret under
+its own domain and overrides human locks. Ordinary hard deletion respects those locks.
+
+Protection covers native PostgreSQL/DuckDB, Trino/Iceberg, DuckDB/Iceberg, Snowflake native
+and Iceberg, and Databricks Delta/UniForm. Read the [recovery and permissions contract](human-overrides.md#atomicity-outside-writers-and-recovery),
+including deferred controller recovery, doctor findings and the old-target recreation remedy.
+[Snapshot retention](erasure.md#human-locks-and-physical-retention) still controls how long
+erased values remain readable through time travel; S7.AL.6 owns the outstanding reporting work.

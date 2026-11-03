@@ -10,13 +10,15 @@ Set a secret variable through the project's Secrets provider, then name it in
 `craft-connector.yml`, after Uploads when present:
 
 ```yaml
-Erasure:
-  Hmac_secret: ETL_ERASURE_HMAC
+Privacy:
+  Hmac_secret: ETL_PRIVACY_HMAC
 ```
 
 Only the variable name belongs in the file. Missing or empty secrets refuse erasure before
-any deletion. HMAC-SHA-256 covers the normalized table, column and exact key. Rotating the
-secret breaks matching to old audit records: coordinate lifts and registrations before rotation.
+any deletion. HMAC-SHA-256 covers the normalized table, column and exact key. Protection and
+erasure share this project secret with separate HMAC domains. Rotation is not
+supported in 0.9.0: an immutable project key check refuses a changed secret before writes or
+history lookups. Restore the original secret. Never put its value in configuration.
 
 ```bash
 etl-craft erase --project support --table raw.people --column customer_id --value KEY --reason 'request received' --dry-run
@@ -67,3 +69,16 @@ records and archives, and protect database backups and source-system logs separa
 
 Keep personal data in a few dimension tables and reference them through surrogate keys. This
 limits erasure's reach while retaining useful history without distributing personal identifiers.
+
+## Human locks and physical retention
+
+Erasure overrides human row and value locks: removing a person must also remove a steward's
+corrected identifier. The lock state disappears with each erased row; permanent keyed events
+retain the erasure outcome. Ordinary hard deletion respects those locks instead; unlock the
+key before deleting it. Doctor accounts for committed ERASURE and HARD_DELETE events rather
+than reporting those keys as outside deletions.
+
+On Iceberg and Delta, old values remain readable through time travel until their snapshots
+expire. Erasure never expires snapshots implicitly. [S7.AL slice 6](../development/road-to-1.0.0.md#s7al-pre-demo-package-gaps)
+owns per-table retention-bound reporting and doctor checks; those reports are not implemented
+by protection acceptance. Configure and operate bounded snapshot retention in the warehouse.

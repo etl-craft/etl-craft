@@ -272,6 +272,6 @@ Uploads:
   # Archive_to: file:///srv/etl-archive/uploads
   # Or: {Store: s3://team-archive/uploads, Profile: archive}
 
-# Standing erasure HMAC: store the variable name, never its value.
-# Erasure:
-#   Hmac_secret: ETL_ERASURE_HMAC
+# Shared protection/erasure privacy HMAC: retain the original secret; rotation is unsupported.
+# Privacy:
+#   Hmac_secret: ETL_PRIVACY_HMAC

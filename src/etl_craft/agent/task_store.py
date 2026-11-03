@@ -13,7 +13,12 @@ from etl_craft.core.enums import ActionName, AgentReport
 from etl_craft.core.erasure import ErasureReport
 from etl_craft.core.errors import ServerError
 from etl_craft.core.items import ItemRecord, ItemState
-from etl_craft.core.protection import ProtectionPage, ProtectionReport
+from etl_craft.core.protection import (
+    ProtectionCandidates,
+    ProtectionMatches,
+    ProtectionPage,
+    ProtectionReport,
+)
 from etl_craft.core.upload_copy import verified_upload
 from etl_craft.core.uploads import UploadFile, UploadInfo
 from etl_craft.engine.alerts import AlertState
@@ -53,6 +58,20 @@ class RemoteTaskStore:
                     self.request(AgentReport.PROTECTION_READ),
                     target=target,
                     protection_cursor=cursor,
+                )
+            ),
+        )
+
+    def protection_match(self, target: str, candidates: ProtectionCandidates) -> ProtectionMatches:
+        """Never retain candidates or receive keyed identities from the host."""
+        candidates.__post_init__()
+        return from_json(
+            ProtectionMatches,
+            self.call(
+                replace(
+                    self.request(AgentReport.PROTECTION_READ),
+                    target=target,
+                    protection_candidates=candidates,
                 )
             ),
         )

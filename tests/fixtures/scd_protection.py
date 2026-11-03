@@ -25,11 +25,11 @@ def prepare(w, kind, compare="name|amount", *, source=None):
 
 
 def use_postgres_engine(w, request):
-    from fixtures.engine_db import apply_schema
+    from fixtures.engine_db import prepare_postgres_engine_db
     from fixtures.metadata import add_pipeline, start_run
 
     db = request.getfixturevalue("postgres_database")
-    apply_schema(db.engine)
+    prepare_postgres_engine_db(db, request.getfixturevalue("postgres_schema_template"))
     w.config = replace(w.config, engine=db.config.engine)
     w.engine_db = db.engine
     with db.engine.begin() as conn:

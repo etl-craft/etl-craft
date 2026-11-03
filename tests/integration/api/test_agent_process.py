@@ -300,7 +300,10 @@ def test_children_never_receive_agent_token(cluster, monkeypatch):
         "User": "demo",
         "Secret": "PINNED_EMAIL_PASSWORD",
     }
+    raw["Privacy"] = {"Hmac_secret": "PINNED_PRIVACY_SECRET"}
     bootstrap.write_text(yaml.safe_dump(raw, sort_keys=False))
+    monkeypatch.setenv("PINNED_PRIVACY_SECRET", "pinned-host-only")
+    monkeypatch.setenv("CURRENT_PRIVACY_SECRET", "current-host-only")
     monkeypatch.setenv("PINNED_EMAIL_PASSWORD", "pinned-example-only")
     monkeypatch.setenv("CURRENT_EMAIL_PASSWORD", "current-example-only")
     _, url = start_ui(p)
@@ -313,6 +316,8 @@ def test_children_never_receive_agent_token(cluster, monkeypatch):
         "from etl_craft.scripting import ScriptResult\n"
         "def run(task):\n"
         "    assert 'ETL_CRAFT_TOKEN' not in os.environ\n"
+        "    assert 'PINNED_PRIVACY_SECRET' not in os.environ\n"
+        "    assert 'CURRENT_PRIVACY_SECRET' not in os.environ\n"
         "    assert 'ETL_CRAFT_REFRESH_TOKEN' not in os.environ\n"
         "    assert os.environ['PINNED_EMAIL_PASSWORD'] == 'pinned-example-only'\n"
         "    work = json.loads(Path(sys.argv[sys.argv.index('--work-file')+1]).read_text())\n"
@@ -334,6 +339,7 @@ def test_children_never_receive_agent_token(cluster, monkeypatch):
     )
     publish_project(p, agent_dir)
     raw["Orchestration"]["Email"]["Secret"] = "CURRENT_EMAIL_PASSWORD"
+    raw["Privacy"]["Hmac_secret"] = "CURRENT_PRIVACY_SECRET"
     bootstrap.write_text(yaml.safe_dump(raw, sort_keys=False))
     controller = p.start("controller", "--no-ui")
     code, output = p.run(

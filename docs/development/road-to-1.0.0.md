@@ -192,7 +192,7 @@ item's text, or work done early under another item.
 | S7.J Documentation to finish | In progress | #85, #227, #277 | Generated references and guides exist; supported public contracts, complete reference and recipes remain |
 | S7.L ETL Craft logo and CLI banner | In progress | #277 | Shared mark, favicon and theme assets exist; complete branding guidance and interactive banner contract remain |
 | S7.AL Pre-demo package gaps | Planned |  | Six slices: duplicate_count, stale docs, guarded-table test instructions, event-file validation opt-in, timeline waits and erasure snapshot bounds |
-| S7.AM Protection on every warehouse | In progress | #311, #312 | Slices 1–2: atomic SCD merges, in-row locks/provenance and guarded intent recovery; full-provider acceptance remains slice 3 |
+| S7.AM Protection on every warehouse | Done | #311, #312, #313 | Atomic SCD merges, in-row protection and recovery, private audit identities and provider acceptance |
 | S7.M Stewardship uploads | Done (M2) | #296, #305 | Atomic receipts and safe stored names; processed layout, retention archives and verified reruns; crash recovery and guarded upload history |
 | S7.S Seed tables | Done | #308 | Typed pinned-bundle seeds replace reference tables until recorded stewardship handover |
 | S7.T Business calendars | Done | #276 | Shared holiday and weekend calendars for schedules, run dates, backfill and catch-up |
@@ -972,6 +972,15 @@ empty-history-page handling defect, which was corrected and verified. No cloud w
   every boundary on both Engine DBs. Both native cloud protection checks passed again with
   the final single-matched-UPDATE shape.
 
+- S7.AM slice 3 acceptance availability: all four local warehouses, both Engine DBs and
+  twenty concurrency rounds passed. PostgreSQL's pre-15 fallback was exercised on the
+  local server with the MERGE capability disabled. All twelve Snowflake native/Iceberg
+  and twelve Databricks Delta/UniForm cells passed across runs. Snowflake's protected
+  mutation and SCD2 successor queries now use joins to avoid rejected correlated
+  subqueries. Network and driver interruptions cleared on rerun. Final cloud cleanup
+  verified that each configured schema was empty, with only the system information
+  schema alongside it. Complete release candidate evidence remains S7.H.
+
 - **S7.AM recovery protocol (owner, 2026-11-02).** Choices that differ from the item
   text: the internal `POST /api/v1/agent/report` protocol gains PROTECTION_READ and
   PROTECTION_EVENT, not a user route, setting or flag. Both local and remote stores use the
@@ -1068,6 +1077,37 @@ empty-history-page handling defect, which was corrected and verified. No cloud w
     No upload-id index is added: recovery filters target/request, and provenance joins the
     existing upload primary key rather than filtering events by upload id. FALSE uses the
     existing target MERGE and intent appends, adding no warehouse statement.
+
+- **S7.AM private audit identities (owner, 2026-11-02).** Choices that differ from the item
+  text: erasure overrides human locks; ordinary hard deletion respects them. Committed
+  ERASURE/HARD_DELETE evidence accounts for missing keys in doctor; erasure removes row-local
+  lock state and provenance retains its event even when no target rows remain.
+  - `Privacy.Hmac_secret` replaces unreleased `Erasure.Hmac_secret`, without an alias. One
+    project secret uses separate protection-key, protection-value, erasure-key and key-check
+    domains. Warehouse typed MD5/hash version 2 and in-row fingerprints are unchanged; the
+    host HMACs event identities before persistence. Key identities bind the canonical target;
+    value identities also bind the column, preventing cross-target/column matching against
+    known live values. Agents never hold the secret.
+  - Unreleased 0081/0082 carry immutable per-project key checks on history rows; development
+    Engine DBs must be recreated. Database guards prevent a different key check, including
+    concurrent first uses, without adding ordinary append round trips. Missing/changed secrets
+    are refused before protection/erasure writes and history/doctor lookups. Restore the
+    original secret; supported rotation is a possible later item, not roadmap scope.
+  - Stamped writes recover by request id. HARD_DELETE/ERASURE recover by absence of their
+    protected keys. Deletion events cover only rows with protection state; unprotected rows
+    have no lock history to reconcile. Candidate scans use ETL_PROTECTION IS NOT NULL and
+    bounded warehouse cursor batches only for pending deletion recovery. Each key shape is
+    scanned once; indexed host matching filters by the candidate HMACs. Host reads resolve one
+    checked secret per operation. PROTECTION_READ matches transient MD5
+    candidates on the host, under the same fence and terminal/LOST creator rules, returning
+    only matched request event ids. Complete absence commits; all present abandons; a mixed
+    result fails naming request/count. Interrupted scans append no outcome and restart.
+
+- **S7.AM acceptance execution (owner, 2026-11-03).** The owner waived CI timing
+  measurement for slice 3 and requested completion of tests and the PR. Cloud acceptance
+  may run Snowflake and Databricks concurrently. After acceptance, remove generated user
+  schemas and empty each configured schema, preserving system information schemas. No
+  required suite, marker, coverage gate or CI job is removed.
 
 - **S7.AM budgets and CI (owner, 2026-11-02).** Actual staged LOCKED type inspection
   shares the existing key-count query, including empty stages; ordinary SCD1/SCD2 retain
