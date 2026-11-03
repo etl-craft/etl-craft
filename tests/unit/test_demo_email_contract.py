@@ -17,7 +17,7 @@ class DemoEvidence:
         self.requested = None
 
     def latest_run(self, pipeline):
-        assert pipeline == "SUPPORT_DM"
+        assert pipeline == "DEMO"
         return 7, RunStatus.SUCCESS
 
     def engine_rows(self, sql, **params):
@@ -32,8 +32,8 @@ class DemoEvidence:
 @pytest.mark.parametrize(
     ("attempts", "subject"),
     [
-        (1, "SUPPORT_DM: SUCCESS"),
-        (2, "SUPPORT_DM: COMPLETED_WITH_ERRORS"),
+        (1, "DEMO: SUCCESS"),
+        (2, "DEMO: COMPLETED_WITH_ERRORS"),
     ],
 )
 def test_demo_email_uses_recorded_retries(attempts, subject):

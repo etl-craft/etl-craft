@@ -118,4 +118,8 @@ def run_demo(config: Path) -> tuple[str, ...]:
 if __name__ == "__main__":
     if len(sys.argv) > 2:
         raise SystemExit("usage: python ten_projects.py [craft-connector.yml]")
-    run_demo(Path(sys.argv[1]).absolute() if len(sys.argv) == 2 else HERE / "craft-connector.yml")
+    run_demo(
+        Path(sys.argv[1]).absolute()
+        if len(sys.argv) == 2
+        else HERE.parent / "demo" / "craft-connector.yml"
+    )

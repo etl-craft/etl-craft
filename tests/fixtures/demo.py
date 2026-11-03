@@ -1,4 +1,4 @@
-"""The Support Insights demo, from ``examples/demo``, run by an installed ``etl-craft``.
+"""The small package demo, from ``examples/demo``, run by an installed ``etl-craft``.
 
 ``installed_cli(installer)`` installs the wheel under test (``ETL_CRAFT_TEST_WHEEL``, set by
 ``scripts/run_suite.py --wheel``) into a clean virtual environment, with pip or with uv, once
@@ -44,7 +44,7 @@ from etl_craft.core.actor import SYSTEM_ACTOR, acting_as
 from etl_craft.dialects.engine import for_engine
 from etl_craft.engine.connection import engine_db
 from etl_craft.engine.queries import run_script
-from etl_craft.warehouse.connection import build_warehouse_engine
+from etl_craft.warehouse.connection import build_warehouse_engine, warehouse_dialect
 from fixtures.cloud import DATABRICKS_VARS, SNOWFLAKE_VARS, require_variables
 from fixtures.services import (
     MINIO_PASSWORD,
@@ -56,7 +56,7 @@ from fixtures.services import (
 
 REPO = Path(__file__).resolve().parents[2]
 DEMO = REPO / "examples" / "demo"
-SCHEMAS = ("lnd", "prs", "ds", "cdc", "pre_dm", "dm", "aud", "info")
+SCHEMAS = ("lnd", "prs", "ds", "cdc", "pre_dm", "dm", "aud")
 PASSWORD_VAR = "ETL_CRAFT_DEMO_SECRET"
 S3_VAR = "ETL_CRAFT_DEMO_S3_SECRET"
 ENGINES = ("sqlite", "postgres")
@@ -143,7 +143,7 @@ class Demo:
                     "Host": smtp.host,
                     "Port": smtp.port,
                     "From_address": "etl-craft@example.com",
-                    "From_name": "Support Insights",
+                    "From_name": "Small package",
                     "Tls_mode": "NONE",
                 },
             },
@@ -171,6 +171,14 @@ class Demo:
             path.write_text(yaml.safe_dump(raw, sort_keys=False), encoding="utf-8")
             return self
         path.write_text(yaml.safe_dump(raw, sort_keys=False), encoding="utf-8")
+        if not warehouse_dialect(self.config).views:
+            metadata = self.root / "metadata" / "demo.sql"
+            metadata.write_text(
+                metadata.read_text().replace(
+                    "'area_summary', 'SQL_ACTION', 'CREATE_VIEW'",
+                    "'area_summary', 'SQL_ACTION', 'CREATE_TABLE'",
+                )
+            )
         self._make_schemas()
         return self
 
@@ -333,7 +341,7 @@ class Demo:
         os.environ.setdefault("ETL_CRAFT_DEMO_PRIVACY_HMAC", "test-only-demo-privacy")
         return load_config(self.root / "craft-connector.yml")
 
-    def seed(self, name: str = "support_insights.sql") -> None:
+    def seed(self, name: str = "demo.sql") -> None:
         """Load a metadata file of the demo's, with email addresses of this demo's own."""
         sql = (self.root / "metadata" / name).read_text(encoding="utf-8")
         sql = sql.replace("@example.com", f"+{self.tag}@example.com")
@@ -487,7 +495,7 @@ class _Closing:
 
 
 def _empty_namespaces(names: Sequence[str]) -> None:
-    """Create the demo's namespaces in the shared Iceberg REST catalog, emptied of tables."""
+    """Create the demo's Iceberg namespaces, emptied of views and tables."""
     catalog = require("iceberg_rest")
     base = f"{catalog.http_url}/v1/namespaces"
     for name in names:
@@ -499,6 +507,10 @@ def _empty_namespaces(names: Sequence[str]) -> None:
                 raise
             _request("POST", base, {"namespace": [name]})
             continue
+        with urllib.request.urlopen(f"{base}/{name}/views", timeout=10) as reply:
+            views = json.load(reply).get("identifiers", [])
+        for view in views:
+            _request("DELETE", f"{base}/{name}/views/{view['name']}")
         for table in tables:
             _request("DELETE", f"{base}/{name}/tables/{table['name']}?purgeRequested=true")
 

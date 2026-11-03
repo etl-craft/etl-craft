@@ -1,9 +1,9 @@
-"""The Support Insights demo, end to end, from the built wheel installed with pip and with uv.
+"""The small package demo, end to end, from the built wheel installed with pip and with uv.
 
 With pip, every Engine DB with every local warehouse; with uv, SQLite and DuckDB, since the
 installer changes how the package got there, not what it does. Each case runs through the engine.
 The runs cover
-python with offsets, the eight SQL actions, business rules in two waves, alerts and a failure
+python with offsets, all nine SQL actions, business rules in two waves, alerts and a failure
 watcher, the SLA email, a task that fails once, a timeout, a stopped run resumed, cross-pipeline
 gates and cloning; then the warehouse's data, the audit rows, the emails, and what ``validate``,
 ``doctor``, ``history``, ``graph``, ``lineage`` and ``generate-docs`` report.
@@ -11,17 +11,23 @@ gates and cloning; then the warehouse's data, the audit rows, the emails, and wh
 
 from __future__ import annotations
 
+import json
 import signal
+import socket
 import time
+import urllib.error
+import urllib.request
 from csv import DictReader
 from pathlib import Path
 
 import pytest
+import yaml
 from sqlalchemy import text
 
 from etl_craft.core.actor import SYSTEM_ACTOR, acting_as
-from etl_craft.core.enums import EmailFlavour, RunStatus
+from etl_craft.core.enums import EmailFlavour, RunStatus, SqlAction
 from etl_craft.engine.connection import engine_db
+from etl_craft.warehouse.connection import warehouse_dialect
 from fixtures.demo import Demo, demos, installed_cli
 
 INSTALLERS = {"pip": pytest.mark.e2e_pip, "uv": pytest.mark.e2e_uv}
@@ -49,7 +55,7 @@ def make_demo(clis, tmp_path):
     made: list[Demo] = []
 
     def make(installer: str, engine: str, warehouse: str) -> Demo:
-        demo = Demo(clis(installer), tmp_path / "support-insights", engine, warehouse)
+        demo = Demo(clis(installer), tmp_path / "small-demo", engine, warehouse)
         made.append(demo)
         return demo.build()
 
@@ -76,7 +82,7 @@ def set_parameter(demo: Demo, pipeline: str, task: str, name: str, value: str) -
 
 
 def run_clients(demo: Demo) -> None:
-    for pipeline in ("CLIENT_ALPHA", "CLIENT_BETA"):
+    for pipeline in ("SOURCE_A", "SOURCE_B"):
         assert "SUCCESS" in demo.ok("run", "--pipeline-code", pipeline)
 
 
@@ -90,26 +96,26 @@ def test_the_demo_runs_locally(make_demo, installer, engine, warehouse):
 
     # The mart's first run: the flaky feed fails, what needs it is skipped, and the alerts run.
     run_clients(demo)
-    first = demo.run("run", "--pipeline-code", "SUPPORT_DM")
+    first = demo.run("run", "--pipeline-code", "DEMO")
     assert first.returncode == 1, first.stderr[-3000:]
     assert "flaky_feed (FAILED)" in first.stdout
     skipped = first.stdout.split("skipped because of the failure: ", 1)[1].split("\n")[0]
     assert set(skipped.split(", ")) >= {"interactions", "setup_fact", "fact", "quality"}
     # A failed run consumes nothing, so the next one builds on the same client runs; after that
     # the mart waits for both clients to succeed again.
-    assert "SUCCESS" in demo.ok("run", "--pipeline-code", "SUPPORT_DM")
-    assert "SKIPPED" in demo.ok("run", "--pipeline-code", "SUPPORT_DM")
+    assert "SUCCESS" in demo.ok("run", "--pipeline-code", "DEMO")
+    assert "SKIPPED" in demo.ok("run", "--pipeline-code", "DEMO")
     run_clients(demo)
-    assert "SUCCESS" in demo.ok("run", "--pipeline-code", "SUPPORT_DM")
+    assert "SUCCESS" in demo.ok("run", "--pipeline-code", "DEMO")
 
     # The export overruns its time limit and its SLA.
-    export = demo.run("run", "--pipeline-code", "SUPPORT_EXPORT")
+    export = demo.run("run", "--pipeline-code", "EXPORT")
     assert export.returncode == 1
     assert "export (FAILED)" in export.stdout and "BREACHED" in export.stdout
     assert "timed out after 2s" in export.stderr
 
     # A backfill stopped part way is resumed, without repeating what finished.
-    running = demo.popen("run", "--pipeline-code", "SUPPORT_BACKFILL")
+    running = demo.popen("run", "--pipeline-code", "BACKFILL")
     deadline = time.monotonic() + 120
     while True:
         rows = demo.engine_rows(
@@ -122,17 +128,15 @@ def test_the_demo_runs_locally(make_demo, installer, engine, warehouse):
         time.sleep(0.5)
     running.send_signal(signal.SIGTERM)
     running.wait(timeout=120)
-    run_id, status = demo.latest_run("SUPPORT_BACKFILL")
+    run_id, status = demo.latest_run("BACKFILL")
     assert status == "IN-PROGRESS"
-    assert demo.task_runs("SUPPORT_BACKFILL", run_id) == {
+    assert demo.task_runs("BACKFILL", run_id) == {
         "prepare": ("SUCCESS", 1),
         "backfill": ("FAILED", 1),
     }
-    set_parameter(demo, "SUPPORT_BACKFILL", "backfill", "INPUT_PARAMS", '{"seconds": 0}')
-    assert f"pipeline_run_id={run_id} SUCCESS" in demo.ok(
-        "run", "--pipeline-code", "SUPPORT_BACKFILL"
-    )
-    assert demo.task_runs("SUPPORT_BACKFILL", run_id) == {
+    set_parameter(demo, "BACKFILL", "backfill", "INPUT_PARAMS", '{"seconds": 0}')
+    assert f"pipeline_run_id={run_id} SUCCESS" in demo.ok("run", "--pipeline-code", "BACKFILL")
+    assert demo.task_runs("BACKFILL", run_id) == {
         "prepare": ("SUCCESS", 1),
         "backfill": ("SUCCESS", 2),
     }
@@ -141,25 +145,30 @@ def test_the_demo_runs_locally(make_demo, installer, engine, warehouse):
     check_the_warehouse(demo)
     check_the_emails(demo, failed=True)
     check_the_reports(demo)
+    check_server(demo)
+    if not warehouse_dialect(demo.config).views:
+        set_parameter(demo, "DEMO", "area_summary", "SQL_ACTION", SqlAction.CREATE_VIEW)
+        refused = demo.run("pipelines", "refresh")
+        assert refused.returncode == 1
+        assert "DEMO.area_summary" in refused.stdout and "cannot create views" in refused.stdout
 
 
 def check_the_warehouse(demo: Demo) -> None:
     """The data every run wrote, and what the business rules flagged."""
-    assert demo.rows("SELECT COUNT(*) FROM {c}.lnd.client_alpha") == [(24,)]
-    assert demo.rows("SELECT COUNT(*) FROM {c}.prs.alpha_interactions") == [(22,)]
+    assert demo.rows("SELECT COUNT(*) FROM {c}.lnd.client_alpha") == [(4,)]
+    assert demo.rows("SELECT COUNT(*) FROM {c}.prs.alpha_interactions") == [(3,)]
     assert demo.rows(
         "SELECT COUNT(*) FROM {c}.prs.alpha_interactions WHERE agent_code = 'TEST'"
     ) == [(0,)]
     assert demo.rows(
         "SELECT source_system, COUNT(*) FROM {c}.dm.support_fact GROUP BY source_system "
         "ORDER BY source_system"
-    ) == [("ALPHA", 22), ("BETA", 16)]
+    ) == [("ALPHA", 3), ("BETA", 2)]
     assert demo.rows(
         "SELECT agent_code, team, email, DELETE_FLAG FROM {c}.ds.agents ORDER BY agent_code"
     ) == [
         ("A01", "east", "ann@example.com", "N"),
         ("A02", "west", "bo@example.com", "N"),
-        ("A03", "west", "cy@example.com", "N"),
         ("A04", "west", "di@example.com", "Y"),
     ]
     assert demo.rows(
@@ -169,10 +178,19 @@ def check_the_warehouse(demo: Demo) -> None:
         ("A01", "east", "Y"),
         ("A02", "east", "N"),
         ("A02", "west", "Y"),
-        ("A03", "west", "Y"),
         ("A04", "west", "Y"),
     ]
     assert demo.rows("SELECT COUNT(*) FROM {c}.aud.CFG_PIPELINES") == [(5,)]
+    assert demo.rows("SELECT SUM(interactions) FROM {c}.dm.area_summary") == [(5,)]
+    actions = demo.engine_rows(
+        "SELECT DISTINCT p.PARAMETER_VALUE AS action FROM CFG_TASK_PARAMETERS p "
+        "JOIN AUD_TASK_RUN_LOG r ON r.TASK_ID=p.TASK_ID "
+        "WHERE p.PARAMETER_NAME='SQL_ACTION' AND r.STATUS='SUCCESS'"
+    )
+    expected_actions = set(SqlAction)
+    if not warehouse_dialect(demo.config).views:
+        expected_actions.remove(SqlAction.CREATE_VIEW)
+    assert {row[0] for row in actions} == {action.value for action in expected_actions}
     flagged = demo.engine_rows(
         "SELECT r.BUSINESS_RULE_NAME AS rule, r.BUSINESS_RULE_TYPE AS kind, COUNT(*) AS n "
         "FROM AUD_BUSINESS_RULES_RESULTS x JOIN CFG_BUSINESS_RULES r "
@@ -180,9 +198,9 @@ def check_the_warehouse(demo: Demo) -> None:
         "GROUP BY r.BUSINESS_RULE_NAME, r.BUSINESS_RULE_TYPE ORDER BY r.BUSINESS_RULE_NAME"
     )
     assert [(rule, kind, int(n)) for rule, kind, n in flagged] == [
-        ("long call", "REPORT", 8),
-        ("rating out of range", "REJECT", 6),
-        ("unknown agent", "INCOMPLETE", 2),
+        ("long call", "REPORT", 1),
+        ("rating out of range", "REJECT", 1),
+        ("unknown agent", "INCOMPLETE", 1),
     ]
     offsets = demo.engine_rows(
         "SELECT p.PIPELINE_CODE AS p, o.OFFSET_TYPE AS kind, o.OFFSET_VALUE AS v "
@@ -190,14 +208,14 @@ def check_the_warehouse(demo: Demo) -> None:
         "JOIN CFG_PIPELINES p ON p.PIPELINE_ID = t.PIPELINE_ID ORDER BY p.PIPELINE_CODE"
     )
     assert offsets == [
-        ("CLIENT_ALPHA", "NUMBER", "24"),
-        ("CLIENT_BETA", "TIMESTAMP", "2026-09-01T23:00:00"),
-        ("SUPPORT_DM", "NUMBER", "3"),
+        ("DEMO", "NUMBER", "3"),
+        ("SOURCE_A", "NUMBER", "4"),
+        ("SOURCE_B", "TIMESTAMP", "2026-09-01T09:00:00"),
     ]
 
 
 def check_the_emails(demo: Demo, *, failed: bool) -> None:
-    run_id, status = demo.latest_run("SUPPORT_DM")
+    run_id, status = demo.latest_run("DEMO")
     assert status == RunStatus.SUCCESS
     tasks = demo.engine_rows(
         "SELECT t.TASK_CODE AS task_code,r.STATUS AS status,r.ATTEMPT_COUNT AS attempts,"
@@ -213,20 +231,20 @@ def check_the_emails(demo: Demo, *, failed: bool) -> None:
         if any(attempts > 1 for _, _, attempts, _ in tasks)
         else EmailFlavour.SUCCESS
     )
-    expected = f"SUPPORT_DM: {outcome}"
+    expected = f"DEMO: {outcome}"
     subjects = demo.wait_for_email(expected)
     assert expected in subjects, (tasks, subjects)
     if failed:
         assert {
-            "SUPPORT_DM: FAILED",
-            "SUPPORT_DM: a feed failed",
-            "[etl-craft] SUPPORT_EXPORT: SLA of 0.0002 h missed",
+            "DEMO: FAILED",
+            "DEMO: a feed failed",
+            "[etl-craft] EXPORT: SLA of 0.0002 h missed",
         } <= subjects
 
 
 def check_the_reports(demo: Demo) -> None:
     history = DictReader(
-        demo.ok("history", "--pipeline-code", "SUPPORT_DM", "--all").splitlines(),
+        demo.ok("history", "--pipeline-code", "DEMO", "--all").splitlines(),
         delimiter="\t",
     )
     assert [row["STATUS"] for row in history] == [
@@ -235,7 +253,7 @@ def check_the_reports(demo: Demo) -> None:
         "SUCCESS",
         "FAILED",
     ]
-    assert "wave" in demo.ok("graph", "--pipeline-code", "SUPPORT_DM").lower()
+    assert "wave" in demo.ok("graph", "--pipeline-code", "DEMO").lower()
     target = f"{demo.prefix}dm.support_fact"
     lineage = demo.ok("lineage", "--table", target, "--column", "rating")
     assert f"{demo.prefix}lnd.client_alpha.rating" in lineage
@@ -243,3 +261,32 @@ def check_the_reports(demo: Demo) -> None:
     assert "generate-docs: wrote" in demo.ok("generate-docs", "--strict", "--with-warehouse")
     fact = (demo.root / "catalog" / "tables" / f"{target}.html").read_text("utf-8")
     assert "unknown agent" in fact and f'data-col="{target}|rating"' in fact
+
+
+def check_server(demo: Demo) -> None:
+    """The installed controller serves probes and shuts down cleanly."""
+    with socket.socket() as listener:
+        listener.bind(("127.0.0.1", 0))
+        address = f"127.0.0.1:{listener.getsockname()[1]}"
+    path = demo.root / "craft-connector.yml"
+    raw = yaml.safe_load(path.read_text())
+    raw["Orchestration"]["Api_address"] = address
+    path.write_text(yaml.safe_dump(raw, sort_keys=False))
+    controller = demo.popen("controller", "--no-ui")
+    try:
+        deadline = time.monotonic() + 30
+        while True:
+            assert controller.poll() is None, controller.communicate()
+            try:
+                with urllib.request.urlopen(f"http://{address}/health", timeout=2) as reply:
+                    assert reply.status == 200 and json.load(reply)
+                break
+            except urllib.error.URLError:
+                assert time.monotonic() < deadline, "controller never served /health"
+                time.sleep(0.1)
+        with urllib.request.urlopen(f"http://{address}/metrics", timeout=2) as reply:
+            assert reply.status == 200
+    finally:
+        controller.terminate()
+        stdout, stderr = controller.communicate(timeout=30)
+    assert controller.returncode == 0, (stdout, stderr)

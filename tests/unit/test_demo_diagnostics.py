@@ -51,7 +51,7 @@ def test_demo_catalog_capture_includes_only_generated_project_namespaces(monkeyp
 
 
 def test_failure_capture_saves_attempt_logs_before_catalog_failure(monkeypatch, tmp_path):
-    project = tmp_path / "support-insights"
+    project = tmp_path / "small-demo"
     (project / "logs").mkdir(parents=True)
     (project / "logs" / "attempt.log").write_text("warehouse statement failed\n")
     target = tmp_path / "evidence"
@@ -70,7 +70,7 @@ def test_failed_evidence_capture_does_not_replace_the_original_failure(monkeypat
 
     monkeypatch.setenv("ETL_CRAFT_CI_DIAGNOSTICS", str(tmp_path / "artifacts"))
     temporary = tmp_path / "test"
-    project = temporary / "support-insights"
+    project = temporary / "small-demo"
     project.mkdir(parents=True)
     (project / "craft-connector.yml").write_text("Warehouse: {}\n")
     item = SimpleNamespace(

@@ -1,6 +1,6 @@
 """Land the agent list, whole, each run: it changes from one version to the next.
 
-Version 1 has four agents. From version 2, Bo moves from the east team to the west and the
+Version 1 has three agents. From version 2, Bo moves from the east team to the west and the
 feed has no email for Bo (the SCD1 merge keeps the one it had), and Di has left. The offset is
 the version loaded, so each run loads the next one.
 """
@@ -15,12 +15,11 @@ def agents(version: int) -> list[dict[str, str | None]]:
     rows: list[dict[str, str | None]] = [
         {"code": "A01", "name": "Ann", "team": "east", "email": "ann@example.com", "left": "N"},
         {"code": "A02", "name": "Bo", "team": "east", "email": "bo@example.com", "left": "N"},
-        {"code": "A03", "name": "Cy", "team": "west", "email": "cy@example.com", "left": "N"},
         {"code": "A04", "name": "Di", "team": "west", "email": "di@example.com", "left": "N"},
     ]
     if version >= 2:
         rows[1] |= {"team": "west", "email": None}
-        rows[3] |= {"left": "Y"}
+        rows[2] |= {"left": "Y"}
     return rows
 
 

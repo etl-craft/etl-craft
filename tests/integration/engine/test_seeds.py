@@ -386,16 +386,16 @@ def test_demo_reference_seeds_lock_after_real_stewardship_upload(
     from etl_craft.services.operations.uploads import UploadRequest, receive
 
     ctx, _, publish = seed_project
-    demo = Path(__file__).resolve().parents[3] / "examples/demo"
-    for name in ("seeds", "python_scripts", "validation_scripts", "sql_scripts"):
+    demo = Path(__file__).resolve().parents[3] / "tests/fixtures/seed_demo"
+    for name in ("seeds", "python_scripts", "validation_scripts"):
         shutil.copytree(demo / name, ctx.config.project_dir / name, dirs_exist_ok=True)
     with duckdb.connect(str(ctx.config.project_dir / "warehouse.db")) as conn:
         conn.execute("CREATE SCHEMA info; CREATE SCHEMA lnd")
     with acting_as(ctx.actor), ctx.engine.begin() as conn:
-        for name in ("support_insights.sql", "seed_stewardship.sql"):
-            run_script(
-                conn, for_engine(conn).split_statements((demo / "metadata" / name).read_text())
-            )
+        run_script(
+            conn,
+            for_engine(conn).split_statements((demo / "metadata/seed_stewardship.sql").read_text()),
+        )
     publish()
     first = act(ctx, ActionName.SEED_APPLY)
     assert len(first.loads) == 5
