@@ -9,11 +9,13 @@ if TYPE_CHECKING:
 from etl_craft.config.loader_helpers import mapping, reject_unknown
 from etl_craft.config.resolve import Resolver
 
+KEYS = frozenset({"Hmac_secret"})
+
 
 def parse_privacy(raw: dict[str, object], path: Path, resolver: Resolver) -> str | None:
     """Keep a variable name, never a resolved secret, in project settings."""
     values = mapping(raw, "Privacy", path, required=False)
-    reject_unknown(values, frozenset({"Hmac_secret"}), "Privacy", path)
+    reject_unknown(values, KEYS, "Privacy", path)
     return resolver.secret_reference(values.get("Hmac_secret"), "Privacy.Hmac_secret")
 
 

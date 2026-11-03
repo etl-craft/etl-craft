@@ -13,6 +13,9 @@ if TYPE_CHECKING:
 
 from etl_craft.core.errors import ConfigurationError
 
+KEYS = frozenset({"Max_file_mb", "Archive_to"})
+ARCHIVE_KEYS = frozenset({"Store", "Profile"})
+
 
 @dataclass(frozen=True)
 class Uploads:
@@ -40,7 +43,7 @@ def parse_uploads(raw: dict[str, object], path: Path, resolver: Resolver) -> Upl
     from etl_craft.config.object_stores import parse_location, parse_stores
 
     values = mapping(raw, "Uploads", path, required=False)
-    reject_unknown(values, frozenset({"Max_file_mb", "Archive_to"}), "Uploads", path)
+    reject_unknown(values, KEYS, "Uploads", path)
     value = values.get("Max_file_mb", 50)
     if isinstance(value, bool) or not isinstance(value, int) or value < 1:
         raise ConfigurationError(
@@ -57,7 +60,7 @@ def parse_uploads(raw: dict[str, object], path: Path, resolver: Resolver) -> Upl
             "mapping for s3://; set Archive_to to a location and name an existing "
             "Object_stores profile for S3"
         )
-    reject_unknown(location, frozenset({"Store", "Profile"}), "Uploads.Archive_to", path)
+    reject_unknown(location, ARCHIVE_KEYS, "Uploads.Archive_to", path)
     return Uploads(
         value,
         parse_location(location, parse_stores(raw, path, resolver), path, "Uploads.Archive_to"),

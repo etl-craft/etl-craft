@@ -102,8 +102,9 @@ what it waits for); the page address keeps the selection, so a link or Back retu
 Actions act on the selection only: the whole run, or the selected task in it. Each action comes
 from the `capabilities` read: an unavailable one is disabled and says why. Choosing one opens a
 confirmation with the exact scope, its data effect and whether successful work is kept; the
-request goes to `POST /api/v1/projects/{project}/controls`, as `etl-craft control` does, and the
-page shows the recorded status. A request is not completion: the page shows the run's state
+request goes to `POST /api/v1/projects/{project}/controls`. The scoped CLI commands
+`hold`, `release`, `stop`, `abort`, `run --recover` and `run --restart` submit the
+corresponding requests. The page shows the recorded status. A request is not completion: the page shows the run's state
 when it changes.
 
 A selected task's panel also has **Task actions**, each with the same confirmation: **Rerun

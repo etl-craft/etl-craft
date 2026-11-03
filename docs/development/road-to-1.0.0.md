@@ -191,7 +191,7 @@ item's text, or work done early under another item.
 | S7.I The endurance run | Planned |  | 72-hour accelerated Support Insights candidate run, faults and bounded growth evidence after S8 is running |
 | S7.J Documentation to finish | In progress | #85, #227, #277 | Generated references and guides exist; supported public contracts, complete reference and recipes remain |
 | S7.L ETL Craft logo and CLI banner | In progress | #277 | Shared mark, favicon and theme assets exist; complete branding guidance and interactive banner contract remain |
-| S7.AL Pre-demo package gaps | In progress | #314 | Slice 1 reports duplicate counts through audit, metrics and inspection. Slices 2–6 remain. |
+| S7.AL Pre-demo package gaps | In progress | #314, #315 | Slices 1–3 ship duplicate counts, current references and guarded-table validation guidance. Slices 4–6 remain. |
 | S7.AM Protection on every warehouse | Done | #311, #312, #313 | Atomic SCD merges, in-row protection and recovery, private audit identities and provider acceptance |
 | S7.M Stewardship uploads | Done (M2) | #296, #305 | Atomic receipts and safe stored names; processed layout, retention archives and verified reruns; crash recovery and guarded upload history |
 | S7.S Seed tables | Done | #308 | Typed pinned-bundle seeds replace reference tables until recorded stewardship handover |
@@ -1195,6 +1195,14 @@ empty-history-page handling defect, which was corrected and verified. No cloud w
   Acceptance availability: the shared dedupe oracle passed on Snowflake native and
   Iceberg, and Databricks Delta and UniForm. The exact local merge budget assertions
   remain unchanged.
+
+- **S7.AL.2–3 combined delivery (owner, 2026-11-03).** Slices 2 and 3 ship in one
+  pull request, superseding the one-PR-per-slice instruction for these two slices.
+  The reference checks use the live action/router, loader and CLI parser inventories.
+  The guarded-table rule adds actor audit, valid CHECK seeds and typed query-plan
+  fixtures to the touched-suite procedure without adding a CI job.
+  Acceptance availability: the installed-wheel demo ran the README walkthrough locally.
+  No warehouse SQL changed, so cloud acceptance was not needed.
 
 - **Pre-demo gap identity (owner, 2026-11-01).** The five package-gap slices are S7.AL.
   S7.AK already names the merged Schema checker; its item and references retain that identity.

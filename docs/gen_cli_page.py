@@ -20,11 +20,20 @@ sections = [
     "The [exit codes](exit-codes.md) page lists what each exit status means.\n",
     f"```text\n{parser.format_help()}```\n",
 ]
-for action in parser._actions:
-    if isinstance(action, argparse._SubParsersAction):
-        for name, subparser in action.choices.items():
-            sections.append(f"## `{name}`\n")
-            sections.append(f"```text\n{subparser.format_help()}```\n")
+
+
+def command_sections(parser, prefix=""):
+    """Render help for every parser under its full command path."""
+    for action in parser._actions:
+        if isinstance(action, argparse._SubParsersAction):
+            for name, subparser in action.choices.items():
+                command = f"{prefix} {name}".strip()
+                yield f"## `{command}`\n"
+                yield f"```text\n{subparser.format_help()}```\n"
+                yield from command_sections(subparser, command)
+
+
+sections.extend(command_sections(parser))
 
 with mkdocs_gen_files.open("reference/cli.md", "w", encoding="utf-8") as handle:
     handle.write("\n".join(sections))

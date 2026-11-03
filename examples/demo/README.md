@@ -51,8 +51,7 @@ configuration still names secret variables rather than storing their values.
 `prepare.py metadata` creates numbered seed migrations under `migrations/` and runs
 `etl-craft migrate`, then `etl-craft pipelines refresh` to establish the checked version
 that admission uses. Repeating it leaves applied files unchanged and records an unchanged refresh. To edit loaded metadata,
-add a new project migration instead of editing an applied seed. The optional remote-mode
-seed is added after the main seed.
+add a new project migration instead of editing an applied seed.
 
 The emails arrive in Mailpit at <http://localhost:58025>. `etl-craft history`, `graph`, `steps`
 and `lineage` show what ran. `etl-craft lineage --strict` also traces every SQL task before
@@ -143,12 +142,14 @@ admin service token in `ETL_CRAFT_TOKEN`.
 
 ## Protect a human correction
 
-After the first successful `SUPPORT_DM` run, serve this project and sign in as a USER admin
+After the first successful `SUPPORT_DM` run, set and retain the
+[project privacy secret](#repository-reference-seeds-and-stewardship). Serve this project
+with that secret in the server environment and sign in as a USER admin
 through its [HTTP sign-in flow](../../docs/deploying/security.md). With that access token in
 `ACCESS_TOKEN` and the server URL in `SERVER`, correct Ann's name:
 
 ```bash
-curl --fail-with-body "$SERVER/api/v1/values" \
+curl --fail-with-body "$SERVER/api/v1/projects/default/values" \
   -H "Authorization: Bearer $ACCESS_TOKEN" -H 'Content-Type: application/json' \
   -d '{"pipeline_code":"SUPPORT_DM","task_code":"agents","key":{"agent_code":"A01"},"values":{"agent_name":"Anne"},"reason":"Verified spelling"}'
 ```
@@ -158,7 +159,7 @@ The response and the `/values/provenance` endpoint attribute the protected name 
 ETL retains the engine identity on fields it changes. To release the correction:
 
 ```bash
-curl --fail-with-body "$SERVER/api/v1/values/unlock" \
+curl --fail-with-body "$SERVER/api/v1/projects/default/values/unlock" \
   -H "Authorization: Bearer $ACCESS_TOKEN" -H 'Content-Type: application/json' \
   -d '{"pipeline_code":"SUPPORT_DM","task_code":"agents","key":{"agent_code":"A01"},"columns":["agent_name"],"reason":"Use source spelling again"}'
 ```

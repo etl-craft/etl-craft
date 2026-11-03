@@ -5,7 +5,6 @@
 
 The team creates warehouse schemas and authors CFG_ rows as project migrations. This script
 prepares both from warehouse_schemas.sql and metadata/support_insights.sql, then runs migrate.
-Pass metadata/remote_mode.sql after `metadata` to load it too.
 """
 
 from __future__ import annotations

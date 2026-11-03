@@ -29,18 +29,19 @@ warehouse evidence records a unique request ID instead. ETL writes retain their 
 ## HTTP requests
 
 Sign in through the server's [password or SSO flow](../deploying/security.md) and use its
-access token as `$ACCESS_TOKEN`. Substitute an existing pipeline, merge task, key and column:
+access token as `$ACCESS_TOKEN`. Set `$PROJECT` to the project code and substitute an
+existing pipeline, merge task, key and column:
 
 ```bash
-curl --fail-with-body "$SERVER/api/v1/values" \
+curl --fail-with-body "$SERVER/api/v1/projects/$PROJECT/values" \
   -H "Authorization: Bearer $ACCESS_TOKEN" -H 'Content-Type: application/json' \
   -d '{"pipeline_code":"SALES","task_code":"customers","key":{"customer_id":42},"values":{"name":"Correct name"},"reason":"Verified with customer"}'
 
-curl --fail-with-body "$SERVER/api/v1/values/provenance" \
+curl --fail-with-body "$SERVER/api/v1/projects/$PROJECT/values/provenance" \
   -H "Authorization: Bearer $ACCESS_TOKEN" -H 'Content-Type: application/json' \
   -d '{"pipeline_code":"SALES","task_code":"customers","key":{"customer_id":42}}'
 
-curl --fail-with-body "$SERVER/api/v1/values/unlock" \
+curl --fail-with-body "$SERVER/api/v1/projects/$PROJECT/values/unlock" \
   -H "Authorization: Bearer $ACCESS_TOKEN" -H 'Content-Type: application/json' \
   -d '{"pipeline_code":"SALES","task_code":"customers","key":{"customer_id":42},"columns":["name"],"reason":"Return ownership to the feed"}'
 ```
@@ -180,7 +181,7 @@ under separate key/value domains before recording events. Keys also bind the tar
 values bind the target and column, preventing matching against unrelated live values.
 Agents never receive the secret.
 The immutable project key check refuses rotation: restore the original secret if it differs
-from the one the history uses. The former `Erasure.Hmac_secret` setting has no alias.
+from the one the history uses.
 
 Ordinary hard deletion respects human locks; unlock the key before deleting it. Personal-data
 erasure overrides locks so corrected identifiers are removed too. Provenance retains the

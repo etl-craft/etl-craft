@@ -16,10 +16,9 @@ All notable changes are recorded here. The format follows
   projected correlated subquery. SCD2 successor selection uses an anti-join that Snowflake
   supports. Lock-only writes keep their existing counts and one MERGE.
 - Protection audit identities now use host-side domain-separated HMAC-SHA-256, preventing
-  offline matching of erased subjects against warehouse MD5 fingerprints. Rename the
-  unreleased `Erasure.Hmac_secret` setting to `Privacy.Hmac_secret`; protection and erasure
-  share it. Missing or changed secrets are refused; rotation is unsupported. Recreate
-  development Engine DBs that applied earlier 0081/0082 migrations.
+  offline matching of erased subjects against warehouse MD5 fingerprints. Protection and erasure
+  share `Privacy.Hmac_secret`. Missing or changed secrets are refused. Recreate development
+  Engine DBs that applied earlier 0081/0082 migrations.
 - Provenance retains erasure history after the last protected target row disappears and
   separates physical ROW_ID maintenance from business-key history. Doctor recognizes surviving
   SCD2 rows when erasure removes only an older identifier.
@@ -36,8 +35,7 @@ All notable changes are recorded here. The format follows
 - SCD1 updates/inserts and SCD2 closes/successor inserts now use one target MERGE on supported
   warehouse formats, including DuckDB over Iceberg. This removes the visible close-before-insert
   crash window on Iceberg and Delta; replay preserves unchanged versions and counts. PostgreSQL
-  before 15 retains its same-transaction fallback. In-row protection and Engine DB intent
-  recovery now extend the protection contract to the supported warehouse providers.
+  before 15 retains its same-transaction fallback.
 - Snowflake lock cancellation omits completed query history while retaining running statements,
   avoiding a slow history scan when releasing a failed task's target lock.
 
@@ -57,10 +55,9 @@ All notable changes are recorded here. The format follows
   history and rejects; expressions and unmanaged targets are reported without deletion.
 - Migration 0081 adds guarded `AUD_ERASURE_SUBJECTS` in SQLite and PostgreSQL. The only update
   is one lift; raw identifiers stay in that private register and bound warehouse parameters.
-  Configure `Privacy.Hmac_secret` with a Secrets variable name. Rotation is refused; restore
+  Configure the shared privacy secret with a Secrets variable name. Rotation is refused. Restore
   the original secret for existing audit identities. Shared operation-scoped value masking
-  protects logs, errors and
-  result documents; this is the common core for later S7.C secret registration.
+  protects logs, errors and result documents; this is the common core for later S7.C secret registration.
 
 - Pending Engine migrations now refuse normal login and UI startup with applied/required
   migration identities. Only local `migrate` may verify an admin password against the original
@@ -106,7 +103,8 @@ All notable changes are recorded here. The format follows
 
 - SCD protection now keeps per-cell locks and writers in `ETL_PROTECTION`,
   `ETL_ROW_FINGERPRINT` and `ETL_PROTECTION_REQUEST_ID` on the target, with one target MERGE
-  per mutation on capable warehouses and the transactional PostgreSQL-before-15 fallback.
+  per mutation across supported warehouse formats and the transactional PostgreSQL-before-15
+  fallback.
   Migration 0082 adds guarded hash-only `AUD_PROTECTION_EVENTS`; recovery resolves pending
   mutations before writes, at controller startup and on provenance reads. Doctor reports
   externally deleted locked keys. Old side-table targets require backup, recreation and
@@ -386,9 +384,7 @@ All notable changes are recorded here. The format follows
   `SUCCESS` dependency on it and an upload pipeline without exactly one.
 - `Uploads.Max_file_mb` (`uploads.max_file_mb`, default 50) and the optional `excel` extra
   (`openpyxl>=3.1.5,<4`). Upload bytes and workbook expansion are bounded before scripts run.
-- Per-row upload attribution through managed SQL actions, later-upload-wins merge ordering,
-  and human SCD protection through atomic target mutations on supported warehouses, including
-  Iceberg/Trino upload pipelines.
+- Per-row upload attribution through managed SQL actions, and later-upload-wins merge ordering.
 - Attempt-token-only `GET /api/v1/agent/uploads/{upload_id}/content` for API-only agents,
   with live-lease/run admission and SHA-256 verification shared with local execution.
 
@@ -686,14 +682,11 @@ All notable changes are recorded here. The format follows
   audit, placement and HTTP route; `invoke(ctx, ActionName, request)` is the only way an
   interface reaches an operation. Operations take one request dataclass each and no longer
   check roles themselves. `docs/reference/actions.md` is generated from the table.
-- The HTTP API has one generated route per action, with run selection in the query or body:
-  `POST /api/v1/runs` (runs, task runs, reruns, skips and backfills), `POST /api/v1/marks`,
-  `POST /api/v1/controls` (scoped controls, and `PAUSE`/`RESUME` of a definition),
-  `GET /api/v1/status`, `/steps`, `/graph`, `/explanations`, `/history`, `/capabilities`,
-  `/audit`, `/lineage`, `/validation`, `/accounts` and more; see the actions reference. The
-  `/pipelines/{code}/...` and `/runs/{id}/tasks/...` variants are removed. A malformed or
-  unknown field answers 400 naming the field.
-- Every action that can run anywhere works with `--controller`, including `token`, `account`,
+- The HTTP API generates routes from the action table. Project actions use
+  `/api/v1/projects/{project}/` with run selection in the query or body. Deployment actions
+  use `/api/v1/`. See the actions reference for methods and scopes. Malformed or unknown
+  request fields return 400 naming the field.
+- Every action that can run anywhere works with `--api`, including `token`, `account`,
   `graph`, `steps`, `audit`, `lineage`, `validate`, `clone`, `rehash`, `upgrade-targets`,
   `generate-docs` and `docs-version`. Host-only actions (`config`, `migrate`, `init-db`,
   `setup`, `doctor`, `controller`, `publish-docs`) are refused there with where to run them.
@@ -735,7 +728,7 @@ All notable changes are recorded here. The format follows
 - Remote mode: `Orchestration.Mode`, `Orchestration.Name`, the `etl-craft run --finalize-only`
   flag and the orchestrated finalization it reached. The controller always schedules;
   `--init-only` creates a run it picks up, and another scheduler starts work with
-  `etl-craft run --server` or `POST /api/v1/pipelines/{code}/runs`. The DAG-only settings
+  `etl-craft run --api` or `POST /api/v1/projects/{project}/runs`. The DAG-only settings
   `Global_dag`, `Tags`, `Retry_delay_minutes`, `Depends_on_past`, `Email_on_failure` and
   `Orchestration.Catchup` are removed; `Orchestration.Retries` and
   `Email_recipients` stay because runs and alerts read them. Each removed setting fails as an
@@ -814,14 +807,14 @@ All notable changes are recorded here. The format follows
   and committed checkpoints; restart creates a new context retaining current offsets/watermarks
   and source history. Neither releases human locks or guesses process/query completion.
 - `run --allow-paused` grants one exact run permission while its definition remains paused;
-  `status --capabilities` shares scoped action availability and remedies with the HTTP API.
-  `run --controls-file` and `POST /api/v1/controls/bulk` apply an explicit bounded selection with
+  `capabilities` shares scoped action availability and remedies with the HTTP API.
+  `run --controls-file` and `POST /api/v1/projects/{project}/controls/bulk` apply an explicit bounded selection with
   independent durable outcomes. Migration `0039` extends control actions in both Engine DBs.
 
 - Scoped run/task controls: `hold`/`release` block and unblock dispatch, `stop` drains running
-  work and `abort` stops its task processes, each on the selected run or one `--task_code`. Controls
+  work and `abort` stops its task processes, each on the selected run or one `--task-code`. Controls
   return durable `etl-craft/control/1` requests, optional `--request-key` idempotency, and
-  `status --request-id` inspection locally or through `--server`. Shared HTTP routes expose
+  `control-request --control-id` inspection locally or through `--api`. Shared HTTP routes expose
   the same operator controls and viewer inspection. Migration `0038` adds control requests
   and append-only process/query acknowledgements on SQLite and PostgreSQL.
 - Stop and abort report acceptance separately from physical completion, preserving successful
@@ -830,7 +823,7 @@ All notable changes are recorded here. The format follows
   refuse explicitly; graceful stop remains available for supported handlers. Server-side Python
   scripts need a query adapter for scoped stop; definition pause remains available. Lost leases never imply query termination.
 
-- `run --task_code TASK --standalone` starts an independent manual selection;
+- `run --task-code TASK --standalone` starts an independent manual selection;
   `--with-downstream` includes its continuation from metadata edges. Explicit run identities
   resume the same selection; manual results never satisfy or consume pipeline dependencies.
   Email-only selections may overlap whole-pipeline execution. SQL selections retain exclusive
@@ -840,21 +833,13 @@ All notable changes are recorded here. The format follows
   Engine DBs. Run JSON adds `selected_task_ids`, `ignore_dependencies` and `exclusive_run`.
 
 
-- A local installation operates a server: `--server https://<host>` (or `ETL_CRAFT_SERVER`)
-  sends `status`, `explain`, `history`, `logs`, `whoami`, `run` (a run, `--backfill` or
-  `--rerun`), `pause`, `resume`, `mark` and `cancel` to the server's API, within the account's
-  role, with the same text and JSON output and exit codes as on the server. Plain HTTP is
-  refused except to `localhost`. Commands that change metadata or the Engine DB are refused
-  against a server, naming the server-side way. CI keeps using `ETL_CRAFT_TOKEN`.
-- `etl-craft login --server` signs in with a password or, for SSO, the device flow the server
-  runs. It stores a one-hour access token and a refresh token, `Auth.Refresh_days` (default
-  30), and renews access automatically; `logout --server` revokes the refresh token and its
-  access tokens. Engine DB and warehouse credentials never reach the local installation.
+- CLI API calls preserve the same text and JSON output and exit codes as local calls.
+  Plain HTTP is refused except to `localhost`. Password and SSO device login store an
+  access token and a refresh token, and logout revokes the session. Engine DB and warehouse
+  credentials stay on the server.
 - `etl-craft logs --attempt-id N [--offset BYTES]` prints an attempt's log, locally or from a
-  server.
-- HTTP sign-in routes under `/api/v1/login/` (methods, password, SSO start and poll, refresh,
-  revoke), `GET /api/v1/whoami`, and pipeline-code routes for status, explain, cancel, mark and
-  rerun that select a run with `run_id`, `run_key` or the active run, as the CLI does.
+  server. The HTTP sign-in routes are under `/api/v1/login/`, and `GET /api/v1/whoami` reads
+  the caller's identity.
 - Engine DB migration `0036` adds `CFG_API_TOKENS.TOKEN_KIND` (`SERVICE`, `ACCESS`, `REFRESH`)
   and `REFRESH_TOKEN_ID`; existing user sessions become access tokens. Token JSON includes
   `token_kind`.
@@ -929,7 +914,7 @@ All notable changes are recorded here. The format follows
   output coverage unavailable. Action parsing uses execution's normalization rules. Offline,
   unavailable and stale comparisons remain explicit; inferred names do not invent type contracts.
   Missing tables/views distinguish pending first deployment from missing referenced objects.
-  `gaps.json` and authenticated `GET /api/v1/catalog/gaps?compare=true` share a dated input-versioned
+  `gaps.json` and authenticated `GET /api/v1/projects/{project}/catalog/gaps?compare=true` share a dated input-versioned
   report. API comparisons read metadata only and never publish lineage history. No config,
   migration, dependency or warehouse business-data change is required.
 
@@ -999,7 +984,7 @@ All notable changes are recorded here. The format follows
   query returning a row, without worker slots. Timeouts fail or skip, and evidence and file
   consumption commit with success. Downstream SQL reads `$$event_files`; Python scripts receive
   `task.event_files` and can use the token in `INPUT_PARAMS`. Single-task runs return `WAITING`;
-  remote mode refuses these local scheduling waits. Indefinite deadlines and native file
+  indefinite deadlines and native file
   notifications support long waits with configurable fallback scans and SQL probe intervals.
   Engine DB migration `0023_event_waits.sql` adds immutable evidence/consumption and separates
   event and dependency waits.
@@ -1053,7 +1038,7 @@ All notable changes are recorded here. The format follows
   PostgreSQL.
 
 - Task processes run through a pool: whole-pipeline runs and the server admit each attempt and
-  submit it to the local pool, which runs it on this host; `run --task_code` runs its one attempt
+  submit it to the local pool, which runs it on this host; `run --task-code` runs its one attempt
   in the foreground the same way. New
   `Orchestration.Local_ingestion_slots` and `Local_warehouse_slots` cap how many Python ingestion
   tasks and how many SQL, business-rule and alert tasks run at once, within
@@ -1061,15 +1046,11 @@ All notable changes are recorded here. The format follows
 
 ### Changed
 
-- `etl-craft cancel` is replaced by `etl-craft abort` (stop task processes now) and
-  `etl-craft stop` (let running attempts finish); both end the run `CANCELLED`. `runs.cancel_run`
-  and the `POST /api/v1/pipelines/{code}/cancel` and `/runs/{id}/cancel` routes are removed: use
-  `POST /api/v1/pipelines/{code}/controls` with `action` `ABORT` or `STOP`. `pause` and `resume`
-  act only on the pipeline definition; scoped holds are `hold` and `release`. Audit records name
-  the operation `stop`, `abort`, `hold` or `release` instead of `cancel`.
-- `GET /api/v1/pipelines/{code}/runs` returns the `etl-craft/history/1` document that
-  `etl-craft history` prints (`entries`, `changes`, and the next page's `before`) instead of
-  `etl-craft/runs/1`. Run and task history list the newest run id first.
+- Scoped `abort` stops task processes and `stop` lets running attempts finish. Both end
+  the run `CANCELLED`. Their shared API is `POST /api/v1/projects/{project}/controls`.
+  Definition controls are `pause` and `resume`. Scoped holds use `hold` and `release`.
+- `GET /api/v1/projects/{project}/history` returns the same `etl-craft/history/1` document
+  as `etl-craft history`. Run and task history list the newest run ID first.
 - Every action has one implementation in `services.operations`, which the CLI, the HTTP API
   and later the UI call. Python callers use `operations.maintenance` (`initialize`, `migrate`,
   `clone_tables`, `rehash_target`, `upgrade_audit_columns`, `setup_engine`, `grants`) and
