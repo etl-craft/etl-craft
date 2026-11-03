@@ -6,7 +6,7 @@
 first. Each line is one check:
 
 ```text
-[OK  ] Configuration: /srv/etl-craft/craft-connector.yml (mode remote, project /srv/etl-craft)
+[OK  ] Configuration: /srv/etl-craft/craft-connector.yml (project /srv/etl-craft)
 [OK  ] Settings: 6 from variables, 3 as written
 [WARN] Setting used as written: Engine.prod.user is 'ETL_USER': no variable of that name is set in the environment source, so the text itself is the value
 [OK  ] Engine DB secret: resolved from ENGINE_PROD_SECRET

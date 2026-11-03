@@ -300,14 +300,14 @@ make services-up          # local PostgreSQL, MinIO, Iceberg REST, Trino, Mailpi
   service suites default to four workers.
   The release gate retains every Python × OS combination. CI always runs the complete suite
   and is the authority.
-- **Before a PR, run the touched suites** (owner, 2026-10-30): `tests/unit` (it holds the
-  enum, action-table and dialect checks), the test modules of the code the change touches,
-  `tests/integration/api` and `tests/browser` when `api/` or a template changes,
-  `test_query_plans.py` when Engine DB SQL changes, `test_upgrade.py` when a migration or
-  `schema.sql` changes, and `test_catalog.py` when catalog output changes. That set takes
-  minutes. `make test-changed` reruns nearly the whole suite after a change to a widely
-  imported module (`core/enums.py`, `services/operations/models.py`); use it only when its
-  selection is small.
+- **Before a PR, run the touched suites** (owner, 2026-10-30): run `tests/unit` and touched
+  modules. For API or template changes, run `tests/integration/api` and `tests/browser`.
+  Run `test_query_plans.py` for Engine DB SQL, `test_upgrade.py` for migrations or schema
+  changes, and `test_catalog.py` for catalog output changes. For a new guarded Engine DB
+  table or changes to its guards or CHECK columns, run `test_actor_audit.py`,
+  `test_upgrade.py` and `test_query_plans.py` with valid CHECK seeds and query-plan seed rows
+  with typed parameters. Use `make test-changed` only when its selection is small. A widely
+  imported module can select nearly the whole suite.
 - **Concurrency:** a change to run creation, leases, locks, ROW_ID allocation or gates runs its
   tests 20 times locally, because CI runs each test once.
 - **CI time:** required pull-request CI stays under ten minutes of execution time (the longest

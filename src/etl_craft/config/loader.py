@@ -48,15 +48,17 @@ from etl_craft.config.loader_orchestration import (
     parse_retry_on,
 )
 from etl_craft.config.loader_warehouse import WAREHOUSE_SECTION_KEYS, parse_warehouse
-from etl_craft.config.managed_engine import managed_cloning_problem
+from etl_craft.config.managed_engine import MANAGED_FIELDS, managed_cloning_problem
 from etl_craft.config.model import DEFAULT_LOG_DIR, EXAMPLE_PATH, ConnectionProfile, ConnectorConfig
 from etl_craft.config.object_stores import ARTIFACT_KEYS, LOG_KEYS, STORE_KEYS, with_artifacts
+from etl_craft.config.privacy import KEYS as PRIVACY_KEYS
 from etl_craft.config.privacy import parse_privacy
 from etl_craft.config.resolve import Resolver
 from etl_craft.config.retention import KEYS as RETENTION_KEYS
 from etl_craft.config.retention import parse_retention
 from etl_craft.config.targets import active_catalog
-from etl_craft.config.uploads import parse_uploads
+from etl_craft.config.uploads import ARCHIVE_KEYS, parse_uploads
+from etl_craft.config.uploads import KEYS as UPLOAD_KEYS
 from etl_craft.core.enums import AuthMode
 from etl_craft.core.errors import ConfigurationError, MetadataError
 
@@ -95,7 +97,9 @@ def settings_by_section() -> dict[str, frozenset[str]]:
         "Orchestration": ORCHESTRATION_KEYS - {"Email"},
         "Orchestration.Email": frozenset(map(shown, EMAIL_KEYS)),
         "Deployment": DEPLOYMENT_KEYS,
-        "Engine": frozenset({"Name", "Listen_jdbc_url"}) | fields,
+        "Engine": frozenset({"Name", "Listen_jdbc_url"})
+        | fields
+        | frozenset(map(shown, MANAGED_FIELDS)),
         "Warehouse": WAREHOUSE_SECTION_KEYS | fields | frozenset(map(shown, warehouse_fields)),
         "Cloning": CLONING_KEYS,
         "Docs_site": DOCS_SITE_KEYS,
@@ -104,8 +108,9 @@ def settings_by_section() -> dict[str, frozenset[str]]:
         "Artifacts": ARTIFACT_KEYS,
         "Logs": LOG_KEYS,
         "Retention": RETENTION_KEYS,
-        "Uploads": frozenset({"Max_file_mb", "Archive_to"}),
-        "Privacy": frozenset({"Hmac_secret"}),
+        "Uploads": UPLOAD_KEYS,
+        "Uploads.Archive_to": ARCHIVE_KEYS,
+        "Privacy": PRIVACY_KEYS,
     }
 
 

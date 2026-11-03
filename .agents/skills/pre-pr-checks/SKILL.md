@@ -119,6 +119,10 @@ the authority. `make test` uses automatic unit workers and four service workers;
 `PYTEST_WORKERS` to cap both. `make check` measures coverage in parallel. Keep TMPDIR on disk
 (the Make targets use `$HOME/.cache/etl-craft/tests/tmp`), because /tmp may be RAM-backed.
 
+For a new guarded Engine DB table or a change to its guards or CHECK columns, run
+`test_upgrade.py`, `test_actor_audit.py` and `test_query_plans.py`. Supply valid CHECK seeds
+and query-plan seed rows with typed parameters.
+
 ## 1b. Repeated races
 
 CI runs each test once; a race shows up on CI's slower runners long before a fast workstation
