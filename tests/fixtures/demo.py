@@ -44,7 +44,7 @@ from etl_craft.core.actor import SYSTEM_ACTOR, acting_as
 from etl_craft.dialects.engine import for_engine
 from etl_craft.engine.connection import engine_db
 from etl_craft.engine.queries import run_script
-from etl_craft.warehouse.connection import build_warehouse_engine
+from etl_craft.warehouse.connection import build_warehouse_engine, warehouse_dialect
 from fixtures.cloud import DATABRICKS_VARS, SNOWFLAKE_VARS, require_variables
 from fixtures.services import (
     MINIO_PASSWORD,
@@ -171,6 +171,14 @@ class Demo:
             path.write_text(yaml.safe_dump(raw, sort_keys=False), encoding="utf-8")
             return self
         path.write_text(yaml.safe_dump(raw, sort_keys=False), encoding="utf-8")
+        if not warehouse_dialect(self.config).views:
+            metadata = self.root / "metadata" / "demo.sql"
+            metadata.write_text(
+                metadata.read_text().replace(
+                    "'area_summary', 'SQL_ACTION', 'CREATE_VIEW'",
+                    "'area_summary', 'SQL_ACTION', 'CREATE_TABLE'",
+                )
+            )
         self._make_schemas()
         return self
 
@@ -487,7 +495,7 @@ class _Closing:
 
 
 def _empty_namespaces(names: Sequence[str]) -> None:
-    """Create the demo's namespaces in the shared Iceberg REST catalog, emptied of tables."""
+    """Create the demo's Iceberg namespaces, emptied of views and tables."""
     catalog = require("iceberg_rest")
     base = f"{catalog.http_url}/v1/namespaces"
     for name in names:
@@ -499,6 +507,10 @@ def _empty_namespaces(names: Sequence[str]) -> None:
                 raise
             _request("POST", base, {"namespace": [name]})
             continue
+        with urllib.request.urlopen(f"{base}/{name}/views", timeout=10) as reply:
+            views = json.load(reply).get("identifiers", [])
+        for view in views:
+            _request("DELETE", f"{base}/{name}/views/{view['name']}")
         for table in tables:
             _request("DELETE", f"{base}/{name}/tables/{table['name']}?purgeRequested=true")
 

@@ -27,6 +27,7 @@ from sqlalchemy import text
 from etl_craft.core.actor import SYSTEM_ACTOR, acting_as
 from etl_craft.core.enums import EmailFlavour, RunStatus, SqlAction
 from etl_craft.engine.connection import engine_db
+from etl_craft.warehouse.connection import warehouse_dialect
 from fixtures.demo import Demo, demos, installed_cli
 
 INSTALLERS = {"pip": pytest.mark.e2e_pip, "uv": pytest.mark.e2e_uv}
@@ -145,6 +146,11 @@ def test_the_demo_runs_locally(make_demo, installer, engine, warehouse):
     check_the_emails(demo, failed=True)
     check_the_reports(demo)
     check_server(demo)
+    if not warehouse_dialect(demo.config).views:
+        set_parameter(demo, "DEMO", "area_summary", "SQL_ACTION", SqlAction.CREATE_VIEW)
+        refused = demo.run("pipelines", "refresh")
+        assert refused.returncode == 1
+        assert "DEMO.area_summary" in refused.stdout and "cannot create views" in refused.stdout
 
 
 def check_the_warehouse(demo: Demo) -> None:
@@ -181,7 +187,10 @@ def check_the_warehouse(demo: Demo) -> None:
         "JOIN AUD_TASK_RUN_LOG r ON r.TASK_ID=p.TASK_ID "
         "WHERE p.PARAMETER_NAME='SQL_ACTION' AND r.STATUS='SUCCESS'"
     )
-    assert {row[0] for row in actions} == {action.value for action in SqlAction}
+    expected_actions = set(SqlAction)
+    if not warehouse_dialect(demo.config).views:
+        expected_actions.remove(SqlAction.CREATE_VIEW)
+    assert {row[0] for row in actions} == {action.value for action in expected_actions}
     flagged = demo.engine_rows(
         "SELECT r.BUSINESS_RULE_NAME AS rule, r.BUSINESS_RULE_TYPE AS kind, COUNT(*) AS n "
         "FROM AUD_BUSINESS_RULES_RESULTS x JOIN CFG_BUSINESS_RULES r "

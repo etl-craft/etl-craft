@@ -968,7 +968,9 @@ empty-history-page handling defect, which was corrected and verified. No cloud w
   scripts/soak.py was deleted instead of taking a project directory. The small demo can't
   run it, and S7.I's endurance runner targets the S8 deployment. S7.I may reuse its code
   from git history. S7.I's section already describes the S8 deployment and does not
-  assume soak.py; its text is unchanged.
+  assume soak.py; its text is unchanged. The installed fixture uses a table summary
+  where persistent views are unsupported and asserts CREATE_VIEW's refusal explicitly;
+  supported warehouses execute it. Iceberg namespace cleanup removes views and tables.
 
 - S7.AM slice 1 acceptance availability: SQL/SCD, replay, failure, stewardship, erasure and
   allocation contracts passed on PostgreSQL, DuckDB, Trino/Iceberg and DuckDB/Iceberg. Unit
