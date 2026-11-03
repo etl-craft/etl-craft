@@ -20,7 +20,7 @@ def erasure_project(seed_project, monkeypatch):
 
     path = ctx.config.config_path
     raw = yaml.safe_load(path.read_text())
-    raw["Erasure"] = {"Hmac_secret": "ERASURE_HMAC"}
+    raw["Privacy"] = {"Hmac_secret": "ERASURE_HMAC"}
     path.write_text(yaml.safe_dump(raw, sort_keys=False))
     ctx = replace(ctx, config=load_config(path))
     publish()
@@ -55,7 +55,7 @@ def erasure_world(sql_world, monkeypatch):
 
     w = sql_world
     monkeypatch.setenv("ERASURE_HMAC", "test-hmac-secret")
-    config = replace(w.config, erasure_hmac_secret="ERASURE_HMAC")
+    config = replace(w.config, privacy_hmac_secret="ERASURE_HMAC")
     w.run(
         "land",
         SQL_ACTION="CREATE_TABLE",

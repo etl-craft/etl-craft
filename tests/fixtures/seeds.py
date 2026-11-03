@@ -13,7 +13,8 @@ from fixtures.engine_db import profile_block
 
 
 @pytest.fixture
-def seed_project(engine_db, tmp_path):
+def seed_project(engine_db, tmp_path, monkeypatch):
+    monkeypatch.setenv("SEED_TEST_PRIVACY_KEY", "seed-fixture-key")
     profile = ConnectionProfile(
         "WAREHOUSE", "dev", f"jdbc:duckdb:{tmp_path / 'warehouse.db'}", "", "NONE"
     )
@@ -24,6 +25,7 @@ def seed_project(engine_db, tmp_path):
         "Warehouse": {"Name": "DuckDB", "dev": profile_block(profile, "ds")},
     }
     raw["Artifacts"] = {"Store": (tmp_path / "artifacts").as_uri()}
+    raw["Privacy"] = {"Hmac_secret": "SEED_TEST_PRIVACY_KEY"}
     path = tmp_path / "craft-connector.yml"
     path.write_text(yaml.safe_dump(raw, sort_keys=False))
     config = load_config(path)

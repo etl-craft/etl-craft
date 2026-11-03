@@ -35,7 +35,8 @@ pytestmark = pytest.mark.parametrize(
 
 
 @pytest.fixture
-def agent_scene(engine_db, tmp_path):
+def agent_scene(engine_db, tmp_path, monkeypatch):
+    monkeypatch.setenv("ETL_CRAFT_TEST_PRIVACY_SECRET", "test-only-project-privacy")
     warehouse = ConnectionProfile(
         "WAREHOUSE", "test", f"jdbc:duckdb:{tmp_path / 'w.duckdb'}", "", "NONE", schema="main"
     )
@@ -43,6 +44,7 @@ def agent_scene(engine_db, tmp_path):
         engine_db.config,
         config_path=tmp_path / "craft-connector.yml",
         deployment=DeploymentProfile.CONTROLLER_AGENTS,
+        privacy_hmac_secret="ETL_CRAFT_TEST_PRIVACY_SECRET",
         warehouse=warehouse,
         log_dir=tmp_path / "logs",
     )
@@ -1939,10 +1941,11 @@ def test_upload_content_is_fenced_to_its_attempt_and_run(agent_scene, refusal):
             assert expected in response.text
 
 
-def test_only_a_live_erasure_attempt_can_request_host_erasure(agent_scene):
+def test_only_a_live_erasure_attempt_can_request_host_erasure(agent_scene, monkeypatch):
+    monkeypatch.delenv("ETL_CRAFT_TEST_PRIVACY_SECRET")
     attempt = claim(agent_scene, handler="ERASURE")
     answer = post(agent_scene, "report", attempt_id=attempt, operation="ERASURE")
-    # No HMAC setting is configured: the live request reaches the shared preflight.
+    # The missing secret reaches the shared preflight only for a live attempt.
     assert answer.status_code != 200
     assert "Hmac_secret" in answer.text
     db, _, _, _, _, _ = agent_scene
@@ -2007,13 +2010,14 @@ def test_host_erasure_reads_only_the_attempts_project_register(agent_scene, monk
                 text(
                     "INSERT INTO AUD_ERASURE_SUBJECTS "
                     "(PROJECT_ID,TABLE_NAME,COLUMN_NAME,SUBJECT_KEY,KEY_HMAC,REASON,"
-                    "CREATED_BY,CREATED_AT) VALUES "
-                    "(:project,'warehouse.ds.people','person',:key,:digest,'request','owner',:now)"
+                    "CREATED_BY,CREATED_AT,KEY_CHECK) VALUES "
+                    "(:project,'warehouse.ds.people','person',:key,:digest,'request','owner',:now,:check)"
                 ),
                 {
                     "project": identity,
                     "key": f"private-{identity}",
                     "digest": digest,
+                    "check": "c" * 64,
                     "now": datetime.now(UTC),
                 },
             )
@@ -2156,8 +2160,11 @@ def test_protection_reports_require_admitted_target_live_lock_and_fenced_credent
     assert stale.status_code in {401, 409}, stale.text
 
 
-@pytest.mark.parametrize("bad", ["raw_field", "raw_hash", "batch", "columns"])
-def test_protection_report_schema_refuses_values_and_oversized_lists(agent_scene, bad):
+@pytest.mark.parametrize("bad", ["raw_field", "raw_hash", "batch", "columns", "request"])
+@pytest.mark.parametrize("operation", ["PROTECTION_EVENT", "PROTECTION_READ"])
+def test_protection_report_schema_refuses_values_and_oversized_lists(
+    agent_scene, bad, operation, caplog
+):
     from etl_craft.core.protection import MAX_PROTECTION_COLUMNS, MAX_PROTECTION_EVENTS
 
     scene, attempt, key = protected_claim(agent_scene)
@@ -2171,18 +2178,37 @@ def test_protection_report_schema_refuses_values_and_oversized_lists(agent_scene
         intent["events"][0]["value_hashes"] = ["private-business-value"]
     elif bad == "batch":
         intent["events"] *= MAX_PROTECTION_EVENTS + 1
+    elif bad == "request":
+        intent["request_id"] = "a" * 32
     else:
         intent["events"][0]["columns"] = [f"c_{i}" for i in range(MAX_PROTECTION_COLUMNS + 1)]
         intent["events"][0]["value_hashes"] = ["b" * 32] * (MAX_PROTECTION_COLUMNS + 1)
+    if operation == "PROTECTION_READ":
+        from uuid import uuid4
+
+        candidate = {
+            "request_id": str(uuid4()),
+            "columns": intent["events"][0]["columns"],
+            "hashes": ["a" * 32],
+            "cursor": 0,
+        }
+        if bad == "raw_field":
+            candidate["value"] = "private-business-value"
+        elif bad == "raw_hash":
+            candidate["hashes"] = ["private-business-value"]
+        elif bad == "batch":
+            candidate["hashes"] *= MAX_PROTECTION_EVENTS + 1
+        elif bad == "request":
+            candidate["request_id"] = "a" * 32
+        payload = {"protection_candidates": candidate}
+    else:
+        payload = {"protection": intent}
     refused = post(
-        scene,
-        "report",
-        attempt_id=attempt,
-        operation="PROTECTION_EVENT",
-        target="main.people",
-        protection=intent,
+        scene, "report", attempt_id=attempt, operation=operation, target="main.people", **payload
     )
     assert refused.status_code == 400, refused.text
+    assert "private-business-value" not in refused.text + caplog.text
+    assert "a" * 32 not in refused.text + caplog.text
     with scene[0].engine.connect() as conn:
         assert conn.execute(text("SELECT COUNT(*) FROM AUD_PROTECTION_EVENTS")).scalar_one() == 0
 
@@ -2190,7 +2216,8 @@ def test_protection_report_schema_refuses_values_and_oversized_lists(agent_scene
 def test_protection_reports_derive_project_from_the_admitted_run(agent_scene):
     from etl_craft.core.enums_protection import ProtectionKind, ProtectionStatus
     from etl_craft.core.protection import ProtectionEvent, ProtectionReport
-    from etl_craft.engine.protection_events import append, target_identity
+    from etl_craft.engine.protection_events import append as append_event
+    from etl_craft.engine.protection_events import target_identity
 
     db = agent_scene[0]
     with db.engine.begin() as conn:
@@ -2200,7 +2227,7 @@ def test_protection_reports_derive_project_from_the_admitted_run(agent_scene):
                 "VALUES ('tenant','Tenant','default') RETURNING PROJECT_ID AS project_id"
             )
         ).scalar_one()
-        default_request = append(
+        default_request = append_event(
             conn,
             target_identity(agent_scene[-1], "main.people")[0],
             ProtectionReport(
@@ -2208,6 +2235,7 @@ def test_protection_reports_derive_project_from_the_admitted_run(agent_scene):
                 (ProtectionEvent(ProtectionKind.WRITE, "c" * 32, ("name",), ("d" * 32,)),),
             ),
             None,
+            privacy_key="test-only-project-privacy",
         )
     scene, attempt, key = protected_claim(agent_scene, project_id=project)
     assert (
@@ -2355,3 +2383,129 @@ def test_agent_upload_event_uses_only_its_verified_receipt_and_uploader(agent_sc
             assert (
                 conn.execute(text("SELECT COUNT(*) FROM AUD_PROTECTION_EVENTS")).scalar_one() == 0
             )
+
+
+@pytest.mark.parametrize("kind", ["HARD_DELETE", "ERASURE"])
+@pytest.mark.parametrize("size", [1, 257])
+def test_pending_deletion_candidates_match_without_disclosing_fingerprints(
+    agent_scene, kind, caplog, size
+):
+    scene, attempt, lock = protected_claim(agent_scene)
+    assert (
+        post(scene, "report", attempt_id=attempt, operation="LOCK", lock_key=lock).status_code
+        == 200
+    )
+    import json
+
+    from etl_craft.core.enums_protection import ProtectionKind, ProtectionStatus
+    from etl_craft.core.protection import ProtectionEvent, ProtectionReport
+    from etl_craft.engine.protection_events import append, target_identity
+
+    event = ProtectionEvent(ProtectionKind(kind), "a" * 32, ("name",), (None,))
+    with scene[0].engine.begin() as conn:
+        target = target_identity(scene[-1], "main.people")[0]
+        request = append(
+            conn,
+            target,
+            ProtectionReport(ProtectionStatus.PENDING, (event,) * min(size, 256)),
+            None,
+            privacy_key="test-only-project-privacy",
+        )
+        if size > 256:
+            append(
+                conn,
+                target,
+                ProtectionReport(ProtectionStatus.PENDING, (event,), request),
+                None,
+                privacy_key="test-only-project-privacy",
+            )
+    query = {"request_id": request, "columns": ["name"], "hashes": ["a" * 32], "cursor": 0}
+    answer = post(
+        scene,
+        "report",
+        attempt_id=attempt,
+        operation="PROTECTION_READ",
+        target="main.people",
+        protection_candidates=query,
+    )
+    assert answer.status_code == 200, answer.text
+    assert len(answer.json()["data"]["matched"]) == min(size, 256)
+    if size > 256:
+        query["cursor"] = answer.json()["data"]["cursor"]
+        next_page = post(
+            scene,
+            "report",
+            attempt_id=attempt,
+            operation="PROTECTION_READ",
+            target="main.people",
+            protection_candidates=query,
+        )
+        assert next_page.status_code == 200, next_page.text
+        assert len(next_page.json()["data"]["matched"]) == 1
+        assert next_page.json()["data"]["cursor"] is None
+        assert "a" * 32 not in next_page.text
+        query["cursor"] = 0
+    assert "a" * 32 not in answer.text + caplog.text
+    query["hashes"] = ["c" * 32]
+    absent = post(
+        scene,
+        "report",
+        attempt_id=attempt,
+        operation="PROTECTION_READ",
+        target="main.people",
+        protection_candidates=query,
+    )
+    assert absent.status_code == 200
+    assert absent.json()["data"]["matched"] == []
+    wrong = post(
+        scene,
+        "report",
+        attempt_id=attempt,
+        operation="PROTECTION_READ",
+        target="main.other",
+        protection_candidates=query,
+    )
+    assert wrong.status_code == 403, wrong.text
+    assert "admitted-target" in wrong.text
+    agent_intent = post(
+        scene,
+        "report",
+        attempt_id=attempt,
+        operation="PROTECTION_EVENT",
+        target="main.people",
+        protection=protection_intent(),
+    )
+    assert agent_intent.status_code == 200, agent_intent.text
+    with scene[0].engine.connect() as conn:
+        rows = (
+            conn.execute(text("SELECT KEY_HASH AS key_hash FROM AUD_PROTECTION_EVENTS"))
+            .scalars()
+            .all()
+        )
+        values = (
+            conn.execute(text("SELECT VALUE_HASHES AS value_hashes FROM AUD_PROTECTION_EVENTS"))
+            .scalars()
+            .all()
+        )
+    assert "test-only-project-privacy" not in (
+        answer.text + agent_intent.text + caplog.text + str(rows) + str(values)
+    )
+    assert "b" * 32 not in str(values)
+    assert all(len(value) == 64 for row in values for value in json.loads(row) if value is not None)
+    assert len(rows) == size + 1 and len(set(rows)) == 1
+    assert all(len(value) == 64 for value in rows)
+    assert "a" * 32 not in str(rows)
+    with scene[0].engine.begin() as conn:
+        conn.execute(
+            text("UPDATE AUD_TASK_ATTEMPTS SET LEASE_EXPIRES_AT=:past WHERE ATTEMPT_ID=:attempt"),
+            {"past": datetime.now(UTC) - timedelta(seconds=60), "attempt": attempt},
+        )
+    stale = post(
+        scene,
+        "report",
+        attempt_id=attempt,
+        operation="PROTECTION_READ",
+        target="main.people",
+        protection_candidates=query,
+    )
+    assert stale.status_code in {401, 409}, stale.text

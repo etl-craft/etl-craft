@@ -115,3 +115,39 @@ def test_engine_mutation_cannot_claim_upload_provenance(kind):
     event = ProtectionEvent(kind, "a" * 32, ("name",), ("b" * 32,))
     with pytest.raises(UsageError, match="non-upload event kind"):
         ProtectionReport(ProtectionStatus.PENDING, (event,), upload_id=42)
+
+
+def test_a_fingerprint_cannot_be_echoed_as_a_noncanonical_request_identity():
+    value = "a" * 32
+    with pytest.raises(UsageError, match="canonical server-issued UUID") as refused:
+        ProtectionReport(ProtectionStatus.COMMITTED, request_id=value)
+    assert value not in str(refused.value)
+
+
+def test_deletion_candidates_require_canonical_request_identities():
+    from etl_craft.core.protection import ProtectionCandidates
+
+    value = "a" * 32
+    with pytest.raises(UsageError, match="canonical server-issued UUID") as refused:
+        ProtectionCandidates(value, ("id",))
+    assert value not in str(refused.value)
+
+
+@pytest.mark.parametrize("kind", ["edit", "unlock", "provenance"])
+def test_protection_requests_omit_private_input_from_refusal_audits(kind):
+    import json
+
+    from etl_craft.services.operations.requests import arguments
+    from etl_craft.services.operations.values import ValueEdit, ValueKey, ValueUnlock
+
+    value = "private-person-identifier"
+    common = {"pipeline_code": "P", "task_code": "load", "key": {"id": value}}
+    if kind == "edit":
+        request = ValueEdit(**common, values={"name": value}, reason="correct " + value)
+    elif kind == "unlock":
+        request = ValueUnlock(**common, reason="release " + value)
+    else:
+        request = ValueKey(**common)
+    assert value not in json.dumps(arguments(request))
+    assert value not in repr(request)
+    assert arguments(request)["pipeline_code"] == "P"

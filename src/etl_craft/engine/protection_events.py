@@ -2,7 +2,7 @@
 
 import json
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from uuid import uuid4
 
@@ -13,6 +13,7 @@ from etl_craft.core.actor import current_actor
 from etl_craft.core.enums import AttemptStatus
 from etl_craft.core.enums_protection import ProtectionEvidence, ProtectionKind, ProtectionStatus
 from etl_craft.core.errors import PermissionDeniedError, StaleTransitionError, UsageError
+from etl_craft.core.privacy import PrivacyDomain, digest, fingerprint
 from etl_craft.core.protection import (
     MAX_PROTECTION_EVENTS,
     ProtectionEvent,
@@ -79,9 +80,26 @@ def read(conn: Connection, target: str, cursor: int = 0) -> ProtectionPage:
 
 
 def fenced_read(
-    conn: Connection, target: str, fencing: dict[str, object], cursor: int = 0
+    conn: Connection,
+    target: str,
+    fencing: dict[str, object],
+    cursor: int = 0,
+    *,
+    config: ConnectorConfig,
 ) -> ProtectionPage:
-    """Check the live attempt/lock and pending work in one Engine DB round trip."""
+    """Expose only the bounded public page after the common host-side access check."""
+    return fenced_access(conn, target, fencing, cursor, config=config)[0]
+
+
+def fenced_access(
+    conn: Connection,
+    target: str,
+    fencing: dict[str, object],
+    cursor: int = 0,
+    *,
+    config: ConnectorConfig,
+) -> tuple[ProtectionPage, str | None]:
+    """Return host-only checked access; the secret never belongs in an agent response."""
     validate_cursor(cursor)
     rows = (
         conn.execute(
@@ -100,13 +118,17 @@ def fenced_read(
         raise StaleTransitionError(
             f"{where}: target-lock check failed; acquire its live lock before reporting"
         )
+    from etl_craft.engine.privacy import checked
+
+    privacy_key = checked(config, rows[0]["privacy_key_check"])
     events = [row for row in rows if row["event_id"] is not None]
     result = _records(events[:MAX_PROTECTION_EVENTS])
-    return ProtectionPage(
+    page = ProtectionPage(
         result,
         result[-1].event_id if len(events) > MAX_PROTECTION_EVENTS else None,
         bool(rows[0]["protection_active"]),
     )
+    return page, privacy_key
 
 
 def history(
@@ -155,7 +177,11 @@ def _records(rows: Sequence[RowMapping]) -> tuple[ProtectionRecord, ...]:
 
 
 def append_fenced(
-    conn: Connection, target: str, report: ProtectionReport, fencing: dict[str, object]
+    conn: Connection,
+    target: str,
+    report: ProtectionReport,
+    fencing: dict[str, object],
+    privacy_key: str,
 ) -> str | None:
     """Append ordinary owned outcomes with their fence in the same atomic statement."""
     report.__post_init__()
@@ -169,7 +195,7 @@ def append_fenced(
             "columns": json.dumps(e.columns),
             "hashes": json.dumps(e.value_hashes),
         }
-        for e in report.events
+        for e in (_private_event(privacy_key, target, raw) for raw in report.events)
     ]
     params = {
         **_scope(target),
@@ -177,6 +203,7 @@ def append_fenced(
         "request_id": request,
         "events": json.dumps(events),
         "continuation": report.request_id is not None,
+        "key_check": digest(privacy_key, PrivacyDomain.CHECK),
         "upload_id": report.upload_id,
         "status": report.status,
         "actor": current_actor().name,
@@ -197,6 +224,8 @@ def append(
     report: ProtectionReport,
     attempt_id: int | None,
     hash_target: str | None = None,
+    *,
+    privacy_key: str,
 ) -> str:
     """Allocate intents and append one final outcome, preserving its creating attempt."""
     report.__post_init__()
@@ -216,7 +245,7 @@ def append(
         )
     if previous:
         creator = previous[0]
-        _ownership(
+        recovery_owner(
             target,
             request_id,
             Creator(creator.attempt_id, ProtectionKind(creator.kind), creator.attempt_status),
@@ -233,7 +262,7 @@ def append(
         )
     if report.status == ProtectionStatus.PENDING:
         for event in report.events:
-            _insert(conn, scope, report, event, attempt_id, None)
+            _insert(conn, scope, report, event, (attempt_id, None), privacy_key)
     else:
         first = conn.execute(statement(conn, "protection_first_pending"), _scope(target)).first()
         if first is not None and first.request_id != request_id:
@@ -250,20 +279,27 @@ def append(
             from etl_craft.engine.repository.hash_versions import save_hash_version
 
             save_hash_version(conn, hash_target or target, 2)
-        _insert(conn, scope, report, None, previous[0].attempt_id, attempt_id)
+        _insert(conn, scope, report, None, (previous[0].attempt_id, attempt_id), privacy_key)
     return request_id
 
 
-def _ownership(
-    target: str, request_id: str, creator: Creator, report: ProtectionReport, attempt_id: int | None
+def recovery_owner(
+    target: str,
+    request_id: str,
+    creator: Creator,
+    report: ProtectionReport,
+    attempt_id: int | None,
+    *,
+    require_terminal: bool = False,
 ) -> None:
+    """Refuse another live creator and retain evidence-specific recovery rules."""
     detail = (
         f"attempt {attempt_id}, target {target}, request "
         f"{request_id}, creating attempt {creator.attempt_id}"
     )
     if report.evidence is not None:
         _evidence(detail, creator.kind, report)
-    if creator.attempt_id == attempt_id:
+    if creator.attempt_id == attempt_id and not require_terminal:
         return
     if report.evidence is None or report.status == ProtectionStatus.PENDING:
         raise PermissionDeniedError(
@@ -300,9 +336,10 @@ def _insert(
     scope: dict[str, object],
     report: ProtectionReport,
     event: ProtectionEvent | None,
-    creator: int | None,
-    recovering: int | None,
+    attempts: tuple[int | None, int | None],
+    privacy_key: str,
 ) -> None:
+    creator, recovering = attempts
     actor = current_actor().name
     previous = (
         conn.execute(statement(conn, "protection_request"), scope).first()
@@ -310,6 +347,7 @@ def _insert(
         else None
     )
     if event is not None:
+        event = _private_event(privacy_key, str(scope["target"]), event)
         kind = event.kind
     else:
         assert previous is not None
@@ -322,6 +360,7 @@ def _insert(
             "upload_id": None if previous is None else previous.upload_id,
             "kind": kind,
             "key_hash": None if event is None else event.key_hash,
+            "key_check": digest(privacy_key, PrivacyDomain.CHECK),
             "columns": json.dumps(() if event is None else event.columns),
             "hashes": json.dumps(() if event is None else event.value_hashes),
             "status": report.status,
@@ -330,4 +369,18 @@ def _insert(
             "recovering_attempt": recovering if report.evidence is not None else None,
             "recovery_actor": actor if report.evidence is not None else None,
         },
+    )
+
+
+def _private_event(key: str, target: str, event: ProtectionEvent) -> ProtectionEvent:
+    """Seal fingerprints once for both fenced and standalone persistence paths."""
+    return replace(
+        event,
+        key_hash=fingerprint(key, PrivacyDomain.KEY, target, event.key_hash),
+        value_hashes=tuple(
+            None
+            if value is None
+            else fingerprint(key, PrivacyDomain.VALUE, target, value, column.lower())
+            for column, value in zip(event.columns, event.value_hashes, strict=True)
+        ),
     )

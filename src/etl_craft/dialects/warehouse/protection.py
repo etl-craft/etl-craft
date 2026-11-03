@@ -31,6 +31,28 @@ class ProtectionSql:
             f"ORDER BY t.ROW_ID DESC) AS etl_rank FROM {self.target} t) v WHERE etl_rank = 1"
         )
 
+    def incoming(
+        self,
+        stage: str,
+        match: str,
+        changed: str,
+        *,
+        locked: bool,
+        include_unchanged: bool,
+    ) -> str:
+        """Project mutation flags with one set-based join, including unchanged uploads."""
+        cells = "".join(
+            f",{hashed} AS cell_{i}" for i, hashed in enumerate(self.cell_hashes.values())
+        )
+        mutating = "p.ROW_ID IS NULL"
+        selected = "TRUE" if include_unchanged else mutating
+        control = "t.LOCKED" if locked else "NULL"
+        return (
+            f"SELECT DISTINCT {self.key_hash} AS key_hash,{control} AS upload_locked{cells},"
+            f"{mutating} AS mutating FROM {stage} t LEFT JOIN {self.target} p "
+            f"ON {match} AND NOT ({changed}) WHERE {selected}"
+        )
+
     def protect_stage(
         self, stage: str, columns: tuple[str, ...], *, delete: bool, preserve: bool = False
     ) -> str:
@@ -97,7 +119,8 @@ def bound_relation(columns: tuple[tuple[str, str], ...], count: int) -> str:
     )
 
 
-def key_membership(target: str, hashed: str, parameters: tuple[str, ...]) -> str:
-    """Read only logged-key fingerprints present in the physical target."""
-    binds = ",".join(f":{name}" for name in parameters)
-    return f"SELECT DISTINCT {hashed} AS key_hash FROM {target} t WHERE {hashed} IN ({binds})"
+def recovery_candidates(target: str, hashed: str) -> str:
+    """Stream only protected key fingerprints through the warehouse cursor once."""
+    return (
+        f"SELECT DISTINCT {hashed} AS key_hash FROM {target} t WHERE t.ETL_PROTECTION IS NOT NULL"
+    )

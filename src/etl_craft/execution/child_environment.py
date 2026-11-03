@@ -28,7 +28,7 @@ PROCESS_VARIABLES = frozenset(
 )
 
 
-def child_environment(config: ConnectorConfig) -> dict[str, str]:
+def child_environment(config: ConnectorConfig, *, host: bool = False) -> dict[str, str]:
     """Keep process basics and configured connection variables, never deployment tokens."""
     names = PROCESS_VARIABLES | {
         setting.variable
@@ -40,10 +40,13 @@ def child_environment(config: ConnectorConfig) -> dict[str, str]:
         )
     }
     names |= {p.secret_var for p in (config.engine, config.warehouse) if p is not None}
+    if host and config.privacy_hmac_secret:
+        names |= {config.privacy_hmac_secret}
     return {
         key: value
         for key, value in os.environ.items()
         if (key in names or key.startswith("LC_"))
+        and (host or key != config.privacy_hmac_secret)
         and key != "ETL_CRAFT_TOKEN"
         and key != "ETL_CRAFT_ATTEMPT_OWNER"
     } | {"PYTHONUNBUFFERED": "1"}

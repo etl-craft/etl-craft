@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from typing import ClassVar
 
 from etl_craft.config.targets import active_catalog
@@ -13,6 +13,7 @@ from etl_craft.core.enums import ActionName, ActorKind, Handler
 from etl_craft.core.enums_protection import ProtectionKind
 from etl_craft.core.errors import PermissionDeniedError, SqlGuardError, UsageError
 from etl_craft.core.governance import check_reason
+from etl_craft.core.redaction import mask_text, registering
 from etl_craft.core.time import as_utc
 from etl_craft.engine import locks
 from etl_craft.engine.repository.pipelines import resolve_pipeline_id
@@ -49,15 +50,15 @@ class ValueKey(Request):
 
     pipeline_code: str
     task_code: str
-    key: dict[str, object]
+    key: dict[str, object] = field(repr=False, metadata={"audit": False})
 
 
 @dataclass(frozen=True, kw_only=True)
 class ValueEdit(ValueKey):
     """Explicit values for one key; omitted existing values are retained."""
 
-    values: dict[str, object]
-    reason: str = ""
+    values: dict[str, object] = field(repr=False, metadata={"audit": False})
+    reason: str = field(default="", repr=False, metadata={"audit": False})
     row_lock: bool = False
 
 
@@ -65,7 +66,7 @@ class ValueEdit(ValueKey):
 class ValueUnlock(ValueKey):
     """An explicit release; no columns means all active locks on the selected key."""
 
-    reason: str = ""
+    reason: str = field(default="", repr=False, metadata={"audit": False})
     columns: tuple[str, ...] = ()
 
 
@@ -243,6 +244,16 @@ def _result(
     ctx: OperationContext, guard: Protection, key_hash: str, request_id: str | None
 ) -> ValueResult:
     """Return current attribution and the last hundred events for exactly this key."""
+    from etl_craft.core.privacy import PrivacyDomain, fingerprint
+    from etl_craft.engine.privacy import check
+
+    with ctx.engine.connect() as conn:
+        privacy_key = check(conn, ctx.config)
+    assert privacy_key is not None
+    from etl_craft.engine.protection_events import target_identity
+
+    private_target = target_identity(ctx.config, guard.session.target)[0]
+    private_key = fingerprint(privacy_key, PrivacyDomain.KEY, private_target, key_hash)
     guard.refresh(key_hash)
     state = guard.states.get(key_hash)
     current = (
@@ -251,31 +262,60 @@ def _result(
         else tuple(
             {
                 **cell,
-                "key_hash": key_hash,
+                "key_hash": private_key,
+                "value_hash": None
+                if cell.get("value_hash") is None
+                else fingerprint(
+                    privacy_key, PrivacyDomain.VALUE, private_target, str(cell["value_hash"]), name
+                ),
                 "column_name": name,
                 "happened_at": as_utc(cell["happened_at"]) if cell.get("happened_at") else None,
             }
             for name, cell in sorted(state.cells.items())
         )
     )
+    return ValueResult(
+        guard.session.target,
+        True,
+        request_id,
+        current,
+        _history(ctx, guard, private_target, private_key),
+    )
+
+
+def _history(
+    ctx: OperationContext, guard: Protection, private_target: str, private_key: str
+) -> tuple[dict[str, object], ...]:
+    """Keep physical-row maintenance events out of business-key attribution."""
     store = guard.session.protection_store
     assert store is not None
     history: list[dict[str, object]] = []
     from etl_craft.engine.protection_events import history as event_history
-    from etl_craft.engine.protection_events import target_identity
 
     with ctx.engine.connect() as conn:
         recent = event_history(
-            conn, target_identity(ctx.config, guard.session.target)[0], key_hash, guard.request_id
+            conn,
+            private_target,
+            private_key,
+            guard.request_id,
         )
     for record in recent:
         event = record.event
-        if event is None or event.key_hash != key_hash:
+        if (
+            event is None
+            or event.key_hash != private_key
+            or event.kind == ProtectionKind.REHASH
+            or (
+                event.kind
+                in {ProtectionKind.KEY, ProtectionKind.ERASURE, ProtectionKind.HARD_DELETE}
+                and event.columns != guard.key_columns
+            )
+        ):
             continue
         for column, hashed in zip(event.columns, event.value_hashes, strict=True):
             history.append(
                 {
-                    "key_hash": key_hash,
+                    "key_hash": private_key,
                     "column_name": column,
                     "value_hash": hashed,
                     "event_kind": event.kind,
@@ -293,7 +333,7 @@ def _result(
                     "revision": record.event_id,
                 }
             )
-    return ValueResult(guard.session.target, True, request_id, current, tuple(history[:100]))
+    return tuple(history[:100])
 
 
 def write_values(ctx: OperationContext, edit: ValueEdit) -> ValueResult:
@@ -303,13 +343,16 @@ def write_values(ctx: OperationContext, edit: ValueEdit) -> ValueResult:
     """
     pipeline, task = edit.pipeline_code, edit.task_code
     request = ProtectionRequest.create(ctx.actor, edit.reason)
+    private = tuple(v for v in (*edit.key.values(), *edit.values.values()) if isinstance(v, str))
+    with registering(*private):
+        reason = mask_text(edit.reason or "")
     arguments = {
         "pipeline_code": pipeline,
         "task_code": task,
         "columns": tuple(edit.values),
-        "reason": edit.reason,
+        "reason": reason,
     }
-    with recorded(ctx, ActionName.DATA_EDIT, arguments):
+    with recorded(ctx, ActionName.DATA_EDIT, arguments), registering(*private):
         _check_reason(edit.reason)
         if ctx.actor.kind not in {ActorKind.USER, ActorKind.SERVICE}:
             raise PermissionDeniedError(
@@ -368,14 +411,20 @@ def unlock_values(ctx: OperationContext, edit: ValueUnlock) -> ValueResult:
     """Release protection explicitly; integrations cannot unlock a person's values."""
     pipeline, task = edit.pipeline_code, edit.task_code
     request = ProtectionRequest.create(ctx.actor, edit.reason)
-    with recorded(
-        ctx,
-        ActionName.DATA_UNLOCK,
-        {
-            "pipeline_code": pipeline,
-            "task_code": task,
-            "reason": edit.reason,
-        },
+    private = tuple(v for v in edit.key.values() if isinstance(v, str))
+    with registering(*private):
+        reason = mask_text(edit.reason or "")
+    with (
+        recorded(
+            ctx,
+            ActionName.DATA_UNLOCK,
+            {
+                "pipeline_code": pipeline,
+                "task_code": task,
+                "reason": reason,
+            },
+        ),
+        registering(*private),
     ):
         _check_reason(edit.reason)
         if ctx.actor.kind != ActorKind.USER:
@@ -403,8 +452,11 @@ def unlock_values(ctx: OperationContext, edit: ValueUnlock) -> ValueResult:
 def provenance(ctx: OperationContext, request: ValueKey) -> ValueResult:
     """Read known writers and lock evidence; never infer identity from actor-column strings."""
     key = request.key
-    with _selected(ctx, request.pipeline_code, request.task_code) as (guard, _context):
-        if not exists(guard.session):
+    with (
+        registering(*(v for v in key.values() if isinstance(v, str))),
+        _selected(ctx, request.pipeline_code, request.task_code) as (guard, _context),
+    ):
+        if not exists(guard.session) and not guard.session.protection_active:
             return ValueResult(guard.session.target, False, None, (), ())
         guard.check()
         return _result(ctx, guard, _selected_key(guard, key), None)

@@ -128,9 +128,14 @@ def _intent(
             if whole
             else plan.hashes(hashed)
         )
+        sql += " AND t.ETL_PROTECTION IS NOT NULL"
         for key in session.run(sql, params, step="fingerprint exact erasure keys").scalars():
             yield ProtectionEvent(ProtectionKind.ERASURE, str(key), keys, (None,) * len(keys))
 
+    if session.protection_active is False:
+        return
+    if "etl_protection" not in {c.lower() for c, _ in session.target_columns()}:
+        return
     store = session.protection_store
     assert store is not None
     pending(

@@ -17,7 +17,17 @@ def registering(*values: str) -> Iterator[None]:
         yield
     except Exception as error:
         # Materialize safe exception text before the operation scope ends.
-        error.args = tuple(mask(arg) for arg in error.args)
+        pending: list[BaseException] = [error]
+        seen: set[int] = set()
+        while pending:
+            current = pending.pop()
+            if id(current) in seen:
+                continue
+            seen.add(id(current))
+            current.args = tuple(mask(arg) for arg in current.args)
+            pending.extend(
+                cause for cause in (current.__cause__, current.__context__) if cause is not None
+            )
         raise
     finally:
         _VALUES.reset(token)

@@ -81,7 +81,7 @@ class ErasureDelete:
         )
         return (
             self.hashes(expression) + f" AND NOT EXISTS (SELECT 1 FROM {self.target} other "
-            f"WHERE {match} AND ({self.predicate}) IS NOT TRUE)"
+            f"WHERE {match} AND NOT COALESCE(({self.predicate}),FALSE))"
         )
 
     def statement(self, keys: tuple[str, ...], dialect: WarehouseDialect, conn: Connection) -> str:

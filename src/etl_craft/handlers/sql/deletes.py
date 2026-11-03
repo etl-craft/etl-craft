@@ -79,6 +79,10 @@ def _intent(
     session: Session, action: ActionContext, stage: str, kind: ProtectionKind, live: str = ""
 ) -> str | None:
     keys = action.task.merge_key
+    if session.protection_active is False:
+        return None
+    if "etl_protection" not in {c.lower() for c, _ in session.target_columns()}:
+        return None
     physical = {c.lower(): c for c, _ in session.target_columns()}
     hashed = session.hash([f"t.{c}" for c in keys], keys)
     return intent(
@@ -87,7 +91,7 @@ def _intent(
         kind,
         f"SELECT DISTINCT {hashed} AS key_hash FROM {session.target} "
         f"t WHERE EXISTS (SELECT 1 FROM {stage} s WHERE "
-        f"{key_match(keys)}){live}",
+        f"{key_match(keys)}){live} AND t.ETL_PROTECTION IS NOT NULL",
     )
 
 

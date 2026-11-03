@@ -315,7 +315,7 @@ class ConnectorConfig:
     object_stores: dict[str, ObjectStore] = field(default_factory=dict)
     retention: Retention = field(default_factory=Retention)
     uploads: Uploads = field(default_factory=Uploads)
-    erasure_hmac_secret: str | None = None
+    privacy_hmac_secret: str | None = None
     retry_on: RetryOn = RetryOn.TRANSIENT
 
     @property

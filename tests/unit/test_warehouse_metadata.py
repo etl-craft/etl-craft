@@ -398,3 +398,14 @@ def test_known_add_column_updates_cache_and_failed_ddl_forces_reread():
                 session.sweep()
     finally:
         engine.dispose()
+
+
+def test_postgres_array_oid_is_not_described_as_its_scalar_element():
+    registry = Mock()
+    registry.get.return_value = SimpleNamespace(name="int4", oid=23, array_oid=1007)
+    conn = SimpleNamespace(
+        connection=SimpleNamespace(
+            dbapi_connection=SimpleNamespace(adapters=SimpleNamespace(types=registry))
+        )
+    )
+    assert for_key("postgres").result_type(conn, SimpleNamespace(type_code=1007)) is None

@@ -602,6 +602,7 @@ def test_pending_protection_pins_creator_until_recovery_then_retains_only_event_
                 (ProtectionEvent(ProtectionKind.WRITE, "a" * 32, ("name",), ("b" * 32,)),),
             ),
             attempt,
+            privacy_key="retention-test-key",
         )
     preview = invoke(ctx, ActionName.PURGE, PurgeInput(dry_run=True))
     assert preview.counts["AUD_TASK_ATTEMPTS"] == 0
@@ -618,6 +619,7 @@ def test_pending_protection_pins_creator_until_recovery_then_retains_only_event_
                 evidence=ProtectionEvidence.STAMP_ABSENT,
             ),
             None,
+            privacy_key="retention-test-key",
         )
     purged = invoke(ctx, ActionName.PURGE, PurgeInput())
     assert purged.counts["AUD_TASK_ATTEMPTS"] == 1

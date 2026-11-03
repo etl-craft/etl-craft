@@ -238,25 +238,13 @@ def empty_engine_db(request: pytest.FixtureRequest, tmp_path: Path, engine_actor
 def engine_db(empty_engine_db: EngineDb, request: pytest.FixtureRequest) -> EngineDb:
     """An isolated Engine DB copied from its dialect's immutable packaged schema."""
     db = empty_engine_db
-    db.engine.dispose()
     if db.config.engine.jdbc_url.startswith("jdbc:sqlite:"):
+        db.engine.dispose()
         template = request.getfixturevalue("sqlite_schema_template")
         shutil.copyfile(template, db.config.project_dir / "engine.db")
     else:
         template = request.getfixturevalue("postgres_schema_template")
-        name = db.engine.url.database
-        assert name is not None
-        with postgres_admin() as conn:
-            conn.execute(
-                psycopg.sql.SQL("DROP DATABASE {} WITH (FORCE)").format(
-                    psycopg.sql.Identifier(name)
-                )
-            )
-            conn.execute(
-                psycopg.sql.SQL("CREATE DATABASE {} TEMPLATE {}").format(
-                    psycopg.sql.Identifier(name), psycopg.sql.Identifier(template)
-                )
-            )
+        prepare_postgres_engine_db(db, template)
     return db
 
 
@@ -275,3 +263,19 @@ def engine_db_cut_off(engine):
             yield
         finally:
             admin.execute(psycopg.sql.SQL("ALTER DATABASE {} ALLOW_CONNECTIONS true").format(name))
+
+
+def prepare_postgres_engine_db(db: EngineDb, template: str) -> None:
+    """Clone the immutable packaged schema instead of replaying every DDL per test."""
+    db.engine.dispose()
+    name = db.engine.url.database
+    assert name is not None
+    with postgres_admin() as conn:
+        conn.execute(
+            psycopg.sql.SQL("DROP DATABASE {} WITH (FORCE)").format(psycopg.sql.Identifier(name))
+        )
+        conn.execute(
+            psycopg.sql.SQL("CREATE DATABASE {} TEMPLATE {}").format(
+                psycopg.sql.Identifier(name), psycopg.sql.Identifier(template)
+            )
+        )

@@ -66,3 +66,6 @@ Uploads:
   Max_file_mb: 50
   # Archive_to: file:///srv/etl-archive/uploads
   # Or: {Store: s3://team-archive/uploads, Profile: archive}                      # value
+
+Privacy:
+  Hmac_secret: ETL_CRAFT_DEMO_PRIVACY_HMAC  # variable — retain the same secret for project history

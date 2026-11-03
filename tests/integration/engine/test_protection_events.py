@@ -14,8 +14,14 @@ from etl_craft.core.protection import (
     ProtectionReport,
 )
 from etl_craft.engine import transitions
-from etl_craft.engine.protection_events import append, read
+from etl_craft.engine.protection_events import append as append_event
+from etl_craft.engine.protection_events import read
 from fixtures.metadata import add_pipeline, add_task
+
+
+def append(*args, **kwargs):
+    return append_event(*args, privacy_key="test-only-project-privacy", **kwargs)
+
 
 ACTOR = Actor("steward", ActorKind.USER)
 RECOVERER = Actor("recovery", ActorKind.SERVICE)
@@ -200,8 +206,8 @@ def test_guarded_event_upload_identity_check_and_null_non_upload_events(engine_d
         ).scalar_one()
     insert = text(
         "INSERT INTO AUD_PROTECTION_EVENTS (PROJECT_ID,TARGET_ID,REQUEST_ID,KIND,KEY_HASH,"
-        "COLUMN_NAMES,VALUE_HASHES,STATUS,CREATED_BY,CREATED_AT,UPLOAD_ID) "
-        "VALUES (1,:target,:request,:kind,:key,'[]','[]','PENDING','steward',:now,:upload)"
+        "COLUMN_NAMES,VALUE_HASHES,STATUS,CREATED_BY,CREATED_AT,UPLOAD_ID,KEY_CHECK) "
+        "VALUES (1,:target,:request,:kind,:key,'[]','[]','PENDING','steward',:now,:upload,:check)"
     )
     for kind in (ProtectionKind.REHASH, ProtectionKind.HARD_DELETE, ProtectionKind.ERASURE):
         with acting_as(ACTOR), pytest.raises(IntegrityError), engine_db.engine.begin() as conn:
@@ -211,7 +217,8 @@ def test_guarded_event_upload_identity_check_and_null_non_upload_events(engine_d
                     "target": TARGET,
                     "request": "check-" + kind,
                     "kind": kind,
-                    "key": "a" * 32,
+                    "key": "a" * 64,
+                    "check": "c" * 64,
                     "now": datetime.now(UTC),
                     "upload": upload,
                 },
@@ -230,3 +237,165 @@ def test_guarded_event_upload_identity_check_and_null_non_upload_events(engine_d
             ).scalar_one()
             is None
         )
+
+
+def test_first_privacy_secret_wins_atomically_for_the_project(engine_db):
+    from etl_craft.core.errors import ConfigurationError
+    from etl_craft.engine import protection_events
+    from etl_craft.engine.privacy import guarded
+    from fixtures.races import two_at_once
+
+    def record(key, target):
+        try:
+            with acting_as(ACTOR), guarded(engine_db.config), engine_db.engine.begin() as conn:
+                return protection_events.append(
+                    conn,
+                    target,
+                    ProtectionReport(ProtectionStatus.PENDING, (EVENT,)),
+                    None,
+                    privacy_key=key,
+                )
+        except ConfigurationError as error:
+            return error
+
+    result = two_at_once(
+        lambda: record("first-secret", TARGET),
+        lambda: record("second-secret", TARGET + "_other"),
+        at=(engine_db.engine, "begin"),
+    )
+    assert sum(isinstance(value, str) for value in result) == 1
+    failure = next(value for value in result if isinstance(value, ConfigurationError))
+    for part in ("Privacy.Hmac_secret", "differs", "restore the original secret"):
+        assert part in str(failure)
+    with engine_db.engine.connect() as conn:
+        assert conn.execute(text("SELECT COUNT(*) FROM AUD_PROTECTION_EVENTS")).scalar_one() == 1
+
+
+def test_validate_and_doctor_refuse_stewardship_without_project_privacy_secret(engine_db):
+    from etl_craft.engine.migrations import mark_packaged_migrations_applied
+    from etl_craft.services.doctor import run_checks
+    from etl_craft.services.validate import validate
+
+    with acting_as(ACTOR), engine_db.engine.begin() as conn:
+        pipeline = add_pipeline(conn, "STEWARDSHIP")
+        add_task(
+            conn,
+            pipeline,
+            "merge",
+            SQL_ACTION="SCD1_MERGE",
+            TARGET_OBJECT="main.people",
+            SELECT_QUERY="SELECT 1 AS id",
+            MERGE_KEY="id",
+            MERGE_COMPARE_COLUMNS="id",
+        )
+        conn.execute(
+            text("UPDATE CFG_PIPELINES SET STEWARDABLE_FLAG='Y' WHERE PIPELINE_ID=:id"),
+            {"id": pipeline},
+        )
+        mark_packaged_migrations_applied(conn)
+    validation = validate(engine_db.engine, engine_db.config)
+    assert any(
+        "Privacy.Hmac_secret" in f.message and "configure" in f.message for f in validation.findings
+    )
+    doctor = run_checks(engine_db.config)
+    assert any("Privacy.Hmac_secret" in c.detail and "configure" in c.detail for c in doctor)
+
+
+def test_erasure_normalizes_unquoted_managed_sql_targets(engine_db):
+    from dataclasses import replace
+
+    from etl_craft.config import ConnectionProfile
+    from etl_craft.core.erasure import ErasureEntry
+    from etl_craft.handlers.erasure import coverage, project_coverage
+
+    config = replace(
+        engine_db.config,
+        warehouse=ConnectionProfile(
+            "WAREHOUSE",
+            "dev",
+            "jdbc:snowflake://account.snowflakecomputing.com/?db=database&schema=schema",
+            "",
+            "NONE",
+            extra={"database": "database", "schema": "schema"},
+        ),
+    )
+    with acting_as(ACTOR), engine_db.engine.begin() as conn:
+        pipeline = add_pipeline(conn, "P")
+        add_task(
+            conn,
+            pipeline,
+            "T",
+            SQL_ACTION="SCD1_MERGE",
+            TARGET_OBJECT="database.schema.people",
+            SELECT_QUERY="SELECT 1 AS id",
+            MERGE_KEY="id",
+            MERGE_COMPARE_COLUMNS="id",
+        )
+    graph = project_coverage(engine_db.engine, config)
+    reached, _ = coverage(
+        config, ErasureEntry("DATABASE.SCHEMA.PEOPLE", "ID", "1", "a" * 64), graph
+    )
+    assert reached == [("DATABASE.SCHEMA.PEOPLE", "id")]
+
+
+def test_native_key_labels_and_canonical_cells_share_private_value_identity(engine_db):
+    with acting_as(ACTOR), engine_db.engine.begin() as conn:
+        append(
+            conn,
+            TARGET,
+            ProtectionReport(
+                ProtectionStatus.PENDING,
+                (
+                    ProtectionEvent(ProtectionKind.KEY, "a" * 32, ("ID",), ("b" * 32,)),
+                    ProtectionEvent(ProtectionKind.LOCK, "a" * 32, ("id",), ("b" * 32,)),
+                ),
+            ),
+            None,
+        )
+        records = read(conn, TARGET).records
+    values = [record.event.value_hashes for record in records]
+    assert len(values) == 2 and values[0] == values[1]
+    assert values[0] != ("b" * 32,)
+
+
+def test_candidate_matching_uses_one_checked_privacy_key_snapshot(engine_db, monkeypatch):
+    from dataclasses import replace
+
+    from etl_craft.config import ConnectionProfile, resolve
+    from etl_craft.core.errors import ConfigurationError
+    from etl_craft.core.protection import ProtectionCandidates
+    from etl_craft.engine import locks
+    from etl_craft.engine.task_store import LocalTaskStore
+    from etl_craft.handlers.resources import LocalLocker
+
+    config = replace(
+        engine_db.config,
+        warehouse=ConnectionProfile(
+            "WAREHOUSE", "dev", "jdbc:duckdb:warehouse.db", "", "NONE", schema="main"
+        ),
+        privacy_hmac_secret="TEST_PRIVACY",
+    )
+    event = ProtectionEvent(ProtectionKind.ERASURE, "a" * 32, ("id",), (None,))
+    with acting_as(ACTOR), engine_db.engine.begin() as conn:
+        request = append(conn, TARGET, ProtectionReport(ProtectionStatus.PENDING, (event,)), None)
+        event_id = read(conn, TARGET).records[0].event_id
+    original = resolve.resolve_named_secret
+    seen = []
+
+    def rotating(config, name):
+        if name != "TEST_PRIVACY":
+            return original(config, name)
+        seen.append(name)
+        return "test-only-project-privacy" if len(seen) == 1 else "changed"
+
+    monkeypatch.setattr(resolve, "resolve_named_secret", rotating)
+    locker = LocalLocker(engine_db.engine, config)
+    store = LocalTaskStore.standalone(engine_db.engine, config, locker)
+    lock = locks.target("main.people", "warehouse")
+    query = ProtectionCandidates(request, ("id",), ("a" * 32,))
+    with acting_as(ACTOR), store.hold(lock.key, lock.name, 30):
+        result = store.protection_match("main.people", query)
+        assert result.matched == (event_id,)
+        assert seen == ["TEST_PRIVACY"]
+        with pytest.raises(ConfigurationError, match="restore the original secret"):
+            store.protection_match("main.people", query)

@@ -571,3 +571,38 @@ def test_rename_validates_active_erasure_entries_in_its_writer_transaction(erasu
     assert result.pipeline_id is not None
     entries = act(ctx, ActionName.ERASURE_LIST)
     assert len(entries.entries) == 1
+
+
+def test_failed_register_insert_never_exposes_bound_subject_key(erasure_project, engine_db):
+    import traceback
+
+    ctx = erasure_project
+    key = "-".join(("private", "person", "key"))
+    if engine_db.config.engine.jdbc_url.startswith("jdbc:sqlite:"):
+        statements = (
+            "CREATE TRIGGER fail_erasure_registration BEFORE INSERT ON AUD_ERASURE_SUBJECTS "
+            "BEGIN SELECT RAISE(ABORT,'forced register failure'); END",
+        )
+    else:
+        statements = (
+            "CREATE FUNCTION fail_erasure_registration() RETURNS trigger LANGUAGE plpgsql AS $$ "
+            "BEGIN RAISE EXCEPTION 'forced register failure'; END $$",
+            "CREATE TRIGGER fail_erasure_registration BEFORE INSERT ON AUD_ERASURE_SUBJECTS "
+            "FOR EACH ROW EXECUTE FUNCTION fail_erasure_registration()",
+        )
+    with acting_as(ctx.actor), ctx.engine.begin() as conn:
+        for statement in statements:
+            conn.execute(text(statement))
+    with pytest.raises(HandlerError, match=r"register|registration") as error:
+        act(
+            ctx,
+            ActionName.ERASE,
+            table="ds.people",
+            column="person",
+            value=key,
+            reason="request",
+        )
+    assert key not in "".join(traceback.format_exception(error.value))
+    with ctx.engine.connect() as conn:
+        rows = conn.execute(text("SELECT ARGUMENTS AS arguments FROM AUD_ACTIONS")).mappings().all()
+    assert key not in str(rows)

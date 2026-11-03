@@ -14,101 +14,101 @@ from fixtures.scd_protection import prepare, use_postgres_engine
 from fixtures.sql_warehouse import warehouses
 
 
-@warehouses("duckdb")
 @pytest.mark.parametrize("engine_kind", ["sqlite", "postgresql"])
 @pytest.mark.parametrize("kind", ["edit", "unlock", "rehash", "erasure", "hard_delete"])
-@pytest.mark.parametrize(
-    "point",
-    [
-        "protection.before_pending",
-        "protection.after_pending",
-        "protection.after_merge",
-        "protection.after_committed",
-    ],
-)
 def test_killed_mutation_recovers_once_from_warehouse_evidence(
-    sql_world, request, monkeypatch, engine_kind, kind, point
+    sql_world, request, monkeypatch, engine_kind, kind
 ):
     w = sql_world
     if engine_kind == "postgresql":
         use_postgres_engine(w, request)
     monkeypatch.setenv("ERASURE_HMAC", "test-only-hmac")
-    w.config = replace(w.config, erasure_hmac_secret="ERASURE_HMAC")
+    w.config = replace(w.config, privacy_hmac_secret="ERASURE_HMAC")
     ctx, _ = prepare(w, "SCD2_MERGE")
-    act(
-        ctx,
-        ActionName.DATA_EDIT,
-        pipeline_code="P",
-        task_code="load",
-        key={"id": 1},
-        values={"name": "Before"},
-        reason="correct",
-    )
-    context = None
-    if kind == "hard_delete":
+    for ordinal, point in enumerate(
+        (
+            "protection.before_pending",
+            "protection.after_pending",
+            "protection.after_merge",
+            "protection.after_committed",
+        )
+    ):
         act(
             ctx,
-            ActionName.DATA_UNLOCK,
+            ActionName.DATA_EDIT,
             pipeline_code="P",
             task_code="load",
             key={"id": 1},
-            reason="delete",
-            columns=(),
+            values={"name": f"Before-{ordinal}", "amount": 10},
+            reason="correct",
         )
-        context = w.task(
-            "remove",
-            SQL_ACTION="DELETE_ROWS",
-            TARGET_OBJECT="protected",
-            SELECT_QUERY="SELECT 1 AS id",
-            MERGE_KEY="id",
-            HARD_DELETE="true",
-        )
-    with w.engine_db.connect() as conn:
-        before = conn.execute(text("SELECT MAX(EVENT_ID) FROM AUD_PROTECTION_EVENTS")).scalar_one()
-    w.warehouse.dispose()
-    process = multiprocessing.get_context("spawn").Process(
-        target=mutate, args=(w.config, kind, w.name("protected"), point, context)
-    )
-    try:
-        process.start()
-        process.join(60)
-        assert process.exitcode == 137, (kind, point, process.exitcode)
-    finally:
-        if process.is_alive():
-            process.kill()
-            process.join(5)
-    expire_leases(w.engine_db)
-    for _ in range(2):
-        act(ctx, ActionName.DATA_PROVENANCE, pipeline_code="P", task_code="load", key={"id": 1})
-    with w.engine_db.connect() as conn:
-        rows = (
-            conn.execute(
-                text(
-                    "SELECT STATUS AS status,REQUEST_ID AS request_id,"
-                    "RECOVERY_ACTOR AS recovery_actor "
-                    "FROM AUD_PROTECTION_EVENTS WHERE EVENT_ID>:before ORDER BY EVENT_ID"
-                ),
-                {"before": before},
+        context = None
+        if kind == "hard_delete":
+            act(
+                ctx,
+                ActionName.DATA_UNLOCK,
+                pipeline_code="P",
+                task_code="load",
+                key={"id": 1},
+                reason="delete",
+                columns=(),
             )
-            .mappings()
-            .all()
+            context = w.task(
+                "remove",
+                SQL_ACTION="DELETE_ROWS",
+                TARGET_OBJECT="protected",
+                SELECT_QUERY="SELECT 1 AS id",
+                MERGE_KEY="id",
+                HARD_DELETE="true",
+            )
+        with w.engine_db.connect() as conn:
+            before = conn.execute(
+                text("SELECT MAX(EVENT_ID) FROM AUD_PROTECTION_EVENTS")
+            ).scalar_one()
+        w.warehouse.dispose()
+        process = multiprocessing.get_context("spawn").Process(
+            target=mutate, args=(w.config, kind, w.name("protected"), point, context)
         )
-    if point == "protection.before_pending":
-        assert rows == []
-    else:
-        finals = [r for r in rows if r["status"] != "PENDING"]
-        assert len(finals) == 1
-        expected = "ABANDONED" if point == "protection.after_pending" else "COMMITTED"
-        assert finals[0]["status"] == expected
-        assert all(r["request_id"] == finals[0]["request_id"] for r in rows)
-        if point != "protection.after_committed":
-            assert finals[0]["recovery_actor"] == "alice"
+        try:
+            process.start()
+            process.join(60)
+            assert process.exitcode == 137, (kind, point, process.exitcode)
+        finally:
+            if process.is_alive():
+                process.kill()
+                process.join(5)
+        expire_leases(w.engine_db)
+        for _ in range(2):
+            act(ctx, ActionName.DATA_PROVENANCE, pipeline_code="P", task_code="load", key={"id": 1})
+        with w.engine_db.connect() as conn:
+            rows = (
+                conn.execute(
+                    text(
+                        "SELECT STATUS AS status,REQUEST_ID AS request_id,"
+                        "RECOVERY_ACTOR AS recovery_actor "
+                        "FROM AUD_PROTECTION_EVENTS WHERE EVENT_ID>:before ORDER BY EVENT_ID"
+                    ),
+                    {"before": before},
+                )
+                .mappings()
+                .all()
+            )
+        if point == "protection.before_pending":
+            assert rows == []
+        else:
+            finals = [r for r in rows if r["status"] != "PENDING"]
+            assert len(finals) == 1
+            expected = "ABANDONED" if point == "protection.after_pending" else "COMMITTED"
+            assert finals[0]["status"] == expected
+            assert all(r["request_id"] == finals[0]["request_id"] for r in rows)
+            if point != "protection.after_committed":
+                assert finals[0]["recovery_actor"] == "alice"
 
 
-@warehouses("duckdb")
 @pytest.mark.parametrize("engine_kind", ["sqlite", "postgresql"])
+@pytest.mark.parametrize("kind", ["edit", "hard_delete", "erasure"])
 def test_two_fenced_recovery_holders_append_one_final_status(
-    sql_world, request, monkeypatch, engine_kind
+    sql_world, request, monkeypatch, engine_kind, kind
 ):
     from etl_craft.core.errors import InjectedFaultError
     from etl_craft.handlers.resources import LocalLocker
@@ -119,15 +119,36 @@ def test_two_fenced_recovery_holders_append_one_final_status(
         use_postgres_engine(w, request)
     ctx, _ = prepare(w, "SCD1_MERGE")
     fields = {"pipeline_code": "P", "task_code": "load", "key": {"id": 1}}
+    if kind != "edit":
+        act(ctx, ActionName.DATA_EDIT, **fields, values={"name": "Human"}, reason="activate")
+        if kind == "hard_delete":
+            act(ctx, ActionName.DATA_UNLOCK, **fields, columns=(), reason="release")
     monkeypatch.setenv("ETL_CRAFT_FAULT", "protection.after_pending")
     with pytest.raises(InjectedFaultError):
-        act(ctx, ActionName.DATA_EDIT, **fields, values={"name": "Human"}, reason="correct")
+        if kind == "edit":
+            act(ctx, ActionName.DATA_EDIT, **fields, values={"name": "Human"}, reason="correct")
+        elif kind == "hard_delete":
+            w.run(
+                "delete_pending",
+                SQL_ACTION="DELETE_ROWS",
+                TARGET_OBJECT="protected",
+                SELECT_QUERY="SELECT 1 AS id",
+                MERGE_KEY="id",
+                HARD_DELETE="true",
+            )
+        else:
+            from etl_craft.core.erasure import ErasureEntry
+            from etl_craft.handlers.erasure import apply_entries
+
+            apply_entries(
+                w.engine_db, w.config, (ErasureEntry(w.name("protected"), "id", "1", "a" * 64),)
+            )
     monkeypatch.delenv("ETL_CRAFT_FAULT")
     with w.engine_db.connect() as conn:
         pending = conn.execute(
             text(
                 "SELECT REQUEST_ID AS request_id FROM AUD_PROTECTION_EVENTS "
-                "WHERE STATUS='PENDING' ORDER BY EVENT_ID LIMIT 1"
+                "WHERE STATUS='PENDING' ORDER BY EVENT_ID DESC LIMIT 1"
             )
         ).scalar_one()
 

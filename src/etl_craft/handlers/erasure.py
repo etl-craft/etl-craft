@@ -9,7 +9,6 @@ from graphlib import CycleError, TopologicalSorter
 from sqlalchemy.engine import Engine
 
 from etl_craft.config import ConnectorConfig
-from etl_craft.config.resolve import resolve_named_secret
 from etl_craft.config.targets import active_catalog
 from etl_craft.core.definitions import using
 from etl_craft.core.enums import Handler, ScriptKind, SqlAction
@@ -20,7 +19,7 @@ from etl_craft.core.erasure import (
     ErasureSelection,
     Unfollowed,
 )
-from etl_craft.core.errors import ConfigurationError, HandlerError
+from etl_craft.core.errors import HandlerError
 from etl_craft.core.faults import fault_point
 from etl_craft.core.redaction import mask_text, registering
 from etl_craft.dialects.business_rules import quote_output_key
@@ -40,20 +39,10 @@ from etl_craft.warehouse.connection import open_warehouse, warehouse_dialect, wa
 
 
 def secret(config: ConnectorConfig) -> str:
-    """Refuse before any warehouse mutation when the named HMAC secret is unavailable."""
-    name = config.erasure_hmac_secret
-    if not name:
-        raise ConfigurationError(
-            "Erasure.Hmac_secret=missing; expected a secret variable name; configure "
-            "Erasure.Hmac_secret and set that variable before erase or ERASURE"
-        )
-    try:
-        return resolve_named_secret(config, name)
-    except ConfigurationError:
-        raise ConfigurationError(
-            f"Erasure.Hmac_secret={name!r}: variable is missing or empty; expected a "
-            "resolved HMAC secret; set the variable in the configured Secrets provider"
-        ) from None
+    """Use the project secret shared with protection history."""
+    from etl_craft.config.privacy import privacy_secret
+
+    return privacy_secret(config)
 
 
 def identity(config: ConnectorConfig, table: str, *, stored: bool = False) -> str:
@@ -77,7 +66,7 @@ def _managed(engine: Engine, config: ConnectorConfig) -> set[str]:
         params = fetch_all_task_parameters(conn, Handler.SQL)
         ingestion = fetch_all_task_parameters(conn, Handler.PYTHON)
     managed = {
-        identity(config, p["TARGET_OBJECT"], stored=True)
+        identity(config, p["TARGET_OBJECT"])
         for p in params.values()
         if p.get("TARGET_OBJECT") and p.get("SQL_ACTION") in WRITERS | {SqlAction.SETUP_TABLE}
     }
@@ -108,7 +97,8 @@ class Coverage:
     aggregates: set[str]
 
 
-def _graph(engine: Engine, config: ConnectorConfig) -> Coverage:
+def project_coverage(engine: Engine, config: ConnectorConfig) -> Coverage:
+    """Build the pinned project graph shared by every entry in an erasure pass."""
     graph, scripts = project_graph(engine, config)
     with using(graph):
         lineages = [
@@ -246,10 +236,14 @@ def apply_entries(
     store: TaskStore | None = None,
 ) -> ErasureReport:
     """Preflight all coverage before deleting, then commit tables in upstream-first order."""
+    from etl_craft.engine.privacy import check
+
+    with engine.connect() as conn:
+        check(conn, config)
     hmac_secret = secret(config)
     tables, boundaries = [], {}
     with registering(hmac_secret, *(e.value for e in entries)):
-        graph = _graph(engine, config) if entries else None
+        graph = project_coverage(engine, config) if entries else None
         plans = (
             [] if graph is None else [(entry, *coverage(config, entry, graph)) for entry in entries]
         )

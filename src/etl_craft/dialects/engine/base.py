@@ -215,6 +215,7 @@ class EngineDialect(ABC):
             "protection_read_fence",
             "protection_read",
             "protection_activation",
+            "privacy_check",
             "protection_request",
             "protection_first_pending",
             "protection_verified_upload",

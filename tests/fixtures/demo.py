@@ -155,6 +155,7 @@ class Demo:
             },
             "Artifacts": {"Store": (self.root / ".etl-craft" / "artifacts").as_uri()},
         }
+        raw["Privacy"] = {"Hmac_secret": "ETL_CRAFT_DEMO_PRIVACY_HMAC"}
         seeds = self.root / "seeds" / "warehouse"
         if self.catalog != "warehouse":
             seeds = seeds.rename(seeds.with_name(self.catalog))
@@ -311,7 +312,12 @@ class Demo:
                 conn.execute(text(f"CREATE SCHEMA IF NOT EXISTS {schema}"))
 
     def environment(self) -> dict[str, str]:
-        env = {**os.environ, PASSWORD_VAR: POSTGRES_PASSWORD, S3_VAR: MINIO_PASSWORD}
+        env = {
+            **os.environ,
+            PASSWORD_VAR: POSTGRES_PASSWORD,
+            S3_VAR: MINIO_PASSWORD,
+            "ETL_CRAFT_DEMO_PRIVACY_HMAC": "test-only-demo-privacy",
+        }
         env["XDG_CONFIG_HOME"] = str(self.root / ".person")
         env.pop("ETL_CRAFT_TOKEN", None)
         if self.access_token is not None:
@@ -324,6 +330,7 @@ class Demo:
     def config(self) -> ConnectorConfig:
         os.environ.setdefault(PASSWORD_VAR, POSTGRES_PASSWORD)
         os.environ.setdefault(S3_VAR, MINIO_PASSWORD)
+        os.environ.setdefault("ETL_CRAFT_DEMO_PRIVACY_HMAC", "test-only-demo-privacy")
         return load_config(self.root / "craft-connector.yml")
 
     def seed(self, name: str = "support_insights.sql") -> None:

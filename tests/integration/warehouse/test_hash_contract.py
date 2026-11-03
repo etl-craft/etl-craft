@@ -164,6 +164,7 @@ def test_rehash_command_validates_dry_run_then_upgrades(sql_world, capsys, monke
             "Table_format": str(w.config.warehouse_table_format),
             "dev": fields,
         },
+        "Privacy": {"Hmac_secret": w.config.privacy_hmac_secret},
     }
     path = w.config.config_path
     path.write_text(yaml.safe_dump(raw, sort_keys=False))

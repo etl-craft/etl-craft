@@ -11,7 +11,7 @@ from etl_craft.config.targets import active_catalog
 from etl_craft.core.enums import SqlAction
 from etl_craft.core.errors import ConfigurationError, LockTimeoutError
 from etl_craft.dialects.warehouse import WarehouseDialect
-from etl_craft.dialects.warehouse.protection import key_membership
+from etl_craft.dialects.warehouse.protection import recovery_candidates
 from etl_craft.engine import locks
 from etl_craft.engine.protection_events import target_identity
 from etl_craft.engine.queries import statement
@@ -84,6 +84,13 @@ def problems(engine: Engine, config: ConnectorConfig) -> list[str]:
             .scalars()
             .all()
         )
+    if not targets:
+        return []
+    from etl_craft.engine.privacy import check
+
+    with engine.connect() as conn:
+        privacy_key = check(conn, config)
+    assert privacy_key is not None
     result = []
     for target in targets:
         with engine.connect() as conn:
@@ -105,10 +112,10 @@ def problems(engine: Engine, config: ConnectorConfig) -> list[str]:
                 locked[row.key_hash].update(names)
             elif row.kind == ProtectionKind.UNLOCK:
                 locked[row.key_hash].difference_update(names)
-            else:
+            elif columns.get(row.key_hash) == names:
                 locked.pop(row.key_hash, None)
         expected = {key: columns[key] for key, cells in locked.items() if cells and key in columns}
-        missing = _missing(engine, config, target, expected)
+        missing = _missing(engine, config, target, expected, privacy_key)
         if missing:
             result.append(
                 f"{target}: {len(missing)} locked key hashes are "
@@ -122,8 +129,13 @@ def problems(engine: Engine, config: ConnectorConfig) -> list[str]:
 
 
 def _missing(
-    engine: Engine, config: ConnectorConfig, target: str, expected: dict[str, tuple[str, ...]]
+    engine: Engine,
+    config: ConnectorConfig,
+    target: str,
+    expected: dict[str, tuple[str, ...]],
+    key: str,
 ) -> set[str]:
+    from etl_craft.core.privacy import PrivacyDomain, fingerprint
     from etl_craft.core.protection import MAX_PROTECTION_EVENTS
 
     if not expected:
@@ -131,8 +143,8 @@ def _missing(
     locker = LocalLocker(engine, config)
     found: set[str] = set()
     groups: dict[tuple[str, ...], list[str]] = defaultdict(list)
-    for key, columns in expected.items():
-        groups[columns].append(key)
+    for key_hash, columns in expected.items():
+        groups[columns].append(key_hash)
     with (
         locks.target(target_identity(config, target)[1], active_catalog(config)).hold(locker),
         open_warehouse(config, locker) as warehouse,
@@ -142,25 +154,26 @@ def _missing(
         try:
             if not session.target_columns():
                 return set(expected)
-            for columns, keys in groups.items():
+            for columns in groups:
                 from etl_craft.dialects.business_rules import quote_output_key
 
                 hashed = session.hash(
                     [f"t.{quote_output_key(c, session.dialect.sqlglot_dialect)}" for c in columns],
                     columns,
                 )
-                for start in range(0, len(keys), MAX_PROTECTION_EVENTS):
-                    params = {
-                        f"key_{i}": key
-                        for i, key in enumerate(keys[start : start + MAX_PROTECTION_EVENTS])
-                    }
-                    found.update(
-                        session.run(
-                            key_membership(session.target, hashed, tuple(params)),
-                            params,
-                            step="doctor compare locked key membership",
-                        ).scalars()
-                    )
+                with session.run(
+                    recovery_candidates(session.target, hashed),
+                    step="doctor compare locked key membership",
+                ) as rows:
+                    for page in rows.scalars().partitions(MAX_PROTECTION_EVENTS):
+                        found.update(
+                            private
+                            for value in page
+                            if (private := fingerprint(key, PrivacyDomain.KEY, target, str(value)))
+                            in expected
+                        )
+                        if expected.keys() <= found:
+                            break
         finally:
             session.sweep()
     return set(expected) - found

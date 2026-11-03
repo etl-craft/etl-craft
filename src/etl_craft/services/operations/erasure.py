@@ -1,7 +1,5 @@
 """Admin-controlled standing erasures, shared by the command and the browser."""
 
-import hashlib
-import hmac
 import json
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
@@ -57,7 +55,10 @@ def deployment(ctx: OperationContext) -> OperationContext:
 
 def entries(ctx: OperationContext, request: NoInput) -> ErasureList:
     """List HMACs and a fixed mask, never personal values."""
+    from etl_craft.engine.privacy import check
+
     with ctx.engine.connect() as conn:
+        check(conn, ctx.config, required=False)
         rows = (
             conn.execute(statement(conn, "erasure_entries"), {"all_entries": True}).mappings().all()
         )
@@ -99,13 +100,19 @@ def _erase(ctx: OperationContext, request: EraseInput) -> ErasureReport:
     ):
         check_column(warehouse, ctx.config, table, column)
     assert isinstance(request.value, str)
-    digest = hmac.new(
-        key.encode(),
-        json.dumps(
-            [table, column, request.value], separators=(",", ":"), ensure_ascii=False
-        ).encode(),
-        hashlib.sha256,
-    ).hexdigest()
+    from etl_craft.core.privacy import PrivacyDomain
+    from etl_craft.core.privacy import digest as private_digest
+    from etl_craft.engine.privacy import check, guarded
+
+    with ctx.engine.connect() as conn:
+        verified_key = check(conn, ctx.config)
+    assert verified_key is not None
+    key = verified_key
+    digest = private_digest(
+        key,
+        PrivacyDomain.ERASURE,
+        json.dumps([table, column, request.value], separators=(",", ":"), ensure_ascii=False),
+    )
     entry = ErasureEntry(table, column, request.value, digest)
     if request.dry_run:
         return apply_entries(ctx.engine, ctx.config, (entry,), dry_run=True)
@@ -114,6 +121,7 @@ def _erase(ctx: OperationContext, request: EraseInput) -> ErasureReport:
         "table_name": table,
         "column_name": column,
         "key_hmac": digest,
+        "key_check": private_digest(key, PrivacyDomain.CHECK),
         "subject_key": request.value,
         "reason": mask_text(request.reason),
         "actor": ctx.actor.name,
@@ -130,7 +138,7 @@ def _erase(ctx: OperationContext, request: EraseInput) -> ErasureReport:
             )
         return ErasureReport()
     try:
-        with ctx.engine.begin() as conn:
+        with guarded(ctx.config), ctx.engine.begin() as conn:
             conn.execute(statement(conn, "erasure_insert"), parameters)
     except IntegrityError:
         with ctx.engine.connect() as conn:

@@ -660,12 +660,17 @@ def test_protected_shape_change_is_refused_before_ddl(sql_world):
 
 @warehouses("postgres")
 @pytest.mark.parametrize("kind", ["SCD1_MERGE", "SCD2_MERGE"])
-def test_pre15_transactional_fallback_carries_in_row_columns(sql_world, monkeypatch, kind):
+@pytest.mark.parametrize("engine_kind", ["sqlite", "postgresql"])
+def test_pre15_transactional_fallback_carries_in_row_columns(
+    sql_world, monkeypatch, kind, request, engine_kind
+):
     from etl_craft.dialects.warehouse.postgres import PostgresWarehouse
     from etl_craft.services.rehash import rehash
 
     monkeypatch.setattr(PostgresWarehouse, "supports_insert_merge", lambda self, conn: False)
     w = sql_world
+    if engine_kind == "postgresql":
+        use_postgres_engine(w, request)
     ctx, params = prepare(w, kind)
     act(
         ctx,
@@ -691,8 +696,15 @@ def test_pre15_transactional_fallback_carries_in_row_columns(sql_world, monkeypa
     w.run("load", **params)
     assert current(w)[0]["name"] == "Source"
 
+    from fixtures.protection_acceptance import check_locked_deletion, check_mutation_boundaries
 
-@warehouses("duckdb", "postgres", "trino_iceberg")
+    check_locked_deletion(w, ctx, "load", "protected", params)
+    check_mutation_boundaries(w, ctx, "load", "protected", params, monkeypatch)
+    if engine_kind == "postgresql":
+        check_mutation_boundaries(w, ctx, "load", "protected", params, monkeypatch, agent=True)
+
+
+@warehouses("duckdb", "postgres", "trino_iceberg", "duckdb_iceberg")
 @pytest.mark.parametrize("kind", ["SCD1_MERGE", "SCD2_MERGE"])
 @pytest.mark.parametrize("row_lock", [False, True])
 def test_nested_business_column_refuses_first_edit_or_lock_without_target_writes(
@@ -701,16 +713,14 @@ def test_nested_business_column_refuses_first_edit_or_lock_without_target_writes
     from fixtures.single_merge import target_mutations
 
     w = sql_world
-    ctx, params = prepare(w, kind, compare="name")
-    w.run(
-        "load",
-        **{
-            **params,
-            "SELECT_QUERY": (
-                f"SELECT id,name,amount,ARRAY[1,2] AS numbers FROM {w.name('protected')} WHERE 1=0"
-            ),
-            "SCHEMA_EVOLUTION": "true",
-        },
+    ctx, params = prepare(
+        w,
+        kind,
+        compare="name",
+        source=(
+            "SELECT 1 AS id,CAST('Source' AS VARCHAR(30)) AS name,"
+            "10 AS amount,ARRAY[1,2] AS numbers"
+        ),
     )
     params = {
         **params,
@@ -718,7 +728,7 @@ def test_nested_business_column_refuses_first_edit_or_lock_without_target_writes
         f"FROM {w.name('protected')} WHERE ACTIVE_FLAG='Y'",
     }
     w.run("load", **params)
-    before = w.rows(f"SELECT * FROM {w.name('protected')}")
+    before = w.rows(f"SELECT * FROM {w.name('protected')} ORDER BY ROW_ID")
     assert w.rows(
         f"SELECT ETL_ROW_FINGERPRINT FROM {w.name('protected')} WHERE ACTIVE_FLAG='Y'"
     ) == [(None,)]
@@ -743,11 +753,11 @@ def test_nested_business_column_refuses_first_edit_or_lock_without_target_writes
     ):
         assert part in message, message
     assert statements == []
-    assert w.rows(f"SELECT * FROM {w.name('protected')}") == before
+    assert w.rows(f"SELECT * FROM {w.name('protected')} ORDER BY ROW_ID") == before
     with w.engine_db.connect() as conn:
         assert conn.execute(text("SELECT COUNT(*) FROM AUD_PROTECTION_EVENTS")).scalar_one() == 0
     w.run("load", **params)
-    assert w.rows(f"SELECT * FROM {w.name('protected')}") == before
+    assert w.rows(f"SELECT * FROM {w.name('protected')} ORDER BY ROW_ID") == before
     act(ctx, ActionName.REHASH, target=w.name("protected"))
     assert w.rows(
         f"SELECT ETL_ROW_FINGERPRINT FROM {w.name('protected')} WHERE ACTIVE_FLAG='Y'"

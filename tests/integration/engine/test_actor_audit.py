@@ -303,11 +303,14 @@ def seeded_tables(db):
                 if table.upper() == "AUD_BUSINESS_RULES_RESULTS" and lower == "status":
                     value = "REPORT"
                 if table.upper() == "AUD_ERASURE_SUBJECTS":
-                    value = {"key_hmac": "a" * 64, "active_flag": "Y"}.get(lower, value)
+                    value = {"key_hmac": "a" * 64, "key_check": "c" * 64, "active_flag": "Y"}.get(
+                        lower, value
+                    )
                 if table.upper() == "AUD_PROTECTION_EVENTS":
                     value = {
                         "status": "COMMITTED",
                         "kind": "WRITE",
+                        "key_check": "c" * 64,
                         "column_names": "[]",
                         "value_hashes": "[]",
                     }.get(lower, value)

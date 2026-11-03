@@ -78,8 +78,8 @@ class VersionMerge:
         insert = (
             f"SELECT s.*, CAST(NULL AS BIGINT) AS {self.matched}, "
             f"TRUE AS {self.inserting}{insert_flag} "
-            f"FROM {self.stage} s WHERE NOT EXISTS (SELECT 1 FROM {self.target} t "
-            f"WHERE {active} AND NOT ({self.condition}))"
+            f"FROM {self.stage} s LEFT JOIN {self.target} t "
+            f"ON {active} AND NOT ({self.condition}) WHERE t.ROW_ID IS NULL"
         )
         return f"({close} UNION ALL {insert})"
 

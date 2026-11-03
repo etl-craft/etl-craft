@@ -207,6 +207,10 @@ def validate_snapshot(
                         report.fail(f"seed {seed.target}", str(error))
     except (EtlCraftError, OSError) as error:
         report.fail("seeds", str(error))
+    from etl_craft.engine.privacy import problems as privacy_problems
+
+    for message in privacy_problems(conn, config):
+        report.fail("privacy", message)
     from etl_craft.services.erasure import problems_on
 
     for message in problems_on(conn, engine, config, check_coverage=False):

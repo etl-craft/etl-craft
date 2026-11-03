@@ -8,7 +8,10 @@ alone. ``ExitCode`` lists them all.
 from __future__ import annotations
 
 from enum import IntEnum
-from typing import ClassVar
+from typing import TYPE_CHECKING, ClassVar
+
+if TYPE_CHECKING:
+    from etl_craft.core.failures import Failure
 
 
 class ExitCode(IntEnum):
@@ -143,6 +146,7 @@ class HandlerError(EtlCraftError):
     """A task handler is missing or failed; the task is recorded as ``FAILED``."""
 
     exit_code = ExitCode.HANDLER
+    failure_evidence: Failure | None = None
 
 
 class CloningError(EtlCraftError):

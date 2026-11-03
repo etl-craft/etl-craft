@@ -8,6 +8,24 @@ All notable changes are recorded here. The format follows
 
 ### Fixed
 
+- Snowflake stewardship uploads use a set-based mutation check instead of an unsupported
+  projected correlated subquery. SCD2 successor selection uses an anti-join that Snowflake
+  supports. Lock-only writes keep their existing counts and one MERGE.
+- Protection audit identities now use host-side domain-separated HMAC-SHA-256, preventing
+  offline matching of erased subjects against warehouse MD5 fingerprints. Rename the
+  unreleased `Erasure.Hmac_secret` setting to `Privacy.Hmac_secret`; protection and erasure
+  share it. Missing or changed secrets are refused; rotation is unsupported. Recreate
+  development Engine DBs that applied earlier 0081/0082 migrations.
+- Provenance retains erasure history after the last protected target row disappears and
+  separates physical ROW_ID maintenance from business-key history. Doctor recognizes surviving
+  SCD2 rows when erasure removes only an older identifier.
+- Erasure resolves unquoted managed SQL targets using the warehouse identifier rules,
+  including Snowflake. PostgreSQL setup preserves array types outside merge compare columns.
+- Failed or refused edit, unlock and provenance requests omit private keys and values from
+  request audits and mask private input in error messages.
+- Registered private values no longer corrupt logging format specifiers; driver error
+  parameters and private fingerprint text are suppressed without losing safe error causes.
+
 - Trino target-lock handoff accepts its exact already-finished-query cancellation response,
   while still requiring a separate check that no tagged warehouse statements remain running.
 
@@ -35,8 +53,9 @@ All notable changes are recorded here. The format follows
   history and rejects; expressions and unmanaged targets are reported without deletion.
 - Migration 0081 adds guarded `AUD_ERASURE_SUBJECTS` in SQLite and PostgreSQL. The only update
   is one lift; raw identifiers stay in that private register and bound warehouse parameters.
-  Configure `Erasure.Hmac_secret` with a Secrets variable name. Rotating it breaks matching to
-  old HMAC audit identities. Shared operation-scoped value masking protects logs, errors and
+  Configure `Privacy.Hmac_secret` with a Secrets variable name. Rotation is refused; restore
+  the original secret for existing audit identities. Shared operation-scoped value masking
+  protects logs, errors and
   result documents; this is the common core for later S7.C secret registration.
 
 - Pending Engine migrations now refuse normal login and UI startup with applied/required

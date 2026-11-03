@@ -1,7 +1,7 @@
 """Bounded hash-only protection messages shared by local and remote task stores."""
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import ClassVar
 from uuid import UUID
 
@@ -11,7 +11,7 @@ from etl_craft.core.errors import UsageError
 MAX_PROTECTION_EVENTS = 256
 MAX_PROTECTION_COLUMNS = 128
 PROTECTION_COLUMNS = ("ETL_PROTECTION", "ETL_ROW_FINGERPRINT", "ETL_PROTECTION_REQUEST_ID")
-_HASH = re.compile(r"[0-9a-f]{32}")
+_HASH = re.compile(r"(?:[0-9a-f]{32}|[0-9a-f]{64})")
 
 
 @dataclass(frozen=True)
@@ -21,9 +21,9 @@ class ProtectionEvent:
     __pydantic_config__: ClassVar[dict[str, str]] = {"extra": "forbid"}
 
     kind: ProtectionKind
-    key_hash: str
+    key_hash: str = field(repr=False)
     columns: tuple[str, ...]
-    value_hashes: tuple[str | None, ...]
+    value_hashes: tuple[str | None, ...] = field(repr=False)
 
     def __post_init__(self) -> None:
         """Reject values and unbounded or ambiguous column lists."""
@@ -119,17 +119,19 @@ class ProtectionReport:
                 "writes or unlocks only; omit upload_id for engine and operator work"
             )
         if self.request_id is not None:
-            try:
-                UUID(self.request_id)
-            except ValueError as error:
-                raise UsageError(
-                    "protection request_id: found an invalid id; expected "
-                    "a server-issued UUID; use the PENDING response"
-                ) from error
+            validate_request_id(self.request_id)
         if len(self.events) > MAX_PROTECTION_EVENTS:
             raise UsageError(
                 f"protection batch: found {len(self.events)}; expected "
                 f"at most {MAX_PROTECTION_EVENTS}; split the batch"
+            )
+        if self.status == ProtectionStatus.PENDING and any(
+            len(e.key_hash) != 32 or any(h is not None and len(h) != 32 for h in e.value_hashes)
+            for e in self.events
+        ):
+            raise UsageError(
+                "protection report: expected 32 hex digit warehouse fingerprints; "
+                "send typed MD5 fingerprints and let the host protect them"
             )
         if self.status == ProtectionStatus.PENDING and (
             not self.events or self.evidence is not None
@@ -185,6 +187,19 @@ class ProtectionPage:
             validate_cursor(self.cursor)
 
 
+def validate_request_id(request_id: str) -> None:
+    """Reject noncanonical identities without echoing possible private fingerprints."""
+    try:
+        canonical = str(UUID(request_id))
+    except ValueError:
+        canonical = ""
+    if canonical != request_id:
+        raise UsageError(
+            "protection request_id: found an invalid id; expected a canonical server-issued "
+            "UUID; use the PENDING response or read pending intents"
+        )
+
+
 def validate_cursor(cursor: int) -> None:
     """Reject cursors that cannot name an Engine DB event identity."""
     if not 0 <= cursor <= 2**63 - 1:
@@ -192,3 +207,42 @@ def validate_cursor(cursor: int) -> None:
             f"protection cursor={cursor}; expected an event id from 0 to 9223372036854775807; "
             "restart the read"
         )
+
+
+@dataclass(frozen=True)
+class ProtectionCandidates:
+    """One bounded warehouse page for one pending deletion's exact key shape."""
+
+    __pydantic_config__: ClassVar[dict[str, str]] = {"extra": "forbid"}
+
+    request_id: str
+    columns: tuple[str, ...]
+    hashes: tuple[str, ...] = field(default=(), repr=False)
+    cursor: int = 0
+
+    def __post_init__(self) -> None:
+        """Keep candidate fingerprints transient and reject oversize input without truncation."""
+        validate_cursor(self.cursor)
+        if not 1 <= len(self.columns) <= MAX_PROTECTION_COLUMNS:
+            raise UsageError(
+                f"protection candidates: expected 1-{MAX_PROTECTION_COLUMNS} columns; "
+                "split the request"
+            )
+        if len(self.hashes) > MAX_PROTECTION_EVENTS:
+            raise UsageError(
+                f"protection candidates: expected at most {MAX_PROTECTION_EVENTS} hashes; "
+                "split the batch"
+            )
+        if any(not re.fullmatch(r"[0-9a-f]{32}", h) for h in self.hashes):
+            raise UsageError(
+                "protection candidates: expected typed MD5 fingerprints; correct the batch"
+            )
+        validate_request_id(self.request_id)
+
+
+@dataclass(frozen=True)
+class ProtectionMatches:
+    """Expose only the requested intent's matched event identities, never either hash."""
+
+    matched: tuple[int, ...]
+    cursor: int | None

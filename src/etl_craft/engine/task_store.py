@@ -20,7 +20,12 @@ from etl_craft.core.erasure import ErasureReport
 from etl_craft.core.errors import HandlerError, StaleTransitionError
 from etl_craft.core.items import ItemRecord, ItemState, ItemStore
 from etl_craft.core.ownership import ResourceLocker, attempt_holder
-from etl_craft.core.protection import ProtectionPage, ProtectionReport
+from etl_craft.core.protection import (
+    ProtectionCandidates,
+    ProtectionMatches,
+    ProtectionPage,
+    ProtectionReport,
+)
 from etl_craft.core.time import as_utc
 from etl_craft.core.uploads import UploadFile
 from etl_craft.engine import locks, resource_locks, transitions
@@ -123,6 +128,10 @@ class RuleEnding:
 class TaskStore(ResourceLocker, ItemStore, Protocol):
     """The local and HTTP task backends expose the same bounded operations."""
 
+    def protection_match(self, target: str, candidates: ProtectionCandidates) -> ProtectionMatches:
+        """Compare bounded candidates only for this target's pending deletion recovery."""
+        ...
+
     def protection_read(self, target: str, cursor: int = 0) -> ProtectionPage:
         """Read a bounded page under the same admitted-target ownership fence."""
         ...
@@ -220,21 +229,34 @@ class LocalTaskStore:
 
         with self.engine.begin() as conn:
             canonical, fencing = self._protection_scope(conn, target)
-            return fenced_read(conn, canonical, fencing, cursor)
+            return fenced_read(conn, canonical, fencing, cursor, config=self.config)
 
-    def protection_event(self, target: str, report: ProtectionReport) -> str:
-        """Never append an event for an unfenced target or another live creator."""
-        from etl_craft.engine.protection_events import append, append_fenced
+    def protection_match(self, target: str, candidates: ProtectionCandidates) -> ProtectionMatches:
+        """Use the same host matcher as the fenced agent report."""
+        from etl_craft.engine.protection_matching import match
 
         with self.engine.begin() as conn:
             canonical, fencing = self._protection_scope(conn, target)
-            if request := append_fenced(conn, canonical, report, fencing):
+            return match(conn, self.config, canonical, fencing, candidates)
+
+    def protection_event(self, target: str, report: ProtectionReport) -> str:
+        """Never append an event for an unfenced target or another live creator."""
+        from etl_craft.config.privacy import privacy_secret
+        from etl_craft.engine.privacy import guarded
+        from etl_craft.engine.protection_events import append, append_fenced
+
+        key = privacy_secret(self.config)
+        with guarded(self.config), self.engine.begin() as conn:
+            canonical, fencing = self._protection_scope(conn, target)
+            if request := append_fenced(conn, canonical, report, fencing, key):
                 return request
             canonical = self._protection_fence(conn, target)
             from etl_craft.engine.protection_events import target_identity
 
             physical = target_identity(self.config, target)[1]
-            return append(conn, canonical, report, self.identity.attempt_id, physical)
+            return append(
+                conn, canonical, report, self.identity.attempt_id, physical, privacy_key=key
+            )
 
     def _protection_scope(self, conn: Connection, target: str) -> tuple[str, dict[str, object]]:
         from etl_craft.core.errors import PermissionDeniedError

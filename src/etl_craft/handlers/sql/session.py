@@ -16,14 +16,15 @@ import logging
 import secrets
 import time
 from collections.abc import Mapping, Sequence
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, NoReturn
 
 from sqlalchemy import event, text
 from sqlalchemy.engine import Connection, CursorResult
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import SQLAlchemyError, StatementError
 
 from etl_craft.core.enums import SqlAction, TableFormat
 from etl_craft.core.errors import HandlerError, SqlGuardError
+from etl_craft.core.redaction import mask_text
 from etl_craft.core.text import qualify, split_object_ref
 from etl_craft.core.uploads import UploadWriter
 from etl_craft.dialects.warehouse import WarehouseDialect
@@ -158,7 +159,7 @@ class Session:
         try:
             return self.dialect.describe_select(self.conn, sql)
         except SQLAlchemyError as error:
-            raise self._failure("stage the SELECT", error) from error
+            self._fail("stage the SELECT", error)
 
     def _shape(self, name: str) -> Sequence[tuple[str, str, int | None, int | None, str]]:
         key = name.lower()
@@ -167,7 +168,7 @@ class Session:
             try:
                 found = self.dialect.read_metadata(self.conn, name)
             except SQLAlchemyError as error:
-                raise self._failure(f"read the columns of {name}", error) from error
+                self._fail(f"read the columns of {name}", error)
             logger.info("read the columns of %s (%.2fs)", name, time.monotonic() - started)
             self.cache_metadata(name, found)
         return self._metadata[key]
@@ -193,7 +194,7 @@ class Session:
             result = self.conn.execute(text(sql), self.bindings | dict(params or {}))
         except SQLAlchemyError as error:
             logger.error("%s failed; the statement was:\n%s", step, sql)
-            raise self._failure(step, error) from error
+            self._fail(step, error)
         elapsed = time.monotonic() - started
         rows = result.rowcount if result.returns_rows is False and result.rowcount >= 0 else None
         if rows is None:
@@ -222,7 +223,7 @@ class Session:
             self.dialect.create_table_as(self.conn, name, select_sql, self.params)
         except SQLAlchemyError as error:
             logger.error("%s failed; the SELECT was:\n%s", step, select_sql)
-            raise self._failure(step, error) from error
+            self._fail(step, error)
         logger.info("%s (%.2fs)", step, time.monotonic() - started)
 
     def create_side_table(self, name: str, select_sql: str, *, step: str) -> None:
@@ -235,16 +236,23 @@ class Session:
             self.dialect.backup_table(self.conn, name, f"({select_sql}) etl_src")
         except SQLAlchemyError as error:
             logger.error("%s failed; the SELECT was:\n%s", step, select_sql)
-            raise self._failure(step, error) from error
+            self._fail(step, error)
         logger.info("%s", step)
 
-    def _failure(self, step: str, error: SQLAlchemyError) -> HandlerError:
+    def _fail(self, step: str, error: SQLAlchemyError) -> NoReturn:
         """Say which step on which target failed, with the database's own first line."""
+        if isinstance(error, StatementError):
+            error.hide_parameters = True
         cause = getattr(error, "orig", None) or error
         detail = str(cause).strip().splitlines()[0] if str(cause).strip() else repr(cause)
-        return HandlerError(
-            f"{self.action} {self.target}: {step} failed: {type(cause).__name__}: {detail}"
+        failure = HandlerError(
+            f"{self.action} {self.target}: {step} failed: "
+            f"{type(cause).__name__}: {mask_text(detail)}"
         )
+        sensitive = mask_text(str(error)) != str(error)
+        if sensitive:
+            failure.failure_evidence = self.dialect.classify_failure(error)
+        raise failure from (None if sensitive else error)
 
     # Names
 
@@ -365,7 +373,7 @@ class Session:
                 self._types[key] = self.dialect.full_column_types(self.conn, name)
             return dict(self._types[key])
         except SQLAlchemyError as error:
-            raise self._failure(f"read complete column types of {name}", error) from error
+            self._fail(f"read complete column types of {name}", error)
 
     def hash_types(self, name: str) -> dict[str, str]:
         """Return types and declared decimal scales for hashing table ``name``.
@@ -489,7 +497,7 @@ class Session:
                 self._formats[key] = self.dialect.existing_table_format(self.conn, self.target)
             existing = self._formats[key]
         except SQLAlchemyError as error:
-            raise self._failure("read the existing table format", error) from error
+            self._fail("read the existing table format", error)
         if existing != self.dialect.spec.table_format:
             raise SqlGuardError(
                 f"{self.action} {self.target}: existing table format is {existing}, "
@@ -506,4 +514,4 @@ class Session:
                 self._generators[key] = self.dialect.row_id_generated(self.conn, self.target)
             return self._generators[key]
         except SQLAlchemyError as error:
-            raise self._failure("read the ROW_ID generator", error) from error
+            self._fail("read the ROW_ID generator", error)

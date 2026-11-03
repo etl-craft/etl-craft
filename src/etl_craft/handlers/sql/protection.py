@@ -15,6 +15,7 @@ from etl_craft.core.errors import SqlGuardError
 from etl_craft.core.protection import MAX_PROTECTION_COLUMNS, ProtectionEvent
 from etl_craft.core.protection_state import ProtectionRequest as ProtectionRequest
 from etl_craft.core.protection_state import RowProtection
+from etl_craft.core.redaction import registering
 from etl_craft.core.text import sha256_hex
 from etl_craft.dialects.warehouse.merges import matched_merge
 from etl_craft.dialects.warehouse.protection import ProtectionSql, bound_relation
@@ -252,16 +253,24 @@ class Protection:
             params = {
                 f"v_{i}_{j}": value for i, row in enumerate(batch) for j, value in enumerate(row)
             }
-            body = bound_relation(columns, len(batch))
-            if start == 0:
-                previous = s.bindings
-                s.bindings = previous | params
-                try:
-                    name = s.create_scratch(name, body, step="stage bounded protection metadata")
-                finally:
-                    s.bindings = previous
-            else:
-                s.run(f"INSERT INTO {name} {body}", params, step="bind protection metadata")
+            fingerprints = tuple(
+                match
+                for value in params.values()
+                for match in re.findall(r"(?<![0-9a-f])[0-9a-f]{32}(?![0-9a-f])", str(value))
+            )
+            with registering(*fingerprints):
+                body = bound_relation(columns, len(batch))
+                if start == 0:
+                    previous = s.bindings
+                    s.bindings = previous | params
+                    try:
+                        name = s.create_scratch(
+                            name, body, step="stage bounded protection metadata"
+                        )
+                    finally:
+                        s.bindings = previous
+                else:
+                    s.run(f"INSERT INTO {name} {body}", params, step="bind protection metadata")
         return name
 
     def stage(self, stage: str, *, delete: bool = False) -> str:
@@ -292,30 +301,27 @@ class Protection:
     def _incoming(self, stage: str, condition: str) -> Sequence[RowMapping]:
         """Read hashes only from the already-protected effective stage."""
         s = self.session
-        cells = "".join(
-            f",{hashed} AS cell_{i}" for i, hashed in enumerate(self.sql.cell_hashes.values())
-        )
         key = " AND ".join(f"p.{c}=t.{c}" for c in self.task.merge_key)
         active = " AND p.ACTIVE_FLAG='Y'" if self.task.action == SqlAction.SCD2_MERGE else ""
-        same = condition.replace("t.", "p.").replace("s.", "t.")
-        selected = (
-            "TRUE"
-            if self.row_lock
+        changed = condition.replace("t.", "p.").replace("s.", "t.")
+        include_unchanged = bool(
+            self.row_lock
             or self.activating
             or (
                 self.request is not None
                 and self.request.upload_id is not None
                 and self.request.actor.kind == ActorKind.USER
             )
-            else f"NOT EXISTS (SELECT 1 FROM {s.target} p WHERE {key}{active} AND NOT ({same}))"
         )
-        locked = "t.LOCKED" if "locked" in {c.lower() for c, _ in s.columns(stage)} else "NULL"
         return (
             s.run(
-                f"SELECT {self.sql.key_hash} AS key_hash,{locked} AS upload_locked{cells},NOT "
-                f"EXISTS (SELECT 1 FROM {s.target} p WHERE {key}{active} "
-                f"AND NOT ({same})) AS mutating FROM {stage} t WHERE "
-                f"{selected}",
+                self.sql.incoming(
+                    stage,
+                    key + active,
+                    changed,
+                    locked="locked" in {c.lower() for c, _ in s.columns(stage)},
+                    include_unchanged=include_unchanged,
+                ),
                 step="fingerprint effective values",
             )
             .mappings()

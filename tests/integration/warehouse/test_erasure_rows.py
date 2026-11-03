@@ -13,7 +13,7 @@ KEY = "person-private-793"
 def test_renames_people_versions_rejects_boundaries_and_resends(sql_world, monkeypatch):
     w = sql_world
     monkeypatch.setenv("ERASURE_HMAC", "test-hmac-secret")
-    config = replace(w.config, erasure_hmac_secret="ERASURE_HMAC")
+    config = replace(w.config, privacy_hmac_secret="ERASURE_HMAC")
     w.run(
         "land",
         SQL_ACTION="CREATE_TABLE",
@@ -92,7 +92,8 @@ def test_erasure_and_merge_take_the_same_target_lock(sql_world, monkeypatch):
 
     w = sql_world
     monkeypatch.setenv("ERASURE_HMAC", "test-hmac-secret")
-    config = replace(w.config, erasure_hmac_secret="ERASURE_HMAC")
+    config = replace(w.config, privacy_hmac_secret="ERASURE_HMAC")
+    w.config = config
     w.run(
         "land",
         SQL_ACTION="CREATE_TABLE",
@@ -146,7 +147,7 @@ def test_erasure_and_merge_take_the_same_target_lock(sql_world, monkeypatch):
 def test_two_direct_columns_are_one_atomic_table_selection(sql_world, monkeypatch):
     w = sql_world
     monkeypatch.setenv("ERASURE_HMAC", "test-hmac-secret")
-    config = replace(w.config, erasure_hmac_secret="ERASURE_HMAC")
+    config = replace(w.config, privacy_hmac_secret="ERASURE_HMAC")
     w.run(
         "land",
         SQL_ACTION="CREATE_TABLE",
@@ -172,7 +173,7 @@ def test_two_direct_columns_are_one_atomic_table_selection(sql_world, monkeypatc
 def test_numeric_identifier_uses_native_bound_equality(sql_world, monkeypatch):
     w = sql_world
     monkeypatch.setenv("ERASURE_HMAC", "test-hmac-secret")
-    config = replace(w.config, erasure_hmac_secret="ERASURE_HMAC")
+    config = replace(w.config, privacy_hmac_secret="ERASURE_HMAC")
     w.run(
         "land",
         SQL_ACTION="CREATE_TABLE",
@@ -191,7 +192,7 @@ def test_numeric_identifier_uses_native_bound_equality(sql_world, monkeypatch):
 def test_quoted_native_identifier_keeps_its_physical_case(sql_world, monkeypatch, column_name):
     w = sql_world
     monkeypatch.setenv("ERASURE_HMAC", "test-hmac-secret")
-    config = replace(w.config, erasure_hmac_secret="ERASURE_HMAC")
+    config = replace(w.config, privacy_hmac_secret="ERASURE_HMAC")
     from etl_craft.dialects.warehouse.erasure import column_identity
     from etl_craft.handlers.erasure import identity
     from etl_craft.warehouse.connection import warehouse_dialect
@@ -227,7 +228,7 @@ def test_erasure_matches_the_identifier_in_each_scd2_version_without_erasing_oth
 
     w = sql_world
     monkeypatch.setenv("ERASURE_HMAC", "test-hmac-secret")
-    w.config = replace(w.config, erasure_hmac_secret="ERASURE_HMAC")
+    w.config = replace(w.config, privacy_hmac_secret="ERASURE_HMAC")
     owner, _ = prepare(w, "SCD2_MERGE")
     act(
         owner,

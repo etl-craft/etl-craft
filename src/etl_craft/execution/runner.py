@@ -667,7 +667,7 @@ def _start_and_record(
                 log_path=log_path,
                 # Output reaches the log as it is written, so a hang or a kill loses none of it.
                 env={
-                    **child_environment(config),
+                    **child_environment(config, host=True),
                     "PYTHONUNBUFFERED": "1",
                     "ETL_CRAFT_ATTEMPT_ID": str(spec.attempt_id),
                     "ETL_CRAFT_ATTEMPT_OWNER": owner,
