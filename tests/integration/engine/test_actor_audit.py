@@ -13,6 +13,7 @@ from sqlalchemy import inspect, text
 from sqlalchemy.exc import DBAPIError
 
 from etl_craft.core.actor import Actor, ActorKind, acting_as
+from etl_craft.core.counts import Counts
 from etl_craft.core.enums import (
     AccountKind,
     AgentCommand,
@@ -175,13 +176,19 @@ def seeded_tables(db):
             lease_expires_at=datetime.now(UTC) + timedelta(seconds=60),
         )
         transitions.finish_attempt(
-            conn, attempt, AttemptStatus.SUCCESS, ALICE, owner="audit-fixture"
+            conn,
+            attempt,
+            AttemptStatus.SUCCESS,
+            ALICE,
+            owner="audit-fixture",
+            counts=Counts(duplicate_count=0),
         )
         values = {
             "upload_id": 1,
             "bundle_id": "a" * 64,
             "manifest": "{}",
             "attempt_id": attempt,
+            "duplicate_count": 0,
             "kind": ControlAcknowledgement.PROCESS,
             "request_key": "audit-guard-fixture",
             "attempt_ids": "[]",
@@ -655,6 +662,30 @@ def test_terminal_attempts_and_append_only_rows_are_immutable(engine_db):
                 engine_db.engine.begin() as conn,
             ):
                 conn.exec_driver_sql(sql)
+
+
+def test_terminal_log_attachment_cannot_change_duplicate_count(engine_db):
+    seeded_tables(engine_db)
+    with (
+        pytest.raises(DBAPIError, match="immutable"),
+        engine_db.engine.begin() as conn,
+    ):
+        conn.execute(
+            text(
+                "UPDATE AUD_TASK_ATTEMPTS SET LOG_PATH='attempt.log', DUPLICATE_COUNT=1 "
+                "WHERE STATUS='SUCCESS'"
+            )
+        )
+    with engine_db.engine.begin() as conn:
+        conn.execute(
+            text("UPDATE AUD_TASK_ATTEMPTS SET LOG_PATH='attempt.log' WHERE STATUS='SUCCESS'")
+        )
+        assert (
+            conn.execute(
+                text("SELECT DUPLICATE_COUNT FROM AUD_TASK_ATTEMPTS WHERE STATUS='SUCCESS'")
+            ).scalar_one()
+            == 0
+        )
 
 
 def test_actor_stamps_survive_failed_insert(engine_db):

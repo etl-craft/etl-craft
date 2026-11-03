@@ -72,6 +72,7 @@ class TaskInsight:
     updated: int | None
     deleted: int | None
     rejected: int | None
+    duplicates: int | None
 
 
 @dataclass(frozen=True)
@@ -318,6 +319,7 @@ def _tasks(
                     _measured(row, "updated", "update_measured"),
                     _measured(row, "deleted", "delete_measured"),
                     _measured(row, "rejected", "reject_measured"),
+                    _measured(row, "duplicates", "duplicate_measured"),
                 )
                 for row in _rows(conn, "insights_tasks", params, pipelines)
             ),

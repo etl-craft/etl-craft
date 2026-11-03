@@ -225,6 +225,7 @@ class TaskStatusView:
     attempts: int
     rows_written: int | None
     reject_count: int | None
+    duplicate_count: int | None
     duration_seconds: float | None
     error: str | None
     explanation: Explanation
@@ -565,6 +566,7 @@ def _pipeline_status(ctx: OperationContext, request: RunSelection) -> StatusView
                 task.attempt_count if task is not None else 0,
                 task.rows_written if task is not None else None,
                 task.reject_count if task is not None else None,
+                task.duplicate_count if task is not None else None,
                 elapsed_seconds(task.start_date, task.end_date or now)
                 if task is not None
                 else None,

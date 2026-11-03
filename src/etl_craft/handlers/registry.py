@@ -91,6 +91,7 @@ def format_task_log(result: HandlerResult) -> str | None:
         "UPDATE_COUNT": result.update_count,
         "DELETE_COUNT": result.delete_count,
         "REJECT_COUNT": result.reject_count,
+        "DUPLICATE_COUNT": result.duplicate_count,
         **result.variables,
     }
     lines = [f"{name} = {value}" for name, value in values.items() if value is not None]

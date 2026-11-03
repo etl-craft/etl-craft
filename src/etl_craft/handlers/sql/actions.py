@@ -35,6 +35,7 @@ import logging
 from collections.abc import Callable
 
 from etl_craft.core.actor import Actor
+from etl_craft.core.counts import Counts
 from etl_craft.core.enums import ActorKind, RunStatus, SqlAction
 from etl_craft.core.errors import SqlGuardError
 from etl_craft.core.faults import fault_point
@@ -242,11 +243,8 @@ def append_table(session: Session, action: ActionContext) -> HandlerResult:
 
 def _merge_stage(
     session: Session, action: ActionContext, kind: SqlAction
-) -> tuple[str, int, int | None, int | None]:
-    """Stage, screen, de-duplicate, check and hash the SELECT for a merge.
-
-    Return the stage, the source rows and the rows set aside.
-    """
+) -> tuple[str, Counts, int | None]:
+    """Return the checked, hashed stage, input counts and optional new-key count."""
     task = action.task
     check_target_audit(session, kind)
     version = action.store.target(session.target).hash_version
@@ -315,7 +313,12 @@ def _merge_stage(
         )
         stage = session.protection.prepare(stage, request, condition)
     session.prepare_update_stage(stage, task.merge_key)
-    return stage, source, rejected, int(counts.new_keys) if count_target else None
+    input_counts = Counts(
+        source_count=source,
+        reject_count=rejected,
+        duplicate_count=int(counts.duplicate_rows) if task.dedupe_order else None,
+    )
+    return stage, input_counts, int(counts.new_keys) if count_target else None
 
 
 def scd1_merge(session: Session, action: ActionContext) -> HandlerResult:
@@ -325,8 +328,8 @@ def scd1_merge(session: Session, action: ActionContext) -> HandlerResult:
     taken over the values actually kept.
     """
     task = action.task
-    stage, source, rejected, new = _merge_stage(session, action, SqlAction.SCD1_MERGE)
-    if metadata_only := metadata_result(session, stage, source, rejected):
+    stage, input_counts, new = _merge_stage(session, action, SqlAction.SCD1_MERGE)
+    if metadata_only := metadata_result(session, stage, input_counts):
         return metadata_only
     stage_columns = [
         name
@@ -387,11 +390,12 @@ def scd1_merge(session: Session, action: ActionContext) -> HandlerResult:
     session.drop(stage)
     target_count = session.count(f"SELECT COUNT(*) FROM {target}", step="target rows")
     return HandlerResult(
-        source_count=source,
+        source_count=input_counts.source_count,
         target_count=target_count,
         insert_count=insert_count,
         update_count=update_count,
-        reject_count=rejected,
+        reject_count=input_counts.reject_count,
+        duplicate_count=input_counts.duplicate_count,
     )
 
 
@@ -467,8 +471,8 @@ def scd2_merge(session: Session, action: ActionContext) -> HandlerResult:
     A key with no active version, new or left without one by an interrupted earlier run, gets
     one inserted, so a rerun converges.
     """
-    stage, source, rejected, _ = _merge_stage(session, action, SqlAction.SCD2_MERGE)
-    if metadata_only := metadata_result(session, stage, source, rejected):
+    stage, input_counts, _ = _merge_stage(session, action, SqlAction.SCD2_MERGE)
+    if metadata_only := metadata_result(session, stage, input_counts):
         return metadata_only
     stage_columns = [
         name
@@ -489,11 +493,12 @@ def scd2_merge(session: Session, action: ActionContext) -> HandlerResult:
     session.drop(stage)
     target_count = session.count(f"SELECT COUNT(*) FROM {target}", step="target rows")
     return HandlerResult(
-        source_count=source,
+        source_count=input_counts.source_count,
         target_count=target_count,
         insert_count=inserted,
         update_count=closed,
-        reject_count=rejected,
+        reject_count=input_counts.reject_count,
+        duplicate_count=input_counts.duplicate_count,
     )
 
 

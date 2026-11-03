@@ -152,6 +152,9 @@ The serializer returns a fresh dictionary.
 The [Python API reference](../api/etl_craft/services/operations/index.md) lists the functions,
 context, requests and result fields.
 
+Task and attempt count documents include `duplicate_count` as an integer or `null`.
+Pipeline Insights task totals expose `duplicates` and retain `null` when no run measured it.
+
 ## Execution inspection and diagnostics
 
 `status` returns `StatusView` and `explain` returns `Explanation`; the pure

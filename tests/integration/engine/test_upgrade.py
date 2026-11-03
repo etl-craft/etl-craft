@@ -50,6 +50,11 @@ def test_an_earlier_engine_db_upgrades_to_the_current_schema(
         )
         assert flags and all(flag == "N" for flag in flags)
         assert conn.execute(text("SELECT COUNT(*) FROM AUD_CLONE_STATE")).scalar_one() == 0
+        for table in ("AUD_TASK_RUN_LOG", "AUD_TASK_ATTEMPTS"):
+            assert (
+                conn.execute(text(f"SELECT COUNT(duplicate_count) FROM {table}")).scalar_one() == 0
+            )
+
         assert (
             conn.execute(
                 text("SELECT COUNT(*) FROM AUD_PIPELINES_RUN_LOG WHERE UPDATED_AT IS NULL")

@@ -86,9 +86,10 @@ def check_killed_merge(world, kind, point):
     w.run("seed", SELECT_QUERY=source, **params)
     before = merge_rows(w, target)
     w.new_run()
+    params["MERGE_DEDUPE_ORDER"] = "name DESC"
     params["SELECT_QUERY"] = (
         "SELECT 1 AS id, CAST('new' AS VARCHAR(20)) AS name "
-        "UNION ALL SELECT 2, 'same' UNION ALL SELECT 3, 'add'"
+        "UNION ALL SELECT 2, 'same' UNION ALL SELECT 3, 'add' UNION ALL SELECT 1, 'aged'"
     )
     context = w.task("merge", **params)
     w.warehouse.dispose()
@@ -113,7 +114,7 @@ def check_killed_merge(world, kind, point):
         old_shape,
         sorted(complete_shape),
     )
-    w.run("merge", **params)
+    assert w.run("merge", **params).duplicate_count == 1
     rows = merge_rows(w, target)
     expected = [(1, "new", "Y"), (2, "same", "Y"), (3, "add", "Y")]
     if kind == "SCD2_MERGE":
@@ -134,4 +135,5 @@ def check_killed_merge(world, kind, point):
             assert row["task_run_id"] == context.task_run_id
     again = w.run("merge", **params)
     assert again.insert_count == again.update_count == 0
+    assert again.duplicate_count == 1
     assert merge_rows(w, target) == rows

@@ -49,6 +49,11 @@ def _render(args: argparse.Namespace, out: Output, done: Explanation) -> int:
                 if done.task and done.task.reject_count is not None
                 else ""
             )
+            + (
+                f" duplicates={done.task.duplicate_count}"
+                if done.task and done.task.duplicate_count is not None
+                else ""
+            )
         )
         out.line(
             f"metadata_version={done.run.metadata_version} bundle_id={done.run.bundle_id} "

@@ -10,11 +10,11 @@
 <dl class="facts"><dt>Succeeded</dt><dd>{{ succeeded }} of {{ runs|length }}</dd><dt>Average duration</dt><dd>{{ duration(average|int) if average is not none else "No finished runs" }}</dd></dl>
 {% if runs %}
 <div class="toolbar"><button type="button" data-csv="task-runs" data-csv-name="{{ pipeline.pipeline_code }}-{{ task_code }}-runs.csv">Export CSV</button></div>
-<div class="scroll"><table class="list" id="task-runs"><thead><tr><th scope="col">Run</th><th scope="col">Status</th><th scope="col">Started</th><th scope="col">Duration</th><th scope="col">Rows in</th><th scope="col">Inserted</th><th scope="col">Updated</th><th scope="col">Deleted</th><th scope="col">Rejected</th><th scope="col">Rows per second</th><th scope="col">Attempts</th></tr></thead><tbody>
+<div class="scroll"><table class="list" id="task-runs"><thead><tr><th scope="col">Run</th><th scope="col">Status</th><th scope="col">Started</th><th scope="col">Duration</th><th scope="col">Rows in</th><th scope="col">Inserted</th><th scope="col">Updated</th><th scope="col">Deleted</th><th scope="col">Rejected</th><th scope="col">Duplicates</th><th scope="col">Rows per second</th><th scope="col">Attempts</th></tr></thead><tbody>
 {% for r in runs %}{% set took = seconds.get(r.task_run_id) %}<tr>
 <th scope="row"><a href="{{ run_url(r.pipeline_run_id) }}?task={{ task_code|urlencode }}">{{ r.pipeline_run_id }}</a></th><td>{{ status(r.status) }}</td><td>{{ r.start_date|zoned(settings.timezone) if r.start_date else "Not started" }}</td>
 <td>{{ duration(took|int) if took is not none else "Running" if r.start_date else "" }}</td>
-{% for count in (r.source_count, r.insert_count, r.update_count, r.delete_count, r.reject_count) %}<td>{{ "{:,}".format(count) if count is not none else '<span class="note">Not measured</span>'|safe }}</td>{% endfor %}
+{% for count in (r.source_count, r.insert_count, r.update_count, r.delete_count, r.reject_count, r.duplicate_count) %}<td>{{ "{:,}".format(count) if count is not none else '<span class="note">Not measured</span>'|safe }}</td>{% endfor %}
 <td>{{ "{:,.0f}".format(r.rows_written / took) if took and took >= 1 and r.rows_written else "" }}</td><td>{{ r.attempt_count }}</td></tr>{% endfor %}
 </tbody></table></div>
 {% else %}<p>This task has not run yet.</p>{% endif %}

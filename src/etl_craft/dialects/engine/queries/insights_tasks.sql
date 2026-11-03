@@ -6,7 +6,8 @@ SELECT r.PIPELINE_ID AS pipeline_id, k.TASK_CODE AS task_code, COUNT(*) AS runs,
        SUM(t.INSERT_COUNT) AS inserted, COUNT(t.INSERT_COUNT) AS insert_measured,
        SUM(t.UPDATE_COUNT) AS updated, COUNT(t.UPDATE_COUNT) AS update_measured,
        SUM(t.DELETE_COUNT) AS deleted, COUNT(t.DELETE_COUNT) AS delete_measured,
-       SUM(t.REJECT_COUNT) AS rejected, COUNT(t.REJECT_COUNT) AS reject_measured
+       SUM(t.REJECT_COUNT) AS rejected, COUNT(t.REJECT_COUNT) AS reject_measured,
+       SUM(t.DUPLICATE_COUNT) AS duplicates, COUNT(t.DUPLICATE_COUNT) AS duplicate_measured
 FROM CFG_PIPELINES p
 JOIN AUD_PIPELINES_RUN_LOG r ON r.PIPELINE_ID = p.PIPELINE_ID
  AND r.START_DATE >= :window_start AND r.START_DATE < :window_end

@@ -84,6 +84,7 @@ def apply(conn, operation, attempt, *, owner=OWNER):
                 delete_count=1,
                 rows_written=9,
                 reject_count=3,
+                duplicate_count=2,
             ),
             task_log="values",
             exit_code=0,
@@ -166,10 +167,11 @@ def test_queue_retries_keep_immutable_outcomes_and_all_counts(engine_db):
         summary = conn.execute(
             text(
                 "SELECT SOURCE_COUNT, TARGET_COUNT, INSERT_COUNT, UPDATE_COUNT, "
-                "DELETE_COUNT, ROWS_WRITTEN, REJECT_COUNT, TASK_LOG FROM AUD_TASK_RUN_LOG"
+                "DELETE_COUNT, ROWS_WRITTEN, REJECT_COUNT, DUPLICATE_COUNT, TASK_LOG "
+                "FROM AUD_TASK_RUN_LOG"
             )
         ).one()
-        assert tuple(summary) == (10, 9, 7, 2, 1, 9, 3, "values")
+        assert tuple(summary) == (10, 9, 7, 2, 1, 9, 3, 2, "values")
         second = tr.queue_attempt(conn, task, ACTOR)
         assert second != first
         assert runlog.fetch_task_run_result(conn, task).attempt_count == 2
@@ -182,6 +184,12 @@ def test_queue_retries_keep_immutable_outcomes_and_all_counts(engine_db):
             ),
             {"id": second},
         ).one() == (ACTOR.name, "SERVICE")
+        assert (
+            conn.execute(text("SELECT duplicate_count FROM AUD_TASK_RUN_LOG")).scalar_one() is None
+        )
+        assert conn.execute(
+            text("SELECT duplicate_count FROM AUD_TASK_ATTEMPTS ORDER BY attempt_number")
+        ).scalars().all() == [2, None]
         # A queued attempt has no process and does not block run finalization.
         tr.cancel_attempt(conn, second, ACTOR, error_message="done")
         tr.finish_run(conn, run, "SUCCESS", ACTOR)

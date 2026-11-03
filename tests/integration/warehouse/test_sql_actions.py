@@ -637,6 +637,8 @@ def test_ties_in_the_dedupe_order_are_refused_unless_the_rows_are_the_same(custo
     )
     assert (result.source_count, result.insert_count) == (2, 1)
 
+    assert result.duplicate_count == 1
+
 
 def test_a_soft_delete_leaves_rows_already_deleted_alone(customers):
     w = customers("SCD1_MERGE")

@@ -82,6 +82,10 @@ their Python service operations. Task history includes the canonical `task_run_i
 ordered attempt records, including `not_before` and `retryable`. `status`, `explain`,
 `validate`, `doctor` and `lineage` also accept `--format json`. See [Service operations and JSON](service-operations.md).
 
+Task and attempt summaries distinguish a measured `duplicate_count` of zero from an
+unmeasured count (`null` in JSON). A retry replaces the task summary counts with
+the current attempt’s counts. Earlier attempts retain their own outcomes.
+
 ## Filter by tags
 
 `pipelines`, `status`, `history`, `audit` and `validate` accept repeatable `--tag` filters.

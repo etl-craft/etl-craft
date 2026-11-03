@@ -6,6 +6,10 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Report post-reject merge duplicates in task and attempt counts, inspection, metrics and audit mirrors.
+
 ### Fixed
 
 - Snowflake stewardship uploads use a set-based mutation check instead of an unsupported

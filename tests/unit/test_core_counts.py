@@ -38,4 +38,5 @@ def test_handler_counts_exclude_variables_and_offsets():
         "delete_count",
         "rows_written",
         "reject_count",
+        "duplicate_count",
     }

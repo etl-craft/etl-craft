@@ -357,6 +357,12 @@ where SCD1 source values are NULL and hashes the values actually stored; unchang
 their audit fields. PostgreSQL indexes the stage's merge keys and runs `ANALYZE` before joined
 updates so the planner has current stage statistics.
 
+`DUPLICATE_COUNT` counts source rows removed by `MERGE_DEDUPE_ORDER` after load
+rejects. A measured batch with no removals reports zero. A merge without an order,
+and actions without merge dedupe, leave the count unknown. Unchanged target rows and
+older SCD2 versions do not contribute. Stewardship merges count within each file and sum
+those counts for the attempt. A later file winning the same key does not add a duplicate.
+
 ### Rows set aside
 
 A messy source need not fail the whole load. With `REJECT_LIMIT`, `APPEND_TABLE`,

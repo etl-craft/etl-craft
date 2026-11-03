@@ -471,7 +471,7 @@ class WarehouseDialect:
             }.get(self.sqlglot_dialect or "", f"TYPEOF({value})")
             control = f", {kind} AS locked_type"
         return (
-            "SELECT COALESCE(SUM(n), 0) AS source_rows, "
+            "SELECT COALESCE(SUM(n), 0) AS source_rows, COALESCE(SUM(n - 1), 0) AS duplicate_rows, "
             f"COALESCE(SUM(CASE WHEN {nulls} THEN n ELSE 0 END), 0) AS null_keys, "
             f"COALESCE(SUM(CASE WHEN n > 1 THEN 1 ELSE 0 END), 0) AS duplicate_keys {new}{control} "
             f"FROM (SELECT {listed}, COUNT(*) AS n FROM {stage} GROUP BY {grouped}) counted"

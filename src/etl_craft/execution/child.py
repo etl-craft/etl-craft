@@ -224,13 +224,15 @@ def run_handler(
             controls.acknowledge(conn, identity[0], ControlAcknowledgement.QUERIES)
     fault_point("child.after_outcome")
     logger.info(
-        "task succeeded: source %s, target %s, inserted %s, updated %s, deleted %s, rejected %s",
+        "task succeeded: source %s, target %s, inserted %s, updated %s, deleted %s, "
+        "rejected %s, duplicates %s",
         result.source_count,
         result.target_count,
         result.insert_count,
         result.update_count,
         result.delete_count,
         result.reject_count,
+        result.duplicate_count,
     )
     return ExitCode.SUCCESS
 
