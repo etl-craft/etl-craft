@@ -1,0 +1,11 @@
+Secrets:
+  Source_type: ENVIRONMENT
+Orchestration:
+  Project: default
+Deployment:
+  Profile: CONTROLLER_AGENTS
+Warehouse:
+  Name: DuckDB
+  dev:
+    Jdbc_url: jdbc:duckdb:warehouse.duckdb
+    Schema: main

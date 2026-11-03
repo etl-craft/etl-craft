@@ -176,3 +176,16 @@ from skip reasons, paths, or the free-form platform description. Declared tests 
 own platform must appear in the fresh collection; skips still refuse the release.
 
 CI runs the gate on every `release/**` branch.
+
+## Tagged deployment images
+
+The Release gate workflow builds the base and UI images from the wheel on exact `v<version>`
+release and release-candidate tags. Its image job runs the published Compose template and
+applies the Kubernetes manifests to pinned k3d after server-side dry runs, with a disposable external PostgreSQL database.
+The smoke checks headless probes, sign-in on both UI copies, and successful API-only work
+on the Compose agent and both Kubernetes agents with distinct credentials.
+
+The publishing job requires the evidence gate, catalog scale, chaos, compatibility and
+image smoke jobs to succeed. It loads the tested images and pushes only the exact version
+and its `-ui` tag to GHCR. Branch and PR runs do not push images. PyPI publishing and
+announcements are separate.

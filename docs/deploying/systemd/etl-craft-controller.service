@@ -1,0 +1,18 @@
+[Unit]
+Description=etl-craft controller
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+User=etl-craft
+Group=etl-craft
+WorkingDirectory=/srv/etl-craft/project
+EnvironmentFile=/etc/etl-craft/controller.env
+ExecStart=/opt/etl-craft/bin/etl-craft controller --no-ui
+Restart=on-failure
+TimeoutStopSec=65
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

@@ -19,7 +19,7 @@ from typing import Any
 
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import URL, Engine
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import NoSuchModuleError, SQLAlchemyError
 
 from etl_craft.config import ConnectionProfile, ConnectorConfig, profile_secret
 from etl_craft.config.resolve import resolve_named_secret
@@ -136,7 +136,16 @@ def build_warehouse_engine(
         database=url.path or url.database,
         query=public_url_query(url.query),
     )
-    return create_engine(logged_url, creator=creator, **engine_kwargs)
+    try:
+        return create_engine(logged_url, creator=creator, **engine_kwargs)
+    except (NoSuchModuleError, ImportError) as error:
+        if url.dialect not in {"duckdb", "trino", "snowflake", "databricks"}:
+            raise
+        extra = f"etl-craft[{url.dialect}]"
+        raise ConfigurationError(
+            f"Project {config.project!r}: the {url.dialect} warehouse requires {extra}. "
+            f"Install {extra} or use a project image that includes it."
+        ) from error
 
 
 def warehouse_creator(

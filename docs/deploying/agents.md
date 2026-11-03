@@ -45,6 +45,10 @@ Engine DB clock governs the 60-second attempt leases. A child also watches its o
 lease deadline and its parent's process birth identity: it stops before lease expiry if the
 agent dies or cannot renew. A retry gets a new attempt row; expired ownership is never adopted.
 
+Use `etl-craft agent health` in the same bootstrap directory to check the last successful
+renewal. The check needs no API credentials and opens no port. Use a separate writable
+bootstrap directory per agent.
+
 ## Capacity and controls
 
 The shared resource report measures CPU and memory allocation, reserves and pressure at startup

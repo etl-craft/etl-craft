@@ -1,7 +1,5 @@
 {
   "dependencies": [
-    "duckdb",
-    "duckdb-engine",
     "psutil",
     "psycopg",
     "pyyaml",

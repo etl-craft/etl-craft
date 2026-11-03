@@ -8,6 +8,7 @@ and the SQL and catalog files that ship inside the package.
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import subprocess
@@ -144,4 +145,20 @@ def test_it_installs_and_runs(tmp_path, installer, kind, extra):
             str(_bin(venv, "python")),
             "-c",
             "import fastapi, uvicorn, jinja2; from etl_craft.api.app import create_app",
+        )
+
+    if extra == "ui":
+        assert "usage:" in run(str(_bin(venv, "etl-craft")), "--help")
+        installed = json.loads(
+            run(uv, "pip", "list", "--python", str(_bin(venv, "python")), "--format", "json")
+        )
+        subprocess.run([*install, f"{artifact}[all]"], check=True, cwd=tmp_path, timeout=600)
+        assert (
+            json.loads(
+                run(uv, "pip", "list", "--python", str(_bin(venv, "python")), "--format", "json")
+            )
+            == installed
+        )
+        assert {item["name"] for item in installed}.isdisjoint(
+            {"duckdb", "duckdb-engine", "trino", "snowflake-sqlalchemy", "databricks-sqlalchemy"}
         )

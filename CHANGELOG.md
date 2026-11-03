@@ -8,6 +8,12 @@ All notable changes are recorded here. The format follows
 
 ### Added
 
+- Publish exact-version headless and UI images to GHCR after tagged release validation.
+  The deployment guide includes Compose, Kubernetes and systemd layouts.
+- `etl-craft agent health` checks the local timestamp of the last successful API renewal
+  without credentials or a listening port. Headless controllers serve `/health` and
+  internal `/metrics` and return 404 for other paths.
+
 - Report post-reject merge duplicates in task and attempt counts, inspection, metrics and audit mirrors.
 
 ### Fixed

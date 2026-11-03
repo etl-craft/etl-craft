@@ -2,6 +2,7 @@
 
 import json
 import threading
+from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 from etl_craft.config.model import parse_api_address
@@ -43,6 +44,14 @@ def serve_health(ctx: OperationContext, stop: threading.Event) -> None:
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
             self.wfile.write(body)
+
+        def send_error(
+            self, code: int, message: str | None = None, explain: str | None = None
+        ) -> None:
+            if code == HTTPStatus.NOT_IMPLEMENTED and self.path not in {"/health", "/metrics"}:
+                super().send_error(HTTPStatus.NOT_FOUND)
+                return
+            super().send_error(code, message, explain)
 
         def log_message(self, format: str, *args: object) -> None:
             pass

@@ -142,7 +142,7 @@ item's text, or work done early under another item.
 | S5.AB Pipeline tags and filters | Done | #222 | `TAGS` labels pipelines; one tag filter on list, status, history, catalog and UI views, and tag-selected bulk actions |
 | S5.AC Pipeline trigger tasks | Done | #223 | Durable child admission, controller-held WAIT outcomes, DETACH at QUEUED admission and linked run inspection |
 | S5.AD Pipeline permission groups | Done | #225 | Admin-managed groups, audited direct/tag grants, effective pipeline roles, retained SSO group IDs and child-start permission checks |
-| S5.AE One gateway | In progress | #227 | Slice 1: stateless PostgreSQL `ui`, headless health-only controller, package schema checks, `ui`/`all` extras and `--api`; agent API and deployment layouts remain with S5.C/S7.F |
+| S5.AE One gateway | Done | #227, #231, #316 | Stateless UI replicas, headless probes, fenced API-only agents, deployment layouts and tick metrics |
 | S5.AF Indexes for every query | Done | #229 | Selective history indexes, bounded catalog reads and a PostgreSQL full-scan guard |
 | S5.X Unmanaged SQL tasks | Done | #230 | `SQL_SCRIPT` runs any SQL as an ordinary dependent task with per-statement audit; pre- and post-SQL are upstream and downstream tasks |
 | S5.C The PostgreSQL queue and the agent | Done | #231 | API-only agents with claims, renewals, fenced reports, shared log chunks and durable drain/resume/stop; durable resource locks that pass only after the expired holder's warehouse statements are confirmed stopped |
@@ -185,7 +185,7 @@ item's text, or work done early under another item.
 | S7.C Redaction | In progress | #228, #309 | Recursive name masking and shared operation-scoped value masking exist; resolved-secret registration and Sensitive_patterns remain |
 | S7.D Alert channels | Planned |  | Signed webhooks, Slack-shaped bodies and channel delivery evidence remain; email is already supported |
 | S7.E Secrets providers | In progress | #84, #120 | Environment/file resolution exists; secret managers, task declarations and fenced secret delivery remain |
-| S7.F Packaging and deployment | In progress | #227, #231 | Three roles and ui/all extras exist; role images, release smoke checks and Compose/Kubernetes manifests remain |
+| S7.F Packaging and deployment | Done | #227, #231, #316 | Wheel-built role images, tagged release smoke and publishing, Compose/Kubernetes manifests and systemd units |
 | S7.G Compatibility policy | Planned |  | 0.9.0 compatibility policy, rolling mixed-version contracts and public-surface cleanup remain |
 | S7.H Cloud acceptance | In progress | #104–#110, #208, #231, #236, #247 | Native/Iceberg and managed-engine contracts exist; complete candidate evidence and unavailable provider cases remain |
 | S7.I The endurance run | Planned |  | 72-hour accelerated Support Insights candidate run, faults and bounded growth evidence after S8 is running |
@@ -1204,6 +1204,18 @@ empty-history-page handling defect, which was corrected and verified. No cloud w
   Acceptance availability: the installed-wheel demo ran the README walkthrough locally.
   No warehouse SQL changed, so cloud acceptance was not needed.
 
+- **S7.F and S5.AE (owner, 2026-11-03).** One PR closes S5.AE and finishes
+  the S7.F images and manifests. Exact-version base and UI images publish to GHCR on
+  tagged releases and release candidates after the release and image gates, including
+  before 0.9.0. There is no `latest` tag or publishing from untagged main or PRs.
+  PyPI and announcements still wait for 0.9.0. After merge, S8 pulls the candidate
+  images instead of building from its wheel.
+  - S5.AE's "only /health" meant no API or UI traffic. The headless controller serves
+    `/health` and `/metrics`; S7.I reads `controller_tick_duration_seconds` from
+    `/metrics`. The tick histogram excludes notification and polling waits.
+  - Scale agents with one Deployment and token Secret per agent. Token identity owns
+    the registration, so a second live process cannot share it. Use Secret environment
+    references to keep token files out of the task filesystem.
 - **Pre-demo gap identity (owner, 2026-11-01).** The five package-gap slices are S7.AL.
   S7.AK already names the merged Schema checker; its item and references retain that identity.
 - **Follow-up ownership (owner, 2026-11-01).** No promise from the pre-demo audit is dropped.

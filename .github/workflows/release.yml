@@ -3,6 +3,7 @@ name: Release gate
 on:
   push:
     branches: ["release/**"]
+    tags: ["v*"]
   workflow_dispatch:
 
 concurrency:
@@ -121,3 +122,99 @@ jobs:
         with:
           name: python-platform-${{ matrix.python }}-${{ matrix.os }}
           path: python-platform.xml
+
+  images:
+    name: Build and smoke-test tagged deployment images
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7
+      - name: Verify the tag matches the package
+        id: version
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          python3 - <<'PY'
+          import os
+          import re
+          import tomllib
+          from pathlib import Path
+
+          tag = os.environ["RELEASE_TAG"]
+          version = tomllib.loads(Path("pyproject.toml").read_text())["project"]["version"]
+          if not re.fullmatch(r"v\d+\.\d+\.\d+(?:rc\d+)?", tag) or tag != f"v{version}":
+              raise SystemExit(f"release tag {tag!r} must match package version {version!r}")
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              output.write(f"version={version}\n")
+          PY
+      - name: Build images from the repository wheel
+        env:
+          ETL_CRAFT_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          image="ghcr.io/etl-craft/etl-craft:$ETL_CRAFT_VERSION"
+          docker build --target base --tag "$image" .
+          docker build --target ui --tag "$image-ui" .
+      - name: Install pinned k3d and kubectl
+        run: |
+          tools="$RUNNER_TEMP/deployment-bin"
+          mkdir -p "$tools"
+          curl --fail --silent --show-error --location --retry 3 \
+            https://github.com/k3d-io/k3d/releases/download/v5.9.0/k3d-linux-amd64 \
+            --output "$tools/k3d"
+          curl --fail --silent --show-error --location --retry 3 \
+            https://dl.k8s.io/release/v1.32.2/bin/linux/amd64/kubectl --output "$tools/kubectl"
+          (
+            cd "$tools"
+            sha256sum -c <<'SHA'
+          06d8f25bc3a971c4eb29e0ff08429b180402db0f4dec838c9eac427e296800a0  k3d
+          4f6a959dcc5b702135f8354cc7109b542a2933c46b808b248a214c1f69f817ea  kubectl
+          SHA
+          )
+          chmod +x "$tools/k3d" "$tools/kubectl"
+          echo "$tools" >> "$GITHUB_PATH"
+      - name: Exercise the Compose and Kubernetes examples
+        env:
+          ETL_CRAFT_VERSION: ${{ steps.version.outputs.version }}
+        run: scripts/deployment/smoke.sh --k3d
+      - name: Save exactly the tested images
+        env:
+          ETL_CRAFT_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          image="ghcr.io/etl-craft/etl-craft:$ETL_CRAFT_VERSION"
+          docker save -o deployment-images.tar "$image" "$image-ui"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: deployment-images
+          path: deployment-images.tar
+          retention-days: 1
+          if-no-files-found: error
+
+  publish-images:
+    name: Publish tested images to GHCR
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [gate, catalog-scale, chaos, python-platform, images]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: deployment-images
+      - name: Push only the exact version tags
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_USER: ${{ github.actor }}
+          ETL_CRAFT_VERSION: ${{ needs.images.outputs.version }}
+        run: |
+          image="ghcr.io/etl-craft/etl-craft:$ETL_CRAFT_VERSION"
+          docker load -i deployment-images.tar
+          printf '%s' "$GHCR_TOKEN" | docker login ghcr.io --username "$GHCR_USER" --password-stdin
+          trap 'docker logout ghcr.io' EXIT
+          docker push "$image"
+          docker push "$image-ui"

@@ -1,0 +1,89 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agent
+spec:
+  replicas: 1
+  selector:
+    matchLabels: &id001
+      app: agent
+  template:
+    metadata:
+      labels: *id001
+    spec:
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 310
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: agent
+        image: ghcr.io/etl-craft/etl-craft:1.0.0rc1
+        args:
+        - agent
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: '2'
+            memory: 1024Mi
+        volumeMounts:
+        - name: project
+          mountPath: /project
+        - name: config
+          mountPath: /project/craft-connector.yml
+          subPath: agent.yml
+          readOnly: true
+        - name: state
+          mountPath: /state
+        - name: tmp
+          mountPath: /tmp
+        env:
+        - name: ETL_CRAFT_API
+          valueFrom:
+            configMapKeyRef:
+              name: etl-craft-config
+              key: api-url
+        - name: ETL_CRAFT_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: etl-craft-agent-token
+              key: ETL_CRAFT_TOKEN
+        startupProbe:
+          exec: &id002
+            command:
+            - etl-craft
+            - agent
+            - health
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 12
+        readinessProbe: &id003
+          exec: *id002
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 3
+        livenessProbe: *id003
+      volumes:
+      - name: project
+        emptyDir: {}
+      - name: config
+        configMap:
+          name: etl-craft-config
+      - name: state
+        emptyDir: {}
+      - name: tmp
+        emptyDir: {}
+  strategy:
+    type: Recreate

@@ -116,3 +116,40 @@ def test_cli_reference_renders_each_parsers_own_help(monkeypatch):
     sections = {"": parts[0]} | dict(zip(parts[1::2], parts[2::2], strict=True))
     for command, parser in parser_commands(build_parser()):
         assert f"```text\n{parser.format_help()}```" in sections.get(command, ""), command
+
+
+def test_deployment_examples_use_the_cli_and_configuration_inventories(monkeypatch):
+    import shlex
+
+    import yaml
+
+    from etl_craft.config import load_config
+
+    deployment = ROOT / "docs/deploying"
+    parser = build_parser()
+    compose = yaml.safe_load((deployment / "compose/compose.yml").read_text())
+    for service in compose["services"].values():
+        if service["image"].startswith("ghcr.io/etl-craft/etl-craft:"):
+            parser.parse_args(service["command"])
+            probe = service["healthcheck"]["test"]
+            if probe[:2] == ["CMD", "etl-craft"]:
+                parser.parse_args(probe[2:])
+    for path in (deployment / "kubernetes").glob("*.yml"):
+        for resource in yaml.safe_load_all(path.read_text()):
+            if resource["kind"] != "Deployment":
+                continue
+            for container in resource["spec"]["template"]["spec"]["containers"]:
+                parser.parse_args(container["args"])
+                for key in ("startupProbe", "readinessProbe", "livenessProbe"):
+                    if (probe := container.get(key, {}).get("exec")) is not None:
+                        executable, *arguments = probe["command"]
+                        assert executable == "etl-craft"
+                        parser.parse_args(arguments)
+    for unit in (deployment / "systemd").glob("*.service"):
+        line = next(line for line in unit.read_text().splitlines() if line.startswith("ExecStart="))
+        executable, *arguments = shlex.split(line.partition("=")[2])
+        assert Path(executable).name == "etl-craft"
+        parser.parse_args(arguments)
+    monkeypatch.setenv("ENGINE_PASSWORD", "deployment-test-password")
+    load_config(deployment / "compose/engine.yml")
+    load_config(deployment / "compose/agent.yml", agent=True)
