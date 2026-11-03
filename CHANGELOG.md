@@ -10,6 +10,9 @@ Warehouses are optional extras. Core bundles none. `all` is core plus the UI, fo
 
 ### Added
 
+- Release gate validates pinned demo evidence against the candidate wheel, complete check
+  and scenario inventories, and UTC execution times; empty inventories block release.
+
 - Publish exact-version headless and UI images to GHCR after tagged release validation.
   The deployment guide includes Compose, Kubernetes and systemd layouts.
 - `etl-craft agent health` checks the local timestamp of the last successful API renewal
