@@ -1,5 +1,6 @@
 import hashlib
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -72,6 +73,7 @@ def repo(tmp_path):
         encoding="utf-8",
     )
     (root / ".gitignore").write_text("__pycache__/\n.pytest_cache/\n")
+    setup_example(root)
     git(root, "init", "-q", "-b", "main")
     commit_all(root, "initial")
     return root
@@ -112,7 +114,8 @@ def write_evidence(repo: Path, name: str, **overrides) -> None:
 
 def problems(repo, wheel=None):
     return {
-        result.suite: result.problems for result in gate.check(VERSION, repo, suites(repo), wheel)
+        result.suite: result.problems
+        for result in gate.check(VERSION, repo, suites(repo), wheel or repo / "candidate.whl")
     }
 
 
@@ -120,12 +123,13 @@ def test_passing_evidence_for_every_suite_is_releasable(repo, capsys):
     write_evidence(repo, "unit")
     write_evidence(repo, "package")
     commit_all(repo, "record evidence")
-    assert problems(repo) == {"unit": [], "package": []}
-    assert gate.main(["--repo", str(repo)]) == 0
+    assert problems(repo) == {"unit": [], "package": [], "example-support-insights": []}
+    assert gate.main(["--repo", str(repo), "--wheel", str(repo / "candidate.whl")]) == 0
     assert capsys.readouterr().out.splitlines() == [
         "release gate for 1.0.0",
         "  OK    unit",
         "  OK    package",
+        "  OK    example-support-insights",
         "releasable",
     ]
 
@@ -133,7 +137,7 @@ def test_passing_evidence_for_every_suite_is_releasable(repo, capsys):
 def test_a_suite_without_evidence_blocks_the_release(repo, capsys):
     write_evidence(repo, "unit")
     assert problems(repo)["package"] == ["no evidence (release/evidence/1.0.0/package.json)"]
-    assert gate.main(["--repo", str(repo)]) == 1
+    assert gate.main(["--repo", str(repo), "--wheel", str(repo / "candidate.whl")]) == 1
     assert capsys.readouterr().out.endswith("not releasable\n")
 
 
@@ -204,7 +208,7 @@ def test_wheel_suites_must_all_test_the_same_wheel(repo, tmp_path):
     commit_all(repo, "declare e2e suite")
     write_evidence(repo, "package")
     write_evidence(repo, "e2e", wheel_sha256="0" * 64)
-    found = problems(repo)
+    found = {result.suite: result.problems for result in gate.check(VERSION, repo, suites(repo))}
     assert "wheel-bound suites tested different wheels" in found["package"]
     assert "wheel-bound suites tested different wheels" in found["e2e"]
 
@@ -330,3 +334,119 @@ darwin = ["test_platform.py::test_darwin"]
         counts={"passed": 3},
     )
     assert any(other_node in problem for problem in problems(repo)["unit"])
+
+
+def setup_example(root):
+    fixture = Path(__file__).parents[1] / "fixtures/release_example/complete.json"
+    manifest = json.loads(fixture.read_text())
+    (root / "release/example.toml").write_text(
+        f'commit = "{manifest["demo_commit"]}"\n'
+        'checks = ["fixture-check"]\nscenarios = ["fixture-scenario"]\n'
+    )
+    path = root / "release/evidence" / VERSION / "example-support-insights.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(manifest))
+    wheel = root / "candidate.whl"
+    wheel.write_bytes(b"the wheel")
+    os.utime(wheel, (1767225600, 1767225600))
+    return path
+
+
+def test_complete_example_manifest_is_accepted(repo):
+    assert gate.check_example(VERSION, repo, repo / "candidate.whl").ok
+
+
+@pytest.mark.parametrize("group", ["checks", "scenarios"])
+@pytest.mark.parametrize(
+    "fault", ["missing", "extra", "skipped", "failed", "duplicate", "counts", "evidence"]
+)
+def test_example_inventory_fails_closed(repo, group, fault):
+    path = setup_example(repo)
+    manifest = json.loads(path.read_text())
+    entry = manifest[group][0]
+    if fault == "missing":
+        manifest[group] = []
+    elif fault in ("extra", "duplicate"):
+        manifest[group].append(dict(entry, id="extra" if fault == "extra" else entry["id"]))
+    elif fault in ("skipped", "failed"):
+        entry["outcome"] = fault
+    else:
+        entry[fault] = {} if fault == "counts" else []
+    path.write_text(json.dumps(manifest))
+    result = gate.check_example(VERSION, repo, repo / "candidate.whl")
+    assert not result.ok
+    assert all(
+        str(path) in problem and group in problem and "expected" in problem
+        for problem in result.problems
+    )
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("wheel_sha256", "0" * 64),
+        ("demo_commit", "f" * 40),
+        ("started_at", "2025-01-01T00:00:00Z"),
+        ("ended_at", "invalid"),
+        ("started_at", "2026-01-02T00:00:00"),
+    ],
+)
+def test_example_identity_and_freshness_fail_closed(repo, field, value):
+    path = setup_example(repo)
+    manifest = json.loads(path.read_text())
+    manifest[field] = value
+    path.write_text(json.dumps(manifest))
+    result = gate.check_example(VERSION, repo, repo / "candidate.whl")
+    assert not result.ok
+    assert any(
+        str(path) in problem and field in problem and "expected" in problem
+        for problem in result.problems
+    )
+
+
+@pytest.mark.parametrize("group", ["checks", "scenarios"])
+def test_empty_example_inventory_blocks_release(repo, group):
+    pin = repo / "release/example.toml"
+    pin.write_text(
+        pin.read_text().replace(
+            f'{group} = ["fixture-{"check" if group == "checks" else "scenario"}"]', f"{group} = []"
+        )
+    )
+    result = gate.check_example(VERSION, repo, repo / "candidate.whl")
+    assert any(str(pin) in problem and group in problem for problem in result.problems)
+
+
+def test_example_requires_release_wheel(repo):
+    result = gate.check_example(VERSION, repo, None)
+    assert any("--wheel" in problem for problem in result.problems)
+
+
+@pytest.mark.parametrize("document", ["pin", "manifest"])
+@pytest.mark.parametrize("fault", ["missing", "malformed", "shape"])
+def test_example_document_errors_name_the_file(repo, document, fault):
+    path = (
+        repo / "release/example.toml"
+        if document == "pin"
+        else repo / "release/evidence" / VERSION / "example-support-insights.json"
+    )
+    if fault == "missing":
+        path.unlink()
+    elif fault == "malformed":
+        path.write_text("{invalid")
+    else:
+        path.write_text("commit = 12\nchecks = []\nscenarios = []\n" if document == "pin" else "[]")
+    result = gate.check_example(VERSION, repo, repo / "candidate.whl")
+    assert not result.ok
+    assert any(str(path) in problem and "expected" in problem for problem in result.problems)
+
+
+def test_bad_example_manifest_blocks_the_whole_gate(repo, capsys):
+    write_evidence(repo, "unit")
+    write_evidence(repo, "package")
+    path = repo / "release/evidence" / VERSION / "example-support-insights.json"
+    manifest = json.loads(path.read_text())
+    manifest["scenarios"][0]["outcome"] = "skipped"
+    path.write_text(json.dumps(manifest))
+    commit_all(repo, "record incomplete demo")
+    assert gate.main(["--repo", str(repo), "--wheel", str(repo / "candidate.whl")]) == 1
+    assert "scenarios['fixture-scenario'].outcome" in capsys.readouterr().out

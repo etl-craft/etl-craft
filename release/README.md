@@ -175,3 +175,39 @@ of both exact-version tags before announcing them.
 The release build enforces uncompressed image limits of 280 MB for core and 295 MB
 for UI. The current measured images are 262.4 MB and 278.0 MB. These limits include
 about five percent headroom, rounded up to the next 5 MB.
+
+## Support Insights evidence
+
+The package gate reads `release/example.toml` locally; it never checks out, installs or
+runs the external demo. `repository` identifies the public repository, `commit` pins one
+lowercase 40-hex demo commit, and `checks` and `scenarios` list the exact S8.F and S8.H
+IDs. Both lists must be nonempty and duplicate-free to release, including 0.9.0 candidates.
+They are initially empty: S8.F and S8.H add each ID alongside its producing check.
+
+S8.E's manual/pre-release workflow produces the JSON manifest. The release PR copies it to
+`release/evidence/<version>/example-support-insights.json`; feature PRs use fixtures only.
+The manifest is a JSON object with these fields:
+
+- `demo_commit`: the pinned lowercase 40-hex commit.
+- `wheel_sha256`: the candidate wheel's lowercase SHA-256.
+- `started_at`, `ended_at`: ISO 8601 UTC timestamps, with `Z` or `+00:00`.
+- `checks`, `scenarios`: arrays of objects, each containing `id`, `outcome`, `counts`,
+  and `evidence`. Each expected ID appears exactly once, with no extra IDs.
+  `outcome` must be `passed`; failed, skipped or unknown outcomes refuse release.
+  `counts` is a nonempty object of named, nonnegative integer measurements (for example,
+  rows reconciled). `evidence` is a nonempty array of absolute HTTPS links to uploaded
+  logs, reconciliation results, screenshots or catalog artifacts.
+
+Pass the actual release wheel to the gate:
+
+```bash
+python scripts/release_gate.py --wheel /path/to/etl_craft-<version>-py3-none-any.whl
+```
+
+The wheel's filesystem modification time is its build time for this contract. Preserve it
+when transferring the candidate (for example, archive it with its mtime before uploading).
+A download's new mtime is not a build timestamp. The gate requires wheel mtime <= manifest
+start <= manifest end <= current UTC time. Missing wheel, malformed data, missing evidence,
+empty inventories, identity mismatches and incomplete results all refuse release. Rebuilds
+require a new demo run against the new candidate. The gate validates links, not their remote
+contents; release reviewers must retain and review those artifacts.

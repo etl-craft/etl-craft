@@ -199,7 +199,7 @@ item's text, or work done early under another item.
 | S7.U Personal-data erasure | Done | #309 | Standing table/column erasure follows pinned lineage, with private keys and recoverable ERASURE tasks |
 | S7.V Empty replacements | Done | #275 | ALLOW_EMPTY can refuse an empty CREATE_TABLE or OVERWRITE_TABLE before changing its target |
 | S7.W Docs toolchain after MkDocs 1.x | Planned | | Evaluate Zensical against the API pages, navigation and published versions; migrate only when every requirement works |
-| S7.O Package and demo repositories | In progress | #317 | Slices 1–2: small package demo and public Support Insights seed; slice 3 evidence validation remains |
+| S7.O Package and demo repositories | Done | #317, #318 | Small package demo, public demo seed and pinned candidate evidence validation |
 | S7.P Obvious failures do not stop 1.0.0 | In progress | #173, #178 | Audit done (#173); the log-folder and port checks close their catalog rows (#178); item 4 keeps the catalog current |
 | S7.Q A generic ANSI SQL warehouse | Moved after 0.9.0 | | A `generic` dialect over SQLAlchemy for rare databases: ANSI SQL only, NULL-safe column comparison for merges, refusals for anything without an ANSI form |
 | S7.R Complete the test suite | In progress | #228 | Slice 1: recursive secret masking, merge crash windows and full-column/catalog upgrade guards; six-skill coverage audit remains after S7.A |
@@ -411,6 +411,10 @@ does not move worker work ahead of the metadata, account or operator-control cor
     implementing pull requests update `AGENTS.md`'s design rules to match.
 
 **Acceptance availability.**
+
+S7.O slice 3 passed unit tests, fixture manifest refusal/acceptance checks, static checks
+and strict docs without accessing or running the external demo. S8.E produces real manifests;
+S8.F/S8.H must fill both empty inventories before release.
 
 S7.O slices 1–2 passed unit and affected Engine DB, seed, lineage, alert, catalog and
 Iceberg-isolation checks locally. The reduced installed-wheel fixture, Quick Start as
@@ -956,6 +960,10 @@ passed on Snowflake (two cases) and Databricks (one case); the first Databricks 
 empty-history-page handling defect, which was corrected and verified. No cloud was unavailable.
 
 **Choices that differ from the item text.**
+
+- S7.O slice 3 uses the candidate wheel filesystem mtime as build time, preserved during
+  transfer, and requires `--wheel` for release validation. Both expected inventories start
+  empty and block all releases until S8 supplies real IDs; no IDs are invented here.
 
 - **S7.O slices 1–2 (owner, 2026-11-03).** One combined PR replaces the two
   planned slice branches. Support Insights is the new public repository
