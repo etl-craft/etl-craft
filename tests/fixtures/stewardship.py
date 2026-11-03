@@ -79,17 +79,23 @@ def run(task):
             )
             rows = UploadReader(upload, "CSV").rows(schema={"LOCKED": bool})
             header = next(rows)
-            for row in rows:
-                values = dict(zip(header, row))
+            records = [dict(zip(header, row)) for row in rows]
+            for start in range(0, len(records), 128):
+                batch = records[start:start + 128]
+                params = {"upload": upload.upload_id, "account": upload.account}
+                groups = []
+                for i, values in enumerate(batch):
+                    params.update({
+                        f"id{i}": int(values["id"]),
+                        f"name{i}": values["name"],
+                        f"locked{i}": values.get("LOCKED"),
+                    })
+                    groups.append(f"(:id{i},:name{i},:locked{i},:upload,:account,:account)")
                 conn.execute(text(
                     "INSERT INTO SOURCE_TABLE (id,name,LOCKED,UPLOAD_ID,CREATED_BY,UPDATED_BY) "
-                    "VALUES (:id,:name,:locked,:upload,:account,:account)"
-                ), {
-                    "id": int(values["id"]), "name": values["name"],
-                    "locked": values.get("LOCKED"),
-                    "upload": upload.upload_id, "account": upload.account,
-                })
-                written += 1
+                    "VALUES " + ",".join(groups)
+                ), params)
+                written += len(batch)
     return ScriptResult(row_count=written)
 """.replace("SOURCE_TABLE", source)
     (root / "python_scripts/load.py").write_text(loader)
