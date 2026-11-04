@@ -451,9 +451,14 @@ class ReconcileInput(Request):
 
     pipeline_code: str | None = None
     task_code: str | None = None
+    attest_ended: bool = False
+    reason: str | None = None
 
     def __post_init__(self) -> None:
         """Refuse a task without the pipeline it belongs to."""
+        if self.attest_ended:
+            require_text("reason", self.reason)
+        optional_text("reason", self.reason)
         optional_text("pipeline_code", self.pipeline_code)
         optional_text("task_code", self.task_code)
         if self.task_code and self.pipeline_code is None:

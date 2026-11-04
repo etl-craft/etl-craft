@@ -86,6 +86,7 @@ from etl_craft.services.operations.action_types import Action as Action
 from etl_craft.services.operations.agent_uploads import attempt_request
 from etl_craft.services.operations.context import OperationContext
 from etl_craft.services.operations.erasure_actions import ERASURE_ACTIONS
+from etl_craft.services.operations.permissions import has_role as has_role
 from etl_craft.services.operations.permissions import (
     pipeline_access,
     project_not_found,
@@ -446,15 +447,6 @@ ACTIONS: dict[ActionName, Action] = {row.name: row for row in _ROWS}
 """Every action, by name."""
 
 
-def has_role(role: ApiRole | None, required: ApiRole | None) -> bool:
-    """Whether ``role`` meets ``required``; an unproven role meets only no requirement."""
-    if ApiRole.AGENT in {role, required}:
-        return role == required
-    return required is None or (
-        role is not None and tuple(ApiRole).index(role) >= tuple(ApiRole).index(required)
-    )
-
-
 @contextmanager
 def admitted(ctx: OperationContext, name: ActionName, request: object) -> Iterator[None]:
     """Check the role and record the request once, then run the action's work inside.
@@ -517,6 +509,8 @@ def _authorize_pipeline(
 ) -> bool:
     """Apply pipeline grants without granting deployment-wide privileges."""
     if action.scope == ActionScope.PIPELINE and required is not None:
+        if isinstance(request, ReconcileInput) and request.attest_ended:
+            return False
         if action.name == ActionName.LINEAGE_REFRESH:
             _require_role(ctx, action, required)
             required = ApiRole.VIEWER
@@ -652,6 +646,7 @@ def project_settings(ctx: OperationContext, name: ActionName, request: object) -
         ActionName.LINEAGE_REFRESH,
         ActionName.CATALOG_GAPS,
         ActionName.REHASH,
+        ActionName.RECONCILE,
         ActionName.REHASH_PLAN,
         ActionName.UPGRADE_TARGETS,
         ActionName.CLONE,

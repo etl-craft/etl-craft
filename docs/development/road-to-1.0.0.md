@@ -205,7 +205,7 @@ item's text, or work done early under another item.
 | S7.R Complete the test suite | In progress | #228 | Slice 1: recursive secret masking, merge crash windows and full-column/catalog upgrade guards; six-skill coverage audit remains after S7.A |
 | S7.N Faster complete pull-request CI | Done | #170 | Fail-closed collection/shard accounting, isolated schema templates and shared demo workers; complete checks in 6m33s-8m15s (owner-approved ten-minute target) |
 | S8.A The project layout | In progress | #319, #320 | Small-agent Python slots, compiled role images and singleton rollout; demo acceptance in progress |
-| S8.B Pipelines | In progress | #322, #324 | Package rule scopes, atomic landing, item offsets, stewardship and seeds; demo waits for S7.E task secrets and live acceptance |
+| S8.B Pipelines | In progress | #322, #324, #325 | Package contracts and ending evidence; demo ships sources through ODS, DM, then stewardship/maintenance in separate slices |
 | S8.C Configuration through CI | Planned | | Secretless local DuckDB validation and developer-token deployment of one pinned project commit |
 | S8.D Views | Planned | | Fact and data-metrics views reconciled with independent reference queries |
 | S8.E The CI pipelines | Planned | | Validate, deploy and manual/pre-release full-stack workflows |
@@ -960,6 +960,22 @@ passed on Snowflake (two cases) and Databricks (one case); the first Databricks 
 empty-history-page handling defect, which was corrected and verified. No cloud was unavailable.
 
 **Choices that differ from the item text.**
+
+- **S8.B slicing (owner).** Finish package ending evidence and attested reconciliation on
+  `fix/s8b-defects-3` first and reconcile the live blocked attempt through its merged path.
+  Then merge three independent demo slices in order: (1) SI_SETUP, seeds, SI_REFERENCE,
+  Alpha/Beta/Gamma through ODS, independent expected rows and measured Beta memory;
+  (2) SI_DM and watermark checks; (3) SI_STEWARD_* and SI_MAINTENANCE. Each slice validates
+  and merges before the next; further defects stay on that slice's package branch.
+- **S8.B ending evidence (owner).** `reconcile --attest-ended --reason` distinguishes an
+  operator's process attestation from verified query absence. The API records all observed
+  terminal outcomes, claims retain instance identities, and attempt UI/JSON show the kind,
+  actor and reason. Legacy evidence is not silently classified or backfilled.
+  Acceptance: unit, agent/API/browser, both Engine DB upgrades/guards/query plans, and
+  bounded watermark checks on all four local warehouses passed. Agent ending and recovery
+  cases passed twenty local repetitions; the final ordering change passed twenty more
+  recovery repetitions. Local Semgrep found no issue. Generated warehouse SQL is unchanged,
+  so cloud suites do not apply.
 
 - **S7.E task-secret slice (owner).** SECRETS and task.secret use ENVIRONMENT/FILE;
   fenced claim delivery uses TLS and a private stdin pipe, with redaction before child log
@@ -9479,6 +9495,7 @@ remedy; downstream tasks report "blocked by failure"; nothing is half-written.
 | sends a value the warehouse type cannot hold (numeric overflow, out-of-range date) | fail, naming the column, the value and the declared type | target unchanged |
 | sends an empty batch where `ALLOW_EMPTY` is false | refuse before replacing the target | the previous target rows remain |
 | fails a TABLE business rule of type `REJECT` (for example a row count far below the norm) | fail the rule's task with the rule, the observed value and its detail | Insights shows the observed value and the failed run |
+| agent ending report ↔ watermark fence | preserve verified exit/query evidence for every terminal outcome; an old uncertain process needs explicit checked operator attestation | `test_every_observed_agent_ending_records_only_verified_evidence`, `test_agent_terminal_exit_records_real_evidence`, `test_attested_legacy_ending_advances_the_window_and_names_operator`, and refusal/role tests in `test_ending_evidence.py` |
 | multi-project Engine DB ↔ agent writes | derive every write's project from its authenticated owned attempt; refuse another token's attempt | `test_agent_operation_publishes_and_reads_only_its_project` on both Engine DBs; `test_other_project_token_cannot_publish_an_owned_attempt`; PostgreSQL `test_project_two_agent_setup_and_merge_keep_contracts_isolated` |
 | becomes unreachable or refuses credentials (Kafka broker, MongoDB, MinIO) | retry by its `RETRY_ON` policy, then fail naming the source and the last error | attempts and their failure classes in the audit; the alert sent once |
 | is slow enough to pass the SLA | mark the run's SLA `BREACHED` at the deadline while it keeps running | `SLA_BREACHED_AT` set; the run log and Insights show the breach |

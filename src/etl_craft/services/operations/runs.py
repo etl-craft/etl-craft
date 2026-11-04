@@ -35,13 +35,27 @@ def reconcile_runs(ctx: OperationContext, request: ReconcileInput) -> Reconcilia
         )
     report = reconcile(ctx.engine, pipeline_id=pipeline_id, task_id=task_id)
     from etl_craft.execution import control_flow
+    from etl_craft.execution.ending_recovery import recover_endings
 
+    recovered = recover_endings(
+        ctx.engine,
+        ctx.config,
+        (pipeline_id, task_id),
+        attest_ended=request.attest_ended,
+        reason=request.reason or "operator requested verified ending reconciliation",
+    )
     control_flow.reconcile_endings(
-        ctx.engine, ctx.config, tuple(report.lost), pipeline_id=pipeline_id, task_id=task_id
+        ctx.engine,
+        ctx.config,
+        tuple(report.lost),
+        pipeline_id=pipeline_id,
+        task_id=task_id,
+        reason=request.reason or "operator requested verified ending reconciliation",
     )
     message = (
         f"reconcile: {len(report.lost)} attempt(s) LOST; "
-        f"{len(report.released)} run lease(s) released"
+        f"{len(report.released)} run lease(s) released; "
+        f"{len(recovered)} ending evidence record(s) recovered"
     )
     return ReconciliationView(tuple(report.lost), tuple(report.released), message)
 

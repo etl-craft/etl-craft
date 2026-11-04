@@ -20,6 +20,8 @@ SELECT
     a.DUPLICATE_COUNT AS duplicate_count,
     a.ERROR_MESSAGE AS error_message,
     a.EXIT_CODE AS exit_code,
+    a.PID AS pid,
+    a.PROCESS_START AS process_start,
     a.TASK_LOG AS task_log
 FROM AUD_TASK_ATTEMPTS a
 JOIN AUD_TASK_RUN_LOG t ON t.TASK_RUN_ID = a.TASK_RUN_ID

@@ -252,3 +252,40 @@ the creating attempt must be terminal or reconciled LOST. The host returns match
 ids for that request and a page cursor, never HMACs or unrelated keys.
 The agent scans only non-NULL protection rows, restarts an interrupted scan, and finalizes
 only after complete evidence. Stamped writes use the existing request-id recovery path.
+
+## Ending evidence and operator attestation
+
+The parent agent records an observed process exit with the task's admitted PID and birth
+identity, separately from confirmed warehouse query absence. This applies to SUCCESS,
+FAILED, TIMED_OUT and CANCELLED outcomes. A task-process credential cannot certify its own
+exit. Local supervisors use the same evidence rules. Attempt JSON and the attempt page show
+process/query evidence kind, actor and reason; migrated old observations remain unclassified.
+
+Agent registration records `ETL_CRAFT_AGENT_INSTANCE_ID` (the pod UID in Kubernetes through
+the downward API); a native host process uses its birth and a fresh process instance identity.
+Each claim retains the registration identity, so replacing a pod cannot impersonate its exit.
+Roll controller, API and agents together after migration 0085.
+
+A terminal attempt without ending evidence, including SUCCESS, holds a timestamp reader's
+high mark until its ending is known.
+Use `reconcile --pipeline-code P --task-code T --reason 'Verified recovery'` first. It verifies
+local PID/birth exit and warehouse query absence where possible. If the original pod is gone,
+an operator may explicitly attest only its process ending:
+
+```sh
+etl-craft reconcile --pipeline-code P --task-code T --attest-ended \
+  --reason 'Original pod <name> was deleted; I attest that its task process ended'
+```
+
+The lease must be expired and the attempt terminal/fenced. The warehouse must independently
+confirm that no query with its session tag remains. The original instance must not have a
+live registration. Legacy claims without an instance column use their recorded hostname and
+a later replacement registration; an ambiguous identity is refused. No privileged node or
+process-namespace inspection is used. A missing adapter, live query or original instance
+refuses the request with a remedy. Stop the original process/queries or restore warehouse
+access, then retry; never advance the watermark or edit audit rows to bypass the fence.
+
+Attestation requires the operator role used by reconcile; CAN_RUN alone is insufficient.
+The reason is mandatory. Its process row records ATTESTED, actor, reason and the checks that
+were verified, while its independently verified query row records VERIFIED. Either explicit
+evidence kind releases the same watermark fence. No migration guesses missing evidence.

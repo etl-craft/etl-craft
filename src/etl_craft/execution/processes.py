@@ -75,6 +75,8 @@ class ChildResult:
     output_tail: str
     cancelled: bool = False
     queries_ended: bool = False
+    pid: int | None = None
+    process_start: str | None = None
 
     @property
     def succeeded(self) -> bool:
@@ -141,6 +143,8 @@ def run_child(
         elapsed_seconds=elapsed,
         output_tail=tail,
         cancelled=cancelled,
+        pid=process.pid,
+        process_start=birth,
     )
     logger.debug("pid %s %s after %.1fs", process.pid, result.describe(), elapsed)
     return result

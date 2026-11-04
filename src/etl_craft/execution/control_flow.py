@@ -147,7 +147,6 @@ def after_exit(
     advance(engine, run_id, observed=True, reason=reason, config=config)
 
 
-@acting_as(SYSTEM_ACTOR)
 def reconcile_endings(
     engine: Engine,
     config: ConnectorConfig,
@@ -155,6 +154,7 @@ def reconcile_endings(
     *,
     pipeline_id: int | None = None,
     task_id: int | None = None,
+    reason: str = "reconciliation verified process exit",
 ) -> None:
     """Record physical endings after reconciliation, retaining unknown server query status."""
     with engine.begin() as conn:
@@ -171,7 +171,10 @@ def reconcile_endings(
         for attempt in controls.affected(conn, tuple(pending)):
             if attempt.status not in ACTIVE_ATTEMPTS and process_ended(attempt):
                 controls.observe_exit(
-                    conn, attempt.attempt_id, queries_ended=process_local_queries(config)
+                    conn,
+                    attempt.attempt_id,
+                    queries_ended=process_local_queries(config),
+                    reason=reason,
                 )
     advance(engine, observed=True, config=config)
 

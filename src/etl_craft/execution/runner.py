@@ -685,7 +685,7 @@ def _start_and_record(
         )
     query_error = None
     queries_ended = control_flow.process_local_queries(config)
-    if result.cancelled or result.timed_out or result.returncode < 0:
+    if not queries_ended or result.cancelled or result.timed_out or result.returncode < 0:
         from etl_craft.core.ownership import attempt_holder
         from etl_craft.engine.resource_locks import holder_tag
         from etl_craft.execution.query_cancellation import confirm

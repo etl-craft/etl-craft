@@ -123,6 +123,7 @@ EXPECTED = {
     enums.LineageDirection: {"BOTH", "UPSTREAM", "DOWNSTREAM"},
     enums.ResumeChoice: {"run-now", "catch-up", "wait"},
     enums.ControlStatus: {"REQUESTED", "ACKNOWLEDGED", "COMPLETED"},
+    enums.EndingEvidenceKind: {"VERIFIED", "ATTESTED"},
     enums.ControlAcknowledgement: {"PROCESS", "QUERIES"},
     enums.TriggerKind: {
         "SCHEDULE",

@@ -164,3 +164,13 @@ def test_unknown_databricks_query_state_cannot_acknowledge_cancellation(monkeypa
 def test_databricks_explicit_empty_final_page_confirms_no_running_queries(monkeypatch):
     monkeypatch.setattr(queries, "request", Mock(return_value={"has_next_page": False}))
     assert queries.active(Mock(), TAG) == []
+
+
+def test_attestation_without_query_adapter_refuses_before_connecting(monkeypatch):
+    dialect = SimpleNamespace(session_fencing=False, spec=SimpleNamespace(display_name="fixture"))
+    monkeypatch.setattr(fencing, "warehouse_dialect", lambda _: dialect)
+    connect = Mock()
+    monkeypatch.setattr(fencing, "build_warehouse_engine", connect)
+    with pytest.raises(LockTimeoutError, match=r"cannot verify tagged query absence.*adapter"):
+        fencing.require_absent(SimpleNamespace(), TAG)
+    connect.assert_not_called()

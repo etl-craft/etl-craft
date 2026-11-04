@@ -11,6 +11,8 @@ from dataclasses import replace
 from datetime import UTC, datetime
 from typing import TypeVar
 
+from sqlalchemy.engine import Row
+
 from etl_craft.config.targets import active_catalog
 from etl_craft.core.actor import acting_as
 from etl_craft.core.counts import NO_COUNTS
@@ -19,6 +21,7 @@ from etl_craft.core.enums import (
     ActionOutcome,
     AgentReport,
     AttemptStatus,
+    ControlAcknowledgement,
     Handler,
     YesNo,
 )
@@ -375,6 +378,7 @@ def _commit_end(ctx: OperationContext, request: AgentTask) -> AgentReply:
                 "keep the original ending"
             )
         fence(conn, request.attempt_id, owner)
+        observed = _ending_identity(row, request) and ctx.credential_attempt_id is None
         if request.failure is not None:
             transitions.record_attempt_failure(conn, request.attempt_id, request.failure)
         if status == AttemptStatus.CANCELLED and request.queries_ended:
@@ -400,7 +404,7 @@ def _commit_end(ctx: OperationContext, request: AgentTask) -> AgentReply:
             offset=request.offset,
         )
         log_storage.ensure_source(conn, request.attempt_id)
-        if status == AttemptStatus.CANCELLED:
+        if observed:
             controls.observe_exit(conn, request.attempt_id, queries_ended=request.queries_ended)
         ActionRequest(
             ActionName.AGENT_REPORT,
@@ -416,6 +420,21 @@ def _commit_end(ctx: OperationContext, request: AgentTask) -> AgentReply:
             exit_code=request.exit_code,
         ).write(conn)
     return AgentReply()
+
+
+def _ending_identity(row: Row[tuple[object, ...]] | None, request: AgentTask) -> bool:
+    """Admit only an observation of the recorded task's PID and birth identity."""
+    supplied = request.pid is not None or request.process_start is not None
+    matches = (
+        row is not None and request.pid == row.pid and request.process_start == row.process_start
+    )
+    if supplied and not matches:
+        raise PermissionDeniedError(
+            f"attempt {request.attempt_id}: ending process identity differs from its "
+            "recorded PID/birth; expected the admitted task process; report only the "
+            "process this supervisor started and observed"
+        )
+    return supplied and matches and request.pid is not None and request.process_start is not None
 
 
 def _cancel(ctx: OperationContext, request: AgentTask) -> AgentReply:
@@ -438,7 +457,16 @@ def _cancel(ctx: OperationContext, request: AgentTask) -> AgentReply:
             fence(conn, request.attempt_id, owner)
             if request.queries_ended:
                 attempt_cancellation.acknowledge_cancellation(conn, request.attempt_id, owner)
-        controls.observe_exit(conn, request.attempt_id, queries_ended=request.queries_ended)
+        if _ending_identity(row, request) and ctx.credential_attempt_id is None:
+            controls.observe_exit(conn, request.attempt_id, queries_ended=request.queries_ended)
+        elif request.queries_ended and ctx.credential_attempt_id is None:
+            controls.acknowledge(
+                conn,
+                request.attempt_id,
+                ControlAcknowledgement.QUERIES,
+                reason="agent confirmed tagged queries absent",
+                checks=("tagged_queries_absent",),
+            )
     from etl_craft.execution.control_flow import advance
 
     advance(

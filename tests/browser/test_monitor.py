@@ -327,3 +327,56 @@ def test_a_run_duration_tile_opens_its_run(run_site):
         page.wait_for_url(f"**/runs/{active}")
         expect(page.get_by_role("heading", level=1)).to_contain_text(f"Run {active}")
         browser.close()
+
+
+@pytest.mark.parametrize("theme,width", [("light", 1280), ("dark", 1280), ("light", 390)])
+def test_attempt_evidence_is_readable_and_escaped(run_site, theme, width, tmp_path):
+    from datetime import UTC, datetime, timedelta
+
+    from etl_craft.core.enums import AttemptStatus, EndingEvidenceKind
+    from etl_craft.engine import controls, transitions
+
+    ctx, url, active = run_site
+    with acting_as(Actor("owner", ActorKind.USER)), ctx.engine.begin() as conn:
+        task = conn.execute(
+            text(
+                "SELECT t.TASK_ID AS task_id FROM CFG_TASKS t "
+                "JOIN CFG_PIPELINES p ON p.PIPELINE_ID=t.PIPELINE_ID "
+                "WHERE p.PIPELINE_CODE='OPS' AND t.TASK_CODE='EXTRACT'"
+            )
+        ).scalar_one()
+        summary = transitions.find_or_create_task_run(conn, task, active).task_run_id
+        attempt = transitions.queue_attempt(conn, summary, ctx.actor)
+        transitions.claim_attempt(
+            conn,
+            attempt,
+            ctx.actor,
+            owner="browser",
+            lease_expires_at=datetime.now(UTC) + timedelta(seconds=60),
+        )
+        transitions.start_attempt(
+            conn, attempt, ctx.actor, owner="browser", pid=123, process_start="birth"
+        )
+        transitions.finish_attempt(conn, attempt, AttemptStatus.FAILED, ctx.actor, owner="browser")
+        controls.observe_exit(
+            conn,
+            attempt,
+            queries_ended=True,
+            evidence=EndingEvidenceKind.ATTESTED,
+            reason="Deleted pod <script>window.badEvidence=true</script> " + "x" * 320,
+            checks=("lease_expired", "tagged_queries_absent"),
+        )
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch()
+        page = browser.new_context(
+            ignore_https_errors=True, color_scheme=theme, viewport={"width": width, "height": 900}
+        ).new_page()
+        sign_in_to(
+            page, url, f"/ui/projects/default/pipelines/OPS/runs/{active}/attempts/{attempt}"
+        )
+        expect(page.get_by_text("ATTESTED", exact=False)).to_be_visible()
+        expect(page.get_by_text("VERIFIED", exact=False)).to_be_visible()
+        assert page.evaluate("window.badEvidence") is None
+        assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
+        page.screenshot(path=str(tmp_path / f"evidence-{theme}-{width}.png"), full_page=True)
+        browser.close()

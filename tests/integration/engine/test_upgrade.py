@@ -262,3 +262,39 @@ def test_browser_account_migration_retains_real_users_and_sessions(
     assert after.failed == 0 and after.locked is None and after.must_change == "N"
     assert json.loads(after.settings) == {}
     assert tokens.authenticate(ctx, session.token).name == "alice"
+
+
+def test_ending_evidence_upgrade_keeps_existing_observations_unclassified(empty_engine_db):
+    from etl_craft.core.actor import SYSTEM_ACTOR
+    from etl_craft.engine import migrations, transitions
+    from fixtures.metadata import add_pipeline, add_task, start_run
+
+    db = empty_engine_db
+    install(db, "0.3.0")
+    for file in migrations.migration_streams(db.engine)[0].files:
+        if "0019" <= file.version < "0085":
+            migrations._apply(db.engine, file)
+    with db.engine.begin() as conn:
+        pipeline = add_pipeline(conn, "EVIDENCE_UPGRADE")
+        task = add_task(conn, pipeline, "load")
+        run = start_run(conn, pipeline)
+        summary = transitions.find_or_create_task_run(conn, task, run).task_run_id
+        attempt = transitions.queue_attempt(conn, summary, SYSTEM_ACTOR)
+        observed = datetime.now(UTC)
+        conn.execute(
+            text(
+                "INSERT INTO AUD_ATTEMPT_ACKNOWLEDGEMENTS "
+                "(ATTEMPT_ID,KIND,OBSERVED_AT) VALUES (:id,'PROCESS',:observed)"
+            ),
+            {"id": attempt, "observed": observed},
+        )
+    apply_pending_migrations(db.engine)
+    with db.engine.connect() as conn:
+        row = conn.execute(
+            text(
+                "SELECT EVIDENCE_KIND AS evidence_kind,ACTOR AS actor,REASON AS reason "
+                "FROM AUD_ATTEMPT_ACKNOWLEDGEMENTS WHERE ATTEMPT_ID=:id"
+            ),
+            {"id": attempt},
+        ).one()
+    assert row.evidence_kind is None and row.actor is None and row.reason is None

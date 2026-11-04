@@ -563,6 +563,13 @@ class YesNo(StrEnum):
         return cls.YES if value else cls.NO
 
 
+class EndingEvidenceKind(StrEnum):
+    """Whether an ending was verified or explicitly attested by an operator."""
+
+    VERIFIED = "VERIFIED"
+    ATTESTED = "ATTESTED"
+
+
 class ControlAcknowledgement(StrEnum):
     """Independent, append-only physical observations from an owning agent."""
 
