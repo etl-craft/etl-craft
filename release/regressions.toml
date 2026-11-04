@@ -292,6 +292,7 @@ agent-project-attribution = [
 ]
 
 agent-ending-watermark-fence = [
+    "tests/integration/engine/test_upgrade.py::test_ending_evidence_upgrade_keeps_existing_observations_unclassified",
     "tests/integration/engine/test_ending_evidence.py::test_verified_local_exit_needs_no_attestation_or_lease_wait",
     "tests/integration/execution/test_scoped_controls.py::test_reconcile_observes_exited_terminal_worker_without_rewriting_its_outcome",
     "tests/integration/api/test_agent_api.py::test_every_observed_agent_ending_records_only_verified_evidence",

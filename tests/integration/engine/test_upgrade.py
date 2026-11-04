@@ -283,6 +283,19 @@ def test_ending_evidence_upgrade_keeps_existing_observations_unclassified(empty_
         observed = datetime.now(UTC)
         conn.execute(
             text(
+                "INSERT INTO AUD_TASK_ATTEMPTS (TASK_RUN_ID, ATTEMPT_NUMBER, STATUS, "
+                "QUEUED_AT, STARTED_AT, ENDED_AT, REQUESTED_BY, REQUESTED_BY_KIND) "
+                "VALUES (:summary,2,'SUCCESS',:observed,:observed,:observed,:actor,:kind)"
+            ),
+            {
+                "summary": summary,
+                "observed": observed,
+                "actor": SYSTEM_ACTOR.name,
+                "kind": SYSTEM_ACTOR.kind,
+            },
+        )
+        conn.execute(
+            text(
                 "INSERT INTO AUD_ATTEMPT_ACKNOWLEDGEMENTS "
                 "(ATTEMPT_ID,KIND,OBSERVED_AT) VALUES (:id,'PROCESS',:observed)"
             ),
@@ -298,3 +311,20 @@ def test_ending_evidence_upgrade_keeps_existing_observations_unclassified(empty_
             {"id": attempt},
         ).one()
     assert row.evidence_kind is None and row.actor is None and row.reason is None
+
+    from etl_craft.core.enums import ActionName, ApiRole
+    from etl_craft.services.operations import OperationContext
+    from fixtures.actions import act
+
+    ctx = OperationContext(db.engine, db.config, SYSTEM_ACTOR, role=ApiRole.ADMIN)
+    result = act(ctx, ActionName.RECONCILE, pipeline_code="EVIDENCE_UPGRADE")
+    assert "0 ending evidence" in result.message
+    with db.engine.connect() as conn:
+        legacy = conn.execute(
+            text(
+                "SELECT STATUS AS status, OWNER_ID AS owner, LEASE_EXPIRES_AT AS expiry "
+                "FROM AUD_TASK_ATTEMPTS WHERE TASK_RUN_ID=:summary AND ATTEMPT_NUMBER=2"
+            ),
+            {"summary": summary},
+        ).one()
+    assert legacy.status == "SUCCESS" and legacy.owner is None and legacy.expiry is None

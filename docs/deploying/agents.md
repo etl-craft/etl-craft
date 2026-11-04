@@ -266,8 +266,8 @@ the downward API); a native host process uses its birth and a fresh process inst
 Each claim retains the registration identity, so replacing a pod cannot impersonate its exit.
 Roll controller, API and agents together after migration 0085.
 
-A terminal attempt without ending evidence, including SUCCESS, holds a timestamp reader's
-high mark until its ending is known.
+An old failed, timed-out, cancelled or lost attempt without ending evidence can hold a
+timestamp reader's high mark. Successful commits retain their existing window semantics.
 Use `reconcile --pipeline-code P --task-code T --reason 'Verified recovery'` first. It verifies
 local PID/birth exit and warehouse query absence where possible. If the original pod is gone,
 an operator may explicitly attest only its process ending:

@@ -972,7 +972,8 @@ empty-history-page handling defect, which was corrected and verified. No cloud w
   terminal outcomes, claims retain instance identities, and attempt UI/JSON show the kind,
   actor and reason. Legacy evidence is not silently classified or backfilled. Verified
   local terminal exits retain their existing reconciliation before lease expiry; the
-  expiry gate remains mandatory for attestation.
+  expiry gate remains mandatory for attestation. Existing committed-success window
+  semantics are unchanged; historical unowned successes are not silently backfilled.
   Acceptance: unit, agent/API/browser, both Engine DB upgrades/guards/query plans, and
   bounded watermark checks on all four local warehouses passed. Agent ending and recovery
   cases passed twenty local repetitions; the final ordering change passed twenty more

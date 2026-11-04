@@ -2783,7 +2783,11 @@ def test_every_observed_agent_ending_records_only_verified_evidence(
                 ),
             )
         source_start = as_utc(started.json()["data"]["started_at"])
-        assert (window.high > source_start) if queries_ended else (window.high == source_start)
+        assert (
+            (window.high > source_start)
+            if queries_ended or status == "SUCCESS"
+            else (window.high == source_start)
+        )
 
 
 def test_agent_ending_refuses_a_foreign_process_identity(agent_scene):

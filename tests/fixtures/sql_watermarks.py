@@ -171,7 +171,7 @@ def check_bounded_race(w, db):
     from sqlalchemy import text
 
     from etl_craft.core.enums import AttemptStatus
-    from etl_craft.engine import controls, resource_locks
+    from etl_craft.engine import resource_locks
     from etl_craft.handlers import sql
     from fixtures.metadata import add_pipeline, start_run
     from fixtures.races import paused_after
@@ -236,12 +236,6 @@ def check_bounded_race(w, db):
                     owner=task.owner,
                     counts=result,
                     offset=result.offset,
-                )
-                controls.observe_exit(
-                    conn,
-                    task.attempt_id,
-                    queries_ended=True,
-                    reason="test supervisor observed synchronous task completion",
                 )
             return result
 
