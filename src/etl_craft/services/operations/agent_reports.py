@@ -44,6 +44,7 @@ from etl_craft.engine.agent_state import fence
 from etl_craft.engine.audit import ActionRequest
 from etl_craft.engine.notifications import notification_hub
 from etl_craft.engine.queries import statement
+from etl_craft.engine.repository.pipelines import selected_project
 from etl_craft.engine.task_store import LocalTaskStore, TaskIdentity
 from etl_craft.execution.bundle_files import prepare_task
 from etl_craft.execution.context import build_task_context
@@ -192,7 +193,7 @@ async def _wait_lock(ctx: OperationContext, request: AgentTask) -> AgentReply:
         raise UsageError("lock_wait_seconds must be finite and between 0 and 30")
     deadline = time.monotonic() + limit
     hub = notification_hub(ctx.config, ctx.engine)
-    with acting_as(ctx.actor):
+    with acting_as(ctx.actor), selected_project(ctx.project_id):
         while True:
             generation = hub.generation
             task = await asyncio.to_thread(_context, ctx, request)

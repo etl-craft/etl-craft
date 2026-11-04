@@ -45,6 +45,14 @@ Warehouses are optional extras. Core bundles none. `all` is core plus the UI, fo
 
 ### Fixed
 
+- Agent report and log operations resolve their project from the authenticated attempt before
+  reading or publishing target contracts, registrations, checks, item state and offsets.
+  Rehash considers only the selected project's merge tasks.
+  Existing development Engine DBs may contain contracts attributed to the default project:
+  inspect affected targets and run `etl-craft --project PROJECT rehash --target TARGET` in
+  each intended project before resuming merges. Review the default project's contracts against
+  its own warehouse; no migration silently moves or deletes audit records.
+
 - Timestamp-window validation follows CTE lineage to physical source columns instead of
   treating CTE names as warehouse tables; coarse source timestamps remain refused.
 

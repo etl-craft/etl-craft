@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from typing import ClassVar
 
@@ -13,9 +13,10 @@ from sqlalchemy.engine import Connection, Row
 
 from etl_craft import __version__
 from etl_craft.core.agent_resources import AgentResources, capacity
-from etl_craft.core.enums import AgentStatus, DeploymentProfile, SlotKind
+from etl_craft.core.enums import AgentStatus, ApiRole, DeploymentProfile, SlotKind
 from etl_craft.core.errors import (
     ConfigurationError,
+    PermissionDeniedError,
     RunRefusedError,
     StaleTransitionError,
     UsageError,
@@ -30,10 +31,12 @@ from etl_craft.engine.queries import statement
 from etl_craft.services.operations.agent_capacity import available
 from etl_craft.services.operations.agent_models import (
     AgentControl,
+    AgentLog,
     AgentRegister,
     AgentRenew,
     AgentReply,
     AgentRequest,
+    AgentTask,
 )
 from etl_craft.services.operations.context import OperationContext
 from etl_craft.services.operations.requests import NoInput
@@ -391,3 +394,18 @@ def list_agents(ctx: OperationContext, request: NoInput) -> AgentsView:
             )
         )
     return AgentsView(tuple(result), tuple(pools))
+
+
+def attempt_context(ctx: OperationContext, request: object) -> OperationContext:
+    """Bind every attempt operation to its authenticated owner's recorded project."""
+    if ctx.role != ApiRole.AGENT or not isinstance(request, (AgentTask, AgentLog)):
+        return ctx
+    attempt_id = request.attempt_id
+    with ctx.engine.connect() as conn:
+        work = conn.execute(statement(conn, "agent_work"), {"attempt_id": attempt_id}).one_or_none()
+    if work is None or work.owner_id != str(ctx.credential_token_id):
+        raise PermissionDeniedError(
+            f"attempt {attempt_id}: not owned by this agent token; expected its own "
+            "admitted project and attempt; use the credential issued for this attempt"
+        )
+    return replace(ctx, project_id=int(work.project_id), project=str(work.project_code))

@@ -199,6 +199,19 @@ The last registered pool is retained; earlier pools do not retain authority. Use
 pool-bound token per agent. Existing token expiry is preserved; `never` in token list means
 it needs an explicit rotation policy.
 
+## Project attribution
+
+The API derives a report or log operation's project from its recorded attempt and authenticated
+owner, before resolving any project-owned metadata. The agent's bootstrap project and a
+client-supplied project name cannot redirect an attempt's writes. The same scope is retained
+while asynchronous lock requests wait.
+
+If an existing development Engine DB has agent-created hash contracts under the default
+project instead of the intended project, inspect the affected targets and run
+`etl-craft --project PROJECT rehash --target TARGET` for each intended merge target before
+resuming. Review default-project contracts against that project's own warehouse. There is no
+automatic reassignment or deletion of historical contracts.
+
 ## Protection reports
 
 The internal `POST /api/v1/agent/report` protocol supports `PROTECTION_READ` and

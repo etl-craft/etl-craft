@@ -2569,3 +2569,140 @@ def test_task_secrets_are_not_resolved_for_refused_claims(agent_scene, monkeypat
     assert called == []
     if refusal == "http":
         assert "HTTPS" in response.text and "localhost" in response.text
+
+
+def test_project_two_agent_setup_and_merge_keep_contracts_isolated(agent_scene, monkeypatch):
+    from etl_craft.agent.task_store import RemoteTaskStore
+    from etl_craft.core.counts import Counts
+    from etl_craft.core.enums import AgentReport
+    from etl_craft.core.time import as_utc
+    from etl_craft.engine.repository.hash_versions import fetch_hash_version, save_hash_version
+    from etl_craft.engine.repository.pipelines import current_project_id, selected_project
+    from etl_craft.handlers import sql
+    from etl_craft.handlers.registry import TaskContext
+    from etl_craft.services.operations import agent_reports
+    from etl_craft.services.operations.agent_models import AgentReply
+    from etl_craft.services.operations.serialization import from_json
+    from etl_craft.warehouse.connection import build_warehouse_engine
+    from fixtures.actions import act
+
+    db, client, headers, _, _, config = agent_scene
+    admin = OperationContext(db.engine, config, SYSTEM_ACTOR, role=ApiRole.ADMIN)
+    act(admin, ActionName.PROJECT_ADD, project="second", reason="Agent isolation fixture")
+    with db.engine.begin() as conn:
+        project = conn.execute(
+            text("SELECT PROJECT_ID AS project_id FROM CFG_PROJECTS WHERE PROJECT_CODE='second'")
+        ).scalar_one()
+        with selected_project(project):
+            pipeline = add_pipeline(conn, "P", project_id=project)
+            setup = add_task(
+                conn,
+                pipeline,
+                "setup",
+                SQL_ACTION="SETUP_TABLE",
+                TARGET_OBJECT="main.people",
+                SETUP_FOR="SCD1_MERGE",
+                SELECT_QUERY="SELECT 1 AS id, 'Ann' AS name",
+            )
+            merge = add_task(
+                conn,
+                pipeline,
+                "merge",
+                SQL_ACTION="SCD1_MERGE",
+                TARGET_OBJECT="main.people",
+                MERGE_KEY="id",
+                MERGE_COMPARE_COLUMNS="name",
+                SELECT_QUERY="SELECT 1 AS id, 'Ann' AS name",
+            )
+            run = transitions.create_run(conn, pipeline, SYSTEM_ACTOR)
+        with selected_project(1):
+            save_hash_version(conn, "w.main.people", 1)
+    lock = agent_reports._lock
+
+    def scoped_lock(*args):
+        assert current_project_id() == project
+        return lock(*args)
+
+    monkeypatch.setattr(agent_reports, "_lock", scoped_lock)
+    denied_token = act(admin, ActionName.TOKEN_CREATE, name="ungranted", role=ApiRole.DEVELOPER)
+    refused = client.post(
+        "/api/v1/projects/second/rehash",
+        headers={"Authorization": "Bearer " + denied_token.token},
+        json={"target": "main.people"},
+    )
+    assert refused.status_code == 404, refused.text
+    assert "second" in refused.text
+    for task_id in (setup, merge):
+        with db.engine.begin() as conn:
+            task_run = transitions.find_or_create_task_run(conn, task_id, run).task_run_id
+            attempt = transitions.queue_attempt(conn, task_run, SYSTEM_ACTOR)
+        response = client.post(
+            "/api/v1/agent/claim",
+            headers=headers,
+            json={"version": __version__, "free_kinds": ["warehouse"]},
+        )
+        assert response.status_code == 200, response.text
+        claim = response.json()["data"]
+        assert claim["task"]["attempt_id"] == attempt
+        credential = {"Authorization": "Bearer " + claim["credential"]}
+
+        class Client:
+            def __init__(self, credential):
+                self.credential = credential
+
+            def call(self, action, request, timeout=None):
+                reply = client.post(
+                    "/api/v1/agent/report", headers=self.credential, json=encode(request)
+                )
+                assert reply.status_code == 200, reply.text
+                return AgentReply(reply.json()["data"])
+
+        store = RemoteTaskStore(Client(credential), attempt, lambda _: None, claim["holder_id"])
+        started = store.call(replace(store.request(AgentReport.START), pid=123))
+        context = from_json(TaskContext, claim["task"] | {"config": encode(config)})
+        context = replace(context, started_at=as_utc(started["started_at"]))
+        result = sql.run(context, store)
+        ended = client.post(
+            "/api/v1/agent/report",
+            headers=credential,
+            json=encode(
+                replace(
+                    store.request(AgentReport.END),
+                    status=AttemptStatus.SUCCESS,
+                    counts=Counts(**result.parameters()),
+                )
+            ),
+        )
+        assert ended.status_code == 200, ended.text
+    warehouse = build_warehouse_engine(config)
+    try:
+        with warehouse.connect() as conn:
+            row = conn.execute(
+                text("SELECT id AS id, name AS name, pipeline_id AS pipeline_id FROM main.people")
+            ).one()
+            assert row.id == 1 and row.name == "Ann" and row.pipeline_id == pipeline
+    finally:
+        warehouse.dispose()
+    with db.engine.connect() as conn:
+        with selected_project(project):
+            assert fetch_hash_version(conn, "w.main.people") == 2
+        with selected_project(1):
+            assert fetch_hash_version(conn, "w.main.people") == 1
+        rows = conn.execute(
+            text(
+                "SELECT PROJECT_ID AS project_id FROM AUD_TARGET_HASH_VERSION WHERE HASH_VERSION=2"
+            )
+        ).all()
+        assert rows and all(row.project_id == project for row in rows)
+        assert (
+            conn.execute(
+                text(
+                    "SELECT COUNT(*) AS n FROM AUD_TASK_RUN_LOG l "
+                    "JOIN CFG_TASKS t ON t.TASK_ID=l.TASK_ID "
+                    "JOIN CFG_PIPELINES p ON p.PIPELINE_ID=t.PIPELINE_ID "
+                    "WHERE l.PIPELINE_RUN_ID=:run AND p.PROJECT_ID<>:project"
+                ),
+                {"run": run, "project": project},
+            ).scalar_one()
+            == 0
+        )
