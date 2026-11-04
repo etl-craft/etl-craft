@@ -242,6 +242,8 @@ class ScriptTask:
     uploads: tuple[UploadFile, ...] = ()
     _locks: ResourceLocker | None = field(default=None, repr=False)
 
+    _secret_provider: str | None = field(default=None, repr=False, compare=False)
+    _secret_values: Mapping[str, str] = field(default_factory=dict, repr=False, compare=False)
     _items: ItemStore | None = field(default=None, repr=False, compare=False)
     _landing: Callable[[], LandingContract | None] | None = field(
         default=None, repr=False, compare=False
@@ -276,6 +278,19 @@ class ScriptTask:
             )
         except HandlerError as error:
             raise HandlerError(f"{self.pipeline_code}.{self.task_code}: {error}") from error
+
+    def secret(self, name: str) -> str:
+        """Read one admitted credential; values never fall back to process variables."""
+        from etl_craft.core.task_secrets import declared, read
+
+        label = f"{self.pipeline_code}.{self.task_code}"
+        return read(
+            self._secret_values,
+            declared(self.task_params, label),
+            label,
+            self._secret_provider or str(self.config.source.type),
+            name,
+        )
 
     def replace_landing(
         self, rows: Iterable[Mapping[str, object]], *, item_key: str | None = None

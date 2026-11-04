@@ -73,10 +73,10 @@ def agent_scene(engine_db, tmp_path, monkeypatch):
         )
 
 
-def queue(db, handler="SQL"):
+def queue(db, handler="SQL", **params):
     with db.engine.begin() as conn:
         pipeline = add_pipeline(conn, "P")
-        task = add_task(conn, pipeline, "T", handler)
+        task = add_task(conn, pipeline, "T", handler, **params)
         run = transitions.create_run(conn, pipeline, SYSTEM_ACTOR)
         summary = transitions.find_or_create_task_run(conn, task, run).task_run_id
         return transitions.queue_attempt(conn, summary, SYSTEM_ACTOR)
@@ -2509,3 +2509,63 @@ def test_pending_deletion_candidates_match_without_disclosing_fingerprints(
         protection_candidates=query,
     )
     assert stale.status_code in {401, 409}, stale.text
+
+
+def test_claim_delivers_only_declared_secrets_over_tls(agent_scene, monkeypatch):
+    db, client, headers, human, _, _ = agent_scene
+    monkeypatch.setenv("SOURCE_TOKEN", "private-claim-value")
+    monkeypatch.setenv("UNDECLARED_TOKEN", "unrelated-value")
+    attempt = queue(db, "PYTHON", SECRETS="SOURCE_TOKEN")
+    client.base_url = "https://testserver"
+    response = client.post(
+        "/api/v1/agent/claim",
+        headers=headers,
+        json={"version": __version__, "free_kinds": ["python"]},
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["data"]["task"]["attempt_id"] == attempt
+    assert response.json()["data"]["secret_values"] == {"SOURCE_TOKEN": "private-claim-value"}
+    assert "unrelated-value" not in response.text
+    state = client.get("/api/v1/projects/default/status", headers=human)
+    assert "private-claim-value" not in state.text
+
+
+@pytest.mark.parametrize("refusal", ["http", "expired", "fenced"])
+def test_task_secrets_are_not_resolved_for_refused_claims(agent_scene, monkeypatch, refusal):
+    from etl_craft.services.operations import agent_claims, task_secrets
+
+    db, client, headers, _, agent_id, _ = agent_scene
+    attempt = queue(db, "PYTHON", SECRETS="SOURCE_TOKEN")
+    called = []
+    monkeypatch.setattr(task_secrets, "resolve", lambda task: called.append(task) or {})
+    if refusal != "http":
+        client.base_url = "https://testserver"
+    if refusal == "expired":
+        with db.engine.begin() as conn:
+            conn.execute(
+                text("UPDATE CFG_API_TOKENS SET EXPIRES_AT=:past WHERE TOKEN_ID=:id"),
+                {"past": datetime(2000, 1, 1, tzinfo=UTC), "id": agent_id},
+            )
+    if refusal == "fenced":
+
+        def expire(point):
+            if point == "agent.after_claim":
+                with db.engine.begin() as conn:
+                    conn.execute(
+                        text(
+                            "UPDATE AUD_TASK_ATTEMPTS SET LEASE_EXPIRES_AT=:past "
+                            "WHERE ATTEMPT_ID=:id"
+                        ),
+                        {"past": datetime(2000, 1, 1, tzinfo=UTC), "id": attempt},
+                    )
+
+        monkeypatch.setattr(agent_claims, "fault_point", expire)
+    response = client.post(
+        "/api/v1/agent/claim",
+        headers=headers,
+        json={"version": __version__, "free_kinds": ["python"]},
+    )
+    assert response.status_code != 200, response.text
+    assert called == []
+    if refusal == "http":
+        assert "HTTPS" in response.text and "localhost" in response.text

@@ -542,3 +542,90 @@ def test_explicit_small_python_agent_records_success_or_memory_failure(
         assert agent.wait(timeout=30) == 0, agent.output
     except AssertionError as error:
         raise AssertionError(f"{error}\nagent:\n{agent.output}") from error
+
+
+@pytest.fixture(params=["ENVIRONMENT", "FILE"])
+def secret_cluster(empty_engine_db, cli_project, monkeypatch, request):
+    import os
+
+    import yaml
+
+    monkeypatch.setenv("SOURCE_TOKEN", "task-private-test-value")
+    p = cli_project
+    if request.param == "FILE":
+        path = p.config.project_dir / "provider.env"
+        path.write_text(
+            "SOURCE_TOKEN=task-private-test-value\n"
+            + p.config.engine.secret_var
+            + "="
+            + os.environ[p.config.engine.secret_var]
+            + "\n"
+        )
+        raw = yaml.safe_load(p.config.config_path.read_text())
+        raw["Secrets"] = {"Source_type": "FILE", "Path": str(path)}
+        p.config.config_path.write_text(yaml.safe_dump(raw, sort_keys=False))
+        p.config = load_config(p.config.config_path)
+    cluster = request.getfixturevalue("cluster")
+    agent_dir = cluster[3]
+    path = agent_dir / "craft-connector.yml"
+    raw = yaml.safe_load(path.read_text())
+    raw["Secrets"] = {"Source_type": "ENVIRONMENT"}
+    path.write_text(yaml.safe_dump(raw, sort_keys=False))
+    return cluster
+
+
+@pytest.mark.parametrize("fails", [False, True])
+def test_agent_receives_secrets_by_pipe_and_masks_all_output(secret_cluster, monkeypatch, fails):
+    p, url, token, agent_dir = secret_cluster
+    path = agent_dir / "python_scripts/load.py"
+    path.write_text(
+        "import os\nfrom etl_craft.scripting import ScriptResult, PermanentError\n"
+        "def run(task):\n"
+        "    assert 'SOURCE_TOKEN' not in os.environ\n"
+        "    value = task.secret('SOURCE_TOKEN')\n"
+        "    print(value)\n"
+        "    task.logger.warning('echo %s', value)\n"
+        + (
+            "    raise PermanentError(value)\n"
+            if fails
+            else "    return ScriptResult(1, variables={'echo': value, value: 'opaque'})\n"
+        )
+    )
+    with p.engine.begin() as conn:
+        conn.execute(
+            text(
+                "INSERT INTO CFG_TASK_PARAMETERS (TASK_ID,PARAMETER_NAME,PARAMETER_VALUE) "
+                "VALUES (:id,'SECRETS','SOURCE_TOKEN')"
+            ),
+            {"id": p.task_id},
+        )
+    publish_project(p, agent_dir)
+    controller = p.start("controller", "--no-ui")
+    code, output = p.run("run", "--pipeline-code", "P", "--init-only", "--run-key", "secret-test")
+    assert code == 0, output
+    monkeypatch.delenv("SOURCE_TOKEN")
+    monkeypatch.setenv("ETL_CRAFT_TOKEN", token.token)
+    agent = p.start("agent", "--api", url, "--project-dir", str(agent_dir), "--drain-seconds", "0")
+    try:
+        p.wait_for(
+            "SELECT STATUS FROM AUD_TASK_ATTEMPTS",
+            expected="FAILED" if fails else "SUCCESS",
+            timeout=40,
+        )
+        with p.engine.connect() as conn:
+            attempt = conn.execute(
+                text("SELECT ERROR_MESSAGE AS error,TASK_LOG AS log FROM AUD_TASK_ATTEMPTS")
+            ).one()
+            chunks = conn.execute(
+                text("SELECT CONTENT AS content FROM AUD_ATTEMPT_LOG_CHUNKS")
+            ).all()
+        assert "task-private-test-value" not in str(attempt)
+        assert "task-private-test-value" not in "".join(row.content for row in chunks)
+        assert "[REDACTED]" in "".join(row.content for row in chunks)
+        assert "task-private-test-value" not in agent.output
+        for path in agent_dir.rglob("*"):
+            if path.is_file():
+                assert b"task-private-test-value" not in path.read_bytes()
+    finally:
+        agent.close()
+        controller.close()

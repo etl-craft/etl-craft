@@ -184,7 +184,7 @@ item's text, or work done early under another item.
 | S7.B Users, roles and identities | In progress | #203–#207, #231, #261, #263, #264, #277 | Accounts, fixed roles, scoped grants, pool-bound agents and browser sign-in exist; custom roles, bindings and access explain remain |
 | S7.C Redaction | In progress | #228, #309 | Recursive name masking and shared operation-scoped value masking exist; resolved-secret registration and Sensitive_patterns remain |
 | S7.D Alert channels | Planned |  | Signed webhooks, Slack-shaped bodies and channel delivery evidence remain; email is already supported |
-| S7.E Secrets providers | In progress | #84, #120 | Environment/file resolution exists; secret managers, task declarations and fenced secret delivery remain |
+| S7.E Secrets providers | In progress | #84, #120, #323 | ENVIRONMENT/FILE task declarations, fenced TLS delivery and private child pipe; secret managers and Cache_seconds remain |
 | S7.F Packaging and deployment | Done | #227, #231, #316 | Wheel-built role images, tagged release smoke and publishing, Compose/Kubernetes manifests and systemd units |
 | S7.G Compatibility policy | Planned |  | 0.9.0 compatibility policy, rolling mixed-version contracts and public-surface cleanup remain |
 | S7.H Cloud acceptance | In progress | #104–#110, #208, #231, #236, #247 | Native/Iceberg and managed-engine contracts exist; complete candidate evidence and unavailable provider cases remain |
@@ -960,6 +960,14 @@ passed on Snowflake (two cases) and Databricks (one case); the first Databricks 
 empty-history-page handling defect, which was corrected and verified. No cloud was unavailable.
 
 **Choices that differ from the item text.**
+
+- **S7.E task-secret slice (owner).** SECRETS and task.secret use ENVIRONMENT/FILE;
+  fenced claim delivery uses TLS and a private stdin pipe, with redaction before child log
+  persistence. AWS Secrets Manager, Vault and Secrets.Cache_seconds remain unimplemented;
+  S7.E stays In progress. This slice unblocks S8.B without widening inherited environments.
+  Acceptance: unit/script/validation/agent suites passed; insecure, expired and fenced claims
+  and pipe output/timeout cases passed 20 local repetitions. Security review found and fixed
+  split-prefix redaction before publication. Cloud suites are not applicable to this slice.
 
 - **S8.B (owner).** Seed data headers may omit declared non-key columns, which receive
   dialect-cast NULLs. Keys remain mandatory and blank cells retain their meaning. Stewarded

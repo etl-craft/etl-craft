@@ -65,6 +65,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--rerun", action="store_true")
     parser.add_argument("--log-level", default="INFO")
     parser.add_argument("--log-format", default="text")
+    parser.add_argument("--task-secrets-stdin", action="store_true")
     args = parser.parse_args(argv)
     if (args.attempt_id is None) != (args.owner_id is None):
         parser.error("--attempt-id and --owner-id must be supplied together")
@@ -138,6 +139,10 @@ def _run_bound(
             logger.error("could not start the task: %s", error)
             _record_failure(engine, args.task_run_id, error, config)
             return error.exit_code
+        if args.task_secrets_stdin:
+            from etl_craft.execution.secret_pipe import read_values
+
+            context = replace(context, _secret_values=read_values(sys.stdin))
         if context.bundle_id is not None:
             # The bundle cache stays unwritten: tasks and warehouse drivers that write relative
             # paths do so in the host project directory, as without a bundle.
