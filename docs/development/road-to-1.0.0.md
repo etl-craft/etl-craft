@@ -970,7 +970,9 @@ empty-history-page handling defect, which was corrected and verified. No cloud w
 - **S8.B ending evidence (owner).** `reconcile --attest-ended --reason` distinguishes an
   operator's process attestation from verified query absence. The API records all observed
   terminal outcomes, claims retain instance identities, and attempt UI/JSON show the kind,
-  actor and reason. Legacy evidence is not silently classified or backfilled.
+  actor and reason. Legacy evidence is not silently classified or backfilled. Verified
+  local terminal exits retain their existing reconciliation before lease expiry; the
+  expiry gate remains mandatory for attestation.
   Acceptance: unit, agent/API/browser, both Engine DB upgrades/guards/query plans, and
   bounded watermark checks on all four local warehouses passed. Agent ending and recovery
   cases passed twenty local repetitions; the final ordering change passed twenty more

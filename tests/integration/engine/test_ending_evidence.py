@@ -264,3 +264,67 @@ def test_attestation_does_not_ignore_an_active_source_attempt(legacy_writer):
             ).scalar_one()
             == "QUEUED"
         )
+
+
+def test_verified_local_exit_needs_no_attestation_or_lease_wait(legacy_writer):
+    import json
+    import socket
+    import subprocess
+    import sys
+
+    from etl_craft.engine import attempt_starts
+    from etl_craft.execution.leases import owner_id, process_start
+
+    ctx, _, source, old_task = legacy_writer
+    owner = owner_id()
+    with subprocess.Popen(
+        [sys.executable, "-c", "import sys; sys.stdin.read()"], stdin=subprocess.PIPE
+    ) as child:
+        birth = process_start(child.pid)
+        assert birth is not None
+        with ctx.engine.begin() as conn:
+            run = conn.execute(
+                text("SELECT PIPELINE_RUN_ID AS run_id FROM AUD_TASK_RUN_LOG WHERE TASK_ID=:id"),
+                {"id": old_task},
+            ).scalar_one()
+            task = add_task(conn, source, "local_verified", "PYTHON")
+            summary = transitions.find_or_create_task_run(conn, task, run).task_run_id
+            attempt = transitions.queue_attempt(conn, summary, ctx.actor)
+            transitions.claim_attempt(
+                conn,
+                attempt,
+                ctx.actor,
+                owner=owner,
+                lease_expires_at=datetime.now(UTC) + timedelta(hours=1),
+            )
+            attempt_starts.ensure_attempt_started(
+                conn,
+                attempt,
+                ctx.actor,
+                owner=owner,
+                process=attempt_starts.StartedProcess(socket.gethostname(), child.pid, birth),
+            )
+        child.communicate()
+        assert child.returncode == 0
+    with ctx.engine.begin() as conn:
+        transitions.finish_attempt(conn, attempt, AttemptStatus.FAILED, ctx.actor, owner=owner)
+    result = invoke(
+        ctx,
+        ActionName.RECONCILE,
+        ReconcileInput(
+            pipeline_code="SOURCE", task_code="local_verified", reason="Verified own child exit"
+        ),
+    )
+    assert "1 ending evidence" in result.message
+    with ctx.engine.connect() as conn:
+        row = conn.execute(
+            text(
+                "SELECT EVIDENCE_KIND AS kind, ACTOR AS actor, VERIFIED_CHECKS AS checks "
+                "FROM AUD_ATTEMPT_ACKNOWLEDGEMENTS WHERE ATTEMPT_ID=:id AND KIND='PROCESS'"
+            ),
+            {"id": attempt},
+        ).one()
+    assert row.kind == "VERIFIED" and row.actor == "operator"
+    checks = json.loads(row.checks)
+    assert "process_exit" in checks and "tagged_queries_absent" in checks
+    assert "lease_expired" not in checks

@@ -650,7 +650,8 @@ def test_reconcile_revisits_lost_workers_but_never_guesses_an_unreadable_identit
         raise control_flow.psutil.AccessDenied(pid)
 
     monkeypatch.setattr(control_flow.psutil, "Process", unreadable)
-    assert act(ctx, ActionName.RECONCILE, pipeline_code="P").lost_attempt_ids == ()
+    with pytest.raises(RunRefusedError, match="process ending cannot be verified"):
+        act(ctx, ActionName.RECONCILE, pipeline_code="P")
     assert act(ctx, ActionName.CONTROL_REQUEST, control_id=pending.control_id).completed_at is None
 
     def gone(pid):

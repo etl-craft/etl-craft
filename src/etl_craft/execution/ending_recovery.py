@@ -39,7 +39,8 @@ def recover_endings(
             row = conn.execute(
                 statement(conn, "reconcile_ending_identity"), {"attempt_id": attempt_id}
             ).one()
-            _fenced(row)
+            if attest_ended:
+                _fenced(row)
             if row.token_digest is not None:
                 conn.execute(
                     statement(conn, "agent_registration_lock"), {"agent_id": int(row.owner_id)}
@@ -47,7 +48,6 @@ def recover_endings(
                 row = conn.execute(
                     statement(conn, "reconcile_ending_identity"), {"attempt_id": attempt_id}
                 ).one()
-            _fenced(row)
             if not reason or not reason.strip():
                 raise UsageError(
                     f"attempt {attempt_id}: ending evidence is missing; expected an operator "
@@ -57,25 +57,20 @@ def recover_endings(
             observed = bool(row.process_observed) or process_ended(
                 controls.affected(conn, (attempt_id,))[0]
             )
-            checks: tuple[str, ...]
-            if observed and process_local_queries(config):
-                checks = ("lease_expired", "attempt_fenced", "process_exit", "embedded_query_exit")
-            else:
-                tag = holder_tag(attempt_holder(attempt_id, row.token_digest or row.owner_id))
-                try:
-                    require_absent(config, tag)
-                except LockTimeoutError as error:
-                    raise LockTimeoutError(f"attempt {attempt_id}: {error}") from error
-                checks = ("lease_expired", "attempt_fenced", "tagged_queries_absent")
+            _fenced(row, require_expiry=attest_ended or not observed)
+            if not observed and not attest_ended:
+                raise RunRefusedError(
+                    f"attempt {attempt_id}: process ending cannot be verified on host {row.host}; "
+                    "expected verified exit or explicit operator attestation; restore its "
+                    "original agent or use reconcile --attest-ended --reason REASON"
+                )
+            checks = ("attempt_fenced", *_query_checks(config, row, observed))
+            if row.lease_expires_at is not None and as_utc(row.lease_expires_at) < as_utc(
+                row.observed_now
+            ):
+                checks += ("lease_expired",)
             evidence = EndingEvidenceKind.VERIFIED
             if not observed:
-                if not attest_ended:
-                    raise RunRefusedError(
-                        f"attempt {attempt_id}: process ending cannot be verified "
-                        f"on host {row.host}; "
-                        "expected verified exit or explicit operator attestation; restore its "
-                        "original agent or use reconcile --attest-ended --reason REASON"
-                    )
                 _instance_gone(row)
                 evidence = EndingEvidenceKind.ATTESTED
                 checks += ("original_instance_not_registered",)
@@ -91,9 +86,27 @@ def recover_endings(
     return tuple(recovered)
 
 
-def _fenced(row: Row[tuple[object, ...]]) -> None:
+def _query_checks(
+    config: ConnectorConfig, row: Row[tuple[object, ...]], observed: bool
+) -> tuple[str, ...]:
+    """Confirm query absence independently of the attempt's recorded outcome."""
+    checks = ("process_exit",) if observed else ()
+    if observed and process_local_queries(config):
+        return (*checks, "embedded_query_exit")
+    tag = holder_tag(attempt_holder(row.attempt_id, row.token_digest or row.owner_id))
+    try:
+        require_absent(config, tag)
+    except LockTimeoutError as error:
+        raise LockTimeoutError(f"attempt {row.attempt_id}: {error}") from error
+    return (*checks, "tagged_queries_absent")
+
+
+def _fenced(row: Row[tuple[object, ...]], *, require_expiry: bool = True) -> None:
     if row.status in (AttemptStatus.CLAIMED, AttemptStatus.RUNNING, AttemptStatus.QUEUED) or (
-        row.lease_expires_at is None or as_utc(row.lease_expires_at) >= as_utc(row.observed_now)
+        require_expiry
+        and (
+            row.lease_expires_at is None or as_utc(row.lease_expires_at) >= as_utc(row.observed_now)
+        )
     ):
         raise RunRefusedError(
             f"attempt {row.attempt_id}: status={row.status}, lease={row.lease_expires_at}; "

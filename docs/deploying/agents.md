@@ -277,7 +277,8 @@ etl-craft reconcile --pipeline-code P --task-code T --attest-ended \
   --reason 'Original pod <name> was deleted; I attest that its task process ended'
 ```
 
-The lease must be expired and the attempt terminal/fenced. The warehouse must independently
+Attestation requires an expired lease and a terminal/fenced attempt. Ordinary verified
+reconciliation of a terminal local worker does not wait for its lease to expire. The warehouse must independently
 confirm that no query with its session tag remains. The original instance must not have a
 live registration. Legacy claims without an instance column use their recorded hostname and
 a later replacement registration; an ambiguous identity is refused. No privileged node or

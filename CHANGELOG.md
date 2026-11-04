@@ -57,7 +57,9 @@ Warehouses are optional extras. Core bundles none. `all` is core plus the UI, fo
   failures and timeouts; task status alone never creates evidence. Migration 0085 leaves old
   evidence unclassified and never backfills missing acknowledgements. Recover affected old
   attempts through reconcile, with explicit operator attestation when a deleted pod prevents
-  verifying its process exit; no manual audit edits or watermark reset is needed.
+  verifying its process exit; no manual audit edits or watermark reset is needed. Verified
+  terminal local exits remain reconcilable before lease expiry; unknown exits refuse with
+  the attestation remedy instead of being treated as query evidence.
 
 - Agent report and log operations resolve their project from the authenticated attempt before
   reading or publishing target contracts, registrations, checks, item state and offsets.
