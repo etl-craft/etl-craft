@@ -965,6 +965,9 @@ empty-history-page handling defect, which was corrected and verified. No cloud w
   fenced claim delivery uses TLS and a private stdin pipe, with redaction before child log
   persistence. AWS Secrets Manager, Vault and Secrets.Cache_seconds remain unimplemented;
   S7.E stays In progress. This slice unblocks S8.B without widening inherited environments.
+  Acceptance: unit/script/validation/agent suites passed; insecure, expired and fenced claims
+  and pipe output/timeout cases passed 20 local repetitions. Security review found and fixed
+  split-prefix redaction before publication. Cloud suites are not applicable to this slice.
 
 - **S8.B (owner).** Seed data headers may omit declared non-key columns, which receive
   dialect-cast NULLs. Keys remain mandatory and blank cells retain their meaning. Stewarded
