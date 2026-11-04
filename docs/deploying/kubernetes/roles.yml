@@ -4,6 +4,8 @@ metadata:
   name: etl-craft-controller
 spec:
   replicas: 1
+  strategy:
+    type: Recreate
   selector:
     matchLabels: &id001
       app: etl-craft-controller

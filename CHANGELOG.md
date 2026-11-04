@@ -25,6 +25,9 @@ Warehouses are optional extras. Core bundles none. `all` is core plus the UI, fo
 
 ### Fixed
 
+- Stop the singleton Kubernetes controller before replacing it, avoiding a rollout blocked
+  by the active controller guard.
+
 - Compile bytecode in role and project images so read-only agent health probes do not
   recompile imports on every invocation.
 
