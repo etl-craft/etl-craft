@@ -81,6 +81,8 @@ class Work:
     timeout_seconds: int
     credential: str
     holder_id: str
+    secret_values: dict[str, str] = field(default_factory=dict, repr=False)
+    secret_provider: str | None = None
 
 
 @dataclass
@@ -309,6 +311,7 @@ class AgentLoop:
                     "birth": self.birth,
                     "credential": work.credential,
                     "holder_id": work.holder_id,
+                    "secret_provider": work.secret_provider,
                 }
             ),
             encoding="utf-8",
@@ -335,6 +338,9 @@ class AgentLoop:
             cwd=self.config.project_dir,
             env=self._environment(work, folder),
         )
+        from etl_craft.execution.secret_pipe import with_values
+
+        spec = with_values(spec, work.secret_values)
         with self.lock:
             self.tasks[attempt_id] = task
             task.future = self.executor.submit(

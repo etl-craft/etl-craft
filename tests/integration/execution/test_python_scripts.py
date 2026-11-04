@@ -910,3 +910,75 @@ def test_local_children_never_receive_deployment_credentials(project, monkeypatc
     outcome = run_task(engine, config, "P", "load")
     assert outcome.status == RunStatus.SUCCESS
     assert task_row(engine, outcome.task_run_id).target == 1
+
+
+@pytest.mark.parametrize("project", [False], indirect=True)
+@pytest.mark.parametrize("provider", ["ENVIRONMENT", "FILE"])
+def test_local_task_secret_is_piped_and_masked(project, monkeypatch, provider):
+    engine, config, pipeline, task = project
+    value = "local-private-test-value"
+    monkeypatch.setenv("SOURCE_TOKEN", value)
+    raw = yaml.safe_load(config.config_path.read_text())
+    if provider == "FILE":
+        path = config.project_dir / "provider.env"
+        values = {"SOURCE_TOKEN": value}
+        from etl_craft.config import profile_needs_secret
+
+        if profile_needs_secret(config.engine):
+            values[config.engine.secret_var] = os.environ[config.engine.secret_var]
+        path.write_text("".join(f"{name}={value}\n" for name, value in values.items()))
+        raw["Secrets"] = {"Source_type": "FILE", "Path": str(path)}
+        config.config_path.write_text(yaml.safe_dump(raw, sort_keys=False))
+        config = load_config(config.config_path)
+    path = config.python_scripts_dir / "load.py"
+    path.write_text(
+        "import os\nfrom etl_craft.scripting import ScriptResult\n"
+        "def run(task):\n"
+        "    assert 'SOURCE_TOKEN' not in os.environ\n"
+        "    value = task.secret('SOURCE_TOKEN')\n"
+        "    print(value)\n"
+        "    return ScriptResult(1, variables={'echo': value, value: 'opaque'})\n"
+    )
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "INSERT INTO CFG_TASK_PARAMETERS (TASK_ID,PARAMETER_NAME,PARAMETER_VALUE) "
+                "VALUES (:id,'SECRETS','SOURCE_TOKEN')"
+            ),
+            {"id": task},
+        )
+        start_run(conn, pipeline)
+    outcome = run_task(engine, config, "P", "load")
+    assert outcome.status == RunStatus.SUCCESS, outcome
+    row = task_row(engine, outcome.task_run_id)
+    assert value not in str(row)
+    logs = list(config.log_dir.rglob("*.log"))
+    assert logs
+    assert all(value not in path.read_text() for path in logs)
+    assert any("[REDACTED]" in path.read_text() for path in logs)
+
+
+@pytest.mark.parametrize("project", [False], indirect=True)
+def test_secret_value_cannot_be_published_as_a_checkpoint(project, monkeypatch):
+    engine, config, pipeline, task = project
+    monkeypatch.setenv("SOURCE_TOKEN", "private-checkpoint-value")
+    (config.python_scripts_dir / "load.py").write_text(
+        "from etl_craft.scripting import ScriptResult, Offset\n"
+        "def run(task):\n    return ScriptResult(1, Offset.text(task.secret('SOURCE_TOKEN')))\n"
+    )
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "INSERT INTO CFG_TASK_PARAMETERS (TASK_ID,PARAMETER_NAME,PARAMETER_VALUE) "
+                "VALUES (:id,'SECRETS','SOURCE_TOKEN')"
+            ),
+            {"id": task},
+        )
+        start_run(conn, pipeline)
+    outcome = run_task(engine, config, "P", "load")
+    assert outcome.status == RunStatus.FAILED
+    row = task_row(engine, outcome.task_run_id)
+    assert "private-checkpoint-value" not in str(row)
+    assert "returned offset contains a declared secret" in row.error
+    with engine.connect() as conn:
+        assert fetch_task_offset(conn, task) is None

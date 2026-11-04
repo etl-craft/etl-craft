@@ -136,9 +136,14 @@ def _reply(
         for f in fields(context)
         if f.name != "config" and not f.name.startswith("_")
     }
+    from etl_craft.services.operations.task_secrets import for_claim
+
+    values = for_claim(ctx, context)
     return AgentReply(
         {
             "task": metadata,
+            "secret_values": values,
+            "secret_provider": str(context.config.source.type),
             "credential": credential,
             "holder_id": attempt_holder(int(claimed.attempt_id), ctx.credential_digest or ""),
             "lease_seconds": budget,

@@ -17,7 +17,7 @@ import threading
 import time
 from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import IO
 
@@ -55,6 +55,8 @@ class ChildSpec:
     log_path: Path | None = None
     env: Mapping[str, str] | None = None
     cwd: Path | None = None
+    input_data: bytes | None = field(default=None, repr=False)
+    redacted_values: tuple[str, ...] = field(default=(), repr=False)
 
 
 @dataclass(frozen=True)
@@ -108,19 +110,26 @@ def run_child(
         start_offset = output.tell()
         started = time.monotonic()
         interrupts.checkpoint()
-        process = subprocess.Popen(
-            spec.argv,
-            stdin=subprocess.DEVNULL,
-            stdout=output,
-            stderr=subprocess.STDOUT,
-            env=None if spec.env is None else dict(spec.env),
-            cwd=spec.cwd,
-            start_new_session=True,
-        )
+        process = _launch(spec, output)
+        reader = None
+        failures: list[OSError] = []
+        finished = threading.Event()
+        if spec.redacted_values:
+            from etl_craft.execution.secret_pipe import capture_output
+
+            assert process.stdout is not None
+            cancel = cancel or threading.Event()
+            reader = threading.Thread(
+                target=capture_output,
+                args=(process.stdout, output, spec.redacted_values, cancel, failures, finished),
+                daemon=True,
+            )
+            reader.start()
         birth = process_start(process.pid)
         logger.debug("started pid %s: %s", process.pid, " ".join(spec.argv))
         timed_out = cancelled = False
         try:
+            _send_input(process, spec.input_data)
             if on_started is not None:
                 on_started(process.pid)
             fault_point("supervisor.after_popen")
@@ -137,6 +146,15 @@ def run_child(
         except BaseException:
             _stop_group(process, birth, kill_grace_seconds)
             raise
+        finally:
+            if reader is not None:
+                finished.set()
+                reader.join()
+        if failures:
+            raise RunStateError(
+                f"child log {spec.log_path}: output capture failed ({type(failures[0]).__name__}); "
+                "restore writable log storage and retry the task"
+            )
         elapsed = time.monotonic() - started
         tail = _read_tail(output, start_offset, tail_bytes)
     result = ChildResult(
@@ -149,6 +167,29 @@ def run_child(
     )
     logger.debug("pid %s %s after %.1fs", process.pid, result.describe(), elapsed)
     return result
+
+
+def _send_input(process: subprocess.Popen[bytes], data: bytes | None) -> None:
+    """Close the private pipe after delivering its payload; tolerate an already failed child."""
+    if process.stdin is not None and data is not None:
+        try:
+            process.stdin.write(data)
+            process.stdin.close()
+        except BrokenPipeError:
+            logger.debug("pid %s closed its input before reading the task payload", process.pid)
+
+
+def _launch(spec: ChildSpec, output: IO[bytes]) -> subprocess.Popen[bytes]:
+    """Choose private stdin and filtered stdout only for credential-bearing tasks."""
+    return subprocess.Popen(
+        spec.argv,
+        stdin=subprocess.PIPE if spec.input_data is not None else subprocess.DEVNULL,
+        stdout=subprocess.PIPE if spec.redacted_values else output,
+        stderr=subprocess.STDOUT,
+        env=None if spec.env is None else dict(spec.env),
+        cwd=spec.cwd,
+        start_new_session=True,
+    )
 
 
 def _wait(

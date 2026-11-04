@@ -66,6 +66,8 @@ class TaskContext:
     uploads: tuple[UploadWriter, ...] = ()
     upload_inputs: tuple[UploadInfo, ...] = ()
     _definition: Definition | None = None
+    _secret_provider: str | None = field(default=None, repr=False, compare=False)
+    _secret_values: Mapping[str, str] | None = field(default=None, repr=False, compare=False)
 
 
 @dataclass(frozen=True)

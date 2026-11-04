@@ -45,7 +45,7 @@ from etl_craft.warehouse.connection import warehouse_task
 
 logger = logging.getLogger(__name__)
 
-PARAMETERS = frozenset({"SCRIPT_FILE", "INPUT_PARAMS", "SCRIPT_KIND"})
+PARAMETERS = frozenset({"SCRIPT_FILE", "INPUT_PARAMS", "SCRIPT_KIND", "SECRETS"})
 """The task parameters a Python-script task reads."""
 
 SCRIPT_LOGGER = "etl_craft_script"
@@ -54,7 +54,32 @@ SCRIPT_LOGGER = "etl_craft_script"
 
 @warehouse_task()
 def run(context: TaskContext, engine_db: Engine | TaskStore) -> HandlerResult:
-    """Run the task's Python script and return the counts it reports."""
+    """Run with only admitted credentials and mask results before leaving their scope."""
+    from dataclasses import replace
+
+    from etl_craft.core.redaction import mask, mask_text, registering
+    from etl_craft.handlers.task_secrets import resolve
+
+    values = resolve(context) if context._secret_values is None else dict(context._secret_values)
+    with registering(*values.values()):
+        result = _run(replace(context, _secret_values=values), engine_db)
+        if (
+            result.offset is not None
+            and result.offset.offset_value is not None
+            and any(value in result.offset.offset_value for value in values.values())
+        ):
+            raise PermanentError(
+                f"{context.pipeline_code}.{context.task_code}: returned offset contains a "
+                "declared secret; return a source position without credential values"
+            )
+        return replace(
+            result,
+            variables={mask_text(str(key)): mask(value) for key, value in result.variables.items()},
+        )
+
+
+def _run(context: TaskContext, engine_db: Engine | TaskStore) -> HandlerResult:
+    """Load and invoke the admitted script, then check its result."""
     params = context.task_params
     kind = script_kind(params, f"{context.pipeline_code}.{context.task_code}")
     name = (params.get("SCRIPT_FILE") or "").strip()
@@ -369,6 +394,8 @@ def script_task(
         _locks=store,
         _items=store,
         _landing=lambda: store.state().landing,
+        _secret_values=context._secret_values or {},
+        _secret_provider=context._secret_provider,
         logger=logging.getLogger(f"{SCRIPT_LOGGER}.{context.task_code}"),
         run_date=context.run_date,
         backfill=context.backfill,

@@ -10,6 +10,11 @@ Warehouses are optional extras. Core bundles none. `all` is core plus the UI, fo
 
 ### Added
 
+- Python task `SECRETS` declares pipe-separated ENVIRONMENT/FILE provider names;
+  `task.secret(name)` refuses undeclared/missing names. Fenced TLS claims deliver only
+  declared task values, passed to children by pipe and masked before log persistence.
+  Provider credentials remain on controller/API hosts.
+
 - Seed data headers may omit declared non-key columns; the warehouse fills them with typed
   NULLs. Missing keys and undeclared headers are refused; empty-cell semantics are unchanged.
 

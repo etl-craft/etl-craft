@@ -11,7 +11,9 @@ that runs etl-craft.
 
 Secrets never appear in logs, in error messages, or in the connection URLs etl-craft logs. An
 Python script receives its own settings through `CFG_TASK_PARAMETERS`, which are not secret:
-a script that needs a credential reads it from its environment. Values in
+a Python task declares provider names in `SECRETS` and reads them with `task.secret(name)`.
+The controller/API resolves names from ENVIRONMENT or FILE; agent children receive only
+these values through a private pipe, never inherited environment variables. Values in
 `CFG_TASK_PARAMETERS` and anything a script prints or logs are the team's responsibility.
 
 Audit arguments and structured log fields mask secret-named keys recursively, including mappings
@@ -316,7 +318,8 @@ expires. It cannot claim work or address another attempt. Local and agent task i
 use the same environment allowlist: PATH, PYTHONPATH, HOME, LANG, LANGUAGE, LC_* locale variables, TZ,
 TMPDIR/TMP/TEMP, USER/LOGNAME, SYSTEMROOT and TLS certificate locations, plus variables
 explicitly named by the loaded connection configuration. Local tasks require their configured
-Engine DB connection as well as warehouse connections. Deployment tokens and refresh/session
+Engine DB connection as well as warehouse connections. Task-source credentials are declared
+separately in SECRETS and travel by stdin pipe, with output redaction before log persistence. Deployment tokens and refresh/session
 credentials are not inherited. The task's attempt credential is passed in its private work
 file, never as ETL_CRAFT_TOKEN. Projects still share the instance's executable-code trust
 boundary; this is credential scoping, not a sandbox.

@@ -60,6 +60,7 @@ and managed SQL keep `Orchestration.Retry_on`. `explain` shows the effective pol
 |---|---|
 | `SCRIPT_KIND` | required: `INGESTION` or `UTILITY` |
 | `SCRIPT_FILE` | the script's path from the project directory, inside `python_scripts/`, such as `python_scripts/crm/customers.py` |
+| `SECRETS` | optional: pipe-separated provider names, for example `SOURCE_USER|SOURCE_PASSWORD`; values stay outside metadata |
 | `INPUT_PARAMS` | optional: a JSON object the script receives as a dictionary, such as `{"region": "eu", "days": 30}` |
 | `SOURCE_OBJECT` | optional: where the script reads from, for the [catalog](catalog.md)'s lineage graphs |
 
@@ -163,6 +164,33 @@ own future imports apply; dataclasses, enums, pickling and `typing.get_type_hint
 other modules. A script may use `ProcessPoolExecutor` with the `fork` start method on platforms
 that support it. The `spawn` start method cannot re-import the script by its generated module
 name; put functions needed by spawned agents in a normally importable helper module.
+
+## Task credentials
+
+Declare credential names with the `SECRETS` task parameter and read them with
+`task.secret("SOURCE_PASSWORD")`. The configured `Secrets.Source_type` resolves names from
+ENVIRONMENT or FILE (`Secrets.Path`); non-secret source hosts and database names belong in
+INPUT_PARAMS. Never put values in task parameters or source code.
+
+Validation checks every declared name against the provider and checks literal `task.secret`
+calls for undeclared names without running the script. Dynamic names are checked when read.
+A refusal names the pipeline, task, name, provider and remedy, never the value.
+
+For controller/agent deployment, mount the provider file only on controller/API hosts.
+The API resolves declared names for the current fenced claim over HTTPS (plain HTTP is
+allowed only on localhost). Agents receive only that task's declared values, pass them over
+a private stdin pipe, and do not need provider credentials. Values are absent from process
+environments, command arguments, work files and bundle files. Local task processes use the
+same pipe. Registered values are masked from logs, errors, audit-visible results and returned
+script variables; output filtering also covers print/stdout/stderr and split writes.
+
+```python
+def run(task):
+    password = task.secret("SOURCE_PASSWORD")
+    # Use the credential with the source client; never return or print it.
+```
+
+AWS Secrets Manager, Vault and configurable caching are not implemented by this slice.
 
 ## Output and logs
 

@@ -665,6 +665,9 @@ def _python(conn: Connection, context: TaskContext, data: _Metadata) -> list[str
     if not name:
         return ["SCRIPT_FILE is required for HANDLER=PYTHON, such as python_scripts/load.py"]
     path = python_script(context.config, name)
+    from etl_craft.handlers.task_secrets import problems
+
+    problems(context, path)
     python_scripts.parse_input_params(params.get("INPUT_PARAMS"))
     problem = python_scripts.script_definition_problem(path, name)
     return [problem] if problem else []
