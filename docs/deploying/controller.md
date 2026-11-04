@@ -42,7 +42,8 @@ Another scheduler can [submit a run over HTTP](http-api.md#starting-runs-from-an
 With a [deployment profile](sizing.md), the controller sizes its pool, threads and Engine DB pool
 from the measured allocation. `CFG_PIPELINES.MAX_PARALLEL_TASKS` bounds each pipeline across
 its runs. The shared local pool keeps its measured machine-wide process cap;
-`Local_python_slots` and `Local_warehouse_slots` add ceilings by kind (see
+`Local_python_slots` sets the Python count within CPU, total and base-memory bounds;
+`Local_warehouse_slots` adds a ceiling (see
 [running pipelines](../guides/running-pipelines.md)). Cooperative pipeline supervision and
 pending gate checks do not use those slots. Runs still owned by another foreground process are left with that
 process. Paused or inactive pipelines receive no dispatch; resuming a pipeline allows its

@@ -2,7 +2,8 @@
 #
 # `etl-craft run --pipeline-code X` resolves each ready wave from
 # CFG_TASK_DEPENDENCY and runs one subprocess per task, at most
-# Local_python_slots and Local_warehouse_slots cap measured process capacity.
+# Local_python_slots may override the default Python memory estimate;
+# CPU, total slots and process-base memory remain bounds. Local_warehouse_slots caps SQL slots.
 #
 # Each setting is marked `# variable` or `# value`. A variable is looked up in
 # the secrets source (here: the process environment); when it is not set, the

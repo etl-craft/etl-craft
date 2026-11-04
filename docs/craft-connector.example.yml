@@ -52,7 +52,8 @@ Orchestration:
                                        # Engine DB waits for it after a restart or failover;
                                        # 0: fail at the first refused connection
   # Local_python_slots: 2             # value — optional: at most this many Python script
-  #                                    # tasks at once; unset, they may use every slot
+  #                                    # tasks at once; may exceed the 512 MB estimate.
+  #                                    # CPU, total slots and base memory still bound it.
   # Local_warehouse_slots: 6           # value — optional: the same for SQL, rule and alert tasks
   Gate_wait_minutes: 60                # value — how long a run waits for a running upstream
                                        # pipeline or task it depends on; 0: judge at once

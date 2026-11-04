@@ -58,12 +58,13 @@ def start_role(
     if server or config.deployment != DeploymentProfile.CONTROLLER_AGENTS:
         _refuse_unaffordable(allocation, sizing, server=server)
     logger.info(
-        "%s sizing: %d task slots (%s), %d python, %d warehouse, %d server threads, "
+        "%s sizing: %d task slots (%s), %d python (%s), %d warehouse, %d server threads, "
         "Engine DB pool %d%s",
         sizing.profile,
         sizing.task_slots.value,
         sizing.task_slots.reason,
         sizing.python_slots.value,
+        sizing.python_slots.reason,
         sizing.warehouse_slots.value,
         sizing.server_threads.value,
         sizing.engine_pool.value,

@@ -52,7 +52,9 @@ bootstrap directory per agent.
 ## Capacity and controls
 
 The shared resource report measures CPU and memory allocation, reserves and pressure at startup
-and on renewals. Flags cap the derived Python and warehouse slots; they cannot create capacity.
+and on renewals. An explicit Python count can exceed the default memory estimate within measured CPU,
+process-base memory and total-slot bounds; warehouse flags remain ceilings.
+See [small Python containers](sizing.md#small-python-agent-containers).
 Unknown CPU or memory capacity is visible and admits no task. Claims account for reservations
 on overlapping allocations on the same host, so two agents cannot count that host twice.
 A task must fit one agent; capacity on different hosts is never combined to fit a task.

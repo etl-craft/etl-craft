@@ -48,9 +48,12 @@ choose `CONTROLLER` for a dedicated host.
 
    The task slots are what SQL tasks fit; Python slots are what Python scripts fit, never
    more than the task slots.
-4. **Cap.** `Local_python_slots` and `Local_warehouse_slots`, when written, are ceilings:
-   a measured size never exceeds them. `CFG_PIPELINES.MAX_PARALLEL_TASKS` separately caps
-   each pipeline; raising it never raises the machine's measured capacity.
+4. **Set or cap.** `Local_python_slots` (or an agent's `--python-slots`) may
+   explicitly exceed the default 512 MB memory estimate. CPU and total task slots still
+   bound the result. Each declared slot must fit the measured 80 MB base cost of an empty
+   task process; otherwise startup refuses the count, usable memory and remedy.
+   `Local_warehouse_slots` remains a ceiling. `CFG_PIPELINES.MAX_PARALLEL_TASKS`
+   separately caps each pipeline.
 5. **Pool.** `Orchestration.Db_pool_size` defaults to 10 connections per process, with no
    overflow. Profile sizing does not independently enlarge that declared ceiling.
 
@@ -107,3 +110,24 @@ credentials remain host-local and use the existing profile authentication settin
 `publish-docs` serves static files and releases its idle Engine DB pool before waiting for HTTP
 requests. Short provisioning/inspection commands use the remaining server headroom rather than
 holding a long-lived process reservation.
+
+## Small Python agent containers
+
+Agents always use dedicated-agent sizing under `CONTROLLER_AGENTS`, including when their
+bootstrap configuration has no deployment profile. They reserve 80 MB for the supervisor
+plus the larger of 32 MB or 10% of the allocation; they never use LAPTOP's 2 GB reserve.
+An empty agent and task measured 79.84 MB RSS and 79.47 MB peak RSS respectively on Linux
+Python 3.11. The named base costs round each up to 80 MB; application imports and buffers
+need their own headroom.
+
+For example, a 256 MB agent has 144 MB usable. Its default Python estimate yields zero
+slots, but `--python-slots 1` permits one. Startup logs and `doctor` show the explicit
+count and original estimate. Task `MEMORY_REQUEST_MB` still defaults to 512; set an
+existing task's request to its measured requirement (for example 128 MB) to fit this agent.
+The count does not bypass task resource reservations or increase the container limit.
+
+A task killed by SIGKILL, including a container OOM kill, fails with the agent, allocation
+limit and Python-slot setting in its attempt message and log. It is a permanent failure;
+reduce memory use or concurrency, or increase the limit before explicitly recovering it.
+SIGKILL alone cannot distinguish OOM from an external kill; inspect the container's
+`memory.events` to confirm OOM. The agent never labels an unconfirmed kill as proven OOM.
