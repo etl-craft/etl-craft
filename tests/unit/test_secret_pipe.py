@@ -106,3 +106,23 @@ def test_unread_credential_pipe_does_not_block_task_timeout(monkeypatch):
             for process in children:
                 if process.poll() is None:
                     process.kill()
+
+
+def test_claim_provider_is_a_closed_name():
+    from etl_craft.agent.loop import Work
+    from etl_craft.core.enums import SecretsSource
+    from etl_craft.core.errors import ServerError
+    from etl_craft.services.operations.serialization import from_json
+
+    claim = {
+        "task": {},
+        "lease_seconds": 60,
+        "timeout_seconds": 30,
+        "credential": "scoped",
+        "holder_id": "holder",
+        "secret_provider": "FILE",
+    }
+    work = from_json(Work, claim)
+    assert work.secret_provider is SecretsSource.FILE
+    with pytest.raises(ServerError, match="secret_provider"):
+        from_json(Work, claim | {"secret_provider": "not-a-provider"})

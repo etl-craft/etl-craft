@@ -31,6 +31,7 @@ from etl_craft.core.enums import (
     AttemptStatus,
     FailureClass,
     Handler,
+    SecretsSource,
     SlotKind,
 )
 from etl_craft.core.errors import ConfigurationError, EtlCraftError, RunStateError, ServerError
@@ -82,7 +83,7 @@ class Work:
     credential: str
     holder_id: str
     secret_values: dict[str, str] = field(default_factory=dict, repr=False)
-    secret_provider: str | None = None
+    secret_provider: SecretsSource | None = None
 
 
 @dataclass
@@ -311,7 +312,9 @@ class AgentLoop:
                     "birth": self.birth,
                     "credential": work.credential,
                     "holder_id": work.holder_id,
-                    "secret_provider": work.secret_provider,
+                    "secret_provider": (
+                        None if work.secret_provider is None else work.secret_provider.value
+                    ),
                 }
             ),
             encoding="utf-8",
