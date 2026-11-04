@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
@@ -204,6 +204,7 @@ class LocalTaskStore:
     definition: Definition | None = None
     _contracts: dict[str, TargetState] = field(default_factory=dict, compare=False)
     _erasure_target: str | None = None
+    parameters: Mapping[str, str] = field(default_factory=dict, repr=False)
 
     def erasure_target(self, target: str) -> LocalTaskStore:
         """Bind a host-validated lineage target without exposing an agent target override."""
@@ -465,10 +466,9 @@ class LocalTaskStore:
         """Read only scopes declared by this attempt's admitted SELECT."""
         from etl_craft.config.project import sql_script
         from etl_craft.core.rule_flags import parse_scopes
-        from etl_craft.engine.repository.tasks import fetch_task_parameters
         from etl_craft.engine.rule_scopes import keys
 
-        params = fetch_task_parameters(conn, self.identity.task_id)
+        params = self.parameters
         raw = params.get("SELECT_QUERY", "")
         if name := params.get("SCRIPT_FILE"):
             raw = sql_script(self.config, name).read_text(encoding="utf-8")
