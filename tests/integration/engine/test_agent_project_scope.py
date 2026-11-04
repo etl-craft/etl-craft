@@ -129,3 +129,22 @@ def test_other_project_token_cannot_publish_an_owned_attempt(owned_project_attem
             text("SELECT COUNT(*) AS n FROM AUD_ACTIONS WHERE OUTCOME='REFUSED'")
         ).scalar_one()
         assert refused == 1
+
+
+def test_rehash_candidate_lookup_is_project_scoped(owned_project_attempt):
+    from etl_craft.engine.queries import statement
+
+    ctx, project, pipeline, _, _, _, _ = owned_project_attempt
+    with ctx.engine.begin() as conn:
+        with selected_project(1):
+            other = add_pipeline(conn, "OTHER")
+            foreign = add_task(
+                conn, other, "merge", SQL_ACTION="SCD1_MERGE", TARGET_OBJECT="main.people"
+            )
+        with selected_project(project):
+            own = add_task(
+                conn, pipeline, "merge", SQL_ACTION="SCD1_MERGE", TARGET_OBJECT="main.people"
+            )
+            found = set(conn.execute(statement(conn, "rehash_tasks")).scalars())
+    assert own in found
+    assert foreign not in found

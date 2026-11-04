@@ -205,7 +205,7 @@ item's text, or work done early under another item.
 | S7.R Complete the test suite | In progress | #228 | Slice 1: recursive secret masking, merge crash windows and full-column/catalog upgrade guards; six-skill coverage audit remains after S7.A |
 | S7.N Faster complete pull-request CI | Done | #170 | Fail-closed collection/shard accounting, isolated schema templates and shared demo workers; complete checks in 6m33s-8m15s (owner-approved ten-minute target) |
 | S8.A The project layout | In progress | #319, #320 | Small-agent Python slots, compiled role images and singleton rollout; demo acceptance in progress |
-| S8.B Pipelines | In progress | #322 | Package rule scopes, atomic landing, item offsets, stewardship and seeds; demo waits for S7.E task secrets and live acceptance |
+| S8.B Pipelines | In progress | #322, #324 | Package rule scopes, atomic landing, item offsets, stewardship and seeds; demo waits for S7.E task secrets and live acceptance |
 | S8.C Configuration through CI | Planned | | Secretless local DuckDB validation and developer-token deployment of one pinned project commit |
 | S8.D Views | Planned | | Fact and data-metrics views reconciled with independent reference queries |
 | S8.E The CI pipelines | Planned | | Validate, deploy and manual/pre-release full-stack workflows |
@@ -973,6 +973,7 @@ empty-history-page handling defect, which was corrected and verified. No cloud w
   the shared operation/write path on SQLite and PostgreSQL and the real agent/API chain on
   PostgreSQL; SQLite continues to refuse CONTROLLER_AGENTS deployments. Existing misattributed
   contracts require explicit per-project inspection and rehash, with no silent audit repair.
+  The follow-up also scopes rehash candidate tasks to their selected project.
 
 - **S8.B (owner).** Seed data headers may omit declared non-key columns, which receive
   dialect-cast NULLs. Keys remain mandatory and blank cells retain their meaning. Stewarded

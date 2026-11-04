@@ -342,6 +342,7 @@ def full_scans(plan, partial_indexes=frozenset(), limited=False):
 
 REGISTRY = "Reads the agent registry: one row per agent token, bounded by the tokens issued."
 FULL_READS = {
+    ("rehash_tasks", "cfg_pipelines"): "Finds every active merge target in the selected project.",
     (
         "permission_effective",
         "cfg_pipelines",
@@ -477,7 +478,6 @@ FULL_READS = {
     ("metadata_codes", "cfg_pipelines"): "Loads the complete identifier-to-code map.",
     ("permission_pipelines", "cfg_pipelines"): "Lists all pipelines for permission evaluation.",
     ("sql_tasks", "cfg_pipelines"): "Validates SQL tasks across all active pipelines.",
-    ("rehash_tasks", "cfg_pipelines"): "Finds all merge targets across active pipelines.",
     ("catalog_lineage_cache", "aud_column_lineage"): "Loads the complete current lineage cache.",
     (
         "recorded_hash_version_names",

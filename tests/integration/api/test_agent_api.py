@@ -2569,6 +2569,8 @@ def test_task_secrets_are_not_resolved_for_refused_claims(agent_scene, monkeypat
     assert called == []
     if refusal == "http":
         assert "HTTPS" in response.text and "localhost" in response.text
+
+
 def test_project_two_agent_setup_and_merge_keep_contracts_isolated(agent_scene, monkeypatch):
     from etl_craft.agent.task_store import RemoteTaskStore
     from etl_craft.core.counts import Counts

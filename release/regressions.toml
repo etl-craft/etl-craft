@@ -285,6 +285,7 @@ small-agent-python-slots = [
 ]
 
 agent-project-attribution = [
+    "tests/integration/engine/test_agent_project_scope.py::test_rehash_candidate_lookup_is_project_scoped",
     "tests/integration/engine/test_agent_project_scope.py::test_agent_operation_publishes_and_reads_only_its_project",
     "tests/integration/engine/test_agent_project_scope.py::test_other_project_token_cannot_publish_an_owned_attempt",
     "tests/integration/api/test_agent_api.py::test_project_two_agent_setup_and_merge_keep_contracts_isolated",
