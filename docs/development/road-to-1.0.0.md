@@ -994,9 +994,11 @@ empty-history-page handling defect, which was corrected and verified. No cloud w
   fail permanently and fire ordinary FAILURE edges. Their downstream edges use HAS_DATA,
   replacing the item's SUCCESS text because the package already refuses that edge.
   S8.D valid-count reporting reads rejected keys from cloned audit tables; current-run ODS
-  admission uses recorded rule scopes, never asynchronous mirrors. Full demo validation,
+  admission uses recorded rule scopes, never asynchronous mirrors. Full demo validation and
   Beta memory measurement remain in progress. Paired cloud provenance and omitted-column
-  seed checks passed. Live source ingestion is blocked by unfinished S7.E task-secret
+  seed checks passed, together with atomic landing crash/retry and rule-scope checks on both
+  clouds concurrently. Local units, touched Engine DB/warehouse suites, upgrade/guard/query
+  checks and 20 item-offset crash repeats passed. Live source ingestion waits for S7.E task-secret
   declarations/delivery: arbitrary source credentials are intentionally excluded from task
   environments; no credential allowlist bypass is introduced.
 
