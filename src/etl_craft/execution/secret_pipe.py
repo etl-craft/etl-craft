@@ -40,17 +40,17 @@ def capture_output(
             if not chunk:
                 break
             pending += chunk
-            while pending:
+            while len(pending) >= width:
+                safe = len(pending) - width + 1
                 matches = [(pending.find(value), value) for value in secrets if value in pending]
                 if matches:
                     index, value = min(matches, key=lambda match: (match[0], -len(match[1])))
-                    output.write(pending[:index] + b"[REDACTED]")
-                    pending = pending[index + len(value) :]
-                else:
-                    length = max(0, len(pending) - width + 1)
-                    output.write(pending[:length])
-                    pending = pending[length:]
-                    break
+                    if index < safe:
+                        output.write(pending[:index] + b"[REDACTED]")
+                        pending = pending[index + len(value) :]
+                        continue
+                output.write(pending[:safe])
+                pending = pending[safe:]
             output.flush()
         for value in secrets:
             pending = pending.replace(value, b"[REDACTED]")
@@ -101,3 +101,31 @@ def with_values(spec: ChildSpec, values: dict[str, str]) -> ChildSpec:
         input_data=json.dumps(values).encode(),
         redacted_values=tuple(values.values()),
     )
+
+
+def send_input(
+    target: IO[bytes],
+    data: bytes,
+    stop: threading.Event,
+    failures: list[OSError],
+    finished: threading.Event,
+) -> None:
+    """Bound pipe feeding so a child that never reads can still be killed on time."""
+    offset = 0
+    try:
+        os.set_blocking(target.fileno(), False)
+        while offset < len(data) and not finished.is_set():
+            _, ready, _ = select.select([], [target], [], 0.1)
+            if ready:
+                try:
+                    offset += os.write(target.fileno(), data[offset : offset + 16384])
+                except BlockingIOError:
+                    continue
+    except BrokenPipeError:
+        pass
+    except OSError as error:
+        # This thread is a process boundary: cancel the child and report the pipe failure.
+        failures.append(error)
+        stop.set()
+    finally:
+        target.close()

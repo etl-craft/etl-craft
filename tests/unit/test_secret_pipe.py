@@ -51,3 +51,58 @@ def test_invalid_pipe_payload_never_echoes_input(data):
     with pytest.raises(PermanentError, match=r"credential pipe.*1 MiB.*restore") as error:
         read_values(io.StringIO(data))
     assert data[:20] not in str(error.value)
+
+
+def test_overlapping_secret_prefix_waits_for_the_longer_value(monkeypatch):
+    import io
+    import threading
+    from unittest.mock import Mock
+
+    from etl_craft.execution.secret_pipe import capture_output
+
+    chunks = iter([b"shared-prefix", b"-private-tail", b""])
+    monkeypatch.setattr("os.read", lambda fd, size: next(chunks))
+    monkeypatch.setattr("select.select", lambda *args: ([1], [], []))
+    source = Mock()
+    output = io.BytesIO()
+    capture_output(
+        source,
+        output,
+        ("shared-prefix", "shared-prefix-private-tail"),
+        threading.Event(),
+        [],
+        threading.Event(),
+    )
+    assert output.getvalue() == b"[REDACTED]"
+
+
+def test_unread_credential_pipe_does_not_block_task_timeout(monkeypatch):
+    import subprocess
+    from concurrent.futures import ThreadPoolExecutor
+
+    children = []
+    original = subprocess.Popen
+
+    def launch(*args, **kwargs):
+        process = original(*args, **kwargs)
+        children.append(process)
+        return process
+
+    monkeypatch.setattr("etl_craft.execution.processes.subprocess.Popen", launch)
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        future = pool.submit(
+            run_child,
+            ChildSpec(
+                (sys.executable, "-c", "import threading; threading.Event().wait()"),
+                timeout_seconds=0.1,
+                input_data=b"x" * (1024 * 1024),
+                redacted_values=("private",),
+            ),
+        )
+        try:
+            result = future.result(timeout=3)
+            assert result.timed_out
+        finally:
+            for process in children:
+                if process.poll() is None:
+                    process.kill()

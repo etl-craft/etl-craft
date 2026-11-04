@@ -26,6 +26,7 @@ from etl_craft.engine.resource_locks import holder_tag
 from etl_craft.execution.child import exit_now
 from etl_craft.execution.classify import classify_failure
 from etl_craft.execution.leases import process_start
+from etl_craft.execution.secret_pipe import read_values
 from etl_craft.handlers.registry import TaskContext, format_task_log, resolve_handler
 from etl_craft.services.operations.agent_models import AgentTask
 from etl_craft.services.operations.serialization import encode, from_json
@@ -97,8 +98,6 @@ def main() -> int:
         (folder / "result").write_text(json.dumps({"trigger": True}), encoding="utf-8")
         return ExitCode.SUCCESS
     context = started_context(context, started)
-    from etl_craft.execution.secret_pipe import read_values
-
     context = replace(
         context,
         _secret_values=read_values(sys.stdin) if args.task_secrets_stdin else {},

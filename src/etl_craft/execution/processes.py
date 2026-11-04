@@ -111,50 +111,27 @@ def run_child(
         started = time.monotonic()
         interrupts.checkpoint()
         process = _launch(spec, output)
-        reader = None
-        failures: list[OSError] = []
-        finished = threading.Event()
-        if spec.redacted_values:
-            from etl_craft.execution.secret_pipe import capture_output
-
-            assert process.stdout is not None
-            cancel = cancel or threading.Event()
-            reader = threading.Thread(
-                target=capture_output,
-                args=(process.stdout, output, spec.redacted_values, cancel, failures, finished),
-                daemon=True,
-            )
-            reader.start()
         birth = process_start(process.pid)
         logger.debug("started pid %s: %s", process.pid, " ".join(spec.argv))
         timed_out = cancelled = False
-        try:
-            _send_input(process, spec.input_data)
-            if on_started is not None:
-                on_started(process.pid)
-            fault_point("supervisor.after_popen")
-            cancelled = _wait(process, spec.timeout_seconds or None, cancel)
-            if cancelled:
-                logger.warning("stopping pid %s: cancellation was requested", process.pid)
-                _stop_group(process, birth, min(kill_grace_seconds, 1))
-        except subprocess.TimeoutExpired:
-            timed_out = True
-            logger.warning(
-                "pid %s exceeded its %gs limit; stopping it", process.pid, spec.timeout_seconds
-            )
-            _stop_group(process, birth, kill_grace_seconds)
-        except BaseException:
-            _stop_group(process, birth, kill_grace_seconds)
-            raise
-        finally:
-            if reader is not None:
-                finished.set()
-                reader.join()
-        if failures:
-            raise RunStateError(
-                f"child log {spec.log_path}: output capture failed ({type(failures[0]).__name__}); "
-                "restore writable log storage and retry the task"
-            )
+        with _task_pipes(process, spec, output, cancel) as task_cancel:
+            try:
+                if on_started is not None:
+                    on_started(process.pid)
+                fault_point("supervisor.after_popen")
+                cancelled = _wait(process, spec.timeout_seconds or None, task_cancel)
+                if cancelled:
+                    logger.warning("stopping pid %s: cancellation was requested", process.pid)
+                    _stop_group(process, birth, min(kill_grace_seconds, 1))
+            except subprocess.TimeoutExpired:
+                timed_out = True
+                logger.warning(
+                    "pid %s exceeded its %gs limit; stopping it", process.pid, spec.timeout_seconds
+                )
+                _stop_group(process, birth, kill_grace_seconds)
+            except BaseException:
+                _stop_group(process, birth, kill_grace_seconds)
+                raise
         elapsed = time.monotonic() - started
         tail = _read_tail(output, start_offset, tail_bytes)
     result = ChildResult(
@@ -169,14 +146,52 @@ def run_child(
     return result
 
 
-def _send_input(process: subprocess.Popen[bytes], data: bytes | None) -> None:
-    """Close the private pipe after delivering its payload; tolerate an already failed child."""
-    if process.stdin is not None and data is not None:
-        try:
-            process.stdin.write(data)
-            process.stdin.close()
-        except BrokenPipeError:
-            logger.debug("pid %s closed its input before reading the task payload", process.pid)
+@contextmanager
+def _task_pipes(
+    process: subprocess.Popen[bytes],
+    spec: ChildSpec,
+    output: IO[bytes],
+    cancel: threading.Event | None,
+) -> Iterator[threading.Event | None]:
+    """Drain output and feed credentials while supervision retains its timeout and cancellation."""
+    from etl_craft.execution.secret_pipe import capture_output, send_input
+
+    threads = []
+    finished = threading.Event()
+    failures: list[OSError] = []
+    if spec.redacted_values or spec.input_data is not None:
+        cancel = cancel or threading.Event()
+    if spec.redacted_values:
+        assert process.stdout is not None and cancel is not None
+        threads.append(
+            threading.Thread(
+                target=capture_output,
+                args=(process.stdout, output, spec.redacted_values, cancel, failures, finished),
+                daemon=True,
+            )
+        )
+    if spec.input_data is not None:
+        assert process.stdin is not None and cancel is not None
+        threads.append(
+            threading.Thread(
+                target=send_input,
+                args=(process.stdin, spec.input_data, cancel, failures, finished),
+                daemon=True,
+            )
+        )
+    for thread in threads:
+        thread.start()
+    try:
+        yield cancel
+    finally:
+        finished.set()
+        for thread in threads:
+            thread.join()
+    if failures:
+        raise RunStateError(
+            f"child log {spec.log_path}: pipe I/O failed ({type(failures[0]).__name__}); "
+            "restore writable log storage and retry the task"
+        )
 
 
 def _launch(spec: ChildSpec, output: IO[bytes]) -> subprocess.Popen[bytes]:
