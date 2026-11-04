@@ -11,11 +11,11 @@ RUN pip install --no-cache-dir uv==0.12.17 \
 
 FROM builder AS dependencies
 RUN uv venv /opt/etl-craft \
-    && uv pip install --python /opt/etl-craft/bin/python --no-cache --require-hashes -r /tmp/core.txt \
-    && uv pip install --python /opt/etl-craft/bin/python --no-cache --no-deps /wheel/*.whl
+    && uv pip install --python /opt/etl-craft/bin/python --no-cache --compile-bytecode --require-hashes -r /tmp/core.txt \
+    && uv pip install --python /opt/etl-craft/bin/python --no-cache --compile-bytecode --no-deps /wheel/*.whl
 
 FROM dependencies AS web
-RUN uv pip install --python /opt/etl-craft/bin/python --no-cache --require-hashes -r /tmp/ui.txt
+RUN uv pip install --python /opt/etl-craft/bin/python --no-cache --compile-bytecode --require-hashes -r /tmp/ui.txt
 
 FROM python AS runtime
 LABEL org.opencontainers.image.source="https://github.com/etl-craft/etl-craft"

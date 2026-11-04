@@ -25,6 +25,9 @@ Warehouses are optional extras. Core bundles none. `all` is core plus the UI, fo
 
 ### Fixed
 
+- Compile bytecode in role and project images so read-only agent health probes do not
+  recompile imports on every invocation.
+
 - Explicit Python slots may exceed the default memory estimate within CPU, total-slot and
   measured process-base bounds. Dedicated agents reserve their supervisor's base memory;
   startup and doctor show the explicit count and estimate. SIGKILL/OOM task endings record
