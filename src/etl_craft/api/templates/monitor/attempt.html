@@ -10,6 +10,8 @@
 <dl class="facts inline">
   <dt>Owner</dt><dd>{{ attempt.owner_id or "Not claimed" }}</dd>
   <dt>Host</dt><dd>{{ attempt.host or "Not recorded" }}{% if attempt.pid %} · PID {{ attempt.pid }}{% endif %}</dd>
+  <dt>Process ending evidence</dt><dd>{{ attempt.process_evidence_kind or "Not classified" }}{% if attempt.process_evidence_actor %} · {{ attempt.process_evidence_actor }}{% endif %}{% if attempt.process_evidence_reason %} · {{ attempt.process_evidence_reason }}{% endif %}</dd>
+  <dt>Query ending evidence</dt><dd>{{ attempt.query_evidence_kind or "Not classified" }}{% if attempt.query_evidence_actor %} · {{ attempt.query_evidence_actor }}{% endif %}{% if attempt.query_evidence_reason %} · {{ attempt.query_evidence_reason }}{% endif %}</dd>
   <dt>Exit code</dt><dd id="attempt-exit">{{ attempt.exit_code if attempt.exit_code is not none else "None yet" }}</dd>
   <dt>Queued</dt><dd>{{ attempt.queued_at|zoned(settings.timezone) }}</dd>
   <dt>Started</dt><dd>{{ attempt.started_at|zoned(settings.timezone) }}</dd>

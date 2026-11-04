@@ -48,6 +48,10 @@ spec:
         - name: tmp
           mountPath: /tmp
         env:
+        - name: ETL_CRAFT_AGENT_INSTANCE_ID
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.uid
         - name: ETL_CRAFT_CONFIG
           value: /state/craft-connector.yml
         - name: ETL_CRAFT_API

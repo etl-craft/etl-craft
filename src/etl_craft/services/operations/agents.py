@@ -7,6 +7,7 @@ import math
 from dataclasses import dataclass, replace
 from datetime import datetime
 from typing import ClassVar
+from uuid import uuid4
 
 from sqlalchemy import bindparam
 from sqlalchemy.engine import Connection, Row
@@ -152,6 +153,7 @@ def register(ctx: OperationContext, request: AgentRegister) -> AgentReply:
             conn,
             {
                 "agent_id": agent_id,
+                "instance_id": request.instance_id or str(uuid4()),
                 "pool": request.pool,
                 "host": request.resources.host,
                 "version": request.version,

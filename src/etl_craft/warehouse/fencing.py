@@ -88,6 +88,32 @@ def confirm_stopped(config: ConnectorConfig, tag: str) -> None:
         engine.dispose()
 
 
+def require_absent(config: ConnectorConfig, tag: str) -> None:
+    """Verify absence without cancelling a running query or assuming process exit."""
+    dialect = warehouse_dialect(config)
+    if not dialect.session_fencing:
+        raise LockTimeoutError(
+            f"{tag}: {dialect.spec.display_name} cannot verify tagged query absence; "
+            "use a warehouse with a query acknowledgement adapter before attesting"
+        )
+    engine = build_warehouse_engine(config, session_tag=None)
+    try:
+        with engine.connect() as conn:
+            count = dialect.running_tagged(conn, tag)
+        if count:
+            raise LockTimeoutError(
+                f"{tag}: {count} tagged warehouse queries still running; expected zero; "
+                "stop them through their owning process or warehouse, then reconcile again"
+            )
+    except SQLAlchemyError as error:
+        raise LockTimeoutError(
+            f"{tag}: query absence could not be verified ({type(error).__name__}); "
+            "restore warehouse access before reconciling"
+        ) from error
+    finally:
+        engine.dispose()
+
+
 @contextmanager
 def cancellation_scope(config: ConnectorConfig, tag: str) -> Iterator[None]:
     """Bind the session identity a task or probe's SIGTERM handler must cancel."""

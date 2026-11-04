@@ -29,10 +29,13 @@ class AgentRegister(AgentRequest):
 
     pool: str
     resources: AgentResources
+    instance_id: str | None = None
 
     def __post_init__(self) -> None:
         """Keep pool names bounded and usable in notification routing."""
         require_text("pool", self.pool, limit=128)
+        if self.instance_id is not None:
+            require_text("instance_id", self.instance_id, limit=256)
 
 
 @dataclass(frozen=True, kw_only=True)

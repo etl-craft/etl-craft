@@ -629,3 +629,63 @@ def test_agent_receives_secrets_by_pipe_and_masks_all_output(secret_cluster, mon
     finally:
         agent.close()
         controller.close()
+
+
+@pytest.mark.chaos
+@pytest.mark.parametrize("outcome", ["FAILED", "TIMED_OUT"])
+def test_agent_terminal_exit_records_real_evidence(cluster, monkeypatch, outcome):
+    p, url, token, agent_dir = cluster
+    script = (
+        "from etl_craft.scripting import PermanentError\n"
+        "def run(task):\n    raise PermanentError('deliberate failed writer')\n"
+        if outcome == "FAILED"
+        else "import threading\ndef run(task):\n    threading.Event().wait(120)\n"
+    )
+    (agent_dir / "python_scripts/load.py").write_text(script)
+    with p.engine.begin() as conn:
+        for name, value in (
+            ("RETRY_ON", "NONE"),
+            ("TASK_TIMEOUT_SECONDS", "3" if outcome == "TIMED_OUT" else "30"),
+        ):
+            conn.execute(
+                text(
+                    "INSERT INTO CFG_TASK_PARAMETERS (TASK_ID,PARAMETER_NAME,PARAMETER_VALUE) "
+                    "VALUES (:task,:name,:value)"
+                ),
+                {"task": p.task_id, "name": name, "value": value},
+            )
+    publish_project(p, agent_dir)
+    controller = p.start("controller", "--no-ui")
+    code, output = p.run(
+        "run", "--pipeline-code", "P", "--init-only", "--run-key", "ending-evidence"
+    )
+    assert code == 0, output
+    monkeypatch.setenv("ETL_CRAFT_TOKEN", token.token)
+    agent = p.start("agent", "--api", url, "--project-dir", str(agent_dir), "--drain-seconds", "0")
+    p.wait_for("SELECT STATUS FROM AUD_TASK_ATTEMPTS", expected=outcome, timeout=30)
+    p.wait_for("SELECT count(*) FROM AUD_ATTEMPT_ACKNOWLEDGEMENTS", expected=2, timeout=10)
+    with p.engine.connect() as conn:
+        evidence = (
+            conn.execute(
+                text(
+                    "SELECT KIND AS kind,EVIDENCE_KIND AS evidence_kind "
+                    "FROM AUD_ATTEMPT_ACKNOWLEDGEMENTS"
+                )
+            )
+            .mappings()
+            .all()
+        )
+        attempt = conn.execute(
+            text(
+                "SELECT PID AS pid, PROCESS_START AS birth, AGENT_INSTANCE_ID AS instance "
+                "FROM AUD_TASK_ATTEMPTS"
+            )
+        ).one()
+        registered = conn.execute(
+            text("SELECT INSTANCE_ID AS instance FROM AUD_AGENTS")
+        ).scalar_one()
+    assert {r["kind"] for r in evidence} == {"PROCESS", "QUERIES"}
+    assert all(r["evidence_kind"] == "VERIFIED" for r in evidence)
+    assert attempt.pid and attempt.birth and attempt.instance == registered
+    agent.signal(signal.SIGTERM)
+    assert agent.wait(timeout=40) == 0, agent.output + controller.output

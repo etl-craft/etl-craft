@@ -290,3 +290,14 @@ agent-project-attribution = [
     "tests/integration/engine/test_agent_project_scope.py::test_other_project_token_cannot_publish_an_owned_attempt",
     "tests/integration/api/test_agent_api.py::test_project_two_agent_setup_and_merge_keep_contracts_isolated",
 ]
+
+agent-ending-watermark-fence = [
+    "tests/integration/engine/test_upgrade.py::test_ending_evidence_upgrade_keeps_existing_observations_unclassified",
+    "tests/integration/engine/test_ending_evidence.py::test_verified_local_exit_needs_no_attestation_or_lease_wait",
+    "tests/integration/execution/test_scoped_controls.py::test_reconcile_observes_exited_terminal_worker_without_rewriting_its_outcome",
+    "tests/integration/api/test_agent_api.py::test_every_observed_agent_ending_records_only_verified_evidence",
+    "tests/integration/api/test_agent_process.py::test_agent_terminal_exit_records_real_evidence",
+    "tests/integration/engine/test_ending_evidence.py::test_attested_legacy_ending_advances_the_window_and_names_operator",
+    "tests/integration/engine/test_ending_evidence.py::test_attestation_refuses_unverified_endings_without_writes",
+    "tests/integration/engine/test_ending_evidence.py::test_can_run_grant_does_not_grant_attestation",
+]

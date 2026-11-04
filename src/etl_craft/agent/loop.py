@@ -44,7 +44,7 @@ from etl_craft.core.text import sha256_hex
 from etl_craft.engine.resource_locks import holder_tag
 from etl_craft.execution.child_environment import child_environment
 from etl_craft.execution.control_flow import process_local_queries
-from etl_craft.execution.leases import process_start
+from etl_craft.execution.leases import owner_id, process_start
 from etl_craft.execution.processes import ChildResult, ChildSpec, run_child
 from etl_craft.execution.query_cancellation import confirm
 from etl_craft.services.operations.agent_models import (
@@ -184,6 +184,7 @@ class AgentLoop:
                 version=__version__,
                 pool=self.options.pool,
                 resources=self.resources,
+                instance_id=os.environ.get("ETL_CRAFT_AGENT_INSTANCE_ID") or owner_id(),
             ),
         )
         if not isinstance(registered.data, dict):
@@ -352,7 +353,21 @@ class AgentLoop:
                 tail_bytes=self.config.logs.tail_bytes,
                 cancel=task.cancel,
                 kill_grace_seconds=1,
+                on_started=None if task.trigger else lambda pid: self._started(task, pid),
             )
+
+    def _started(self, task: RunningTask, pid: int) -> None:
+        """Pin the observed process before its bootstrap can time out."""
+        self.client.call(
+            ActionName.AGENT_REPORT,
+            AgentTask(
+                version=__version__,
+                attempt_id=task.attempt_id,
+                operation=AgentReport.START,
+                pid=pid,
+                process_start=process_start(pid),
+            ),
+        )
 
     def _heartbeats(self) -> None:
         while not self.closed.is_set():
@@ -517,9 +532,9 @@ class AgentLoop:
             )
         if task.forced_status is not None:
             ending = replace(ending, status=task.forced_status, error_message=task.forced_message)
-        queries_ended = task.kind != SlotKind.PYTHON or process_local_queries(self.config)
+        queries_ended = process_local_queries(self.config)
         assert self.client.token is not None
-        if outcome.cancelled or outcome.timed_out or outcome.returncode < 0:
+        if not queries_ended or outcome.cancelled or outcome.timed_out or outcome.returncode < 0:
             tag = holder_tag(
                 attempt_holder(task.attempt_id, sha256_hex(self.client.token.encode()))
             )
@@ -532,11 +547,18 @@ class AgentLoop:
                         version=__version__,
                         attempt_id=task.attempt_id,
                         operation=AgentReport.CANCEL,
+                        pid=outcome.pid,
+                        process_start=outcome.process_start,
                         error_message=reason,
                     ),
                 )
                 return False
-        ending = replace(ending, queries_ended=queries_ended)
+        ending = replace(
+            ending,
+            queries_ended=queries_ended,
+            pid=outcome.pid,
+            process_start=outcome.process_start,
+        )
         self.client.call(ActionName.AGENT_REPORT, ending)
         return True
 

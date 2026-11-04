@@ -551,6 +551,15 @@ def test_cancellation_needs_warehouse_confirmation_from_the_pinned_owner(agent_s
 
     db, client, headers, _, _, config = agent_scene
     attempt = claim(agent_scene)
+    started = post(
+        agent_scene,
+        "report",
+        attempt_id=attempt,
+        operation="START",
+        pid=123,
+        process_start="cancelled-child-birth",
+    )
+    assert started.status_code == 200, started.text
     ctx = OperationContext(db.engine, config, SYSTEM_ACTOR, role=ApiRole.ADMIN)
     pending = invoke(
         ctx,
@@ -564,6 +573,8 @@ def test_cancellation_needs_warehouse_confirmation_from_the_pinned_owner(agent_s
             "version": __version__,
             "attempt_id": attempt,
             "operation": "CANCEL",
+            "pid": 123,
+            "process_start": "cancelled-child-birth",
             "queries_ended": confirmed,
             "error_message": "warehouse confirmation still pending",
         },
@@ -580,7 +591,7 @@ def test_cancellation_needs_warehouse_confirmation_from_the_pinned_owner(agent_s
         from etl_craft.engine.controls import get
 
         view = get(conn, pending.control_id)
-    assert row.status == AttemptStatus.CLAIMED
+    assert row.status == AttemptStatus.RUNNING
     assert row.requested is not None
     assert (row.acknowledged is not None) == confirmed
     assert view.status == ControlStatus.ACKNOWLEDGED
@@ -2703,6 +2714,119 @@ def test_project_two_agent_setup_and_merge_keep_contracts_isolated(agent_scene, 
                     "WHERE l.PIPELINE_RUN_ID=:run AND p.PROJECT_ID<>:project"
                 ),
                 {"run": run, "project": project},
+            ).scalar_one()
+            == 0
+        )
+
+
+@pytest.mark.parametrize("status", ["SUCCESS", "FAILED", "TIMED_OUT", "CANCELLED"])
+@pytest.mark.parametrize("queries_ended", [False, True])
+def test_every_observed_agent_ending_records_only_verified_evidence(
+    agent_scene, status, queries_ended
+):
+    db, _, _, _, _, _ = agent_scene
+    attempt = claim(agent_scene)
+    started = post(
+        agent_scene,
+        "report",
+        attempt_id=attempt,
+        operation="START",
+        pid=123,
+        process_start="recorded-process-birth",
+    )
+    assert started.status_code == 200, started.text
+    ended = post(
+        agent_scene,
+        "report",
+        attempt_id=attempt,
+        operation="END",
+        status=status,
+        pid=123,
+        process_start="recorded-process-birth",
+        queries_ended=queries_ended,
+    )
+    assert ended.status_code == 200, ended.text
+    with db.engine.connect() as conn:
+        rows = (
+            conn.execute(
+                text(
+                    "SELECT KIND AS kind,EVIDENCE_KIND AS evidence_kind,ACTOR AS actor "
+                    "FROM AUD_ATTEMPT_ACKNOWLEDGEMENTS WHERE ATTEMPT_ID=:id"
+                ),
+                {"id": attempt},
+            )
+            .mappings()
+            .all()
+        )
+    assert {r["kind"] for r in rows} == ({"PROCESS", "QUERIES"} if queries_ended else {"PROCESS"})
+
+    assert all(row["evidence_kind"] == "VERIFIED" and row["actor"] for row in rows)
+    if status in ("SUCCESS", "FAILED", "TIMED_OUT", "CANCELLED"):
+        from etl_craft.core.enums import OffsetType
+        from etl_craft.core.time import as_utc
+        from etl_craft.engine.repository.offsets import StoredOffset
+        from etl_craft.engine.timestamp_windows import WindowDefinition, admit_window
+        from fixtures.metadata import start_run
+
+        with db.engine.begin() as conn:
+            pipeline = add_pipeline(conn, "DM")
+            task = add_task(conn, pipeline, "read")
+            run = start_run(conn, pipeline)
+            summary = transitions.find_or_create_task_run(conn, task, run).task_run_id
+            window = admit_window(
+                conn,
+                task,
+                summary,
+                datetime.now(UTC),
+                WindowDefinition(
+                    StoredOffset(OffsetType.TIMESTAMP, "2000-01-01T00:00:00+00:00"), ("P",)
+                ),
+            )
+        source_start = as_utc(started.json()["data"]["started_at"])
+        assert (
+            (window.high > source_start)
+            if queries_ended or status == "SUCCESS"
+            else (window.high == source_start)
+        )
+
+
+def test_agent_ending_refuses_a_foreign_process_identity(agent_scene):
+    db, *_ = agent_scene
+    attempt = claim(agent_scene)
+    assert (
+        post(
+            agent_scene,
+            "report",
+            attempt_id=attempt,
+            operation="START",
+            pid=123,
+            process_start="admitted-birth",
+        ).status_code
+        == 200
+    )
+    answer = post(
+        agent_scene,
+        "report",
+        attempt_id=attempt,
+        operation="END",
+        status="FAILED",
+        pid=124,
+        process_start="foreign-birth",
+        queries_ended=True,
+    )
+    assert answer.status_code == 403 and "PID/birth" in answer.text
+    with db.engine.connect() as conn:
+        assert (
+            conn.execute(
+                text("SELECT STATUS AS status FROM AUD_TASK_ATTEMPTS WHERE ATTEMPT_ID=:id"),
+                {"id": attempt},
+            ).scalar_one()
+            == "RUNNING"
+        )
+        assert (
+            conn.execute(
+                text("SELECT COUNT(*) AS n FROM AUD_ATTEMPT_ACKNOWLEDGEMENTS WHERE ATTEMPT_ID=:id"),
+                {"id": attempt},
             ).scalar_one()
             == 0
         )

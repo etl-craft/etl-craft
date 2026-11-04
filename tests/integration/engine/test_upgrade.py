@@ -262,3 +262,69 @@ def test_browser_account_migration_retains_real_users_and_sessions(
     assert after.failed == 0 and after.locked is None and after.must_change == "N"
     assert json.loads(after.settings) == {}
     assert tokens.authenticate(ctx, session.token).name == "alice"
+
+
+def test_ending_evidence_upgrade_keeps_existing_observations_unclassified(empty_engine_db):
+    from etl_craft.core.actor import SYSTEM_ACTOR
+    from etl_craft.engine import migrations, transitions
+    from fixtures.metadata import add_pipeline, add_task, start_run
+
+    db = empty_engine_db
+    install(db, "0.3.0")
+    for file in migrations.migration_streams(db.engine)[0].files:
+        if "0019" <= file.version < "0085":
+            migrations._apply(db.engine, file)
+    with db.engine.begin() as conn:
+        pipeline = add_pipeline(conn, "EVIDENCE_UPGRADE")
+        task = add_task(conn, pipeline, "load")
+        run = start_run(conn, pipeline)
+        summary = transitions.find_or_create_task_run(conn, task, run).task_run_id
+        attempt = transitions.queue_attempt(conn, summary, SYSTEM_ACTOR)
+        observed = datetime.now(UTC)
+        conn.execute(
+            text(
+                "INSERT INTO AUD_TASK_ATTEMPTS (TASK_RUN_ID, ATTEMPT_NUMBER, STATUS, "
+                "QUEUED_AT, STARTED_AT, ENDED_AT, REQUESTED_BY, REQUESTED_BY_KIND) "
+                "VALUES (:summary,2,'SUCCESS',:observed,:observed,:observed,:actor,:kind)"
+            ),
+            {
+                "summary": summary,
+                "observed": observed,
+                "actor": SYSTEM_ACTOR.name,
+                "kind": SYSTEM_ACTOR.kind,
+            },
+        )
+        conn.execute(
+            text(
+                "INSERT INTO AUD_ATTEMPT_ACKNOWLEDGEMENTS "
+                "(ATTEMPT_ID,KIND,OBSERVED_AT) VALUES (:id,'PROCESS',:observed)"
+            ),
+            {"id": attempt, "observed": observed},
+        )
+    apply_pending_migrations(db.engine)
+    with db.engine.connect() as conn:
+        row = conn.execute(
+            text(
+                "SELECT EVIDENCE_KIND AS evidence_kind,ACTOR AS actor,REASON AS reason "
+                "FROM AUD_ATTEMPT_ACKNOWLEDGEMENTS WHERE ATTEMPT_ID=:id"
+            ),
+            {"id": attempt},
+        ).one()
+    assert row.evidence_kind is None and row.actor is None and row.reason is None
+
+    from etl_craft.core.enums import ActionName, ApiRole
+    from etl_craft.services.operations import OperationContext
+    from fixtures.actions import act
+
+    ctx = OperationContext(db.engine, db.config, SYSTEM_ACTOR, role=ApiRole.ADMIN)
+    result = act(ctx, ActionName.RECONCILE, pipeline_code="EVIDENCE_UPGRADE")
+    assert "0 ending evidence" in result.message
+    with db.engine.connect() as conn:
+        legacy = conn.execute(
+            text(
+                "SELECT STATUS AS status, OWNER_ID AS owner, LEASE_EXPIRES_AT AS expiry "
+                "FROM AUD_TASK_ATTEMPTS WHERE TASK_RUN_ID=:summary AND ATTEMPT_NUMBER=2"
+            ),
+            {"summary": summary},
+        ).one()
+    assert legacy.status == "SUCCESS" and legacy.owner is None and legacy.expiry is None

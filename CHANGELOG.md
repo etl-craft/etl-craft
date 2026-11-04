@@ -10,6 +10,13 @@ Warehouses are optional extras. Core bundles none. `all` is core plus the UI, fo
 
 ### Added
 
+- `reconcile --attest-ended --reason REASON` recovers missing terminal process evidence only
+  after expiry/fencing, tagged-query absence and original-agent-instance checks. Process
+  attestations are recorded as ATTESTED with the operator, reason and verified checks;
+  independently confirmed query endings remain VERIFIED. Attempt JSON and UI show evidence.
+- Agent registration retains a pod/host instance identity and pins it to each claim. Kubernetes
+  manifests supply the pod UID through the downward API.
+
 - Python task `SECRETS` declares pipe-separated ENVIRONMENT/FILE provider names;
   `task.secret(name)` refuses undeclared/missing names. Fenced TLS claims deliver only
   declared task values, passed to children by pipe and masked before log persistence.
@@ -44,6 +51,15 @@ Warehouses are optional extras. Core bundles none. `all` is core plus the UI, fo
 - Report post-reject merge duplicates in task and attempt counts, inspection, metrics and audit mirrors.
 
 ### Fixed
+
+- Agent ending reports preserve observed PID/birth and query-ending evidence for every terminal
+  outcome. Both agent and local supervisors confirm server-side queries after ordinary exits,
+  failures and timeouts; task status alone never creates evidence. Migration 0085 leaves old
+  evidence unclassified and never backfills missing acknowledgements. Recover affected old
+  attempts through reconcile, with explicit operator attestation when a deleted pod prevents
+  verifying its process exit; no manual audit edits or watermark reset is needed. Verified
+  terminal local exits remain reconcilable before lease expiry; unknown exits refuse with
+  the attestation remedy instead of being treated as query evidence.
 
 - Agent report and log operations resolve their project from the authenticated attempt before
   reading or publishing target contracts, registrations, checks, item state and offsets.

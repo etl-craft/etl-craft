@@ -272,6 +272,18 @@ def test_attempt_page_shows_the_attempt_read_and_links_its_log(monitor):
     ctx, client, active = monitor
     attempt = ran_extract(ctx, active)
     attempt_log(ctx, active, attempt, "extract started\nextract done\n")
+    from etl_craft.core.enums import EndingEvidenceKind
+    from etl_craft.engine import controls
+
+    with acting_as(OWNER), ctx.engine.begin() as conn:
+        controls.observe_exit(
+            conn,
+            attempt,
+            queries_ended=True,
+            evidence=EndingEvidenceKind.ATTESTED,
+            reason="Deleted pod <script>not executable</script>",
+            checks=("lease_expired", "tagged_queries_absent"),
+        )
     login(client)
     run_page = client.get(f"{BASE}/OPS/runs/{active}", params={"task": "EXTRACT"})
     assert f'href="{BASE}/OPS/runs/{active}/attempts/{attempt}"' in run_page.text
@@ -283,6 +295,12 @@ def test_attempt_page_shows_the_attempt_read_and_links_its_log(monitor):
     assert f'href="{log_api}" download="attempt-{attempt}.log"' in page.text
     assert client.get(log_api).text == "extract started\nextract done\n"
     assert client.get(log_api, params={"offset": 16}).text == "extract done\n"
+
+    assert document["process_evidence_kind"] == "ATTESTED"
+    assert document["query_evidence_kind"] == "VERIFIED"
+    assert document["process_evidence_actor"] == "owner"
+    assert "ATTESTED" in page.text and "VERIFIED" in page.text
+    assert "&lt;script&gt;not executable&lt;/script&gt;" in page.text
 
 
 def test_attempt_page_refuses_another_runs_or_pipelines_attempt_alike(monitor):

@@ -191,3 +191,12 @@ def visible_dependents(conn: Connection, ctx: OperationContext, code: str) -> tu
         if pipeline_access(conn, scoped).permits(row.pipeline_code):
             visible.append(f"{row.project_code}.{row.pipeline_code}")
     return tuple(visible)
+
+
+def has_role(role: ApiRole | None, required: ApiRole | None) -> bool:
+    """Whether ``role`` meets ``required``; an unproven role meets only no requirement."""
+    if ApiRole.AGENT in {role, required}:
+        return role == required
+    return required is None or (
+        role is not None and tuple(ApiRole).index(role) >= tuple(ApiRole).index(required)
+    )

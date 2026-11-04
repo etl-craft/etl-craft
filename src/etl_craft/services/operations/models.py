@@ -8,7 +8,14 @@ from datetime import date, datetime
 from typing import Any, ClassVar
 
 from etl_craft.core.business_rules import RuleObservation
-from etl_craft.core.enums import AttemptStatus, FailureClass, RunStatus, SlaStatus, TriggerKind
+from etl_craft.core.enums import (
+    AttemptStatus,
+    EndingEvidenceKind,
+    FailureClass,
+    RunStatus,
+    SlaStatus,
+    TriggerKind,
+)
 from etl_craft.engine.repository.intervention_rows import Intervention
 from etl_craft.engine.repository.pauses import Pause, Resume
 from etl_craft.engine.standing_pauses import TaskPause
@@ -92,6 +99,15 @@ class AttemptView:
     retry_on: str | None = None
     retry_reason: str | None = None
     item_progress: str | None = None
+
+    process_evidence_kind: EndingEvidenceKind | None = None
+    process_evidence_actor: str | None = None
+    process_evidence_reason: str | None = None
+    process_evidence_checks: str | None = None
+    query_evidence_kind: EndingEvidenceKind | None = None
+    query_evidence_actor: str | None = None
+    query_evidence_reason: str | None = None
+    query_evidence_checks: str | None = None
 
 
 @dataclass(frozen=True)

@@ -10,6 +10,7 @@ from sqlalchemy.engine import Connection, RowMapping
 
 from etl_craft.core.enums import (
     AttemptStatus,
+    EndingEvidenceKind,
     FailureClass,
     RunStatus,
     SlaStatus,
@@ -195,6 +196,10 @@ def attempt_document(row: RowMapping) -> AttemptView:
         "not_before",
     ):
         captured[key] = timestamp(captured[key])
+    for prefix in ("process", "query"):
+        key = f"{prefix}_evidence_kind"
+        if captured.get(key) is not None:
+            captured[key] = EndingEvidenceKind(captured[key])
     captured["status"] = AttemptStatus(captured["status"])
     captured["failure_class"] = FailureClass(captured["failure_class"])
     captured["retry_reason"] = retry_reason(
