@@ -497,3 +497,20 @@ def test_reopening_and_failing_a_successful_upload_run_never_unlocks_its_seed(se
     finally:
         purpose.reset(token)
     assert act(ctx, ActionName.SEED_APPLY).loads[0].status == SeedStatus.LOCKED
+
+
+def test_omitted_seed_column_is_unchanged_on_reapplication(seed_project):
+    ctx, folder, publish = seed_project
+    with (folder / "columns.csv").open("a") as stream:
+        stream.write("upload_id|BIGINT|N\n")
+    publish()
+    loaded = act(ctx, ActionName.SEED_APPLY).loads[0]
+    assert loaded.status == SeedStatus.LOADED, loaded.message
+    assert act(ctx, ActionName.SEED_APPLY).loads[0].status == SeedStatus.UNCHANGED
+    import duckdb
+
+    with duckdb.connect(str(ctx.config.project_dir / "warehouse.db")) as conn:
+        assert conn.execute("SELECT id,upload_id FROM ds.agents ORDER BY id").fetchall() == [
+            (1, None),
+            (2, None),
+        ]

@@ -62,7 +62,7 @@ from etl_craft.core.text import (
     substitute_task_tokens,
     suggest,
 )
-from etl_craft.dialects.query_analysis import read_only_problem
+from etl_craft.dialects.query_analysis import read_only_problem, read_query
 from etl_craft.dialects.warehouse.base import STORAGE_PARAMETERS
 from etl_craft.engine.repository.offsets import StoredOffset
 from etl_craft.handlers.registry import TaskContext
@@ -170,6 +170,16 @@ class SqlTask:
 
 
 def read_sql_task(context: TaskContext, stored: StoredOffset | None = None) -> SqlTask:
+    """Name the exact consumer when a rule scope cannot be interpreted safely."""
+    try:
+        return _read_sql_task(context, stored)
+    except SqlGuardError as error:
+        if "$$rule_flags" in str(error):
+            raise SqlGuardError(f"{context.pipeline_code}.{context.task_code}: {error}") from error
+        raise
+
+
+def _read_sql_task(context: TaskContext, stored: StoredOffset | None = None) -> SqlTask:
     """Read and check the SQL task's parameters; ``SqlGuardError`` or ``MetadataError`` if wrong."""
     params = context.task_params
     action = read_action(params)
@@ -321,6 +331,9 @@ def resolve_select(
     raw = upload_select(
         raw, len((event_values or {}).get("upload_ids", ())), validating=pipeline_run_id == 0
     )
+    from etl_craft.core.rule_flags import placeholder, replace_scopes
+
+    raw = replace_scopes(raw, placeholder)
     # Tokens first: a ``$$`` would otherwise read as a dollar-quoted string when splitting.
     watermark = read_watermark(params, stored)
     bounded = bounded_definition(config, params)
@@ -345,7 +358,13 @@ def resolve_select(
         if pipeline_run_id
         else None,
     )
-    statements = split_statements(substituted)
+    dialect = warehouse_dialect(config).sqlglot_dialect if config.warehouse is not None else None
+    reading = read_query(substituted, dialect)
+    statements = (
+        [substituted.strip().removesuffix(";")]
+        if reading.problem is None and reading.unparsed is None
+        else split_statements(substituted)
+    )
     if len(statements) != 1:
         raise SqlGuardError(
             f"{source} must hold exactly one SELECT; it holds {len(statements)} statements"

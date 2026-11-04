@@ -93,3 +93,9 @@ def test_seed_replacement_retains_declared_values_and_merge_shape(sql_world, mer
         assert w.rows(f"SELECT name FROM {w.name('reference')} WHERE ACTIVE_FLAG='Y'") == [
             ("Corrected",)
         ]
+
+
+def test_seed_omitted_columns_are_typed_null(sql_world, tmp_path):
+    from fixtures.seed_columns import check_omitted_seed_columns
+
+    check_omitted_seed_columns(sql_world, tmp_path / "seed")

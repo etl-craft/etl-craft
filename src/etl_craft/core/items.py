@@ -25,6 +25,7 @@ class ItemRecord:
     ended: str | None = None
     report_id: str = ""
     attempt_id: int | None = None
+    offset_position: int | None = None
 
 
 @dataclass(frozen=True)

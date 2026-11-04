@@ -42,24 +42,31 @@ class Seed:
         return ".".join(part for part in self.identity if part is not None)
 
     def rows(self) -> list[tuple[object, ...]]:
-        """Require a header matching the declared ordered columns and full-width rows."""
+        """Align declared fields with the header, filling omitted non-key fields with NULL."""
         path = self.directory / "data.csv"
         rows = list(reader(path).rows())
-        expected = tuple(name for name, _ in self.columns)
-        if not rows or tuple(str(value).lower() for value in rows[0]) != tuple(
-            name.lower() for name in expected
-        ):
+        header = tuple(str(value).lower() for value in rows[0]) if rows else ()
+        declared = {name.lower() for name, _ in self.columns}
+        if not header or len(set(header)) != len(header) or set(header) - declared:
             raise MetadataError(
-                f"{path}, row 1, column header: value={rows[0] if rows else None!r}; "
-                f"expected {expected}; correct data.csv's pipe-delimited header"
+                f"{self.target}: {path}, row 1, header={header!r}; expected unique declared "
+                "columns; declare each header column in columns.csv or remove it from data.csv"
             )
+        if missing := set(self.keys) - set(header):
+            raise MetadataError(
+                f"{self.target}: {path}, row 1, missing key columns {sorted(missing)!r}; "
+                "KEY_FLAG=Y columns cannot be omitted; include them in data.csv's header and rows"
+            )
+        result = []
         for number, row in enumerate(rows[1:], 2):
-            if len(row) != len(expected):
+            if len(row) != len(header):
                 raise MetadataError(
                     f"{path}, row {number}, column count: value={len(row)}; expected "
-                    f"{len(expected)}; correct this data.csv row"
+                    f"{len(header)}; correct this data.csv row"
                 )
-        return rows[1:]
+            values = dict(zip(header, row, strict=True))
+            result.append(tuple(values.get(name.lower()) for name, _ in self.columns))
+        return result
 
 
 def reader(path: Path) -> UploadReader:

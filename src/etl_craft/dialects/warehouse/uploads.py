@@ -1,5 +1,7 @@
 """Bound uploader expressions shared by warehouse actions."""
 
+from collections.abc import Iterable
+
 from etl_craft.core.uploads import UploadWriter
 
 
@@ -29,12 +31,16 @@ def invalid_upload_rows(stage: str, uploads: tuple[UploadWriter, ...]) -> str:
     return f"SELECT UPLOAD_ID FROM {stage} WHERE UPLOAD_ID IS NULL OR UPLOAD_ID NOT IN ({ids})"
 
 
-def actor_parts(uploads: tuple[UploadWriter, ...], column: str) -> tuple[str, str]:
+def actor_parts(
+    uploads: tuple[UploadWriter, ...], column: str, declared: Iterable[str]
+) -> tuple[str, str]:
     """Keep ordinary append and overwrite account columns aligned with their values."""
     if not uploads:
         return "", ""
+    names = {name.lower() for name in declared}
+    actors = [name for name in ("CREATED_BY", "UPDATED_BY") if name.lower() in names]
     writer = writer_expression(uploads, column)
-    return ", CREATED_BY, UPDATED_BY", f", {writer}, {writer}"
+    return "".join(", " + name for name in actors), "".join(", " + writer for _ in actors)
 
 
 def upload_select(sql: str, count: int, *, validating: bool) -> str:

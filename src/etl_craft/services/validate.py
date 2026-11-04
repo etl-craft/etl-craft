@@ -20,7 +20,6 @@ from typing import ClassVar
 
 from sqlalchemy.engine import Connection, Engine
 from sqlalchemy.exc import SQLAlchemyError
-from sqlglot import exp
 
 from etl_craft.config import ConnectorConfig
 from etl_craft.config.project import python_script
@@ -85,13 +84,14 @@ from etl_craft.services.calendar_checks import (
 from etl_craft.services.doctor import Status
 from etl_craft.services.lineage import (
     dialect_and_catalog,
+    extract,
     script_lineage,
     table_name,
 )
 from etl_craft.services.placement import Placement, placement
 from etl_craft.services.seeds import cast_rows, discover
 from etl_craft.services.source_columns import definition_problem, drift, warehouse_columns
-from etl_craft.services.stewardship_checks import graph_problems, sql_problems
+from etl_craft.services.stewardship_checks import graph_problems, sql_problems, validation_problems
 from etl_craft.services.trigger_validation import trigger_definition, trigger_graph_problems
 from etl_craft.warehouse.connection import build_warehouse_engine, open_warehouse
 
@@ -566,6 +566,9 @@ def _target_formats(config: ConnectorConfig, data: _Metadata, report: Report) ->
 
 def _sql(conn: Connection, context: TaskContext, data: _Metadata) -> list[str]:
     spec = read_sql_task(context)
+    from etl_craft.services.rule_scopes import validate_scopes
+
+    validate_scopes(conn, context, spec)
     source_pipeline_ids(conn, source_pipelines(context.task_params))
     if context.config.warehouse is None:
         return ["a SQL task needs a Warehouse section in craft-connector.yml"]
@@ -693,7 +696,7 @@ def _sql_script(conn: Connection, context: TaskContext, data: _Metadata) -> list
 
 def _file_validation(conn: Connection, context: TaskContext, data: _Metadata) -> list[str]:
     file_validation.settings(context)
-    return []
+    return validation_problems(conn, context)
 
 
 CHECKS: dict[str, Callable[[Connection, TaskContext, _Metadata], list[str]]] = {
@@ -760,28 +763,18 @@ def _timestamp_definitions(conn: Connection, context: TaskContext, spec: SqlTask
     ):
         wanted.add((qualify(spec.target_object, catalog).lower(), "update_date"))
     if spec.bounded and spec.watermark is not None and spec.select_sql is not None:
-        reading = read_query(spec.select_sql, dialect.sqlglot_dialect)
-        if reading.root is not None:
-            for select in reading.root.find_all(exp.Select):
-                tables = {
-                    table.alias_or_name.lower(): qualify(
-                        ".".join(part.name for part in table.parts), catalog
-                    ).lower()
-                    for table in select.find_all(exp.Table)
-                }
-                for projection in select.expressions:
-                    column = projection.this if isinstance(projection, exp.Alias) else projection
-                    if (
-                        projection.alias_or_name.lower() == spec.watermark.column.lower()
-                        and isinstance(column, exp.Column)
-                    ):
-                        source = (
-                            tables.get(column.table.lower())
-                            if column.table
-                            else (next(iter(tables.values())) if len(tables) == 1 else None)
-                        )
-                        if source is not None:
-                            wanted.add((source, column.name.lower()))
+        wanted.update(
+            (qualify(edge.source_object, catalog).lower(), edge.source_column.lower())
+            for edge in extract(
+                spec.select_sql,
+                spec.target_object,
+                dialect=dialect.sqlglot_dialect,
+                catalog=catalog,
+            )
+            if edge.target_column.lower() == spec.watermark.column.lower()
+            and edge.source_object is not None
+            and edge.source_column is not None
+        )
     return [
         problem
         for column in fetch_source_columns(conn)

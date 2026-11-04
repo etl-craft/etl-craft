@@ -80,6 +80,31 @@ is literal text and does not require a substitution switch. Tokens inside dollar
 strings are also preserved; tagged delimiters such as `$literal$...$literal$` distinguish
 literal bodies from adjacent bare substitution tokens.
 
+## Recorded business-rule flags
+
+In a managed SELECT, use `$$rule_flags(rules_task, REJECT)` as a text-key subquery:
+
+```sql
+SELECT source_system_identifier, customer_id
+FROM pre_ods.customer_support_stage
+WHERE CAST(ROW_ID AS VARCHAR) NOT IN ($$rule_flags(check_rows, REJECT))
+```
+
+Name explicit unique row-rule types: `REJECT`, `INCOMPLETE`, `REPORT`. There is no default.
+The SQL task needs a direct same-pipeline SUCCESS dependency on that BUSINESS_RULES task.
+The selected ROW rules must share one active target table/key column. Validation and refresh
+refuse missing/incorrect edges and ambiguous contracts; execution also verifies the upstream
+is SUCCESS in this exact run. `ANY` does not bypass that requirement.
+
+Only active `AUD_BUSINESS_RULES_RESULTS` flags published by that task in the current pipeline
+run and matching the admitted target are included. Another run's flags are never used.
+The subquery returns typed text keys (cast the compared column to the warehouse's text type,
+`STRING` on Databricks). An empty set stays typed and excludes no rows. More than 10,000 distinct
+keys fails before a target write; split the source batch into smaller runs. No keys are truncated.
+Attempt statement logs record the named task, selected types and expanded key count. The
+ordinary task dependency appears in catalog and lineage. Cloned audit tables remain suitable
+for reporting; they are not used to gate this run's writes.
+
 ## SQL watermarks
 
 ### Scalar lower bounds

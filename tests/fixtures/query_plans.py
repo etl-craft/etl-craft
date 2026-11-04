@@ -42,6 +42,8 @@ INTEGER_NAMES = frozenset(
 MOMENT = datetime(2026, 1, 1, tzinfo=UTC)
 VALUES = {
     "all_entries": False,
+    "offset_position": 1,
+    "rule_type": "REJECT",
     "duplicate_count": 0,
     "lock_owner": "plan-owner",
     "continuation": False,

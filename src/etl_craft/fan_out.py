@@ -24,12 +24,13 @@ from etl_craft.core.enums import ItemStatus, ScriptKind
 from etl_craft.core.errors import HandlerError, PermanentError
 from etl_craft.core.faults import fault_point
 from etl_craft.core.items import ItemRecord, ItemState, ItemStore, bounded_keys, progress
+from etl_craft.core.landing import current_item
 from etl_craft.core.log import log_context
 from etl_craft.core.script_kinds import reported_count, script_kind
 from etl_craft.core.text import mask_arguments
 
 if TYPE_CHECKING:
-    from etl_craft.scripting import ScriptResult, ScriptTask
+    from etl_craft.scripting import Offset, ScriptResult, ScriptTask
 
 THREAD_CEILING = 256
 DEFAULT_PARALLEL = 16
@@ -149,11 +150,16 @@ def execute(
             f"{task.task_code}: fan_out items did not succeed: {detail}; fix the "
             f"failed items and retry this task run"
         )
+    from etl_craft.fan_out_offsets import combined
+
     counts = [r.row_count for r in final]
+    offset = combined(task, final)
+    fault_point("items.after_success")
     return ScriptResult(
         sum(value for value in counts if value is not None)
         if all(value is not None for value in counts)
-        else None
+        else None,
+        offset=offset,
     )
 
 
@@ -270,9 +276,16 @@ class Work:
                 self.fn,
                 key,
                 script_kind(self.task.task_params, self.task.task_code),
+                self.task.task_run_id,
+                self.task.offset,
             )
         return self.executor.submit(
-            evaluate, self.fn, key, script_kind(self.task.task_params, self.task.task_code)
+            evaluate,
+            self.fn,
+            key,
+            script_kind(self.task.task_params, self.task.task_code),
+            self.task.task_run_id,
+            self.task.offset,
         )
 
     def submit(self, key: str, number: int) -> ItemRecord:
@@ -299,18 +312,31 @@ class Work:
         self.task.logger.info("%s; projected finish in %.1fs", progress(tuple(known.values())), eta)
 
 
-def evaluate(fn: Callable[[str], ScriptResult], key: str, kind: ScriptKind) -> ScriptResult:
+def evaluate(
+    fn: Callable[[str], ScriptResult],
+    key: str,
+    kind: ScriptKind,
+    task_run_id: int,
+    committed: Offset | None,
+) -> ScriptResult:
     """Validate a worker's result inside its future so failures remain retryable evidence."""
     from etl_craft.scripting import ScriptResult
 
-    with log_context(item_key=key):
-        result = fn(key)
-    if not isinstance(result, ScriptResult) or result.offset is not None:
+    token = current_item.set((task_run_id, key))
+    try:
+        with log_context(item_key=key):
+            result = fn(key)
+    finally:
+        current_item.reset(token)
+    if not isinstance(result, ScriptResult):
         raise HandlerError(
             f"item {key}: result type={type(result).__name__}; expected "
             "ScriptResult with nonnegative row_count "
-            "and no item offset; return the offset from the task"
+            "and an optional own-key PARTITIONS offset"
         )
+    from etl_craft.fan_out_offsets import position
+
+    position(key, result.offset, committed, kind)
     reported_count(result.row_count, kind, f"item {key}")
     return result
 
@@ -319,14 +345,22 @@ def finish(store: ItemStore, event: ItemRecord, future: Future[ScriptResult]) ->
     """Record failures at the worker boundary; a requested cancellation wins at ending."""
     error = future.exception()
     if error is None:
-        ending = replace(event, status=ItemStatus.SUCCESS, row_count=future.result().row_count)
+        from etl_craft.fan_out_offsets import position
+
+        result = future.result()
+        ending = replace(
+            event,
+            status=ItemStatus.SUCCESS,
+            row_count=result.row_count,
+            offset_position=position(event.key, result.offset, None, ScriptKind.INGESTION),
+        )
     else:
         message = str(mask_arguments({"message": f"{type(error).__name__}: {error}"})["message"])[
             :4096
         ]
         ending = replace(event, status=ItemStatus.FAILED, error=message)
     fault_point("item.before_result")
-    result = store.item_event(
+    recorded = store.item_event(
         replace(
             ending,
             ended=datetime.now(UTC).isoformat(),
@@ -334,4 +368,4 @@ def finish(store: ItemStore, event: ItemRecord, future: Future[ScriptResult]) ->
         )
     )
     fault_point("item.after_result")
-    return result
+    return recorded

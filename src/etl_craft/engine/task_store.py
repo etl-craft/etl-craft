@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
@@ -19,6 +19,7 @@ from etl_craft.core.enums import BusinessRuleLevel, Handler, RunStatus, SqlActio
 from etl_craft.core.erasure import ErasureReport
 from etl_craft.core.errors import HandlerError, StaleTransitionError
 from etl_craft.core.items import ItemRecord, ItemState, ItemStore
+from etl_craft.core.landing import GENERATED_COLUMNS, LandingContract
 from etl_craft.core.ownership import ResourceLocker, attempt_holder
 from etl_craft.core.protection import (
     ProtectionCandidates,
@@ -26,6 +27,7 @@ from etl_craft.core.protection import (
     ProtectionPage,
     ProtectionReport,
 )
+from etl_craft.core.text import qualify
 from etl_craft.core.time import as_utc
 from etl_craft.core.uploads import UploadFile
 from etl_craft.engine import locks, resource_locks, transitions
@@ -91,6 +93,8 @@ class TaskState:
     merge_conflict: str | None
     target: str | None = None
     contract: TargetState | None = None
+    rule_flags: dict[str, tuple[str, ...]] = field(default_factory=dict)
+    landing: LandingContract | None = None
 
 
 @dataclass(frozen=True)
@@ -200,6 +204,7 @@ class LocalTaskStore:
     definition: Definition | None = None
     _contracts: dict[str, TargetState] = field(default_factory=dict, compare=False)
     _erasure_target: str | None = None
+    parameters: Mapping[str, str] = field(default_factory=dict, repr=False)
 
     def erasure_target(self, target: str) -> LocalTaskStore:
         """Bind a host-validated lineage target without exposing an agent target override."""
@@ -410,19 +415,67 @@ class LocalTaskStore:
 
     def state(self, sql_action: str | None = None) -> TaskState:
         """Read only metadata belonging to the selected task and its run."""
-        with using(self.definition):
+        from etl_craft.engine.repository.pipelines import current_project_id, selected_project
+
+        project_id = current_project_id()
+        if self.definition is not None:
+            pipeline = self.definition.row(
+                "CFG_PIPELINES", "pipeline_id", self.identity.pipeline_id
+            )
+            project_id = int(str(pipeline.get("project_id", 1)))
+        with using(self.definition), selected_project(project_id):
             identity = self.identity
             with self.engine.connect() as conn:
                 self._assert(conn)
                 if sql_action is not None:
-                    return self._sql_state(conn, sql_action)
+                    state = self._sql_state(conn, sql_action)
+                    return (
+                        state
+                        if sql_action == SqlAction.DROP_TABLE
+                        else replace(state, rule_flags=self._rule_scopes(conn))
+                    )
                 return TaskState(
                     fetch_task_offset(conn, identity.task_id),
                     tuple(fetch_business_rules_for_task(conn, identity.task_id)),
                     (),
                     {},
                     None,
+                    landing=self._landing_contract(conn),
                 )
+
+    def _landing_contract(self, conn: Connection) -> LandingContract | None:
+        """Expose only the declared landing target and active column types of this task."""
+        from etl_craft.engine.repository.source_columns import fetch_source_columns
+        from etl_craft.engine.repository.tasks import fetch_task_parameters
+
+        params = fetch_task_parameters(conn, self.identity.task_id)
+        target = params.get("TARGET_OBJECT")
+        if target is None:
+            return None
+        catalog = active_catalog(self.config)
+        canonical = qualify(target, catalog)
+        columns = tuple(
+            (c.column_name, c.data_type)
+            for c in fetch_source_columns(conn)
+            if qualify(c.table_name, catalog).lower() == canonical.lower()
+            and c.column_name.lower() not in GENERATED_COLUMNS
+        )
+        return LandingContract(self.identity.task_id, canonical, columns)
+
+    def _rule_scopes(self, conn: Connection) -> dict[str, tuple[str, ...]]:
+        """Read only scopes declared by this attempt's admitted SELECT."""
+        from etl_craft.config.project import sql_script
+        from etl_craft.core.rule_flags import parse_scopes
+        from etl_craft.engine.rule_scopes import keys
+
+        params = self.parameters
+        raw = params.get("SELECT_QUERY", "")
+        if name := params.get("SCRIPT_FILE"):
+            raw = sql_script(self.config, name).read_text(encoding="utf-8")
+        return {
+            scope.token: keys(conn, self.identity.task_id, self.identity.pipeline_run_id, scope)
+            for scope in parse_scopes(raw)
+        }
 
     def _sql_state(self, conn: Connection, sql_action: str) -> TaskState:
         """Read checkpoint, peer outcomes and target contract from one database snapshot."""
@@ -589,6 +642,10 @@ class LocalTaskStore:
             controls.lock_run(conn, self.identity.pipeline_run_id)
             self._assert(conn)
             assert self.identity.attempt_id is not None
+            from etl_craft.engine.item_offsets import check
+
+            with using(self.definition):
+                check(conn, self.identity.task_id, event)
             return items.record(conn, self.identity.task_run_id, self.identity.attempt_id, event)
 
     def _rule(self, conn: Connection, rule_id: int) -> BusinessRule:

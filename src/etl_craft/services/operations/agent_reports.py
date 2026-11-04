@@ -98,6 +98,7 @@ def _store(ctx: OperationContext, task: TaskContext) -> LocalTaskStore:
         ),
         LocalLocker(ctx.engine, task.config),
         definition=task._definition,
+        parameters=task.task_params,
     )
 
 

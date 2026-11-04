@@ -156,4 +156,5 @@ def task_store(
         ),
         LocalLocker(backend, context.config, with_warehouse=with_warehouse),
         definition=context._definition,
+        parameters=context.task_params,
     )

@@ -607,3 +607,44 @@ def test_cli_item_reason_obeys_governance(
             conn.execute(text("SELECT REASON AS reason FROM AUD_RUN_INTERVENTIONS")).scalars().all()
         )
         assert reasons == ([""] if policy == "RELAXED" else [])
+
+
+def test_provisional_partition_evidence_survives_retry_without_committing(scene):
+    from etl_craft.core.errors import TransientError
+    from etl_craft.engine.repository.offsets import (
+        StoredOffset,
+        fetch_task_offset,
+        save_task_offset,
+    )
+    from etl_craft.scripting import Offset
+
+    task_id = scene.store.identity.task_id
+    committed = StoredOffset("PARTITIONS", '{"A":10,"B":20}')
+    with scene.db.begin() as conn:
+        save_task_offset(conn, task_id, committed)
+    helper = replace(scene.task, offset=Offset.partitions({"A": 10, "B": 20}))
+
+    def first(key):
+        if key == "B":
+            raise TransientError("B interrupted")
+        return ScriptResult(1, Offset.partitions({key: 15}))
+
+    with pytest.raises(HandlerError, match="B interrupted"):
+        helper.fan_out(["A", "B"], first, max_items=2, max_parallel=1)
+    with scene.db.connect() as conn:
+        assert fetch_task_offset(conn, task_id) == committed
+        records = {r.key: r for r in latest(conn, scene.summary)}
+        assert records["A"].offset_position == 15
+        assert records["B"].offset_position is None
+    calls = []
+    result = replace(helper, _item_positions={}).fan_out(
+        ["A", "B"],
+        lambda key: calls.append(key) or ScriptResult(1, Offset.partitions({key: 25})),
+        max_items=2,
+        max_parallel=1,
+    )
+    assert calls == ["B"]
+    assert result.offset.value == {"A": 15, "B": 25}
+    with scene.db.connect() as conn:
+        assert fetch_task_offset(conn, task_id) == committed
+        assert {r.key: r.offset_position for r in latest(conn, scene.summary)} == {"A": 15, "B": 25}

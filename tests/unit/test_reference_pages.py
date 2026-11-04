@@ -53,6 +53,7 @@ def test_the_parameter_page_lists_what_each_handler_reads():
     assert "| `SCRIPT_FILE` |  |" in page
     assert "| `EMAIL_SUBJECT_FAILED` | one outcome: `EMAIL_SUBJECT_<OUTCOME>` |" in page
     assert "| `TASK_TIMEOUT_SECONDS` |  |" in page
+    assert "| `REQUIRE_UPLOADS` |  |" in page
 
 
 @pytest.mark.parametrize("dialect", ["postgres", "sqlite"])

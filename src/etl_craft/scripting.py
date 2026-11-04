@@ -64,6 +64,7 @@ from etl_craft.core.errors import (
     TransientError as TransientError,
 )
 from etl_craft.core.items import ItemStore
+from etl_craft.core.landing import LandingContract
 from etl_craft.core.ownership import ResourceLocker
 from etl_craft.core.text import qualify
 from etl_craft.core.upload_reader import UploadReader as UploadReader
@@ -242,6 +243,10 @@ class ScriptTask:
     _locks: ResourceLocker | None = field(default=None, repr=False)
 
     _items: ItemStore | None = field(default=None, repr=False, compare=False)
+    _landing: Callable[[], LandingContract | None] | None = field(
+        default=None, repr=False, compare=False
+    )
+    _item_positions: dict[str, int] = field(default_factory=dict, repr=False, compare=False)
     _warehouse_mutex: RLock = field(default_factory=RLock, repr=False, compare=False)
 
     def fan_out(
@@ -271,6 +276,14 @@ class ScriptTask:
             )
         except HandlerError as error:
             raise HandlerError(f"{self.pipeline_code}.{self.task_code}: {error}") from error
+
+    def replace_landing(
+        self, rows: Iterable[Mapping[str, object]], *, item_key: str | None = None
+    ) -> int:
+        """Stream typed rows and atomically replace this task's or current item's batch."""
+        from etl_craft.landing import replace_landing
+
+        return replace_landing(self, rows, item_key=item_key)
 
     def table(self, name: str) -> str:
         """Return ``schema.table`` as its full name in the active warehouse database.

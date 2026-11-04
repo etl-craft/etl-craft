@@ -1,3 +1,4 @@
 COLUMN_NAME|DATA_TYPE|KEY_FLAG
 customer_type_code|VARCHAR(100)|Y
 customer_type_name|VARCHAR(100)|N
+upload_id|BIGINT|N

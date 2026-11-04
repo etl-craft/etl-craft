@@ -713,8 +713,9 @@ def test_bounded_source_findings_are_shared_by_validate_refresh_and_config_apply
     )
 
 
+@pytest.mark.parametrize("cte", [False, True])
 @pytest.mark.parametrize("column", ["UPDATE_DATE", "changed"])
-def test_known_coarse_timestamp_definitions_are_validation_findings(project, column):
+def test_known_coarse_timestamp_definitions_are_validation_findings(project, column, cte):
     from fixtures.metadata import add_source_column
 
     engine, config, _ = project
@@ -732,6 +733,12 @@ def test_known_coarse_timestamp_definitions_are_validation_findings(project, col
             "WATERMARK_COLUMN": "changed",
             "WATERMARK_START": "2000-01-01T00:00:00+00:00",
         }
+        if cte:
+            params["SELECT_QUERY"] = (
+                "WITH recent AS (SELECT id, changed FROM raw.events) "
+                "SELECT id, changed FROM recent WHERE changed >= $$watermark "
+                "AND changed < $$watermark_max"
+            )
         add_task(conn, pipeline, "read", "SQL", **params)
         add_source_column(
             conn, target if column == "UPDATE_DATE" else "raw.events", column, "TIMESTAMP(0)", 1
@@ -910,3 +917,78 @@ def test_locked_upload_control_refused_early_by_validate_and_refresh(project, en
     )
     for part in parts:
         assert any(part in message for message in messages), messages
+
+
+@pytest.mark.parametrize("kind", [None, "HAS_DATA", "FAILURE", "SUCCESS"])
+def test_rule_flag_scope_requires_success_dependency(project, kind):
+    engine, config, _ = project
+    with engine.begin() as conn:
+        pipeline = add_pipeline(conn, "FLAGS")
+        rules = add_task(conn, pipeline, "rules", "BUSINESS_RULES")
+        add_rule(conn, pipeline, rules, "bad")
+        consumer = add_task(
+            conn,
+            pipeline,
+            "consume",
+            "SQL",
+            SQL_ACTION="APPEND_TABLE",
+            TARGET_OBJECT="sales.clean",
+            SELECT_QUERY="SELECT id FROM sales.orders WHERE CAST(id AS VARCHAR) "
+            "NOT IN ($$rule_flags(rules, REJECT))",
+        )
+        if kind is not None:
+            add_dependency(conn, pipeline, consumer, rules, kind)
+    report = validate(engine, config)
+    failures = [
+        f for f in report.findings if f.where == "FLAGS.consume" and f.status == Status.FAIL
+    ]
+    if kind == "SUCCESS":
+        assert not failures
+    else:
+        assert any(
+            "$$rule_flags(rules, REJECT)" in f.message
+            and "SUCCESS" in f.message
+            and "remedy" in f.message
+            for f in failures
+        )
+
+
+def test_required_uploads_refuses_a_pipeline_that_cannot_receive_files(project):
+    engine, config, root = project
+    folder = root / "validation_scripts"
+    folder.mkdir()
+    (folder / "check.py").write_text("def validate(task):\n    return None\n")
+    with engine.begin() as conn:
+        pipeline = add_pipeline(conn, "UPLOAD_REQUIRED")
+        add_task(
+            conn,
+            pipeline,
+            "validate_file",
+            "FILE_VALIDATION",
+            SCRIPT_FILE="validation_scripts/check.py",
+            FILE_FORMAT="CSV",
+            REQUIRE_UPLOADS="Y",
+        )
+    report = validate(engine, config)
+    findings = [
+        f
+        for f in report.findings
+        if f.where == "UPLOAD_REQUIRED.validate_file" and f.status == Status.FAIL
+    ]
+    assert any(
+        "REQUIRE_UPLOADS=Y" in f.message
+        and "STEWARDABLE_FLAG=N" in f.message
+        and "remedy" in f.message
+        for f in findings
+    )
+    with engine.begin() as conn:
+        conn.execute(
+            text("UPDATE CFG_PIPELINES SET STEWARDABLE_FLAG='Y' WHERE PIPELINE_ID=:id"),
+            {"id": pipeline},
+        )
+    report = validate(engine, config)
+    assert not [
+        f
+        for f in report.findings
+        if f.where == "UPLOAD_REQUIRED.validate_file" and f.status == Status.FAIL
+    ]

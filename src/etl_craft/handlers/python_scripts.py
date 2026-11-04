@@ -87,6 +87,9 @@ def run(context: TaskContext, engine_db: Engine | TaskStore) -> HandlerResult:
     with capture_all_loggers():
         result = _call(entry, task, name)
     checked = check_result(result, name, stored, task=context)
+    from etl_craft.fan_out_offsets import check_return
+
+    check_return(task, checked)
     result_variables = dict(checked.variables)
     elapsed = time.monotonic() - started
     variables: dict[str, object] = {}
@@ -365,6 +368,7 @@ def script_task(
         config=context.config,
         _locks=store,
         _items=store,
+        _landing=lambda: store.state().landing,
         logger=logging.getLogger(f"{SCRIPT_LOGGER}.{context.task_code}"),
         run_date=context.run_date,
         backfill=context.backfill,

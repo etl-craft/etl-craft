@@ -301,6 +301,10 @@ class WarehouseDialect:
         finally:
             cursor.close()
 
+    def prepare_landing_publication(self, conn: Connection) -> None:
+        """Keep transactional publication unless a dialect owns a statement commit."""
+        return None
+
     def script_autocommit(self, engine: Engine, driver: DBAPIConnection) -> None:
         """Enable native autocommit without SQLAlchemy starting an implicit transaction."""
         engine.dialect.set_isolation_level(driver, "AUTOCOMMIT")

@@ -13,13 +13,20 @@ area_code|VARCHAR(100)|Y
 area_name|VARCHAR(100)|N
 ```
 
-`data.csv` starts with the same ordered column names:
+`data.csv` starts with its supplied column names:
 
 ```text
 area_code|area_name
 billing|Billing
 technical|Technical support
 ```
+
+A declared non-key column may be absent from `data.csv`'s header. Every row receives a
+SQL NULL cast by the warehouse to that column's declared type. Key columns (`KEY_FLAG=Y`)
+must appear; undeclared or duplicate header columns are refused. Header order may differ
+from declaration order. Empty cells retain their existing values and are not NULL markers.
+Both files remain part of the seed fingerprint, so reapplying the same omitted-column seed
+reports `UNCHANGED`.
 
 Values are cast by the destination warehouse to their declared types. `validate` checks the selected deployment files and refuses a
 missing declaration, a different catalog or an invalid value, naming the file, row, column,
@@ -60,7 +67,7 @@ including the table, load id and remedy, without a traceback. `ERROR_MESSAGE` is
 for `FAILED`. The command exits 0 for loaded, unchanged and locked tables, and 1 if a table
 load failed. Request and validation refusals retain their usual error exit codes.
 
-The [Support Insights demo](https://github.com/etl-craft/etl-craft/tree/main/examples/demo) seeds its reference tables and
+The [Support Insights demo](https://github.com/etl-craft/support-insights) seeds its reference tables and
 includes optional stewardship pipelines to demonstrate the handover on supported warehouses.
 
 
