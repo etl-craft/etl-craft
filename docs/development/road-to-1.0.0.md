@@ -204,7 +204,7 @@ item's text, or work done early under another item.
 | S7.Q A generic ANSI SQL warehouse | Moved after 0.9.0 | | A `generic` dialect over SQLAlchemy for rare databases: ANSI SQL only, NULL-safe column comparison for merges, refusals for anything without an ANSI form |
 | S7.R Complete the test suite | In progress | #228 | Slice 1: recursive secret masking, merge crash windows and full-column/catalog upgrade guards; six-skill coverage audit remains after S7.A |
 | S7.N Faster complete pull-request CI | Done | #170 | Fail-closed collection/shard accounting, isolated schema templates and shared demo workers; complete checks in 6m33s-8m15s (owner-approved ten-minute target) |
-| S8.A The project layout | In progress | #319 | Explicit small-agent Python slots; demo stack and measurements in progress |
+| S8.A The project layout | In progress | #319, #320 | Small-agent Python slots and compiled role images; demo acceptance in progress |
 | S8.B Pipelines | Planned | | Client, reference, stewardship, maintenance and DM pipelines with independent expected rows |
 | S8.C Configuration through CI | Planned | | Secretless local DuckDB validation and developer-token deployment of one pinned project commit |
 | S8.D Views | Planned | | Fact and data-metrics views reconciled with independent reference queries |
@@ -977,6 +977,9 @@ empty-history-page handling defect, which was corrected and verified. No cloud w
   equal keyed payloads and refuses conflicting payloads naming the key and remedy.
   Acceptance availability: local sizing/process probes and package unit/static/docs checks;
   full demo idle/batch measurements and stack acceptance remain with the demo PR. No cloud runs.
+  Read-only role/project images compile Python bytecode during the build: cold health probes
+  otherwise repeatedly compile imports and exceed the existing three-second S7.F probe timeout
+  when the twelve agents probe together. Probe thresholds are unchanged.
 
 - S7.O slice 3 uses the candidate wheel filesystem mtime as build time, preserved during
   transfer, and requires `--wheel` for release validation. Both expected inventories start

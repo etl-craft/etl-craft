@@ -6,7 +6,7 @@ ARG ETL_CRAFT_REQUIREMENT
 COPY --from=uv /uv /tmp/uv
 COPY wheels/ /tmp/wheels/
 RUN if [ -n "$ETL_CRAFT_REQUIREMENT" ]; then \
-      /tmp/uv pip install --python /opt/etl-craft/bin/python --no-cache --link-mode=copy \
+      /tmp/uv pip install --python /opt/etl-craft/bin/python --no-cache --compile-bytecode --link-mode=copy \
         --find-links /tmp/wheels "$ETL_CRAFT_REQUIREMENT"; \
     fi
 FROM ${BASE_IMAGE}
