@@ -6,17 +6,12 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
-- Upload-bound APPEND_TABLE and OVERWRITE_TABLE allow unprotected staging targets without CREATED_BY/UPDATED_BY. Declared actor columns still receive per-upload account stamps; protected and SCD targets still require full audit columns. UPLOAD_ID is required in both the SELECT and target for every upload-bound managed write.
-
-- Python landing replacement retains declared UPLOAD_ID and optional LOCKED without creating or stamping actor columns. Snowflake publishes its single landing MERGE in autocommit mode so a process loss cannot leave the publication transaction open.
-
-- Managed SELECT guards honor warehouse string escaping when checking statement boundaries, including quoted keys containing backslashes and semicolons on Snowflake and Databricks.
-
-- Ingestion fan-out items may return an own-key PARTITIONS offset. Provisional positions survive retries in item evidence; the combined checkpoint still commits only with successful attempt ending. Wrong keys/types, backwards positions and script overrides fail permanently.
-
 Warehouses are optional extras. Core bundles none. `all` is core plus the UI, for a single machine.
 
 ### Added
+
+- Seed data headers may omit declared non-key columns; the warehouse fills them with typed
+  NULLs. Missing keys and undeclared headers are refused; empty-cell semantics are unchanged.
 
 - FILE_VALIDATION `REQUIRE_UPLOADS=Y` refuses an upload-free run with a permanent, audited
   failure and upload remedy. Default N preserves empty-run skipping; validation requires
@@ -44,6 +39,14 @@ Warehouses are optional extras. Core bundles none. `all` is core plus the UI, fo
 - Report post-reject merge duplicates in task and attempt counts, inspection, metrics and audit mirrors.
 
 ### Fixed
+
+- Timestamp-window validation follows CTE lineage to physical source columns instead of
+  treating CTE names as warehouse tables; coarse source timestamps remain refused.
+
+- Snowflake publishes the atomic landing MERGE in autocommit mode so a lost task process
+  cannot leave its publication transaction open.
+- Managed SELECT guards honor warehouse string escaping when checking statement boundaries,
+  including keys containing backslashes and semicolons on Snowflake and Databricks.
 
 - Stop the singleton Kubernetes controller before replacing it, avoiding a rollout blocked
   by the active controller guard.
@@ -131,6 +134,16 @@ Warehouses are optional extras. Core bundles none. `all` is core plus the UI, fo
   lookups by code should filter on `ETL_CRAFT_PROJECT`, as the updated examples do.
 
 ### Changed
+
+- Upload-bound APPEND_TABLE and OVERWRITE_TABLE allow unprotected staging targets without
+  CREATED_BY/UPDATED_BY. Declared actors still receive per-upload account stamps; protected
+  and SCD targets retain full audit requirements. Every upload-bound managed write requires
+  UPLOAD_ID in both SELECT and target.
+- Python landing replacement retains declared UPLOAD_ID and optional LOCKED without creating
+  or stamping actor columns.
+- Ingestion fan-out items may return own-key PARTITIONS offsets, retained provisionally with
+  item success across retries. The task checkpoint commits only with successful attempt ending.
+  Wrong keys/types, backwards positions and script overrides fail permanently.
 
 - Keep the package Quick Start and installed-wheel tests on a small demo; the full
   Support Insights project now starts in its own public repository. The installed

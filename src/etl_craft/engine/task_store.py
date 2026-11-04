@@ -420,7 +420,11 @@ class LocalTaskStore:
                 self._assert(conn)
                 if sql_action is not None:
                     state = self._sql_state(conn, sql_action)
-                    return replace(state, rule_flags=self._rule_scopes(conn))
+                    return (
+                        state
+                        if sql_action == SqlAction.DROP_TABLE
+                        else replace(state, rule_flags=self._rule_scopes(conn))
+                    )
                 return TaskState(
                     fetch_task_offset(conn, identity.task_id),
                     tuple(fetch_business_rules_for_task(conn, identity.task_id)),
@@ -441,9 +445,19 @@ class LocalTaskStore:
             return None
         catalog = active_catalog(self.config)
         canonical = qualify(target, catalog)
+        from etl_craft.engine.repository.pipelines import current_project_id, selected_project
+
+        project_id = current_project_id()
+        if self.definition is not None:
+            pipeline = self.definition.row(
+                "CFG_PIPELINES", "pipeline_id", self.identity.pipeline_id
+            )
+            project_id = int(str(pipeline.get("project_id", 1)))
+        with selected_project(project_id):
+            declared = fetch_source_columns(conn)
         columns = tuple(
             (c.column_name, c.data_type)
-            for c in fetch_source_columns(conn)
+            for c in declared
             if qualify(c.table_name, catalog).lower() == canonical.lower()
             and c.column_name.lower() not in GENERATED_COLUMNS
         )

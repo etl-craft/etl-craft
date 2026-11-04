@@ -69,10 +69,15 @@ def cli_writer(w, target="landing"):
     )
     if "secret_var" in profile.extra:
         fields["Secret"] = profile.secret_var
+    engine_profile = w.config.engine
+    if w.engine_db.dialect.name == "sqlite":
+        engine_profile = replace(
+            engine_profile, jdbc_url="jdbc:sqlite:" + w.engine_db.url.database, schema="main"
+        )
     raw = {
         "Secrets": {"Source_type": "ENVIRONMENT"},
         "Orchestration": {"Project": "default", "Log_dir": "logs", "Api_address": "127.0.0.1:0"},
-        "Engine": {"dev": profile_block(w.config.engine, w.config.engine.schema)},
+        "Engine": {"dev": profile_block(engine_profile, engine_profile.schema)},
         "Warehouse": {"Table_format": str(w.config.warehouse_table_format), "dev": fields},
         "Artifacts": {"Store": (w.project / "artifacts").as_uri()},
         "Privacy": {"Hmac_secret": "ETL_CRAFT_TEST_PRIVACY_SECRET"},

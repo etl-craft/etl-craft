@@ -713,8 +713,9 @@ def test_bounded_source_findings_are_shared_by_validate_refresh_and_config_apply
     )
 
 
+@pytest.mark.parametrize("cte", [False, True])
 @pytest.mark.parametrize("column", ["UPDATE_DATE", "changed"])
-def test_known_coarse_timestamp_definitions_are_validation_findings(project, column):
+def test_known_coarse_timestamp_definitions_are_validation_findings(project, column, cte):
     from fixtures.metadata import add_source_column
 
     engine, config, _ = project
@@ -732,6 +733,12 @@ def test_known_coarse_timestamp_definitions_are_validation_findings(project, col
             "WATERMARK_COLUMN": "changed",
             "WATERMARK_START": "2000-01-01T00:00:00+00:00",
         }
+        if cte:
+            params["SELECT_QUERY"] = (
+                "WITH recent AS (SELECT id, changed FROM raw.events) "
+                "SELECT id, changed FROM recent WHERE changed >= $$watermark "
+                "AND changed < $$watermark_max"
+            )
         add_task(conn, pipeline, "read", "SQL", **params)
         add_source_column(
             conn, target if column == "UPDATE_DATE" else "raw.events", column, "TIMESTAMP(0)", 1

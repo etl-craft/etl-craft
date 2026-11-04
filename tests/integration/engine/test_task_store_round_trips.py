@@ -52,3 +52,69 @@ def test_task_state_batches_peer_statuses_and_target_contracts(engine_db):
     overhead = 1 if for_engine(db).supports_api_replicas else 0
     assert counter.result()["engine_statements"] == 1 + overhead
     assert counter.result()["engine_transactions"] == 1
+
+
+def test_landing_contract_uses_its_admitted_project(engine_db):
+    import json
+
+    from etl_craft.core.definitions import Definition
+    from etl_craft.engine.task_store import LocalTaskStore, TaskIdentity
+    from etl_craft.handlers.resources import LocalLocker
+
+    rows = {
+        "CFG_PIPELINES": [{"pipeline_id": 87, "project_id": 2}],
+        "CFG_TASKS": [
+            {
+                "task_id": 91,
+                "pipeline_id": 87,
+                "handler": "PYTHON",
+                "target_active_flag": "Y",
+                "target_table_id": 93,
+            }
+        ],
+        "CFG_TABLES": [
+            {
+                "table_id": 93,
+                "project_id": 2,
+                "catalog_name": None,
+                "schema_name": "lnd",
+                "table_name": "admitted",
+                "object_kind": None,
+                "active_flag": "Y",
+            }
+        ],
+        "CFG_COLUMNS": [
+            {
+                "table_id": 93,
+                "column_name": "id",
+                "data_type": "BIGINT",
+                "column_position": 1,
+                "is_nullable": "Y",
+                "active_flag": "Y",
+            }
+        ],
+    }
+    image = {name: {"columns": list(records[0]), "rows": records} for name, records in rows.items()}
+    image["CFG_TASK_PARAMETERS"] = {
+        "columns": ["task_id", "parameter_name", "parameter_value", "active_flag"],
+        "rows": [],
+    }
+    definition = Definition.read(json.dumps({"_version": 2} | image))
+    from dataclasses import replace
+
+    from etl_craft.config import ConnectionProfile
+
+    config = replace(
+        engine_db.config,
+        warehouse=ConnectionProfile("WAREHOUSE", "dev", "jdbc:duckdb:warehouse.db", "", "NONE"),
+    )
+    store = LocalTaskStore(
+        engine_db.engine,
+        config,
+        TaskIdentity(87, 91, 1, 1, None, None),
+        LocalLocker(engine_db.engine, engine_db.config),
+        definition,
+    )
+    contract = store.state().landing
+    assert contract is not None
+    assert contract.columns == (("id", "BIGINT"),)

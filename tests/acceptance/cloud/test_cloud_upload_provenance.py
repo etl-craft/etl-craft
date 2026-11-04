@@ -7,6 +7,7 @@ import pytest
 from acceptance.cloud.test_cloud_sql_actions import close_world, cloud_world
 from etl_craft.core.enums import TableFormat
 from fixtures.cloud import DATABRICKS_VARS, SNOWFLAKE_VARS, require_variables
+from fixtures.seed_columns import check_omitted_seed_columns
 from integration.warehouse.test_upload_attribution import (
     test_ordinary_upload_rows_retain_ids_and_stamp_declared_actors as check_staging,
 )
@@ -35,5 +36,6 @@ def test_cloud_upload_staging_and_ods(tmp_path, vendor, variables):
             for declared in (True, False):
                 check_staging(w, action, declared)
         check_chain(w)
+        check_omitted_seed_columns(w, tmp_path / "seed")
     finally:
         close_world(w)

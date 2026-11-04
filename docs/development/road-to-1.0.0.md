@@ -205,7 +205,7 @@ item's text, or work done early under another item.
 | S7.R Complete the test suite | In progress | #228 | Slice 1: recursive secret masking, merge crash windows and full-column/catalog upgrade guards; six-skill coverage audit remains after S7.A |
 | S7.N Faster complete pull-request CI | Done | #170 | Fail-closed collection/shard accounting, isolated schema templates and shared demo workers; complete checks in 6m33s-8m15s (owner-approved ten-minute target) |
 | S8.A The project layout | In progress | #319, #320 | Small-agent Python slots, compiled role images and singleton rollout; demo acceptance in progress |
-| S8.B Pipelines | In progress | | Client, reference, stewardship, maintenance and DM pipelines with independent expected rows |
+| S8.B Pipelines | In progress | #322 | Package rule scopes, atomic landing, item offsets, stewardship and seeds; demo waits for S7.E task secrets and live acceptance |
 | S8.C Configuration through CI | Planned | | Secretless local DuckDB validation and developer-token deployment of one pinned project commit |
 | S8.D Views | Planned | | Fact and data-metrics views reconciled with independent reference queries |
 | S8.E The CI pipelines | Planned | | Validate, deploy and manual/pre-release full-stack workflows |
@@ -961,6 +961,17 @@ empty-history-page handling defect, which was corrected and verified. No cloud w
 
 **Choices that differ from the item text.**
 
+- **S8.B (owner).** Seed data headers may omit declared non-key columns, which receive
+  dialect-cast NULLs. Keys remain mandatory and blank cells retain their meaning. Stewarded
+  DS seeds declare UPLOAD_ID without placing it in data.csv; no fabricated upload is used.
+- **S8.B (owner).** Only REJECT flags exclude rows from ODS; INCOMPLETE and REPORT
+  rows remain eligible. Rejectable generator batches contain parseable negative durations,
+  so business rules, rather than data-type parsing, reject them.
+- **S8.B (owner).** The requested rejectable-data slice is included: each generator has
+  a bounded --rejectable negative-duration batch, with explicit identity, duration and rating
+  REJECT rules. The remainder of S8.H's mixed-quality scenario matrix stays with S8.H.
+  SQL files and rule SELECTs are formatted. Steward CDC joins active PRS keys to current-run
+  landing receipts so unchanged-value uploads can still carry their UPLOAD_ID/LOCKED control.
 - **S8.B (owner).** Provenance is never lost: every upload-bound APPEND_TABLE,
   OVERWRITE_TABLE and SCD merge requires UPLOAD_ID in both SELECT and target. Unprotected
   staging targets may omit actor columns; each declared actor column is still stamped from
@@ -968,8 +979,8 @@ empty-history-page handling defect, which was corrected and verified. No cloud w
   The original repository's DS records replace the toy seeds, including source-specific
   lookup IDs and values; generator lookup initialization uses those same records.
 - **S8.B (owner).** Landing rows carry UPLOAD_ID and optional LOCKED as declared
-  business columns. replace_landing adds no actor columns: uploader attribution stays in
-  the merge's existing upload mapping. Steward SELECTs retain UPLOAD_ID through PRS, CDC,
+  business columns. replace_landing adds no actor columns: managed writes resolve uploader
+  attribution through the existing upload mapping when their targets declare actor columns. Steward SELECTs retain UPLOAD_ID through PRS, CDC,
   PRE_ODS and ODS; no SETUP_TABLE change or landing actor stamping is introduced.
 - **S8.B (owner).** Fan-out ingestion items may return own-key PARTITIONS positions,
   retained provisionally with item success, including skipped successes on retry. The task
@@ -984,7 +995,10 @@ empty-history-page handling defect, which was corrected and verified. No cloud w
   replacing the item's SUCCESS text because the package already refuses that edge.
   S8.D valid-count reporting reads rejected keys from cloned audit tables; current-run ODS
   admission uses recorded rule scopes, never asynchronous mirrors. Full demo validation,
-  Beta memory measurement and paired cloud acceptance remain in progress.
+  Beta memory measurement remain in progress. Paired cloud provenance and omitted-column
+  seed checks passed. Live source ingestion is blocked by unfinished S7.E task-secret
+  declarations/delivery: arbitrary source credentials are intentionally excluded from task
+  environments; no credential allowlist bypass is introduced.
 
 
 - **S8.A (owner).** Workstation: 14 GiB RAM, 12 cores, 15 GiB zram and a 16 GiB
