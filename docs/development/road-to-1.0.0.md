@@ -968,6 +968,11 @@ empty-history-page handling defect, which was corrected and verified. No cloud w
   Acceptance: unit/script/validation/agent suites passed; insecure, expired and fenced claims
   and pipe output/timeout cases passed 20 local repetitions. Security review found and fixed
   split-prefix redaction before publication. Cloud suites are not applicable to this slice.
+- **S8.B (owner).** A separate `fix/s8b-defects-2` package PR collects defects found after
+  #322 merged; #323 remains the task-secret slice. Multi-project contract isolation exercises
+  the shared operation/write path on SQLite and PostgreSQL and the real agent/API chain on
+  PostgreSQL; SQLite continues to refuse CONTROLLER_AGENTS deployments. Existing misattributed
+  contracts require explicit per-project inspection and rehash, with no silent audit repair.
 
 - **S8.B (owner).** Seed data headers may omit declared non-key columns, which receive
   dialect-cast NULLs. Keys remain mandatory and blank cells retain their meaning. Stewarded
@@ -9473,6 +9478,7 @@ remedy; downstream tasks report "blocked by failure"; nothing is half-written.
 | sends a value the warehouse type cannot hold (numeric overflow, out-of-range date) | fail, naming the column, the value and the declared type | target unchanged |
 | sends an empty batch where `ALLOW_EMPTY` is false | refuse before replacing the target | the previous target rows remain |
 | fails a TABLE business rule of type `REJECT` (for example a row count far below the norm) | fail the rule's task with the rule, the observed value and its detail | Insights shows the observed value and the failed run |
+| multi-project Engine DB ↔ agent writes | derive every write's project from its authenticated owned attempt; refuse another token's attempt | `test_agent_operation_publishes_and_reads_only_its_project` on both Engine DBs; `test_other_project_token_cannot_publish_an_owned_attempt`; PostgreSQL `test_project_two_agent_setup_and_merge_keep_contracts_isolated` |
 | becomes unreachable or refuses credentials (Kafka broker, MongoDB, MinIO) | retry by its `RETRY_ON` policy, then fail naming the source and the last error | attempts and their failure classes in the audit; the alert sent once |
 | is slow enough to pass the SLA | mark the run's SLA `BREACHED` at the deadline while it keeps running | `SLA_BREACHED_AT` set; the run log and Insights show the breach |
 

@@ -283,3 +283,9 @@ small-agent-python-slots = [
     "tests/unit/test_resources.py::test_explicit_python_slots_refuse_less_than_the_process_base_before_start",
     "tests/integration/api/test_agent_process.py::test_explicit_small_python_agent_records_success_or_memory_failure",
 ]
+
+agent-project-attribution = [
+    "tests/integration/engine/test_agent_project_scope.py::test_agent_operation_publishes_and_reads_only_its_project",
+    "tests/integration/engine/test_agent_project_scope.py::test_other_project_token_cannot_publish_an_owned_attempt",
+    "tests/integration/api/test_agent_api.py::test_project_two_agent_setup_and_merge_keep_contracts_isolated",
+]

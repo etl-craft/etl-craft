@@ -600,8 +600,8 @@ def invoke(ctx: OperationContext, name: ActionName, request: object) -> object:
         assert isinstance(request, ACTIONS[name].request)
         record_refusal(ctx, name, arguments(request), error)
         raise error
-    ctx = _request_context(ctx, name, request)
     try:
+        ctx = _request_context(ctx, name, request)
         ctx = _project_context(ctx, ACTIONS[name], request)
     except (PermissionDeniedError, ResourceNotFoundError) as error:
         assert isinstance(request, ACTIONS[name].request)
@@ -773,7 +773,7 @@ def _request_context(ctx: OperationContext, name: ActionName, request: object) -
                 initiator = initiating_context(conn, ctx, row.pipeline_run_id)
                 if ctx.actor == initiator.actor:
                     ctx = initiator
-    return ctx
+    return agents.attempt_context(ctx, request)
 
 
 def _request_codes(conn: Connection, action: Action, request: object) -> list[str]:
