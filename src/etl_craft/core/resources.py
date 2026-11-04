@@ -7,9 +7,9 @@ the reason, never as zero.
 
 Sizing is opt-in through a declared ``DeploymentProfile``. Each profile reserves a share of the
 allocation for whatever else runs on the host, counts the controller and HTTP server as one
-process, and divides the rest into task slots by per-kind cost estimates. Configured settings
-stay ceilings: a derived size never exceeds them, and a size is never rounded up past what the
-allocation holds.
+process, and divides the rest into task slots by per-kind cost estimates.
+Explicit Python slots can exceed the default memory estimate within CPU, process-base memory
+and total-slot bounds. Other configured limits remain ceilings.
 """
 
 from __future__ import annotations
@@ -219,6 +219,10 @@ CONTROLLER_CPUS = 0.5
 CONTROLLER_MEMORY = 256 * MIB
 TASK_COST = {"warehouse": (0.25, 128 * MIB), "python": (1.0, 512 * MIB)}
 """Per task process: CPUs and memory. Warehouse tasks mostly wait on the warehouse."""
+TASK_PROCESS_BASE_MEMORY = 80 * MIB
+"""Minimum resident memory for an empty Python task process."""
+AGENT_PROCESS_MEMORY = 80 * MIB
+"""Resident memory for the dedicated agent supervisor, separate from its reserve."""
 SERVER_THREADS_PER_CPU = 4
 SUPERVISION_CONNECTIONS = 2
 DEFAULT_POOL_SIZE = 5
@@ -331,11 +335,30 @@ def _slots(
         else:
             fits[kind] = Size(by_cpu, f"CPU: {max(free_cpus, 0):g} free at {cpu_cost:g} each")
     total = _ceiling(fits["warehouse"], ceilings.max_parallel_tasks, "total task slots")
-    python = _ceiling(fits["python"], ceilings.python_slots, "Orchestration.Local_python_slots")
+    python = _python_slots(fits["python"], free_cpus, free_memory, ceilings.python_slots)
     warehouse = _ceiling(total, ceilings.warehouse_slots, "Orchestration.Local_warehouse_slots")
     if python.value > total.value:
-        python = Size(total.value, "no more than the task slots")
+        python = Size(total.value, f"{python.reason}; no more than {total.value} total task slots")
     return total, python, warehouse
+
+
+def _python_slots(derived: Size, cpus: float, memory: float | None, explicit: int | None) -> Size:
+    """Trade the default estimate for the measured floor when the count is explicit."""
+    if explicit is None:
+        return derived
+    setting = "Orchestration.Local_python_slots/--python-slots"
+    if memory is not None and explicit * TASK_PROCESS_BASE_MEMORY > max(0, memory):
+        raise ConfigurationError(
+            f"{setting}={explicit}: usable memory {max(0, memory) / MIB:.0f} MB; "
+            f"expected {TASK_PROCESS_BASE_MEMORY // MIB} MB base cost per declared slot; "
+            "lower the setting or raise the container memory limit"
+        )
+    cpu_bound = max(0, math.floor(cpus / TASK_COST["python"][0]))
+    return Size(
+        min(explicit, cpu_bound),
+        f"set explicitly to {explicit}; estimate allowed {derived.value} ({derived.reason}); "
+        f"CPU bound {cpu_bound}",
+    )
 
 
 def _ceiling(derived: Size, ceiling: int | None, setting: str) -> Size:
@@ -357,7 +380,7 @@ def size_agent(allocation: Allocation, ceilings: Ceilings) -> Sizing:
     """Size the task host with the same per-kind estimates and explicit ceilings."""
     cpus, memory = allocation.cpus.value, allocation.memory.value
     reserve_cpus = None if cpus is None else max(0.05, cpus * 0.1)
-    reserve_memory = None if memory is None else max(32 * MIB, memory * 0.1)
+    reserve_memory = None if memory is None else AGENT_PROCESS_MEMORY + max(32 * MIB, memory * 0.1)
     fallbacks = []
     if cpus is None or memory is None:
         total = python = warehouse = Size(

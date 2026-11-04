@@ -461,3 +461,84 @@ def test_api_only_agent_runs_upload_validation_and_load(cluster, monkeypatch):
     finally:
         agent.signal(signal.SIGTERM)
         agent.wait(timeout=40)
+
+
+@pytest.mark.parametrize("killed", [False, True], ids=["empty", "sigkill"])
+def test_explicit_small_python_agent_records_success_or_memory_failure(
+    cluster, monkeypatch, killed
+):
+    from etl_craft.core.enums import AttemptStatus, FailureClass
+    from etl_craft.core.resources import MIB, discover
+
+    p, url, token, folder = cluster
+    memory_mb = 1024 if killed else 256
+    physical_mb = (discover().memory.value or 0) / MIB
+    body = (
+        "    import os, signal\n    os.kill(os.getpid(), signal.SIGKILL)\n"
+        if killed
+        else "    return ScriptResult(0)\n"
+    )
+    (folder / "python_scripts" / "load.py").write_text(
+        "from etl_craft.scripting import ScriptResult\ndef run(task):\n" + body
+    )
+    with p.engine.begin() as conn:
+        conn.execute(
+            text(
+                "INSERT INTO CFG_TASK_PARAMETERS (TASK_ID,PARAMETER_NAME,PARAMETER_VALUE) "
+                "VALUES (:task,'MEMORY_REQUEST_MB',:memory)"
+            ),
+            {"task": p.task_id, "memory": "128"},
+        )
+    publish_project(p, folder)
+    p.start("controller", "--no-ui")
+    assert p.run("run", "--pipeline-code", "P", "--init-only", "--run-key", "small-agent")[0] == 0
+    monkeypatch.setenv("ETL_CRAFT_TOKEN", token.token)
+    agent = p.start(
+        "agent",
+        "--api",
+        url,
+        "--project-dir",
+        str(folder),
+        "--cpu",
+        "2",
+        "--memory-mb",
+        str(memory_mb),
+        "--python-slots",
+        "1",
+        "--warehouse-slots",
+        "0",
+        "--drain-seconds",
+        "0",
+    )
+    try:
+        status = AttemptStatus.FAILED if killed else AttemptStatus.SUCCESS
+        p.wait_for("SELECT STATUS FROM AUD_TASK_ATTEMPTS", expected=status, timeout=30)
+        assert "set explicitly to 1" in agent.output
+        assert f"estimate allowed {int(killed)}" in agent.output
+        if killed:
+            with p.engine.connect() as conn:
+                row = conn.execute(
+                    text(
+                        "SELECT ERROR_MESSAGE AS message, FAILURE_CLASS AS failure "
+                        "FROM AUD_TASK_ATTEMPTS"
+                    )
+                ).one()
+                logs = conn.execute(
+                    text("SELECT CONTENT AS content FROM AUD_ATTEMPT_LOG_CHUNKS")
+                ).all()
+                host = conn.execute(text("SELECT HOST AS host FROM AUD_AGENTS")).scalar_one()
+            assert row.failure == FailureClass.PERMANENT
+            for part in (
+                host,
+                "SIGKILL",
+                f"container memory limit {physical_mb:.0f} MB",
+                "--python-slots=1",
+                "lower",
+                "explicitly recovering",
+            ):
+                assert part in row.message
+                assert part in "".join(chunk.content for chunk in logs)
+        agent.signal(signal.SIGTERM)
+        assert agent.wait(timeout=30) == 0, agent.output
+    except AssertionError as error:
+        raise AssertionError(f"{error}\nagent:\n{agent.output}") from error

@@ -204,7 +204,7 @@ item's text, or work done early under another item.
 | S7.Q A generic ANSI SQL warehouse | Moved after 0.9.0 | | A `generic` dialect over SQLAlchemy for rare databases: ANSI SQL only, NULL-safe column comparison for merges, refusals for anything without an ANSI form |
 | S7.R Complete the test suite | In progress | #228 | Slice 1: recursive secret masking, merge crash windows and full-column/catalog upgrade guards; six-skill coverage audit remains after S7.A |
 | S7.N Faster complete pull-request CI | Done | #170 | Fail-closed collection/shard accounting, isolated schema templates and shared demo workers; complete checks in 6m33s-8m15s (owner-approved ten-minute target) |
-| S8.A The project layout | Planned | | Project, generators, bootstrap and measured k3d deployment in Support Insights |
+| S8.A The project layout | In progress | #319 | Explicit small-agent Python slots; demo stack and measurements in progress |
 | S8.B Pipelines | Planned | | Client, reference, stewardship, maintenance and DM pipelines with independent expected rows |
 | S8.C Configuration through CI | Planned | | Secretless local DuckDB validation and developer-token deployment of one pinned project commit |
 | S8.D Views | Planned | | Fact and data-metrics views reconciled with independent reference queries |
@@ -960,6 +960,23 @@ passed on Snowflake (two cases) and Databricks (one case); the first Databricks 
 empty-history-page handling defect, which was corrected and verified. No cloud was unavailable.
 
 **Choices that differ from the item text.**
+
+- **S8.A (owner).** Workstation: 14 GiB RAM, 12 cores, 15 GiB zram and a 16 GiB
+  NVMe swapfile. Pods use LimitedSwap through a kubelet configuration file, with verified
+  nonzero `memory.swap.max`; every pod has requests and limits, low idle-service requests
+  and Trino's request near its limit. Images build locally from a pinned merged package
+  commit using S7.F's Dockerfiles and `k3d image import`; no registry push. S8.E moves to
+  gated candidates. Install pinned CloudNativePG with kubectl; the Helm/ARC GitHub runner
+  and owner-created GitHub App move to S8.E. The demo's AGENTS.md applies package rules,
+  fixes defects in package PRs, sets disk TMPDIR and limits tests to two workers/one suite.
+  Explicit Python counts may exceed the default estimate within CPU, total-slot and measured
+  process-base bounds; defaults remain 512/128 MiB. Dedicated agents reserve their supervisor,
+  not LAPTOP memory. Gamma permits physical duplicate notifications. Its version key combines
+  object key and ETag; EVENT_SQL groups each key once. S8.F must inject a repeated notification
+  and assert one object load and one AUD_EVENT_KEYS entry. The existing package deduplicates
+  equal keyed payloads and refuses conflicting payloads naming the key and remedy.
+  Acceptance availability: local sizing/process probes and package unit/static/docs checks;
+  full demo idle/batch measurements and stack acceptance remain with the demo PR. No cloud runs.
 
 - S7.O slice 3 uses the candidate wheel filesystem mtime as build time, preserved during
   transfer, and requires `--wheel` for release validation. Both expected inventories start

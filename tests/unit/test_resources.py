@@ -224,3 +224,47 @@ def test_removed_deployment_profiles_are_refused(tmp_path, profile):
         ConfigurationError, match=r"Deployment.Profile=.*expected one of.*CONTROLLER"
     ):
         load_config(path)
+
+
+def test_explicit_python_slots_can_exceed_estimate_with_agent_cpu_and_total_bounds():
+    from etl_craft.core.resources import size_agent
+
+    allocation = discover(machine(2, 256 * MIB))
+    assert size_agent(allocation, Ceilings()).python_slots.value == 0
+    explicit = size_agent(allocation, Ceilings(python_slots=1))
+    assert explicit.profile == DeploymentProfile.CONTROLLER_AGENTS
+    assert explicit.python_slots.value == explicit.task_slots.value == 1
+    assert "set explicitly to 1" in explicit.python_slots.reason
+    assert "estimate allowed 0" in explicit.python_slots.reason
+    assert "512 MB each" in explicit.python_slots.reason
+    cpu_limited = size_agent(discover(machine(1, 1024 * MIB)), Ceilings(python_slots=2))
+    assert cpu_limited.python_slots.value == 0
+    capped = size_agent(discover(machine(4, 2048 * MIB)), Ceilings(1, 3))
+    assert capped.python_slots.value == capped.task_slots.value == 1
+
+
+def test_explicit_python_slots_refuse_less_than_the_process_base_before_start():
+    from etl_craft.core.resources import size_agent
+
+    with pytest.raises(ConfigurationError) as caught:
+        size_agent(discover(machine(4, 256 * MIB)), Ceilings(python_slots=2))
+    for part in (
+        "Local_python_slots/--python-slots=2",
+        "usable memory 144 MB",
+        "80 MB base cost",
+        "lower",
+        "raise",
+    ):
+        assert part in str(caught.value)
+
+
+def test_doctor_and_startup_show_explicit_and_estimated_python_slots(tmp_path, caplog):
+    path = write_config(tmp_path, {"Profile": "CONTROLLER"}, Local_python_slots=2)
+    measured = machine(4, 2 * GIB)
+    checks = {c.name: c for c in resource_checks(load_config(path), measured)}
+    assert "set explicitly to 2" in checks["Sizing: python slots"].detail
+    assert "estimate allowed 1" in checks["Sizing: python slots"].detail
+    caplog.set_level(logging.INFO, "etl_craft.config.sizing")
+    start_role(load_config(path), server=False, host=measured)
+    assert "set explicitly to 2" in caplog.text
+    assert "estimate allowed 1" in caplog.text

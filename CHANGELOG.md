@@ -25,6 +25,11 @@ Warehouses are optional extras. Core bundles none. `all` is core plus the UI, fo
 
 ### Fixed
 
+- Explicit Python slots may exceed the default memory estimate within CPU, total-slot and
+  measured process-base bounds. Dedicated agents reserve their supervisor's base memory;
+  startup and doctor show the explicit count and estimate. SIGKILL/OOM task endings record
+  the agent, memory limit and slot setting, and fail permanently rather than retrying silently.
+
 - Snowflake stewardship uploads use a set-based mutation check instead of an unsupported
   projected correlated subquery. SCD2 successor selection uses an anti-join that Snowflake
   supports. Lock-only writes keep their existing counts and one MERGE.

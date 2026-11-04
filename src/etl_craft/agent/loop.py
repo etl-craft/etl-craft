@@ -6,6 +6,7 @@ import codecs
 import json
 import logging
 import os
+import signal
 import sys
 import tempfile
 import threading
@@ -28,14 +29,16 @@ from etl_craft.core.enums import (
     AgentReport,
     AgentStatus,
     AttemptStatus,
+    FailureClass,
     Handler,
     SlotKind,
 )
 from etl_craft.core.errors import ConfigurationError, EtlCraftError, RunStateError, ServerError
+from etl_craft.core.failures import Failure
 from etl_craft.core.faults import fault_point
 from etl_craft.core.ownership import attempt_holder
 from etl_craft.core.placement import slot_kind
-from etl_craft.core.resources import Ceilings
+from etl_craft.core.resources import MIB, Ceilings, discover
 from etl_craft.core.text import sha256_hex
 from etl_craft.engine.resource_locks import holder_tag
 from etl_craft.execution.child_environment import child_environment
@@ -137,6 +140,16 @@ class AgentLoop:
         self.commands: tuple[int, ...] = ()
         measured = report(options.ceilings, options.declared)
         self.resources = measured
+        logger.info(
+            "dedicated agent %s (%s): memory %.0f MB; reserve and supervisor %.0f MB; "
+            "Python slots %d (%s)",
+            measured.host,
+            measured.sizing.profile,
+            (measured.allocation.memory.value or 0) / MIB,
+            (measured.sizing.reserve_memory or 0) / MIB,
+            measured.sizing.python_slots.value,
+            measured.sizing.python_slots.reason,
+        )
         self.executor = ThreadPoolExecutor(
             max(1, measured.sizing.task_slots.value), thread_name_prefix="agent-task"
         )
@@ -482,6 +495,13 @@ class AgentLoop:
             )
         else:
             ending = from_json(AgentTask, result)
+        if (
+            outcome.returncode == -signal.SIGKILL
+            and not outcome.cancelled
+            and not outcome.timed_out
+            and task.forced_status is None
+        ):
+            ending = self._killed_task(task, ending)
         if outcome.timed_out:
             ending = replace(
                 ending, status=AttemptStatus.TIMED_OUT, error_message="agent task timeout"
@@ -510,6 +530,35 @@ class AgentLoop:
         ending = replace(ending, queries_ended=queries_ended)
         self.client.call(ActionName.AGENT_REPORT, ending)
         return True
+
+    def _killed_task(self, task: RunningTask, ending: AgentTask) -> AgentTask:
+        """SIGKILL includes container OOM; retain the limit and explicit slot setting."""
+        limit = discover().memory
+        message = (
+            f"agent {self.resources.host} task process killed by SIGKILL (possible container OOM); "
+            f"container memory limit {(limit.value or 0) / MIB:.0f} MB ({limit.source}); "
+            "Orchestration.Local_python_slots/--python-slots="
+            f"{self.options.ceilings.python_slots}; "
+            "lower the slot setting or task memory use, or raise the container memory limit "
+            "before explicitly recovering the failed attempt"
+        )
+        self.client.call(
+            ActionName.AGENT_LOG,
+            AgentLog(
+                version=__version__,
+                attempt_id=task.attempt_id,
+                sequence=task.sequence,
+                content=message + "\n",
+            ),
+        )
+        task.sequence += 1
+        return replace(
+            ending,
+            status=AttemptStatus.FAILED,
+            exit_code=-signal.SIGKILL,
+            error_message=message,
+            failure=Failure(FailureClass.PERMANENT, "SIGKILL"),
+        )
 
     def _forget(self, task: RunningTask) -> None:
         with self.lock:
