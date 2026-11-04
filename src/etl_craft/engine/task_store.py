@@ -414,7 +414,15 @@ class LocalTaskStore:
 
     def state(self, sql_action: str | None = None) -> TaskState:
         """Read only metadata belonging to the selected task and its run."""
-        with using(self.definition):
+        from etl_craft.engine.repository.pipelines import current_project_id, selected_project
+
+        project_id = current_project_id()
+        if self.definition is not None:
+            pipeline = self.definition.row(
+                "CFG_PIPELINES", "pipeline_id", self.identity.pipeline_id
+            )
+            project_id = int(str(pipeline.get("project_id", 1)))
+        with using(self.definition), selected_project(project_id):
             identity = self.identity
             with self.engine.connect() as conn:
                 self._assert(conn)
@@ -445,19 +453,9 @@ class LocalTaskStore:
             return None
         catalog = active_catalog(self.config)
         canonical = qualify(target, catalog)
-        from etl_craft.engine.repository.pipelines import current_project_id, selected_project
-
-        project_id = current_project_id()
-        if self.definition is not None:
-            pipeline = self.definition.row(
-                "CFG_PIPELINES", "pipeline_id", self.identity.pipeline_id
-            )
-            project_id = int(str(pipeline.get("project_id", 1)))
-        with selected_project(project_id):
-            declared = fetch_source_columns(conn)
         columns = tuple(
             (c.column_name, c.data_type)
-            for c in declared
+            for c in fetch_source_columns(conn)
             if qualify(c.table_name, catalog).lower() == canonical.lower()
             and c.column_name.lower() not in GENERATED_COLUMNS
         )
