@@ -882,3 +882,33 @@ def test_table_business_rules_on_snowflake(tmp_path):
         check_table_business_rules(w)
     finally:
         close_world(w)
+
+
+@pytest.mark.cloud_databricks
+def test_rule_flags_on_databricks(tmp_path):
+    from fixtures.rule_flags import check_literal_keys, check_rule_flags
+
+    require_variables("DATABRICKS", DATABRICKS_VARS)
+    fields = {name.lower(): f"ETL_CRAFT_TEST_DATABRICKS_{name}" for name in DATABRICKS_VARS}
+    schema = os.environ["ETL_CRAFT_TEST_DATABRICKS_SCHEMA"]
+    w = cloud_world(tmp_path, "Databricks", fields, TableFormat.NATIVE, schema)
+    try:
+        check_rule_flags(w)
+        check_literal_keys(w)
+    finally:
+        close_world(w)
+
+
+@pytest.mark.cloud_snowflake
+def test_rule_flags_on_snowflake(tmp_path):
+    from fixtures.rule_flags import check_literal_keys, check_rule_flags
+
+    require_variables("SNOWFLAKE", SNOWFLAKE_VARS)
+    fields = {name.lower(): f"ETL_CRAFT_TEST_SNOWFLAKE_{name}" for name in SNOWFLAKE_VARS}
+    schema = os.environ["ETL_CRAFT_TEST_SNOWFLAKE_SCHEMA"]
+    w = cloud_world(tmp_path, "Snowflake", fields, TableFormat.NATIVE, schema)
+    try:
+        check_rule_flags(w)
+        check_literal_keys(w)
+    finally:
+        close_world(w)

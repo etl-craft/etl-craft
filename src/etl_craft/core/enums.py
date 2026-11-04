@@ -29,6 +29,14 @@ from etl_craft.core.errors import EtlCraftError
 E = TypeVar("E", bound=StrEnum)
 
 
+class RuleFlagType(StrEnum):
+    """Row-rule classifications explicitly selected by a SQL scope."""
+
+    REJECT = "REJECT"
+    INCOMPLETE = "INCOMPLETE"
+    REPORT = "REPORT"
+
+
 class BusinessRuleLevel(StrEnum):
     """Whether a check flags target rows or records one table result."""
 

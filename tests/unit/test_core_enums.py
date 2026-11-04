@@ -8,6 +8,7 @@ from etl_craft.core.enums import RunStatus
 pytestmark = pytest.mark.unit
 
 EXPECTED = {
+    enums.RuleFlagType: {"REJECT", "INCOMPLETE", "REPORT"},
     enums_ui.Theme: {"system", "light", "dark"},
     enums_ui.TimeDisplay: {"relative", "absolute"},
     enums_ui.SearchKind: {"PIPELINE", "TASK", "TABLE", "RUN"},

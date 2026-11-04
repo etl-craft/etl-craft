@@ -33,6 +33,7 @@ def latest(conn: Connection, task_run_id: int, key: str | None = None) -> tuple[
             None if r.ended is None else str(r.ended),
             r.report_id,
             r.attempt_id,
+            r.offset_position,
         )
         for r in rows
     )
@@ -83,6 +84,15 @@ def record(conn: Connection, task_run_id: int, attempt_id: int, event: ItemRecor
             "give each item a nonempty stable key"
         )
     validate_numbers(event)
+    if event.offset_position is not None and (
+        type(event.offset_position) is not int
+        or event.offset_position < 0
+        or event.status != ItemStatus.SUCCESS
+    ):
+        raise HandlerError(
+            f"item {event.key}: offset_position={event.offset_position!r}; expected a "
+            "nonnegative provisional position only with SUCCESS; return a PARTITIONS item offset"
+        )
     validate_report_id(event.report_id)
     duplicate = conn.execute(statement(conn, "item_report"), {"report_id": event.report_id}).first()
     previous = latest(conn, task_run_id, event.key)
@@ -112,7 +122,7 @@ def record(conn: Connection, task_run_id: int, attempt_id: int, event: ItemRecor
                 f"item {event.key}: no matching live item attempt; reload item evidence"
             )
         if old.status == ItemStatus.CANCEL_REQUESTED:
-            event = replace(event, status=ItemStatus.CANCELLED)
+            event = replace(event, status=ItemStatus.CANCELLED, offset_position=None)
         elif old.status != ItemStatus.RUNNING:
             raise StaleTransitionError(
                 f"item {event.key}: status={old.status}; expected RUNNING; reload item evidence"
@@ -155,13 +165,22 @@ def check_duplicate(old: object, run: int, attempt: int, event: ItemRecord) -> N
     from sqlalchemy.engine import Row
 
     assert isinstance(old, Row)
-    if (old.task_run_id, old.attempt_id, old.key, old.number, old.row_count, old.error) != (
+    if (
+        old.task_run_id,
+        old.attempt_id,
+        old.key,
+        old.number,
+        old.row_count,
+        old.error,
+        old.offset_position,
+    ) != (
         run,
         attempt,
         event.key,
         event.number,
         event.row_count,
         mask_error(event.error),
+        None if old.status == ItemStatus.CANCELLED else event.offset_position,
     ) or not (
         old.status == event.status
         or (

@@ -103,7 +103,9 @@ def overwrite_table(session: Session, action: ActionContext) -> HandlerResult:
         session, stage, SqlAction.OVERWRITE_TABLE, schema_evolution=action.task.schema_evolution
     )
     columns = ", ".join(name for name, _ in session.columns(stage))
-    actor_columns, actor_values = actor_parts(action.uploads, "UPLOAD_ID")
+    actor_columns, actor_values = actor_parts(
+        action.uploads, "UPLOAD_ID", (name for name, _ in session.target_columns())
+    )
     computed = not session.row_id_generated()
     row_id_columns = ", ROW_ID" if computed else ""
     row_id_values = ", CAST(ROW_NUMBER() OVER (ORDER BY NULL) AS BIGINT)" if computed else ""
@@ -164,7 +166,11 @@ def _overwrite_ddl(
         }
         if action.uploads:
             managed.update(
-                created_by=f"{writer} AS CREATED_BY", updated_by=f"{writer} AS UPDATED_BY"
+                **{
+                    name: f"{writer} AS {name.upper()}"
+                    for name in ("created_by", "updated_by")
+                    if name in types
+                }
             )
         expressions = [
             managed.get(name.lower(), f"CAST({name} AS {types[name.lower()]}) AS {name}")
@@ -215,7 +221,9 @@ def append_table(session: Session, action: ActionContext) -> HandlerResult:
     fault_point("sql.append.after_delete")
     columns = ", ".join(name for name, _ in session.columns(stage))
     row_id_columns, row_id_values = session.row_id_insert_parts()
-    actor_columns, actor_values = actor_parts(action.uploads, "UPLOAD_ID")
+    actor_columns, actor_values = actor_parts(
+        action.uploads, "UPLOAD_ID", (name for name, _ in session.target_columns())
+    )
     pipeline_column = ", PIPELINE_ID" if "pipeline_id" in present else ""
     pipeline_value = ", :pipeline_id" if pipeline_column else ""
     result = session.run(

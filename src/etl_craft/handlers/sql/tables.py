@@ -254,10 +254,20 @@ def require_target(session: Session) -> list[tuple[str, str]]:
 
 
 def audit_columns(session: Session, action: str) -> tuple[str, ...]:
-    """Upload writes always retain both account columns, including ordinary targets."""
+    """Require full actor audit on merges/protected targets; retain declared staging actors."""
     columns = AUDIT_COLUMNS[action]
     if session.uploads:
-        columns = tuple(dict.fromkeys((*columns, "CREATED_BY", "UPDATED_BY")))
+        present = {name.lower() for name, _ in session.target_columns()}
+        required = (
+            action in {SqlAction.SCD1_MERGE, SqlAction.SCD2_MERGE}
+            or session.action == SqlAction.SETUP_TABLE
+            or session.protection is not None
+            or "etl_protection" in present
+        )
+        actors = tuple(
+            name for name in ("CREATED_BY", "UPDATED_BY") if required or name.lower() in present
+        )
+        columns = tuple(dict.fromkeys((*columns, *actors)))
     return columns
 
 
@@ -291,6 +301,8 @@ def check_or_evolve(session: Session, stage: str, action: str, *, schema_evoluti
     target_columns = check_target_audit(session, action)
     required = ("PIPELINE_RUN_ID", *audit_columns(session, action))
     managed = {column.lower() for column in required} | {ROW_ID_COLUMN.lower()}
+    if action in {SqlAction.APPEND_TABLE, SqlAction.OVERWRITE_TABLE}:
+        managed.update({"created_by", "updated_by"})
     stage_columns = [
         (name, kind)
         for name, kind in session.columns(stage)

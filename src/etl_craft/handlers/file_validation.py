@@ -9,8 +9,9 @@ from types import MappingProxyType
 from sqlalchemy.engine import Engine
 
 from etl_craft.config.project import project_file
+from etl_craft.core.enums import YesNo
 from etl_craft.core.enums_uploads import UploadFormat
-from etl_craft.core.errors import HandlerError
+from etl_craft.core.errors import HandlerError, PermanentError
 from etl_craft.core.upload_reader import UploadReader, check_file
 from etl_craft.engine.task_store import TaskStore
 from etl_craft.handlers.python_scripts import (
@@ -19,6 +20,7 @@ from etl_craft.handlers.python_scripts import (
     script_definition_problem,
 )
 from etl_craft.handlers.registry import HandlerResult, TaskContext, task_store
+from etl_craft.handlers.sql.spec import parse_flag
 from etl_craft.scripting import ValidationTask
 
 PARAMETERS = frozenset(
@@ -29,15 +31,30 @@ PARAMETERS = frozenset(
         "ENCODING",
         "MAX_FILE_MB",
         "INPUT_PARAMS",
+        "REQUIRE_UPLOADS",
     }
 )
 logger = logging.getLogger(__name__)
+
+
+def require_uploads(context: TaskContext) -> bool:
+    """Normalize the explicit Y/N setting before using the shared boolean parser."""
+    name = "REQUIRE_UPLOADS"
+    written = context.task_params.get(name, YesNo.NO).strip().upper()
+    values: dict[str, str] = {YesNo.YES: "true", YesNo.NO: "false"}
+    if written not in values:
+        raise HandlerError(
+            f"{context.pipeline_code}.{context.task_code}: {name}={written!r}; "
+            "expected Y or N; remedy: set REQUIRE_UPLOADS=Y or omit it for N"
+        )
+    return parse_flag({name: values[written]}, name)
 
 
 def settings(context: TaskContext) -> tuple[str, UploadFormat, int]:
     """Check formats and the pipeline ceiling against the project's blanket limit."""
     where = f"{context.pipeline_code}.{context.task_code}"
     params = context.task_params
+    require_uploads(context)
     file_format = params.get("FILE_FORMAT", "").strip().upper()
     if file_format not in set(UploadFormat):
         raise HandlerError(
@@ -83,6 +100,13 @@ def run(context: TaskContext, backend: Engine | TaskStore) -> HandlerResult:
     entry = None
     store = task_store(context, backend)
     uploads = store.upload_files()
+    if not uploads and require_uploads(context):
+        raise PermanentError(
+            f"{context.pipeline_code}.{context.task_code}: no uploaded files in this run; "
+            "expected at least one upload because REQUIRE_UPLOADS=Y; "
+            "start the run from an upload in the UI or with `etl-craft upload "
+            f"--pipeline-code {context.pipeline_code} <file>`"
+        )
     accepted = 0
     for upload in uploads:
         try:

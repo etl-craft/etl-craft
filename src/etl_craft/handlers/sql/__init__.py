@@ -67,22 +67,9 @@ def run(context: TaskContext, engine_db: Engine | TaskStore) -> HandlerResult:
         warehouse_task(),
         open_warehouse(config, store) as warehouse,
     ):
-        needs_state = task.watermark is not None or task.action in {
-            SqlAction.SETUP_TABLE,
-            SqlAction.DROP_TABLE,
-            SqlAction.SCD1_MERGE,
-            SqlAction.SCD2_MERGE,
-        }
-        state = store.state(task.action) if needs_state else None
-        if task.action in {SqlAction.SCD1_MERGE, SqlAction.SCD2_MERGE}:
-            assert state is not None
-            other = state.merge_conflict
-            if other is not None:
-                raise SqlGuardError(
-                    f"{task.target_object}: {task.action} conflicts with an active {other} writer; "
-                    "give the target one merge action before running"
-                )
+        state = _read_state(task, context, store)
         task = _watermarked_task(task, context, store, state)
+        task = _rule_filtered_task(task, context, state, dialect)
         if context.started_at is None:
             raise SqlGuardError(
                 f"{context.pipeline_code}.{context.task_code}: recorded start is NULL; "
@@ -123,6 +110,55 @@ def run(context: TaskContext, engine_db: Engine | TaskStore) -> HandlerResult:
             raise outcome
         _publish(session, store)
     return replace(outcome, offset=session.watermark_to) if task.watermark is not None else outcome
+
+
+def _read_state(task: SqlTask, context: TaskContext, store: TaskStore) -> TaskState | None:
+    """Read checkpoint, rule scopes and conflicting writers before executing SQL."""
+    from etl_craft.core.rule_flags import parse_scopes
+    from etl_craft.handlers.sql.spec import read_select
+
+    raw, _ = read_select(context.config, context.task_params) if task.select_sql else ("", "")
+    needed = (
+        bool(parse_scopes(raw))
+        or task.watermark is not None
+        or task.action
+        in {SqlAction.SETUP_TABLE, SqlAction.DROP_TABLE, SqlAction.SCD1_MERGE, SqlAction.SCD2_MERGE}
+    )
+    state = store.state(task.action) if needed else None
+    if task.action in {SqlAction.SCD1_MERGE, SqlAction.SCD2_MERGE}:
+        assert state is not None
+        if (other := state.merge_conflict) is not None:
+            raise SqlGuardError(
+                f"{task.target_object}: {task.action} conflicts with an active {other} writer; "
+                "give the target one merge action before running"
+            )
+    return state
+
+
+def _rule_filtered_task(
+    task: SqlTask, context: TaskContext, state: TaskState | None, dialect: WarehouseDialect
+) -> SqlTask:
+    """Expand recorded keys only after their successful upstream dependency committed."""
+    from etl_craft.core.rule_flags import parse_scopes, placeholder
+    from etl_craft.dialects.warehouse.rule_flags import key_set
+    from etl_craft.handlers.sql.spec import read_select
+
+    if task.select_sql is None:
+        return task
+    raw, _ = read_select(context.config, context.task_params)
+    expanded = task.select_sql
+    assert expanded is not None
+    for scope in parse_scopes(raw):
+        assert state is not None
+        keys = state.rule_flags[scope.token]
+        logger.info(
+            "rule_flags statement scope: task=%s types=%s expanded_key_count=%d",
+            scope.task,
+            ",".join(scope.types),
+            len(keys),
+        )
+        expanded = expanded.replace(placeholder(scope), key_set(dialect, keys), 1)
+    return replace(task, select_sql=expanded)
 
 
 def _recover_protection(session: Session, store: TaskStore) -> None:

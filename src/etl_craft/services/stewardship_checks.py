@@ -57,6 +57,24 @@ def graph_problems(
     return problems
 
 
+def validation_problems(conn: Connection, context: TaskContext) -> list[str]:
+    """Refuse an upload-only validator on a pipeline nobody can upload to."""
+    from etl_craft.handlers.file_validation import require_uploads
+
+    if not require_uploads(context):
+        return []
+    row = conn.execute(
+        statement(conn, "stewardship_pipeline"), {"pipeline_id": context.pipeline_id}
+    ).one()
+    if row.stewardable_flag != YesNo.YES:
+        return [
+            f"{context.pipeline_code}.{context.task_code}: REQUIRE_UPLOADS=Y with "
+            f"STEWARDABLE_FLAG={row.stewardable_flag}; expected STEWARDABLE_FLAG=Y; "
+            "remedy: enable uploads for this pipeline or set REQUIRE_UPLOADS=N"
+        ]
+    return []
+
+
 def sql_problems(conn: Connection, context: TaskContext, spec: SqlTask) -> list[str]:
     """Refuse unsupported protection and writes that lose their file identity."""
     if not _stewardship_schema(conn):

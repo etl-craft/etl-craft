@@ -6,9 +6,29 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+- Upload-bound APPEND_TABLE and OVERWRITE_TABLE allow unprotected staging targets without CREATED_BY/UPDATED_BY. Declared actor columns still receive per-upload account stamps; protected and SCD targets still require full audit columns. UPLOAD_ID is required in both the SELECT and target for every upload-bound managed write.
+
+- Python landing replacement retains declared UPLOAD_ID and optional LOCKED without creating or stamping actor columns. Snowflake publishes its single landing MERGE in autocommit mode so a process loss cannot leave the publication transaction open.
+
+- Managed SELECT guards honor warehouse string escaping when checking statement boundaries, including quoted keys containing backslashes and semicolons on Snowflake and Databricks.
+
+- Ingestion fan-out items may return an own-key PARTITIONS offset. Provisional positions survive retries in item evidence; the combined checkpoint still commits only with successful attempt ending. Wrong keys/types, backwards positions and script overrides fail permanently.
+
 Warehouses are optional extras. Core bundles none. `all` is core plus the UI, for a single machine.
 
 ### Added
+
+- FILE_VALIDATION `REQUIRE_UPLOADS=Y` refuses an upload-free run with a permanent, audited
+  failure and upload remedy. Default N preserves empty-run skipping; validation requires
+  STEWARDABLE_FLAG=Y when the setting is enabled.
+
+- Managed SQL `$$rule_flags(task, TYPE[, TYPE])` scopes consume active, committed row-rule
+  decisions for the exact pipeline run after a direct SUCCESS dependency, with explicit
+  types and a 10,000-key hard cap. Keys use dialect-rendered typed literals; attempt logs
+  record types and expanded counts.
+- `ScriptTask.replace_landing(rows, item_key=None)` streams declared column types into
+  bounded staging and atomically replaces only the task's or current fan-out item's batch,
+  stamping ownership and run provenance while preserving other items.
 
 - Release gate validates pinned demo evidence against the candidate wheel, complete check
   and scenario inventories, and UTC execution times; empty inventories block release.

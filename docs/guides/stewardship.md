@@ -18,6 +18,13 @@ pipeline that loads files can use it. A pipeline that takes uploads needs exactl
 with no files (a scheduled run with nothing uploaded) it succeeds with 0 and the tasks after it
 are skipped. `validate` refuses a `SUCCESS` dependency on a validation task.
 
+Set the FILE_VALIDATION task parameter `REQUIRE_UPLOADS=Y` when an upload-free run must fail
+instead. It is a Y/N flag, default `N`. With `Y` and no files, validation fails permanently,
+without retrying, naming the pipeline/task and telling the caller to start from an upload in
+the UI or with `etl-craft upload --pipeline-code <code> <file>`. The attempt and full log retain
+that failure; ordinary FAILURE edges can send an alert. Downstream edges remain `HAS_DATA`.
+`validate` refuses `REQUIRE_UPLOADS=Y` unless the pipeline has `STEWARDABLE_FLAG=Y`.
+
 Only files the validation task accepted in a real attempt reach later tasks. Marking the
 validation task `SUCCESS` does not release a run's files: a task that reads them fails, naming
 the upload. Retry or rerun the original upload run to reuse its stored files.
@@ -79,8 +86,14 @@ Python loading scripts read `task.uploads`, retaining every row's `UPLOAD_ID`. M
 must SELECT that column explicitly; `$$upload_ids` expands to bound ids of this run's accepted
 files. Set `MERGE_DEDUPE_ORDER=UPLOAD_ID ASC` on stewardship merges. The engine binds the account
 for each staged row's upload, refuses missing or foreign ids before mutation, and stamps
-`CREATED_BY`/`UPDATED_BY` from that mapping. Loading scripts must also stamp their own landing
-rows with each upload's account. Later uploads win for overlapping keys.
+`CREATED_BY`/`UPDATED_BY` from that mapping. Landing rows carry `UPLOAD_ID` (and `LOCKED` when used) as ordinary declared columns.
+`task.replace_landing` adds no actor columns. Carry `UPLOAD_ID` explicitly through PRS,
+CDC and PRE_ODS to each merge. Every upload-bound APPEND_TABLE, OVERWRITE_TABLE and SCD
+merge requires UPLOAD_ID in both the SELECT and target, and refuses missing or foreign ids
+before mutation. Unprotected APPEND/OVERWRITE staging tables may omit CREATED_BY/UPDATED_BY;
+any actor columns they declare are stamped from the upload mapping. Protected targets and
+SCD merge targets still require the full audit columns. The next merge binds each account
+from UPLOAD_ID even when intervening stages have no actor columns. Later uploads win for overlapping keys.
 
 Optional `LOCKED` controls each USER upload row. Declare it as BOOLEAN in landing, carry it
 through the loading script and select it explicitly in the merge SELECT, alongside `UPLOAD_ID`.

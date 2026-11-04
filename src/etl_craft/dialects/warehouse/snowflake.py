@@ -69,6 +69,10 @@ class SnowflakeWarehouse(WarehouseDialect):
         """Count unfinished queries; a status this code does not know counts as running."""
         return len(conn.execute(text(self._UNFINISHED), {"tag": tag}).all())
 
+    def prepare_landing_publication(self, conn: Connection) -> None:
+        """Commit the single landing MERGE without leaving an abandoned transaction lock."""
+        conn.execution_options(isolation_level="AUTOCOMMIT")
+
     def classify_failure(self, error: BaseException) -> Failure:
         """SQLSTATE and compile errors precede Snowflake's general network classes."""
         error = driver_error(error)

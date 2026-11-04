@@ -91,7 +91,7 @@ from etl_craft.services.lineage import (
 from etl_craft.services.placement import Placement, placement
 from etl_craft.services.seeds import cast_rows, discover
 from etl_craft.services.source_columns import definition_problem, drift, warehouse_columns
-from etl_craft.services.stewardship_checks import graph_problems, sql_problems
+from etl_craft.services.stewardship_checks import graph_problems, sql_problems, validation_problems
 from etl_craft.services.trigger_validation import trigger_definition, trigger_graph_problems
 from etl_craft.warehouse.connection import build_warehouse_engine, open_warehouse
 
@@ -566,6 +566,9 @@ def _target_formats(config: ConnectorConfig, data: _Metadata, report: Report) ->
 
 def _sql(conn: Connection, context: TaskContext, data: _Metadata) -> list[str]:
     spec = read_sql_task(context)
+    from etl_craft.services.rule_scopes import validate_scopes
+
+    validate_scopes(conn, context, spec)
     source_pipeline_ids(conn, source_pipelines(context.task_params))
     if context.config.warehouse is None:
         return ["a SQL task needs a Warehouse section in craft-connector.yml"]
@@ -693,7 +696,7 @@ def _sql_script(conn: Connection, context: TaskContext, data: _Metadata) -> list
 
 def _file_validation(conn: Connection, context: TaskContext, data: _Metadata) -> list[str]:
     file_validation.settings(context)
-    return []
+    return validation_problems(conn, context)
 
 
 CHECKS: dict[str, Callable[[Connection, TaskContext, _Metadata], list[str]]] = {
