@@ -205,7 +205,7 @@ item's text, or work done early under another item.
 | S7.R Complete the test suite | In progress | #228 | Slice 1: recursive secret masking, merge crash windows and full-column/catalog upgrade guards; six-skill coverage audit remains after S7.A |
 | S7.N Faster complete pull-request CI | Done | #170 | Fail-closed collection/shard accounting, isolated schema templates and shared demo workers; complete checks in 6m33s-8m15s (owner-approved ten-minute target) |
 | S8.A The project layout | In progress | #319, #320 | Small-agent Python slots, compiled role images and singleton rollout; demo acceptance in progress |
-| S8.B Pipelines | In progress | #322, #324, #325, #326 | Package contracts and ending evidence; demo ships sources through ODS, DM, then stewardship/maintenance in separate slices |
+| S8.B Pipelines | Done | #322, #324, #325, #326, #327 | Demo source/ODS, bounded DM, all steward uploads and explicit drained maintenance validated in separate slices |
 | S8.C Configuration through CI | Planned | | Secretless local DuckDB validation and developer-token deployment of one pinned project commit |
 | S8.D Views | Planned | | Fact and data-metrics views reconciled with independent reference queries |
 | S8.E The CI pipelines | Planned | | Validate, deploy and manual/pre-release full-stack workflows |
@@ -960,6 +960,24 @@ passed on Snowflake (two cases) and Databricks (one case); the first Databricks 
 empty-history-page handling defect, which was corrected and verified. No cloud was unavailable.
 
 **Choices that differ from the item text.**
+
+- **S8.B final pipeline slice.** Source-to-ODS and SI_DM merged in support-insights#2/#3;
+  the final demo slice adds the four upload-only steward pipelines and nine explicit
+  Iceberg maintenance tasks. SI_DM now fences SI_STEWARD_BUSINESS as well as all clients.
+  CSV validators accept optional LOCKED, check declared numeric/boolean/timestamp shapes
+  before landing, and preserve UPLOAD_ID through the full business chain. Only REJECT
+  flags exclude ODS rows. Local demo USER credentials live in ignored .env.demo-users
+  (mode 0600), excluded from Docker contexts and project bundles.
+  Trino ALTER TABLE EXECUTE parses as an opaque unmanaged command, so its expected
+  managed-target overlap warning is not inferred; the demo checks the explicit lake-table
+  inventory independently and requires operator holds/draining before maintenance.
+  Acceptance: all eleven pipelines validated; independent source, mart, upload-chain and
+  reference-history expectations passed. Two USER uploaders in one run retained per-row
+  attribution through landing/PRS/CDC/PRE_ODS/ODS. Restore/unlock batches and following DM
+  windows passed. Nine maintenance tasks completed without retry; rows and a held Gamma
+  wait's original budget were preserved. Original failed validation and interrupted-attempt
+  evidence remain audited with expected outcomes and checked reconciliation. Full S8.F/H
+  acceptance remains separate; no generated package SQL changed and no cloud run applies.
 
 - **S8.B DM START-report defect.** A parent START exchange that loses the API response
   stops the real child and records its observed ending as FAILED once the API returns;
