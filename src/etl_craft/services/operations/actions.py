@@ -198,8 +198,8 @@ _ROWS = (
            POST, f"{API}/login/refresh"),
     Action(ActionName.LOGOUT, sessions.sign_out, sessions.TokenInput, None, None, POST,
            f"{API}/login/revoke", BY_ACTION),
-    Action(ActionName.WHOAMI, sessions.whoami, NoInput, sessions.Identity, VIEWER, GET,
-           f"{API}/whoami"),
+    Action(ActionName.WHOAMI, sessions.whoami, sessions.IdentityInput, sessions.Identity,
+           VIEWER, GET, f"{API}/whoami"),
     Action(ActionName.ABOUT, about.read_about, NoInput, about.About, VIEWER, GET, f"{API}/about"),
     Action(ActionName.CATALOG_PAGE, catalog_pages.read_catalog, catalog_pages.CatalogInput,
            None, VIEWER, GET, f"{API}/catalog/page", scope=ActionScope.PROJECT, streams=True),
@@ -469,7 +469,7 @@ def admitted(ctx: OperationContext, name: ActionName, request: object) -> Iterat
             record_refusal(ctx, name, given, error)
             raise
         if action.audit == Audit.REQUEST:
-            with recorded(ctx, name, given):
+            with recorded(ctx, name, given, on_completion=name == ActionName.MIGRATE):
                 yield
         else:
             with acting_as(ctx.actor):

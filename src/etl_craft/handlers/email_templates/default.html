@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>{{ subject }}</title></head>
+<body style="margin:0;padding:24px 12px;background:#f2f4f7;color:#182230;font-family:Arial,Helvetica,sans-serif;font-size:16px">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center">
+<!--[if mso]><table role="presentation" width="640"><tr><td><![endif]-->
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:640px;background:#ffffff;border:1px solid #d0d5dd;border-radius:8px">
+<tr><td style="padding:24px;background:#182230;color:#ffffff;border-top:6px solid {{ run.color }}">
+<div style="font-size:13px;letter-spacing:1px;font-weight:bold;color:{% if environment.type == 'PROD' %}#ffb4ab{% else %}#b2ddff{% endif %}">{{ environment.label }}</div>
+<div style="margin-top:10px;font-size:14px">{{ project.code }} · {{ pipeline.code }}</div>
+<h1 style="font-size:24px;margin:14px 0 0;color:#ffffff">{{ run.symbol }} {{ run.status }}</h1></td></tr>
+<tr><td style="padding:24px">
+<div style="line-height:1.6;white-space:pre-wrap;overflow-wrap:anywhere">{% for line in body_lines %}{{ line }}<br>{% endfor %}</div>
+<table width="100%" cellpadding="8" cellspacing="0" style="margin:20px 0;background:#f9fafb;border:1px solid #eaecf0;font-size:13px;text-align:left">
+<tr><th scope="row">Project / environment</th><td>{{ project.code }} / {{ environment.label }}</td></tr>
+<tr><th scope="row">Run / logical date</th><td>{{ run.id }} / {{ run.logical_date }}</td></tr>
+<tr><th scope="row">Started</th><td>{{ run.start or 'Not recorded' }}</td></tr>
+<tr><th scope="row">Ended</th><td>{{ run.end or 'Still running' }}</td></tr>
+<tr><th scope="row">Duration</th><td>{{ run.duration }}</td></tr>
+</table>
+{% if sla %}<p style="border-left:4px solid #b42318;padding:12px;background:#fef3f2">{{ sla.message }}</p>{% endif %}
+{% for error in errors %}<pre style="font:12px/1.6 Consolas,monospace;white-space:pre-wrap;word-break:break-word;overflow-wrap:anywhere;padding:16px;background:#fef3f2;border:1px solid #fecdca">{{ error }}</pre>{% endfor %}
+{% if watched_tasks %}<h2 style="font-size:18px">Tasks in this run</h2>
+<table width="100%" cellpadding="8" cellspacing="0" style="border-collapse:collapse;font-size:13px;text-align:left"><tr style="background:#f2f4f7"><th scope="col">Task</th><th scope="col">Status</th><th scope="col">Attempts</th></tr>
+{% for row in watched_tasks %}<tr><td style="border-bottom:1px solid #eaecf0">{{ row.code }}</td><td style="border-bottom:1px solid #eaecf0;color:{{ row.color }}">{{ row.symbol }} {{ row.status }}</td><td style="border-bottom:1px solid #eaecf0">{{ row.attempts }}</td></tr>{% endfor %}</table>{% endif %}
+{% for entry in pipelines %}<h2 style="font-size:18px">{{ entry.code }} — {{ entry.status }}</h2><p style="font-size:13px">Run {{ entry.run_id }} · {{ entry.start or 'Not recorded' }} — {{ entry.end or 'Still running' }}</p>
+{% for row in entry.tasks %}<p style="font-size:13px;color:{{ row.color }}">{{ row.symbol }} {{ row.code }}: {{ row.status }}</p>{% if row.error %}<pre style="white-space:pre-wrap;word-break:break-word;font:12px/1.6 Consolas,monospace">{{ row.error }}</pre>{% endif %}{% endfor %}{% endfor %}
+</td></tr>
+<tr><td style="padding:20px 24px;background:#f9fafb;border-top:1px solid #eaecf0;color:#475467;font-size:12px;line-height:1.6">etl-craft {{ version }}<br>Sent to {{ recipients|join(', ') }} because {{ recipient_reason }}.</td></tr>
+</table><!--[if mso]></td></tr></table><![endif]--></td></tr></table></body></html>

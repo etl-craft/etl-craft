@@ -8,10 +8,15 @@ from __future__ import annotations
 
 import codecs
 import json
+import os
 import sys
 from collections.abc import Callable, Iterable
 from typing import TextIO
 
+from etl_craft.cli.prompts import can_prompt
+from etl_craft.core.enums_access import EnvironmentType
+from etl_craft.core.environment import Environment
+from etl_craft.core.errors import UsageError
 from etl_craft.engine.controls import ControlView
 from etl_craft.services.operations import to_json
 from etl_craft.services.operations.agents import AgentsView
@@ -29,6 +34,63 @@ class Output:
         """Write to the given streams instead of the process's standard streams."""
         self._stdout = stdout
         self._stderr = stderr
+        self.environment: Environment | None = None
+        self.project = ""
+        self.confirmed = False
+        self.environment_reason: str | None = None
+
+    def context(
+        self, project: str, environment: Environment, api: str | None, *, json: bool
+    ) -> None:
+        """Print one selected-project banner, or attach it to subsequent JSON results."""
+        previous = (self.project, self.environment.label if self.environment else None)
+        self.project, self.environment = project, environment
+        if not json and previous != (project, environment.label):
+            self.context_line(f"{project} · {environment.label} · {api or 'local'}")
+
+    def context_line(self, text: str) -> None:
+        """Keep context on one line without terminal-control sequences from display names."""
+        line = " ".join(text.split())
+        print("".join(char for char in line if char.isprintable()), file=self.stderr)
+
+    def unknown_environment(self, engine: str, *, json: bool) -> None:
+        """Make legacy schema uncertainty explicit without inventing a project environment."""
+        self.environment_reason = "Engine DB predates environment metadata"
+        if not json:
+            self.context_line(f"{engine} · environment unknown ({self.environment_reason})")
+
+    def confirm(self, action: str, *, yes: bool) -> None:
+        """Confirm production changes once per command before an operation is called."""
+        if (
+            self.environment is None
+            or self.environment.type != EnvironmentType.PROD
+            or self.confirmed
+        ):
+            return
+        if not yes:
+            remedy = f"type {self.project!r} at a terminal, or pass --yes for unattended execution"
+            if not can_prompt() or os.environ.get("CI"):
+                raise UsageError(
+                    f"project {self.project!r}, environment PRODUCTION: {action} requires "
+                    f"confirmation; {remedy}"
+                )
+            print(
+                f"PRODUCTION action: {action}; type project code {self.project} to confirm:",
+                file=self.stderr,
+            )
+            try:
+                answer = input()
+            except EOFError as error:
+                raise UsageError(
+                    f"project {self.project!r}, environment PRODUCTION: confirmation ended; "
+                    f"{remedy}"
+                ) from error
+            if answer != self.project:
+                raise UsageError(
+                    f"project {self.project!r}, environment PRODUCTION: confirmation did "
+                    f"not match; project action was not executed; {remedy}"
+                )
+        self.confirmed = True
 
     @property
     def stdout(self) -> TextIO:
@@ -57,8 +119,20 @@ class Output:
         self.stdout.write(decoder.decode(b"", final=True))
 
     def document(self, result: object) -> None:
-        """Write the same JSON document returned by the service serializer."""
-        self.line(json.dumps(to_json(result), ensure_ascii=False, allow_nan=False))
+        """Write operation JSON with the selected CLI environment metadata."""
+        document = to_json(result)
+        if self.environment_reason is not None:
+            document = {
+                **document,
+                "environment": None,
+                "environment_reason": self.environment_reason,
+            }
+        elif self.environment is not None and isinstance(document, dict):
+            document = {
+                **document,
+                "environment": {"type": self.environment.type, "name": self.environment.name},
+            }
+        self.line(json.dumps(document, ensure_ascii=False, allow_nan=False))
 
     def result(
         self,

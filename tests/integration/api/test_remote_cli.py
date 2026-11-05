@@ -128,6 +128,61 @@ def sign_in(monkeypatch, capsys, url, name="alice", *answers):
     return run(capsys, "login", "--api", url)
 
 
+def test_temporary_password_identity_uses_the_selected_project_environment(
+    server,
+    monkeypatch,
+    capsys,
+    tmp_path,
+):
+    from fixtures.actions import act
+
+    ctx = server["ctx"]
+    act(
+        ctx,
+        ActionName.PROJECT_ADD,
+        project="other",
+        name="Other",
+        environment_type="SIT",
+        reason="identity test",
+    )
+    act(ctx, ActionName.ACCOUNT_RESET_PASSWORD, name="alice", password=PASSWORD)
+    monkeypatch.setattr("builtins.input", lambda prompt="": "alice")
+    monkeypatch.setattr(login, "password", lambda confirm=False: PASSWORD)
+    monkeypatch.setattr(login, "interactive", lambda: None)
+    selected = tmp_path / "other.yml"
+    selected.write_text("Secrets:\n  Source_type: ENVIRONMENT\nOrchestration:\n  Project: other\n")
+    code, _, err = run(
+        capsys, "--config", str(selected), "--project", "other", "login", "--api", server["url"]
+    )
+    assert code == 0, err
+    # An ungranted project's environment is not exposed during sign-in.
+    assert "SIT" not in err
+    act(
+        ctx,
+        ActionName.ACCESS_GRANT,
+        project="other",
+        account="alice",
+        permission="CAN_VIEW",
+        reason="environment identity check",
+    )
+    code, out, _ = run(
+        capsys,
+        "--config",
+        str(selected),
+        "--project",
+        "other",
+        "whoami",
+        "--api",
+        server["url"],
+        "--format",
+        "json",
+    )
+    assert code == 0 and json.loads(out)["environment"] == {"type": "SIT", "name": None}
+    code, _, err = run(capsys, "--project", "default", "whoami", "--api", server["url"])
+    assert code == 0 and "default · CUSTOM" in err
+    assert run(capsys, "--project", "default", "pipelines", "--api", server["url"])[0] == 26
+
+
 def tokens_of(ctx, name):
     with ctx.engine.connect() as conn:
         return conn.execute(
@@ -245,7 +300,15 @@ def test_remote_reads_print_exactly_what_the_local_project_prints(server, monkey
         for output in ("text", "json"):
             local = run(capsys, *argv, "--format", output)
             remote = run(capsys, *argv, "--format", output, "--api", url)
-            assert remote == local and local[0] in (0, 1), argv
+            assert remote[:2] == local[:2] and local[0] in (0, 1), argv
+            if output == "text":
+                assert local[2].startswith("default · CUSTOM · local\n")
+                assert remote[2].startswith(f"default · CUSTOM · {url}\n")
+                assert local[2].removeprefix("default · CUSTOM · local\n") == remote[
+                    2
+                ].removeprefix(f"default · CUSTOM · {url}\n")
+            else:
+                assert remote[2] == local[2]
     monkeypatch.setenv("ETL_CRAFT_TOKEN", server["service"]["admin"])
     for argv in (("token", "list"), ("account", "list")):
         local = run(capsys, *argv, "--format", "json")
@@ -371,7 +434,7 @@ def test_attempt_logs_stream_from_the_server_within_the_role(server, monkeypatch
     assert run(capsys, "logs", "--attempt-id", attempt, "--api", url) == (
         0,
         "first\nsecond é\n",
-        "",
+        f"default · CUSTOM · {url}\n",
     )
     assert run(capsys, "logs", "--attempt-id", attempt, "--offset", "6", "--api", url)[1] == (
         "second é\n"

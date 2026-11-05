@@ -7,7 +7,13 @@ import signal
 import threading
 from pathlib import Path
 
-from etl_craft.cli.commands.common import Command, command_context, on_host, request_from
+from etl_craft.cli.commands.common import (
+    Command,
+    command_context,
+    on_host,
+    prepare_context,
+    request_from,
+)
 from etl_craft.cli.output import Output
 from etl_craft.core.enums import ActionName
 from etl_craft.core.errors import ExitCode
@@ -58,6 +64,7 @@ def wait_until_stopped() -> None:
 
 def _run(args: argparse.Namespace, out: Output) -> int:
     on_host(args, ActionName.PUBLISH_DOCS)
+    prepare_context(args, ActionName.PUBLISH_DOCS)
     request = request_from(args, PublishInput)
     with command_context(args) as ctx, admitted(ctx, ActionName.PUBLISH_DOCS, request):
         out.line("publish-docs: this whole-project static catalog does not enforce pipeline grants")

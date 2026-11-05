@@ -102,6 +102,7 @@ Orchestration:
   prod:
     Retries: 1                         # value
     Email_recipients: [data-alerts@example.com]  # value
+    # Email_template: email_templates/team.html  # optional SLA HTML template; project-relative
     Email:
       Host: EMAIL_HOST                 # variable
       Port: EMAIL_PORT                 # variable

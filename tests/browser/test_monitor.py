@@ -98,6 +98,7 @@ def sign_in_to(page, url, destination):
     page.get_by_label("Account name", exact=True).fill("owner")
     page.get_by_label("Password", exact=True).fill(PASSWORD)
     page.get_by_role("button", name="Sign in", exact=True).click()
+    page.wait_for_url(url + destination, wait_until="load")
 
 
 def test_bulk_pause_run_now_and_csv_export(run_site, tmp_path):
@@ -184,7 +185,13 @@ def test_live_updates_refresh_the_page_or_warn_while_a_dialog_is_open(run_site, 
     with sync_playwright() as pw:
         browser = pw.chromium.launch()
         page = browser.new_context(ignore_https_errors=True).new_page()
-        sign_in_to(page, url, "/ui/projects/default/pipelines/OPS")
+        with page.expect_response(
+            lambda response: (
+                response.url.startswith(url + "/ui/projects/default/live?")
+                and response.status == 200
+            )
+        ):
+            sign_in_to(page, url, "/ui/projects/default/pipelines/OPS")
         page.wait_for_load_state("load")
         expect(page.locator("#live-updated")).to_contain_text("s ago")
         with acting_as(Actor("owner", ActorKind.USER)), ctx.engine.begin() as conn:

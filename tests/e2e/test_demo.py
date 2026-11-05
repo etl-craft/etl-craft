@@ -231,14 +231,14 @@ def check_the_emails(demo: Demo, *, failed: bool) -> None:
         if any(attempts > 1 for _, _, attempts, _ in tasks)
         else EmailFlavour.SUCCESS
     )
-    expected = f"DEMO: {outcome}"
+    expected = f"[CUSTOM] DEMO: {outcome}"
     subjects = demo.wait_for_email(expected)
     assert expected in subjects, (tasks, subjects)
     if failed:
         assert {
-            "DEMO: FAILED",
-            "DEMO: a feed failed",
-            "[etl-craft] EXPORT: SLA of 0.0002 h missed",
+            "[CUSTOM] DEMO: FAILED",
+            "[CUSTOM] DEMO: a feed failed",
+            "[CUSTOM] EXPORT: SLA of 0.0002 h missed",
         } <= subjects
 
 

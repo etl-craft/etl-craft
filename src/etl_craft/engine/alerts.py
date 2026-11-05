@@ -1,13 +1,16 @@
 """Run and SLA evidence read for an attempt's email report."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
 from sqlalchemy.engine import Connection
 
 from etl_craft.core.definitions import using
 from etl_craft.core.enums import SlaStatus
+from etl_craft.core.environment import Environment
 from etl_craft.core.errors import MetadataError
+from etl_craft.core.time import as_utc
+from etl_craft.engine.environment import project_environment
 from etl_craft.engine.queries import statement
 from etl_craft.engine.repository.pipelines import fetch_pipeline_detail, resolve_pipeline_id
 from etl_craft.engine.repository.runs import (
@@ -64,13 +67,16 @@ class AlertState:
     sla: SlaResult | None
     watched: tuple[FailureWatchMessage, ...]
     digests: tuple[PipelineDigest, ...]
+    project: str = ""
+    environment: Environment | None = None
+    run: dict[str, str | int | None] = field(default_factory=dict)
 
 
 def read_alert(
     conn: Connection,
     pipeline_id: int,
     run_id: int,
-    task_id: int,
+    task_id: int | None,
     enforce_sla: bool,
     pipelines: str | None,
 ) -> AlertState:
@@ -94,9 +100,23 @@ def read_alert(
             if pipelines.strip().upper() == "ALL"
             else [code.strip() for code in pipelines.split("|") if code.strip()]
         )
+    project, environment = project_environment(conn)
+    recorded = conn.execute(statement(conn, "email_run_context"), {"pipeline_run_id": run_id}).one()
+    start = as_utc(recorded.start_date)
+    end = as_utc(recorded.end_date) if recorded.end_date else None
     return AlertState(
         tuple(fetch_task_statuses_for_run(conn, pipeline_id, run_id)),
         sla,
-        tuple(fetch_failure_watch_messages(conn, task_id)),
+        tuple(fetch_failure_watch_messages(conn, task_id)) if task_id is not None else (),
         tuple(latest_run_of(conn, code) for code in codes),
+        project,
+        environment,
+        {
+            "id": run_id,
+            "logical_date": str(recorded.logical_date),
+            "start": start.isoformat(),
+            "end": end.isoformat() if end else None,
+            "duration": f"{((end or datetime.now(UTC)) - start).total_seconds():.2f} seconds",
+            "status": recorded.status,
+        },
     )

@@ -15,6 +15,7 @@ from etl_craft.api.ui_templates import render
 from etl_craft.core.actor import SYSTEM_ACTOR
 from etl_craft.core.enums import ActionName, ApiRole
 from etl_craft.core.errors import PermissionDeniedError, ResourceNotFoundError
+from etl_craft.services.operations import sessions
 from etl_craft.services.operations.actions import has_role, invoke
 from etl_craft.services.operations.announcements import AnnouncementFilter, Announcements
 from etl_craft.services.operations.catalog_pages import CatalogInput, CatalogPage
@@ -31,7 +32,7 @@ def page_values(
     caller = browser.cookie_context(ctx, request)
     selected = request.path_params.get("project") or request.query_params.get("project") or None
     caller = replace(caller, project=str(selected or ""), project_id=None)
-    identity = invoke(caller, ActionName.WHOAMI, NoInput())
+    identity = invoke(caller, ActionName.WHOAMI, sessions.IdentityInput())
     assert isinstance(identity, Identity)
     if identity.must_change_password and request.url.path != "/ui/profile/password":
         raise HTTPException(

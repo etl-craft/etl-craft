@@ -755,3 +755,20 @@ def test_catalog_first_endings_and_repair_labels(engine_db, tmp_path):
     folder = write_site(catalog, engine_db.config, tmp_path / "audit-catalog").folder
     task_page = (folder / "tasks/COUNTS.load.html").read_text()
     assert "old failure" not in task_page
+
+
+def test_catalog_header_keeps_environment_through_incremental_rebuild(project, tmp_path):
+    from dataclasses import replace
+
+    from etl_craft.services.catalog.site import write_site
+
+    engine, config, _ = project
+    catalog = build_catalog(engine, config)
+    assert catalog.project_code == "default"
+    folder = tmp_path / "environment-catalog"
+    write_site(replace(catalog, environment_label="PRODUCTION"), config, folder)
+    for name in ("index.html", "pipelines/SALES.html"):
+        assert "default · PRODUCTION</strong>" in (folder / name).read_text()
+    write_site(replace(catalog, environment_label="UAT · Owner <review>"), config, folder)
+    for name in ("index.html", "pipelines/SALES.html"):
+        assert "default · UAT · Owner &lt;review&gt;</strong>" in (folder / name).read_text()

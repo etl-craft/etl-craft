@@ -242,6 +242,10 @@ def validate_on(
         pipeline_codes=[code for code, _ in pipeline_parameters],
     )
     report = Report()
+    from etl_craft.handlers.email_templates import validate_templates
+
+    for template_problem in validate_templates(config, {}):
+        report.fail("Orchestration.Email_template", template_problem)
     dialect, catalog = dialect_and_catalog(config)
     if pipeline_code is None and not for_engine(conn).has_table(conn, "CFG_PROJECTS"):
         for readiness_problem in normalization_problems(conn, catalog=catalog, dialect=dialect):
@@ -674,7 +678,10 @@ def _python(conn: Connection, context: TaskContext, data: _Metadata) -> list[str
 
 
 def _email_alert(conn: Connection, context: TaskContext, data: _Metadata) -> list[str]:
+    from etl_craft.handlers.email_templates import validate_templates
+
     problems = email_alert.alert_parameter_problems(context.task_params)
+    problems.extend(validate_templates(context.config, context.task_params))
     if context.config.email is None:
         problems.insert(0, "an EMAIL_ALERT task needs an Email section in craft-connector.yml")
     return problems

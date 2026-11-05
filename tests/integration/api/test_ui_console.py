@@ -83,7 +83,7 @@ def test_lists_exactly_the_commands_the_role_may_run(site, name, role):
     assert {"controller", "migrate", "config", "login", "ui"}.isdisjoint(listed)
 
 
-def test_prints_the_same_text_and_json_as_the_cli(site, monkeypatch, capsys):
+def test_console_keeps_action_output_without_cli_environment_context(site, monkeypatch, capsys):
     from etl_craft.cli import main
 
     p, ctx, client = site
@@ -95,9 +95,17 @@ def test_prints_the_same_text_and_json_as_the_cli(site, monkeypatch, capsys):
         assert main(line.split()) == 0
         printed = capsys.readouterr().out
         result = run(client, csrf, f"etl-craft {line}")
-        assert (result["exit_code"], result["output"], result["error"]) == (0, printed, "")
+        assert result["exit_code"] == 0 and result["error"] == ""
+        if "--format json" in line:
+            import json
+
+            document = json.loads(printed)
+            assert document.pop("environment") == {"type": "CUSTOM", "name": None}
+            assert json.loads(result["output"]) == document
+        else:
+            assert result["output"] == printed
     assert main(["status", "--pipeline-code", "NOPE"]) != 0
-    cli_error = capsys.readouterr().err
+    cli_error = capsys.readouterr().err.removeprefix("default · CUSTOM · local\n")
     result = run(client, csrf, "status --pipeline-code NOPE")
     assert result["exit_code"] != 0 and result["error"] == cli_error
 

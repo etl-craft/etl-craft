@@ -108,6 +108,8 @@ def page_versions(
     )
     context = (
         renderer,
+        catalog.project_code,
+        catalog.environment_label,
         catalog.database,
         catalog.warehouse_identity,
         catalog.sql_dialect,

@@ -1,5 +1,6 @@
 {
   "dependencies": [
+    "jinja2",
     "psutil",
     "psycopg",
     "pyyaml",

@@ -14,7 +14,9 @@ import logging
 import os
 import re
 import tomllib
+from collections.abc import Callable
 from contextlib import nullcontext
+from contextvars import ContextVar
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Unpack
@@ -40,6 +42,11 @@ from etl_craft.engine.migration_steps import (
 from etl_craft.engine.queries import run_script, statement
 
 logger = logging.getLogger(__name__)
+
+before_project_migrations: ContextVar[Callable[[], None] | None] = ContextVar(
+    "before_project_migrations", default=None
+)
+"""An interface may confirm after packaged upgrades, before the first project write."""
 
 MIGRATIONS_DIR_ENV_VAR = "ETL_CRAFT_MIGRATIONS_DIR"
 ENGINE = "ENGINE"
@@ -356,6 +363,12 @@ def apply_pending_migrations(
                 with engine.connect() as conn:
                     step.check(conn, target)
         for stream in streams:
+            if (
+                stream.source == PROJECT
+                and any((file.source, file.version) not in ledger for file in stream.files)
+                and (confirm := before_project_migrations.get())
+            ):
+                confirm()
             for migration in stream.files:
                 if (migration.source, migration.version) in ledger:
                     continue

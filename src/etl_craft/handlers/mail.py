@@ -14,7 +14,6 @@ A failure names the relay or program and what went wrong.
 
 from __future__ import annotations
 
-import html
 import logging
 import os
 import smtplib
@@ -31,19 +30,12 @@ from etl_craft.config.model import EmailProfile
 from etl_craft.core.enums import AuthMode, EmailTransport, TlsMode
 from etl_craft.core.errors import EtlCraftError, HandlerError
 from etl_craft.dialects import credentials
+from etl_craft.engine.alerts import AlertState
 
 logger = logging.getLogger(__name__)
 
 SMTP_TIMEOUT_SECONDS = 30.0
 """How long the relay may take to answer each step."""
-
-STYLE = (
-    "body{font-family:-apple-system,Segoe UI,Helvetica,Arial,sans-serif;color:#1f2328}"
-    "table{border-collapse:collapse;margin:0.5em 0}"
-    "th,td{border:1px solid #d0d7de;padding:4px 10px;text-align:left}"
-    "details{margin:0.4em 0}"
-    "summary{cursor:pointer;font-weight:600}"
-)
 
 
 def parse_recipients(value: str | None, setting: str) -> list[str]:
@@ -57,18 +49,13 @@ def parse_recipients(value: str | None, setting: str) -> list[str]:
     return addresses
 
 
-def page(body: str) -> str:
-    """Wrap an HTML fragment in the page every email uses."""
-    return f"<html><head><style>{STYLE}</style></head><body>{body}</body></html>"
-
-
-def paragraph(text: str) -> str:
-    """Return ``text`` as an escaped HTML paragraph."""
-    return f"<p>{html.escape(text)}</p>"
-
-
 def send_email(
-    config: ConnectorConfig, recipients: Sequence[str], subject: str, body_html: str
+    config: ConnectorConfig,
+    recipients: Sequence[str],
+    subject: str,
+    body_html: str,
+    *,
+    body_text: str | None = None,
 ) -> str | None:
     """Send HTML email; return a partial-refusal warning, or fail with the transport and cause."""
     if config.email is None:
@@ -90,7 +77,11 @@ def send_email(
         message["Subject"] = subject
         message["From"] = formataddr((profile.from_name, profile.from_address))
         message["To"] = ", ".join(recipients)
-        message.set_content("This email is HTML; open it in a client that shows HTML.")
+        message.set_content(
+            body_text
+            if body_text is not None
+            else "This email is HTML; open it in a client that shows HTML."
+        )
         message.add_alternative(body_html, subtype="html")
         if profile.transport == EmailTransport.SENDMAIL:
             step = "send"
@@ -257,19 +248,37 @@ def send_sla_lapse_email(
     *,
     pipeline_code: str,
     pipeline_run_id: int,
+    state: AlertState,
     sla_hours: float,
-    elapsed_hours: float,
 ) -> None:
     """Email that a run is past its pipeline's SLA; only when ``Enforce_sla`` is on."""
     if not config.limits.enforce_sla:
         return
     recipients = sla_recipients(config, pipeline_recipients)
-    subject = f"[etl-craft] {pipeline_code}: SLA of {sla_hours:g} h missed"
-    body = (
-        f'<p style="color:#cf222e;font-weight:600">{html.escape(pipeline_code)}: SLA missed</p>'
-        + paragraph(
-            f"pipeline_run_id={pipeline_run_id} has been running {elapsed_hours:.2f} h, past "
-            f"its SLA of {sla_hours:g} h."
-        )
+    assert state.sla is not None
+    elapsed_hours = state.sla.elapsed_hours
+    from etl_craft.handlers.email_context import email_context
+    from etl_craft.handlers.email_templates import render
+
+    data = email_context(state, pipeline=pipeline_code, status=str(state.run["status"]))
+    assert state.environment is not None
+    subject = (
+        f"[{state.environment.label.split(' · ')[0]}] {pipeline_code}: "
+        f"SLA of {sla_hours:g} h missed"
     )
-    send_email(config, recipients, subject, page(body))
+    body = (
+        f"pipeline_run_id={pipeline_run_id} has been running {elapsed_hours:.2f} h, "
+        f"past its SLA of {sla_hours:g} h."
+    )
+    data.update(
+        subject=subject,
+        body=body,
+        recipients=recipients,
+        recipient_reason="pipeline EMAIL_RECIPIENTS"
+        if pipeline_recipients
+        else "Orchestration.Email_recipients",
+        sla={"hours": sla_hours, "elapsed_hours": elapsed_hours, "message": body},
+    )
+    rendered = render(config, config.email_template, data)
+    plain = render(config, None, data, text=True)
+    send_email(config, recipients, subject, rendered, body_text=plain)

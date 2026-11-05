@@ -3,11 +3,20 @@
 import argparse
 import time
 from collections.abc import Callable
+from dataclasses import replace
 
+from etl_craft.cli.authentication import command_identity
 from etl_craft.cli.client import ApiClient
-from etl_craft.cli.commands.common import Command, call, command_context, configure_output
+from etl_craft.cli.commands.common import (
+    Command,
+    call,
+    command_context,
+    command_project,
+    configure_output,
+    prepare_context,
+)
 from etl_craft.cli.output import Output
-from etl_craft.cli.prompts import interactive, password
+from etl_craft.cli.prompts import CONSOLE, interactive, password
 from etl_craft.core import interrupts
 from etl_craft.core.enums import ActionName
 from etl_craft.core.errors import ConfigurationError
@@ -44,6 +53,15 @@ def _login(args: argparse.Namespace, out: Output) -> int:
         token = session.refresh_token or session.access_token
         call(args, ActionName.LOGOUT, sessions.TokenInput(token=token))
         raise
+    if CONSOLE.get() is None and command_project(args):
+        scoped = command_identity.get()
+        identity_token = command_identity.set(
+            replace(scoped, identity=session.metadata) if scoped else None
+        )
+        try:
+            prepare_context(args, ActionName.WHOAMI, identity=True)
+        finally:
+            command_identity.reset(identity_token)
     out.line(f"Signed in{where} as {session.metadata.name} ({session.metadata.role})")
     return 0
 
@@ -99,7 +117,15 @@ def _logout(args: argparse.Namespace, out: Output) -> int:
 
 
 def _whoami(args: argparse.Namespace, out: Output) -> int:
-    identity = call(args, ActionName.WHOAMI, NoInput())
+    if CONSOLE.get() is None and command_project(args):
+        prepare_context(args, ActionName.WHOAMI, identity=True)
+    identity = call(
+        args,
+        ActionName.WHOAMI,
+        sessions.IdentityInput(
+            project=None if CONSOLE.get() is not None else command_project(args) or None
+        ),
+    )
     assert isinstance(identity, sessions.Identity)
     out.result(
         identity, args.output_format, text=lambda: out.line(f"{identity.name} {identity.role}")

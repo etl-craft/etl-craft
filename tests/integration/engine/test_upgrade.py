@@ -28,7 +28,7 @@ RELEASES = sorted(path.name for path in SCHEMAS.iterdir() if path.is_dir())
 
 @pytest.mark.parametrize("release", RELEASES)
 def test_an_earlier_engine_db_upgrades_to_the_current_schema(
-    empty_engine_db, release, monkeypatch, tmp_path
+    empty_engine_db, release, monkeypatch, tmp_path, cli_logging
 ):
     engine = empty_engine_db.engine
     folder = "postgres" if engine.dialect.name == "postgresql" else "sqlite"
@@ -146,7 +146,7 @@ def test_signal_migration_keeps_existing_file_consumption_and_evidence(engine_db
 
 @pytest.mark.parametrize("release", RELEASES)
 def test_browser_account_migration_retains_real_users_and_sessions(
-    empty_engine_db, release, monkeypatch, tmp_path
+    empty_engine_db, release, monkeypatch, tmp_path, cli_logging
 ):
     import json
     import shutil
@@ -328,3 +328,64 @@ def test_ending_evidence_upgrade_keeps_existing_observations_unclassified(empty_
             {"summary": summary},
         ).one()
     assert legacy.status == "SUCCESS" and legacy.owner is None and legacy.expiry is None
+
+
+@pytest.mark.parametrize("output_format", ["text", "json"])
+@pytest.mark.parametrize("with_project_migration", [False, True])
+def test_legacy_cli_upgrade_reports_unknown_environment_without_prompt(
+    empty_engine_db,
+    monkeypatch,
+    tmp_path,
+    capsys,
+    output_format,
+    with_project_migration,
+    cli_logging,
+):
+    import json
+
+    import yaml
+
+    from etl_craft.cli import main
+    from fixtures.engine_db import profile_block
+
+    db = empty_engine_db
+    install(db, "0.3.0")
+    config = tmp_path / "craft-connector.yml"
+    config.write_text(
+        yaml.safe_dump(
+            {
+                "Secrets": {"Source_type": "ENVIRONMENT"},
+                "Orchestration": {"Project": "default"},
+                "Engine": {"test": profile_block(db.config.engine, db.config.engine.schema)},
+            },
+            sort_keys=False,
+        )
+    )
+    if with_project_migration:
+        directory = tmp_path / "migrations"
+        directory.mkdir()
+        (directory / "0001_team.sql").write_text("CREATE TABLE CFG_TEAM_LEGACY (ID INTEGER);\n")
+    monkeypatch.delenv("ETL_CRAFT_TOKEN", raising=False)
+    monkeypatch.setattr("builtins.input", lambda *a: pytest.fail("legacy upgrade prompted"))
+    args = ["migrate", "--config", str(config)]
+    if output_format == "json":
+        args += ["--format", "json"]
+    assert main(args) == 0
+    captured = capsys.readouterr()
+    reason = "Engine DB predates environment metadata"
+    if output_format == "json":
+        document = json.loads(captured.out)
+        assert document["environment"] is None
+        assert document["environment_reason"] == reason
+        assert "environment unknown" not in captured.err
+    else:
+        assert f"environment unknown ({reason})" in captured.err
+    with db.engine.connect() as conn:
+        assert "environment_type" in db.dialect.column_names(conn, "CFG_PROJECTS")
+        assert db.dialect.has_table(conn, "CFG_TEAM_LEGACY") == with_project_migration
+        assert (
+            conn.execute(
+                text("SELECT COUNT(*) FROM AUD_ACTIONS WHERE COMMAND='migrate'")
+            ).scalar_one()
+            == 1
+        )

@@ -42,6 +42,7 @@ from etl_craft.core.enums import GapState, Handler, SqlAction
 from etl_craft.core.errors import EtlCraftError, MetadataError
 from etl_craft.core.text import is_safe_identifier
 from etl_craft.core.time import as_utc
+from etl_craft.engine.environment import project_environment
 from etl_craft.engine.repository.business_rules import fetch_rule_observations
 from etl_craft.engine.repository.catalog import (
     Consumption,
@@ -259,6 +260,8 @@ class Catalog:
     sql_dialect: str | None = None
     trigger_links: list[TriggerLink] = field(default_factory=list)
     insights: Insights | None = None
+    environment_label: str = ""
+    project_code: str = ""
 
     def where(self, table: str) -> tuple[str, str, str]:
         """Return a table's ``(database, schema, table)``; the active database when unnamed."""
@@ -745,6 +748,9 @@ def build_catalog(
 ) -> Catalog:
     """Build current assets and attach their recorded lineage histories."""
     catalog = collect_catalog(engine, config, with_warehouse=with_warehouse)
+    with engine.connect() as conn:
+        catalog.project_code, environment = project_environment(conn)
+        catalog.environment_label = environment.label
     _lineage_history(catalog, engine)
     return catalog
 

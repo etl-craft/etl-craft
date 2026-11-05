@@ -63,6 +63,8 @@ def check_agent_imports(args: argparse.Namespace, out: Output) -> int:
     client = ApiClient(args.api, command_project(args))
     names = client.invoke(ActionName.AGENT_DOCTOR, AgentDoctor(version=__version__))
     assert isinstance(names, AgentImports)
+    if names.environment is not None:
+        out.context(client.project, names.environment, args.api, json=args.output_format == "json")
     result = client.invoke(
         ActionName.AGENT_DOCTOR,
         AgentDoctor(

@@ -338,7 +338,7 @@ def test_nested_requests_with_different_actors_are_distinct(ctx):
         ("pipelines", []),
     ],
 )
-def test_cli_json_is_the_action_document_with_one_request(ctx, capsys, monkeypatch, command, extra):
+def test_cli_json_adds_environment_after_one_context_read(ctx, capsys, monkeypatch, command, extra):
     from etl_craft.cli.commands import common
 
     seed(ctx, active=True, task=command in {"steps", "history"})
@@ -359,10 +359,19 @@ def test_cli_json_is_the_action_document_with_one_request(ctx, capsys, monkeypat
     code = main([*arguments, *extra])
     output = capsys.readouterr()
     assert code == 0, output.err
-    assert len(observed) == 1
-    assert json.loads(output.out) == to_json(observed[0])
+    from etl_craft.services.operations.admin_metadata import Projects
+
+    assert len(observed) == 2
+    assert isinstance(observed[0], Projects)
+    expected = to_json(observed[1])
+    expected["environment"] = {
+        "type": observed[0].projects[0].environment_type,
+        "name": observed[0].projects[0].environment_name,
+    }
+    assert json.loads(output.out) == expected
+    assert " · " not in output.err
     mutating = command in {"run", "mark", "abort", "pause", "resume", "reconcile"}
-    assert action_count(ctx) == before_actions + int(mutating)
+    assert action_count(ctx) == before_actions + 1 + int(mutating)
 
 
 @pytest.mark.parametrize(

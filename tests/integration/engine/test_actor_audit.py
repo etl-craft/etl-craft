@@ -533,7 +533,7 @@ def test_postgres_extra_write_grant_is_reported(engine_db):
 
 @pytest.mark.parametrize("actor_name", ["alice", "alice@laptop"])
 def test_cli_actor_requests_and_read_only_audit(
-    engine_db, tmp_path, monkeypatch, capsys, actor_name
+    engine_db, tmp_path, monkeypatch, capsys, actor_name, cli_logging
 ):
     import yaml
 
@@ -612,7 +612,22 @@ def test_cli_actor_requests_and_read_only_audit(
         ).all()
         assert [tuple(row) for row in actions] == [
             (name, actor_name, "SERVICE")
-            for name in ("pipelines refresh", "run", "control", "control", "control", "mark")
+            for name in (
+                "project list",
+                "pipelines refresh",
+                "project list",
+                "run",
+                "project list",
+                "control",
+                "project list",
+                "control",
+                "project list",
+                "control",
+                "project list",
+                "mark",
+                "project list",
+                "project list",
+            )
         ]
         row = conn.execute(
             text(
@@ -633,7 +648,7 @@ def test_cli_actor_requests_and_read_only_audit(
     assert main(["--config", str(config), "run", "--pipeline-code", "P", "--init-only"]) == 3
     assert "no signed-in account" in capsys.readouterr().err
     with engine_db.engine.connect() as conn:
-        assert conn.execute(text("SELECT COUNT(*) FROM AUD_ACTIONS")).scalar_one() == 6
+        assert conn.execute(text("SELECT COUNT(*) FROM AUD_ACTIONS")).scalar_one() == len(actions)
 
 
 def test_terminal_attempts_and_append_only_rows_are_immutable(engine_db):

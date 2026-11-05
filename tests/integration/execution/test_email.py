@@ -95,16 +95,18 @@ def test_an_alert_reports_the_run_with_a_digest(mailpit, pipeline):
         EMAIL_BODY="Failures: $$error_message",
         EMAIL_PIPELINES="P|NOPE",
     )
-    subject = f"{tag} P pipeline {ids['P']} run {ids['run']} task {ids['alert_run']}: FAILED"
+    subject = (
+        f"[CUSTOM] {tag} P pipeline {ids['P']} run {ids['run']} task {ids['alert_run']}: FAILED"
+    )
     assert result.variables["EMAIL_SUBJECT"] == subject
     message = read(subject)
     assert [to["Address"] for to in message["To"]] == ["ops@example.com", "lead@example.com"]
     assert (message["From"]["Name"], message["From"]["Address"]) == ("ETL Craft", "etl@example.com")
     body = message["HTML"]
-    assert "P: FAILED" in body and "Failures: 3 rows had no key" in body
+    assert "✕ FAILED</h1>" in body and "Failures: 3 rows had no key" in body
     # The digest: P's latest run with its tasks, and a row for the unknown code.
-    assert "<summary>P: " in body and "3 rows had no key</td>" in body
-    assert "NOPE</td>" in body and "UNKNOWN" in body
+    assert "P — IN-PROGRESS</h2>" in body and "3 rows had no key</pre>" in body
+    assert "NOPE — UNKNOWN</h2>" in body
 
 
 def test_an_alert_on_other_outcomes_sends_nothing(mailpit, pipeline):
@@ -157,11 +159,15 @@ def test_a_multiline_database_error_is_safe_in_the_subject_and_kept_in_the_body(
         EMAIL_SUBJECT=f"{tag}: $$error_message",
         EMAIL_BODY="$$error_message",
     )
-    subject = f"{tag}: " + " ".join(error.split())
+    subject = f"[CUSTOM] {tag}: " + " ".join(error.split())
     assert result.variables["EMAIL_SUBJECT"] == subject
     message = read(tag)
     assert message["Subject"] == subject
-    assert html.escape(error) in message["HTML"].replace("\r\n", "\n")
+    rendered = message["HTML"].replace("\r\n", "\n")
+    assert (
+        html.unescape(rendered.split("<pre", 1)[1].split(">", 1)[1].split("</pre>", 1)[0]) == error
+    )
+    assert "<br>" in rendered
 
 
 @pytest.mark.parametrize(
@@ -280,21 +286,28 @@ def test_the_sla_email_goes_to_the_pipeline_recipients_only_when_enforced(mailpi
             '\'{"EMAIL_RECIPIENTS": ["owner@example.com"]}\' '
             f"WHERE PIPELINE_ID = {pipeline_id}"
         )
-    lapse = SlaLapse(code, 97, 1.0, 1.5)
+    with engine_db.engine.begin() as conn:
+        run_id = start_run(conn, pipeline_id)
+    lapse = SlaLapse(code, run_id, 1.0, 1.5)
+    from etl_craft.engine.alerts import read_alert
+
+    with engine_db.engine.connect() as conn:
+        state = read_alert(conn, pipeline_id, run_id, None, False, None)
     # Enforce_sla off: no hook, and a direct call sends nothing.
     assert default_hooks(config, engine_db.engine).on_sla_lapse is None
     send_sla_lapse_email(
-        config, None, pipeline_code=code, pipeline_run_id=1, sla_hours=1, elapsed_hours=2
+        config, None, pipeline_code=code, pipeline_run_id=run_id, sla_hours=1, state=state
     )
 
     enforced = replace(config, limits=ExecutionLimits(enforce_sla=True))
     default_hooks(enforced, engine_db.engine).on_sla_lapse(lapse)
-    message = read(f"[etl-craft] {code}: SLA of 1 h missed")
+    message = read(f"[CUSTOM] {code}: SLA of 1 h missed")
     assert [to["Address"] for to in message["To"]] == ["owner@example.com"]
-    assert "pipeline_run_id=97 has been running 1.50 h, past its SLA of 1 h." in message["HTML"]
+    assert f"pipeline_run_id={run_id} has been running" in message["HTML"]
+    assert "past its SLA of 1 h." in message["HTML"]
     with pytest.raises(HandlerError, match="no one to send the SLA email to"):
         send_sla_lapse_email(
-            enforced, None, pipeline_code=code, pipeline_run_id=1, sla_hours=1, elapsed_hours=2
+            enforced, None, pipeline_code=code, pipeline_run_id=run_id, sla_hours=1, state=state
         )
 
 
@@ -331,7 +344,7 @@ def test_an_alert_through_sendmail(engine_db, pipeline, tmp_path):
     # Recipients come from the headers (-t); the sender is the profile's from_address (-f).
     assert sent.startswith("-t -oi -f etl@example.com -F ETL Craft\n")
     assert "From: ETL Craft <etl@example.com>" in sent
-    assert "To: ops@example.com" in sent and "Subject: FAILED" in sent
+    assert "To: ops@example.com" in sent and "Subject: [CUSTOM] FAILED" in sent
     assert probe_email_relay(config) is None
 
 

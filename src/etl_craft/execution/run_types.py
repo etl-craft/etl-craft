@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable, Generator
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import TypeVar
 
 from sqlalchemy.engine import Connection, Engine
@@ -13,6 +13,7 @@ from etl_craft.config import ConnectorConfig
 from etl_craft.core import interrupts
 from etl_craft.core.enums import (
     RunStatus,
+    SlaStatus,
 )
 from etl_craft.core.graph import DependencyGraph
 from etl_craft.engine import runlog
@@ -104,13 +105,19 @@ def default_hooks(config: ConnectorConfig, engine: Engine) -> RunHooks:
         with engine.connect() as conn:
             pipeline_id = resolve_pipeline_id(conn, lapse.pipeline_code)
             recipients = fetch_pipeline_detail(conn, pipeline_id).email_recipients
+            from etl_craft.engine.alerts import read_alert
+
+            state = replace(
+                read_alert(conn, pipeline_id, lapse.pipeline_run_id, None, False, None),
+                sla=runlog.SlaResult(SlaStatus.BREACHED, lapse.sla_hours, lapse.elapsed_hours),
+            )
         send_sla_lapse_email(
             pinned,
             recipients,
             pipeline_code=lapse.pipeline_code,
             pipeline_run_id=lapse.pipeline_run_id,
+            state=state,
             sla_hours=lapse.sla_hours,
-            elapsed_hours=lapse.elapsed_hours,
         )
 
     return RunHooks(on_sla_lapse=email_the_lapse, on_finalized=finalized)
