@@ -108,6 +108,7 @@ class RunningTask:
     fenced: bool = False
     trigger: bool = False
     decoded: bool = False
+    started_reported: bool = False
 
     def lease(self, deadline: float) -> None:
         """Publish a conservative monotonic deadline before the task's existing one expires."""
@@ -358,6 +359,18 @@ class AgentLoop:
 
     def _started(self, task: RunningTask, pid: int) -> None:
         """Pin the observed process before its bootstrap can time out."""
+        try:
+            self._report_started(task, pid, process_start(pid))
+        except ServerError as error:
+            task.forced_status = AttemptStatus.FAILED
+            task.forced_message = (
+                f"attempt {task.attempt_id}: agent START report failed ({error}); "
+                "the supervisor stopped the child; restore the API and retry the failed attempt"
+            )
+            task.cancel.set()
+
+    def _report_started(self, task: RunningTask, pid: int, birth: str | None) -> None:
+        """Retry the same observed identity before reporting an ending."""
         self.client.call(
             ActionName.AGENT_REPORT,
             AgentTask(
@@ -365,9 +378,10 @@ class AgentLoop:
                 attempt_id=task.attempt_id,
                 operation=AgentReport.START,
                 pid=pid,
-                process_start=process_start(pid),
+                process_start=birth,
             ),
         )
+        task.started_reported = True
 
     def _heartbeats(self) -> None:
         while not self.closed.is_set():
@@ -508,6 +522,8 @@ class AgentLoop:
         result = json.loads(path.read_text(encoding="utf-8")) if path.is_file() else None
         if isinstance(result, dict) and result.get("trigger"):
             return True
+        if not task.trigger and not task.started_reported and outcome.pid is not None:
+            self._report_started(task, outcome.pid, outcome.process_start)
         if result is None:
             ending = AgentTask(
                 version=__version__,

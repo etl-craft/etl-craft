@@ -6,6 +6,11 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+- Agents stop and record the real child ending when the parent START report encounters an
+  API outage. The failed attempt names the START exchange and remedy instead of renewing
+  a permanently CLAIMED reservation. Existing stuck attempts require draining/replacing the
+  owning agent, expired-lease reconciliation and explicit retry; no audit rows are backfilled.
+
 Warehouses are optional extras. Core bundles none. `all` is core plus the UI, for a single machine.
 
 ### Added

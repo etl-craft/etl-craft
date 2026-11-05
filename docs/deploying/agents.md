@@ -290,3 +290,9 @@ Attestation requires the operator role used by reconcile; CAN_RUN alone is insuf
 The reason is mandatory. Its process row records ATTESTED, actor, reason and the checks that
 were verified, while its independently verified query row records VERIFIED. Either explicit
 evidence kind releases the same watermark fence. No migration guesses missing evidence.
+
+If the parent's START report loses its API response, the supervisor stops the child and
+retains its observed PID/birth and exit. The attempt fails with a START-report message once
+the API is reachable; it is not renewed forever as CLAIMED. On an older installation, drain
+or replace the owning agent, let its attempt lease expire, reconcile through the documented
+verified/attested path, then explicitly retry the failed run. Never edit audit rows.

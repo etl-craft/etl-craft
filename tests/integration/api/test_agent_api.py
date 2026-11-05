@@ -2830,3 +2830,71 @@ def test_agent_ending_refuses_a_foreign_process_identity(agent_scene):
             ).scalar_one()
             == 0
         )
+
+
+@pytest.mark.parametrize("start_committed", [False, True])
+def test_start_response_loss_ends_the_claim_and_keeps_observed_identity(
+    agent_scene, tmp_path, monkeypatch, start_committed
+):
+    import sys
+    import tempfile
+    from types import SimpleNamespace
+
+    from etl_craft.agent import loop
+    from etl_craft.core.errors import ServerError
+    from etl_craft.execution.processes import ChildSpec, run_child
+
+    db, _, headers, _, _, config = agent_scene
+    attempt = claim(agent_scene, "PYTHON")
+    temporary = tempfile.TemporaryDirectory(dir=tmp_path)
+    task = loop.RunningTask(attempt, loop.SlotKind.PYTHON, tmp_path, temporary, 1000)
+    calls = 0
+
+    def exchange(action, request):
+        nonlocal calls
+        calls += 1
+        if calls == 1 and not start_committed:
+            raise ServerError("START response lost; restore the API")
+        response = post(agent_scene, "report", **encode(request))
+        assert response.status_code == 200, response.text
+        if calls == 1:
+            raise ServerError("START response lost after commit; restore the API")
+
+    client = SimpleNamespace(call=exchange, token=headers["Authorization"].removeprefix("Bearer "))
+    agent = SimpleNamespace(client=client, config=config)
+    agent._report_started = lambda task, pid, birth: loop.AgentLoop._report_started(
+        agent, task, pid, birth
+    )
+    outcome = run_child(
+        ChildSpec(
+            (sys.executable, "-c", "import threading; threading.Event().wait()"),
+            timeout_seconds=5,
+            log_path=tmp_path / "output",
+        ),
+        cancel=task.cancel,
+        on_started=lambda pid: loop.AgentLoop._started(agent, task, pid),
+    )
+    monkeypatch.setattr(loop, "process_local_queries", lambda config: False)
+    monkeypatch.setattr(loop, "confirm", lambda config, tag: None)
+    assert loop.AgentLoop._finish(agent, task, outcome)
+    with db.engine.connect() as conn:
+        row = conn.execute(
+            text(
+                "SELECT STATUS AS status,PID AS pid,PROCESS_START AS birth, "
+                "ERROR_MESSAGE AS message FROM AUD_TASK_ATTEMPTS WHERE ATTEMPT_ID=:id"
+            ),
+            {"id": attempt},
+        ).one()
+        kinds = (
+            conn.execute(
+                text("SELECT KIND AS kind FROM AUD_ATTEMPT_ACKNOWLEDGEMENTS WHERE ATTEMPT_ID=:id"),
+                {"id": attempt},
+            )
+            .scalars()
+            .all()
+        )
+    assert row.status == AttemptStatus.FAILED
+    assert row.pid == outcome.pid and row.birth == outcome.process_start
+    assert "START" in row.message
+    assert set(kinds) == {"PROCESS", "QUERIES"}
+    temporary.cleanup()

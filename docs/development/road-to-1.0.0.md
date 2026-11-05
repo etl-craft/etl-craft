@@ -205,7 +205,7 @@ item's text, or work done early under another item.
 | S7.R Complete the test suite | In progress | #228 | Slice 1: recursive secret masking, merge crash windows and full-column/catalog upgrade guards; six-skill coverage audit remains after S7.A |
 | S7.N Faster complete pull-request CI | Done | #170 | Fail-closed collection/shard accounting, isolated schema templates and shared demo workers; complete checks in 6m33s-8m15s (owner-approved ten-minute target) |
 | S8.A The project layout | In progress | #319, #320 | Small-agent Python slots, compiled role images and singleton rollout; demo acceptance in progress |
-| S8.B Pipelines | In progress | #322, #324, #325 | Package contracts and ending evidence; demo ships sources through ODS, DM, then stewardship/maintenance in separate slices |
+| S8.B Pipelines | In progress | #322, #324, #325, #326 | Package contracts and ending evidence; demo ships sources through ODS, DM, then stewardship/maintenance in separate slices |
 | S8.C Configuration through CI | Planned | | Secretless local DuckDB validation and developer-token deployment of one pinned project commit |
 | S8.D Views | Planned | | Fact and data-metrics views reconciled with independent reference queries |
 | S8.E The CI pipelines | Planned | | Validate, deploy and manual/pre-release full-stack workflows |
@@ -960,6 +960,24 @@ passed on Snowflake (two cases) and Databricks (one case); the first Databricks 
 empty-history-page handling defect, which was corrected and verified. No cloud was unavailable.
 
 **Choices that differ from the item text.**
+
+- **S8.B DM START-report defect.** A parent START exchange that loses the API response
+  stops the real child and records its observed ending as FAILED once the API returns;
+  the monitor must not retain a failed Future and renew CLAIMED forever. Existing stuck
+  attempts need the documented agent replacement, lease expiry and reconcile path, never
+  a migration or direct audit update. Unit, PostgreSQL agent API/process and ending-evidence
+  checks passed, including twenty local START-loss repetitions. Static/docs and local
+  Semgrep passed; warehouse SQL is unchanged, so no cloud suite applies. The live DM slice
+  continues after this fix merges.
+
+- **S8.B DM slice.** The source-to-ODS demo slice merged as support-insights#2.
+  SI_DM's initial writer list contains the three existing clients; the stewardship slice
+  adds SI_STEWARD_BUSINESS when that pipeline exists, because validation refuses unknown
+  codes. No inactive placeholder or freshness dependency is introduced. The DM SELECT
+  expands lookup-only changes and defers rows whose joined ODS stamps reach the admitted
+  high bound. Deterministic fixtures check inclusive low/exclusive high, empty ranges,
+  lookup expansion and later joined values; independent live expectations use generator
+  inputs and original seeds. Full concurrent-writer acceptance remains S8.F.
 
 - **S8.B slicing (owner).** Finish package ending evidence and attested reconciliation on
   `fix/s8b-defects-3` first and reconcile the live blocked attempt through its merged path.
@@ -9498,6 +9516,7 @@ remedy; downstream tasks report "blocked by failure"; nothing is half-written.
 | sends a value the warehouse type cannot hold (numeric overflow, out-of-range date) | fail, naming the column, the value and the declared type | target unchanged |
 | sends an empty batch where `ALLOW_EMPTY` is false | refuse before replacing the target | the previous target rows remain |
 | fails a TABLE business rule of type `REJECT` (for example a row count far below the norm) | fail the rule's task with the rule, the observed value and its detail | Insights shows the observed value and the failed run |
+| agent START report ↔ process supervision | stop the real child and retain its ending when START delivery fails, then record FAILED rather than renewing a stuck claim | `test_failed_start_report_stops_child_and_preserves_ending_evidence`, `test_start_response_loss_ends_the_claim_and_keeps_observed_identity` |
 | agent ending report ↔ watermark fence | preserve verified exit/query evidence for every terminal outcome; an old uncertain process needs explicit checked operator attestation | `test_every_observed_agent_ending_records_only_verified_evidence`, `test_agent_terminal_exit_records_real_evidence`, `test_attested_legacy_ending_advances_the_window_and_names_operator`, and refusal/role tests in `test_ending_evidence.py` |
 | multi-project Engine DB ↔ agent writes | derive every write's project from its authenticated owned attempt; refuse another token's attempt | `test_agent_operation_publishes_and_reads_only_its_project` on both Engine DBs; `test_other_project_token_cannot_publish_an_owned_attempt`; PostgreSQL `test_project_two_agent_setup_and_merge_keep_contracts_isolated` |
 | becomes unreachable or refuses credentials (Kafka broker, MongoDB, MinIO) | retry by its `RETRY_ON` policy, then fail naming the source and the last error | attempts and their failure classes in the audit; the alert sent once |
