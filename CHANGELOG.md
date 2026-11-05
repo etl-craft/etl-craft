@@ -6,6 +6,10 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+- The new browser interface gains a task's history page (runs with row counts, definition, kept offset,
+  CSV), the attempt page (outcome, evidence, log), run items (rerun, cancel, mark), the pipeline run
+  matrix and run filters, why a task is in its state, and run and task controls (hold, release, stop,
+  abort, restart, mark) that show why an action is unavailable. All writes use one confirmation.
 - The new browser interface at `/app` gains Pipelines (tag filter, bulk pause and resume, CSV export),
   a pipeline's page (run durations, runs, task graph with lineage, Run now, Pause and Resume),
   Scheduled runs, and Held and paused (release holds, resume pipelines and tasks). Every write

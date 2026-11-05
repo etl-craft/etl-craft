@@ -113,3 +113,17 @@ export function Field({ label, children }: { label: string; children: React.Reac
     </label>
   );
 }
+
+/** Name and value pairs such as task parameters: names muted, values in monospace and wrapped. */
+export function ParamList({ entries }: { entries: [string, string][] }) {
+  return (
+    <dl className="m-0 grid gap-x-6 gap-y-2 text-[13px] sm:grid-cols-[minmax(10rem,16rem)_1fr]">
+      {entries.map(([name, value]) => (
+        <div key={name} className="contents">
+          <dt className="font-mono text-xs text-muted">{name}</dt>
+          <dd className="m-0 break-words font-mono text-xs">{value}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}

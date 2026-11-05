@@ -71,36 +71,118 @@ export interface Graph {
 export interface AttemptView {
   attempt_id: number;
   attempt_number: number;
+  pipeline_run_id: number;
+  task_run_id: number;
   status: string;
+  owner_id: string | null;
   queued_at: string | null;
+  claimed_at: string | null;
   started_at: string | null;
   ended_at: string | null;
   host: string | null;
+  pid: number | null;
   exit_code: number | null;
+  source_count: number | null;
+  target_count: number | null;
+  insert_count: number | null;
+  update_count: number | null;
+  delete_count: number | null;
   rows_written: number | null;
+  reject_count: number | null;
+  duplicate_count: number | null;
+  watermark_from: string | null;
+  watermark_to: string | null;
   error_message: string | null;
   failure_class: string;
+  failure_source: string | null;
+  failure_code: string | null;
   retry_on: string | null;
+  retry_reason: string | null;
+  retryable: boolean;
+  log_path: string | null;
+  process_evidence_kind: string | null;
+  process_evidence_actor: string | null;
+  process_evidence_reason: string | null;
+  query_evidence_kind: string | null;
+  query_evidence_actor: string | null;
+  query_evidence_reason: string | null;
 }
 
 export interface TaskRunView {
   task_code: string;
+  task_run_id: number;
+  pipeline_run_id: number;
   status: RunStatus;
   start_date: string | null;
   end_date: string | null;
   attempt_count: number;
+  source_count: number | null;
+  target_count: number | null;
+  insert_count: number | null;
+  update_count: number | null;
+  delete_count: number | null;
+  rows_written: number | null;
+  reject_count: number | null;
+  duplicate_count: number | null;
   error_message: string | null;
   attempts: AttemptView[];
+  item_progress: string | null;
 }
 
 export interface TaskHistory {
   entries: TaskRunView[];
 }
 
+export interface TaskDefinition {
+  task_code: string;
+  handler: string;
+  parameters: Record<string, string>;
+  merge_key: string[];
+  merge_columns: string[];
+}
+
+export interface TaskOffset {
+  kind: string | null;
+  offset_type: string | null;
+  offset_value: string | null;
+  pending_task_run_id: number | null;
+  pending_upper_bound: string | null;
+}
+
+export interface Dependency {
+  upstream: string;
+  dependency_type: string;
+  status: string | null;
+  met: boolean;
+  reason: string;
+}
+
+export interface Explanation {
+  run_condition: string;
+  required_count: number;
+  dependencies: Dependency[];
+  retry_at: string | null;
+}
+
+export interface ItemRecord {
+  key: string;
+  status: string;
+  row_count: number | null;
+  error: string | null;
+  started: string | null;
+  ended: string | null;
+}
+
+export interface Items {
+  records: ItemRecord[];
+  progress: { total: number; done: number; failed: number; skipped: number };
+}
+
 export interface Capability {
   action: string;
   available: boolean;
   reason: string | null;
+  preserves_successful_work: boolean;
 }
 
 export interface Capabilities {

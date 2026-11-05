@@ -1,7 +1,7 @@
 import { CirclePause } from "lucide-react";
 import * as React from "react";
 import { Link } from "react-router-dom";
-import { statusMeta, toneClass } from "@/components/status";
+import { StatusMark, statusMeta, toneClass } from "@/components/status";
 import { formatDuration, formatTime } from "@/lib/format";
 import { runPath } from "@/lib/routes";
 import type { Pipeline, RunView } from "@/lib/types";
@@ -12,20 +12,16 @@ export function RecentRuns({ project, pipeline }: { project: string; pipeline: P
   if (pipeline.recent_runs.length === 0) return <span className="text-muted">No runs yet</span>;
   return (
     <span className="flex items-center gap-1">
-      {pipeline.recent_runs.map((run) => {
-        const { icon: Icon, label, spin } = statusMeta(run.status);
-        return (
-          <Link
-            key={run.pipeline_run_id}
-            to={runPath(project, pipeline.pipeline_code, run.pipeline_run_id)}
-            title={`Run ${run.pipeline_run_id}: ${label}`}
-            aria-label={`Run ${run.pipeline_run_id}, ${label}`}
-            className={cn("grid size-6 place-items-center rounded-full", toneClass(run.status))}
-          >
-            <Icon aria-hidden className={cn("size-3.5", spin && "animate-spin")} />
-          </Link>
-        );
-      })}
+      {pipeline.recent_runs.map((run) => (
+        <Link
+          key={run.pipeline_run_id}
+          to={runPath(project, pipeline.pipeline_code, run.pipeline_run_id)}
+          aria-label={`Run ${run.pipeline_run_id}, ${statusMeta(run.status).label}`}
+          title={`Run ${run.pipeline_run_id}: ${statusMeta(run.status).label}`}
+        >
+          <StatusMark status={run.status} />
+        </Link>
+      ))}
     </span>
   );
 }

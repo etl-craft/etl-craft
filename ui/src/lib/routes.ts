@@ -14,3 +14,9 @@ export const pipelinePath = (project: string, pipeline: string, tab?: string): s
   `/projects/${enc(project)}/pipelines/${enc(pipeline)}` + (tab ? `?tab=${tab}` : "");
 export const scheduledPath = (project: string): string => `/projects/${enc(project)}/scheduled`;
 export const heldPath = (project: string): string => `/projects/${enc(project)}/held`;
+export const taskPath = (project: string, pipeline: string, task: string): string =>
+  `/projects/${enc(project)}/pipelines/${enc(pipeline)}/tasks/${enc(task)}`;
+export const attemptPath = (project: string, pipeline: string, runId: number | string, task: string, attemptId: number | string): string =>
+  `${runPath(project, pipeline, runId)}/tasks/${enc(task)}/attempts/${attemptId}`;
+export const itemsPath = (project: string, pipeline: string, runId: number | string, task: string): string =>
+  `${runPath(project, pipeline, runId)}/tasks/${enc(task)}/items`;

@@ -194,7 +194,7 @@ item's text, or work done early under another item.
 | S7.AL Pre-demo package gaps | In progress | #314, #315 | Slices 1–3 ship duplicate counts, current references and guarded-table validation guidance. Slices 4–6 remain. |
 | S7.AM Protection on every warehouse | Done | #311, #312, #313 | Atomic SCD merges, in-row protection and recovery, private audit identities and provider acceptance |
 | S7.AN Always show the environment | Done | #328 | CLI context and production confirmation; designed, sandboxed alert/SLA templates and catalog environment |
-| S7.AO UI rebuild | In progress | #329 | Slice 1 (shell, Home, runs, run detail with recovery) merged; slice 2 (pipelines, pipeline page, scheduled, held and paused) in review; remaining pages and the old UI's deletion follow |
+| S7.AO UI rebuild | In progress | #329, #330 | Slices 1–2 merged (shell, Home, runs, run detail, pipelines, pipeline page, scheduled, held); slice 3 (task, attempt, items, matrix, run and task controls) in review; remaining pages and the old UI's deletion follow |
 | S7.M Stewardship uploads | Done (M2) | #296, #305 | Atomic receipts and safe stored names; processed layout, retention archives and verified reruns; crash recovery and guarded upload history |
 | S7.S Seed tables | Done | #308 | Typed pinned-bundle seeds replace reference tables until recorded stewardship handover |
 | S7.T Business calendars | Done | #276 | Shared holiday and weekend calendars for schedules, run dates, backfill and catch-up |
@@ -9155,9 +9155,10 @@ script or style); it adds no server logic.
    pages stay reachable from the new shell. Owner approves the look before auto-merge.
 2. Slice 2: Pipelines (tag filter, bulk pause and resume, CSV), a pipeline's page (run
    durations, runs, task graph, Run now, Pause, Resume), Scheduled runs, Held and paused.
-   Later slices move the rest by area: the task and attempt pages and the run matrix, uploads,
-   insights, console, catalog entry, system and agents, administration, personal settings,
-   search and sign-in.
+   Slice 3: the task history page, attempt page, run items, the run matrix, run filters, and
+   run and task controls. Later slices move the rest by area: a task's offset reset and data
+   provenance, uploads, insights, console, catalog entry, system and agents, administration,
+   personal settings, search and sign-in.
 3. Final slice: serve the new UI at `/ui`, delete the Jinja/htmx templates, their page modules
    and static files, and the `/app` alias. The catalog's static site is unchanged.
 
