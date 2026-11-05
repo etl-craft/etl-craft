@@ -1,11 +1,14 @@
 import { useQuery } from "@tanstack/react-query";
+import { Download } from "lucide-react";
 import * as React from "react";
 import { Fact, FactList, Loading, Notice } from "@/components/common";
 import { StatusBadge } from "@/components/status";
 import { Button } from "@/components/ui/button";
 import { useTimezone } from "@/hooks";
 import { getText, project } from "@/lib/api";
+import { downloadFile } from "@/lib/download";
 import { formatDuration, formatTime } from "@/lib/format";
+import { cn } from "@/lib/utils";
 import type { AttemptView } from "@/lib/types";
 
 const count = (value: number | null) => (value === null ? "Not measured" : value.toLocaleString("en-GB"));
@@ -16,6 +19,7 @@ const LIVE = new Set(["QUEUED", "CLAIMED", "RUNNING"]);
 /** An attempt's log, fetched on demand and kept fresh while the attempt is still running. */
 export function AttemptLog({ code, attempt, open = false }: { code: string; attempt: Pick<AttemptView, "attempt_id" | "status">; open?: boolean }) {
   const [shown, setShown] = React.useState(open);
+  const [wrap, setWrap] = React.useState(true);
   const log = useQuery({
     queryKey: ["log", code, attempt.attempt_id, attempt.status],
     queryFn: () => getText(`${project(code)}/attempts/${attempt.attempt_id}/log`),
@@ -25,15 +29,27 @@ export function AttemptLog({ code, attempt, open = false }: { code: string; atte
   const lines = log.data?.split("\n") ?? [];
   return (
     <div className="grid gap-2">
-      <Button size="sm" className="w-fit" onClick={() => setShown(!shown)} aria-expanded={shown}>
-        {shown ? "Hide log" : "Show log"}
-      </Button>
+      <div className="flex flex-wrap items-center gap-3">
+        <Button size="sm" className="w-fit" onClick={() => setShown(!shown)} aria-expanded={shown}>
+          {shown ? "Hide log" : "Show log"}
+        </Button>
+        {shown && log.isSuccess ? (
+          <>
+            <Button size="sm" onClick={() => downloadFile(`attempt-${attempt.attempt_id}.log`, log.data, "text/plain;charset=utf-8")}>
+              <Download className="size-4" aria-hidden /> Download log
+            </Button>
+            <label className="flex items-center gap-1.5 text-xs text-muted">
+              <input type="checkbox" checked={wrap} onChange={(event) => setWrap(event.target.checked)} /> Wrap lines
+            </label>
+          </>
+        ) : null}
+      </div>
       {shown && log.isPending ? <Loading what="log" /> : null}
       {shown && log.isError ? <Notice>{(log.error as Error).message}</Notice> : null}
       {shown && log.isSuccess ? (
         <>
-          {lines.length > 400 ? <p className="m-0 text-xs text-muted">Showing the last 400 of {lines.length} lines.</p> : null}
-          <pre tabIndex={0} aria-label="Attempt log" className="m-0 max-h-96 overflow-auto rounded-md border border-border bg-surface-2 p-3 font-mono text-xs leading-5">
+          {lines.length > 400 ? <p className="m-0 text-xs text-muted">Showing the last 400 of {lines.length} lines; download the log for all of it.</p> : null}
+          <pre tabIndex={0} aria-label="Attempt log" className={cn("m-0 max-h-96 overflow-auto rounded-md border border-border bg-surface-2 p-3 font-mono text-xs leading-5", wrap && "whitespace-pre-wrap break-words")}>
             {lines.slice(-400).join("\n")}
           </pre>
         </>
