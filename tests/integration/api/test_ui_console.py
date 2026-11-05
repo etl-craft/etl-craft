@@ -17,7 +17,8 @@ from fixtures.metadata import add_pipeline, add_task
 
 PASSWORD = "correct horse battery"
 URL = "/ui/projects/default/console"
-API = "/api/v1/projects/default/console"
+API = URL
+JSON = {"Accept": "application/json"}
 
 
 @pytest.fixture
@@ -164,7 +165,7 @@ def test_never_prompts_a_scheduled_resume_prints_the_refusal_instead(site, monke
 
 def test_the_commands_route_lists_only_what_the_signed_in_person_may_type(site):
     _, _, client = site
-    anonymous = client.get(API + "/commands")
+    anonymous = client.get(API + "/commands", headers=JSON)
     assert anonymous.status_code == 401
     login(client, "owner")
     admin = client.get(API + "/commands").json()
@@ -191,7 +192,7 @@ def test_the_commands_route_says_when_there_is_no_console(metadata_project):
 
 def test_the_json_console_route_runs_a_line_with_the_same_csrf_proof_as_the_page(site):
     _, _, client = site
-    assert client.post(API, json={"line": "status"}).status_code == 401
+    assert client.post(API, json={"line": "status"}, headers=JSON).status_code == 401
     csrf, _ = login(client, "owner")
     refused = client.post(API, json={"line": "pipelines"}, headers={"Origin": "https://testserver"})
     assert refused.status_code == 403  # no CSRF proof, no run

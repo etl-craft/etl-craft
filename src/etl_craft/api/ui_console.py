@@ -41,7 +41,7 @@ def add_console_page(app: FastAPI, ctx: OperationContext, console: Console | Non
             },
         )
 
-    @app.get("/api/v1/projects/{project}/console/commands", include_in_schema=False)
+    @app.get("/ui/projects/{project}/console/commands", include_in_schema=False)
     def commands(request: Request, project: str) -> Response:
         """List the commands, with their flags, that the signed-in person may type here."""
         caller = replace(browser.cookie_context(ctx, request), project=project, project_id=None)
@@ -53,7 +53,6 @@ def add_console_page(app: FastAPI, ctx: OperationContext, console: Console | Non
             }
         )
 
-    @app.post("/api/v1/projects/{project}/console", include_in_schema=False)
     @app.post("/ui/projects/{project}/console", include_in_schema=False)
     async def run(request: Request, project: str) -> Response:
         caller = browser.cookie_context(ctx, request)

@@ -23,7 +23,7 @@ export function Console() {
   const client = useQueryClient();
   const info = useProjectInfo(code);
   useDocumentTitle("Console", code, info.project && { type: info.project.environment_type, name: info.project.environment_name });
-  const commands = useQuery({ queryKey: ["console-commands", code], queryFn: () => getJson<{ available: boolean; commands: Record<string, string[]> }>(`${project(code)}/console/commands`) });
+  const commands = useQuery({ queryKey: ["console-commands", code], queryFn: () => getJson<{ available: boolean; commands: Record<string, string[]> }>(`/ui/projects/${encodeURIComponent(code)}/console/commands`) });
   const recent = useQuery({ queryKey: ["console-history", code], queryFn: () => getJson<{ actions: AuditAction[] }>(`${project(code)}/audit`, { mine: true }) });
   const [lines, setLines] = React.useState<Line[]>([{ kind: "note", text: `etl-craft console · project ${code} · type help for the commands you can run` }]);
   const [value, setValue] = React.useState("");
@@ -47,7 +47,7 @@ export function Console() {
     setBusy(true);
     setFailure(null);
     try {
-      const result = await postJson<ConsoleResult>(`${project(code)}/console`, { line });
+      const result = await postJson<ConsoleResult>(`/ui/projects/${encodeURIComponent(code)}/console`, { line });
       const added: Line[] = [];
       if (result.output) added.push({ kind: "output", text: result.output });
       if (result.error) added.push({ kind: "error", text: result.error });

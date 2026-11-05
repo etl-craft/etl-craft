@@ -3,6 +3,7 @@ import * as React from "react";
 import { Link, Outlet, useParams } from "react-router-dom";
 import { EnvironmentBadge, EnvironmentStrip } from "@/components/environment-badge";
 import { DropdownContent, DropdownItem, DropdownLabel, DropdownMenu, DropdownSeparator, DropdownTrigger } from "@/components/dropdown";
+import { Logo } from "@/components/logo";
 import { Sidebar } from "@/components/sidebar";
 import { Button } from "@/components/ui/button";
 import { useHealth, useIdentity } from "@/hooks";
@@ -49,10 +50,7 @@ export function AppShell() {
           {open ? <X className="size-5" /> : <Menu className="size-5" />}
         </Button>
         <Link to="/" className="flex items-center gap-2 font-semibold">
-          <svg viewBox="0 0 32 32" className="size-6" aria-hidden>
-            <rect width="32" height="32" rx="7" fill="var(--accent)" />
-            <path d="M8 21 L16 9 L24 21 M12 21 L16 15 L20 21" fill="none" stroke="var(--accent-fg)" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
+          <Logo className="size-7" />
           <span className="hidden sm:inline">etl-craft</span>
         </Link>
         <DropdownMenu>
