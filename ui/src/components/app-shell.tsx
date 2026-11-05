@@ -43,7 +43,7 @@ export function AppShell() {
       <a href="#main" className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:bg-surface focus:p-2">
         Skip to content
       </a>
-      {env ? <EnvironmentStrip env={env} project={code} /> : null}
+      {env ? <EnvironmentStrip env={env} /> : null}
       <header className="z-30 flex h-14 shrink-0 items-center gap-3 border-b border-border bg-surface px-4">
         <Button variant="ghost" size="icon" className="lg:hidden" aria-label={open ? "Close menu" : "Open menu"} onClick={() => setOpen(!open)}>
           {open ? <X className="size-5" /> : <Menu className="size-5" />}
@@ -74,7 +74,6 @@ export function AppShell() {
             ))}
           </DropdownContent>
         </DropdownMenu>
-        {env ? <EnvironmentBadge env={env} className="hidden sm:inline-flex" /> : null}
         <div className="ml-auto flex items-center gap-1">
           <Button variant="ghost" size="icon" aria-label={theme === "dark" ? "Use the light theme" : "Use the dark theme"} onClick={() => {
             const next: Theme = theme === "dark" ? "light" : "dark";

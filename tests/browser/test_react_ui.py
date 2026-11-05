@@ -145,7 +145,10 @@ def test_production_is_unmistakable_and_recovery_needs_the_project_code(scene):
         browser, page, _ = open_page(pw)
         sign_in(page, url, f"/app/projects/default/runs/OPS/{bad}")
         expect(page).to_have_title(f"PRODUCTION · default · OPS #{bad} · etl-craft")
-        expect(page.get_by_role("status").filter(has_text="PRODUCTION")).to_be_visible()
+        strip = page.get_by_role("status").filter(has_text="PRODUCTION")
+        expect(strip).to_be_visible()
+        expect(strip).not_to_contain_text("default")  # the project is named once, in the switcher
+        expect(page.get_by_role("button", name="Switch project")).to_have_text("default")
         page.get_by_role("button", name="Recover run").click()
         dialog = page.get_by_role("dialog")
         dialog.get_by_label("Reason (kept in the audit trail)").fill("urgent")
