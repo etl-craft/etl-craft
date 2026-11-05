@@ -50,7 +50,7 @@ export function AppShell() {
           {open ? <X className="size-5" /> : <Menu className="size-5" />}
         </Button>
         <Link to="/" className="flex items-center gap-2 font-semibold">
-          <Logo className="size-7" />
+          <Logo className="size-8" />
           <span className="hidden sm:inline">etl-craft</span>
         </Link>
         <DropdownMenu>

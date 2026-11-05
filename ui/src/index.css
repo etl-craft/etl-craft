@@ -23,6 +23,7 @@
   --idle-fg: #475467; --idle-bg: #eef0f3;
   --env-prod: #b42318; --env-prod-fg: #ffffff;
   --env-other: #3f4a5a; --env-other-fg: #ffffff;
+  --mark-a: #3a6cf7; --mark-b: #1b44c4; --mark-glyph: #ffffff;
 }
 [data-theme="dark"] {
   color-scheme: dark;
@@ -46,6 +47,7 @@
   --idle-fg: #b0b8c4; --idle-bg: #232a34;
   --env-prod: #c9372c; --env-prod-fg: #ffffff;
   --env-other: #3a4553; --env-other-fg: #f1f4f8;
+  --mark-a: #9dbaff; --mark-b: #6d93f2; --mark-glyph: #0c1426;
 }
 
 @theme inline {

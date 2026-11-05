@@ -6,6 +6,9 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+- The etl-craft mark is now a solid tile (layered chevrons under a plane, white on a blue gradient, dark on a
+  light blue one in the dark theme) in the new interface, the browser console, sign-in, the offline catalog and
+  the favicon. The new interface also now sets the project favicon.
 - The new browser interface gains Insights (summary, runs per day, pipelines, rows by task, failures, rules,
   schema checks, latest runs, with CSV), the command console (tab completion, history, your recent requests)
   and the Catalog page (validate, rebuild, refresh lineage, record versions, and the generated catalog in
