@@ -34,6 +34,12 @@ def _global_options(*, defaults: bool) -> argparse.ArgumentParser:
         return value if defaults else argparse.SUPPRESS
 
     group.add_argument(
+        "--yes",
+        action="store_true",
+        default=default(False),
+        help="Confirm production changes or a printed selection without prompting.",
+    )
+    group.add_argument(
         "--config",
         type=Path,
         metavar="PATH",
@@ -112,6 +118,7 @@ def main(argv: Sequence[str] | None = None, commands: Sequence[Command] = COMMAN
     parser = build_parser(commands)
     args = parser.parse_args(argv)
     out = Output()
+    args._output = out
     if getattr(args, "handler", None) is None:
         parser.print_usage(out.stdout)
         return ExitCode.USAGE

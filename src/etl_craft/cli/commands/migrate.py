@@ -3,15 +3,26 @@
 from __future__ import annotations
 
 import argparse
+from dataclasses import dataclass
 from pathlib import Path
+from typing import ClassVar
 
-from etl_craft.cli.commands.common import Command, call, request_from
+from etl_craft.cli.commands.common import Command, call, configure_output, request_from
 from etl_craft.cli.output import Output
 from etl_craft.core.enums import ActionName
 from etl_craft.services.operations.maintenance import MigrateInput
 
 
+@dataclass(frozen=True)
+class MigrationResult:
+    """CLI-only migration document; operations keep returning their existing list."""
+
+    SCHEMA: ClassVar[str] = "etl-craft/migrate/1"
+    applied: tuple[str, ...]
+
+
 def _configure(parser: argparse.ArgumentParser) -> None:
+    configure_output(parser)
     parser.add_argument(
         "--migrations-dir",
         type=Path,
@@ -38,6 +49,9 @@ def _run(args: argparse.Namespace, out: Output) -> int:
         request_from(args, MigrateInput, project_configs=tuple(args.project_configs)),
     )
     assert isinstance(applied, list)
+    if args.output_format == "json":
+        out.document(MigrationResult(tuple(applied)))
+        return 0
     if not applied:
         out.line("migrate: already up to date")
     for version in applied:

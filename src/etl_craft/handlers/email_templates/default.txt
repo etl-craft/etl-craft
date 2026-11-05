@@ -1,0 +1,15 @@
+{{ environment.label }} · {{ project.code }} · {{ pipeline.code }}
+{{ run.symbol }} {{ run.status }} — run {{ run.id }} ({{ run.logical_date }})
+{{ subject }}
+
+{{ body }}
+Started: {{ run.start }}
+Ended: {{ run.end }}
+Duration: {{ run.duration }}
+{% if sla %}{{ sla.message }}{% endif %}
+{% for error in errors %}{{ error }}
+{% endfor %}{% for row in watched_tasks %}{{ row.symbol }} {{ row.code }}: {{ row.status }} ({{ row.attempts }} attempts)
+{% endfor %}{% for entry in pipelines %}{{ entry.code }}: {{ entry.status }} (run {{ entry.run_id }})
+{% for row in entry.tasks %}{{ row.symbol }} {{ row.code }}: {{ row.status }} {{ row.error or '' }}
+{% endfor %}{% endfor %}
+etl-craft {{ version }} — sent to {{ recipients|join(', ') }} because {{ recipient_reason }}.

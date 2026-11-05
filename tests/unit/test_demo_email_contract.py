@@ -32,8 +32,8 @@ class DemoEvidence:
 @pytest.mark.parametrize(
     ("attempts", "subject"),
     [
-        (1, "DEMO: SUCCESS"),
-        (2, "DEMO: COMPLETED_WITH_ERRORS"),
+        (1, "[CUSTOM] DEMO: SUCCESS"),
+        (2, "[CUSTOM] DEMO: COMPLETED_WITH_ERRORS"),
     ],
 )
 def test_demo_email_uses_recorded_retries(attempts, subject):

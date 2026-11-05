@@ -308,3 +308,113 @@ def test_run_override_reasons_share_governance(
         assert accepted, error
     else:
         assert not accepted and "STRICT" in error and "--reason" in error
+
+
+def test_production_cli_refuses_before_mutating_and_confirms_exact_code(
+    metadata_project, monkeypatch, capsys
+):
+    from etl_craft.engine.repository.pauses import fetch_open_pauses
+
+    monkeypatch.delenv("CI", raising=False)
+
+    project = metadata_project
+    ctx = OperationContext(project.engine, project.config, SYSTEM_ACTOR, role=ApiRole.ADMIN)
+    credential = act(ctx, ActionName.TOKEN_CREATE, name="admin", role=ApiRole.ADMIN)
+    act(
+        ctx, ActionName.PROJECT_SET, project="default", environment_type="PROD", reason="production"
+    )
+    with project.engine.begin() as conn:
+        add_pipeline(conn, "P")
+    monkeypatch.chdir(project.root)
+    monkeypatch.setenv("ETL_CRAFT_TOKEN", credential.token)
+    monkeypatch.setattr("etl_craft.cli.output.can_prompt", lambda: False)
+    assert main(["pause", "--pipeline-code", "P", "--reason", "maintenance"]) == ExitCode.USAGE
+    captured = capsys.readouterr()
+    assert "PRODUCTION" in captured.err and "--yes" in captured.err
+    with project.engine.connect() as conn:
+        assert "P" not in fetch_open_pauses(conn)
+    monkeypatch.setattr("etl_craft.cli.output.can_prompt", lambda: True)
+    monkeypatch.setattr("builtins.input", lambda: "wrong")
+    assert main(["pause", "--pipeline-code", "P", "--reason", "maintenance"]) == ExitCode.USAGE
+    with project.engine.connect() as conn:
+        assert "P" not in fetch_open_pauses(conn)
+    monkeypatch.setattr("builtins.input", lambda: "default")
+    assert main(["pause", "--pipeline-code", "P", "--reason", "maintenance"]) == ExitCode.SUCCESS
+    with project.engine.connect() as conn:
+        assert "P" in fetch_open_pauses(conn)
+
+
+@pytest.mark.parametrize("confirmation", ["right", "wrong", "noninteractive", "yes"])
+def test_prod_project_migration_confirms_before_its_first_write(
+    metadata_project, monkeypatch, capsys, confirmation
+):
+    from sqlalchemy import text
+
+    from etl_craft.dialects.engine import for_engine
+
+    monkeypatch.delenv("CI", raising=False)
+    project = metadata_project
+    ctx = OperationContext(project.engine, project.config, SYSTEM_ACTOR, role=ApiRole.ADMIN)
+    credential = act(ctx, ActionName.TOKEN_CREATE, name="admin", role=ApiRole.ADMIN)
+    act(
+        ctx, ActionName.PROJECT_SET, project="default", environment_type="PROD", reason="production"
+    )
+    directory = project.root / "migrations"
+    directory.mkdir(exist_ok=True)
+    (directory / "0001_team.sql").write_text("CREATE TABLE CFG_TEAM_CHECK (ID INTEGER);\n")
+    monkeypatch.chdir(project.root)
+    monkeypatch.setenv("ETL_CRAFT_TOKEN", credential.token)
+    monkeypatch.setattr("etl_craft.cli.output.can_prompt", lambda: confirmation != "noninteractive")
+
+    def answer():
+        with project.engine.connect() as conn:
+            assert not for_engine(conn).has_table(conn, "CFG_TEAM_CHECK")
+        return "default" if confirmation == "right" else "wrong"
+
+    monkeypatch.setattr("builtins.input", answer)
+    arguments = ["migrate"] + (["--yes"] if confirmation == "yes" else [])
+    result = main(arguments)
+    accepted = confirmation in {"right", "yes"}
+    assert result == (ExitCode.SUCCESS if accepted else ExitCode.USAGE), capsys.readouterr().err
+    with project.engine.connect() as conn:
+        assert for_engine(conn).has_table(conn, "CFG_TEAM_CHECK") == accepted
+        if not accepted:
+            assert not conn.execute(
+                text(
+                    "SELECT VERSION FROM SCHEMA_MIGRATIONS "
+                    "WHERE SOURCE='PROJECT' AND VERSION='0001_team'"
+                )
+            ).first()
+
+
+def test_login_and_whoami_show_the_selected_environment(metadata_project, monkeypatch, capsys):
+    import json
+    import sys
+
+    project = metadata_project
+    ctx = OperationContext(project.engine, project.config, SYSTEM_ACTOR, role=ApiRole.ADMIN)
+    act(ctx, ActionName.ACCOUNT_ADD, name="owner", role=ApiRole.ADMIN, password="owner password")
+    act(
+        ctx,
+        ActionName.PROJECT_SET,
+        project="default",
+        environment_type="UAT",
+        environment_name="owner checks",
+        reason="environment",
+    )
+    monkeypatch.chdir(project.root)
+    monkeypatch.delenv("ETL_CRAFT_TOKEN", raising=False)
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(project.root / "private-session"))
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
+    monkeypatch.setattr("builtins.input", lambda prompt="": "owner")
+    monkeypatch.setattr("getpass.getpass", lambda prompt: "owner password")
+    assert main(["login"]) == ExitCode.SUCCESS
+    captured = capsys.readouterr()
+    assert "owner (admin)" in captured.out
+    assert "default · UAT · owner checks · local" in captured.err
+    assert main(["whoami", "--format", "json"]) == ExitCode.SUCCESS
+    captured = capsys.readouterr()
+    identity = json.loads(captured.out)
+    assert identity["name"] == "owner"
+    assert identity["environment"] == {"type": "UAT", "name": "owner checks"}
+    assert " · " not in captured.err

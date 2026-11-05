@@ -295,6 +295,7 @@ class ConnectorConfig:
     allow_schedule: bool = True
     """Whether this environment's controller starts pipelines on their ``RUN_SCHEDULE``."""
     email: EmailProfile | None = None
+    email_template: str | None = None
     limits: ExecutionLimits = field(default_factory=ExecutionLimits)
     config_path: Path | None = None
     _host_config_path: Path | None = field(default=None, repr=False)

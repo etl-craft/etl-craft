@@ -469,7 +469,7 @@ def admitted(ctx: OperationContext, name: ActionName, request: object) -> Iterat
             record_refusal(ctx, name, given, error)
             raise
         if action.audit == Audit.REQUEST:
-            with recorded(ctx, name, given):
+            with recorded(ctx, name, given, on_completion=name == ActionName.MIGRATE):
                 yield
         else:
             with acting_as(ctx.actor):

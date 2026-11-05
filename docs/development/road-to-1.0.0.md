@@ -193,6 +193,7 @@ item's text, or work done early under another item.
 | S7.L ETL Craft logo and CLI banner | In progress | #277 | Shared mark, favicon and theme assets exist; complete branding guidance and interactive banner contract remain |
 | S7.AL Pre-demo package gaps | In progress | #314, #315 | Slices 1–3 ship duplicate counts, current references and guarded-table validation guidance. Slices 4–6 remain. |
 | S7.AM Protection on every warehouse | Done | #311, #312, #313 | Atomic SCD merges, in-row protection and recovery, private audit identities and provider acceptance |
+| S7.AN Always show the environment | Done | #328 | CLI context and production confirmation; designed, sandboxed alert/SLA templates and catalog environment |
 | S7.M Stewardship uploads | Done (M2) | #296, #305 | Atomic receipts and safe stored names; processed layout, retention archives and verified reruns; crash recovery and guarded upload history |
 | S7.S Seed tables | Done | #308 | Typed pinned-bundle seeds replace reference tables until recorded stewardship handover |
 | S7.T Business calendars | Done | #276 | Shared holiday and weekend calendars for schedules, run dates, backfill and catch-up |
@@ -960,6 +961,23 @@ passed on Snowflake (two cases) and Databricks (one case); the first Databricks 
 empty-history-page handling defect, which was corrected and verified. No cloud was unavailable.
 
 **Choices that differ from the item text.**
+
+- **S7.AN legacy upgrades.** Before environment metadata exists, migrate explicitly shows
+  the Engine DB with environment unknown (Engine DB predates environment metadata); JSON
+  records environment null and its reason. It does not invent PROD or prompt. Project
+  migrations confirm the selected PROD context after packaged migrations, before their first
+  write; current-schema invocations follow the normal context rules.
+
+- **S7.AN / S8.E handover.** When implementing S8.E, deploy.yml must pass global --yes
+  explicitly before state-changing command groups. No existing setting is a public UI base
+  URL (Docs_site.External_url serves the static catalog), so the email template omits View run.
+  UI context/dialog changes remain S7.AO.
+
+- **S7.AN acceptance availability.** CLI, sandbox/template, released-schema upgrade, catalog
+  and Mailpit delivery/render checks passed locally, with PROD project migration checks
+  repeated 20 times. PostgreSQL service cases were unavailable while the demo stack ran alone.
+  Screenshots cover Chromium desktop/mobile; native mail clients were unavailable. No cloud
+  SQL changed.
 
 - **S8.B final pipeline slice.** Source-to-ODS and SI_DM merged in support-insights#2/#3;
   the final demo slice adds the four upload-only steward pipelines and nine explicit
@@ -9052,6 +9070,64 @@ target lock, hash contract, authenticated operations and actual uploader attribu
 requires intent logging, can discard later commits, exposes transient rows and has no
 DuckDB-over-Iceberg form. It is not a protection implementation strategy.
 
+
+### S7.AN Always show the environment
+
+Owner, 2026-11-04/05. Airflow never tells you which environment you are in. Alert emails
+are bare paragraph/table HTML and look broken. Reuse existing project ENVIRONMENT_TYPE
+(DEV/SIT/UAT/PROD/SANDBOX/CUSTOM) and ENVIRONMENT_NAME; add no Engine DB field. UI tab title,
+PROD dialog and “Recover run” belong to S7.AO's UI rebuild; do not touch UI templates.
+
+**Change.**
+
+1. Every project-scoped CLI command prints one context line to stderr before output:
+   `support_insights · PRODUCTION · https://etl.example`, or `· local` without --api.
+   PROD displays PRODUCTION; other types include the name when set. Text only: JSON adds
+   `environment` with type/name and prints no context line. Deployment commands print none.
+   Use one shared helper in cli/output.
+2. State-changing CLI commands use the action table's write actions (listed in the PR).
+   In an interactive terminal show context/action and require typing the exact project code;
+   mismatch exits non-zero without mutation. Non-interactive without --yes refuses with
+   project/environment/remedy, never prompts. Reuse pause's --yes pattern in one implementation.
+   Non-PROD never prompts; this is presentation only, operations/API authorization unchanged.
+3. Login/whoami show the selected project's environment with the account.
+4. Email subjects start [PRODUCTION] or [TYPE]; body names project/environment.
+5. Ship a designed built-in alert/SLA template and support team HTML templates. Jinja is banned
+   only for SQL; jinja2 is an owner-approved core dependency.
+   Render with SandboxedEnvironment, autoescape and StrictUndefined, using only a documented
+   context: environment type/name, project, pipeline, run ID/logical date/zoned start/end/
+   duration/status, task, errors, watched tasks, EMAIL_PIPELINES summary, SLA details, version,
+   recipients and selection reason. Templates cannot reach Python objects, files or network.
+   The default uses table layout/inline CSS, maximum 640px, for Gmail/Outlook/Apple Mail. Its
+   header emphasizes production and shows project/pipeline/outcome with color and symbol:
+   blue running, red failure, green success, amber only retries/warnings. Escaped body retains
+   line breaks, followed by facts, untruncated wrapped monospace errors and symbol task rows.
+   A View run button appears only if an existing public UI URL setting exists; otherwise omit
+   and record why. Footer names version and why the address received it; document the copyable
+   template location.
+   EMAIL_TEMPLATE selects an HTML file under email_templates/; optional EMAIL_TEMPLATE_TEXT
+   selects plain text, otherwise use built-in text. Confine paths: refuse absolute paths, ..
+   and escaping symlinks. SLA uses approved Orchestration.Email_template or the built-in.
+   EMAIL_SUBJECT*/EMAIL_BODY* and their $$ tokens remain; templates receive subject/body and
+   use Jinja variables. Validate parses all referenced templates for syntax/undefined names
+   against the documented context, refusing with file/line/remedy. Send-time rendering failure
+   fails without sending a partial or fallback email.
+6. The catalog/docs-site header shows the environment.
+7. Add failing-first CLI context/JSON/PROD right/wrong prompt/non-interactive/--yes/non-PROD
+   tests; email escaping/sandbox/path/validate/custom-render tests and failed/success/SLA
+   snapshots; and catalog-header checks. Render through demo Mailpit and save screenshots
+   under $HOME/.cache/etl-craft/ui-review/email/, listing them in the PR.
+8. Owner authorizes this section/Progress row in the feature PR. Update email-alerts.md with
+   context/example/security, project layout, CLI reference and CHANGELOG; S8.E Handover says
+   deploy.yml passes --yes. No CI timing/watching or cloud runs; disk TMPDIR, at most two
+   workers and one suite at a time.
+
+**Done when.** Every Change above is implemented and checked; the PR includes the write-action
+set, new public surface/dependencies, failing-first evidence and Mailpit screenshots. S7.AO
+UI templates remain untouched. The PR uses squash auto-merge and keeps its branch.
+
+
+
 ## Release candidate: the Support Insights example
 
 **Goal.** Prove 1.0.0 on a real project before it is released. The
@@ -9096,6 +9172,7 @@ never runs the demo itself.
 | Warehouse tables | Target DDL | **Replaced** by `SETUP_TABLE` tasks and S7.S seeds; `aud.dag_runs`, `dwh.aud_dag_runs` and their trigger are removed |
 | Reference data | Hand-written DDL and inserts | **Replaced** by folder-addressed S7.S seeds: three stewarded `ds` tables, replaceable `ds.sources` and `info.data_dictionary`; duplicate object metadata tables and their `dwh` copies are removed |
 | Views | `vw.data_metrics_view`, `vw.customer_support_fact_view` | **Rewritten** over etl-craft's tables (`S8.D`) |
+
 
 ### S8.A The project layout
 

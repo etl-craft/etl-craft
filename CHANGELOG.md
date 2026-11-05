@@ -6,6 +6,13 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+- Show existing project environment in CLI text/JSON and catalog headers; require typed project
+  confirmation for production CLI writes, or --yes for noninteractive execution.
+- Prefix alert/SLA subjects with environment and ship designed multipart email templates.
+  EMAIL_TEMPLATE/EMAIL_TEMPLATE_TEXT and Orchestration.Email_template select confined,
+  sandboxed project templates in bundled email_templates/. Jinja2 is now a core dependency.
+
+
 - Agents stop and record the real child ending when the parent START report encounters an
   API outage. The failed attempt names the START exchange and remedy instead of renewing
   a permanently CLAIMED reservation. Existing stuck attempts require draining/replacing the

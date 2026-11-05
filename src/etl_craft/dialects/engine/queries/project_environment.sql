@@ -1,0 +1,3 @@
+SELECT PROJECT_ID AS project_id, PROJECT_CODE AS project_code,
+ENVIRONMENT_TYPE AS environment_type, ENVIRONMENT_NAME AS environment_name
+FROM CFG_PROJECTS

@@ -12,6 +12,7 @@ from etl_craft.cli.commands.common import (
     command_context,
     command_project,
     configure_output,
+    prepare_context,
 )
 from etl_craft.cli.output import Output
 from etl_craft.cli.prompts import CONSOLE
@@ -47,6 +48,7 @@ def upload(args: argparse.Namespace, out: Output) -> int:
             "upload FILE cannot read files on the server through the console; "
             "use the local CLI with --api or submit a file through the Uploads page"
         )
+    prepare_context(args, ActionName.UPLOAD)
     request = UploadRequest(pipeline_code=args.pipeline_code)
     if args.api:
         result = ApiClient(args.api, command_project(args, required=True)).upload(

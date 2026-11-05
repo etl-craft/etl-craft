@@ -250,7 +250,8 @@ def test_an_audited_change_is_recorded_once_and_a_refusal_never_runs(operations,
     entered, refused = [], []
 
     @contextmanager
-    def recorded(ctx, recorded_name, given):
+    def recorded(ctx, recorded_name, given, *, on_completion=False):
+        assert on_completion == (recorded_name == ActionName.MIGRATE)
         entered.append(recorded_name)
         yield
 

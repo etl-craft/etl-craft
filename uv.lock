@@ -737,6 +737,7 @@ name = "etl-craft"
 version = "0.3.0"
 source = { editable = "." }
 dependencies = [
+    { name = "jinja2" },
     { name = "psutil" },
     { name = "psycopg", extra = ["binary"] },
     { name = "pyyaml" },
@@ -748,7 +749,6 @@ dependencies = [
 [package.optional-dependencies]
 all = [
     { name = "fastapi" },
-    { name = "jinja2" },
     { name = "pydantic" },
     { name = "starlette" },
     { name = "uvicorn" },
@@ -780,7 +780,6 @@ trino = [
 ]
 ui = [
     { name = "fastapi" },
-    { name = "jinja2" },
     { name = "pydantic" },
     { name = "starlette" },
     { name = "uvicorn" },
@@ -824,7 +823,7 @@ requires-dist = [
     { name = "duckdb-engine", marker = "extra == 'duckdb'", specifier = ">=0.13,<1" },
     { name = "etl-craft", extras = ["ui"], marker = "extra == 'all'", editable = "." },
     { name = "fastapi", marker = "extra == 'ui'", specifier = ">=0.115,<1" },
-    { name = "jinja2", marker = "extra == 'ui'", specifier = ">=3.1,<4" },
+    { name = "jinja2", specifier = ">=3.1.6,<4" },
     { name = "ngrok", marker = "extra == 'publish'", specifier = ">=1.4,<2" },
     { name = "openpyxl", marker = "extra == 'excel'", specifier = ">=3.1.5,<4" },
     { name = "psutil", specifier = ">=6.0,<7" },

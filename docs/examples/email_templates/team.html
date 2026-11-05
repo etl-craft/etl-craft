@@ -1,0 +1,8 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>{{ subject }}</title></head>
+<body style="font-family:Arial,sans-serif;color:#182230">
+<h1>{{ environment.label }} · {{ project.code }} · {{ pipeline.code }}</h1>
+<p>{{ subject }}</p><div style="white-space:pre-wrap">{% for line in body_lines %}{{ line }}<br>{% endfor %}</div>
+<p>Run {{ run.id }}: {{ run.status }} — {{ run.start }}</p>
+{% for error in errors %}<pre style="white-space:pre-wrap;word-break:break-word">{{ error }}</pre>{% endfor %}
+<p>etl-craft {{ version }} — {{ recipient_reason }}</p>
+</body></html>

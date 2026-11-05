@@ -274,6 +274,7 @@ def parse_config(raw: object, path: Path, *, agent: bool = False) -> ConnectorCo
         allow_schedule=flag(orchestration, "Allow_schedule", True, path),
         retry_on=parse_retry_on(orchestration, path),
         email=email,
+        email_template=orchestration.text("Email_template"),
         limits=limits,
         config_path=path,
         dependency_gates=dependency_gates,

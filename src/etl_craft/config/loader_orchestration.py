@@ -30,6 +30,7 @@ ORCHESTRATION_KEYS = frozenset(
         "Allow_schedule",
         "Dependency_gates",
         "Email",
+        "Email_template",
     }
 )
 

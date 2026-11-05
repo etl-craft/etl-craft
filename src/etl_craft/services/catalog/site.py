@@ -313,6 +313,8 @@ class _Writer(Pages):
             f'<link rel="icon" href="{root}favicon.svg" type="image/svg+xml"></head>'
             f'<body data-root="{root}" data-generated="{generated}" data-compared="{compared}">'
             '<header class="top">'
+            f'<strong class="environment">{_e(self.catalog.project_code)} · '
+            f"{_e(self.catalog.environment_label)}</strong>"
             f'<a class="brand product-lockup" href="{root}index.html" '
             f'aria-label="etl-craft home">{mark}<span>etl-craft</span></a><nav>{nav}</nav>'
             '<div class="search"><input type="search" placeholder="Search pipelines, tasks, '

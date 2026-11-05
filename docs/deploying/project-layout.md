@@ -142,3 +142,12 @@ Projects without a published connection cannot be compared until their connectio
 
 If an approved bundle or its connection settings cannot be read, project results report the
 comparison as unavailable with a remedy. That diagnostic does not block an admin change.
+
+## Email templates
+
+`email_templates/` holds team-owned HTML and optional plain-text email templates, included
+in project bundles. EMAIL_TEMPLATE and EMAIL_TEMPLATE_TEXT name paths relative to the project,
+for example `email_templates/team.html` and `email_templates/team.txt`.
+Orchestration.Email_template selects the SLA HTML template. See
+[Email alerts](../guides/email-alerts.md#environment-and-designed-templates) for the context,
+copyable example and path/sandbox restrictions.

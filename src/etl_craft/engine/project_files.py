@@ -13,7 +13,9 @@ from etl_craft.core.errors import ConfigurationError, UsageError
 from etl_craft.core.file_bytes import read_regular
 from etl_craft.core.text import sha256_hex
 
-FOLDERS = frozenset({"sql_scripts", "python_scripts", "validation_scripts", "seeds"})
+FOLDERS = frozenset(
+    {"sql_scripts", "python_scripts", "validation_scripts", "seeds", "email_templates"}
+)
 MAX_BYTES = 64 * 1024 * 1024
 MAX_FILES = 10000
 

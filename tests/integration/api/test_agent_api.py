@@ -1233,6 +1233,7 @@ def test_agent_doctor_checks_static_imports_without_executing_project_code(agent
     discovery = client.post("/api/v1/projects/default/agent/doctor", headers=agent, json=payload)
     assert discovery.status_code == 200, discovery.text
     assert discovery.json()["imports"] == ["absent_bundle_dependency_xyz"]
+    assert discovery.json()["environment"] == {"type": "CUSTOM", "name": None}
     observations = payload | {
         "bundle_id": bundle.bundle_id,
         "missing": ["absent_bundle_dependency_xyz"],

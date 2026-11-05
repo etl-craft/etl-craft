@@ -245,7 +245,15 @@ def test_remote_reads_print_exactly_what_the_local_project_prints(server, monkey
         for output in ("text", "json"):
             local = run(capsys, *argv, "--format", output)
             remote = run(capsys, *argv, "--format", output, "--api", url)
-            assert remote == local and local[0] in (0, 1), argv
+            assert remote[:2] == local[:2] and local[0] in (0, 1), argv
+            if output == "text":
+                assert local[2].startswith("default · CUSTOM · local\n")
+                assert remote[2].startswith(f"default · CUSTOM · {url}\n")
+                assert local[2].removeprefix("default · CUSTOM · local\n") == remote[
+                    2
+                ].removeprefix(f"default · CUSTOM · {url}\n")
+            else:
+                assert remote[2] == local[2]
     monkeypatch.setenv("ETL_CRAFT_TOKEN", server["service"]["admin"])
     for argv in (("token", "list"), ("account", "list")):
         local = run(capsys, *argv, "--format", "json")
@@ -371,7 +379,7 @@ def test_attempt_logs_stream_from_the_server_within_the_role(server, monkeypatch
     assert run(capsys, "logs", "--attempt-id", attempt, "--api", url) == (
         0,
         "first\nsecond é\n",
-        "",
+        f"default · CUSTOM · {url}\n",
     )
     assert run(capsys, "logs", "--attempt-id", attempt, "--offset", "6", "--api", url)[1] == (
         "second é\n"
