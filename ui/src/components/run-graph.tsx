@@ -1,4 +1,4 @@
-import { ChevronRight } from "lucide-react";
+import { ArrowUpRight } from "lucide-react";
 import * as React from "react";
 import { Background, Controls, Handle, MarkerType, Position, ReactFlow, type Edge, type Node, type NodeProps, type ReactFlowInstance } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
@@ -34,7 +34,7 @@ function Task({ data }: NodeProps<TaskNode>) {
   return (
     <div
       data-focus={data.focus}
-      className={cn("flex h-[52px] w-[230px] items-center gap-2 rounded-md border bg-surface pl-2.5 pr-1 text-[13px] shadow-sm transition-opacity", NODE_TONE[data.focus])}
+      className={cn("flex h-[52px] w-[230px] items-center gap-2 rounded-md border bg-surface pl-2.5 pr-2 text-[13px] shadow-sm transition-opacity", NODE_TONE[data.focus])}
     >
       <Handle type="target" position={Position.Left} className="!size-1.5 !border-0 !bg-border-strong" />
       <span className={cn("grid size-7 shrink-0 place-items-center rounded-full", toneClass(data.status))} title={statusLabel}>
@@ -48,13 +48,13 @@ function Task({ data }: NodeProps<TaskNode>) {
         type="button"
         aria-label={`Open ${data.label} details`}
         title="Open status, attempts and log"
-        className="nodrag nopan grid size-8 shrink-0 cursor-pointer place-items-center rounded text-muted hover:bg-surface-2 hover:text-accent"
+        className="nodrag nopan grid size-7 shrink-0 cursor-pointer place-items-center rounded-md border border-border-strong text-muted hover:border-accent hover:bg-surface-2 hover:text-accent"
         onClick={(event) => {
           event.stopPropagation();
           data.onOpen(data.label);
         }}
       >
-        <ChevronRight aria-hidden className="size-4" />
+        <ArrowUpRight aria-hidden className="size-4" />
       </button>
       <Handle type="source" position={Position.Right} className="!size-1.5 !border-0 !bg-border-strong" />
     </div>
