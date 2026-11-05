@@ -194,6 +194,7 @@ item's text, or work done early under another item.
 | S7.AL Pre-demo package gaps | In progress | #314, #315 | Slices 1–3 ship duplicate counts, current references and guarded-table validation guidance. Slices 4–6 remain. |
 | S7.AM Protection on every warehouse | Done | #311, #312, #313 | Atomic SCD merges, in-row protection and recovery, private audit identities and provider acceptance |
 | S7.AN Always show the environment | Done | #328 | CLI context and production confirmation; designed, sandboxed alert/SLA templates and catalog environment |
+| S7.AO UI rebuild | In progress | | Slice 1: React app shell, Home, a pipeline's runs and one run with its graph and run-level recovery; the old pages remain until their slices land |
 | S7.M Stewardship uploads | Done (M2) | #296, #305 | Atomic receipts and safe stored names; processed layout, retention archives and verified reruns; crash recovery and guarded upload history |
 | S7.S Seed tables | Done | #308 | Typed pinned-bundle seeds replace reference tables until recorded stewardship handover |
 | S7.T Business calendars | Done | #276 | Shared holiday and weekend calendars for schedules, run dates, backfill and catch-up |
@@ -9127,6 +9128,39 @@ set, new public surface/dependencies, failing-first evidence and Mailpit screens
 UI templates remain untouched. The PR uses squash auto-merge and keeps its branch.
 
 
+
+### S7.AO UI rebuild
+
+Owner, 2026-11-05. The Jinja/htmx UI is unreleasable (crude, browser-default controls, no
+hierarchy). The rebuilt UI replaces it entirely: once it is polished it is the only UI, at
+`/ui`. The visual reference is Databricks (left navigation, top bar with project switcher and
+environment badge, dense tables, shaded light and dark themes).
+
+**Decisions.** React + TypeScript + Vite, shadcn/ui-style components (Radix, Tailwind) copied
+into `ui/`, TanStack Query and Table, React Flow for graphs, lucide icons. Node is needed
+only to build. The built files are committed under `src/etl_craft/api/spa/`, so the wheel and
+the sdist carry them and installing, or building a wheel from the sdist, needs no Node. One
+CI job (`make ui-check`) typechecks, lints, unit-tests, audits the production dependencies,
+rebuilds, and fails when the committed build differs from what the source produces. The SPA
+calls only `/api/v1` as the cookie session (same CSRF, roles and content policy: no inline
+script or style); it adds no server logic.
+
+**Slices.**
+
+1. Foundation (this slice): the scaffold, build, packaging and CI job; serving under `/app`
+   with sign-in redirect; the app shell (navigation, project switcher, environment strip and
+   badge, theme, account menu); Home, a pipeline's runs, and one run with the task graph,
+   task attempts and logs, and run-level "Recover run" through one confirmation dialog that
+   names the project and environment (PRODUCTION also needs the project code typed). The old
+   pages stay reachable from the new shell. Owner approves the look before auto-merge.
+2. Later slices move the remaining pages by area (pipelines and scheduling, holds, uploads,
+   insights, console, catalog entry, system and agents, administration, personal settings).
+3. Final slice: serve the new UI at `/ui`, delete the Jinja/htmx templates, their page modules
+   and static files, and the `/app` alias. The catalog's static site is unchanged.
+
+**Done when.** Every page is served by the new UI, the old templates and htmx assets are
+deleted, every write action goes through the confirmation dialog, and the screenshots of every
+page in light, dark and 390 px are approved by the owner.
 
 ## Release candidate: the Support Insights example
 

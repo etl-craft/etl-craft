@@ -1,0 +1,30 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { lazy, StrictMode, Suspense } from "react";
+import { createRoot } from "react-dom/client";
+import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { AppShell } from "@/components/app-shell";
+import { Home } from "@/pages/home";
+import { Runs } from "@/pages/runs";
+import { applyTheme, initialTheme } from "@/lib/theme";
+import "./index.css";
+
+applyTheme(initialTheme());
+const RunDetail = lazy(() => import("@/pages/run-detail").then((m) => ({ default: m.RunDetail })));
+const client = new QueryClient({ defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: true, staleTime: 5_000 } } });
+
+createRoot(document.getElementById("root")!).render(
+  <StrictMode>
+    <QueryClientProvider client={client}>
+      <BrowserRouter basename="/app">
+        <Routes>
+          <Route element={<AppShell />}>
+            <Route index element={<Home />} />
+            <Route path="projects/:project/runs" element={<Runs />} />
+            <Route path="projects/:project/runs/:pipeline/:runId" element={<Suspense fallback={<p className="text-muted">Loading run…</p>}><RunDetail /></Suspense>} />
+            <Route path="*" element={<p className="text-muted">That page does not exist. Use the navigation to go Home.</p>} />
+          </Route>
+        </Routes>
+      </BrowserRouter>
+    </QueryClientProvider>
+  </StrictMode>,
+);

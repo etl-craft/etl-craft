@@ -1,7 +1,7 @@
 .PHONY: help sync lint format typecheck imports history test test-changed coverage check static build verify-package clean regressions \
 	quality quality-baseline \
 	certs services-up services-down services-reset test-harness suite release-gate \
-	docs docs-serve docs-site
+	docs docs-serve docs-site ui-install ui-build ui-check
 
 UV ?= uv
 PYTEST_WORKERS ?= auto
@@ -91,6 +91,18 @@ release-gate: ## Check the release evidence of every required suite
 docs: ## Build the documentation site into site/ (strict: any warning fails)
 	$(UV) run mkdocs build --strict --site-dir site
 	$(UV) run python scripts/check_docs_content.py site
+
+ui-install: ## Install the browser interface's pinned build tools (Node is needed only to build)
+	cd ui && npm ci
+
+ui-build: ui-install ## Build the browser interface into src/etl_craft/api/spa
+	cd ui && npm run build
+
+ui-check: ui-install ## Typecheck, lint, unit-test, audit and rebuild the interface; fail if the shipped build differs
+	cd ui && npm run typecheck && npm run lint -- --max-warnings 0 && npm test && npm audit --omit=dev
+	cd ui && npm run build
+	git diff --exit-code -- src/etl_craft/api/spa
+	test -z "$$(git status --porcelain -- src/etl_craft/api/spa)"
 
 docs-serve: ## Serve the documentation site with live reload
 	$(UV) run mkdocs serve

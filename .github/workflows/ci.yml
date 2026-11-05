@@ -76,6 +76,19 @@ jobs:
       - name: Quality baseline
         run: make quality
 
+  ui:
+    name: browser interface (build, types, lint, tests, shipped output)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: ui/.node-version
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+      - name: Check the interface and that the shipped build is the one its source produces
+        run: make ui-check
+
   test:
     name: coverage (${{ matrix.python }}, ${{ matrix.os }}, shard ${{ matrix.index }})
     needs: prepare
@@ -278,7 +291,7 @@ jobs:
   complete:
     name: every test and matrix accounted for
     if: always()
-    needs: [prepare, static, test, service, e2e, package, browser]
+    needs: [prepare, static, ui, test, service, e2e, package, browser]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7

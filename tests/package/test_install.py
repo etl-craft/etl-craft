@@ -13,6 +13,7 @@ import os
 import shutil
 import subprocess
 import sys
+import tarfile
 import zipfile
 from pathlib import Path
 
@@ -58,6 +59,7 @@ SHIPPED = (
     "etl_craft/api/static/uploads.js",
     "etl_craft/api/static/htmx.min.js",
     "etl_craft/api/static/htmx.LICENSE",
+    "etl_craft/api/spa/index.html",
 )
 
 CHECK = """
@@ -98,6 +100,20 @@ def test_the_wheel_holds_the_package_files_and_the_licence():
     names = zipfile.ZipFile(_artifact("wheel")).namelist()
     assert [name for name in SHIPPED if name not in names] == []
     assert any(name.endswith("licenses/LICENSE") for name in names)
+
+
+@pytest.mark.parametrize("kind", ["wheel", "sdist"])
+def test_the_built_browser_interface_ships_in_the_wheel_and_the_sdist(kind):
+    artifact = _artifact(kind)
+    if kind == "wheel":
+        names = zipfile.ZipFile(artifact).namelist()
+    else:
+        with tarfile.open(artifact) as archive:
+            names = archive.getnames()
+    scripts = [name for name in names if "/api/spa/assets/" in name and name.endswith(".js")]
+    sheets = [name for name in names if "/api/spa/assets/" in name and name.endswith(".css")]
+    assert scripts and sheets, "the built UI bundle (api/spa/assets) is missing from the " + kind
+    assert not [name for name in names if "node_modules" in name]
 
 
 @pytest.mark.parametrize(
