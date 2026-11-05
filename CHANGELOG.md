@@ -6,6 +6,10 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+- The new browser interface at `/app` gains Pipelines (tag filter, bulk pause and resume, CSV export),
+  a pipeline's page (run durations, runs, task graph with lineage, Run now, Pause and Resume),
+  Scheduled runs, and Held and paused (release holds, resume pipelines and tasks). Every write
+  goes through one confirmation naming the project and environment.
 - A new browser interface (React, built with Node at release time and shipped prebuilt in the
   wheel and sdist; users need no Node) is served at `/app`: Home, a pipeline's runs, and one run
   with its task graph, attempts and logs, plus a run-level "Recover run" action behind a

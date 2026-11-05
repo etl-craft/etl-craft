@@ -49,11 +49,6 @@ export interface History {
   before: number | null;
 }
 
-export interface PipelineView {
-  pipeline_code: string;
-  pipeline_name: string;
-}
-
 export interface StepView {
   task_code: string;
   task_run_id: number | null;
@@ -120,4 +115,54 @@ export interface ControlView {
   message: string;
   run_status: RunStatus;
   execution_run_id: number | null;
+}
+
+export interface Pause {
+  paused_at: string;
+  paused_by: string;
+  reason: string;
+}
+
+export interface TaskPause {
+  task_code: string;
+  outcome: string | null;
+  expires_at: string | null;
+  paused_at: string;
+  actor: string;
+  reason: string;
+}
+
+export interface RecentRun {
+  pipeline_run_id: number;
+  status: RunStatus;
+  sla_status: string | null;
+}
+
+export interface Pipeline {
+  pipeline_code: string;
+  pipeline_name: string;
+  refresh_type: string;
+  run_schedule: string | null;
+  sla_in_hours: number | null;
+  paused: Pause | null;
+  tags: string[];
+  task_pauses: TaskPause[];
+  next_run: string | null;
+  schedule_problem: string | null;
+  recent_runs: RecentRun[];
+}
+
+export interface Hold {
+  control_id: number;
+  pipeline_run_id: number;
+  pipeline_code: string;
+  task_code: string | null;
+  requested_by: string;
+  reason: string | null;
+  requested_at: string;
+}
+
+export interface BulkOutcome {
+  pipeline_code: string;
+  error?: string | null;
 }

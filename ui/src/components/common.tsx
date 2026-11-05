@@ -102,3 +102,14 @@ export function SelectField({
     </label>
   );
 }
+
+export const inputClass = "h-9 w-full rounded-md border border-border-strong bg-surface px-2 text-sm text-fg max-sm:h-11";
+
+export function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <label className="grid gap-1 text-sm">
+      <span className="font-medium">{label}</span>
+      {children}
+    </label>
+  );
+}
