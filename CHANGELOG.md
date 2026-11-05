@@ -6,6 +6,11 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+- A new browser interface (React, built with Node at release time and shipped prebuilt in the
+  wheel and sdist; users need no Node) is served at `/app`: Home, a pipeline's runs, and one run
+  with its task graph, attempts and logs, plus a run-level "Recover run" action behind a
+  confirmation naming the project and environment. The existing pages remain until the
+  remaining pages are rebuilt.
 - Identity replies include the selected project environment; login and whoami remain available
   while a temporary password requires replacement. The whoami API accepts an optional project.
 

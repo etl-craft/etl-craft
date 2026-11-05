@@ -23,6 +23,7 @@ from etl_craft.api.ui_live import add_live_route
 from etl_craft.api.ui_monitor import add_monitor_pages
 from etl_craft.api.ui_operations import add_operations_pages
 from etl_craft.api.ui_pages import add_pages
+from etl_craft.api.ui_spa import add_spa_pages
 from etl_craft.api.ui_tasks import add_task_pages
 from etl_craft.core.errors import (
     EtlCraftError,
@@ -81,6 +82,7 @@ def create_app(
     _add_error_handlers(app)
     app.add_middleware(BrowserHeaders)
     add_pages(app, ctx)
+    add_spa_pages(app, ctx)
     add_monitor_pages(app, ctx)
     add_live_route(app, ctx)
     add_insights_page(app, ctx)

@@ -114,6 +114,20 @@ make sync
 uv run pre-commit install    # optional: run the same checks on every commit
 ```
 
+## Browser interface
+
+The UI source is in `ui/` (React, TypeScript, Vite). Node is needed only to build it; the
+built files are committed under `src/etl_craft/api/spa/` and ship in the wheel and sdist.
+Pinned versions are in `ui/package-lock.json` and the Node version in `ui/.node-version`.
+
+```bash
+make ui-build    # npm ci, then build into src/etl_craft/api/spa
+make ui-check    # typecheck, lint, unit tests, audit, rebuild; fails if the build differs
+```
+
+Change `ui/src`, run `make ui-build` and commit the rebuilt files with the change. Pages call
+only `/api/v1`; they add no server logic.
+
 ## Documentation versions
 
 `dev` documents `main`; each release line (such as `0.1`) documents its newest patch tag,

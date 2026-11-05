@@ -1,0 +1,118 @@
+@import "tailwindcss";
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+:root {
+  color-scheme: light;
+  --bg: #f4f5f7;
+  --surface: #ffffff;
+  --surface-2: #f8f9fb;
+  --border: #dfe3e8;
+  --border-strong: #c5ccd5;
+  --fg: #14181f;
+  --muted: #566170;
+  --accent: #1f4fd8;
+  --accent-fg: #ffffff;
+  --ring: #1f4fd8;
+  --sidebar: #ffffff;
+  --sidebar-fg: #3b4654;
+  --sidebar-active: #e8eefd;
+  --ok-fg: #166534; --ok-bg: #dcfce7;
+  --bad-fg: #b42318; --bad-bg: #fee4e2;
+  --run-fg: #1d4ed8; --run-bg: #dbeafe;
+  --warn-fg: #8a3b0a; --warn-bg: #fef0c7;
+  --idle-fg: #475467; --idle-bg: #eef0f3;
+  --env-prod: #b42318; --env-prod-fg: #ffffff;
+  --env-other: #3f4a5a; --env-other-fg: #ffffff;
+}
+[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0c0f13;
+  --surface: #151a21;
+  --surface-2: #1a2029;
+  --border: #272f3a;
+  --border-strong: #3a4553;
+  --fg: #e8ecf1;
+  --muted: #9aa5b4;
+  --accent: #7ea2ff;
+  --accent-fg: #0c0f13;
+  --ring: #7ea2ff;
+  --sidebar: #0a0d11;
+  --sidebar-fg: #aeb8c5;
+  --sidebar-active: #171e28;
+  --ok-fg: #6ee7a1; --ok-bg: #0f2a1c;
+  --bad-fg: #ffa39b; --bad-bg: #3a1512;
+  --run-fg: #9bbbff; --run-bg: #14284d;
+  --warn-fg: #fcd34d; --warn-bg: #3a2a08;
+  --idle-fg: #b0b8c4; --idle-bg: #232a34;
+  --env-prod: #c9372c; --env-prod-fg: #ffffff;
+  --env-other: #3a4553; --env-other-fg: #f1f4f8;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-fg: var(--fg);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-accent-fg: var(--accent-fg);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-fg: var(--sidebar-fg);
+  --color-sidebar-active: var(--sidebar-active);
+  --color-ok: var(--ok-fg);
+  --color-ok-bg: var(--ok-bg);
+  --color-bad: var(--bad-fg);
+  --color-bad-bg: var(--bad-bg);
+  --color-run: var(--run-fg);
+  --color-run-bg: var(--run-bg);
+  --color-warn: var(--warn-fg);
+  --color-warn-bg: var(--warn-bg);
+  --color-idle: var(--idle-fg);
+  --color-idle-bg: var(--idle-bg);
+  --font-sans: "Inter Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono Variable", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+
+html { background: var(--bg); }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.5;
+  font-feature-settings: "cv11", "ss03";
+  letter-spacing: -0.006em;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.num { font-variant-numeric: tabular-nums; }
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
+
+h1, h2, h3 { letter-spacing: -0.02em; }
+code, pre, .font-mono { font-feature-settings: "calt"; letter-spacing: 0; }
+
+/* React Flow follows the app theme and avoids its inline-style defaults. */
+.react-flow {
+  --xy-background-color: transparent;
+  --xy-edge-stroke-default: var(--muted);
+  --xy-controls-button-background-color: var(--surface);
+  --xy-controls-button-background-color-hover: var(--surface-2);
+  --xy-controls-button-color: var(--fg);
+  --xy-controls-button-color-hover: var(--fg);
+  --xy-controls-button-border-color: var(--border);
+  --xy-edge-label-background-color: var(--surface);
+  --xy-edge-label-color: var(--fg);
+}
+.react-flow__attribution { display: none; }
+.react-flow__controls { box-shadow: none; border: 1px solid var(--border-strong); border-radius: 6px; overflow: hidden; }
+.react-flow__controls-button { background: var(--surface); color: var(--fg); border-bottom: 1px solid var(--border); }
+.react-flow__controls-button:hover { background: var(--surface-2); }
+.react-flow__controls-button svg { fill: currentColor; }
+.react-flow__edge-textbg { fill: var(--surface); }
+.react-flow__edge-text { fill: var(--fg); font-size: 11px; }
