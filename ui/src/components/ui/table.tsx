@@ -10,7 +10,7 @@ export function Table({ className, ...props }: React.TableHTMLAttributes<HTMLTab
 }
 export const Th = ({ className, ...props }: React.ThHTMLAttributes<HTMLTableCellElement>) => (
   <th
-    className={cn("whitespace-nowrap border-b border-border bg-surface-2 px-2.5 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted", className)}
+    className={cn("border-b border-border bg-surface-2 px-2.5 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted", className)}
     {...props}
   />
 );

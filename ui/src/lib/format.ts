@@ -31,3 +31,7 @@ export function formatAgo(iso: string | null, now = Date.now()): string {
   if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
   return `${Math.floor(seconds / 86400)}d ago`;
 }
+
+export const seconds = (value: number | null): string => (value === null ? "None" : `${value.toFixed(1)} s`);
+export const percent = (value: number | null): string => (value === null ? "No finished runs" : `${Math.round(value * 100)}%`);
+export const measured = (value: number | null): string => (value === null ? "Not measured" : value.toLocaleString("en-GB"));

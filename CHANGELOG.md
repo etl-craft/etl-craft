@@ -6,6 +6,10 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+- The new browser interface gains Insights (summary, runs per day, pipelines, rows by task, failures, rules,
+  schema checks, latest runs, with CSV), the command console (tab completion, history, your recent requests)
+  and the Catalog page (validate, rebuild, refresh lineage, record versions, and the generated catalog in
+  place). The console is also served as JSON at `/api/v1/projects/{project}/console` and `.../console/commands`.
 - The new browser interface gains Uploads (choose a pipeline, upload a file, see its receipt and recent
   files), and on a task's page the offset or watermark reset (recorded against a chosen run) and the data
   lookup of one business key with value edits and unlocks for administrators.

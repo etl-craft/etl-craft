@@ -5,7 +5,10 @@ import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { AppShell } from "@/components/app-shell";
 import { ToastProvider } from "@/components/toast";
 import { Attempt } from "@/pages/attempt";
+import { Catalog } from "@/pages/catalog";
+import { Console } from "@/pages/console";
 import { Held } from "@/pages/held";
+import { Insights } from "@/pages/insights";
 import { Items } from "@/pages/items";
 import { Home } from "@/pages/home";
 import { PipelineDetail } from "@/pages/pipeline-detail";
@@ -35,6 +38,9 @@ createRoot(document.getElementById("root")!).render(
             <Route path="projects/:project/pipelines/:pipeline" element={<PipelineDetail />} />
             <Route path="projects/:project/pipelines/:pipeline/tasks/:task" element={<Task />} />
             <Route path="projects/:project/uploads" element={<Uploads />} />
+            <Route path="projects/:project/insights" element={<Insights />} />
+            <Route path="projects/:project/console" element={<Console />} />
+            <Route path="projects/:project/catalog" element={<Catalog />} />
             <Route path="projects/:project/scheduled" element={<Scheduled />} />
             <Route path="projects/:project/held" element={<Held />} />
             <Route path="projects/:project/runs" element={<Runs />} />

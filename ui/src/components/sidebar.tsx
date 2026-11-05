@@ -16,7 +16,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { NavLink } from "react-router-dom";
-import { existingPath, heldPath, homePath, pipelinesPath, runsPath, scheduledPath, uploadsPath } from "@/lib/routes";
+import { catalogPath, consolePath, heldPath, homePath, insightsPath, pipelinesPath, runsPath, scheduledPath, uploadsPath } from "@/lib/routes";
 import { cn } from "@/lib/utils";
 
 interface Item {
@@ -28,7 +28,6 @@ interface Item {
 }
 
 function sections(code: string | undefined, admin: boolean): { title: string; items: Item[] }[] {
-  const legacy = (name: string) => existingPath(code ?? "", name);
   return [
     {
       title: "Overview",
@@ -46,9 +45,9 @@ function sections(code: string | undefined, admin: boolean): { title: string; it
               { label: "Scheduled runs", icon: CalendarClock, to: scheduledPath(code) },
               { label: "Held and paused", icon: PauseCircle, to: heldPath(code) },
               { label: "Uploads", icon: Upload, to: uploadsPath(code) },
-              { label: "Insights", icon: ChartNoAxesColumn, href: legacy("insights") },
-              { label: "Catalog", icon: BookOpen, href: legacy("catalog") },
-              { label: "Console", icon: SquareTerminal, href: legacy("console") },
+              { label: "Insights", icon: ChartNoAxesColumn, to: insightsPath(code) },
+              { label: "Catalog", icon: BookOpen, to: catalogPath(code) },
+              { label: "Console", icon: SquareTerminal, to: consolePath(code) },
             ],
           },
         ]

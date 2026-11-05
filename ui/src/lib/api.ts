@@ -9,15 +9,17 @@ export class ApiError extends Error {
   }
 }
 
-type Params = Record<string, string | number | boolean | null | undefined>;
+type Params = Record<string, string | number | boolean | string[] | null | undefined>;
 
 export function csrfToken(): string {
   return document.querySelector('meta[name="csrf-token"]')?.getAttribute("content") ?? "";
 }
 
 function query(params?: Params): string {
-  const pairs = Object.entries(params ?? {}).filter(([, v]) => v !== undefined && v !== null && v !== "");
-  return pairs.length ? "?" + new URLSearchParams(pairs.map(([k, v]) => [k, String(v)])).toString() : "";
+  const pairs = Object.entries(params ?? {}).flatMap(([k, v]): [string, string][] =>
+    v === undefined || v === null || v === "" ? [] : Array.isArray(v) ? v.map((item): [string, string] => [k, item]) : [[k, String(v)]],
+  );
+  return pairs.length ? "?" + new URLSearchParams(pairs).toString() : "";
 }
 
 export function signInAgain(): void {

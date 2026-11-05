@@ -17,6 +17,8 @@ export function ActionButton<TResult>({
   endpoint,
   body,
   describe,
+  onDone,
+  askReason = true,
   fields,
   icon,
   variant = "outline",
@@ -30,7 +32,11 @@ export function ActionButton<TResult>({
   endpoint: string;
   body: (reason: string) => unknown;
   describe: (result: TResult) => string;
+  /** Called with the server's answer once the action has succeeded, for example to reload what it changed. */
+  onDone?: (result: TResult) => void;
   fields?: React.ReactNode;
+  /** False for requests that take no reason. */
+  askReason?: boolean;
   icon?: React.ReactNode;
   variant?: ButtonProps["variant"];
   size?: ButtonProps["size"];
@@ -40,6 +46,7 @@ export function ActionButton<TResult>({
   const toast = useToast();
   const write = useWrite<TResult>(project(code) + endpoint, (result) => {
     toast(describe(result));
+    onDone?.(result);
     setOpen(false);
   });
   if (!info) return null;
@@ -67,6 +74,7 @@ export function ActionButton<TResult>({
         busy={write.isPending}
         onConfirm={(reason) => write.mutate(body(reason))}
         onClose={() => setOpen(false)}
+        askReason={askReason}
       >
         {fields}
       </ConfirmDialog>
