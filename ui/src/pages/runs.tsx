@@ -3,6 +3,7 @@ import { createColumnHelper, flexRender, getCoreRowModel, getSortedRowModel, use
 import { ArrowDown, ArrowUp } from "lucide-react";
 import * as React from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
+import { Loading, Notice, PageHeader, SelectField } from "@/components/common";
 import { StatusBadge } from "@/components/status";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -10,6 +11,7 @@ import { Table, Td, Th } from "@/components/ui/table";
 import { useProjectInfo, useTimezone } from "@/hooks";
 import { getJson, project } from "@/lib/api";
 import { formatDuration, formatTime } from "@/lib/format";
+import { runPath } from "@/lib/routes";
 import type { History, PipelineView, RunView } from "@/lib/types";
 import { useDocumentTitle } from "@/title";
 
@@ -52,7 +54,7 @@ export function Runs() {
         cell: (c) => (
           <Link
             className="num font-medium text-accent hover:underline"
-            to={`/projects/${encodeURIComponent(code)}/runs/${encodeURIComponent(c.row.original.pipeline_code)}/${c.getValue()}`}
+            to={runPath(code, c.row.original.pipeline_code, c.getValue())}
           >
             #{c.getValue()}
           </Link>
@@ -81,54 +83,36 @@ export function Runs() {
 
   return (
     <div className="grid grid-cols-1 gap-4">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="m-0 text-2xl font-semibold">Pipeline runs</h1>
-          <p className="mt-1 text-sm text-muted">{code}</p>
-        </div>
-        <div className="flex flex-wrap items-end gap-3">
-          <label className="grid gap-1 text-xs text-muted">
-            Pipeline
-            <select
-              value={pipeline}
-              onChange={(event) => set("pipeline", event.target.value)}
-              className="h-9 min-w-44 rounded-md border border-border-strong bg-surface px-2 text-sm text-fg"
-            >
+      <PageHeader
+        title="Pipeline runs"
+        subtitle={code}
+        actions={
+          <div className="flex flex-wrap items-end gap-3">
+            <SelectField label="Pipeline" value={pipeline} onChange={(value) => set("pipeline", value)}>
               <option value="">All pipelines</option>
               {(pipelines.data?.pipelines ?? []).map((p) => (
                 <option key={p.pipeline_code} value={p.pipeline_code}>
                   {p.pipeline_code}
                 </option>
               ))}
-            </select>
-          </label>
-          <label className="grid gap-1 text-xs text-muted">
-            Status
-            <select
-              value={status}
-              onChange={(event) => set("status", event.target.value)}
-              className="h-9 min-w-36 rounded-md border border-border-strong bg-surface px-2 text-sm text-fg"
-            >
+            </SelectField>
+            <SelectField label="Status" value={status} onChange={(value) => set("status", value)}>
               <option value="">Any status</option>
               {STATUSES.map((s) => (
                 <option key={s} value={s}>
                   {s === "IN-PROGRESS" ? "Running" : s.charAt(0) + s.slice(1).toLowerCase()}
                 </option>
               ))}
-            </select>
-          </label>
-          {pipeline || status ? (
-            <Button variant="ghost" onClick={() => setParams({}, { replace: true })}>
-              Clear filters
-            </Button>
-          ) : null}
-        </div>
-      </div>
-      {runs.isError ? (
-        <p role="alert" className="rounded-md bg-bad-bg p-3 text-sm text-bad">
-          {(runs.error as Error).message}
-        </p>
-      ) : null}
+            </SelectField>
+            {pipeline || status ? (
+              <Button variant="ghost" onClick={() => setParams({}, { replace: true })}>
+                Clear filters
+              </Button>
+            ) : null}
+          </div>
+        }
+      />
+      {runs.isError ? <Notice>{(runs.error as Error).message}</Notice> : null}
       <Card>
         <Table aria-label="Pipeline runs">
           <thead>
@@ -162,7 +146,7 @@ export function Runs() {
             ))}
           </tbody>
         </Table>
-        {runs.isPending ? <p className="p-4 text-muted">Loading runs…</p> : null}
+        {runs.isPending ? <Loading what="runs" className="p-4" /> : null}
         {runs.isSuccess && rows.length === 0 ? (
           <p className="p-4 text-muted">
             {status ? `None of the ${all.length} loaded runs is ${status.toLowerCase()}. Load more or clear the status filter.` : "No runs yet."}

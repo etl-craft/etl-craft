@@ -13,9 +13,9 @@
   --accent: #1f4fd8;
   --accent-fg: #ffffff;
   --ring: #1f4fd8;
-  --sidebar: #11161d;
-  --sidebar-fg: #c9d1db;
-  --sidebar-active: #1d2632;
+  --sidebar: #ffffff;
+  --sidebar-fg: #3b4654;
+  --sidebar-active: #e8eefd;
   --ok-fg: #166534; --ok-bg: #dcfce7;
   --bad-fg: #b42318; --bad-bg: #fee4e2;
   --run-fg: #1d4ed8; --run-bg: #dbeafe;
@@ -44,7 +44,7 @@
   --run-fg: #9bbbff; --run-bg: #14284d;
   --warn-fg: #fcd34d; --warn-bg: #3a2a08;
   --idle-fg: #b0b8c4; --idle-bg: #232a34;
-  --env-prod: #e5483b; --env-prod-fg: #ffffff;
+  --env-prod: #c9372c; --env-prod-fg: #ffffff;
   --env-other: #3a4553; --env-other-fg: #f1f4f8;
 }
 

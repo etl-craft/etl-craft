@@ -1,12 +1,14 @@
 import { useQueries } from "@tanstack/react-query";
-import { CircleCheck, CircleX, Clock, Hourglass, LoaderCircle } from "lucide-react";
+import { CircleCheck, CircleX, Clock, Hourglass, LoaderCircle, type LucideIcon } from "lucide-react";
 import { Link } from "react-router-dom";
+import { Eyebrow, Fact, FactList, Loading, Notice, PageHeader } from "@/components/common";
 import { EnvironmentBadge } from "@/components/environment-badge";
 import { StatusBadge } from "@/components/status";
 import { Card, CardHeader } from "@/components/ui/card";
 import { useHealth, useTimezone } from "@/hooks";
 import { getJson, project } from "@/lib/api";
 import { formatAgo, formatTime } from "@/lib/format";
+import { runPath, runsPath } from "@/lib/routes";
 import type { History, ProjectCounts } from "@/lib/types";
 import { useDocumentTitle } from "@/title";
 import { cn } from "@/lib/utils";
@@ -28,15 +30,11 @@ async function failuresSince(code: string, since: string): Promise<History> {
   return { entries, before: null };
 }
 
-function Metric({ label, value, icon: Icon, tone }: { label: string; value: number; icon: typeof CircleX; tone: string }) {
-  const quiet = value === 0;
+function Metric({ label, value, icon, tone }: { label: string; value: number; icon: LucideIcon; tone: string }) {
   return (
-    <div className="grid gap-1">
-      <dt className="flex items-center gap-1.5 text-xs text-muted">
-        <Icon aria-hidden className="size-3.5" /> {label}
-      </dt>
-      <dd className={cn("num m-0 font-semibold", quiet ? "text-xl text-muted" : cn("text-3xl", tone))}>{value}</dd>
-    </div>
+    <Fact label={label} icon={icon} valueClassName={value === 0 ? "text-xl font-semibold text-muted" : cn("text-3xl font-semibold", tone)}>
+      {value}
+    </Fact>
   );
 }
 
@@ -47,27 +45,27 @@ function ProjectCard({ p, failures, since }: { p: ProjectCounts; failures: Histo
     <Card className={cn(loud && "border-bad/60")}>
       <CardHeader>
         <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <Link to={`/projects/${encodeURIComponent(p.project)}/runs`} className="truncate text-base font-semibold hover:underline">
+          <Link to={runsPath(p.project)} className="truncate text-base font-semibold hover:underline">
             {p.project}
           </Link>
           <EnvironmentBadge env={{ type: p.environment_type, name: p.environment_name }} />
         </div>
         <span className="text-xs text-muted">{p.governance}</span>
       </CardHeader>
-      <dl className="m-0 grid grid-cols-2 gap-4 p-4 sm:grid-cols-4">
+      <FactList className="gap-4 p-4 sm:grid-cols-4 lg:grid-cols-4">
         <Metric label="Failed" value={p.failed} icon={CircleX} tone="text-bad" />
         <Metric label="Running" value={p.running} icon={LoaderCircle} tone="text-run" />
         <Metric label="SLA misses" value={p.sla_misses} icon={Clock} tone="text-warn" />
         <Metric label="Queued tasks" value={p.queued_tasks} icon={Hourglass} tone="text-fg" />
-      </dl>
+      </FactList>
       {loud ? (
         <div className="border-t border-border">
-          <p className="px-4 pt-3 text-xs font-semibold uppercase tracking-wide text-muted">Recent failures</p>
+          <Eyebrow className="px-4 pt-3">Recent failures</Eyebrow>
           <ul className="m-0 list-none p-2">
             {failures.slice(0, 5).map((run) => (
               <li key={run.pipeline_run_id}>
                 <Link
-                  to={`/projects/${encodeURIComponent(p.project)}/runs/${encodeURIComponent(run.pipeline_code)}/${run.pipeline_run_id}`}
+                  to={runPath(p.project, run.pipeline_code, run.pipeline_run_id)}
                   className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md px-2 py-1.5 hover:bg-surface-2"
                 >
                   <StatusBadge status={run.status} />
@@ -112,22 +110,18 @@ export function Home() {
   const totalFailed = projects.reduce((sum, p) => sum + p.failed, 0);
   return (
     <div className="grid grid-cols-1 gap-6">
-      <div>
-        <h1 className="m-0 text-2xl font-semibold">Home</h1>
-        <p className="mt-1 text-sm text-muted">
-          {health.isError
+      <PageHeader
+        title="Home"
+        subtitle={
+          health.isError
             ? "The project list could not be read."
             : totalFailed > 0
               ? `${totalFailed} failed run${totalFailed === 1 ? "" : "s"} in the last 24 hours across ${failing.length} project${failing.length === 1 ? "" : "s"}.`
-              : "Everything that ran in the last 24 hours succeeded."}
-        </p>
-      </div>
-      {health.isError ? (
-        <p role="alert" className="rounded-md bg-bad-bg p-3 text-sm text-bad">
-          {(health.error as Error).message}
-        </p>
-      ) : null}
-      {health.isPending ? <p className="text-muted">Loading projects…</p> : null}
+              : "Everything that ran in the last 24 hours succeeded."
+        }
+      />
+      {health.isError ? <Notice>{(health.error as Error).message}</Notice> : null}
+      {health.isPending ? <Loading what="projects" /> : null}
       <div className="grid gap-4 xl:grid-cols-2">
         {[...projects]
           .sort((a, b) => b.failed - a.failed || b.running - a.running || a.project.localeCompare(b.project))

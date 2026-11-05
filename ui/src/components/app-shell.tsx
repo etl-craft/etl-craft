@@ -1,59 +1,24 @@
-import { ChevronDown, ExternalLink, House, ListChecks, LogOut, Menu, Moon, Sun, X } from "lucide-react";
+import { ChevronDown, LogOut, Menu, Moon, Sun, X } from "lucide-react";
 import * as React from "react";
-import { Link, NavLink, Outlet, useParams } from "react-router-dom";
-import { EnvironmentBadge } from "@/components/environment-badge";
+import { Link, Outlet, useParams } from "react-router-dom";
+import { EnvironmentBadge, EnvironmentStrip } from "@/components/environment-badge";
 import { DropdownContent, DropdownItem, DropdownLabel, DropdownMenu, DropdownSeparator, DropdownTrigger } from "@/components/dropdown";
+import { Sidebar } from "@/components/sidebar";
 import { Button } from "@/components/ui/button";
 import { useHealth, useIdentity } from "@/hooks";
 import { signOut } from "@/lib/api";
-import { isProduction } from "@/lib/environment";
+import { runsPath } from "@/lib/routes";
 import { applyTheme, initialTheme, type Theme } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 
-const navLink = ({ isActive }: { isActive: boolean }) =>
-  cn("flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm", isActive ? "bg-sidebar-active text-white" : "text-sidebar-fg hover:bg-sidebar-active");
+const COLLAPSE_KEY = "etl-craft-nav-collapsed";
 
-function Sidebar({ code, admin }: { code?: string; admin: boolean }) {
-  const enc = code ? encodeURIComponent(code) : "";
-  const legacy: [string, string][] = code
-    ? [
-        ["Pipelines", `/ui/projects/${enc}/pipelines`],
-        ["Scheduled runs", `/ui/projects/${enc}/scheduled`],
-        ["Held and paused", `/ui/projects/${enc}/held`],
-        ["Uploads", `/ui/projects/${enc}/uploads`],
-        ["Insights", `/ui/projects/${enc}/insights`],
-        ["Catalog", `/ui/projects/${enc}/catalog`],
-        ["Console", `/ui/projects/${enc}/console`],
-      ]
-    : [];
-  const platform: [string, string][] = [["System health", "/ui/system"], ["Agents", "/ui/agents"], ...(admin ? ([["Administration", "/ui/admin"]] as [string, string][]) : [])];
-  return (
-    <nav aria-label="Main" className="grid content-start gap-5 p-3">
-      <div className="grid gap-0.5">
-        <p className="px-2.5 pb-1 text-[11px] font-semibold uppercase tracking-wider text-sidebar-fg/60">Overview</p>
-        <NavLink to="/" end className={navLink}>
-          <House className="size-4" aria-hidden /> Home
-        </NavLink>
-        {code ? (
-          <NavLink to={`/projects/${enc}/runs`} className={navLink}>
-            <ListChecks className="size-4" aria-hidden /> Runs
-          </NavLink>
-        ) : null}
-      </div>
-      {[["Project", legacy], ["Platform", platform]].map(([title, links]) =>
-        (links as [string, string][]).length ? (
-          <div key={title as string} className="grid gap-0.5">
-            <p className="px-2.5 pb-1 text-[11px] font-semibold uppercase tracking-wider text-sidebar-fg/60">{title as string}</p>
-            {(links as [string, string][]).map(([label, href]) => (
-              <a key={href} href={href} className={navLink({ isActive: false })}>
-                <ExternalLink className="size-3.5 opacity-60" aria-hidden /> {label}
-              </a>
-            ))}
-          </div>
-        ) : null,
-      )}
-    </nav>
-  );
+function readCollapsed(): boolean {
+  try {
+    return window.localStorage.getItem(COLLAPSE_KEY) === "1";
+  } catch {
+    return false;
+  }
 }
 
 export function AppShell() {
@@ -64,6 +29,7 @@ export function AppShell() {
   const [chosen, setTheme] = React.useState<Theme | null>(null);
   const theme = chosen ?? initialTheme(identity.data?.settings.theme);
   const [open, setOpen] = React.useState(false);
+  const [collapsed, setCollapsed] = React.useState(() => readCollapsed());
   React.useEffect(() => applyTheme(theme), [theme]);
   const mustChange = identity.data?.must_change_password;
   React.useEffect(() => {
@@ -73,23 +39,12 @@ export function AppShell() {
   const admin = identity.data?.role === "admin";
 
   return (
-    <div className="min-h-screen bg-bg">
+    <div className="flex h-dvh flex-col bg-bg">
       <a href="#main" className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:bg-surface focus:p-2">
         Skip to content
       </a>
-      {env ? (
-        <div
-          role="status"
-          className={cn(
-            "flex h-7 items-center justify-center gap-2 px-3 text-xs font-semibold tracking-wide",
-            isProduction(env) ? "bg-[var(--env-prod)] text-[var(--env-prod-fg)]" : "bg-[var(--env-other)] text-[var(--env-other-fg)]",
-          )}
-        >
-          {isProduction(env) ? "PRODUCTION — changes here affect live data" : `${env.type}${env.name ? " · " + env.name : ""}`}
-          <span className="font-normal opacity-90">· {code}</span>
-        </div>
-      ) : null}
-      <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-border bg-surface px-4">
+      {env ? <EnvironmentStrip env={env} project={code} /> : null}
+      <header className="z-30 flex h-14 shrink-0 items-center gap-3 border-b border-border bg-surface px-4">
         <Button variant="ghost" size="icon" className="lg:hidden" aria-label={open ? "Close menu" : "Open menu"} onClick={() => setOpen(!open)}>
           {open ? <X className="size-5" /> : <Menu className="size-5" />}
         </Button>
@@ -111,7 +66,7 @@ export function AppShell() {
             <DropdownLabel>Projects</DropdownLabel>
             {(health.data?.projects ?? []).map((p) => (
               <DropdownItem key={p.project} asChild>
-                <Link to={`/projects/${encodeURIComponent(p.project)}/runs`} className="justify-between gap-4">
+                <Link to={runsPath(p.project)} className="justify-between gap-4">
                   <span>{p.project}</span>
                   <EnvironmentBadge env={{ type: p.environment_type, name: p.environment_name }} />
                 </Link>
@@ -154,18 +109,35 @@ export function AppShell() {
           </DropdownMenu>
         </div>
       </header>
-      <div className="lg:grid lg:grid-cols-[14rem_1fr]">
+      <div className="relative flex min-h-0 flex-1">
         <aside
           className={cn(
-            "bg-sidebar lg:sticky lg:top-[5.25rem] lg:block lg:h-[calc(100vh-5.25rem)] lg:overflow-y-auto",
-            open ? "fixed inset-x-0 top-[5.25rem] z-20 block h-[calc(100vh-5.25rem)] overflow-y-auto" : "hidden",
+            "z-20 shrink-0 border-r border-border bg-sidebar transition-[width] duration-150",
+            open ? "absolute inset-y-0 left-0 block w-64 shadow-xl lg:static lg:shadow-none" : "hidden lg:block",
+            !open && (collapsed ? "lg:w-14" : "lg:w-56"),
+            open && (collapsed ? "lg:w-14" : "lg:w-56"),
           )}
           onClick={() => setOpen(false)}
         >
-          <Sidebar code={code} admin={admin} />
+          <Sidebar
+            code={code}
+            admin={admin}
+            collapsed={collapsed && !open}
+            onToggle={() => {
+              const next = !collapsed;
+              setCollapsed(next);
+              try {
+                window.localStorage.setItem(COLLAPSE_KEY, next ? "1" : "0");
+              } catch {
+                /* the choice lasts for this page only */
+              }
+            }}
+          />
         </aside>
-        <main id="main" className="mx-auto w-full max-w-[1400px] min-w-0 px-4 py-6 sm:px-6">
-          <Outlet />
+        <main id="main" className="min-w-0 flex-1 overflow-y-auto">
+          <div className="mx-auto w-full max-w-[1400px] px-4 py-6 sm:px-6">
+            <Outlet />
+          </div>
         </main>
       </div>
     </div>

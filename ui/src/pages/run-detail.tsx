@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, LifeBuoy } from "lucide-react";
 import * as React from "react";
 import { Link, useParams } from "react-router-dom";
+import { Fact, FactList, Loading, Notice, PageHeader } from "@/components/common";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { RunGraph } from "@/components/run-graph";
 import { StatusBadge } from "@/components/status";
@@ -11,19 +12,11 @@ import { Table, Td, Th } from "@/components/ui/table";
 import { useIdentity, useProjectInfo, useTimezone } from "@/hooks";
 import { ApiError, getJson, getText, postJson, project } from "@/lib/api";
 import { formatDuration, formatTime } from "@/lib/format";
+import { runsPath } from "@/lib/routes";
 import type { Capabilities, ControlView, Graph, RunView, Steps, TaskHistory } from "@/lib/types";
 import { useDocumentTitle } from "@/title";
 
 const RECOVERABLE = new Set(["FAILED", "LOST", "STOPPED", "ABORTED"]);
-
-function Fact({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="grid gap-0.5">
-      <dt className="text-xs text-muted">{label}</dt>
-      <dd className="num m-0">{children}</dd>
-    </div>
-  );
-}
 
 function AttemptLog({ code, attemptId }: { code: string; attemptId: number }) {
   const [shown, setShown] = React.useState(false);
@@ -34,11 +27,9 @@ function AttemptLog({ code, attemptId }: { code: string; attemptId: number }) {
       <Button size="sm" className="w-fit" onClick={() => setShown(!shown)} aria-expanded={shown}>
         {shown ? "Hide log" : "Show log"}
       </Button>
-      {shown && log.isPending ? <p className="text-muted">Loading log…</p> : null}
+      {shown && log.isPending ? <Loading what="log" /> : null}
       {shown && log.isError ? (
-        <p role="alert" className="rounded-md bg-bad-bg p-3 text-sm text-bad">
-          {(log.error as Error).message}
-        </p>
+        <Notice>{(log.error as Error).message}</Notice>
       ) : null}
       {shown && log.isSuccess ? (
         <>
@@ -66,17 +57,13 @@ function TaskPanel({ code, pipeline, runId, task }: { code: string; pipeline: st
         {run ? <StatusBadge status={run.status} /> : null}
       </CardHeader>
       <div className="grid gap-4 p-4">
-        {history.isPending ? <p className="text-muted">Loading task…</p> : null}
+        {history.isPending ? <Loading what="task" /> : null}
         {history.isError ? (
-          <p role="alert" className="rounded-md bg-bad-bg p-3 text-sm text-bad">
-            {(history.error as Error).message}
-          </p>
+          <Notice>{(history.error as Error).message}</Notice>
         ) : null}
         {history.isSuccess && !run ? <p className="text-muted">This task has not started under this run.</p> : null}
         {run?.error_message ? (
-          <p role="alert" className="m-0 whitespace-pre-wrap rounded-md bg-bad-bg p-3 font-mono text-xs text-bad">
-            {run.error_message}
-          </p>
+          <Notice mono>{run.error_message}</Notice>
         ) : null}
         {run && run.attempts.length === 0 ? (
           <p className="m-0 text-muted">No attempt was started for this task{run.status === "SKIPPED" ? ": an upstream outcome skipped it" : ""}.</p>
@@ -88,7 +75,7 @@ function TaskPanel({ code, pipeline, runId, task }: { code: string; pipeline: st
               <StatusBadge status={attempt.status} />
               <span className="num text-xs text-muted">id {attempt.attempt_id}</span>
             </div>
-            <dl className="m-0 grid grid-cols-2 gap-3 text-[13px] sm:grid-cols-4">
+            <FactList className="gap-3 sm:grid-cols-4 lg:grid-cols-4">
               <Fact label="Started">{formatTime(attempt.started_at, tz)}</Fact>
               <Fact label="Duration">{formatDuration(attempt.started_at, attempt.ended_at)}</Fact>
               <Fact label="Rows written">{attempt.rows_written ?? "—"}</Fact>
@@ -98,7 +85,7 @@ function TaskPanel({ code, pipeline, runId, task }: { code: string; pipeline: st
               </Fact>
               <Fact label="Failure class">{attempt.status === "FAILED" ? attempt.failure_class : "—"}</Fact>
               <Fact label="Retry on">{attempt.retry_on ?? "—"}</Fact>
-            </dl>
+            </FactList>
             <AttemptLog code={code} attemptId={attempt.attempt_id} />
           </section>
         ))}
@@ -192,50 +179,47 @@ export function RunDetail() {
 
   if (run.isError) {
     return (
-      <p role="alert" className="rounded-md bg-bad-bg p-3 text-sm text-bad">
-        {(run.error as Error).message}
-      </p>
+      <Notice>{(run.error as Error).message}</Notice>
     );
   }
   const r = run.data;
   return (
     <div className="grid grid-cols-1 gap-5">
-      <Link to={`/projects/${encodeURIComponent(code)}/runs?pipeline=${encodeURIComponent(pipeline)}`} className="inline-flex w-fit items-center gap-1 text-sm text-muted hover:text-fg">
+      <Link to={runsPath(code, pipeline)} className="inline-flex w-fit items-center gap-1 text-sm text-muted hover:text-fg">
         <ArrowLeft className="size-4" aria-hidden /> {pipeline} runs
       </Link>
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="grid gap-2">
-          <div className="flex flex-wrap items-center gap-3">
-            <h1 className="m-0 text-2xl font-semibold">
-              {pipeline} <span className="num text-muted">#{runId}</span>
-            </h1>
-            {r ? <StatusBadge status={r.status} /> : null}
-          </div>
-          {r ? (
-            <dl className="m-0 grid grid-cols-2 gap-x-8 gap-y-3 text-[13px] sm:grid-cols-3 lg:grid-cols-5">
-              <Fact label="Started">{formatTime(r.start_date, tz)}</Fact>
-              <Fact label="Ended">{formatTime(r.end_date, tz)}</Fact>
-              <Fact label="Duration">{formatDuration(r.start_date, r.end_date)}</Fact>
-              <Fact label="Logical date">{r.run_date ?? "—"}</Fact>
-              <Fact label="Trigger">{r.trigger_kind.toLowerCase()}</Fact>
-              <Fact label="Started by">{r.started_by ?? "—"}</Fact>
-              <Fact label="Run key">
-                <span className="break-all">{r.run_key}</span>
-              </Fact>
-              {r.sla_status ? <Fact label="SLA">{r.sla_status}</Fact> : null}
-            </dl>
-          ) : (
-            <p className="text-muted">Loading run…</p>
-          )}
-        </div>
-        {r ? <RecoverRun code={code} run={r} canRun={canRun} /> : null}
-      </div>
+      <PageHeader
+        title={
+          <>
+            {pipeline} <span className="num text-muted">#{runId}</span>
+          </>
+        }
+        status={r ? <StatusBadge status={r.status} /> : null}
+        actions={r ? <RecoverRun code={code} run={r} canRun={canRun} /> : null}
+      >
+        {r ? (
+          <FactList>
+            <Fact label="Started">{formatTime(r.start_date, tz)}</Fact>
+            <Fact label="Ended">{formatTime(r.end_date, tz)}</Fact>
+            <Fact label="Duration">{formatDuration(r.start_date, r.end_date)}</Fact>
+            <Fact label="Logical date">{r.run_date ?? "—"}</Fact>
+            <Fact label="Trigger">{r.trigger_kind.toLowerCase()}</Fact>
+            <Fact label="Started by">{r.started_by ?? "—"}</Fact>
+            <Fact label="Run key">
+              <span className="break-all">{r.run_key}</span>
+            </Fact>
+            {r.sla_status ? <Fact label="SLA">{r.sla_status}</Fact> : null}
+          </FactList>
+        ) : (
+          <Loading what="run" />
+        )}
+      </PageHeader>
       <Card>
         <CardHeader>
           <CardTitle>Tasks</CardTitle>
           <span className="text-xs text-muted">Select a task for its attempts and log</span>
         </CardHeader>
-        {graph.isSuccess ? <RunGraph graph={graph.data} statuses={statuses} selected={open} onSelect={setSelected} /> : <p className="p-4 text-muted">{graph.isError ? (graph.error as Error).message : "Loading graph…"}</p>}
+        {graph.isSuccess ? <RunGraph graph={graph.data} statuses={statuses} selected={open} onSelect={setSelected} /> : graph.isError ? <Notice className="m-4">{(graph.error as Error).message}</Notice> : <Loading what="graph" className="p-4" />}
       </Card>
       <Card>
         <Table aria-label="Task list">

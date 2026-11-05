@@ -1,4 +1,5 @@
 import * as React from "react";
+import { Notice } from "@/components/common";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { EnvironmentBadge } from "@/components/environment-badge";
@@ -75,9 +76,7 @@ export function ConfirmDialog({
           </label>
         ) : null}
         {error ? (
-          <p role="alert" className="rounded-md bg-bad-bg p-3 text-sm text-bad">
-            {error}
-          </p>
+          <Notice>{error}</Notice>
         ) : null}
         <div className="flex justify-end gap-2">
           <Button type="button" onClick={onClose}>

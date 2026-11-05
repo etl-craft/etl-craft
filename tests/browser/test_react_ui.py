@@ -10,7 +10,14 @@ from sqlalchemy import text
 from etl_craft.core.actor import Actor, ActorKind, acting_as
 from etl_craft.core.enums import ActionName
 from fixtures.actions import act
-from fixtures.metadata import add_dependency, add_pipeline, add_task, finish_run, start_run, task_run
+from fixtures.metadata import (
+    add_dependency,
+    add_pipeline,
+    add_task,
+    finish_run,
+    start_run,
+    task_run,
+)
 
 pytestmark = pytest.mark.browser
 PASSWORD = "correct horse battery"
@@ -53,7 +60,7 @@ def open_page(pw, **options):
 
 
 def test_home_runs_and_run_detail_lead_to_a_confirmed_recovery(scene):
-    ctx, url, good, bad = scene
+    ctx, url, _, bad = scene
     with sync_playwright() as pw:
         browser, page, problems = open_page(pw)
         sign_in(page, url)
@@ -107,8 +114,14 @@ def test_the_runs_table_filters_by_status_and_pipeline_in_the_address(scene):
 
 def test_a_viewer_sees_the_failed_run_but_no_recover_action(scene):
     ctx, url, _, bad = scene
-    act(ctx, ActionName.ACCESS_GRANT, project="default", account="alice",
-        permission="CAN_VIEW", reason="view the runs")
+    act(
+        ctx,
+        ActionName.ACCESS_GRANT,
+        project="default",
+        account="alice",
+        permission="CAN_VIEW",
+        reason="view the runs",
+    )
     with sync_playwright() as pw:
         browser, page, _ = open_page(pw)
         sign_in(page, url, f"/app/projects/default/runs/OPS/{bad}", name="alice")
@@ -120,8 +133,14 @@ def test_a_viewer_sees_the_failed_run_but_no_recover_action(scene):
 
 def test_production_is_unmistakable_and_recovery_needs_the_project_code(scene):
     ctx, url, _, bad = scene
-    act(ctx, ActionName.PROJECT_SET, project="default", environment_type="PROD",
-        governance="STRICT", reason="production project")
+    act(
+        ctx,
+        ActionName.PROJECT_SET,
+        project="default",
+        environment_type="PROD",
+        governance="STRICT",
+        reason="production project",
+    )
     with sync_playwright() as pw:
         browser, page, _ = open_page(pw)
         sign_in(page, url, f"/app/projects/default/runs/OPS/{bad}")
@@ -134,6 +153,33 @@ def test_production_is_unmistakable_and_recovery_needs_the_project_code(scene):
         expect(submit).to_be_disabled()
         dialog.get_by_label("This is PRODUCTION").fill("default")
         expect(submit).to_be_enabled()
+        browser.close()
+
+
+def test_the_navigation_collapses_to_icons_keeps_its_links_and_is_remembered(scene):
+    _, url, _, _ = scene
+    with sync_playwright() as pw:
+        browser, page, problems = open_page(pw, viewport={"width": 1280, "height": 900})
+        sign_in(page, url, "/app/projects/default/runs")
+        nav = page.get_by_role("navigation", name="Main")
+        runs = nav.get_by_role("link", name="Runs", exact=True)
+        wide = runs.bounding_box()["width"]
+        expect(nav.get_by_text("Overview")).to_be_visible()
+        # the column reaches the bottom edge of the window, however short the page is
+        side = page.locator("aside").bounding_box()
+        assert side["y"] + side["height"] >= 899
+        page.get_by_role("button", name="Collapse the navigation").click()
+        expect(nav.get_by_text("Overview")).to_have_count(0)
+        expect(page.locator("aside")).to_have_css("width", "56px")
+        assert runs.bounding_box()["width"] < wide / 2
+        expect(runs).to_have_attribute("title", "Runs")
+        assert runs.locator("svg").count() == 1
+        page.reload()
+        expect(page.get_by_role("button", name="Expand the navigation")).to_be_visible()
+        page.get_by_role("button", name="Expand the navigation").click()
+        expect(nav.get_by_text("Overview")).to_be_visible()
+        assert runs.locator("svg").count() == 1
+        assert problems == []
         browser.close()
 
 
