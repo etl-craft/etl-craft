@@ -3,9 +3,12 @@ import * as React from "react";
 import { cn } from "@/lib/utils";
 
 /** A failure or refusal, always announced to assistive technology. */
-export function Notice({ children, mono, className }: { children: React.ReactNode; mono?: boolean; className?: string }) {
+export function Notice({ children, mono, info, className }: { children: React.ReactNode; mono?: boolean; info?: boolean; className?: string }) {
   return (
-    <p role="alert" className={cn("m-0 rounded-md bg-bad-bg p-3 text-sm text-bad", mono && "whitespace-pre-wrap font-mono text-xs", className)}>
+    <p
+      role={info ? "status" : "alert"}
+      className={cn("m-0 rounded-md p-3 text-sm", info ? "bg-idle-bg text-fg" : "bg-bad-bg text-bad", mono && "whitespace-pre-wrap font-mono text-xs", className)}
+    >
       {children}
     </p>
   );
@@ -123,5 +126,16 @@ export function ParamList({ entries }: { entries: [string, string][] }) {
         </div>
       ))}
     </dl>
+  );
+}
+
+/** A headline number with its label, for summary rows. */
+export function Stat({ label, value, tone }: { label: string; value: React.ReactNode; tone?: string }) {
+  // A number is the headline; "Not measured" and its kind are said quietly.
+  const absent = typeof value === "string" && /^(Not measured|None|No finished runs)$/.test(value);
+  return (
+    <Fact label={label} valueClassName={absent ? "text-base text-muted" : cn("text-2xl font-semibold", tone)}>
+      {value}
+    </Fact>
   );
 }

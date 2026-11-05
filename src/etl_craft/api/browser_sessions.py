@@ -36,7 +36,14 @@ def browser_request(request: Request) -> bool:
 
 
 def html_request(request: Request) -> bool:
-    """Only browser views and explicit HTML negotiation receive HTML errors."""
+    """Only browser views and explicit HTML negotiation receive HTML errors.
+
+    A script that asks for JSON and not for HTML, as the browser interface does, receives JSON
+    errors even from a /ui path.
+    """
+    accept = request.headers.get("accept", "")
+    if "application/json" in accept and "text/html" not in accept:
+        return False
     return request.url.path.startswith(("/ui", "/signin")) or (
         request.headers.get("HX-Request") == "true"
         or "text/html" in request.headers.get("accept", "")

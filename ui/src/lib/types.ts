@@ -274,3 +274,126 @@ export interface ValueResult {
   records: Record<string, unknown>[];
   history: Record<string, unknown>[];
 }
+
+export interface DayInsight {
+  day: string;
+  runs: number;
+  succeeded: number;
+  failed: number;
+  average_seconds: number | null;
+}
+
+export interface PipelineInsight {
+  pipeline_code: string | null;
+  runs: number;
+  succeeded: number;
+  failed: number;
+  finished: number;
+  in_progress: number;
+  success_rate: number | null;
+  average_seconds: number | null;
+  longest_seconds: number | null;
+  sla_breached: number;
+  attempts: number;
+  retries: number;
+  lost_attempts: number;
+  rows_written: number | null;
+  rows_per_second: number | null;
+  average_wait_seconds: number | null;
+  average_run_seconds: number | null;
+}
+
+export interface TaskInsight {
+  pipeline_code: string;
+  task_code: string;
+  runs: number;
+  source_rows: number | null;
+  target_rows: number | null;
+  inserted: number | null;
+  updated: number | null;
+  deleted: number | null;
+  rejected: number | null;
+}
+
+export interface FailureInsight {
+  pipeline_code: string;
+  task_code: string;
+  status: string;
+  failure_class: string | null;
+  attempts: number;
+}
+
+export interface RuleObservation {
+  observed: string;
+  passed: string;
+}
+
+export interface RuleInsight {
+  pipeline_code: string;
+  rule_name: string;
+  runs: number;
+  failed: number;
+  passed: number;
+  not_passed: number;
+  flagged_rows: number;
+  observations: RuleObservation[];
+}
+
+export interface GapInsight {
+  attribute: string;
+  state: string;
+  checks: number;
+}
+
+export interface Insights {
+  window_start: string;
+  window_end: string;
+  pipelines: string[];
+  total: PipelineInsight;
+  per_pipeline: PipelineInsight[];
+  days: DayInsight[];
+  tasks: TaskInsight[];
+  failures: FailureInsight[];
+  rules: RuleInsight[];
+  latest: RunView[];
+  gaps: GapInsight[];
+  gaps_compared_at: string | null;
+  schema_check_schedule: string | null;
+  schema_check_on_demand: boolean;
+}
+
+export interface Finding {
+  severity?: string;
+  message: string;
+}
+
+export interface Report {
+  pipelines: number;
+  tasks: number;
+  findings: Finding[];
+}
+
+export interface AuditAction {
+  action_id: number;
+  at: string;
+  command: string;
+  outcome: string;
+}
+
+export interface ConsoleResult {
+  exit_code: number;
+  output: string;
+  error: string;
+}
+
+export interface TaskLineage {
+  task: string;
+  error: string | null;
+  cached: boolean;
+}
+
+/** What a lineage refresh answers: every task traced again, and which of them could not be. */
+export interface LineageRefresh {
+  lineages: TaskLineage[];
+  failed: boolean;
+}

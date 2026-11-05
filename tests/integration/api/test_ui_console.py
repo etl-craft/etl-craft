@@ -17,6 +17,8 @@ from fixtures.metadata import add_pipeline, add_task
 
 PASSWORD = "correct horse battery"
 URL = "/ui/projects/default/console"
+API = URL
+JSON = {"Accept": "application/json"}
 
 
 @pytest.fixture
@@ -159,3 +161,45 @@ def test_never_prompts_a_scheduled_resume_prints_the_refusal_instead(site, monke
     assert run(client, csrf, "pause --pipeline-code ORDERS --reason upkeep")["exit_code"] == 0
     resumed = run(client, csrf, "resume --pipeline-code ORDERS --reason upkeep")
     assert resumed["exit_code"] != 0 and "scheduled resume requires" in resumed["error"]
+
+
+def test_the_commands_route_lists_only_what_the_signed_in_person_may_type(site):
+    _, _, client = site
+    anonymous = client.get(API + "/commands", headers=JSON)
+    assert anonymous.status_code == 401
+    login(client, "owner")
+    admin = client.get(API + "/commands").json()
+    assert admin["available"] is True and "status" in admin["commands"]
+    assert all(isinstance(flags, list) for flags in admin["commands"].values())
+    login(client, "alice")
+    viewer = client.get(API + "/commands").json()
+    assert "status" in viewer["commands"]
+    assert set(viewer["commands"]) < set(admin["commands"])  # a viewer is offered fewer
+
+
+def test_the_commands_route_says_when_there_is_no_console(metadata_project):
+    from etl_craft.engine.migrations import mark_packaged_migrations_applied
+
+    p = metadata_project
+    with p.engine.begin() as conn:
+        mark_packaged_migrations_applied(conn)
+    ctx = OperationContext(p.engine, p.config, Actor("owner", ActorKind.USER), role=ApiRole.ADMIN)
+    act(ctx, ActionName.ACCOUNT_ADD, name="owner", role=ApiRole.ADMIN, password=PASSWORD)
+    client = TestClient(create_app(ctx), base_url="https://testserver")
+    login(client, "owner")
+    assert client.get(API + "/commands").json() == {"available": False, "commands": {}}
+
+
+def test_the_json_console_route_runs_a_line_with_the_same_csrf_proof_as_the_page(site):
+    _, _, client = site
+    assert client.post(API, json={"line": "status"}, headers=JSON).status_code == 401
+    csrf, _ = login(client, "owner")
+    refused = client.post(API, json={"line": "pipelines"}, headers={"Origin": "https://testserver"})
+    assert refused.status_code == 403  # no CSRF proof, no run
+    ran = client.post(
+        API,
+        json={"line": "pipelines"},
+        headers={"X-CSRF-Token": csrf, "Origin": "https://testserver"},
+    )
+    assert ran.status_code == 200 and ran.json()["exit_code"] == 0
+    assert "ORDERS" in ran.json()["output"]

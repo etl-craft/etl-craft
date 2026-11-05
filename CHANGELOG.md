@@ -6,6 +6,15 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+- The etl-craft mark is now a solid tile (layered chevrons under a plane, white on a blue gradient, dark on a
+  light blue one in the dark theme) in the new interface, the browser console, sign-in, the offline catalog and
+  the favicon. The new interface also now sets the project favicon.
+- The new browser interface gains Insights (summary, runs per day, pipelines, rows by task, failures, rules,
+  schema checks, latest runs, with CSV), the command console (tab completion, history, your recent requests)
+  and the Catalog page (validate, rebuild, refresh lineage, record versions, and the generated catalog in
+  place). "Refresh lineage" reports how many tasks were traced and names any task that could not be traced
+  with its reason. The console's commands for tab completion are served at
+  `/ui/projects/{project}/console/commands`, and a client that asks for JSON gets JSON errors from `/ui` paths.
 - The new browser interface gains Uploads (choose a pipeline, upload a file, see its receipt and recent
   files), and on a task's page the offset or watermark reset (recorded against a chosen run) and the data
   lookup of one business key with value edits and unlocks for administrators.

@@ -6,8 +6,6 @@ export const runsPath = (project: string, pipeline?: string): string =>
   `/projects/${enc(project)}/runs` + (pipeline ? `?pipeline=${enc(pipeline)}` : "");
 export const runPath = (project: string, pipeline: string, runId: number | string): string =>
   `/projects/${enc(project)}/runs/${enc(pipeline)}/${runId}`;
-/** Pages of the existing interface, until their slice is rebuilt. */
-export const existingPath = (project: string, page: string): string => `/ui/projects/${enc(project)}/${page}`;
 export const pipelinesPath = (project: string, tags: string[] = []): string =>
   `/projects/${enc(project)}/pipelines` + (tags.length ? "?" + tags.map((t) => `tag=${enc(t)}`).join("&") : "");
 export const pipelinePath = (project: string, pipeline: string, tab?: string): string =>
@@ -22,3 +20,8 @@ export const itemsPath = (project: string, pipeline: string, runId: number | str
   `${runPath(project, pipeline, runId)}/tasks/${enc(task)}/items`;
 export const uploadsPath = (project: string, pipeline?: string): string =>
   `/projects/${enc(project)}/uploads` + (pipeline ? `?pipeline=${enc(pipeline)}` : "");
+export const insightsPath = (project: string): string => `/projects/${enc(project)}/insights`;
+export const consolePath = (project: string): string => `/projects/${enc(project)}/console`;
+export const catalogPath = (project: string): string => `/projects/${enc(project)}/catalog`;
+/** The generated catalog site, served by the same-origin file route. */
+export const catalogSite = (project: string, page = "index.html"): string => `/ui/projects/${enc(project)}/catalog/files/${page}`;

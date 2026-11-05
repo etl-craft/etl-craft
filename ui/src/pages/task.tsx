@@ -1,17 +1,16 @@
 import { useQuery } from "@tanstack/react-query";
 import { createColumnHelper } from "@tanstack/react-table";
-import { ArrowLeft, Download } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 import { Fact, FactList, Loading, Notice, PageHeader, ParamList } from "@/components/common";
+import { CsvButton } from "@/components/csv-button";
 import { DataTable } from "@/components/data-table";
 import { OffsetCard } from "@/components/offset-card";
 import { ProvenanceCard } from "@/components/provenance-card";
 import { StatusBadge } from "@/components/status";
-import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { useProjectInfo, useTimezone } from "@/hooks";
 import { getJson, project } from "@/lib/api";
-import { downloadCsv, toCsv } from "@/lib/csv";
 import { formatDuration, formatTime } from "@/lib/format";
 import { pipelinePath, runPath } from "@/lib/routes";
 import type { Pipeline, TaskDefinition, TaskHistory, TaskOffset, TaskRunView } from "@/lib/types";
@@ -36,14 +35,6 @@ export function Task() {
   const took = runs.map(seconds).filter((s): s is number => s !== null);
   const average = took.length ? took.reduce((a, b) => a + b, 0) / took.length : null;
   const paused = pipe.data?.task_pauses.find((p) => p.task_code === task);
-  const exportCsv = () =>
-    downloadCsv(
-      `${pipeline}-${task}-runs.csv`,
-      toCsv(
-        ["run", "status", "started", "seconds", "rows_in", "inserted", "updated", "deleted", "rejected", "duplicates", "attempts"],
-        runs.map((r) => [r.pipeline_run_id, r.status, r.start_date, seconds(r), r.source_count, r.insert_count, r.update_count, r.delete_count, r.reject_count, r.duplicate_count, r.attempt_count]),
-      ),
-    );
   return (
     <div className="grid grid-cols-1 gap-5">
       <Link to={pipelinePath(code, pipeline, "tasks")} className="inline-flex w-fit items-center gap-1 text-sm text-muted hover:text-fg">
@@ -54,9 +45,11 @@ export function Task() {
         subtitle={`${pipeline} · ${code}`}
         status={paused ? <span className="text-warn">Paused by {paused.actor}: {paused.reason}</span> : null}
         actions={
-          <Button onClick={exportCsv} disabled={runs.length === 0}>
-            <Download className="size-4" aria-hidden /> Export CSV
-          </Button>
+          <CsvButton
+            name={`${pipeline}-${task}-runs.csv`}
+            header={["run", "status", "started", "seconds", "rows_in", "inserted", "updated", "deleted", "rejected", "duplicates", "attempts"]}
+            rows={runs.map((r) => [r.pipeline_run_id, r.status, r.start_date, seconds(r), r.source_count, r.insert_count, r.update_count, r.delete_count, r.reject_count, r.duplicate_count, r.attempt_count])}
+          />
         }
       >
         <FactList className="lg:grid-cols-4">

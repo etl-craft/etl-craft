@@ -1,18 +1,17 @@
 import { useQuery } from "@tanstack/react-query";
 import { createColumnHelper } from "@tanstack/react-table";
-import { Download, Pause, Play } from "lucide-react";
+import { Pause, Play } from "lucide-react";
 import * as React from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { ActionButton } from "@/components/action-button";
 import { Loading, Notice, PageHeader } from "@/components/common";
+import { CsvButton } from "@/components/csv-button";
 import { DataTable } from "@/components/data-table";
 import { NextRun, PauseState, RecentRuns, TagList } from "@/components/pipeline-parts";
 import { StatusBadge } from "@/components/status";
-import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { useCanRun, useProjectInfo, useTimezone } from "@/hooks";
 import { getJson, project } from "@/lib/api";
-import { downloadCsv, toCsv } from "@/lib/csv";
 import { pipelinePath } from "@/lib/routes";
 import type { BulkOutcome, Pipeline } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -45,12 +44,6 @@ export function Pipelines() {
     const next = tags.includes(tag) ? tags.filter((t) => t !== tag) : [...tags, tag];
     setParams(new URLSearchParams(next.map((t) => ["tag", t])), { replace: true });
   };
-  const exportCsv = () => {
-    const rows = (selected.length ? shown.filter((p) => chosen.has(p.pipeline_code)) : shown).map((p) => [
-      p.pipeline_code, p.pipeline_name, p.tags.join(" "), p.run_schedule ?? "", p.next_run ?? "", p.paused ? `paused by ${p.paused.paused_by}: ${p.paused.reason}` : "active", p.task_pauses.length,
-    ]);
-    downloadCsv(`${code}-pipelines.csv`, toCsv(["pipeline", "name", "tags", "schedule", "next_run", "automatic_runs", "paused_tasks"], rows));
-  };
   const bulk = (action: "PAUSE" | "RESUME", verb: string) => (
     <ActionButton<{ outcomes: BulkOutcome[] }>
       code={code}
@@ -71,9 +64,13 @@ export function Pipelines() {
         title="Pipelines"
         subtitle={`${code} · ${tags.length ? `tagged ${tags.join(" and ")}` : "all pipelines"} · ${shown.length}`}
         actions={
-          <Button onClick={exportCsv} disabled={shown.length === 0}>
-            <Download className="size-4" aria-hidden /> Export CSV
-          </Button>
+          <CsvButton
+            name={`${code}-pipelines.csv`}
+            header={["pipeline", "name", "tags", "schedule", "next_run", "automatic_runs", "paused_tasks"]}
+            rows={(selected.length ? shown.filter((p) => chosen.has(p.pipeline_code)) : shown).map((p) => [
+              p.pipeline_code, p.pipeline_name, p.tags.join(" "), p.run_schedule ?? "", p.next_run ?? "", p.paused ? `paused by ${p.paused.paused_by}: ${p.paused.reason}` : "active", p.task_pauses.length,
+            ])}
+          />
         }
       />
       {known.length ? (

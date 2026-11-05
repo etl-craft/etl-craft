@@ -17,6 +17,7 @@ export function ConfirmDialog({
   busy,
   onConfirm,
   onClose,
+  askReason = true,
   children,
 }: {
   open: boolean;
@@ -29,12 +30,14 @@ export function ConfirmDialog({
   busy: boolean;
   onConfirm: (reason: string) => void;
   onClose: () => void;
+  /** False for requests that take no reason; the field is then not shown. */
+  askReason?: boolean;
   children?: React.ReactNode;
 }) {
   const [reason, setReason] = React.useState("");
   const [typed, setTyped] = React.useState("");
   const production = isProduction(env);
-  const ready = reason.trim().length > 0 && (!production || typed === projectCode);
+  const ready = (!askReason || reason.trim().length > 0) && (!production || typed === projectCode);
   return (
     <Dialog open={open} onClose={onClose} labelledBy="confirm-title">
       <form
@@ -55,16 +58,18 @@ export function ConfirmDialog({
           <p className="text-sm text-muted">{effect}</p>
         </div>
         {children}
-        <label className="grid gap-1 text-sm">
-          <span className="font-medium">Reason (kept in the audit trail)</span>
-          <textarea
-            value={reason}
-            onChange={(event) => setReason(event.target.value)}
-            rows={3}
-            required
-            className="rounded-md border border-border-strong bg-surface p-2 text-sm"
-          />
-        </label>
+        {askReason ? (
+          <label className="grid gap-1 text-sm">
+            <span className="font-medium">Reason (kept in the audit trail)</span>
+            <textarea
+              value={reason}
+              onChange={(event) => setReason(event.target.value)}
+              rows={3}
+              required
+              className="rounded-md border border-border-strong bg-surface p-2 text-sm"
+            />
+          </label>
+        ) : null}
         {production ? (
           <label className="grid gap-1 text-sm">
             <span className="font-medium">

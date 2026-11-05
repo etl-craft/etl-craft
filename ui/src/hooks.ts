@@ -47,5 +47,13 @@ export function useWrite<TResult>(path: string, onDone?: (result: TResult) => vo
   });
 }
 
+const ORDER = ["viewer", "operator", "developer", "admin"];
+
+/** Whether the signed-in account's deployment role is at least `minimum`. */
+export function useRoleAtLeast(minimum: "operator" | "developer" | "admin"): boolean {
+  const role = useIdentity().data?.role ?? "viewer";
+  return ORDER.indexOf(role) >= ORDER.indexOf(minimum);
+}
+
 export const failureText = (error: unknown): string | null =>
   error instanceof ApiError ? error.message : error ? "The request did not complete." : null;
