@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { environmentLabel, isProduction } from "@/lib/environment";
 import { formatAgo, formatDuration, formatTime } from "@/lib/format";
-import { layout } from "@/components/run-graph";
+import { layout, lineageOf } from "@/components/run-graph";
 
 describe("environment", () => {
   it("makes production unmistakable and keeps names for the rest", () => {
@@ -51,7 +51,7 @@ describe("graph layout", () => {
   it("shows a task the run has not reached as queued, and marks the selection", () => {
     const { nodes } = layout(graph, {}, "audit");
     expect(nodes.find((n) => n.id === "alert")?.data.status).toBe("QUEUED");
-    expect(nodes.filter((n) => n.data.selected).map((n) => n.id)).toEqual(["audit"]);
+    expect(nodes.filter((n) => n.data.focus === "focus").map((n) => n.id)).toEqual(["audit"]);
   });
   it("wraps a wide wave into columns of at most four", () => {
     const wide = { waves: [["a", "b", "c", "d", "e", "f"], ["g"]], conditional: [], depends_on: {} } as unknown as Parameters<typeof layout>[0];
@@ -60,5 +60,18 @@ describe("graph layout", () => {
     expect(at("a").x).toBe(at("d").x);
     expect(at("e").x).toBeGreaterThan(at("a").x);
     expect(at("g").x).toBeGreaterThan(at("e").x);
+  });
+  it("highlights the focused task's whole lineage and dims the rest", () => {
+    const chain = {
+      waves: [["a"], ["b", "x"], ["c"]],
+      conditional: [],
+      depends_on: { a: [], b: [["a", "SUCCESS"]], x: [["a", "SUCCESS"]], c: [["b", "SUCCESS"]] },
+    } as unknown as Parameters<typeof layout>[0];
+    expect([...lineageOf(chain, "b")].sort()).toEqual(["a", "b", "c"]);
+    const { nodes, edges } = layout(chain, {}, "b");
+    const state = Object.fromEntries(nodes.map((n) => [n.id, n.data.focus]));
+    expect(state).toEqual({ a: "lineage", b: "focus", x: "dim", c: "lineage" });
+    expect(edges.find((e) => e.id === "a->x")?.style?.opacity).toBe(0.25);
+    expect(edges.find((e) => e.id === "b->c")?.style?.opacity).toBe(1);
   });
 });

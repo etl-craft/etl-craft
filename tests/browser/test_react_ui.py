@@ -30,14 +30,17 @@ def scene(site):
         pipeline = add_pipeline(conn, "OPS")
         extract = add_task(conn, pipeline, "EXTRACT")
         load = add_task(conn, pipeline, "LOAD")
+        audit = add_task(conn, pipeline, "AUDIT")
         add_dependency(conn, pipeline, load, extract)
         good = start_run(conn, pipeline)
         task_run(conn, extract, good)
         task_run(conn, load, good)
+        task_run(conn, audit, good)
         finish_run(conn, good)
         bad = start_run(conn, pipeline)
         task_run(conn, extract, bad)
         task_run(conn, load, bad, "FAILED")
+        task_run(conn, audit, bad)
         finish_run(conn, bad, "FAILED")
     return ctx, url, good, bad
 
@@ -73,7 +76,15 @@ def test_home_runs_and_run_detail_lead_to_a_confirmed_recovery(scene):
         graph = page.get_by_role("group", name="Task graph")
         expect(graph.get_by_text("EXTRACT")).to_be_visible()
         expect(graph.get_by_text("LOAD")).to_be_visible()
-        expect(page.get_by_label("Task LOAD")).to_be_visible()  # the failed task opens itself
+        # a click shows the lineage and opens nothing; the task's arrow opens its details
+        expect(graph.locator("[data-focus=none]")).to_have_count(3)
+        graph.get_by_text("LOAD", exact=True).click()
+        expect(graph.locator("[data-focus=focus]")).to_have_count(1)
+        expect(graph.locator("[data-focus=lineage]")).to_have_count(1)  # EXTRACT, upstream of LOAD
+        expect(graph.locator("[data-focus=dim]")).to_have_count(1)  # AUDIT is unrelated
+        expect(page.get_by_label("Task LOAD")).to_have_count(0)
+        graph.get_by_role("button", name="Open LOAD details").click()
+        expect(page.get_by_label("Task LOAD")).to_be_visible()
         page.get_by_role("button", name="Recover run").click()
         dialog = page.get_by_role("dialog")
         expect(dialog.get_by_text("default")).to_be_visible()

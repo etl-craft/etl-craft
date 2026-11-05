@@ -153,7 +153,16 @@ export function RunDetail() {
   const tz = useTimezone();
   const identity = useIdentity(code);
   const info = useProjectInfo(code);
-  const [selected, setSelected] = React.useState<string | null>(null);
+  const [focused, setFocused] = React.useState<string | null>(null);
+  const [opened, setOpened] = React.useState<string | null>(null);
+  const panel = React.useRef<HTMLDivElement>(null);
+  const open = (task: string) => {
+    setFocused(task);
+    setOpened(task);
+  };
+  React.useEffect(() => {
+    if (opened) panel.current?.scrollIntoView({ block: "nearest" });
+  }, [opened]);
   const live = (status?: string) => (status === "IN-PROGRESS" ? 5_000 : false);
 
   const run = useQuery({
@@ -174,8 +183,6 @@ export function RunDetail() {
   const ordered = [...(steps.data?.steps ?? [])].sort((a, b) => (order.get(a.task_code) ?? 0) - (order.get(b.task_code) ?? 0));
   const permission = identity.data?.project_permission;
   const canRun = identity.data?.role === "admin" || permission === "CAN_RUN" || permission === "CAN_MANAGE";
-  const first = ordered.find((s) => s.status === "FAILED")?.task_code ?? null;
-  const open = selected ?? first;
 
   if (run.isError) {
     return (
@@ -217,9 +224,9 @@ export function RunDetail() {
       <Card>
         <CardHeader>
           <CardTitle>Tasks</CardTitle>
-          <span className="text-xs text-muted">Select a task for its attempts and log</span>
+          <span className="text-xs text-muted">Click a task for its lineage; use its arrow for status, attempts and log</span>
         </CardHeader>
-        {graph.isSuccess ? <RunGraph graph={graph.data} statuses={statuses} selected={open} onSelect={setSelected} /> : graph.isError ? <Notice className="m-4">{(graph.error as Error).message}</Notice> : <Loading what="graph" className="p-4" />}
+        {graph.isSuccess ? <RunGraph graph={graph.data} statuses={statuses} focused={focused} onFocus={setFocused} onOpen={open} /> : graph.isError ? <Notice className="m-4">{(graph.error as Error).message}</Notice> : <Loading what="graph" className="p-4" />}
       </Card>
       <Card>
         <Table aria-label="Task list">
@@ -233,9 +240,9 @@ export function RunDetail() {
           </thead>
           <tbody>
             {ordered.map((step) => (
-              <tr key={step.task_code} className={step.task_code === open ? "bg-surface-2" : "hover:bg-surface-2"}>
+              <tr key={step.task_code} className={step.task_code === opened ? "bg-surface-2" : "hover:bg-surface-2"}>
                 <Td>
-                  <button type="button" className="cursor-pointer font-medium text-accent hover:underline" aria-pressed={step.task_code === open} onClick={() => setSelected(step.task_code)}>
+                  <button type="button" className="cursor-pointer font-medium text-accent hover:underline" aria-pressed={step.task_code === opened} onClick={() => open(step.task_code)}>
                     {step.task_code}
                   </button>
                 </Td>
@@ -249,7 +256,11 @@ export function RunDetail() {
           </tbody>
         </Table>
       </Card>
-      {open ? <TaskPanel code={code} pipeline={pipeline} runId={id} task={open} /> : null}
+      {opened ? (
+        <div ref={panel}>
+          <TaskPanel code={code} pipeline={pipeline} runId={id} task={opened} />
+        </div>
+      ) : null}
     </div>
   );
 }

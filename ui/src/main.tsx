@@ -6,6 +6,8 @@ import { AppShell } from "@/components/app-shell";
 import { Home } from "@/pages/home";
 import { Runs } from "@/pages/runs";
 import { applyTheme, initialTheme } from "@/lib/theme";
+import "@fontsource-variable/inter";
+import "@fontsource-variable/jetbrains-mono";
 import "./index.css";
 
 applyTheme(initialTheme());

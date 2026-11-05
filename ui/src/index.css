@@ -71,8 +71,8 @@
   --color-warn-bg: var(--warn-bg);
   --color-idle: var(--idle-fg);
   --color-idle-bg: var(--idle-bg);
-  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --font-sans: "Inter Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono Variable", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 }
 
 html { background: var(--bg); }
@@ -82,8 +82,11 @@ body {
   color: var(--fg);
   font-family: var(--font-sans);
   font-size: 14px;
-  line-height: 1.45;
+  line-height: 1.5;
+  font-feature-settings: "cv11", "ss03";
+  letter-spacing: -0.006em;
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 :focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
 .num { font-variant-numeric: tabular-nums; }
@@ -91,6 +94,25 @@ body {
   * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }
 
+h1, h2, h3 { letter-spacing: -0.02em; }
+code, pre, .font-mono { font-feature-settings: "calt"; letter-spacing: 0; }
+
 /* React Flow follows the app theme and avoids its inline-style defaults. */
-.react-flow { --xy-background-color: transparent; --xy-edge-stroke-default: var(--border-strong); }
+.react-flow {
+  --xy-background-color: transparent;
+  --xy-edge-stroke-default: var(--muted);
+  --xy-controls-button-background-color: var(--surface);
+  --xy-controls-button-background-color-hover: var(--surface-2);
+  --xy-controls-button-color: var(--fg);
+  --xy-controls-button-color-hover: var(--fg);
+  --xy-controls-button-border-color: var(--border);
+  --xy-edge-label-background-color: var(--surface);
+  --xy-edge-label-color: var(--fg);
+}
 .react-flow__attribution { display: none; }
+.react-flow__controls { box-shadow: none; border: 1px solid var(--border-strong); border-radius: 6px; overflow: hidden; }
+.react-flow__controls-button { background: var(--surface); color: var(--fg); border-bottom: 1px solid var(--border); }
+.react-flow__controls-button:hover { background: var(--surface-2); }
+.react-flow__controls-button svg { fill: currentColor; }
+.react-flow__edge-textbg { fill: var(--surface); }
+.react-flow__edge-text { fill: var(--fg); font-size: 11px; }

@@ -13,6 +13,8 @@ export default defineConfig({
     emptyOutDir: true,
     assetsDir: "assets",
     sourcemap: false,
+    // The content policy allows fonts and images only from this server, never as data: URIs.
+    assetsInlineLimit: 0,
   },
   server: { proxy: { "/api": { target: "https://craft.localhost:8443", secure: false } } },
   test: { environment: "jsdom", globals: true, setupFiles: ["./src/test-setup.ts"] },
