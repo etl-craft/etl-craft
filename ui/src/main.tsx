@@ -3,7 +3,11 @@ import { lazy, StrictMode, Suspense } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { AppShell } from "@/components/app-shell";
+import { Held } from "@/pages/held";
 import { Home } from "@/pages/home";
+import { PipelineDetail } from "@/pages/pipeline-detail";
+import { Pipelines } from "@/pages/pipelines";
+import { Scheduled } from "@/pages/scheduled";
 import { Runs } from "@/pages/runs";
 import { applyTheme, initialTheme } from "@/lib/theme";
 import "@fontsource-variable/inter";
@@ -21,6 +25,10 @@ createRoot(document.getElementById("root")!).render(
         <Routes>
           <Route element={<AppShell />}>
             <Route index element={<Home />} />
+            <Route path="projects/:project/pipelines" element={<Pipelines />} />
+            <Route path="projects/:project/pipelines/:pipeline" element={<PipelineDetail />} />
+            <Route path="projects/:project/scheduled" element={<Scheduled />} />
+            <Route path="projects/:project/held" element={<Held />} />
             <Route path="projects/:project/runs" element={<Runs />} />
             <Route path="projects/:project/runs/:pipeline/:runId" element={<Suspense fallback={<p className="text-muted">Loading run…</p>}><RunDetail /></Suspense>} />
             <Route path="*" element={<p className="text-muted">That page does not exist. Use the navigation to go Home.</p>} />

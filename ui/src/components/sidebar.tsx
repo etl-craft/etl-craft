@@ -16,7 +16,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { NavLink } from "react-router-dom";
-import { existingPath, homePath, runsPath } from "@/lib/routes";
+import { existingPath, heldPath, homePath, pipelinesPath, runsPath, scheduledPath } from "@/lib/routes";
 import { cn } from "@/lib/utils";
 
 interface Item {
@@ -42,9 +42,9 @@ function sections(code: string | undefined, admin: boolean): { title: string; it
           {
             title: "Project",
             items: [
-              { label: "Pipelines", icon: Workflow, href: legacy("pipelines") },
-              { label: "Scheduled runs", icon: CalendarClock, href: legacy("scheduled") },
-              { label: "Held and paused", icon: PauseCircle, href: legacy("held") },
+              { label: "Pipelines", icon: Workflow, to: pipelinesPath(code) },
+              { label: "Scheduled runs", icon: CalendarClock, to: scheduledPath(code) },
+              { label: "Held and paused", icon: PauseCircle, to: heldPath(code) },
               { label: "Uploads", icon: Upload, href: legacy("uploads") },
               { label: "Insights", icon: ChartNoAxesColumn, href: legacy("insights") },
               { label: "Catalog", icon: BookOpen, href: legacy("catalog") },

@@ -17,6 +17,7 @@ export function ConfirmDialog({
   busy,
   onConfirm,
   onClose,
+  children,
 }: {
   open: boolean;
   title: string;
@@ -28,6 +29,7 @@ export function ConfirmDialog({
   busy: boolean;
   onConfirm: (reason: string) => void;
   onClose: () => void;
+  children?: React.ReactNode;
 }) {
   const [reason, setReason] = React.useState("");
   const [typed, setTyped] = React.useState("");
@@ -52,6 +54,7 @@ export function ConfirmDialog({
           </p>
           <p className="text-sm text-muted">{effect}</p>
         </div>
+        {children}
         <label className="grid gap-1 text-sm">
           <span className="font-medium">Reason (kept in the audit trail)</span>
           <textarea

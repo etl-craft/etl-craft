@@ -1,4 +1,4 @@
-import { ArrowUpRight } from "lucide-react";
+import { ArrowUpRight, Box } from "lucide-react";
 import * as React from "react";
 import { Background, Controls, Handle, MarkerType, Position, ReactFlow, type Edge, type Node, type NodeProps, type ReactFlowInstance } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
@@ -30,24 +30,25 @@ const NODE_TONE: Record<Focus, string> = {
 };
 
 function Task({ data }: NodeProps<TaskNode>) {
-  const { icon: Icon, label: statusLabel, spin } = statusMeta(data.status);
+  const plain = data.status === "";
+  const { icon: Icon, label: statusLabel, spin } = plain ? { icon: Box, label: "", spin: false } : statusMeta(data.status);
   return (
     <div
       data-focus={data.focus}
       className={cn("flex h-[52px] w-[230px] items-center gap-2 rounded-md border bg-surface pl-2.5 pr-2 text-[13px] shadow-sm transition-opacity", NODE_TONE[data.focus])}
     >
       <Handle type="target" position={Position.Left} className="!size-1.5 !border-0 !bg-border-strong" />
-      <span className={cn("grid size-7 shrink-0 place-items-center rounded-full", toneClass(data.status))} title={statusLabel}>
+      <span className={cn("grid size-7 shrink-0 place-items-center rounded-full", plain ? "bg-idle-bg text-idle" : toneClass(data.status))} title={statusLabel}>
         <Icon aria-hidden className={cn("size-4", spin && "animate-spin")} />
       </span>
       <span className="grid min-w-0 flex-1">
         <span className="truncate font-medium" title={data.label}>{data.label}</span>
-        <span className="text-xs text-muted">{statusLabel}</span>
+        {plain ? null : <span className="text-xs text-muted">{statusLabel}</span>}
       </span>
       <button
         type="button"
         aria-label={`Open ${data.label} details`}
-        title="Open status, attempts and log"
+        title="Open this task"
         className="nodrag nopan grid size-7 shrink-0 cursor-pointer place-items-center rounded-md border border-border-strong text-muted hover:border-accent hover:bg-surface-2 hover:text-accent"
         onClick={(event) => {
           event.stopPropagation();
@@ -91,6 +92,7 @@ export function layout(
   statuses: Record<string, string>,
   focused: string | null,
   onOpen: (task: string) => void = () => undefined,
+  plain = false,
 ): { nodes: TaskNode[]; edges: Edge[]; height: number; columns: number } {
   const lineage = focused ? lineageOf(graph, focused) : null;
   const stateOf = (code: string): Focus => (!lineage ? "none" : code === focused ? "focus" : lineage.has(code) ? "lineage" : "dim");
@@ -104,7 +106,7 @@ export function layout(
       id: code,
       type: "task" as const,
       position: { x: (column + Math.floor(index / MAX_ROWS)) * (WIDTH + GAP_X), y: lift + (index % MAX_ROWS) * (HEIGHT + GAP_Y) },
-      data: { label: code, status: statuses[code] ?? "QUEUED", focus: stateOf(code), onOpen },
+      data: { label: code, status: statuses[code] ?? (plain ? "" : "QUEUED"), focus: stateOf(code), onOpen },
       draggable: false,
     }));
     column += Math.max(1, Math.ceil(wave.length / MAX_ROWS));
@@ -142,12 +144,15 @@ export function RunGraph({
   focused,
   onFocus,
   onOpen,
+  plain,
 }: {
   graph: Graph;
   statuses: Record<string, string>;
   focused: string | null;
   onFocus: (task: string | null) => void;
   onOpen: (task: string) => void;
+  /** Show task definitions only, with no run status. */
+  plain?: boolean;
 }) {
   const frame = React.useRef<HTMLDivElement>(null);
   const [width, setWidth] = React.useState(0);
@@ -159,7 +164,7 @@ export function RunGraph({
     return () => observer.disconnect();
   }, []);
   const flow = React.useRef<ReactFlowInstance | null>(null);
-  const { nodes, edges, height, columns } = layout(graph, statuses, focused, onOpen);
+  const { nodes, edges, height, columns } = layout(graph, statuses, focused, onOpen, plain);
   // Bring a focused task into view when it is off-screen; leave the view alone when it is visible.
   React.useEffect(() => {
     const instance = flow.current;

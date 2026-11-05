@@ -1,16 +1,16 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, LifeBuoy } from "lucide-react";
 import * as React from "react";
 import { Link, useParams } from "react-router-dom";
 import { Fact, FactList, Loading, Notice, PageHeader } from "@/components/common";
-import { ConfirmDialog } from "@/components/confirm-dialog";
+import { ActionButton } from "@/components/action-button";
 import { RunGraph } from "@/components/run-graph";
 import { StatusBadge } from "@/components/status";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, Td, Th } from "@/components/ui/table";
-import { useIdentity, useProjectInfo, useTimezone } from "@/hooks";
-import { ApiError, getJson, getText, postJson, project } from "@/lib/api";
+import { useCanRun, useProjectInfo, useTimezone } from "@/hooks";
+import { getJson, getText, project } from "@/lib/api";
 import { formatDuration, formatTime } from "@/lib/format";
 import { runsPath } from "@/lib/routes";
 import type { Capabilities, ControlView, Graph, RunView, Steps, TaskHistory } from "@/lib/types";
@@ -95,54 +95,35 @@ function TaskPanel({ code, pipeline, runId, task }: { code: string; pipeline: st
 }
 
 function RecoverRun({ code, run, canRun }: { code: string; run: RunView; canRun: boolean }) {
-  const info = useProjectInfo(code);
-  const client = useQueryClient();
-  const [open, setOpen] = React.useState(false);
   const caps = useQuery({
     queryKey: ["capabilities", code, run.pipeline_code, run.pipeline_run_id, run.status],
     queryFn: () => getJson<Capabilities>(`${project(code)}/capabilities`, { pipeline_code: run.pipeline_code, run_id: run.pipeline_run_id }),
     enabled: canRun,
   });
-  const recover = useMutation({
-    mutationFn: (reason: string) =>
-      postJson<ControlView>(`${project(code)}/controls`, { pipeline_code: run.pipeline_code, run_id: run.pipeline_run_id, action: "RECOVER", reason }),
-    onSuccess: () => void client.invalidateQueries(),
-  });
   const capability = caps.data?.actions.find((a) => a.action === "RECOVER");
-  if (!canRun || !info.project || !capability || (!capability.available && !RECOVERABLE.has(run.status))) return null;
-  const env = { type: info.project.environment_type, name: info.project.environment_name };
-  const result = recover.data;
+  if (!canRun || !capability || (!capability.available && !RECOVERABLE.has(run.status))) return null;
   return (
     <div className="grid justify-items-end gap-2">
-      <Button
-        variant="primary"
-        disabled={!capability.available}
-        onClick={() => {
-          recover.reset();
-          setOpen(true);
-        }}
-      >
-        <LifeBuoy className="size-4" aria-hidden /> Recover run
-      </Button>
-      {!capability.available ? <p className="m-0 max-w-md text-right text-xs text-muted">{capability.reason}</p> : null}
-      {result ? (
-        <p role="status" className="m-0 max-w-md text-right text-xs">
-          Recover accepted: control #{result.control_id}
-          {result.execution_run_id ? `, execution #${result.execution_run_id}` : ""}. {result.message}
-        </p>
-      ) : null}
-      <ConfirmDialog
-        open={open && !result}
-        title={`Recover run #${run.pipeline_run_id}`}
-        action="Recover run"
-        effect={`Reopens ${run.pipeline_code} run #${run.pipeline_run_id}: tasks that succeeded are kept; failed and unfinished tasks run again.`}
-        projectCode={code}
-        env={env}
-        error={recover.error instanceof ApiError ? recover.error.message : recover.error ? "The request did not complete." : null}
-        busy={recover.isPending}
-        onConfirm={(reason) => recover.mutate(reason)}
-        onClose={() => setOpen(false)}
-      />
+      {capability.available ? (
+        <ActionButton<ControlView>
+          code={code}
+          label="Recover run"
+          title={`Recover run #${run.pipeline_run_id}`}
+          effect={`Reopens ${run.pipeline_code} run #${run.pipeline_run_id}: tasks that succeeded are kept; failed and unfinished tasks run again.`}
+          endpoint="/controls"
+          body={(reason) => ({ pipeline_code: run.pipeline_code, run_id: run.pipeline_run_id, action: "RECOVER", reason })}
+          describe={(r) => `Recover accepted: control #${r.control_id}${r.execution_run_id ? `, execution #${r.execution_run_id}` : ""}. ${r.message}`}
+          icon={<LifeBuoy className="size-4" aria-hidden />}
+          variant="primary"
+        />
+      ) : (
+        <>
+          <Button variant="primary" disabled>
+            <LifeBuoy className="size-4" aria-hidden /> Recover run
+          </Button>
+          <p className="m-0 max-w-md text-right text-xs text-muted">{capability.reason}</p>
+        </>
+      )}
     </div>
   );
 }
@@ -151,7 +132,6 @@ export function RunDetail() {
   const { project: code = "", pipeline = "", runId = "" } = useParams();
   const id = Number(runId);
   const tz = useTimezone();
-  const identity = useIdentity(code);
   const info = useProjectInfo(code);
   const [focused, setFocused] = React.useState<string | null>(null);
   const [opened, setOpened] = React.useState<string | null>(null);
@@ -181,8 +161,7 @@ export function RunDetail() {
   const statuses = Object.fromEntries((steps.data?.steps ?? []).map((s) => [s.task_code, s.status ?? "QUEUED"]));
   const order = new Map((graph.data?.waves ?? []).flat().map((task, index) => [task, index]));
   const ordered = [...(steps.data?.steps ?? [])].sort((a, b) => (order.get(a.task_code) ?? 0) - (order.get(b.task_code) ?? 0));
-  const permission = identity.data?.project_permission;
-  const canRun = identity.data?.role === "admin" || permission === "CAN_RUN" || permission === "CAN_MANAGE";
+  const canRun = useCanRun(code);
 
   if (run.isError) {
     return (
