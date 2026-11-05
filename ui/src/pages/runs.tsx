@@ -33,7 +33,7 @@ export function Runs() {
         subtitle={code}
         actions={
           <div className="flex flex-wrap items-end gap-3">
-            <SelectField label="Pipeline" value={pipeline} onChange={(value) => set("pipeline", value)}>
+            <SelectField compact label="Pipeline" value={pipeline} onChange={(value) => set("pipeline", value)}>
               <option value="">All pipelines</option>
               {(pipelines.data?.pipelines ?? []).map((p) => (
                 <option key={p.pipeline_code} value={p.pipeline_code}>
@@ -41,7 +41,7 @@ export function Runs() {
                 </option>
               ))}
             </SelectField>
-            <SelectField label="Status" value={status} onChange={(value) => set("status", value)}>
+            <SelectField compact label="Status" value={status} onChange={(value) => set("status", value)}>
               <option value="">Any status</option>
               {STATUSES.map((s) => (
                 <option key={s} value={s}>

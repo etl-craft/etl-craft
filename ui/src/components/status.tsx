@@ -35,8 +35,9 @@ const META: Record<string, Meta> = {
 export const statusMeta = (status: string): Meta =>
   META[status] ?? { label: status.charAt(0) + status.slice(1).toLowerCase(), icon: CircleDashed, tone: "idle" };
 
-export function StatusBadge({ status, className }: { status: string; className?: string }) {
-  const { label, icon: Icon, tone, spin } = statusMeta(status);
+export function StatusBadge({ status, label: named, className }: { status: string; label?: string; className?: string }) {
+  const { label: own, icon: Icon, tone, spin } = statusMeta(status);
+  const label = named ?? own;
   return (
     <span className={cn("inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium", TONE[tone], className)}>
       <Icon aria-hidden className={cn("size-3.5", spin && "animate-spin")} />

@@ -68,6 +68,12 @@ export async function postJson<T>(path: string, body: unknown): Promise<T> {
   return (await response.json()) as T;
 }
 
+/** A multipart upload as the session; the browser sets the boundary, so no content type is given. */
+export async function postForm<T>(path: string, body: FormData, params?: Params): Promise<T> {
+  const response = await send(path + query(params), { method: "POST", headers: { Accept: "application/json", "X-CSRF-Token": csrfToken() }, body });
+  return (await response.json()) as T;
+}
+
 export async function signOut(): Promise<void> {
   await fetch("/api/v1/login/revoke", {
     method: "POST",
