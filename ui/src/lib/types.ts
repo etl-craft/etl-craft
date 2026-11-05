@@ -385,3 +385,15 @@ export interface ConsoleResult {
   output: string;
   error: string;
 }
+
+export interface TaskLineage {
+  task: string;
+  error: string | null;
+  cached: boolean;
+}
+
+/** What a lineage refresh answers: every task traced again, and which of them could not be. */
+export interface LineageRefresh {
+  lineages: TaskLineage[];
+  failed: boolean;
+}
