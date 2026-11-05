@@ -1,4 +1,4 @@
-"""Render the actual HTML accepted by Mailpit in the isolated browser test harness."""
+"""Render email layouts; screenshot capture also exercises demo Mailpit delivery."""
 
 import json
 import os
@@ -20,8 +20,7 @@ from fixtures.services import require
 pytestmark = pytest.mark.browser
 
 
-@pytest.mark.parametrize("outcome", ["FAILED", "SUCCESS", "SLA"])
-def test_delivered_email_layout_and_escaping(tmp_path, outcome):
+def delivered_email(data):
     smtp, api = require("mailpit_smtp"), require("mailpit_api")
     config = ConnectorConfig(
         source=SourceConfig(type="environment"),
@@ -30,7 +29,6 @@ def test_delivered_email_layout_and_escaping(tmp_path, outcome):
             "EMAIL", "dev", smtp.host, smtp.port, "etl@example.com", tls_mode="NONE"
         ),
     )
-    data = email_case(outcome)
     subject = data["subject"] + " " + uuid4().hex
     send_email(
         config,
@@ -52,6 +50,18 @@ def test_delivered_email_layout_and_escaping(tmp_path, outcome):
         delivered = json.load(response)
     assert delivered["Subject"] == subject
     assert "PRODUCTION" in delivered["Text"]
+    return delivered
+
+
+@pytest.mark.parametrize("outcome", ["FAILED", "SUCCESS", "SLA"])
+def test_delivered_email_layout_and_escaping(tmp_path, outcome):
+    data = email_case(outcome)
+    capture = os.environ.get("ETL_CRAFT_EMAIL_SCREENSHOTS")
+    config = ConnectorConfig(
+        source=SourceConfig(type="environment"),
+        engine=ConnectionProfile("ENGINE", "dev", "jdbc:sqlite:unused.db", "main", "NONE"),
+    )
+    delivered = delivered_email(data) if capture else {"HTML": render(config, None, data)}
     output = Path(os.environ.get("ETL_CRAFT_EMAIL_SCREENSHOTS", str(tmp_path / "email")))
     output.mkdir(parents=True, exist_ok=True)
     with sync_playwright() as pw:

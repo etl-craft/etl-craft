@@ -150,7 +150,11 @@ def test_cli_and_http_share_the_service_run_policy(project, role, monkeypatch, c
         assert response.json()["exit_code"] == code
         refused = [a for a in actions(p.engine) if a.outcome == "REFUSED"]
         assert len(refused) == 2
-        assert all(a.actor == f"policy-{role}" and a.command == "run" for a in refused)
+        assert all(a.actor == f"policy-{role}" for a in refused)
+        assert [a.command for a in refused] == [
+            "project list" if role == ApiRole.AGENT else "run",
+            "run",
+        ]
         with p.engine.connect() as conn:
             assert (
                 conn.execute(

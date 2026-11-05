@@ -433,6 +433,9 @@ def test_cli_lockout_unlock_forced_change_and_personal_settings(project, monkeyp
     assert main(["account", "reset-password", "--name", "alice"]) == 0
     monkeypatch.delenv("ETL_CRAFT_TOKEN")
     assert main(["login"]) == 0
+    assert "default · CUSTOM · local" in capsys.readouterr().err
+    assert main(["whoami", "--format", "json"]) == 0
+    assert json.loads(capsys.readouterr().out)["environment"] == {"type": "CUSTOM", "name": None}
     assert main(["about", "--json"]) == 26
     assert "temporary password" in capsys.readouterr().err
     answers = iter((PASSWORD, "replacement password", "replacement password"))

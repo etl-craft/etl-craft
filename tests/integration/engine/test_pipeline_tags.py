@@ -74,6 +74,7 @@ def test_cli_and_http_apply_every_tag_and_preserve_unfiltered_reads(tagged, comm
         == 0
     )
     document = json.loads(capsys.readouterr().out)
+    assert document.pop("environment") == {"type": "CUSTOM", "name": None}
     entries = document[field]
     codes = [
         e["run"]["pipeline_code"] if command == "status" else e["pipeline_code"] for e in entries
@@ -421,6 +422,7 @@ def test_validation_filter_counts_only_matching_active_pipelines(tagged, capsys)
         == 0
     )
     result = json.loads(capsys.readouterr().out)
+    assert result.pop("environment") == {"type": "CUSTOM", "name": None}
     assert result["pipelines"] == 1 and result["tasks"] == 0
     with TestClient(create_app(ctx)) as client:
         response = client.get(

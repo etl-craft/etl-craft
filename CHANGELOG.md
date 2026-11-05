@@ -6,6 +6,10 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+- Identity replies include the selected project environment; login and whoami remain available
+  while a temporary password requires replacement. The whoami API accepts an optional project.
+
+
 - Show existing project environment in CLI text/JSON and catalog headers; require typed project
   confirmation for production CLI writes, or --yes for noninteractive execution.
 - Prefix alert/SLA subjects with environment and ship designed multipart email templates.

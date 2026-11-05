@@ -163,7 +163,11 @@ def test_a_multiline_database_error_is_safe_in_the_subject_and_kept_in_the_body(
     assert result.variables["EMAIL_SUBJECT"] == subject
     message = read(tag)
     assert message["Subject"] == subject
-    assert html.escape(error) in message["HTML"].replace("\r\n", "\n")
+    rendered = message["HTML"].replace("\r\n", "\n")
+    assert (
+        html.unescape(rendered.split("<pre", 1)[1].split(">", 1)[1].split("</pre>", 1)[0]) == error
+    )
+    assert "<br>" in rendered
 
 
 @pytest.mark.parametrize(

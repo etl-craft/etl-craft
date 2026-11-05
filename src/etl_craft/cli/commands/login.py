@@ -119,7 +119,13 @@ def _logout(args: argparse.Namespace, out: Output) -> int:
 def _whoami(args: argparse.Namespace, out: Output) -> int:
     if CONSOLE.get() is None and command_project(args):
         prepare_context(args, ActionName.WHOAMI, identity=True)
-    identity = call(args, ActionName.WHOAMI, NoInput())
+    identity = call(
+        args,
+        ActionName.WHOAMI,
+        sessions.IdentityInput(
+            project=None if CONSOLE.get() is not None else command_project(args) or None
+        ),
+    )
     assert isinstance(identity, sessions.Identity)
     out.result(
         identity, args.output_format, text=lambda: out.line(f"{identity.name} {identity.role}")

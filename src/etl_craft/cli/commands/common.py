@@ -289,6 +289,9 @@ def prepare_context(
                     None,
                     json=getattr(args, "output_format", "text") == "json",
                 )
+    if identity:
+        identity_context(args, out)
+        return
     if out.environment is None:
         project = command_project(args, required=bool(args.api))
         request = ProjectIdentity(project=project or None, reason="CLI environment context")
@@ -318,3 +321,19 @@ def prepare_context(
         or name in {ActionName.CONFIG_APPLY, ActionName.MIGRATE, ActionName.PUBLISH_DOCS}
     ):
         out.confirm(name, yes=args.yes)
+
+
+def identity_context(args: argparse.Namespace, out: Output) -> None:
+    """Use the identity action, which remains available during a forced password change."""
+    from etl_craft.services.operations.sessions import Identity, IdentityInput
+
+    selected = command_project(args, required=bool(args.api))
+    account = call(args, ActionName.WHOAMI, IdentityInput(project=selected))
+    assert isinstance(account, Identity)
+    if account.environment is not None:
+        out.context(
+            selected,
+            account.environment,
+            args.api,
+            json=getattr(args, "output_format", "text") == "json",
+        )

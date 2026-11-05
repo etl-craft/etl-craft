@@ -21,7 +21,8 @@ sections = [
     "Project-scoped text commands print `project · environment · API URL` (or `local`) on stderr. "
     "PROD displays PRODUCTION; other types retain the optional environment name. JSON adds "
     "an `environment` object with `type` and `name`, without a context line. Deployment-wide "
-    "commands have no project banner. Login/whoami include the selected environment.\n",
+    "commands have no project banner. Login/whoami include the selected environment, "
+    "including while a temporary password requires replacement.\n",
     "Production state-changing CLI actions require typing the exact project code at a terminal. "
     "Without a terminal they refuse unless `--yes` is supplied; automation must pass `--yes` "
     "explicitly. Non-production commands never prompt for environment confirmation. This CLI "

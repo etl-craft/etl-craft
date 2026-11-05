@@ -18,11 +18,13 @@ from etl_craft.core.enums import (
     YesNo,
 )
 from etl_craft.core.enums_access import Permission
+from etl_craft.core.environment import Environment
 from etl_craft.core.errors import EtlCraftError, UsageError
 from etl_craft.core.text import sha256_hex
 from etl_craft.core.time import as_utc
 from etl_craft.engine import locks
 from etl_craft.engine.audit import current_request
+from etl_craft.engine.environment import project_environment
 from etl_craft.engine.queries import statement
 from etl_craft.engine.repository.accounts import find_account, unlocked_admins
 from etl_craft.engine.repository.group_claims import token_groups
@@ -84,6 +86,13 @@ class SignInMethods:
     local: bool = True
 
 
+@dataclass(frozen=True, kw_only=True)
+class IdentityInput(Request):
+    """Select the project whose environment accompanies the caller's identity."""
+
+    project: str | None = None
+
+
 @dataclass(frozen=True)
 class Identity:
     """The signed-in account and its current deployment role."""
@@ -100,6 +109,7 @@ class Identity:
     settings: Settings = field(default_factory=Settings)
     last_signin: datetime | None = None
     session_expires_at: datetime | None = None
+    environment: Environment | None = None
 
 
 @dataclass(frozen=True)
@@ -412,8 +422,10 @@ def sign_in_methods(ctx: OperationContext, request: NoInput) -> SignInMethods:
     return SignInMethods(sso=bool(ctx.config.auth.oidc_issuer))
 
 
-def whoami(ctx: OperationContext, request: NoInput) -> Identity:
+def whoami(ctx: OperationContext, request: IdentityInput) -> Identity:
     """Return the caller's account and its current role."""
+    if request.project is not None:
+        ctx = replace(ctx, project=request.project, project_id=None)
     with ctx.engine.connect() as conn:
         row = find_account(conn, ctx.actor.name)
         if row is None:
@@ -436,6 +448,11 @@ def whoami(ctx: OperationContext, request: NoInput) -> Identity:
                 conn,
                 replace(ctx, project=project.project_code, project_id=project.project_id),
             )
+        )
+        environment = (
+            project_environment(conn, code=project.project_code)[1]
+            if project is not None and level is not None
+            else None
         )
         signin = conn.execute(
             statement(conn, "account_last_signin"), {"name": ctx.actor.name}
@@ -460,4 +477,5 @@ def whoami(ctx: OperationContext, request: NoInput) -> Identity:
         settings_from(row.ui_settings),
         None if signin is None else as_utc(signin),
         None if expiry is None else as_utc(expiry),
+        environment,
     )
