@@ -45,4 +45,14 @@ export function StatusBadge({ status, className }: { status: string; className?:
   );
 }
 
+/** The status as a symbol alone, for dense grids and strips; its name is the accessible label. */
+export function StatusMark({ status, label, className }: { status: string; label?: string; className?: string }) {
+  const { icon: Icon, label: name, spin } = statusMeta(status);
+  return (
+    <span role="img" aria-label={label ?? name} title={label ?? name} className={cn("grid size-6 shrink-0 place-items-center rounded-full", TONE[statusMeta(status).tone], className)}>
+      <Icon aria-hidden className={cn("size-3.5", spin && "animate-spin")} />
+    </span>
+  );
+}
+
 export const toneClass = (status: string): string => TONE[statusMeta(status).tone];

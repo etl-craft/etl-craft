@@ -10,10 +10,10 @@ export function Table({ className, ...props }: React.TableHTMLAttributes<HTMLTab
 }
 export const Th = ({ className, ...props }: React.ThHTMLAttributes<HTMLTableCellElement>) => (
   <th
-    className={cn("whitespace-nowrap border-b border-border bg-surface-2 px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted", className)}
+    className={cn("whitespace-nowrap border-b border-border bg-surface-2 px-2.5 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted", className)}
     {...props}
   />
 );
 export const Td = ({ className, ...props }: React.TdHTMLAttributes<HTMLTableCellElement>) => (
-  <td className={cn("border-b border-border px-3 py-2 align-middle", className)} {...props} />
+  <td className={cn("border-b border-border px-2.5 py-2 align-middle", className)} {...props} />
 );

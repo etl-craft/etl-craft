@@ -1,6 +1,6 @@
-import { CircleCheck, X } from "lucide-react";
 import * as React from "react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
+import { useToast } from "@/components/toast";
 import { Button, type ButtonProps } from "@/components/ui/button";
 import { failureText, useProjectInfo, useWrite } from "@/hooks";
 import { project } from "@/lib/api";
@@ -37,8 +37,11 @@ export function ActionButton<TResult>({
 }) {
   const info = useProjectInfo(code).project;
   const [open, setOpen] = React.useState(false);
-  const [dismissed, setDismissed] = React.useState(false);
-  const write = useWrite<TResult>(project(code) + endpoint);
+  const toast = useToast();
+  const write = useWrite<TResult>(project(code) + endpoint, (result) => {
+    toast(describe(result));
+    setOpen(false);
+  });
   if (!info) return null;
   return (
     <div className="grid justify-items-end gap-2">
@@ -47,24 +50,14 @@ export function ActionButton<TResult>({
         size={size}
         onClick={() => {
           write.reset();
-          setDismissed(false);
           setOpen(true);
         }}
       >
         {icon}
         {label}
       </Button>
-      {write.data !== undefined && !dismissed ? (
-        <div role="status" className="fixed bottom-4 right-4 z-50 flex max-w-sm items-start gap-3 rounded-lg border border-border-strong bg-surface p-3 text-sm shadow-xl">
-          <CircleCheck aria-hidden className="mt-0.5 size-4 shrink-0 text-ok" />
-          <p className="m-0 min-w-0 flex-1 break-words">{describe(write.data)}</p>
-          <button type="button" aria-label="Dismiss" className="cursor-pointer rounded p-0.5 text-muted hover:text-fg" onClick={() => setDismissed(true)}>
-            <X aria-hidden className="size-4" />
-          </button>
-        </div>
-      ) : null}
       <ConfirmDialog
-        open={open && write.data === undefined}
+        open={open}
         title={title}
         action={label}
         effect={effect}

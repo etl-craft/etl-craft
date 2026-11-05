@@ -4,47 +4,51 @@ import * as React from "react";
 import { Link, useParams } from "react-router-dom";
 import { Fact, FactList, Loading, Notice, PageHeader } from "@/components/common";
 import { ActionButton } from "@/components/action-button";
+import { AttemptDetails } from "@/components/attempt-details";
+import { ScopeControls } from "@/components/scope-controls";
 import { RunGraph } from "@/components/run-graph";
 import { StatusBadge } from "@/components/status";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, Td, Th } from "@/components/ui/table";
 import { useCanRun, useProjectInfo, useTimezone } from "@/hooks";
-import { getJson, getText, project } from "@/lib/api";
+import { getJson, project } from "@/lib/api";
 import { formatDuration, formatTime } from "@/lib/format";
-import { runsPath } from "@/lib/routes";
-import type { Capabilities, ControlView, Graph, RunView, Steps, TaskHistory } from "@/lib/types";
+import { attemptPath, itemsPath, runsPath, taskPath } from "@/lib/routes";
+import type { Capabilities, ControlView, Explanation, Graph, RunView, Steps, TaskHistory } from "@/lib/types";
 import { useDocumentTitle } from "@/title";
 
 const RECOVERABLE = new Set(["FAILED", "LOST", "STOPPED", "ABORTED"]);
 
-function AttemptLog({ code, attemptId }: { code: string; attemptId: number }) {
-  const [shown, setShown] = React.useState(false);
-  const log = useQuery({ queryKey: ["log", code, attemptId], queryFn: () => getText(`${project(code)}/attempts/${attemptId}/log`), enabled: shown });
-  const lines = log.data?.split("\n") ?? [];
+function Why({ code, pipeline, runId, task }: { code: string; pipeline: string; runId: number; task: string }) {
+  const why = useQuery({
+    queryKey: ["explain", code, pipeline, runId, task],
+    queryFn: () => getJson<Explanation>(`${project(code)}/explanations`, { pipeline_code: pipeline, run_id: runId, task_code: task }),
+  });
+  if (!why.data) return why.isError ? <Notice>{(why.error as Error).message}</Notice> : null;
+  const { dependencies, run_condition: condition, required_count: required, retry_at: retry } = why.data;
   return (
-    <div className="grid gap-2">
-      <Button size="sm" className="w-fit" onClick={() => setShown(!shown)} aria-expanded={shown}>
-        {shown ? "Hide log" : "Show log"}
-      </Button>
-      {shown && log.isPending ? <Loading what="log" /> : null}
-      {shown && log.isError ? (
-        <Notice>{(log.error as Error).message}</Notice>
-      ) : null}
-      {shown && log.isSuccess ? (
-        <>
-          {lines.length > 400 ? <p className="text-xs text-muted">Showing the last 400 of {lines.length} lines.</p> : null}
-          <pre tabIndex={0} aria-label="Attempt log" className="m-0 max-h-96 overflow-auto rounded-md border border-border bg-surface-2 p-3 font-mono text-xs leading-5">
-            {lines.slice(-400).join("\n")}
-          </pre>
-        </>
-      ) : null}
-    </div>
+    <section className="grid gap-2" aria-label="Why this task is in this state">
+      <h3 className="m-0 text-sm font-semibold">Dependencies</h3>
+      <p className="m-0 text-[13px] text-muted">
+        Runs when {condition.toLowerCase()}
+        {required ? ` (${required} required)` : ""}.{retry ? ` Retry at ${retry}.` : ""}
+      </p>
+      <ul className="m-0 grid list-none gap-1 p-0 text-[13px]">
+        {dependencies.map((d) => (
+          <li key={d.upstream} className="flex flex-wrap items-center gap-2">
+            {d.status ? <StatusBadge status={d.status} /> : <span className="text-muted">Not started</span>}
+            <span className="font-medium">{d.upstream}</span>
+            <span className="text-muted">{d.met ? "met" : "not met"}: {d.reason}</span>
+          </li>
+        ))}
+        {dependencies.length === 0 ? <li className="text-muted">No upstream tasks.</li> : null}
+      </ul>
+    </section>
   );
 }
 
-function TaskPanel({ code, pipeline, runId, task }: { code: string; pipeline: string; runId: number; task: string }) {
-  const tz = useTimezone();
+function TaskPanel({ code, pipeline, runId, task, handler }: { code: string; pipeline: string; runId: number; task: string; handler?: string }) {
   const history = useQuery({
     queryKey: ["task-history", code, pipeline, runId, task],
     queryFn: () => getJson<TaskHistory>(`${project(code)}/history`, { pipeline_code: pipeline, run_id: runId, task_code: task }),
@@ -54,40 +58,35 @@ function TaskPanel({ code, pipeline, runId, task }: { code: string; pipeline: st
     <Card aria-label={`Task ${task}`}>
       <CardHeader>
         <CardTitle>{task}</CardTitle>
-        {run ? <StatusBadge status={run.status} /> : null}
+        <span className="flex items-center gap-3">
+          <Link to={taskPath(code, pipeline, task)} className="text-xs text-accent hover:underline">
+            Task history
+          </Link>
+          {handler === "PYTHON" ? (
+            <Link to={itemsPath(code, pipeline, runId, task)} className="text-xs text-accent hover:underline">
+              Items
+            </Link>
+          ) : null}
+          {run ? <StatusBadge status={run.status} /> : null}
+        </span>
       </CardHeader>
       <div className="grid gap-4 p-4">
         {history.isPending ? <Loading what="task" /> : null}
-        {history.isError ? (
-          <Notice>{(history.error as Error).message}</Notice>
-        ) : null}
-        {history.isSuccess && !run ? <p className="text-muted">This task has not started under this run.</p> : null}
-        {run?.error_message ? (
-          <Notice mono>{run.error_message}</Notice>
-        ) : null}
+        {history.isError ? <Notice>{(history.error as Error).message}</Notice> : null}
+        {history.isSuccess && !run ? <p className="m-0 text-muted">This task has not started under this run.</p> : null}
+        {run?.error_message ? <Notice mono>{run.error_message}</Notice> : null}
+        <ScopeControls code={code} pipeline={pipeline} runId={runId} task={task} />
+        {run && run.status !== "SUCCESS" ? <Why code={code} pipeline={pipeline} runId={runId} task={task} /> : null}
         {run && run.attempts.length === 0 ? (
           <p className="m-0 text-muted">No attempt was started for this task{run.status === "SKIPPED" ? ": an upstream outcome skipped it" : ""}.</p>
         ) : null}
         {run?.attempts.map((attempt) => (
-          <section key={attempt.attempt_id} className="grid gap-3 rounded-md border border-border p-3" aria-label={`Attempt ${attempt.attempt_number}`}>
-            <div className="flex flex-wrap items-center gap-3">
-              <h3 className="m-0 text-sm font-semibold">Attempt {attempt.attempt_number}</h3>
-              <StatusBadge status={attempt.status} />
-              <span className="num text-xs text-muted">id {attempt.attempt_id}</span>
-            </div>
-            <FactList className="gap-3 sm:grid-cols-4 lg:grid-cols-4">
-              <Fact label="Started">{formatTime(attempt.started_at, tz)}</Fact>
-              <Fact label="Duration">{formatDuration(attempt.started_at, attempt.ended_at)}</Fact>
-              <Fact label="Rows written">{attempt.rows_written ?? "—"}</Fact>
-              <Fact label="Exit code">{attempt.exit_code ?? "—"}</Fact>
-              <Fact label="Host">
-                <span className="break-all">{attempt.host ?? "—"}</span>
-              </Fact>
-              <Fact label="Failure class">{attempt.status === "FAILED" ? attempt.failure_class : "—"}</Fact>
-              <Fact label="Retry on">{attempt.retry_on ?? "—"}</Fact>
-            </FactList>
-            <AttemptLog code={code} attemptId={attempt.attempt_id} />
-          </section>
+          <div key={attempt.attempt_id} className="grid gap-2 rounded-md border border-border p-3">
+            <AttemptDetails code={code} attempt={attempt} />
+            <Link to={attemptPath(code, pipeline, runId, task, attempt.attempt_id)} className="w-fit text-xs text-accent hover:underline">
+              Open attempt {attempt.attempt_number}
+            </Link>
+          </div>
         ))}
       </div>
     </Card>
@@ -117,12 +116,9 @@ function RecoverRun({ code, run, canRun }: { code: string; run: RunView; canRun:
           variant="primary"
         />
       ) : (
-        <>
-          <Button variant="primary" disabled>
-            <LifeBuoy className="size-4" aria-hidden /> Recover run
-          </Button>
-          <p className="m-0 max-w-md text-right text-xs text-muted">{capability.reason}</p>
-        </>
+        <Button variant="primary" disabled title="Not available now; the reason is listed under Controls">
+          <LifeBuoy className="size-4" aria-hidden /> Recover run
+        </Button>
       )}
     </div>
   );
@@ -200,6 +196,7 @@ export function RunDetail() {
           <Loading what="run" />
         )}
       </PageHeader>
+      <ScopeControls code={code} pipeline={pipeline} runId={id} elsewhere={["RECOVER"]} />
       <Card>
         <CardHeader>
           <CardTitle>Tasks</CardTitle>
@@ -237,7 +234,7 @@ export function RunDetail() {
       </Card>
       {opened ? (
         <div ref={panel}>
-          <TaskPanel code={code} pipeline={pipeline} runId={id} task={opened} />
+          <TaskPanel code={code} pipeline={pipeline} runId={id} task={opened} handler={steps.data?.steps.find((x) => x.task_code === opened)?.handler} />
         </div>
       ) : null}
     </div>

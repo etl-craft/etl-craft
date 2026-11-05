@@ -1,29 +1,39 @@
 import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, Pause, Play, PlayCircle } from "lucide-react";
 import * as React from "react";
-import { Link, useParams, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { ActionButton } from "@/components/action-button";
 import { Field, inputClass, Loading, Notice, PageHeader, SelectField } from "@/components/common";
 import { PauseState, RunBars } from "@/components/pipeline-parts";
 import { RunGraph } from "@/components/run-graph";
-import { RunsTable } from "@/components/runs-table";
+import { RunMatrix } from "@/components/run-matrix";
+import { RunsTable, useRuns } from "@/components/runs-table";
 import { Tabs } from "@/components/tabs";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { useCanRun, useProjectInfo } from "@/hooks";
 import { getJson, project } from "@/lib/api";
-import { existingPath, pipelinesPath } from "@/lib/routes";
-import type { Graph, Pipeline, RunView } from "@/lib/types";
+import { pipelinesPath, taskPath } from "@/lib/routes";
+import type { Graph, Pipeline } from "@/lib/types";
 import { useDocumentTitle } from "@/title";
 
 const TABS = [
   { id: "runs", label: "Runs" },
+  { id: "matrix", label: "Matrix" },
   { id: "tasks", label: "Tasks" },
 ];
 
 export function PipelineDetail() {
   const { project: code = "", pipeline = "" } = useParams();
   const [params, setParams] = useSearchParams();
-  const tab = params.get("tab") === "tasks" ? "tasks" : "runs";
+  const tab = ["tasks", "matrix"].includes(params.get("tab") ?? "") ? (params.get("tab") as string) : "runs";
+  const filters = { pool: params.get("pool") ?? "", agent: params.get("agent") ?? "", failure_class: params.get("failure_class") ?? "" };
+  const setFilter = (key: string, value: string) => {
+    const next = new URLSearchParams(params);
+    if (value) next.set(key, value);
+    else next.delete(key);
+    setParams(next, { replace: true });
+  };
+  const navigate = useNavigate();
   const canRun = useCanRun(code);
   const info = useProjectInfo(code);
   useDocumentTitle(pipeline, code, info.project && { type: info.project.environment_type, name: info.project.environment_name });
@@ -32,8 +42,8 @@ export function PipelineDetail() {
     queryFn: () => getJson<Pipeline>(`${project(code)}/pipelines/${encodeURIComponent(pipeline)}`),
     refetchInterval: 15_000,
   });
-  const graph = useQuery({ queryKey: ["graph", code, pipeline], queryFn: () => getJson<Graph>(`${project(code)}/graph`, { pipeline_code: pipeline }), enabled: tab === "tasks" });
-  const [runs, setRuns] = React.useState<RunView[]>([]);
+  const graph = useQuery({ queryKey: ["graph", code, pipeline], queryFn: () => getJson<Graph>(`${project(code)}/graph`, { pipeline_code: pipeline }), enabled: tab !== "runs" });
+  const runs = useRuns(code, pipeline).all;
   const [focused, setFocused] = React.useState<string | null>(null);
   const [runDate, setRunDate] = React.useState("");
   const [then, setThen] = React.useState("wait");
@@ -114,7 +124,7 @@ export function PipelineDetail() {
         )}
       </PageHeader>
       <Tabs tabs={TABS} value={tab} onChange={(id) => setParams(id === "runs" ? {} : { tab: id }, { replace: true })} />
-      <div role="tabpanel" id="tabpanel" aria-labelledby={`tab-${tab}`} className="grid gap-4">
+      <div role="tabpanel" id="tabpanel" aria-labelledby={`tab-${tab}`} className="grid grid-cols-1 gap-4">
         {tab === "runs" ? (
           <>
             {runs.length ? (
@@ -128,9 +138,34 @@ export function PipelineDetail() {
                 </div>
               </Card>
             ) : null}
-            <RunsTable code={code} pipeline={pipeline} onRuns={setRuns} />
+            <div className="flex flex-wrap items-end gap-3">
+              <Field label="Pool">
+                <input value={filters.pool} onChange={(event) => setFilter("pool", event.target.value)} className={inputClass} placeholder="Any pool" />
+              </Field>
+              <Field label="Agent id">
+                <input value={filters.agent} onChange={(event) => setFilter("agent", event.target.value.replace(/\D/g, ""))} inputMode="numeric" className={inputClass} placeholder="Any agent" />
+              </Field>
+              <SelectField label="Failure class" value={filters.failure_class} onChange={(value) => setFilter("failure_class", value)}>
+                <option value="">Any</option>
+                {["TRANSIENT", "PERMANENT", "UNKNOWN"].map((c) => (
+                  <option key={c} value={c}>
+                    {c.charAt(0) + c.slice(1).toLowerCase()}
+                  </option>
+                ))}
+              </SelectField>
+            </div>
+            <RunsTable code={code} pipeline={pipeline} filters={{ pool: filters.pool || undefined, agent: filters.agent || undefined, failure_class: filters.failure_class || undefined }} />
           </>
+        ) : tab === "matrix" ? (
+          <Card>
+            <CardHeader>
+              <CardTitle>Task outcomes by run</CardTitle>
+              <span className="text-xs text-muted">Newest run first; a dot means the task did not start</span>
+            </CardHeader>
+            {graph.isSuccess ? <RunMatrix code={code} pipeline={pipeline} graph={graph.data} runs={runs} /> : <Loading what="tasks" className="p-4" />}
+          </Card>
         ) : (
+
           <Card>
             <CardHeader>
               <CardTitle>Tasks and dependencies</CardTitle>
@@ -143,7 +178,7 @@ export function PipelineDetail() {
                 plain
                 focused={focused}
                 onFocus={setFocused}
-                onOpen={(task) => window.location.assign(existingPath(code, `pipelines/${encodeURIComponent(pipeline)}/tasks/${encodeURIComponent(task)}`))}
+                onOpen={(task) => navigate(taskPath(code, pipeline, task))}
               />
             ) : graph.isError ? (
               <Notice className="m-4">{(graph.error as Error).message}</Notice>

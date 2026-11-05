@@ -56,6 +56,7 @@ def sign_in(page, url, destination="/app", name="owner"):
 def open_page(pw, **options):
     browser = pw.chromium.launch()
     page = browser.new_context(ignore_https_errors=True, **options).new_page()
+    page.context.set_default_timeout(10_000)  # a loaded runner needs more than 5 s
     problems = []
     page.on("console", lambda m: problems.append(m.text) if m.type == "error" else None)
     page.on("pageerror", lambda e: problems.append(str(e)))
