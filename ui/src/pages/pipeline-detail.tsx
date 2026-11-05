@@ -139,13 +139,13 @@ export function PipelineDetail() {
               </Card>
             ) : null}
             <div className="flex flex-wrap items-end gap-3">
-              <Field label="Pool">
+              <Field compact label="Pool">
                 <input value={filters.pool} onChange={(event) => setFilter("pool", event.target.value)} className={inputClass} placeholder="Any pool" />
               </Field>
-              <Field label="Agent id">
+              <Field compact label="Agent id">
                 <input value={filters.agent} onChange={(event) => setFilter("agent", event.target.value.replace(/\D/g, ""))} inputMode="numeric" className={inputClass} placeholder="Any agent" />
               </Field>
-              <SelectField label="Failure class" value={filters.failure_class} onChange={(value) => setFilter("failure_class", value)}>
+              <SelectField compact label="Failure class" value={filters.failure_class} onChange={(value) => setFilter("failure_class", value)}>
                 <option value="">Any</option>
                 {["TRANSIENT", "PERMANENT", "UNKNOWN"].map((c) => (
                   <option key={c} value={c}>

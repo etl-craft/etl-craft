@@ -20,3 +20,5 @@ export const attemptPath = (project: string, pipeline: string, runId: number | s
   `${runPath(project, pipeline, runId)}/tasks/${enc(task)}/attempts/${attemptId}`;
 export const itemsPath = (project: string, pipeline: string, runId: number | string, task: string): string =>
   `${runPath(project, pipeline, runId)}/tasks/${enc(task)}/items`;
+export const uploadsPath = (project: string, pipeline?: string): string =>
+  `/projects/${enc(project)}/uploads` + (pipeline ? `?pipeline=${enc(pipeline)}` : "");

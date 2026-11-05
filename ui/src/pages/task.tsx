@@ -4,6 +4,8 @@ import { ArrowLeft, Download } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 import { Fact, FactList, Loading, Notice, PageHeader, ParamList } from "@/components/common";
 import { DataTable } from "@/components/data-table";
+import { OffsetCard } from "@/components/offset-card";
+import { ProvenanceCard } from "@/components/provenance-card";
 import { StatusBadge } from "@/components/status";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
@@ -101,9 +103,6 @@ export function Task() {
                 <Fact label="Handler">{def.data.handler}</Fact>
                 {def.data.merge_key.length ? <Fact label="Merge key">{def.data.merge_key.join(", ")}</Fact> : null}
                 {def.data.merge_columns.length ? <Fact label="Compared columns"><span className="break-words">{def.data.merge_columns.join(", ")}</span></Fact> : null}
-                <Fact label="Kept between runs">
-                  {offset.data?.kind ? `${offset.data.kind} · ${offset.data.offset_type ?? ""} ${offset.data.offset_value ?? ""}`.trim() : "Nothing"}
-                </Fact>
               </FactList>
               <ParamList entries={Object.entries(def.data.parameters).sort(([x], [y]) => x.localeCompare(y))} />
             </>
@@ -112,6 +111,8 @@ export function Task() {
           )}
         </div>
       </Card>
+      {offset.data ? <OffsetCard key={offset.data.offset_value ?? ""} code={code} pipeline={pipeline} task={task} offset={offset.data} runs={runs.map((r) => r.pipeline_run_id)} /> : null}
+      {def.data?.merge_key.length ? <ProvenanceCard code={code} pipeline={pipeline} task={task} keys={def.data.merge_key} columns={def.data.merge_columns} /> : null}
     </div>
   );
 }

@@ -248,3 +248,29 @@ export interface BulkOutcome {
   pipeline_code: string;
   error?: string | null;
 }
+
+export interface UploadRow {
+  upload_id: number;
+  account: string;
+  file_name: string;
+  stored_name: string | null;
+  size_bytes: number;
+  pipeline_run_id: number | null;
+  status: string;
+  reason: string | null;
+  uploaded_at: string;
+  run_status: string | null;
+}
+
+export interface UploadReceipt {
+  upload_id: number;
+  pipeline_run_id: number | null;
+  waiting_behind_run_id: number | null;
+}
+
+export interface ValueResult {
+  target: string;
+  enabled: boolean;
+  records: Record<string, unknown>[];
+  history: Record<string, unknown>[];
+}

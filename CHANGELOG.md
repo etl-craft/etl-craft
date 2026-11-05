@@ -6,6 +6,9 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+- The new browser interface gains Uploads (choose a pipeline, upload a file, see its receipt and recent
+  files), and on a task's page the offset or watermark reset (recorded against a chosen run) and the data
+  lookup of one business key with value edits and unlocks for administrators.
 - The new browser interface gains a task's history page (runs with row counts, definition, kept offset,
   CSV), the attempt page (outcome, evidence, log), run items (rerun, cancel, mark), the pipeline run
   matrix and run filters, why a task is in its state, and run and task controls (hold, release, stop,

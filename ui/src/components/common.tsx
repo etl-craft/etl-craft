@@ -82,33 +82,31 @@ export function SelectField({
   label,
   value,
   onChange,
+  compact,
   children,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
+  compact?: boolean;
   children: React.ReactNode;
 }) {
   return (
-    <label className="grid gap-1 text-xs text-muted">
-      {label}
-      <select
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        className="h-9 min-w-40 rounded-md border border-border-strong bg-surface px-2 text-sm text-fg max-sm:h-11"
-      >
+    <Field label={label} compact={compact}>
+      <select value={value} onChange={(event) => onChange(event.target.value)} className={cn(inputClass, "min-w-40")}>
         {children}
       </select>
-    </label>
+    </Field>
   );
 }
 
 export const inputClass = "h-9 w-full rounded-md border border-border-strong bg-surface px-2 text-sm text-fg max-sm:h-11";
 
-export function Field({ label, children }: { label: string; children: React.ReactNode }) {
+/** A labelled control: one style for every form; `compact` is the small muted label used above toolbar filters. */
+export function Field({ label, compact, children }: { label: string; compact?: boolean; children: React.ReactNode }) {
   return (
-    <label className="grid gap-1 text-sm">
-      <span className="font-medium">{label}</span>
+    <label className={cn("grid gap-1", compact ? "text-xs text-muted" : "text-sm")}>
+      <span className={compact ? undefined : "font-medium"}>{label}</span>
       {children}
     </label>
   );
@@ -117,7 +115,7 @@ export function Field({ label, children }: { label: string; children: React.Reac
 /** Name and value pairs such as task parameters: names muted, values in monospace and wrapped. */
 export function ParamList({ entries }: { entries: [string, string][] }) {
   return (
-    <dl className="m-0 grid gap-x-6 gap-y-2 text-[13px] sm:grid-cols-[minmax(10rem,16rem)_1fr]">
+    <dl className="m-0 grid gap-x-6 gap-y-2 text-[13px] sm:grid-cols-[max-content_1fr]">
       {entries.map(([name, value]) => (
         <div key={name} className="contents">
           <dt className="font-mono text-xs text-muted">{name}</dt>
