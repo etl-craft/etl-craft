@@ -1,4 +1,4 @@
-"""One theme-aware tile mark for the console, sign-in, offline catalog, favicon and new interface."""
+"""One theme-aware tile mark for the console, sign-in, catalog, favicon and new interface."""
 
 from importlib.resources import files
 from xml.etree import ElementTree
