@@ -3,6 +3,7 @@ import { lazy, StrictMode, Suspense } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { AppShell } from "@/components/app-shell";
+import { ToastProvider } from "@/components/toast";
 import { Attempt } from "@/pages/attempt";
 import { Held } from "@/pages/held";
 import { Items } from "@/pages/items";
@@ -24,6 +25,7 @@ const client = new QueryClient({ defaultOptions: { queries: { retry: 1, refetchO
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <QueryClientProvider client={client}>
+      <ToastProvider>
       <BrowserRouter basename="/app">
         <Routes>
           <Route element={<AppShell />}>
@@ -41,6 +43,7 @@ createRoot(document.getElementById("root")!).render(
           </Route>
         </Routes>
       </BrowserRouter>
+      </ToastProvider>
     </QueryClientProvider>
   </StrictMode>,
 );
