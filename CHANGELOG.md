@@ -144,6 +144,11 @@ Warehouses are optional extras. Core bundles none. `all` is core plus the UI, fo
 
 ### Fixed
 
+- Lineage resolves the columns the engine adds to a table it writes (`ROW_ID`, `PIPELINE_RUN_ID`,
+  the audit columns of the writing action) when a later SELECT names them, so reading `row_id`,
+  `active_flag` or `update_date` from a managed table is no longer reported as a lineage gap.
+  `SELECT *` still expands to the business columns only.
+
 - A command run against a server (`--api`) rebuilds a result field that is one of a fixed set of
   texts, such as the `operation` of each `config plan` change; it failed with "expected Literal".
 
