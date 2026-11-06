@@ -3,7 +3,8 @@
 Run `etl-craft ui` with the `ui` extra, or use the controller's HTTP server. Put an HTTPS
 reverse proxy in front of it, preserving the public Host header (for example nginx
 `proxy_set_header Host $http_host`): browser cookies are always Secure, including local sign-in.
-Open `/ui`. The minimum width is 320 CSS pixels; 960 pixels or wider gives the desktop layout.
+Open `/ui`; sign-in is at `/ui/signin`. The minimum width is 320 CSS pixels; 960 pixels or
+wider gives the desktop layout.
 The layout remains usable at 200% zoom.
 
 ## Sign-in and sessions
@@ -12,12 +13,15 @@ Local accounts and configured SSO use the existing login actions. Wrong account 
 passwords give the same message. Recovery means contacting the administrator shown on the
 sign-in page; there are no emailed resets. SSO accounts use their identity provider.
 
-Browser sessions have one fixed lifetime of `Auth.Session_hours` (default 12). Credentials
-stay in HTTP-only, Secure, SameSite=Lax host-only cookies, never browser storage. The page
-warns two minutes before expiry. Signing in again retains the requested same-site page;
-external return addresses are refused. Signing out revokes the session in every tab, and
-open tabs return to sign-in. Every browser change needs its CSRF challenge. Browser pages
-refuse framing by other sites and ship a content security policy.
+A session ends after `Auth.Session_idle_minutes` (default 60) without use, and always
+`Auth.Session_hours` (default 12) after sign-in; the command line follows the same rule.
+Credentials stay in HTTP-only, Secure, SameSite=Lax host-only cookies, never browser storage.
+The page warns ten minutes before the end ("Stay signed in" renews it), and when the server
+ends the session it says so in a dialog and offers sign-in, which returns to the same
+same-site page; external return addresses are refused. The page's own refreshes are marked
+as background (`X-ETL-Background: 1`) and do not extend a session. Signing out revokes the
+session in every tab. Every browser change needs its CSRF challenge. Browser pages refuse
+framing by other sites and ship a content security policy.
 
 After `Auth.Lockout_after` consecutive wrong passwords (default 5; 0 disables lockout), a
 local user locks until an admin runs `etl-craft account unlock --name ACCOUNT`. A locked
@@ -29,16 +33,15 @@ the user must change one before opening other pages. Password changes revoke all
 ## Profile, settings and themes
 
 The profile menu shows the account, deployment role, current project permission and groups,
-the CLI sign-in line for this server, last sign-in in settings, keyboard shortcuts, help,
-About and sign-out. Local users have Change password; SSO users do not.
+last sign-in in settings, help, About and sign-out. Local users have Change password; SSO users do not.
 
 Personal settings belong to the account: theme (`system`, `light`, `dark`), IANA timezone,
 default project, page size (1–100) and relative or absolute times. The top-bar theme switch
-saves to the same account setting. Both themes use the catalog's shared assets and data-flow
-mark. Pins and saved filters will arrive with the list pages that use them.
+saves to the same account setting. Both themes use the catalog's shared assets and the product mark. Every list shows values
+unwrapped (hover shows the full value); **Wrap text** wraps them, and the choice is kept.
 
-Use Tab and Shift+Tab to move, the skip link to reach content, `?` for shortcuts, and Escape
-to close the shortcut dialog or profile menu. Every project page names its environment and
+Use Tab and Shift+Tab to move, the skip link to reach content, `/` or Ctrl+K for search, and
+Escape to close a dialog or menu. Every project page names its environment and
 governance; production has a stronger bordered badge as well as the word PRODUCTION.
 
 ```sh
@@ -119,12 +122,8 @@ tasks can be retried. The pipeline header has **Refresh**, which validates and p
 definition. Each posts the same `/api/v1` request as the CLI (`run`, `mark`, `pause`, `items`,
 `reconcile`, `pipelines refresh`).
 
-The list, pipeline and run pages update live. Every 10 seconds the server re-reads what the
-page shows, as you, and the page fetches itself again when that changed; "Updated N s ago" says
-when it last checked. While a dialog is open or you are working inside the page, a notice says
-the page has changed and offers **Refresh now** instead, so nothing moves under you. A lost
-connection shows "Live updates lost, reconnecting"; signing out or losing access stops live
-updates with the reason.
+The list, pipeline and run pages refresh themselves every 10 to 30 seconds while you use them,
+as you, and stop refreshing in a background tab.
 
 Each attempt in a task's panel opens the attempt's page: status, owner, host and process, exit
 code, times, rows, the error with its failure class, and the log. The log shows its last

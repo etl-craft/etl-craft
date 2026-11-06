@@ -27,7 +27,7 @@ const onSignInPage = (): boolean => window.location.pathname.endsWith("/signin")
 export const SESSION_ENDED = "etl-craft:session-ended";
 
 /** The sign-in address that returns to the page being viewed. */
-export const signInAddress = (): string => "/app/signin?return_to=" + encodeURIComponent(window.location.pathname + window.location.search);
+export const signInAddress = (): string => "/ui/signin?return_to=" + encodeURIComponent(window.location.pathname + window.location.search);
 
 /** The session has ended: the shell says so and offers sign-in, so nothing on the page is thrown away. */
 export function signInAgain(): void {
@@ -102,7 +102,7 @@ export async function signOut(): Promise<void> {
     headers: { "Content-Type": "application/json", "X-CSRF-Token": csrfToken() },
     body: "{}",
   });
-  window.location.assign("/app/signin");
+  window.location.assign("/ui/signin");
 }
 
 export const project = (code: string): string => `/api/v1/projects/${encodeURIComponent(code)}`;

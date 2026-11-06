@@ -1,4 +1,4 @@
-"""Serve the built browser interface under ``/app``; it calls only ``/api/v1`` as the session."""
+"""Serve the built browser interface at ``/ui``; it calls only ``/api/v1`` as the session."""
 
 import secrets
 from pathlib import Path
@@ -15,6 +15,7 @@ from etl_craft.services.operations.context import OperationContext
 
 BUNDLE = Path(__file__).parent / "spa"
 CSRF_SLOT = "__CSRF__"
+SIGN_IN = "/ui/signin"
 
 
 def _document() -> str:
@@ -29,11 +30,23 @@ def _document() -> str:
 
 
 def add_spa_pages(app: FastAPI, ctx: OperationContext) -> None:
-    """Mount the built assets, and the shell for every ``/app`` path the router resolves."""
-    app.mount("/app/assets", StaticFiles(directory=BUNDLE / "assets", check_dir=False), name="spa")
+    """Mount the built assets, and the shell for every ``/ui`` path the router resolves.
 
-    @app.get("/app", include_in_schema=False)
-    @app.get("/app/{path:path}", include_in_schema=False)
+    Register this after every other ``/ui`` route: the shell answers whatever is left.
+    """
+    app.mount("/ui/assets", StaticFiles(directory=BUNDLE / "assets", check_dir=False), name="spa")
+    app.mount(
+        "/static/shared",
+        StaticFiles(directory=Path(__file__).parents[1] / "core/static"),
+        name="shared",
+    )
+
+    @app.get("/", include_in_schema=False)
+    def root() -> Response:
+        return RedirectResponse("/ui", 307)
+
+    @app.get("/ui", include_in_schema=False)
+    @app.get("/ui/{path:path}", include_in_schema=False)
     def shell(request: Request, path: str = "") -> Response:
         public = path.rstrip("/") == "signin"
         try:
@@ -41,10 +54,10 @@ def add_spa_pages(app: FastAPI, ctx: OperationContext) -> None:
         except HTTPException:
             if not public:
                 back = request.url.path + ("?" + request.url.query if request.url.query else "")
-                return RedirectResponse("/app/signin?return_to=" + quote(back, safe=""), 303)
+                return RedirectResponse(SIGN_IN + "?return_to=" + quote(back, safe=""), 303)
         else:
             if public:
-                back = request.query_params.get("return_to", "/app")
+                back = request.query_params.get("return_to", "/ui")
                 return RedirectResponse(browser.return_path(back), 303)
         fresh = None if browser.has_challenge(request) else secrets.token_urlsafe(32)
         token = fresh or request.cookies[browser.CSRF]

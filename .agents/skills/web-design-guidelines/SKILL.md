@@ -1,6 +1,6 @@
 ---
 name: web-design-guidelines
-description: Review etl-craft's browser UI (Jinja templates, htmx, plain CSS and JavaScript under src/etl_craft/api) against the Web Interface Guidelines and report findings as file:line. Use before a pull request that changes a page, a template, monitor.css, shell.css or a page script, or when asked to review the UI's design, UX or accessibility.
+description: Review etl-craft's browser UI (the React sources under ui/src) against the Web Interface Guidelines and report findings as file:line. Use before a pull request that changes a page or a component under ui/src, or when asked to review the UI's design, UX or accessibility.
 ---
 
 # web-design-guidelines
@@ -11,24 +11,24 @@ are in `rules.md` and are read from there, never fetched at run time.
 
 ## How to use
 
-1. Read `rules.md` and the files to review (default: `src/etl_craft/api/templates/**`,
-   `src/etl_craft/api/static/*.css`, `src/etl_craft/api/static/*.js`).
+1. Read `rules.md` and the files to review (default: `ui/src/pages/**`,
+   `ui/src/components/**`, `ui/src/index.css`).
 2. Report findings grouped by file in `file:line` form, as `rules.md` describes.
 3. Fix what is mechanical; list the rest with the reason.
 4. Render the changed pages with the repo's Playwright (light, dark, 390 px) and look at them.
 
 ## What applies here
 
-The UI is server-rendered Jinja with htmx and small ES modules; there is no React. Skip the rules
-written for React (hydration, `useState`, `onKeyDown` props, `Link`, virtualization libraries)
-and read their intent against plain HTML instead.
+The UI is React with Tailwind and shared components (`ui/src/components`); pages compose them,
+and `ui/eslint.config.js` refuses copies. Skip the rules written for server-rendered HTML
+and read their intent against the shared components instead.
 
 Project decisions take precedence over these rules:
 
 - Headings and buttons use sentence case, as in the approved Databricks-style layout, not
   Title Case.
-- Times are formatted on the server in the person's chosen timezone (`zoned`), so pages and
-  exports agree; do not reformat them with `Intl` in the browser.
+- Times are formatted with `formatTime` in the person's chosen timezone, so pages and
+  exports agree; do not reformat them with `Intl` elsewhere.
 - Status colours follow the shared tokens in `core/static/catalog.css` (green succeeded, red
   failed, blue running, grey waiting, slate stopped; amber only for retries and warnings), and
   every state keeps its symbol and word.

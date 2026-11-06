@@ -11,6 +11,17 @@ All notable changes are recorded here. The format follows
   environment (PRODUCTION in red). It draws the mark and colour only on a terminal (none with `NO_COLOR` or
   `TERM=dumb`, a narrow terminal, or `ETL_CRAFT_NO_BANNER=1`) and prints plain rows when piped; `--json` is unchanged. Running `etl-craft` with no command on
   a terminal shows the mark and version above the usage (the exit code stays 2).
+- The new browser interface is now the only one, served at `/ui` (sign-in at `/ui/signin`). The
+  server-rendered pages, their scripts and styles (including htmx) and the `/app` preview address
+  are removed, as are the live-update stream (`/ui/projects/{project}/live`) and the pages' HTML
+  error and result pages: the sign-in actions answer `{"redirect": ...}` to the browser, and
+  every refusal under `/ui` is JSON. `/ui/projects/{project}/console` (POST),
+  `/ui/projects/{project}/console/commands` and the catalog frame's
+  `/ui/projects/{project}/catalog/files/...` remain as the interface's own routes. A run's page now offers
+  the run log and a zip of its logs for download and, for operators, Reconcile; the Pipelines page offers
+  Refresh all to developers (found missing by the capability-matrix test, which now reads `ui/src`). The
+  interface keeps the old one's keyboard shortcuts dialog (`?`), Copy run key and a live status line ("Live ·
+  updated N s ago", or that updates were lost); pages refresh by polling and pause while a dialog is open.
 - Signed-in sessions, from the command line and from the browser alike, now end after idle time as well as
   at `Auth.Session_hours`: the new `Auth.Session_idle_minutes` (default 60, range 5 to 10080) sets how long a
   session may go without a request, and `etl-craft login` is needed again once it has (renewal with a refresh

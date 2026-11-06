@@ -4,7 +4,9 @@ import { Link, Outlet, useLocation, useNavigate, useParams } from "react-router-
 import { EnvironmentBadge, EnvironmentStrip } from "@/components/environment-badge";
 import { DropdownContent, DropdownItem, DropdownLabel, DropdownMenu, DropdownSeparator, DropdownTrigger } from "@/components/dropdown";
 import { Logo } from "@/components/logo";
+import { LiveStatus } from "@/components/live-status";
 import { SessionGuard } from "@/components/session-guard";
+import { ShortcutsDialog } from "@/components/shortcuts-dialog";
 import { Sidebar } from "@/components/sidebar";
 import { Button } from "@/components/ui/button";
 import { useHealth, useIdentity } from "@/hooks";
@@ -29,10 +31,14 @@ export function AppShell() {
   const location = useLocation();
   const navigate = useNavigate();
   const searchBox = React.useRef<HTMLInputElement>(null);
+  const [shortcuts, setShortcuts] = React.useState(false);
   React.useEffect(() => {
     const focusSearch = (event: KeyboardEvent) => {
       const typing = event.target instanceof HTMLElement && /^(INPUT|TEXTAREA|SELECT)$/.test(event.target.tagName);
-      if ((event.key === "/" && !typing) || (event.key === "k" && (event.ctrlKey || event.metaKey))) {
+      if (event.key === "?" && !typing && !event.ctrlKey && !event.metaKey && !event.altKey) {
+        event.preventDefault();
+        setShortcuts(true);
+      } else if ((event.key === "/" && !typing) || (event.key === "k" && (event.ctrlKey || event.metaKey))) {
         event.preventDefault();
         searchBox.current?.focus();
       }
@@ -64,6 +70,7 @@ export function AppShell() {
         Skip to content
       </a>
       <SessionGuard />
+      <ShortcutsDialog open={shortcuts} onClose={() => setShortcuts(false)} />
       {env ? <EnvironmentStrip env={env} /> : null}
       <header className="z-30 flex h-14 shrink-0 items-center gap-3 border-b border-border bg-surface px-4">
         <Button variant="ghost" size="icon" className="lg:hidden" aria-label={open ? "Close menu" : "Open menu"} onClick={() => setOpen(!open)}>
@@ -128,6 +135,7 @@ export function AppShell() {
               <DropdownItem asChild>
                 <Link to={settingsPath}>Personal settings</Link>
               </DropdownItem>
+              <DropdownItem onSelect={() => setShortcuts(true)}>Keyboard shortcuts</DropdownItem>
               <DropdownItem asChild>
                 <Link to={aboutPath}>Help and About</Link>
               </DropdownItem>
@@ -166,6 +174,7 @@ export function AppShell() {
         </aside>
         <main id="main" className="min-w-0 flex-1 overflow-y-auto">
           <div className="mx-auto w-full max-w-[1400px] px-4 py-6 sm:px-6">
+            <LiveStatus className="mb-3 justify-end" />
             <Outlet />
           </div>
         </main>

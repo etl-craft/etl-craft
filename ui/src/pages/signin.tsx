@@ -54,13 +54,13 @@ function SsoWait({ grant, returnTo }: { grant: SsoStart; returnTo: string }) {
 export function SignIn() {
   useDocumentTitle("Sign in");
   const [params] = useSearchParams();
-  const returnTo = params.get("return_to") ?? "/app";
+  const returnTo = params.get("return_to") ?? "/ui";
   const methods = useQuery({ queryKey: ["login-methods"], queryFn: () => getJson<SignInMethods>("/api/v1/login/methods") });
   const [name, setName] = React.useState("");
   const [password, setPassword] = React.useState("");
   const login = useMutation({
     mutationFn: () => postJson<Redirect>("/api/v1/login/password", { name, password, _return_to: returnTo }),
-    onSuccess: (answer) => window.location.assign(answer.redirect ?? "/app"),
+    onSuccess: (answer) => window.location.assign(answer.redirect ?? "/ui"),
   });
   const sso = useMutation({ mutationFn: () => postJson<SsoStart>("/api/v1/login/sso", { _return_to: returnTo }) });
   const data = methods.data;

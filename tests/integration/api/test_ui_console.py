@@ -42,11 +42,15 @@ def site(metadata_project):
 
 
 def login(client, name):
-    page = client.get("/signin")
+    page = client.get("/ui/signin")
     csrf = re.search(r'name="csrf-token" content="([^"]+)"', page.text).group(1)
     client.post(
         "/api/v1/login/password",
-        headers={"HX-Request": "true", "X-CSRF-Token": csrf, "Origin": "https://testserver"},
+        headers={
+            "Accept": "application/json",
+            "X-CSRF-Token": csrf,
+            "Origin": "https://testserver",
+        },
         json={"name": name, "password": PASSWORD, "_return_to": "/ui"},
     )
     page = client.get(URL)
@@ -79,8 +83,8 @@ def expected_commands(role):
 @pytest.mark.parametrize(("name", "role"), [("owner", ApiRole.ADMIN), ("alice", ApiRole.VIEWER)])
 def test_lists_exactly_the_commands_the_role_may_run(site, name, role):
     _, _, client = site
-    _, page = login(client, name)
-    listed = set(re.findall(r"<li><code>([a-z-]+)</code></li>", page.text))
+    login(client, name)
+    listed = set(client.get(URL + "/commands").json()["commands"])
     assert listed == expected_commands(role)
     assert {"controller", "migrate", "config", "login", "ui"}.isdisjoint(listed)
 

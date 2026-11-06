@@ -3,9 +3,9 @@ import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import { defineConfig } from "vitest/config";
 
-// The build is shipped inside the Python package and served under /app/.
+// The build is shipped inside the Python package and served under /ui/.
 export default defineConfig({
-  base: "/app/",
+  base: "/ui/",
   plugins: [react(), tailwindcss()],
   resolve: { alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) } },
   build: {

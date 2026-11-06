@@ -57,7 +57,7 @@ def test_insights_summarises_runs_and_filters_through_the_address(scene):
     _, url = scene
     with sync_playwright() as pw:
         browser, page, problems = open_page(pw, viewport={"width": 1280, "height": 1000})
-        sign_in(page, url, "/app/projects/default/insights")
+        sign_in(page, url, "/ui/projects/default/insights")
         expect(page.get_by_role("heading", name="Pipeline insights")).to_be_visible()
         expect(page.get_by_role("term").filter(has_text="Success rate")).to_be_visible()
         expect(page.get_by_role("list", name="Runs per day")).to_be_visible()
@@ -83,7 +83,7 @@ def test_the_console_runs_a_line_completes_commands_and_recalls_history(scene):
     _, url = scene
     with sync_playwright() as pw:
         browser, page, problems = open_page(pw, viewport={"width": 1280, "height": 1000})
-        sign_in(page, url, "/app/projects/default/console")
+        sign_in(page, url, "/ui/projects/default/console")
         log = page.get_by_role("log", name="Console output")
         expect(
             page.get_by_role("button", name="pipelines", exact=True)
@@ -120,7 +120,7 @@ def test_a_viewer_is_offered_fewer_console_commands(scene):
     )
     with sync_playwright() as pw:
         browser, page, _ = open_page(pw)
-        sign_in(page, url, "/app/projects/default/console")
+        sign_in(page, url, "/ui/projects/default/console")
         expect(page.get_by_role("button", name="status", exact=True)).to_be_visible()
         owner_commands = (
             page.get_by_role("list")
@@ -130,7 +130,7 @@ def test_a_viewer_is_offered_fewer_console_commands(scene):
         )
         browser.close()
         browser, page, _ = open_page(pw)
-        sign_in(page, url, "/app/projects/default/console", name="alice")
+        sign_in(page, url, "/ui/projects/default/console", name="alice")
         expect(page.get_by_role("button", name="status", exact=True)).to_be_visible()
         viewer_commands = (
             page.get_by_role("list")
@@ -146,7 +146,7 @@ def test_the_catalog_says_when_nothing_is_built_and_offers_the_rebuild(scene):
     _, url = scene
     with sync_playwright() as pw:
         browser, page, _ = open_page(pw, viewport={"width": 1280, "height": 1000})
-        sign_in(page, url, "/app/projects/default/catalog")
+        sign_in(page, url, "/ui/projects/default/catalog")
         expect(page.get_by_role("heading", name="default catalog")).to_be_visible()
         expect(page.get_by_role("button", name="Validate metadata")).to_be_visible()
         expect(page.get_by_role("button", name="Rebuild catalog")).to_be_visible()
@@ -182,9 +182,9 @@ def test_the_catalog_says_when_nothing_is_built_and_offers_the_rebuild(scene):
 def test_the_pages_render_cleanly_in_both_themes_and_on_a_phone(scene, scheme, width):
     _, url = scene
     pages = {
-        "insights": "/app/projects/default/insights",
-        "console": "/app/projects/default/console",
-        "catalog": "/app/projects/default/catalog",
+        "insights": "/ui/projects/default/insights",
+        "console": "/ui/projects/default/console",
+        "catalog": "/ui/projects/default/catalog",
     }
     with sync_playwright() as pw:
         browser, page, problems = open_page(
