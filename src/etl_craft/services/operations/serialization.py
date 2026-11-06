@@ -9,7 +9,7 @@ from dataclasses import MISSING, fields, is_dataclass
 from datetime import date, datetime
 from enum import Enum
 from pathlib import Path, PurePath
-from typing import Any, TypeVar, Union, cast, get_args, get_origin, get_type_hints
+from typing import Any, Literal, TypeVar, Union, cast, get_args, get_origin, get_type_hints
 
 from etl_craft.core.errors import ServerError, UsageError
 
@@ -86,6 +86,10 @@ def _decode(hint: object, value: object, where: str) -> object:
     origin = get_origin(hint)
     if origin in (Union, types.UnionType):
         return _decode_union(get_args(hint), value, where)
+    if origin is Literal:
+        if value in get_args(hint):
+            return value
+        raise _unexpected(where, value, f"one of {list(get_args(hint))}")
     if origin in (tuple, list, dict, Mapping):
         return _decode_collection(origin, get_args(hint), value, where)
     if isinstance(hint, type) and is_dataclass(hint):
