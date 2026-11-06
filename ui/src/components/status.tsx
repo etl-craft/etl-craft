@@ -30,6 +30,13 @@ const META: Record<string, Meta> = {
   STOPPED: { label: "Stopped", icon: CircleMinus, tone: "warn" },
   ABORTED: { label: "Aborted", icon: CircleX, tone: "warn" },
   HELD: { label: "Held", icon: CircleAlert, tone: "warn" },
+  ACTIVE: { label: "Active", icon: CircleCheck, tone: "ok" },
+  DRAINING: { label: "Draining", icon: CircleAlert, tone: "warn" },
+  GONE: { label: "Gone", icon: CircleMinus, tone: "idle" },
+  DISABLED: { label: "Disabled", icon: CircleMinus, tone: "idle" },
+  LOCKED: { label: "Locked", icon: CircleX, tone: "bad" },
+  REVOKED: { label: "Revoked", icon: CircleMinus, tone: "idle" },
+  ENDED: { label: "Ended", icon: CircleMinus, tone: "idle" },
 };
 
 export const statusMeta = (status: string): Meta =>

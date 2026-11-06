@@ -13,6 +13,27 @@ export interface Selection {
   onToggleAll: (all: boolean) => void;
 }
 
+const WRAP_KEY = "etl-craft-wrap-text";
+
+function readWrap(): boolean {
+  try {
+    return window.localStorage.getItem(WRAP_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function saveWrap(on: boolean): void {
+  try {
+    window.localStorage.setItem(WRAP_KEY, on ? "1" : "0");
+  } catch {
+    /* the choice lasts for this page only */
+  }
+}
+
+/** The full value shows on hover while cells do not wrap; only plain values have one. */
+const hover = (value: unknown): string | undefined => (typeof value === "string" || typeof value === "number" ? String(value) : undefined);
+
 /** The one table every list uses: sortable headers, a label for assistive technology, optional row selection. */
 export function DataTable<T>({
   data,
@@ -36,9 +57,22 @@ export function DataTable<T>({
 }) {
   const [sorting, setSorting] = React.useState<SortingState>(initialSort ?? []);
   const table = useReactTable({ data, columns, state: { sorting }, onSortingChange: setSorting, getCoreRowModel: getCoreRowModel(), getSortedRowModel: getSortedRowModel() });
+  const [wrap, setWrap] = React.useState(readWrap);
   const all = data.length > 0 && !!selection && !!rowId && data.every((row) => selection.ids.has(rowId(row)));
   if (empty !== undefined && data.length === 0) return <p className="m-0 p-4 text-muted">{empty}</p>;
   return (
+    <>
+      <label className="flex cursor-pointer items-center justify-end gap-2 px-3 py-1.5 text-xs text-muted">
+        <input
+          type="checkbox"
+          checked={wrap}
+          onChange={(event) => {
+            setWrap(event.target.checked);
+            saveWrap(event.target.checked);
+          }}
+        />
+        Wrap text
+      </label>
     <Table aria-label={label}>
       <thead>
         {table.getHeaderGroups().map((group) => (
@@ -80,11 +114,14 @@ export function DataTable<T>({
               </Td>
             ) : null}
             {row.getVisibleCells().map((cell) => (
-              <Td key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</Td>
+              <Td key={cell.id} className={wrap ? "break-words" : "whitespace-nowrap"} title={hover(cell.getValue())}>
+                {flexRender(cell.column.columnDef.cell, cell.getContext())}
+              </Td>
             ))}
           </tr>
         ))}
       </tbody>
     </Table>
+    </>
   );
 }

@@ -22,9 +22,12 @@ function query(params?: Params): string {
   return pairs.length ? "?" + new URLSearchParams(pairs).toString() : "";
 }
 
+const onSignInPage = (): boolean => window.location.pathname.endsWith("/signin");
+
 export function signInAgain(): void {
+  if (onSignInPage()) return;
   const back = window.location.pathname + window.location.search;
-  window.location.assign("/signin?return_to=" + encodeURIComponent(back));
+  window.location.assign("/app/signin?return_to=" + encodeURIComponent(back));
 }
 
 async function send(path: string, init: RequestInit): Promise<Response> {
@@ -34,7 +37,7 @@ async function send(path: string, init: RequestInit): Promise<Response> {
   } catch {
     throw new ApiError("The server did not answer; check that the etl-craft server is running and reload.", 0);
   }
-  if (response.status === 401) {
+  if (response.status === 401 && !onSignInPage()) {
     signInAgain();
     throw new ApiError("Your session has ended; sign in again.", 401);
   }
@@ -84,7 +87,7 @@ export async function signOut(): Promise<void> {
     headers: { "Content-Type": "application/json", "X-CSRF-Token": csrfToken() },
     body: "{}",
   });
-  window.location.assign("/signin");
+  window.location.assign("/app/signin");
 }
 
 export const project = (code: string): string => `/api/v1/projects/${encodeURIComponent(code)}`;

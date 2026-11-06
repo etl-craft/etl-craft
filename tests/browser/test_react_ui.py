@@ -46,7 +46,7 @@ def scene(site):
 
 
 def sign_in(page, url, destination="/app", name="owner"):
-    page.goto(url + "/signin?return_to=" + destination.replace("/", "%2F"))
+    page.goto(url + "/app/signin?return_to=" + destination.replace("/", "%2F"))
     page.get_by_label("Account name", exact=True).fill(name)
     page.get_by_label("Password", exact=True).fill(PASSWORD)
     page.get_by_role("button", name="Sign in", exact=True).click()

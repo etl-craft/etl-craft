@@ -35,14 +35,18 @@ def browser_request(request: Request) -> bool:
     )
 
 
+def json_only(request: Request) -> bool:
+    """Whether the caller asks for JSON and not for HTML, as the browser interface does."""
+    accept = request.headers.get("accept", "")
+    return "application/json" in accept and "text/html" not in accept
+
+
 def html_request(request: Request) -> bool:
     """Only browser views and explicit HTML negotiation receive HTML errors.
 
-    A script that asks for JSON and not for HTML, as the browser interface does, receives JSON
-    errors even from a /ui path.
+    A script that asks for JSON and not for HTML receives JSON errors even from a /ui path.
     """
-    accept = request.headers.get("accept", "")
-    if "application/json" in accept and "text/html" not in accept:
+    if json_only(request):
         return False
     return request.url.path.startswith(("/ui", "/signin")) or (
         request.headers.get("HX-Request") == "true"
@@ -152,11 +156,15 @@ def browser_answer(
         target = return_path(destination)
         if result.must_change_password:
             target = "/ui/profile/password?return_to=" + quote(target, safe="")
-        response: Response = (
-            HTMLResponse("", headers={"HX-Redirect": target})
-            if request.headers.get("HX-Request") == "true"
-            else RedirectResponse(target, 303)
-        )
+        response: Response
+        if json_only(request):
+            if result.must_change_password:
+                target = "/app/password"
+            response = JSONResponse({"redirect": target})
+        elif request.headers.get("HX-Request") == "true":
+            response = HTMLResponse("", headers={"HX-Redirect": target})
+        else:
+            response = RedirectResponse(target, 303)
         assert result.metadata.expires_at is not None
         end = as_utc(result.metadata.expires_at)
         response.set_cookie(
@@ -180,7 +188,7 @@ def browser_answer(
         )
         signed_out(response)
         return response
-    if isinstance(result, SsoStart):
+    if isinstance(result, SsoStart) and not json_only(request):
         return render(request, "sso.html", {"grant": result, "return_to": destination})
     if isinstance(result, SsoPoll):
         return JSONResponse({"interval": result.interval})

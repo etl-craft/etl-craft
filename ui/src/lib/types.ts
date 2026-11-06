@@ -4,6 +4,8 @@ export interface Identity {
   name: string;
   role: "admin" | "operator" | "viewer" | string;
   must_change_password: boolean;
+  local_password: boolean;
+  last_signin: string | null;
   project_permission: string | null;
   settings: { theme: string; timezone: string; default_project: string | null; page_size: number; time_display: string };
 }
@@ -396,4 +398,164 @@ export interface TaskLineage {
 export interface LineageRefresh {
   lineages: TaskLineage[];
   failed: boolean;
+}
+
+export interface ControllerVersion {
+  controller_id: number;
+  version: string;
+  heartbeat_at: string;
+}
+
+export interface About {
+  package_version: string;
+  schema_version: string | null;
+  server_version: string;
+  controllers: ControllerVersion[];
+  license: string;
+  docs_url: string;
+}
+
+export interface AgentRow {
+  agent_id: number;
+  pool: string;
+  host: string;
+  version: string;
+  status: "ACTIVE" | "DRAINING" | "GONE" | string;
+  heartbeat_at: string;
+  attempts: number[];
+  free_cpu: number;
+  free_memory_mb: number;
+  pending_commands: { command?: string }[];
+}
+
+export interface PoolCapacity {
+  pool: string;
+  agents: number;
+  advertised_cpu: number;
+  advertised_memory_mb: number;
+  free_cpu: number;
+  free_memory_mb: number;
+}
+
+export interface AgentsView {
+  agents: AgentRow[];
+  pools: PoolCapacity[];
+}
+
+export interface PersonalSettings {
+  theme: string;
+  timezone: string;
+  default_project: string | null;
+  page_size: number;
+  time_display: string;
+}
+
+export interface SearchHit {
+  kind: "PIPELINE" | "TASK" | "RUN" | "TABLE" | string;
+  label: string;
+  detail: string;
+  pipeline_code: string | null;
+  run_id: number | null;
+  catalog_path: string | null;
+}
+
+export interface SearchView {
+  q: string;
+  hits: SearchHit[];
+  truncated: boolean;
+}
+
+export interface Account {
+  account_id: number;
+  name: string;
+  kind: string;
+  role: string;
+  email: string | null;
+  active_flag: string;
+  failed_signins: number;
+  locked_at: string | null;
+  last_signin_at: string | null;
+}
+
+export interface Group {
+  group_id: number;
+  name: string;
+  description: string | null;
+  active_flag: string;
+  members: string[];
+}
+
+export interface TokenRow {
+  token_id: number;
+  name: string;
+  token_kind: string;
+  role: string;
+  created_by: string;
+  created_at: string;
+  expires_at: string | null;
+  revoked_at: string | null;
+  last_used_at: string | null;
+}
+
+export interface Grant {
+  project: string;
+  group: string | null;
+  account: string | null;
+  role: string | null;
+  pipeline: string | null;
+  tag: string | null;
+  permission: string;
+  active_flag: string;
+}
+
+export interface ProjectRow {
+  project: string;
+  name: string;
+  timezone: string;
+  default_pool: string;
+  max_running_tasks: number;
+  active_flag: string;
+  environment_type: string;
+  environment_name: string | null;
+  governance: string;
+  schema_check_schedule: string | null;
+  schema_check_on_demand: string;
+}
+
+export interface PoolRow {
+  name: string;
+  description: string | null;
+  active_flag: string;
+}
+
+export interface Announcement {
+  announcement_id: number;
+  level: string;
+  message: string;
+  starts_at: string;
+  ends_at: string | null;
+  created_by: string;
+  ended_by: string | null;
+  ended_at: string | null;
+}
+
+export interface SignInMethods {
+  sso: boolean;
+  local: boolean;
+  contact: string | null;
+  notice: string | null;
+}
+
+export interface SsoStart {
+  user_code: string;
+  verification_uri: string;
+  device_code: string;
+  nonce: string;
+  interval: number;
+  expires_in: number;
+}
+
+export interface Redirect {
+  redirect?: string;
+  interval?: number;
 }

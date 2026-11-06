@@ -11,6 +11,7 @@ import { project } from "@/lib/api";
  */
 export function ActionButton<TResult>({
   code,
+  canSubmit,
   label,
   title,
   effect,
@@ -24,11 +25,13 @@ export function ActionButton<TResult>({
   variant = "outline",
   size,
 }: {
-  code: string;
+  /** The project the action changes; absent for platform actions such as agents and accounts. */
+  code?: string;
+  canSubmit?: boolean;
   label: string;
   title: string;
   effect: string;
-  /** The API path under the project, such as "/controls". */
+  /** The API path under the project (or under /api/v1 for a platform action), such as "/controls". */
   endpoint: string;
   body: (reason: string) => unknown;
   describe: (result: TResult) => string;
@@ -44,12 +47,12 @@ export function ActionButton<TResult>({
   const info = useProjectInfo(code).project;
   const [open, setOpen] = React.useState(false);
   const toast = useToast();
-  const write = useWrite<TResult>(project(code) + endpoint, (result) => {
+  const write = useWrite<TResult>((code ? project(code) : "/api/v1") + endpoint, (result) => {
     toast(describe(result));
     onDone?.(result);
     setOpen(false);
   });
-  if (!info) return null;
+  if (code && !info) return null;
   return (
     <div className="grid justify-items-end gap-2">
       <Button
@@ -69,7 +72,8 @@ export function ActionButton<TResult>({
         action={label}
         effect={effect}
         projectCode={code}
-        env={{ type: info.environment_type, name: info.environment_name }}
+        env={info ? { type: info.environment_type, name: info.environment_name } : undefined}
+        canSubmit={canSubmit}
         error={failureText(write.error)}
         busy={write.isPending}
         onConfirm={(reason) => write.mutate(body(reason))}

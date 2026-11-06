@@ -84,6 +84,8 @@ class SignInMethods:
     SCHEMA: ClassVar[str] = "etl-craft/sign-in-methods/1"
     sso: bool
     local: bool = True
+    contact: str | None = None
+    notice: str | None = None
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -419,7 +421,12 @@ def sign_out(ctx: OperationContext, request: TokenInput) -> None:
 
 def sign_in_methods(ctx: OperationContext, request: NoInput) -> SignInMethods:
     """Say whether SSO is configured, so a sign-in can offer it."""
-    return SignInMethods(sso=bool(ctx.config.auth.oidc_issuer))
+    auth = ctx.config.auth
+    return SignInMethods(
+        sso=bool(auth.oidc_issuer),
+        contact=auth.admin_contact or None,
+        notice=auth.signin_notice or None,
+    )
 
 
 def whoami(ctx: OperationContext, request: IdentityInput) -> Identity:

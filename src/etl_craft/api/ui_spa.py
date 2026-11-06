@@ -35,11 +35,17 @@ def add_spa_pages(app: FastAPI, ctx: OperationContext) -> None:
     @app.get("/app", include_in_schema=False)
     @app.get("/app/{path:path}", include_in_schema=False)
     def shell(request: Request, path: str = "") -> Response:
+        public = path.rstrip("/") == "signin"
         try:
             browser.cookie_context(ctx, request)
         except HTTPException:
-            back = request.url.path + ("?" + request.url.query if request.url.query else "")
-            return RedirectResponse("/signin?return_to=" + quote(back, safe=""), 303)
+            if not public:
+                back = request.url.path + ("?" + request.url.query if request.url.query else "")
+                return RedirectResponse("/app/signin?return_to=" + quote(back, safe=""), 303)
+        else:
+            if public:
+                back = request.query_params.get("return_to", "/app")
+                return RedirectResponse(browser.return_path(back), 303)
         fresh = None if browser.has_challenge(request) else secrets.token_urlsafe(32)
         token = fresh or request.cookies[browser.CSRF]
         response = HTMLResponse(_document().replace(CSRF_SLOT, token))

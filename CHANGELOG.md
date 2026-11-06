@@ -6,6 +6,14 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+- The new browser interface gains System health, Agents (drain, resume, stop), About, personal settings,
+  password change, search with recently viewed pages (press `/` or Ctrl+K), Administration (accounts,
+  groups, tokens, access, projects, pools, announcements, erasure), project Maintenance (purge, rehash,
+  audit-column upgrade, clone, each with a preview) and its own sign-in page at `/app/signin`, with SSO
+  where configured. `GET /api/v1/login/methods` now also returns the sign-in `contact` and `notice`, and
+  a client that asks only for JSON receives `{"redirect": ...}` from the sign-in actions. Lists in the new
+  interface no longer wrap values by default: hover shows the full value and "Wrap text" wraps them.
+  A refused request value keeps the case of the values it lists (`'BOTH', 'UPSTREAM'`).
 - The etl-craft mark is now a solid tile (layered chevrons under a plane, white on a blue gradient, dark on a
   light blue one in the dark theme) in the new interface, the browser console, sign-in, the offline catalog and
   the favicon. The new interface also now sets the project favicon.
