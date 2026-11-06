@@ -45,8 +45,8 @@ def scene(site):
     return ctx, url, good, bad
 
 
-def sign_in(page, url, destination="/app", name="owner"):
-    page.goto(url + "/app/signin?return_to=" + destination.replace("/", "%2F"))
+def sign_in(page, url, destination="/ui", name="owner"):
+    page.goto(url + "/ui/signin?return_to=" + destination.replace("/", "%2F"))
     page.get_by_label("Account name", exact=True).fill(name)
     page.get_by_label("Password", exact=True).fill(PASSWORD)
     page.get_by_role("button", name="Sign in", exact=True).click()
@@ -111,7 +111,7 @@ def test_the_runs_table_filters_by_status_and_pipeline_in_the_address(scene):
     _, url, good, bad = scene
     with sync_playwright() as pw:
         browser, page, _ = open_page(pw)
-        sign_in(page, url, "/app/projects/default/runs")
+        sign_in(page, url, "/ui/projects/default/runs")
         table = page.get_by_role("table", name="Pipeline runs")
         expect(table.get_by_role("link", name=f"#{good}")).to_be_visible()
         expect(table.get_by_role("link", name=f"#{bad}")).to_be_visible()
@@ -136,7 +136,7 @@ def test_a_viewer_sees_the_failed_run_but_no_recover_action(scene):
     )
     with sync_playwright() as pw:
         browser, page, _ = open_page(pw)
-        sign_in(page, url, f"/app/projects/default/runs/OPS/{bad}", name="alice")
+        sign_in(page, url, f"/ui/projects/default/runs/OPS/{bad}", name="alice")
         expect(page.get_by_role("heading", name=f"OPS #{bad}")).to_be_visible()
         expect(page.get_by_text("Failed", exact=True).first).to_be_visible()
         expect(page.get_by_role("button", name="Recover run")).to_have_count(0)
@@ -155,7 +155,7 @@ def test_production_is_unmistakable_and_recovery_needs_the_project_code(scene):
     )
     with sync_playwright() as pw:
         browser, page, _ = open_page(pw)
-        sign_in(page, url, f"/app/projects/default/runs/OPS/{bad}")
+        sign_in(page, url, f"/ui/projects/default/runs/OPS/{bad}")
         expect(page).to_have_title(f"PRODUCTION · default · OPS #{bad} · etl-craft")
         strip = page.get_by_role("status").filter(has_text="PRODUCTION")
         expect(strip).to_be_visible()
@@ -175,7 +175,7 @@ def test_the_navigation_collapses_to_icons_keeps_its_links_and_is_remembered(sce
     _, url, _, _ = scene
     with sync_playwright() as pw:
         browser, page, problems = open_page(pw, viewport={"width": 1280, "height": 900})
-        sign_in(page, url, "/app/projects/default/runs")
+        sign_in(page, url, "/ui/projects/default/runs")
         nav = page.get_by_role("navigation", name="Main")
         runs = nav.get_by_role("link", name="Runs", exact=True)
         wide = runs.bounding_box()["width"]
@@ -204,9 +204,9 @@ def test_every_page_renders_cleanly_in_both_themes_and_on_a_phone(scene, scheme,
     _, url, _, bad = scene
     shots = os.environ.get("ETL_CRAFT_UI_SCREENSHOTS")
     pages = {
-        "home": "/app",
-        "runs": "/app/projects/default/runs",
-        "run": f"/app/projects/default/runs/OPS/{bad}",
+        "home": "/ui",
+        "runs": "/ui/projects/default/runs",
+        "run": f"/ui/projects/default/runs/OPS/{bad}",
     }
     with sync_playwright() as pw:
         browser, page, problems = open_page(

@@ -39,7 +39,7 @@ createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <QueryClientProvider client={client}>
       <ToastProvider>
-      <BrowserRouter basename="/app">
+      <BrowserRouter basename="/ui">
         <Routes>
           <Route path="signin" element={<SignIn />} />
           <Route element={<AppShell />}>

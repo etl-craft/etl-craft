@@ -6,6 +6,13 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+- The new browser interface is now the only one, served at `/ui` (sign-in at `/ui/signin`). The
+  server-rendered pages, their scripts and styles (including htmx) and the `/app` preview address
+  are removed, as are the live-update stream (`/ui/projects/{project}/live`) and the pages' HTML
+  error and result pages: the sign-in actions answer `{"redirect": ...}` to the browser, and
+  every refusal under `/ui` is JSON. `/ui/projects/{project}/console` (POST),
+  `/ui/projects/{project}/console/commands` and the catalog frame's
+  `/ui/projects/{project}/catalog/files/...` remain as the interface's own routes.
 - Signed-in sessions, from the command line and from the browser alike, now end after idle time as well as
   at `Auth.Session_hours`: the new `Auth.Session_idle_minutes` (default 60, range 5 to 10080) sets how long a
   session may go without a request, and `etl-craft login` is needed again once it has (renewal with a refresh

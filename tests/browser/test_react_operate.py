@@ -78,7 +78,7 @@ def test_a_steward_uploads_a_file_and_sees_it_listed(steward, tmp_path):
     data.write_text("id|name\n1|first\n")
     with sync_playwright() as pw:
         browser, page, problems = open_page(pw, viewport={"width": 1280, "height": 900})
-        sign_in(page, url, "/app/projects/default/uploads")
+        sign_in(page, url, "/ui/projects/default/uploads")
         expect(page.get_by_role("heading", name="Uploads")).to_be_visible()
         expect(page.get_by_text("Recent files for CORRECTIONS")).to_be_visible()
         expect(upload_button(page)).to_be_disabled()
@@ -100,7 +100,7 @@ def test_a_viewer_with_no_upload_grant_is_told_how_to_get_one(steward):
     _, url = steward
     with sync_playwright() as pw:
         browser, page, _ = open_page(pw)
-        sign_in(page, url, "/app/projects/default/uploads", name="alice")
+        sign_in(page, url, "/ui/projects/default/uploads", name="alice")
         expect(page.get_by_text("No pipeline takes uploads from you here.")).to_be_visible()
         expect(upload_button(page)).to_have_count(0)
         browser.close()
@@ -110,7 +110,7 @@ def test_an_operator_resets_a_watermark_with_a_reason(merge_task):
     _, url = merge_task
     with sync_playwright() as pw:
         browser, page, problems = open_page(pw, viewport={"width": 1280, "height": 1000})
-        sign_in(page, url, "/app/projects/default/pipelines/SALES/tasks/LOAD")
+        sign_in(page, url, "/ui/projects/default/pipelines/SALES/tasks/LOAD")
         expect(page.get_by_role("heading", name="Watermark")).to_be_visible()
         expect(page.get_by_text("Nothing stored yet; the first run starts it.")).to_be_visible()
         shoot(page, "task-offset")
@@ -135,7 +135,7 @@ def test_the_data_lookup_asks_for_every_key_column_and_answers(merge_task):
     _, url = merge_task
     with sync_playwright() as pw:
         browser, page, _ = open_page(pw, viewport={"width": 1280, "height": 1000})
-        sign_in(page, url, "/app/projects/default/pipelines/SALES/tasks/LOAD")
+        sign_in(page, url, "/ui/projects/default/pipelines/SALES/tasks/LOAD")
         expect(page.get_by_role("heading", name="Data")).to_be_visible()
         look = page.get_by_role("button", name="Look up")
         expect(look).to_be_disabled()
@@ -156,8 +156,8 @@ def test_the_data_lookup_asks_for_every_key_column_and_answers(merge_task):
 def test_the_operate_pages_render_cleanly_in_both_themes_and_on_a_phone(merge_task, scheme, width):
     _, url = merge_task
     pages = {
-        "uploads": "/app/projects/default/uploads",
-        "task": "/app/projects/default/pipelines/SALES/tasks/LOAD",
+        "uploads": "/ui/projects/default/uploads",
+        "task": "/ui/projects/default/pipelines/SALES/tasks/LOAD",
     }
     with sync_playwright() as pw:
         browser, page, problems = open_page(

@@ -39,18 +39,18 @@ def test_sign_in_refuses_a_wrong_password_and_returns_to_the_page_asked_for(scen
     _, url, _ = scene
     with sync_playwright() as pw:
         browser, page, problems = open_page(pw)
-        page.goto(url + "/app/projects/default/runs")
-        page.wait_for_url(url + "/app/signin?return_to=%2Fapp%2Fprojects%2Fdefault%2Fruns")
+        page.goto(url + "/ui/projects/default/runs")
+        page.wait_for_url(url + "/ui/signin?return_to=%2Fui%2Fprojects%2Fdefault%2Fruns")
         page.get_by_label("Account name", exact=True).fill("owner")
         page.get_by_label("Password", exact=True).fill("not the password")
         page.get_by_role("button", name="Sign in", exact=True).click()
         expect(page.get_by_role("alert")).to_be_visible()
-        assert page.url.endswith("/app/signin?return_to=%2Fapp%2Fprojects%2Fdefault%2Fruns")
+        assert page.url.endswith("/ui/signin?return_to=%2Fui%2Fprojects%2Fdefault%2Fruns")
         page.get_by_label("Password", exact=True).fill(PASSWORD)
         page.get_by_role("button", name="Sign in", exact=True).click()
-        page.wait_for_url(url + "/app/projects/default/runs")
-        page.goto(url + "/app/signin")  # already signed in: nothing to ask
-        page.wait_for_url(url + "/app")
+        page.wait_for_url(url + "/ui/projects/default/runs")
+        page.goto(url + "/ui/signin")  # already signed in: nothing to ask
+        page.wait_for_url(url + "/ui")
         assert [p for p in problems if "status of 400" not in p] == []
         browser.close()
 
@@ -59,7 +59,7 @@ def test_system_health_agents_and_about_read_the_engine_db(scene):
     _, url, _ = scene
     with sync_playwright() as pw:
         browser, page, problems = open_page(pw, viewport={"width": 1280, "height": 900})
-        sign_in(page, url, "/app/system")
+        sign_in(page, url, "/ui/system")
         expect(page.get_by_role("heading", name="System health", exact=True)).to_be_visible()
         expect(page.get_by_text("Not running")).to_be_visible()  # no controller in the scene
         expect(
@@ -69,7 +69,7 @@ def test_system_health_agents_and_about_read_the_engine_db(scene):
         page.get_by_role("link", name="Open agents").click()
         expect(page.get_by_role("heading", name="Agents", exact=True)).to_be_visible()
         expect(page.get_by_text("No agents have registered")).to_be_visible()
-        page.goto(url + "/app/about")
+        page.goto(url + "/ui/about")
         expect(page.get_by_text("Package version")).to_be_visible()
         assert problems == []
         browser.close()
@@ -79,7 +79,7 @@ def test_settings_save_and_the_password_change_ends_the_session(scene):
     _, url, _ = scene
     with sync_playwright() as pw:
         browser, page, problems = open_page(pw)
-        sign_in(page, url, "/app/settings")
+        sign_in(page, url, "/ui/settings")
         save = page.get_by_role("button", name="Save settings")
         expect(save).to_be_disabled()
         page.get_by_label("Page size (1 to 100)").fill("30")
@@ -87,7 +87,7 @@ def test_settings_save_and_the_password_change_ends_the_session(scene):
         expect(page.get_by_role("status").filter(has_text="Settings saved.")).to_be_visible()
         page.reload()
         expect(page.get_by_label("Page size (1 to 100)")).to_have_value("30")
-        page.goto(url + "/app/password")
+        page.goto(url + "/ui/password")
         page.get_by_label("Current password").fill("wrong wrong wrong")
         page.get_by_label("New password", exact=True).fill("another correct horse")
         page.get_by_label("Confirm new password").fill("another correct horse")
@@ -95,7 +95,7 @@ def test_settings_save_and_the_password_change_ends_the_session(scene):
         expect(page.get_by_role("alert")).to_contain_text("password change refused")
         page.get_by_label("Current password").fill(PASSWORD)
         page.get_by_role("button", name="Change password").click()
-        page.wait_for_url(url + "/app/signin?changed=1")
+        page.wait_for_url(url + "/ui/signin?changed=1")
         expect(page.get_by_text("Your password was changed")).to_be_visible()
         assert [p for p in problems if "status of 400" not in p] == []
         browser.close()
@@ -105,7 +105,7 @@ def test_search_finds_pipelines_runs_and_remembers_what_was_opened(scene):
     _, url, _run = scene
     with sync_playwright() as pw:
         browser, page, problems = open_page(pw, viewport={"width": 1280, "height": 900})
-        sign_in(page, url, "/app/projects/default/pipelines/ORDERS")
+        sign_in(page, url, "/ui/projects/default/pipelines/ORDERS")
         page.get_by_label("Search pipelines, tasks, tables and runs").fill("ORD")
         page.keyboard.press("Enter")
         results = page.get_by_role("table", name="Search results")
@@ -115,8 +115,8 @@ def test_search_finds_pipelines_runs_and_remembers_what_was_opened(scene):
         page.get_by_label("Search pipelines, tasks, tables and runs").fill("EXTRACT")
         page.keyboard.press("Enter")
         page.get_by_role("link", name="EXTRACT").first.click()
-        expect(page).to_have_url(url + "/app/projects/default/pipelines/ORDERS/tasks/EXTRACT")
-        page.goto(url + "/app/projects/default/search")
+        expect(page).to_have_url(url + "/ui/projects/default/pipelines/ORDERS/tasks/EXTRACT")
+        page.goto(url + "/ui/projects/default/search")
         page.keyboard.press("/")
         expect(page.get_by_label("Search pipelines, tasks, tables and runs")).to_be_focused()
         assert problems == []
@@ -127,7 +127,7 @@ def test_administrators_manage_accounts_and_tokens_through_confirmations(scene):
     ctx, url, _ = scene
     with sync_playwright() as pw:
         browser, page, problems = open_page(pw, viewport={"width": 1280, "height": 1000})
-        sign_in(page, url, "/app/admin?tab=accounts")
+        sign_in(page, url, "/ui/admin?tab=accounts")
         expect(page.get_by_role("table", name="Accounts").get_by_text("alice")).to_be_visible()
         page.get_by_role("button", name="Add account").click()
         dialog = page.get_by_role("dialog")
@@ -163,7 +163,7 @@ def test_a_viewer_is_told_the_administration_page_needs_an_administrator(scene):
     _, url, _ = scene
     with sync_playwright() as pw:
         browser, page, _ = open_page(pw)
-        sign_in(page, url, "/app/admin", name="alice")
+        sign_in(page, url, "/ui/admin", name="alice")
         expect(page.get_by_role("alert")).to_contain_text("needs the admin role")
         expect(page.get_by_role("link", name="Administration")).to_have_count(0)
         browser.close()
@@ -173,7 +173,7 @@ def test_maintenance_previews_without_changing_anything(scene):
     _, url, _ = scene
     with sync_playwright() as pw:
         browser, page, problems = open_page(pw, viewport={"width": 1280, "height": 1100})
-        sign_in(page, url, "/app/projects/default/maintenance")
+        sign_in(page, url, "/ui/projects/default/maintenance")
         page.get_by_role("button", name="Preview purge").click()
         expect(page.locator("pre").first).to_contain_text("dry_run")
         shoot(page, "maintenance")
@@ -190,14 +190,14 @@ def test_maintenance_previews_without_changing_anything(scene):
 def test_the_pages_render_cleanly_in_both_themes_and_on_a_phone(scene, scheme, width):
     _, url, _ = scene
     pages = {
-        "system": "/app/system",
-        "agents": "/app/agents",
-        "about": "/app/about",
-        "settings": "/app/settings",
-        "search": "/app/projects/default/search?q=ORD",
-        "accounts": "/app/admin?tab=accounts",
-        "projects-admin": "/app/admin?tab=projects",
-        "maintenance": "/app/projects/default/maintenance",
+        "system": "/ui/system",
+        "agents": "/ui/agents",
+        "about": "/ui/about",
+        "settings": "/ui/settings",
+        "search": "/ui/projects/default/search?q=ORD",
+        "accounts": "/ui/admin?tab=accounts",
+        "projects-admin": "/ui/admin?tab=projects",
+        "maintenance": "/ui/projects/default/maintenance",
     }
     with sync_playwright() as pw:
         browser, page, problems = open_page(
@@ -212,7 +212,7 @@ def test_the_pages_render_cleanly_in_both_themes_and_on_a_phone(scene, scheme, w
             assert overflow <= 0, f"{name} scrolls sideways by {overflow}px at {width}px"
             shoot(page, f"{name}-{scheme}-{width}")
         page.context.clear_cookies()
-        page.goto(url + "/app/signin")
+        page.goto(url + "/ui/signin")
         expect(page.get_by_role("button", name="Sign in", exact=True)).to_be_visible()
         shoot(page, f"signin-{scheme}-{width}")
         assert [p for p in problems if "status of 404" not in p] == []
@@ -223,7 +223,7 @@ def test_a_session_that_ended_says_so_and_signing_in_returns_to_the_page(scene):
     ctx, url, _ = scene
     with sync_playwright() as pw:
         browser, page, _problems = open_page(pw)
-        sign_in(page, url, "/app/projects/default/pipelines/ORDERS")
+        sign_in(page, url, "/ui/projects/default/pipelines/ORDERS")
         expect(page.get_by_role("heading", name="ORDERS")).to_be_visible()
         with acting_as(Actor("owner", ActorKind.USER)), ctx.engine.begin() as conn:
             conn.execute(text("UPDATE CFG_API_TOKENS SET REVOKED_AT=CURRENT_TIMESTAMP"))
@@ -233,5 +233,5 @@ def test_a_session_that_ended_says_so_and_signing_in_returns_to_the_page(scene):
         expect(dialog.get_by_text("Your session has ended")).to_be_visible()
         assert "/signin" not in page.url  # nothing was thrown away
         dialog.get_by_role("button", name="Sign in again").click()
-        page.wait_for_url("**/app/signin?return_to=*")
+        page.wait_for_url("**/ui/signin?return_to=*")
         browser.close()
