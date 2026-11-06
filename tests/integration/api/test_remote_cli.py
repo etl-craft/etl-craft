@@ -393,7 +393,6 @@ def test_host_only_actions_and_options_are_refused_against_a_server(server, monk
     url = server["url"]
     monkeypatch.setenv("ETL_CRAFT_TOKEN", server["service"]["operator"])
     for argv, expected in (
-        (("config", "apply"), "reads a published bundle"),
         (("migrate",), "`etl-craft migrate` there"),
         (("init-db",), "run it on the controller's host"),
         (("setup",), "run it on the controller's host"),

@@ -18,6 +18,10 @@ from etl_craft.engine.project_files import (
 pytestmark = pytest.mark.unit
 
 
+def test_publication_accepts_the_config_folder():
+    assert str(safe_path("config/a.csv")) == "config/a.csv"
+
+
 @pytest.mark.parametrize(
     "name",
     [
@@ -25,7 +29,6 @@ pytestmark = pytest.mark.unit
         "/tmp/x",
         "sql_scripts/../x",
         "sql_scripts\\x",
-        "config/a.csv",
         "python_scripts//a.py",
         "sql_scripts/./a.sql",
     ],
