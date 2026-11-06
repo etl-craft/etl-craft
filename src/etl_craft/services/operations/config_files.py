@@ -8,6 +8,8 @@ from pathlib import Path
 
 from sqlalchemy.engine import Connection
 
+from etl_craft.config import ConnectorConfig
+from etl_craft.config.project import project_config
 from etl_craft.core.enums import ApiRole, Transport
 from etl_craft.core.enums_access import Permission
 from etl_craft.core.errors import PermissionDeniedError, ResourceNotFoundError, UsageError
@@ -60,8 +62,13 @@ def required_role(ctx: OperationContext, request: object) -> ApiRole:
     return ApiRole.DEVELOPER if request.bundle is not None else ApiRole.VIEWER
 
 
-def _config_folder(ctx: OperationContext, request: ConfigDirectory) -> tuple[Path, str | None]:
-    """Resolve the folder to read, and the bundle id it came from when it came from one."""
+def _config_folder(
+    ctx: OperationContext, request: ConfigDirectory
+) -> tuple[Path, str | None, ConnectorConfig]:
+    """Resolve the folder to read, the bundle id it came from, and the config that validates it.
+
+    A bundle's rows are validated against the bundle's own script files, never the host's.
+    """
     if request.bundle is None:
         if ctx.transport == Transport.HTTP:
             raise UsageError(
@@ -69,16 +76,17 @@ def _config_folder(ctx: OperationContext, request: ConfigDirectory) -> tuple[Pat
                 "bundle id, since a folder is a path on the server's host; run `etl-craft "
                 "bundle publish`, then `etl-craft config apply --bundle latest`"
             )
-        return config_files.config_directory(ctx.config, request.config_dir), None
+        return config_files.config_directory(ctx.config, request.config_dir), None, ctx.config
     with ctx.engine.connect() as conn:
         bundle = Bundle.select(conn, ctx.project_id, request.bundle)
-    folder = bundle.materialize(ctx.config) / config_files.CONFIG_DIRNAME
+    root = bundle.materialize(ctx.config)
+    folder = root / config_files.CONFIG_DIRNAME
     if not folder.is_dir():
         raise UsageError(
             f"bundle {bundle.bundle_id}: no config/ folder; expected the project's config files "
             "in the published project; add config/ and publish the project again"
         )
-    return folder, bundle.bundle_id
+    return folder, bundle.bundle_id, project_config(ctx.config, root / "craft-connector.yml")
 
 
 def plan_config(ctx: OperationContext, request: ConfigDirectory) -> config_files.ConfigSync:
@@ -106,7 +114,7 @@ def _sync(
     ctx: OperationContext, request: ConfigDirectory, *, apply: bool
 ) -> config_files.ConfigSync:
     """Capture tag effects in the same locked snapshot used to validate submitted changes."""
-    target, bundle_id = _config_folder(ctx, request)
+    target, bundle_id, config = _config_folder(ctx, request)
     files = config_files.read_config_files(target)
     changes: list[TagAccessChange] = []
 
@@ -114,7 +122,7 @@ def _sync(
         check_dependencies(conn, completed, ctx=ctx)
         changes.extend(tag_access_changes(conn, ctx, completed))
 
-    done = config_files.sync_config(ctx.engine, ctx.config, files, apply=apply, authorize=authorize)
+    done = config_files.sync_config(ctx.engine, config, files, apply=apply, authorize=authorize)
     from etl_craft.engine.standing_pauses import current
 
     with ctx.engine.connect() as conn:
