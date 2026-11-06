@@ -58,6 +58,7 @@ the filtered list pages exist. All counts come from the shared `PROJECT_HEALTH` 
 etl-craft project-health --json
 etl-craft --project SALES project-health --json
 etl-craft about --json
+etl-craft --project SALES about
 etl-craft --project SALES catalog page --path index.html --output catalog-page.html
 ```
 

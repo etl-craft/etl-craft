@@ -11,6 +11,7 @@ from pathlib import Path
 
 from etl_craft import __version__
 from etl_craft.cli.authentication import access_context
+from etl_craft.cli.banner import Facts, is_terminal, render, wants_colour
 from etl_craft.cli.commands import COMMANDS, Command
 from etl_craft.cli.output import Output
 from etl_craft.core import log
@@ -120,6 +121,9 @@ def main(argv: Sequence[str] | None = None, commands: Sequence[Command] = COMMAN
     out = Output()
     args._output = out
     if getattr(args, "handler", None) is None:
+        if is_terminal(out.stdout):
+            out.line(render(Facts(version=__version__), art=True, colour=wants_colour(out.stdout)))
+            out.line("")
         parser.print_usage(out.stdout)
         return ExitCode.USAGE
     log.configure(args.log_level, args.log_format)
