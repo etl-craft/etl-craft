@@ -6,6 +6,10 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+- `etl-craft login --name NAME --password-stdin` signs in without a terminal, reading one password
+  line from a pipe (as `setup --password-stdin` does), so a CI job can bootstrap an ephemeral Engine DB.
+  A terminal on stdin, or `--name` without `--password-stdin`, is refused; the password never enters
+  arguments or the audit record.
 - A pipeline can validate the files an `EVENT_WAIT` with `EVENT_FILE` admitted in the same run: set the
   `FILE_VALIDATION` task's new `SOURCE_EVENT=<wait task code>` (the task must depend on the wait with
   `SUCCESS`; `validate` refuses a name that is not that pipeline's file wait). Each admitted file is

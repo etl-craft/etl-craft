@@ -117,6 +117,7 @@ def test_search_finds_pipelines_runs_and_remembers_what_was_opened(scene):
         page.get_by_role("link", name="EXTRACT").first.click()
         expect(page).to_have_url(url + "/ui/projects/default/pipelines/ORDERS/tasks/EXTRACT")
         page.goto(url + "/ui/projects/default/search")
+        expect(page.get_by_role("heading", name="Search", exact=True)).to_be_visible()
         page.keyboard.press("/")
         expect(page.get_by_label("Search pipelines, tasks, tables and runs")).to_be_focused()
         assert problems == []
