@@ -51,6 +51,8 @@ def with_named_engine_columns(
 ) -> dict[str, dict[str, str]]:
     """Return the source schemas plus the engine columns the SELECT names.
 
+    A column the project declares keeps its declared type; the engine's only fills a missing one.
+
     A ``*`` still expands to the business columns only, so existing lineage is unchanged.
     """
     try:
@@ -61,8 +63,8 @@ def with_named_engine_columns(
         named = set()
     return {
         table: {
-            **columns,
             **{c.lower(): "UNKNOWN" for c in owned.get(table, ()) if c.lower() in named},
+            **columns,
         }
         for table, columns in used.items()
     }

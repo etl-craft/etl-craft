@@ -147,7 +147,8 @@ Warehouses are optional extras. Core bundles none. `all` is core plus the UI, fo
 - Lineage resolves the columns the engine adds to a table it writes (`ROW_ID`, `PIPELINE_RUN_ID`,
   the audit columns of the writing action) when a later SELECT names them, so reading `row_id`,
   `active_flag` or `update_date` from a managed table is no longer reported as a lineage gap.
-  `SELECT *` still expands to the business columns only.
+  A column the project declares in `columns.csv` keeps its declared type. `SELECT *` still expands
+  to the business columns only.
 - Downloading a run log or the run's zip works for a pipeline outside the default project: both
   failed after the download started (the browser showed "problem loading page"), because the
   project was forgotten once the action returned.
