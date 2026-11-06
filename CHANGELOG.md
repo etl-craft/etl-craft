@@ -6,6 +6,11 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+- `etl-craft about` is now a banner: the product mark beside the package, Engine DB schema and server
+  versions, the signed-in account and role, live controllers and, with `--project`, the project and its
+  environment (PRODUCTION in red). It draws the mark and colour only on a terminal (none with `NO_COLOR` or
+  `TERM=dumb`, a narrow terminal, or `ETL_CRAFT_NO_BANNER=1`) and prints plain rows when piped; `--json` is unchanged. Running `etl-craft` with no command on
+  a terminal shows the mark and version above the usage (the exit code stays 2).
 - The new browser interface is now the only one, served at `/ui` (sign-in at `/ui/signin`). The
   server-rendered pages, their scripts and styles (including htmx) and the `/app` preview address
   are removed, as are the live-update stream (`/ui/projects/{project}/live`) and the pages' HTML
