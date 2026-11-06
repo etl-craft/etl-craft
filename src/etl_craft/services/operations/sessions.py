@@ -35,7 +35,13 @@ from etl_craft.services.operations.personal import Settings, settings_from
 from etl_craft.services.operations.recording import recorded
 from etl_craft.services.operations.requests import NoInput, Request
 from etl_craft.services.operations.schema_status import require_current_schema
-from etl_craft.services.operations.tokens import TokenGrant, TokenView, find_token, issue_token
+from etl_craft.services.operations.tokens import (
+    TokenGrant,
+    TokenView,
+    find_token,
+    idle_deadline,
+    issue_token,
+)
 from etl_craft.services.passwords import DECOY, verify_password
 
 ACCESS_LIFETIME = timedelta(hours=1)
@@ -84,6 +90,8 @@ class SignInMethods:
     SCHEMA: ClassVar[str] = "etl-craft/sign-in-methods/1"
     sso: bool
     local: bool = True
+    contact: str | None = None
+    notice: str | None = None
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -366,6 +374,13 @@ def refresh(ctx: OperationContext, request: TokenInput) -> Session:
         )
     with ctx.engine.connect() as conn:
         retained_groups = token_groups(conn, found.token_id)
+        uses = conn.execute(statement(conn, "api_session_uses"), {"token_id": found.token_id}).all()
+    last = max((as_utc(u.last_used_at or u.created_at) for u in uses), default=found.created_at)
+    if idle_deadline(ctx, found.created_at, last) <= datetime.now(UTC):
+        raise UsageError(
+            f"the session ended after {ctx.config.auth.session_idle_minutes} minutes without "
+            "activity; run `etl-craft login` again"
+        )
     if retained_groups:
         absolute_end = found.created_at + timedelta(hours=ctx.config.auth.session_hours)
         found = replace(found, expires_at=min(found.expires_at, absolute_end))
@@ -419,7 +434,12 @@ def sign_out(ctx: OperationContext, request: TokenInput) -> None:
 
 def sign_in_methods(ctx: OperationContext, request: NoInput) -> SignInMethods:
     """Say whether SSO is configured, so a sign-in can offer it."""
-    return SignInMethods(sso=bool(ctx.config.auth.oidc_issuer))
+    auth = ctx.config.auth
+    return SignInMethods(
+        sso=bool(auth.oidc_issuer),
+        contact=auth.admin_contact or None,
+        notice=auth.signin_notice or None,
+    )
 
 
 def whoami(ctx: OperationContext, request: IdentityInput) -> Identity:
@@ -457,14 +477,17 @@ def whoami(ctx: OperationContext, request: IdentityInput) -> Identity:
         signin = conn.execute(
             statement(conn, "account_last_signin"), {"name": ctx.actor.name}
         ).scalar_one_or_none()
-        expiry = (
+        used = (
             None
             if ctx.credential_token_id is None
             else conn.execute(
                 statement(conn, "account_session_expiry"),
                 {"token_id": ctx.credential_token_id},
-            ).scalar_one_or_none()
+            ).one_or_none()
         )
+    expiry = as_utc(used.expires_at) if used is not None and used.expires_at else None
+    if expiry is not None and used is not None and used.token_kind == TokenKind.ACCESS:
+        expiry = min(expiry, idle_deadline(ctx, used.created_at, used.last_used_at))
     return Identity(
         ctx.actor.name,
         str(ctx.role),
@@ -476,6 +499,6 @@ def whoami(ctx: OperationContext, request: IdentityInput) -> Identity:
         level,
         settings_from(row.ui_settings),
         None if signin is None else as_utc(signin),
-        None if expiry is None else as_utc(expiry),
+        expiry,
         environment,
     )

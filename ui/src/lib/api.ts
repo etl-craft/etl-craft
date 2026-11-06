@@ -22,19 +22,37 @@ function query(params?: Params): string {
   return pairs.length ? "?" + new URLSearchParams(pairs).toString() : "";
 }
 
+const onSignInPage = (): boolean => window.location.pathname.endsWith("/signin");
+
+export const SESSION_ENDED = "etl-craft:session-ended";
+
+/** The sign-in address that returns to the page being viewed. */
+export const signInAddress = (): string => "/app/signin?return_to=" + encodeURIComponent(window.location.pathname + window.location.search);
+
+/** The session has ended: the shell says so and offers sign-in, so nothing on the page is thrown away. */
 export function signInAgain(): void {
-  const back = window.location.pathname + window.location.search;
-  window.location.assign("/signin?return_to=" + encodeURIComponent(back));
+  if (onSignInPage()) return;
+  window.dispatchEvent(new Event(SESSION_ENDED));
 }
+
+let lastInput = Date.now();
+const QUARTER_MINUTE = 15_000;
+
+/** Real use of the page (a click or key), as opposed to the page refreshing itself. */
+export const noteInput = (): void => {
+  lastInput = Date.now();
+};
 
 async function send(path: string, init: RequestInit): Promise<Response> {
   let response: Response;
+  // The server ends a session after idle time; a refresh nobody asked for must not extend it.
+  const background: Record<string, string> = Date.now() - lastInput > QUARTER_MINUTE ? { "X-ETL-Background": "1" } : {};
   try {
-    response = await fetch(path, { credentials: "same-origin", ...init });
+    response = await fetch(path, { credentials: "same-origin", ...init, headers: { ...(init.headers as Record<string, string> | undefined), ...background } });
   } catch {
     throw new ApiError("The server did not answer; check that the etl-craft server is running and reload.", 0);
   }
-  if (response.status === 401) {
+  if (response.status === 401 && !onSignInPage()) {
     signInAgain();
     throw new ApiError("Your session has ended; sign in again.", 401);
   }
@@ -84,7 +102,7 @@ export async function signOut(): Promise<void> {
     headers: { "Content-Type": "application/json", "X-CSRF-Token": csrfToken() },
     body: "{}",
   });
-  window.location.assign("/signin");
+  window.location.assign("/app/signin");
 }
 
 export const project = (code: string): string => `/api/v1/projects/${encodeURIComponent(code)}`;

@@ -4,9 +4,18 @@ import { createRoot } from "react-dom/client";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { AppShell } from "@/components/app-shell";
 import { ToastProvider } from "@/components/toast";
+import { About } from "@/pages/about";
+import { Admin } from "@/pages/admin";
+import { Agents } from "@/pages/agents";
 import { Attempt } from "@/pages/attempt";
 import { Catalog } from "@/pages/catalog";
 import { Console } from "@/pages/console";
+import { Maintenance } from "@/pages/maintenance";
+import { Password } from "@/pages/password";
+import { Search } from "@/pages/search";
+import { Settings } from "@/pages/settings";
+import { SignIn } from "@/pages/signin";
+import { System } from "@/pages/system";
 import { Held } from "@/pages/held";
 import { Insights } from "@/pages/insights";
 import { Items } from "@/pages/items";
@@ -32,8 +41,17 @@ createRoot(document.getElementById("root")!).render(
       <ToastProvider>
       <BrowserRouter basename="/app">
         <Routes>
+          <Route path="signin" element={<SignIn />} />
           <Route element={<AppShell />}>
             <Route index element={<Home />} />
+            <Route path="system" element={<System />} />
+            <Route path="agents" element={<Agents />} />
+            <Route path="admin" element={<Admin />} />
+            <Route path="about" element={<About />} />
+            <Route path="settings" element={<Settings />} />
+            <Route path="password" element={<Password />} />
+            <Route path="projects/:project/search" element={<Search />} />
+            <Route path="projects/:project/maintenance" element={<Maintenance />} />
             <Route path="projects/:project/pipelines" element={<Pipelines />} />
             <Route path="projects/:project/pipelines/:pipeline" element={<PipelineDetail />} />
             <Route path="projects/:project/pipelines/:pipeline/tasks/:task" element={<Task />} />

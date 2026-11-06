@@ -107,7 +107,11 @@ def _caller(
     """Prove the bearer token's account; the action table decides what it may do."""
     if credentials is None and browser.browser_request(request):
         return browser.cookie_context(ctx, request)
-    identity = None if credentials is None else authenticate(ctx, credentials.credentials)
+    identity = (
+        None
+        if credentials is None
+        else authenticate(ctx, credentials.credentials, background=browser.is_background(request))
+    )
     if identity is None:
         if request.method == "POST" and request.url.path.endswith("/uploads"):
             from etl_craft.core.errors import PermissionDeniedError
@@ -243,7 +247,8 @@ def parse_request(action: Action, given: dict[str, object]) -> object:
         return _adapter(action.name).validate_python(given)
     except ValidationError as error:
         problems = "; ".join(
-            f"`{'.'.join(str(p) for p in e['loc'])}` {e['msg'].lower()}" for e in error.errors()
+            f"`{'.'.join(str(p) for p in e['loc'])}` {e['msg'][:1].lower()}{e['msg'][1:]}"
+            for e in error.errors()
         )
         raise UsageError(f"{action.name}: {problems}") from None
 

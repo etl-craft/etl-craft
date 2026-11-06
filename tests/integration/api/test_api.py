@@ -464,7 +464,7 @@ def test_engine_unavailable_response_does_not_echo_storage_parameters(api, monke
 
     _ctx, client, _creds, _run, _attempt = api
 
-    def broken(*args):
+    def broken(*args, **kwargs):
         raise SQLAlchemyError("secret credential")
 
     monkeypatch.setattr("etl_craft.api.routes.authenticate", broken)
@@ -841,3 +841,14 @@ def test_foreign_project_prefix_cannot_masquerade_as_a_local_pipeline_grant(api)
     redacted = visible_result(replace(ctx, role=ApiRole.VIEWER, project_id=1), value)
     assert redacted.selected_pipeline_run_id is None
     assert redacted.status is None and "private" not in redacted.reason
+
+
+def test_a_refused_enum_value_keeps_the_case_of_the_values_it_lists(api):
+    _ctx, client, creds, _run, _attempt = api
+    response = client.get(
+        "/api/v1/projects/default/lineage?table=a.b&direction=sideways",
+        headers=headers(creds["viewer"]),
+    )
+    assert response.status_code == 400
+    message = response.json()["message"]
+    assert "'BOTH', 'UPSTREAM' or 'DOWNSTREAM'" in message

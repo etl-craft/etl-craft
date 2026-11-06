@@ -228,6 +228,7 @@ class AuthConfig:
     lockout_after: int = 5
     admin_contact: str = "your administrator"
     signin_notice: str | None = None
+    session_idle_minutes: int = 60
 
 
 @dataclass(frozen=True)

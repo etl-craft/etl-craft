@@ -18,26 +18,30 @@ export function ConfirmDialog({
   onConfirm,
   onClose,
   askReason = true,
+  canSubmit = true,
   children,
 }: {
   open: boolean;
   title: string;
   action: string;
   effect: string;
-  projectCode: string;
-  env: EnvironmentInfo;
+  /** Absent for platform actions, which belong to the whole server rather than one project. */
+  projectCode?: string;
+  env?: EnvironmentInfo;
   error: string | null;
   busy: boolean;
   onConfirm: (reason: string) => void;
   onClose: () => void;
   /** False for requests that take no reason; the field is then not shown. */
   askReason?: boolean;
+  /** False while the form fields in `children` are incomplete. */
+  canSubmit?: boolean;
   children?: React.ReactNode;
 }) {
   const [reason, setReason] = React.useState("");
   const [typed, setTyped] = React.useState("");
-  const production = isProduction(env);
-  const ready = (!askReason || reason.trim().length > 0) && (!production || typed === projectCode);
+  const production = !!env && !!projectCode && isProduction(env);
+  const ready = canSubmit && (!askReason || reason.trim().length > 0) && (!production || typed === projectCode);
   return (
     <Dialog open={open} onClose={onClose} labelledBy="confirm-title">
       <form
@@ -52,8 +56,8 @@ export function ConfirmDialog({
             {title}
           </h2>
           <p className="flex flex-wrap items-center gap-2 text-sm">
-            <span className="font-medium">{projectCode}</span>
-            <EnvironmentBadge env={env} />
+            <span className="font-medium">{projectCode ?? "All projects"}</span>
+            {env ? <EnvironmentBadge env={env} /> : null}
           </p>
           <p className="text-sm text-muted">{effect}</p>
         </div>

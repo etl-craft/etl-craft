@@ -9,7 +9,7 @@ import { ApiError, getJson, getText, project } from "@/lib/api";
 import { catalogSite } from "@/lib/routes";
 import type { LineageRefresh, Report } from "@/lib/types";
 import { useDocumentTitle } from "@/title";
-import { useParams } from "react-router-dom";
+import { useParams, useSearchParams } from "react-router-dom";
 
 type Done = { message?: string };
 
@@ -51,6 +51,7 @@ function LineageResult({ result }: { result: LineageRefresh }) {
 
 export function Catalog() {
   const { project: code = "" } = useParams();
+  const [params] = useSearchParams();
   const developer = useRoleAtLeast("developer");
   const admin = useRoleAtLeast("admin");
   const info = useProjectInfo(code);
@@ -126,7 +127,12 @@ export function Catalog() {
           {missing.replace(/[.\s]+$/, "")}.{developer ? " Use Rebuild catalog above." : ""}
         </Notice>
       ) : null}
-      {built.isSuccess ? <iframe key={frame} title={`${code} generated catalog`} src={catalogSite(code)} className="h-[78vh] w-full rounded-lg border border-border bg-surface" /> : null}
+      {built.isSuccess ? <iframe key={frame} title={`${code} generated catalog`} src={catalogSite(code, params.get("page") ?? undefined)} onLoad={embedCatalog} className="h-[78vh] w-full rounded-lg border border-border bg-surface" /> : null}
     </div>
   );
+}
+
+/** The shell already shows the project, environment, brand and theme, so the framed catalog keeps only its navigation and search. */
+function embedCatalog(event: React.SyntheticEvent<HTMLIFrameElement>): void {
+  event.currentTarget.contentDocument?.body.classList.add("embedded");
 }

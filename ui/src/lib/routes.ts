@@ -22,6 +22,14 @@ export const uploadsPath = (project: string, pipeline?: string): string =>
   `/projects/${enc(project)}/uploads` + (pipeline ? `?pipeline=${enc(pipeline)}` : "");
 export const insightsPath = (project: string): string => `/projects/${enc(project)}/insights`;
 export const consolePath = (project: string): string => `/projects/${enc(project)}/console`;
-export const catalogPath = (project: string): string => `/projects/${enc(project)}/catalog`;
+export const catalogPath = (project: string, page?: string): string => `/projects/${enc(project)}/catalog` + (page ? `?page=${enc(page)}` : "");
 /** The generated catalog site, served by the same-origin file route. */
 export const catalogSite = (project: string, page = "index.html"): string => `/ui/projects/${enc(project)}/catalog/files/${page}`;
+export const systemPath = "/system";
+export const agentsPath = "/agents";
+export const adminPath = (tab = "accounts", project?: string): string => `/admin?tab=${tab}` + (project ? `&project=${enc(project)}` : "");
+export const aboutPath = "/about";
+export const settingsPath = "/settings";
+export const passwordPath = "/password";
+export const searchPath = (project: string, q = ""): string => `/projects/${enc(project)}/search` + (q ? `?q=${enc(q)}` : "");
+export const maintenancePath = (project: string): string => `/projects/${enc(project)}/maintenance`;

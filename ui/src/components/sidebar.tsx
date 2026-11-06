@@ -10,13 +10,14 @@ import {
   PanelLeftOpen,
   PauseCircle,
   ShieldCheck,
+  Wrench,
   SquareTerminal,
   Upload,
   Workflow,
   type LucideIcon,
 } from "lucide-react";
 import { NavLink } from "react-router-dom";
-import { catalogPath, consolePath, heldPath, homePath, insightsPath, pipelinesPath, runsPath, scheduledPath, uploadsPath } from "@/lib/routes";
+import { adminPath, agentsPath, systemPath, catalogPath, consolePath, heldPath, homePath, maintenancePath, insightsPath, pipelinesPath, runsPath, scheduledPath, uploadsPath } from "@/lib/routes";
 import { cn } from "@/lib/utils";
 
 interface Item {
@@ -48,6 +49,7 @@ function sections(code: string | undefined, admin: boolean): { title: string; it
               { label: "Insights", icon: ChartNoAxesColumn, to: insightsPath(code) },
               { label: "Catalog", icon: BookOpen, to: catalogPath(code) },
               { label: "Console", icon: SquareTerminal, to: consolePath(code) },
+              ...(admin ? [{ label: "Maintenance", icon: Wrench, to: maintenancePath(code) }] : []),
             ],
           },
         ]
@@ -55,9 +57,9 @@ function sections(code: string | undefined, admin: boolean): { title: string; it
     {
       title: "Platform",
       items: [
-        { label: "System health", icon: Activity, href: "/ui/system" },
-        { label: "Agents", icon: Cpu, href: "/ui/agents" },
-        ...(admin ? [{ label: "Administration", icon: ShieldCheck, href: "/ui/admin" }] : []),
+        { label: "System health", icon: Activity, to: systemPath },
+        { label: "Agents", icon: Cpu, to: agentsPath },
+        ...(admin ? [{ label: "Administration", icon: ShieldCheck, to: adminPath() }] : []),
       ],
     },
   ];
