@@ -49,7 +49,10 @@ class LogLine:
 
 
 def run_log(ctx: OperationContext, request: RunSelection) -> Iterator[bytes]:
-    """Read the selected run's audit rows in one snapshot and stream the lines in time order."""
+    """Read the selected run's audit rows now, in one snapshot, and stream the lines in time order.
+
+    Nothing is read while streaming: the project scope the caller selected has ended by then.
+    """
     with read_snapshot(ctx.engine) as conn:
         pipeline_id = resolve_pipeline_id(conn, request.pipeline_code)
         run_id = select_run(conn, pipeline_id, request.selector).pipeline_run_id
@@ -63,8 +66,7 @@ def run_log(ctx: OperationContext, request: RunSelection) -> Iterator[bytes]:
             *_control_lines(conn, params),
             *_intervention_lines(conn, params),
         ]
-    for line in sorted(lines):
-        yield (line.render(run_id) + "\n").encode()
+    return ((line.render(run_id) + "\n").encode() for line in sorted(lines))
 
 
 def _value(value: object) -> str:
