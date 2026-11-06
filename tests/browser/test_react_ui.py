@@ -225,3 +225,30 @@ def test_every_page_renders_cleanly_in_both_themes_and_on_a_phone(scene, scheme,
                 page.screenshot(path=f"{shots}/{name}-{scheme}-{width}.png", full_page=True)
         assert problems == [], "console errors (a refused style or script shows here)"
         browser.close()
+
+
+def test_a_run_offers_its_logs_and_a_running_run_offers_reconcile(scene):
+    ctx, url, good, _ = scene
+    with acting_as(Actor("owner", ActorKind.USER)), ctx.engine.begin() as conn:
+        pipeline = conn.execute(
+            text("SELECT PIPELINE_ID AS id FROM CFG_PIPELINES WHERE PIPELINE_CODE='OPS'")
+        ).scalar_one()
+        running = start_run(conn, pipeline)
+    with sync_playwright() as pw:
+        browser, page, problems = open_page(pw, viewport={"width": 1280, "height": 900})
+        sign_in(page, url, f"/ui/projects/default/runs/OPS/{good}")
+        link = page.get_by_role("link", name="Download run log")
+        expect(link).to_have_attribute(
+            "href", f"/api/v1/projects/default/run-log?pipeline_code=OPS&run_id={good}"
+        )
+        expect(page.get_by_role("link", name="Download logs (zip)")).to_be_visible()
+        expect(page.get_by_role("button", name="Reconcile")).to_have_count(0)  # it has ended
+        page.goto(url + f"/ui/projects/default/runs/OPS/{running}")
+        page.get_by_role("button", name="Reconcile", exact=True).click()
+        dialog = page.get_by_role("dialog")
+        expect(dialog.get_by_text("fences attempts", exact=False)).to_be_visible()
+        dialog.get_by_role("button", name="Cancel").click()
+        page.goto(url + "/ui/projects/default/pipelines")
+        expect(page.get_by_role("button", name="Refresh all")).to_be_visible()  # owner is admin
+        assert problems == []
+        browser.close()

@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, LifeBuoy } from "lucide-react";
+import { ArrowLeft, Download, LifeBuoy } from "lucide-react";
 import * as React from "react";
 import { Link, useParams } from "react-router-dom";
 import { Fact, FactList, Loading, Notice, PageHeader } from "@/components/common";
@@ -90,6 +90,36 @@ function TaskPanel({ code, pipeline, runId, task, handler }: { code: string; pip
         ))}
       </div>
     </Card>
+  );
+}
+
+/** The run's own log and every attempt's log, downloaded as the API streams them; and, while it runs, fencing of expired owners. */
+function RunTools({ code, run, canRun }: { code: string; run: RunView; canRun: boolean }) {
+  const query = `pipeline_code=${encodeURIComponent(run.pipeline_code)}&run_id=${run.pipeline_run_id}`;
+  const file = (path: string, name: string, label: string) => (
+    <Button asChild size="sm">
+      <a href={`${project(code)}${path}?${query}`} download={name}>
+        <Download className="size-4" aria-hidden /> {label}
+      </a>
+    </Button>
+  );
+  return (
+    <div className="flex flex-wrap gap-2">
+      {file("/run-log", `run-${run.pipeline_run_id}.log`, "Download run log")}
+      {file("/run-zip", `run-${run.pipeline_run_id}-logs.zip`, "Download logs (zip)")}
+      {canRun && !run.end_date ? (
+        <ActionButton<{ message: string }>
+          code={code}
+          label="Reconcile"
+          title={`Reconcile ${run.pipeline_code} run #${run.pipeline_run_id}`}
+          effect="Fences attempts whose owner stopped renewing their lease and records them as LOST, so their tasks can be retried; live attempts are untouched."
+          endpoint="/reconciliations"
+          body={(reason) => ({ pipeline_code: run.pipeline_code, reason })}
+          describe={(r) => r.message}
+          size="sm"
+        />
+      ) : null}
+    </div>
   );
 }
 
@@ -196,6 +226,7 @@ export function RunDetail() {
           <Loading what="run" />
         )}
       </PageHeader>
+      {r ? <RunTools code={code} run={r} canRun={canRun} /> : null}
       <ScopeControls code={code} pipeline={pipeline} runId={id} elsewhere={["RECOVER"]} />
       <Card>
         <CardHeader>
