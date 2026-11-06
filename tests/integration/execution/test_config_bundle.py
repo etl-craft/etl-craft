@@ -1,6 +1,7 @@
 """`config plan` and `config apply` read a published bundle for a caller with no host."""
 
 import csv
+import shutil
 from dataclasses import replace
 from pathlib import Path
 
@@ -79,6 +80,16 @@ def test_a_published_bundle_is_applied_not_the_files_edited_after_it(scene):
     code, output = p.run("config", "apply")  # the host's own files still apply as before
     assert code == 0, output
     assert "unpublished" in codes(p)
+
+
+def test_a_bundle_is_validated_against_its_own_scripts_not_the_hosts(scene):
+    p, folder = scene
+    python_task(folder, "published")
+    code, output = p.run("bundle", "publish")
+    assert code == 0, output
+    shutil.rmtree(p.config.project_dir / "python_scripts")  # a server holds no project scripts
+    code, output = p.run("config", "apply", "--bundle", "latest")
+    assert code == 0 and "published" in codes(p), output
 
 
 def over_http(p, role):
