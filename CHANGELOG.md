@@ -148,6 +148,11 @@ Warehouses are optional extras. Core bundles none. `all` is core plus the UI, fo
   the audit columns of the writing action) when a later SELECT names them, so reading `row_id`,
   `active_flag` or `update_date` from a managed table is no longer reported as a lineage gap.
   `SELECT *` still expands to the business columns only.
+- Downloading a run log or the run's zip works for a pipeline outside the default project: both
+  failed after the download started (the browser showed "problem loading page"), because the
+  project was forgotten once the action returned.
+- The browser interface's confirmation messages close themselves after eight seconds; the close
+  button still dismisses one sooner.
 
 - A command run against a server (`--api`) rebuilds a result field that is one of a fixed set of
   texts, such as the `operation` of each `config plan` change; it failed with "expected Literal".

@@ -1,7 +1,8 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import * as React from "react";
-import { describe, expect, it } from "vitest";
-import { ToastProvider, useToast } from "@/components/toast";
+import { act } from "react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { TOAST_MS, ToastProvider, useToast } from "@/components/toast";
 
 function Asker() {
   const toast = useToast();
@@ -42,4 +43,21 @@ describe("toasts", () => {
     fireEvent.click(screen.getByLabelText("Dismiss"));
     expect(screen.getByRole("status")).not.toHaveTextContent("Recover accepted");
   });
+
+  it("close by themselves after a few seconds", () => {
+    vi.useFakeTimers();
+    render(
+      <ToastProvider>
+        <Asker />
+      </ToastProvider>,
+    );
+    fireEvent.click(screen.getByText("Ask"));
+    expect(screen.getByRole("status")).toHaveTextContent("Recover accepted");
+    act(() => {
+      vi.advanceTimersByTime(TOAST_MS);
+    });
+    expect(screen.getByRole("status")).not.toHaveTextContent("Recover accepted");
+  });
+
+  afterEach(() => vi.useRealTimers());
 });
