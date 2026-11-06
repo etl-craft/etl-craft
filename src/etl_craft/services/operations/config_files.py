@@ -8,9 +8,11 @@ from pathlib import Path
 
 from sqlalchemy.engine import Connection
 
+from etl_craft.core.enums import ApiRole, Transport
 from etl_craft.core.enums_access import Permission
 from etl_craft.core.errors import PermissionDeniedError, ResourceNotFoundError, UsageError
 from etl_craft.core.time import as_utc
+from etl_craft.engine.bundles import Bundle
 from etl_craft.engine.queries import statement
 from etl_craft.services import config_files
 from etl_craft.services.config_models import TagAccessChange
@@ -26,9 +28,22 @@ from etl_craft.services.operations.tag_access import tag_access_changes
 
 @dataclass(frozen=True, kw_only=True)
 class ConfigDirectory(Request):
-    """The config files' folder; ``config/`` in the project directory unless given."""
+    """The config files' folder (``config/`` in the project directory unless given), or a bundle.
+
+    ``bundle`` is ``latest`` or a published bundle's id: the files are that bundle's ``config/``,
+    so a caller with no access to the host, such as CI, applies exactly what it published.
+    """
 
     config_dir: Path | None = None
+    bundle: str | None = None
+
+    def __post_init__(self) -> None:
+        """Refuse two sources for one set of files."""
+        if self.bundle is not None and self.config_dir is not None:
+            raise UsageError(
+                f"config_dir={str(self.config_dir)!r} with bundle={self.bundle!r}; expected one "
+                "source of config files; give a folder on this host, or a published bundle"
+            )
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -37,6 +52,33 @@ class ConfigExportInput(ConfigDirectory):
 
     force: bool = False
     as_of: str | None = None
+
+
+def required_role(ctx: OperationContext, request: object) -> ApiRole:
+    """Require the publishing role to read a published bundle's definitions."""
+    assert isinstance(request, ConfigDirectory)
+    return ApiRole.DEVELOPER if request.bundle is not None else ApiRole.VIEWER
+
+
+def _config_folder(ctx: OperationContext, request: ConfigDirectory) -> tuple[Path, str | None]:
+    """Resolve the folder to read, and the bundle id it came from when it came from one."""
+    if request.bundle is None:
+        if ctx.transport == Transport.HTTP:
+            raise UsageError(
+                "config over the API reads a published bundle: expected bundle=latest or a "
+                "bundle id, since a folder is a path on the server's host; run `etl-craft "
+                "bundle publish`, then `etl-craft config apply --bundle latest`"
+            )
+        return config_files.config_directory(ctx.config, request.config_dir), None
+    with ctx.engine.connect() as conn:
+        bundle = Bundle.select(conn, ctx.project_id, request.bundle)
+    folder = bundle.materialize(ctx.config) / config_files.CONFIG_DIRNAME
+    if not folder.is_dir():
+        raise UsageError(
+            f"bundle {bundle.bundle_id}: no config/ folder; expected the project's config files "
+            "in the published project; add config/ and publish the project again"
+        )
+    return folder, bundle.bundle_id
 
 
 def plan_config(ctx: OperationContext, request: ConfigDirectory) -> config_files.ConfigSync:
@@ -54,7 +96,8 @@ def apply_config(ctx: OperationContext, request: ConfigDirectory) -> config_file
     from etl_craft.services.operations.pipeline_refresh import RefreshInput
     from etl_craft.services.refresh_models import RefreshResults
 
-    checked = invoke(ctx, ActionName.PIPELINE_REFRESH, RefreshInput())
+    pinned = result.directory.removeprefix("bundle ") if request.bundle is not None else None
+    checked = invoke(ctx, ActionName.PIPELINE_REFRESH, RefreshInput(bundle=pinned))
     assert isinstance(checked, RefreshResults)
     return replace(result, refreshes=checked.refreshes)
 
@@ -63,7 +106,7 @@ def _sync(
     ctx: OperationContext, request: ConfigDirectory, *, apply: bool
 ) -> config_files.ConfigSync:
     """Capture tag effects in the same locked snapshot used to validate submitted changes."""
-    target = config_files.config_directory(ctx.config, request.config_dir)
+    target, bundle_id = _config_folder(ctx, request)
     files = config_files.read_config_files(target)
     changes: list[TagAccessChange] = []
 
@@ -89,7 +132,8 @@ def _sync(
             for pause in current(conn, pipeline.pipeline_id)
             if pause.active(datetime.now(UTC))
         )
-    return replace(done, tag_access_changes=tuple(changes), task_pauses=pauses)
+    where = done.directory if bundle_id is None else f"bundle {bundle_id}"
+    return replace(done, directory=where, tag_access_changes=tuple(changes), task_pauses=pauses)
 
 
 def export_config(ctx: OperationContext, request: ConfigExportInput) -> config_files.ConfigExport:
@@ -106,6 +150,11 @@ def export_config(ctx: OperationContext, request: ConfigExportInput) -> config_f
                 "CAN_VIEW on every pipeline to export the full state; ask its project manager "
                 "for the missing permissions or ask the manager to export it"
             )
+    if request.bundle is not None:
+        raise UsageError(
+            f"bundle={request.bundle!r}; export writes files on this host and takes no bundle; "
+            "give config_dir, or omit bundle"
+        )
     target = config_files.config_directory(ctx.config, request.config_dir)
     moment = None if request.as_of is None else resolve_as_of(ctx, request.as_of)
     return config_files.export_config(

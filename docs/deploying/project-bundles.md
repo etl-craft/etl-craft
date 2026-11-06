@@ -47,12 +47,19 @@ etl-craft run --pipeline-code SALES --api https://craft.example.com
 
 The publishing CI runner needs project CAN_MANAGE on its API token and the project files; it needs no
 Engine DB or artifact-store credentials. The API validates and stores the upload. Publication
-contains `craft-connector.yml` and every regular file under `sql_scripts/`, `python_scripts/`
-and `seeds/`, with a SHA-256 per file. Symlinks, traversal and special files are refused.
+contains `craft-connector.yml` and every regular file under `sql_scripts/`, `python_scripts/`,
+`validation_scripts/`, `email_templates/`, `seeds/` and `config/`, with a SHA-256 per file. Symlinks, traversal and special files are refused.
 Remove generated files before publishing: a publication permits at most 10,000 files and
 64 MiB of decoded content. HTTP requests are capped at 128 MiB before JSON decoding,
 including requests without Content-Length. Shorten paths or reduce content if this limit is
 reached. File bytes are omitted from action audit arguments.
+
+`config/` is in the publication so that a runner with no access to the host can apply exactly
+what it published: `etl-craft config apply --bundle latest --api https://craft.example.com` merges
+that publication's config files, then pins its pipelines to the same bundle (`--bundle ID` names
+one; `config plan --bundle` previews it). The API accepts no folder, only a bundle. Both need a
+developer token with project CAN_MANAGE, and a publication made before `config/` was included
+is refused with the remedy of publishing again.
 
 With `Artifacts.Store` set, starting a run without any publication fails before admission.
 A new publication becomes the next run's bundle, even when its files match an earlier one.
