@@ -40,6 +40,8 @@ header.top {
   position: sticky; top: 0; z-index: 10;
 }
 header.top .brand { font-weight: 600; color: var(--text); }
+body.embedded header.top .environment, body.embedded header.top .brand,
+body.embedded header.top .theme-control { display: none; }
 header.top nav { display: flex; flex-wrap: wrap; gap: 4px; }
 header.top nav a { padding: 4px 10px; border-radius: 6px; color: var(--text); }
 header.top nav a.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }

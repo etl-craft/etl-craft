@@ -243,7 +243,8 @@ def parse_request(action: Action, given: dict[str, object]) -> object:
         return _adapter(action.name).validate_python(given)
     except ValidationError as error:
         problems = "; ".join(
-            f"`{'.'.join(str(p) for p in e['loc'])}` {e['msg'].lower()}" for e in error.errors()
+            f"`{'.'.join(str(p) for p in e['loc'])}` {e['msg'][:1].lower()}{e['msg'][1:]}"
+            for e in error.errors()
         )
         raise UsageError(f"{action.name}: {problems}") from None
 

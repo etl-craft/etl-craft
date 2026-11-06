@@ -126,7 +126,12 @@ export function Catalog() {
           {missing.replace(/[.\s]+$/, "")}.{developer ? " Use Rebuild catalog above." : ""}
         </Notice>
       ) : null}
-      {built.isSuccess ? <iframe key={frame} title={`${code} generated catalog`} src={catalogSite(code)} className="h-[78vh] w-full rounded-lg border border-border bg-surface" /> : null}
+      {built.isSuccess ? <iframe key={frame} title={`${code} generated catalog`} src={catalogSite(code)} onLoad={embedCatalog} className="h-[78vh] w-full rounded-lg border border-border bg-surface" /> : null}
     </div>
   );
+}
+
+/** The shell already shows the project, environment, brand and theme, so the framed catalog keeps only its navigation and search. */
+function embedCatalog(event: React.SyntheticEvent<HTMLIFrameElement>): void {
+  event.currentTarget.contentDocument?.body.classList.add("embedded");
 }

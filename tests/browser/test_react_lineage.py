@@ -83,6 +83,8 @@ def test_refreshing_and_rebuilding_shows_the_traced_chain_and_the_api_agrees(cha
         # the catalog's own pages, inside the frame, name the same writers and readers
         frame = page.frame_locator("iframe[title='default generated catalog']")
         expect(frame.get_by_text("Untraced SQL tasks")).to_be_visible()
+        expect(frame.locator("header.top .brand")).to_be_hidden()  # the shell shows the brand
+        expect(frame.locator("header.top nav")).to_be_visible()
         frame.get_by_role("link", name="Warehouse").first.click()
         expect(frame.get_by_text("Read by").first).to_be_visible()
         warehouse = squashed(frame.locator("body"))
