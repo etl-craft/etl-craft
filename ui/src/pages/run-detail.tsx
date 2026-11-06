@@ -1,10 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, Download, LifeBuoy } from "lucide-react";
+import { ArrowLeft, Copy, Download, LifeBuoy } from "lucide-react";
 import * as React from "react";
 import { Link, useParams } from "react-router-dom";
 import { Fact, FactList, Loading, Notice, PageHeader } from "@/components/common";
 import { ActionButton } from "@/components/action-button";
 import { AttemptDetails } from "@/components/attempt-details";
+import { useToast } from "@/components/toast";
 import { ScopeControls } from "@/components/scope-controls";
 import { RunGraph } from "@/components/run-graph";
 import { StatusBadge } from "@/components/status";
@@ -103,8 +104,17 @@ function RunTools({ code, run, canRun }: { code: string; run: RunView; canRun: b
       </a>
     </Button>
   );
+  const toast = useToast();
   return (
     <div className="flex flex-wrap gap-2">
+      <Button
+        size="sm"
+        onClick={() => {
+          void navigator.clipboard.writeText(run.run_key).then(() => toast("Run key copied."));
+        }}
+      >
+        <Copy className="size-4" aria-hidden /> Copy run key
+      </Button>
       {file("/run-log", `run-${run.pipeline_run_id}.log`, "Download run log")}
       {file("/run-zip", `run-${run.pipeline_run_id}-logs.zip`, "Download logs (zip)")}
       {canRun && !run.end_date ? (

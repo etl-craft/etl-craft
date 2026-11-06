@@ -14,7 +14,9 @@ All notable changes are recorded here. The format follows
   `/ui/projects/{project}/console/commands` and the catalog frame's
   `/ui/projects/{project}/catalog/files/...` remain as the interface's own routes. A run's page now offers
   the run log and a zip of its logs for download and, for operators, Reconcile; the Pipelines page offers
-  Refresh all to developers (found missing by the capability-matrix test, which now reads `ui/src`).
+  Refresh all to developers (found missing by the capability-matrix test, which now reads `ui/src`). The
+  interface keeps the old one's keyboard shortcuts dialog (`?`), Copy run key and a live status line ("Live ·
+  updated N s ago", or that updates were lost); pages refresh by polling and pause while a dialog is open.
 - Signed-in sessions, from the command line and from the browser alike, now end after idle time as well as
   at `Auth.Session_hours`: the new `Auth.Session_idle_minutes` (default 60, range 5 to 10080) sets how long a
   session may go without a request, and `etl-craft login` is needed again once it has (renewal with a refresh

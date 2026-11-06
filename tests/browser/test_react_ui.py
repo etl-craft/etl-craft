@@ -252,3 +252,24 @@ def test_a_run_offers_its_logs_and_a_running_run_offers_reconcile(scene):
         expect(page.get_by_role("button", name="Refresh all")).to_be_visible()  # owner is admin
         assert problems == []
         browser.close()
+
+
+def test_shortcuts_copy_run_key_and_live_status_are_offered(scene):
+    _, url, good, _ = scene
+    with sync_playwright() as pw:
+        browser, page, problems = open_page(pw, viewport={"width": 1280, "height": 900})
+        page.context.grant_permissions(["clipboard-read", "clipboard-write"], origin=url)
+        sign_in(page, url, f"/ui/projects/default/runs/OPS/{good}")
+        expect(page.get_by_role("status").filter(has_text="Live")).to_be_visible()
+        page.get_by_role("button", name="Copy run key").click()
+        expect(page.get_by_role("status").filter(has_text="Run key copied.")).to_be_visible()
+        page.keyboard.press("?")
+        dialog = page.get_by_role("dialog")
+        expect(dialog.get_by_text("Keyboard shortcuts")).to_be_visible()
+        dialog.get_by_role("button", name="Close shortcuts").click()
+        expect(dialog).to_have_count(0)
+        page.get_by_role("button", name="Account menu").click()
+        page.get_by_role("menuitem", name="Keyboard shortcuts").click()
+        expect(page.get_by_role("dialog").get_by_text("opens this list")).to_be_visible()
+        assert problems == []
+        browser.close()

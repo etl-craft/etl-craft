@@ -1,3 +1,4 @@
+import { focusManager } from "@tanstack/react-query";
 import * as React from "react";
 import { cn } from "@/lib/utils";
 
@@ -21,6 +22,9 @@ export function Dialog({
     if (!dialog) return;
     if (open && !dialog.open) dialog.showModal();
     if (!open && dialog.open) dialog.close();
+    // Pages refresh themselves; while a dialog is open nothing may change under the person.
+    focusManager.setFocused(open ? false : undefined);
+    return () => focusManager.setFocused(undefined);
   }, [open]);
   return (
     <dialog
