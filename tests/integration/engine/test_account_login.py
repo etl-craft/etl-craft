@@ -154,6 +154,36 @@ def test_cli_password_login_whoami_env_precedence_and_logout(project, monkeypatc
     assert "run `etl-craft login`" in capsys.readouterr().err
 
 
+def test_cli_login_takes_its_password_from_a_pipe_without_a_terminal(project, monkeypatch, capsys):
+    import io
+
+    ctx = project
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: False)
+    monkeypatch.setattr("sys.stdin", io.StringIO(PASSWORD + "\n"))
+    assert main(["login", "--name", "owner", "--password-stdin"]) == 0
+    assert "Signed in as owner" in capsys.readouterr().out
+    key = credentials.database_key(ctx.engine, ctx.config.engine.schema)
+    value = credentials.read_session(key)
+    assert value and tokens.authenticate(ctx, value).name == "owner"
+    monkeypatch.setattr("sys.stdin", io.StringIO("wrong password\n"))
+    assert main(["login", "--name", "owner", "--password-stdin"]) == 2
+    assert "sign-in refused" in capsys.readouterr().err
+    with ctx.engine.connect() as conn:
+        audited = conn.execute(text("SELECT ARGUMENTS AS arguments FROM AUD_ACTIONS")).scalars()
+        assert not any(PASSWORD in str(arguments) for arguments in audited)
+
+
+def test_cli_login_refuses_a_terminal_and_a_lone_flag(project, monkeypatch, capsys):
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
+    assert main(["login", "--name", "owner", "--password-stdin"]) == 2
+    assert "requires piped stdin and --name" in capsys.readouterr().err
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: False)
+    assert main(["login", "--password-stdin"]) == 2
+    assert "requires piped stdin and --name" in capsys.readouterr().err
+    assert main(["login", "--name", "owner"]) == 2
+    assert "requires --password-stdin" in capsys.readouterr().err
+
+
 def test_session_expiry_is_enforced_on_the_next_command(project, capsys):
     ctx = project
     session = act(ctx, ActionName.LOGIN, name="owner", password=PASSWORD)
