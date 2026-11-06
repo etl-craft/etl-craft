@@ -59,7 +59,7 @@ def server(monkeypatch):
     monkeypatch.setattr(
         routes,
         "authenticate",
-        lambda ctx, token: types.SimpleNamespace(
+        lambda ctx, token, **_: types.SimpleNamespace(
             actor=ADMIN,
             role=ApiRole.ADMIN.value,
             token_id=1,

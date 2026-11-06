@@ -241,30 +241,35 @@ SESSION_TOUCH = timedelta(seconds=15)
 def idle_deadline(
     ctx: OperationContext, created_at: datetime, last_used_at: datetime | None
 ) -> datetime:
-    """When a browser session that stays untouched ends."""
+    """When a signed-in session that stays untouched ends."""
     return as_utc(last_used_at or created_at) + timedelta(
         minutes=ctx.config.auth.session_idle_minutes
     )
+
+
+def _touch_window(view: TokenView) -> timedelta:
+    """How stale a token's last use may get before a request records a new one."""
+    return SESSION_TOUCH if view.token_kind == TokenKind.ACCESS else timedelta(hours=1)
 
 
 def _record_use(ctx: OperationContext, view: TokenView) -> None:
     if view.token_kind not in (TokenKind.SERVICE, TokenKind.AGENT, TokenKind.ACCESS):
         return
     now = datetime.now(UTC)
-    window = SESSION_TOUCH if view.token_kind == TokenKind.ACCESS else timedelta(hours=1)
+    window = _touch_window(view)
     if view.last_used_at is not None and now - as_utc(view.last_used_at) < window:
         return
     if _USAGE_SLOT.acquire(blocking=False):
         try:
             Thread(
-                target=_write_use, args=(ctx, view, now, window), daemon=True, name="token-usage"
+                target=_write_use, args=(ctx, view, now), daemon=True, name="token-usage"
             ).start()
         except RuntimeError:
             _USAGE_SLOT.release()
             logger.warning("token usage writer is shutting down; request continues")
 
 
-def _write_use(ctx: OperationContext, view: TokenView, now: datetime, window: timedelta) -> None:
+def _write_use(ctx: OperationContext, view: TokenView, now: datetime) -> None:
     # An independent connection cannot consume request slots; daemon work never delays CLI exit.
     writer = None
     try:
@@ -273,7 +278,7 @@ def _write_use(ctx: OperationContext, view: TokenView, now: datetime, window: ti
         with acting_as(view.actor), writer.begin() as conn:
             conn.execute(
                 statement(conn, "api_token_used"),
-                {"token_id": view.token_id, "now": now, "before": now - window},
+                {"token_id": view.token_id, "now": now, "before": now - _touch_window(view)},
             )
     except (SQLAlchemyError, ConfigurationError):
         # Usage telemetry cannot affect authorization: the credential was already validated.

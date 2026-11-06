@@ -464,7 +464,7 @@ def test_engine_unavailable_response_does_not_echo_storage_parameters(api, monke
 
     _ctx, client, _creds, _run, _attempt = api
 
-    def broken(*args):
+    def broken(*args, **kwargs):
         raise SQLAlchemyError("secret credential")
 
     monkeypatch.setattr("etl_craft.api.routes.authenticate", broken)
