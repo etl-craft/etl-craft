@@ -13,7 +13,16 @@ from etl_craft.services.config_files import ConfigExport, ConfigSync
 from etl_craft.services.operations.config_files import ConfigDirectory, ConfigExportInput
 
 
-def _directory(parser: argparse.ArgumentParser, *, project: bool = True) -> None:
+def _directory(
+    parser: argparse.ArgumentParser, *, project: bool = True, bundle: bool = False
+) -> None:
+    if bundle:
+        parser.add_argument(
+            "--bundle",
+            metavar="latest|ID",
+            help="Read the config/ of this published bundle instead of a folder; the only "
+            "source --api accepts.",
+        )
     if project:
         parser.add_argument(
             "--project-dir", type=Path, help="Project folder holding craft-connector.yml."
@@ -35,10 +44,12 @@ def _configure(parser: argparse.ArgumentParser) -> None:
             "plan",
             help="Show what apply would change and validate it, changing nothing.",
             allow_abbrev=False,
-        )
+        ),
+        bundle=True,
     )
     _directory(
-        verbs.add_parser("apply", help="Merge the submitted config changes.", allow_abbrev=False)
+        verbs.add_parser("apply", help="Merge the submitted config changes.", allow_abbrev=False),
+        bundle=True,
     )
     export = verbs.add_parser(
         "export", help="Write the CFG_ rows as config files.", allow_abbrev=False

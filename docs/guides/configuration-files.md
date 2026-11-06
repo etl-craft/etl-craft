@@ -255,6 +255,19 @@ etl-craft config apply
 The plan's text is a review of the change in Engine DB terms; with `--format json`, a pull
 request bot can post it.
 
+A runner with no access to the controller's host publishes the project, then applies that
+publication over the API, with only a developer token that has project CAN_MANAGE:
+
+```bash
+etl-craft --api https://etl.example.com bundle publish --project-dir project
+etl-craft --api https://etl.example.com config plan --bundle latest
+etl-craft --api https://etl.example.com config apply --bundle latest
+```
+
+`--bundle` (`latest`, or a bundle id) reads that bundle's `config/` instead of a folder and is
+the only source the API accepts; apply then pins the pipelines to the same bundle rather than
+freezing the host's folder. `config export` stays on the host.
+
 ## When it fails
 
 | Exit | What happened | What to do |

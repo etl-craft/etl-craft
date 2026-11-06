@@ -41,6 +41,8 @@ CONSOLE_ONLY = {
     ActionName.HEALTH: "an unauthenticated liveness probe; System health is the page for people",
     ActionName.PIPELINE_REFRESH_HISTORY: "Refresh shows its findings; older ones are a CLI read",
     ActionName.TRIGGER_PIPELINE: "for external orchestrators; people use Run now",
+    ActionName.CONFIG_PLAN: "metadata is code: CI plans a published bundle; not the UI",
+    ActionName.CONFIG_APPLY: "metadata is code: CI applies a published bundle, not the UI",
 }
 """Actions deliberately left to the CLI and the console, each with its reason."""
 

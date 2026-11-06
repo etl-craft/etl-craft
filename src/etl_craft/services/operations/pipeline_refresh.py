@@ -34,9 +34,14 @@ from etl_craft.services.refresh_models import RefreshResults as RefreshResults
 
 @dataclass(frozen=True, kw_only=True)
 class RefreshInput(Request):
-    """One pipeline, or every pipeline in the selected project."""
+    """One pipeline, or every pipeline in the selected project.
+
+    ``bundle`` (``latest`` or a bundle id) pins the definitions to that published bundle instead
+    of freezing the controller host's project folder, as ``config apply --bundle`` does.
+    """
 
     pipeline_code: str | None = None
+    bundle: str | None = None
 
 
 def history(ctx: OperationContext, request: RefreshInput) -> RefreshResults:
@@ -116,7 +121,9 @@ def refresh_on(
                 f"{ctx.project!r}; select an active pipeline shown by `etl-craft pipelines`"
             )
         return RefreshResults(())
-    config, bundle_id, bundle_problem = _project_bundle(ctx, conn if atomic else None)
+    config, bundle_id, bundle_problem = _project_bundle(
+        ctx, conn if atomic else None, request.bundle
+    )
     checked = _project_findings(conn, ctx, config)
     for pipeline in pipelines:
         snapshot = conn.execute(
@@ -170,12 +177,18 @@ def refresh_on(
 def _project_bundle(
     ctx: OperationContext,
     connection: Connection | None,
+    selector: str | None = None,
 ) -> tuple[ConnectorConfig, str | None, RefreshFinding | None]:
     """Check the existing publication contract and freeze bytes once per project refresh."""
     bundle_id = None
     config = ctx.config
     bundle_problem = None
     try:
+        if selector is not None:
+            with ctx.engine.connect() if connection is None else nullcontext(connection) as conn:
+                chosen = Bundle.select(conn, ctx.project_id, selector)
+            config = project_config(config, chosen.materialize(config) / "craft-connector.yml")
+            return config, chosen.bundle_id, None
         files = collect(config.project_dir)
         manifest, _ = decode_files(files)
         with ctx.engine.connect() if connection is None else nullcontext(connection) as conn:

@@ -14,8 +14,9 @@ from etl_craft.core.file_bytes import read_regular
 from etl_craft.core.text import sha256_hex
 
 FOLDERS = frozenset(
-    {"sql_scripts", "python_scripts", "validation_scripts", "seeds", "email_templates"}
+    {"sql_scripts", "python_scripts", "validation_scripts", "seeds", "email_templates", "config"}
 )
+"""The project folders a bundle holds; ``config/`` lets CI apply a bundle without a host."""
 MAX_BYTES = 64 * 1024 * 1024
 MAX_FILES = 10000
 
@@ -37,8 +38,8 @@ def safe_path(value: str) -> PurePosixPath:
     ):
         raise UsageError(
             f"bundle path={value!r}; expected a relative sql_scripts/, python_scripts/, "
-            "validation_scripts/, seeds/ file or craft-connector.yml without traversal; "
-            "correct the manifest"
+            "validation_scripts/, seeds/, email_templates/ or config/ file or "
+            "craft-connector.yml without traversal; correct the manifest"
         )
     return path
 

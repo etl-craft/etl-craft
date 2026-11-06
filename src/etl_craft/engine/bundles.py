@@ -15,6 +15,9 @@ from etl_craft.engine.artifacts import ArtifactStore
 from etl_craft.engine.project_files import materialize
 from etl_craft.engine.queries import statement
 
+LATEST = "latest"
+"""The selector that names a project's newest published bundle."""
+
 
 @dataclass(frozen=True)
 class Bundle:
@@ -42,6 +45,24 @@ class Bundle:
                 f"bundle {bundle_id}: invalid manifest; expected its recorded "
                 f"files and store; restore the manifest from backup"
             ) from error
+
+    @classmethod
+    def select(cls, conn: Connection, project_id: int | None, selector: str) -> Bundle:
+        """Resolve ``latest`` or a bundle id to a publication of this project, never another's."""
+        found = (
+            conn.execute(statement(conn, "bundle_latest"), {"project_id": project_id})
+            if selector == LATEST
+            else conn.execute(
+                statement(conn, "bundle_of_project"),
+                {"bundle_id": selector, "project_id": project_id},
+            )
+        ).scalar_one_or_none()
+        if found is None:
+            raise ResourceNotFoundError(
+                f"bundle={selector!r}: no such published bundle; expected `latest` or a bundle "
+                "id recorded for this project; run `etl-craft bundle publish`"
+            )
+        return cls.load(conn, found)
 
     def read(self, config: ConnectorConfig, path: str) -> bytes:
         """Only a named manifest file can be read from the immutable content store."""

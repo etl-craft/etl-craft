@@ -6,6 +6,13 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+- `etl-craft config plan --bundle latest|ID` and `config apply --bundle latest|ID` read a published
+  bundle's `config/`, so a CI runner with only a developer token (project CAN_MANAGE) can apply what it
+  published over `--api` (`GET /api/v1/projects/{project}/config/plan` and `POST .../config/apply`).
+  Bundles now include the project's `config/` folder (publish again to use an older project with
+  `--bundle`), the apply pins its pipelines to that bundle instead of freezing the host's folder
+  (`RefreshInput` gains `bundle`), and the API refuses a folder: `config apply` without `--bundle`
+  stays on the controller's host.
 - `etl-craft login --name NAME --password-stdin` signs in without a terminal, reading one password
   line from a pipe (as `setup --password-stdin` does), so a CI job can bootstrap an ephemeral Engine DB.
   A terminal on stdin, or `--name` without `--password-stdin`, is refused; the password never enters
