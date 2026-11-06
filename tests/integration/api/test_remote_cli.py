@@ -15,6 +15,7 @@ from sqlalchemy import text
 from etl_craft.api.app import create_app
 from etl_craft.cli import main
 from etl_craft.cli.commands import login
+from etl_craft.config.object_models import Artifacts
 from etl_craft.core.actor import SYSTEM_ACTOR, Actor, ActorKind, acting_as
 from etl_craft.core.enums import ActionName, ApiRole, ControlAction, RunStatus
 from etl_craft.core.errors import ExitCode
@@ -641,3 +642,58 @@ def test_remote_cli_prepares_recovery_restart_and_selected_bulk(
     )
     assert code == 0, err
     assert json.loads(out)["outcomes"][0]["control"]["action"] == "HOLD"
+
+
+def test_a_runner_holding_only_a_token_publishes_and_applies_a_bundle(
+    server, monkeypatch, capsys, tmp_path
+):
+    from types import SimpleNamespace
+
+    from fixtures.actions import act
+
+    ctx = server["ctx"]
+    store = replace(ctx.config, artifacts=Artifacts(store=(tmp_path / "store").as_uri()))
+    served = replace(ctx, config=store)
+    act(
+        ctx,
+        ActionName.ACCESS_GRANT,
+        project="default",
+        account="ci-developer",
+        permission="CAN_MANAGE",
+        reason="ci deploys this project",
+    )
+    folder = tmp_path / "project"
+    (folder / "config").mkdir(parents=True)
+    _write_project(folder, SimpleNamespace(config=store))
+    (folder / "config" / "pipelines.csv").write_text(
+        "PIPELINE_CODE,PIPELINE_NAME,REFRESH_TYPE,ACTIVE_FLAG\nQ,Q,INCREMENTAL,Y\n"
+    )
+    (folder / "config" / "tasks.csv").write_text(  # the fixture's own task is not under test
+        "PIPELINE_CODE,TASK_CODE,TASK_TYPE,HANDLER,ACTIVE_FLAG\nP,T,ETL,PYTHON,N\n"
+    )
+    with Served(served) as url:
+        api = ("--api", url, "--project", "default")
+        monkeypatch.setenv("ETL_CRAFT_TOKEN", server["service"][ApiRole.ADMIN])
+        code, _, err = run(capsys, *api, "bundle", "publish", "--project-dir", str(folder))
+        assert code == 0, err  # an admin approves the project's connection contract once
+        monkeypatch.setenv("ETL_CRAFT_TOKEN", server["service"][ApiRole.DEVELOPER])
+        code, _, err = run(capsys, *api, "bundle", "publish", "--project-dir", str(folder))
+        assert code == 0, err  # the same contract: a developer publishes from then on
+        code, _, err = run(capsys, *api, "config", "apply")  # a folder is not accepted over HTTP
+        assert code == ExitCode.USAGE and "reads a published bundle" in err, err
+        code, out, err = run(capsys, *api, "config", "plan", "--bundle", "latest")
+        assert code == 0 and "insert" in out and "Q" in out, (out, err)
+        assert not _pipelines(served, "Q")
+        code, out, err = run(capsys, *api, "config", "apply", "--bundle", "latest")
+        assert code == 0 and "from bundle " in out, (out, err)
+        assert _pipelines(served, "Q")
+        monkeypatch.setenv("ETL_CRAFT_TOKEN", server["service"][ApiRole.VIEWER])
+        code, _, err = run(capsys, *api, "config", "plan", "--bundle", "latest")
+        assert code == ExitCode.PERMISSION_DENIED, err
+
+
+def _pipelines(ctx, code):
+    with ctx.engine.connect() as conn:
+        return conn.execute(
+            text("SELECT PIPELINE_ID AS id FROM CFG_PIPELINES WHERE PIPELINE_CODE=:c"), {"c": code}
+        ).all()

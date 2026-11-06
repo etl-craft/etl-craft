@@ -144,6 +144,9 @@ Warehouses are optional extras. Core bundles none. `all` is core plus the UI, fo
 
 ### Fixed
 
+- A command run against a server (`--api`) rebuilds a result field that is one of a fixed set of
+  texts, such as the `operation` of each `config plan` change; it failed with "expected Literal".
+
 - Agent ending reports preserve observed PID/birth and query-ending evidence for every terminal
   outcome. Both agent and local supervisors confirm server-side queries after ordinary exits,
   failures and timeouts; task status alone never creates evidence. Migration 0085 leaves old

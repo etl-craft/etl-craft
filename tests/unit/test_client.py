@@ -97,3 +97,16 @@ def test_server_errors_keep_their_class_and_exit_code():
     detail = response_error(422, b'{"detail": [{"loc": ["body", "reason"]}]}', "https://etl")
     assert isinstance(detail, UsageError) and "HTTP 422" in str(detail)
     assert isinstance(response_error(502, b"<html>bad gateway</html>", "https://etl"), ServerError)
+
+
+def test_a_literal_field_rebuilds_and_refuses_a_value_outside_it():
+    from etl_craft.services.config_models import Change, ConfigSync
+
+    sync = ConfigSync(
+        "d", "r", False, False, (Change("pipelines.csv", "CFG_PIPELINES", "insert", "Q"),)
+    )
+    document = to_json(sync)
+    assert from_json(ConfigSync, document) == sync
+    document["changes"][0]["operation"] = "merge"
+    with pytest.raises(ServerError, match=r"operation='merge'; expected one of"):
+        from_json(ConfigSync, document)
