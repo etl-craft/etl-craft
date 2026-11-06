@@ -6,13 +6,14 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
-- Browser sessions now end after idle time as well as at `Auth.Session_hours`: the new
-  `Auth.Session_idle_minutes` (default 60, range 5 to 10080) sets how long a session may go without a
-  request. Activity extends it, never past `Session_hours` from sign-in; command-line tokens are not
-  affected. The new interface warns ten minutes before the end ("Stay signed in"), stops polling while
-  nobody is using the page, and when the server ends the session shows "Your session has ended" with a
-  sign-in that returns to the same page, instead of leaving at once. `GET /api/v1/whoami` reports the
-  earlier of the two ends as `session_expires_at`.
+- Signed-in sessions, from the command line and from the browser alike, now end after idle time as well as
+  at `Auth.Session_hours`: the new `Auth.Session_idle_minutes` (default 60, range 5 to 10080) sets how long a
+  session may go without a request, and `etl-craft login` is needed again once it has (renewal with a refresh
+  token follows the same rule). Activity extends it, never past `Session_hours` from sign-in; service and
+  agent tokens are not affected. A page's own refreshes carry `X-ETL-Background: 1` and do not count as use.
+  The new interface warns ten minutes before the end ("Stay signed in") and, when the server ends the
+  session, shows "Your session has ended" with a sign-in that returns to the same page. `GET /api/v1/whoami`
+  reports the earlier of the two ends as `session_expires_at`.
 - The new browser interface gains System health, Agents (drain, resume, stop), About, personal settings,
   password change, search with recently viewed pages (press `/` or Ctrl+K), Administration (accounts,
   groups, tokens, access, projects, pools, announcements, erasure), project Maintenance (purge, rehash,
