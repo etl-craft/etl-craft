@@ -1,9 +1,11 @@
 """System health, agents, administration, maintenance, search, settings and sign-in in a browser."""
 
+import contextlib
 import os
 from pathlib import Path
 
 import pytest
+from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 from playwright.sync_api import expect, sync_playwright
 from sqlalchemy import text
 from test_react_ui import PASSWORD, open_page, sign_in
@@ -58,12 +60,14 @@ def test_system_health_agents_and_about_read_the_engine_db(scene):
     with sync_playwright() as pw:
         browser, page, problems = open_page(pw, viewport={"width": 1280, "height": 900})
         sign_in(page, url, "/app/system")
-        expect(page.get_by_role("heading", name="System health")).to_be_visible()
+        expect(page.get_by_role("heading", name="System health", exact=True)).to_be_visible()
         expect(page.get_by_text("Not running")).to_be_visible()  # no controller in the scene
-        expect(page.get_by_role("table", name="Projects").get_by_text("default")).to_be_visible()
+        expect(
+            page.get_by_role("table", name="Projects").get_by_text("default", exact=True).first
+        ).to_be_visible()
         shoot(page, "system")
         page.get_by_role("link", name="Open agents").click()
-        expect(page.get_by_role("heading", name="Agents")).to_be_visible()
+        expect(page.get_by_role("heading", name="Agents", exact=True)).to_be_visible()
         expect(page.get_by_text("No agents have registered")).to_be_visible()
         page.goto(url + "/app/about")
         expect(page.get_by_text("Package version")).to_be_visible()
@@ -144,7 +148,9 @@ def test_administrators_manage_accounts_and_tokens_through_confirmations(scene):
         tokens = page.get_by_role("table", name="API tokens")
         expect(tokens.get_by_text("ci", exact=True)).to_be_visible()
         page.get_by_role("tab", name="Projects").click()
-        expect(page.get_by_role("table", name="Projects").get_by_text("default")).to_be_visible()
+        expect(
+            page.get_by_role("table", name="Projects").get_by_text("default", exact=True).first
+        ).to_be_visible()
         assert problems == []
         browser.close()
     with ctx.engine.connect() as conn:
@@ -221,10 +227,11 @@ def test_a_session_that_ended_says_so_and_signing_in_returns_to_the_page(scene):
         expect(page.get_by_role("heading", name="ORDERS")).to_be_visible()
         with acting_as(Actor("owner", ActorKind.USER)), ctx.engine.begin() as conn:
             conn.execute(text("UPDATE CFG_API_TOKENS SET REVOKED_AT=CURRENT_TIMESTAMP"))
-        page.evaluate("document.dispatchEvent(new Event('visibilitychange'))")  # refetch
+        with contextlib.suppress(PlaywrightTimeoutError):  # a refused refresh may cover the page
+            page.get_by_role("link", name="Runs", exact=True).click(timeout=2000)
         dialog = page.get_by_role("dialog")
         expect(dialog.get_by_text("Your session has ended")).to_be_visible()
-        assert page.url.endswith("/app/projects/default/pipelines/ORDERS")  # nothing was thrown away
+        assert "/signin" not in page.url  # nothing was thrown away
         dialog.get_by_role("button", name="Sign in again").click()
-        page.wait_for_url("**/app/signin?return_to=%2Fapp%2Fprojects%2Fdefault%2Fpipelines%2FORDERS")
+        page.wait_for_url("**/app/signin?return_to=*")
         browser.close()

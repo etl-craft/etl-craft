@@ -374,6 +374,13 @@ def refresh(ctx: OperationContext, request: TokenInput) -> Session:
         )
     with ctx.engine.connect() as conn:
         retained_groups = token_groups(conn, found.token_id)
+        uses = conn.execute(statement(conn, "api_session_uses"), {"token_id": found.token_id}).all()
+    last = max((as_utc(u.last_used_at or u.created_at) for u in uses), default=found.created_at)
+    if idle_deadline(ctx, found.created_at, last) <= datetime.now(UTC):
+        raise UsageError(
+            f"the session ended after {ctx.config.auth.session_idle_minutes} minutes without "
+            "activity; run `etl-craft login` again"
+        )
     if retained_groups:
         absolute_end = found.created_at + timedelta(hours=ctx.config.auth.session_hours)
         found = replace(found, expires_at=min(found.expires_at, absolute_end))
@@ -479,7 +486,7 @@ def whoami(ctx: OperationContext, request: IdentityInput) -> Identity:
             ).one_or_none()
         )
     expiry = as_utc(used.expires_at) if used is not None and used.expires_at else None
-    if expiry is not None and ctx.browser_session:
+    if expiry is not None and used is not None and used.token_kind == TokenKind.ACCESS:
         expiry = min(expiry, idle_deadline(ctx, used.created_at, used.last_used_at))
     return Identity(
         ctx.actor.name,

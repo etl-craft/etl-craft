@@ -107,7 +107,11 @@ def _caller(
     """Prove the bearer token's account; the action table decides what it may do."""
     if credentials is None and browser.browser_request(request):
         return browser.cookie_context(ctx, request)
-    identity = None if credentials is None else authenticate(ctx, credentials.credentials)
+    identity = (
+        None
+        if credentials is None
+        else authenticate(ctx, credentials.credentials, background=browser.is_background(request))
+    )
     if identity is None:
         if request.method == "POST" and request.url.path.endswith("/uploads"):
             from etl_craft.core.errors import PermissionDeniedError

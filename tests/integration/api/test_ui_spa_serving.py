@@ -1,4 +1,7 @@
-"""The built browser interface is served under /app to a signed-in session only."""
+"""The built browser interface is served under /app to a signed-in session only.
+
+The session rules (idle end, background refreshes) are the ones the command line follows too.
+"""
 
 import re
 from datetime import UTC, datetime, timedelta
@@ -82,6 +85,15 @@ def test_a_missing_bundle_fails_with_the_remedy(scene, monkeypatch, tmp_path):
 
 
 def set_last_use(client, when):
+    """Back-date the session; first wait for the touch the last request queued, or it overwrites."""
+    deadline = datetime.now(UTC) + timedelta(seconds=10)
+    while datetime.now(UTC) < deadline:
+        with client.engine.connect() as conn:
+            row = conn.execute(
+                text("SELECT LAST_USED_AT AS used FROM CFG_API_TOKENS WHERE TOKEN_KIND='ACCESS'")
+            ).one()
+        if row.used is not None:
+            break
     with client.engine.begin() as conn:
         conn.execute(
             text("UPDATE CFG_API_TOKENS SET LAST_USED_AT=:when WHERE TOKEN_KIND='ACCESS'"),
@@ -108,3 +120,34 @@ def test_the_identity_reports_the_idle_deadline_when_it_comes_before_the_session
     # the request itself may touch the session, which only moves the deadline later
     assert ends >= last + timedelta(minutes=scene.idle_minutes) - timedelta(seconds=5)
     assert ends < datetime.now(UTC) + timedelta(minutes=scene.idle_minutes + 1)
+
+
+def test_a_background_refresh_does_not_extend_a_session_but_real_use_does(scene, monkeypatch):
+    from etl_craft.services.operations import tokens
+
+    touched = []
+    monkeypatch.setattr(tokens, "_record_use", lambda ctx, view: touched.append(view.token_id))
+    sign_in(scene)
+    touched.clear()
+    json = {"Accept": "application/json"}
+    assert scene.get("/api/v1/whoami", headers=json | {"X-ETL-Background": "1"}).status_code == 200
+    assert touched == []
+    assert scene.get("/api/v1/whoami", headers=json).status_code == 200
+    assert len(touched) == 1
+
+
+def test_the_command_line_follows_the_same_idle_rule_as_the_browser(scene):
+    login = scene.post(
+        "/api/v1/login/password",
+        headers={"Authorization": "Bearer none"},
+        json={"name": "alice", "password": PASSWORD},
+    )
+    assert login.status_code == 200, login.text
+    access, refresh = login.json()["access_token"], login.json()["refresh_token"]
+    bearer = {"Authorization": "Bearer " + access}
+    assert scene.get("/api/v1/whoami", headers=bearer).status_code == 200
+    set_last_use(scene, datetime.now(UTC) - timedelta(minutes=scene.idle_minutes + 1))
+    assert scene.get("/api/v1/whoami", headers=bearer).status_code == 401
+    renewed = scene.post("/api/v1/login/refresh", json={"token": refresh})
+    assert renewed.status_code == 400
+    assert "without activity; run `etl-craft login` again" in renewed.json()["message"]

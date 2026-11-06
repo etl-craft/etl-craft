@@ -1,26 +1,23 @@
-import { focusManager, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import * as React from "react";
 import { Notice } from "@/components/common";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { useIdentity } from "@/hooks";
-import { SESSION_ENDED, signInAddress } from "@/lib/api";
+import { noteInput, SESSION_ENDED, signInAddress } from "@/lib/api";
 
 const WARN_MS = 10 * 60_000;
-const QUIET_MS = 2 * 60_000;
 
 /**
  * The server ends a session after idle time (and always at its absolute end). This warns ten
  * minutes before, renews it when the person keeps working, and says so when it has ended.
- * Polling stops while nobody is using the page, so a forgotten tab does not keep the session alive.
+ * The page marks its own refreshes as background, so a forgotten tab does not keep the session alive.
  */
 export function SessionGuard() {
   const client = useQueryClient();
   const identity = useIdentity();
   const [now, setNow] = React.useState(() => Date.now());
   const [ended, setEnded] = React.useState(false);
-  const lastInput = React.useRef(0);
-  const quiet = React.useRef(false);
   const ends = identity.data?.session_expires_at ? Date.parse(identity.data.session_expires_at) : null;
   const left = ends === null ? null : ends - now;
   const over = ended || (left !== null && left <= 0);
@@ -29,23 +26,12 @@ export function SessionGuard() {
 
   React.useEffect(() => {
     const onEnded = () => setEnded(true);
-    const onInput = () => {
-      lastInput.current = Date.now();
-      if (quiet.current) {
-        quiet.current = false;
-        focusManager.setFocused(undefined);
-      }
-    };
-    lastInput.current = Date.now();
+    const onInput = () => noteInput();
     const events = ["pointerdown", "keydown", "wheel", "touchstart"] as const;
     events.forEach((name) => window.addEventListener(name, onInput, { passive: true }));
     window.addEventListener(SESSION_ENDED, onEnded);
     const tick = window.setInterval(() => {
       setNow(Date.now());
-      if (!quiet.current && Date.now() - lastInput.current > QUIET_MS) {
-        quiet.current = true;
-        focusManager.setFocused(false);
-      }
     }, 15_000);
     return () => {
       events.forEach((name) => window.removeEventListener(name, onInput));

@@ -35,10 +35,20 @@ export function signInAgain(): void {
   window.dispatchEvent(new Event(SESSION_ENDED));
 }
 
+let lastInput = Date.now();
+const QUARTER_MINUTE = 15_000;
+
+/** Real use of the page (a click or key), as opposed to the page refreshing itself. */
+export const noteInput = (): void => {
+  lastInput = Date.now();
+};
+
 async function send(path: string, init: RequestInit): Promise<Response> {
   let response: Response;
+  // The server ends a session after idle time; a refresh nobody asked for must not extend it.
+  const background: Record<string, string> = Date.now() - lastInput > QUARTER_MINUTE ? { "X-ETL-Background": "1" } : {};
   try {
-    response = await fetch(path, { credentials: "same-origin", ...init });
+    response = await fetch(path, { credentials: "same-origin", ...init, headers: { ...(init.headers as Record<string, string> | undefined), ...background } });
   } catch {
     throw new ApiError("The server did not answer; check that the etl-craft server is running and reload.", 0);
   }

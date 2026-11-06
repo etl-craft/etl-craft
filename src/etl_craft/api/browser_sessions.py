@@ -23,6 +23,7 @@ from etl_craft.services.operations.tokens import authenticate
 
 SESSION = "__Host-etl-craft-session"
 CSRF = "__Host-etl-craft-csrf"
+BACKGROUND = "X-ETL-Background"
 
 
 def browser_request(request: Request) -> bool:
@@ -114,10 +115,15 @@ def csrf_check(ctx: OperationContext, action: ActionName, request: Request, supp
         raise error
 
 
+def is_background(request: Request) -> bool:
+    """Whether the page marked this request as a refresh nobody asked for."""
+    return request.headers.get(BACKGROUND) == "1"
+
+
 def cookie_context(ctx: OperationContext, request: Request) -> OperationContext:
     """Authenticate the same opaque token used by the API; pages never prove identity themselves."""
     token = request.cookies.get(SESSION, "")
-    identity = authenticate(ctx, token, browser=True) if token else None
+    identity = authenticate(ctx, token, background=is_background(request)) if token else None
     if identity is None:
         raise HTTPException(401, "Sign in to continue", headers={"WWW-Authenticate": "Bearer"})
     return replace(

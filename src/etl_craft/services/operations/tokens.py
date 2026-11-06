@@ -186,17 +186,24 @@ def revoke_token(ctx: OperationContext, request: TokenRevoke) -> TokensView:
     return list_tokens(ctx, NoInput())
 
 
-def authenticate(ctx: OperationContext, token: str, *, browser: bool = False) -> TokenView | None:
+def authenticate(
+    ctx: OperationContext, token: str, *, background: bool = False
+) -> TokenView | None:
     """Refuse refresh tokens and unknown, expired, revoked or project-scoped tokens.
 
-    A browser session is also refused, without being touched, after it sat idle too long.
+    A signed-in session (an access token, from the command line or the browser) is also refused,
+    without being touched, after it sat idle too long. A background refresh (a page polling while
+    nobody uses it) does not count as use.
     """
     view = find_token(ctx, token)
     if view is None or view.token_kind == TokenKind.REFRESH:
         return None
-    if browser and idle_deadline(ctx, view.created_at, view.last_used_at) <= datetime.now(UTC):
+    if view.token_kind == TokenKind.ACCESS and idle_deadline(
+        ctx, view.created_at, view.last_used_at
+    ) <= datetime.now(UTC):
         return None
-    _record_use(ctx, view)
+    if not background:
+        _record_use(ctx, view)
     return view
 
 
@@ -227,8 +234,8 @@ def find_token(ctx: OperationContext, token: str) -> TokenView | None:
     return view
 
 
-# Browser sessions end after idle time, so their last use is kept to the minute.
-SESSION_TOUCH = timedelta(minutes=1)
+# Signed-in sessions end after idle time, so their last use is kept to the quarter minute.
+SESSION_TOUCH = timedelta(seconds=15)
 
 
 def idle_deadline(
