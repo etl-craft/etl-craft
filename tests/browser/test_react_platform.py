@@ -98,7 +98,7 @@ def test_settings_save_and_the_password_change_ends_the_session(scene):
 
 
 def test_search_finds_pipelines_runs_and_remembers_what_was_opened(scene):
-    _, url, run = scene
+    _, url, _run = scene
     with sync_playwright() as pw:
         browser, page, problems = open_page(pw, viewport={"width": 1280, "height": 900})
         sign_in(page, url, "/app/projects/default/pipelines/ORDERS")
@@ -141,13 +141,15 @@ def test_administrators_manage_accounts_and_tokens_through_confirmations(scene):
         dialog.get_by_label("Name").fill("ci")
         dialog.get_by_role("button", name="Create token").click()
         expect(page.get_by_text("This token is shown once")).to_be_visible()
-        expect(page.get_by_role("table", name="API tokens").get_by_text("ci", exact=True)).to_be_visible()
+        tokens = page.get_by_role("table", name="API tokens")
+        expect(tokens.get_by_text("ci", exact=True)).to_be_visible()
         page.get_by_role("tab", name="Projects").click()
         expect(page.get_by_role("table", name="Projects").get_by_text("default")).to_be_visible()
         assert problems == []
         browser.close()
     with ctx.engine.connect() as conn:
-        names = {r.name for r in conn.execute(text("SELECT ACCOUNT_NAME AS name FROM CFG_ACCOUNTS")).all()}
+        rows = conn.execute(text("SELECT ACCOUNT_NAME AS name FROM CFG_ACCOUNTS")).all()
+    names = {r.name for r in rows}
     assert "bob" in names
 
 

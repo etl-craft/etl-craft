@@ -44,7 +44,7 @@ def test_the_shell_sends_a_visitor_to_sign_in_and_back_to_the_same_page(scene):
     response = scene.get("/app/projects/default/runs", params={"status": "FAILED"})
     assert response.status_code == 303
     assert response.headers["location"] == (
-        "/signin?return_to=%2Fapp%2Fprojects%2Fdefault%2Fruns%3Fstatus%3DFAILED"
+        "/app/signin?return_to=%2Fapp%2Fprojects%2Fdefault%2Fruns%3Fstatus%3DFAILED"
     )
 
 
