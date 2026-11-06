@@ -63,6 +63,7 @@ from etl_craft.engine.repository.source_columns import (
 )
 from etl_craft.engine.repository.tasks import fetch_all_task_parameters
 from etl_craft.engine.repository.validation import fetch_active_tasks, fetch_task_dependency_edges
+from etl_craft.handlers.lineage_columns import engine_columns, with_named_engine_columns
 from etl_craft.handlers.sql.spec import resolve_select
 from etl_craft.warehouse.connection import warehouse_dialect
 
@@ -370,6 +371,7 @@ def _collect(
         cache = {} if refresh else fetch_lineage_cache(conn)
     schemas, invalid = _source_schemas(defined, dialect, catalog)
     ordered, processed, writers = _ordered_tasks(engine, config, tasks)
+    owned = engine_columns(tasks, catalog)
     for target in writers:
         schemas.pop(target, None)
     results: list[TaskLineage] = []
@@ -395,18 +397,13 @@ def _collect(
             for source in sources:
                 if source in invalid:
                     raise MetadataError(f"source {source}: {invalid[source]}")
-            used_schemas = {source: schemas[source] for source in sources if source in schemas}
-            contract = [
-                asdict(column)
-                for column in defined
-                if table_name(column.table_name.split("."), catalog) in used_schemas
-            ]
-            key = sha256_hex(
-                (
-                    lineage_key(select_sql, target, dialect, catalog, used_schemas)
-                    + json.dumps(contract, sort_keys=True)
-                ).encode()
+            used_schemas = with_named_engine_columns(
+                {source: schemas[source] for source in sources if source in schemas},
+                owned,
+                select_sql,
+                dialect,
             )
+            key = _lineage_cache_key(select_sql, target, defined, used_schemas, dialect, catalog)
             stored = cache.get((ref.task_id, key), [])
             edges = (
                 [stored_edge(e, name, catalog) for e in stored]
@@ -432,6 +429,28 @@ def _collect(
         keys[ref.task_id] = key
         results.append(TaskLineage(name, target, edges, cached=bool(stored), sources=sources))
     return sorted(results, key=lambda result: result.task)
+
+
+def _lineage_cache_key(
+    select_sql: str,
+    target: str,
+    defined: list[SourceColumn],
+    used_schemas: Mapping[str, Mapping[str, str]],
+    dialect: str | None,
+    catalog: str | None,
+) -> str:
+    """Return the key a task's cached edges are stored under."""
+    contract = [
+        asdict(column)
+        for column in defined
+        if table_name(column.table_name.split("."), catalog) in used_schemas
+    ]
+    return sha256_hex(
+        (
+            lineage_key(select_sql, target, dialect, catalog, used_schemas)
+            + json.dumps(contract, sort_keys=True)
+        ).encode()
+    )
 
 
 def dialect_and_catalog(config: ConnectorConfig) -> tuple[str | None, str | None]:
