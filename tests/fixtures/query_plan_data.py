@@ -309,6 +309,12 @@ SEEDS = [
         RUNS + " CROSS JOIN generate_series(1,1) t",
     ),
     (
+        "AUD_EVENT_FILE_DECISIONS",
+        "TASK_ID,FILE_PATH,VALIDATION_TASK_RUN_ID,SHA256,SIZE_BYTES,STATUS,REASON",
+        f"{TASK_ID},'plan/'||d,{TASK_RUN_ID},repeat('a',64),1,'ACCEPTED',NULL",
+        RUNS + " CROSS JOIN generate_series(1,1) t",
+    ),
+    (
         "AUD_TASK_ITEMS",
         "REPORT_ID,TASK_RUN_ID,ATTEMPT_ID,ITEM_KEY,ITEM_ATTEMPT_NUMBER,STATUS,ROW_COUNT,CREATED_BY,CREATED_AT",
         f"'item-'||{TASK_RUN_ID},{TASK_RUN_ID},{TASK_RUN_ID},'page',1,'SUCCESS',1,'plan',{DAY}",

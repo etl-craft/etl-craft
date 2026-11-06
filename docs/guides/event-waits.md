@@ -58,6 +58,11 @@ A timer checks a matching file when its settling interval ends. Periodic scans a
 watch handles. Globs without a fixed directory prefix use the fallback scan. Each resumed file
 wait checks once immediately for deliveries received during downtime.
 
+## Validating the files a wait admits
+
+A `FILE_VALIDATION` task that names the wait in `SOURCE_EVENT` validates the files the wait admitted
+in this run and holds back the ones it refuses; see [Stewardship uploads](stewardship.md#files-an-event-wait-admits).
+
 ## SQL waits
 
 SQL waits probe at `EVENT_POLL_SECONDS`, close their connections between probes and use the

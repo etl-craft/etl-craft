@@ -62,6 +62,10 @@ class AgentTask(AgentRequest):
     attempt_id: int
     bundle_path: str | None = None
     upload_id: int | None = None
+    wait_code: str | None = None
+    file_path: str | None = None
+    sha256: str | None = None
+    size_bytes: int | None = None
     operation: AgentReport
     item: ItemRecord | None = None
     item_keys: tuple[str, ...] = ()

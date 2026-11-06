@@ -22,6 +22,7 @@ from etl_craft.core.protection import (
 from etl_craft.core.upload_copy import verified_upload
 from etl_craft.core.uploads import UploadFile, UploadInfo
 from etl_craft.engine.alerts import AlertState
+from etl_craft.engine.event_files import AdmittedFile
 from etl_craft.engine.repository.business_rules import RuleRunBinding
 from etl_craft.engine.resource_locks import confirm_stale, holder_tag
 from etl_craft.engine.task_store import RuleEnding, TargetPublication, TargetState, TaskState
@@ -123,6 +124,30 @@ class RemoteTaskStore:
             replace(
                 self.request(AgentReport.UPLOAD_VALIDATION),
                 upload_id=upload_id,
+                error_message=reason,
+            )
+        )
+
+    def event_file_candidates(self, wait_code: str) -> tuple[AdmittedFile, ...]:
+        """Read the files the named wait admitted in this run through the fenced report."""
+        reply = decode(
+            tuple[AdmittedFile, ...],
+            self.call(replace(self.request(AgentReport.EVENT_FILES), wait_code=wait_code)),
+        )
+        assert isinstance(reply, tuple)
+        return reply
+
+    def event_file_result(
+        self, wait_code: str, path: str, digest: tuple[str, int], reason: str | None
+    ) -> None:
+        """Send the validator's per-file outcome through its fenced task report."""
+        self.call(
+            replace(
+                self.request(AgentReport.EVENT_FILE_RESULT),
+                wait_code=wait_code,
+                file_path=path,
+                sha256=digest[0],
+                size_bytes=digest[1],
                 error_message=reason,
             )
         )

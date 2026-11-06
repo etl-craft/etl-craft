@@ -6,6 +6,14 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+- A pipeline can validate the files an `EVENT_WAIT` with `EVENT_FILE` admitted in the same run: set the
+  `FILE_VALIDATION` task's new `SOURCE_EVENT=<wait task code>` (the task must depend on the wait with
+  `SUCCESS`; `validate` refuses a name that is not that pipeline's file wait). Each admitted file is
+  checked with the task's format, size and script exactly as an upload, and its decision, SHA-256 and
+  size are recorded in the new append-only `AUD_EVENT_FILE_DECISIONS` (migration 0086). Files then reach
+  later tasks (`task.event_files`, `$$event_files`) only once accepted, and a task refuses to start when
+  an accepted file changed since it was read; a retry keeps the first recorded digest. Without
+  `SOURCE_EVENT` nothing changes. The agent report action gains `EVENT_FILES` and `EVENT_FILE_RESULT`.
 - `etl-craft about` is now a banner: the product mark beside the package, Engine DB schema and server
   versions, the signed-in account and role, live controllers and, with `--project`, the project and its
   environment (PRODUCTION in red). It draws the mark and colour only on a terminal (none with `NO_COLOR` or

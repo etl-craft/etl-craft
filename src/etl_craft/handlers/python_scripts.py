@@ -39,7 +39,12 @@ from etl_craft.core.log import capture_all_loggers
 from etl_craft.core.script_kinds import reported_count, script_kind
 from etl_craft.engine.repository.offsets import StoredOffset
 from etl_craft.engine.task_store import TaskStore
-from etl_craft.handlers.registry import HandlerResult, TaskContext, task_store
+from etl_craft.handlers.registry import (
+    HandlerResult,
+    TaskContext,
+    require_event_files_unchanged,
+    task_store,
+)
 from etl_craft.scripting import Offset, ScriptResult, ScriptTask
 from etl_craft.warehouse.connection import warehouse_task
 
@@ -377,6 +382,7 @@ def script_task(
     input_params: Mapping[str, Any],
 ) -> ScriptTask:
     """Bind the script helper to the exact admitted attempt and shared store."""
+    require_event_files_unchanged(context)
     params = context.task_params
     return ScriptTask(
         uploads=store.upload_files() if context.uploads else (),

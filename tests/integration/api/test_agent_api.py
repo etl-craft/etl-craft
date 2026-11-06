@@ -2899,3 +2899,74 @@ def test_start_response_loss_ends_the_claim_and_keeps_observed_identity(
     assert "START" in row.message
     assert set(kinds) == {"PROCESS", "QUERIES"}
     temporary.cleanup()
+
+
+def test_an_agent_reads_and_decides_only_the_files_its_named_wait_admitted(agent_scene, tmp_path):
+    db, client, headers, _, _owner, _config = agent_scene
+    inbox = tmp_path / "inbox"
+    inbox.mkdir()
+    admitted = str((inbox / "a.csv").resolve())
+    stranger = str((inbox / "b.csv").resolve())
+    with db.engine.begin() as conn:
+        pipeline = add_pipeline(conn, "P")
+        wait = add_task(conn, pipeline, "wait", "EVENT_WAIT", EVENT_FILE=str(inbox / "*.csv"))
+        validate = add_task(
+            conn,
+            pipeline,
+            "validate",
+            "FILE_VALIDATION",
+            SCRIPT_FILE="validation_scripts/check.py",
+            FILE_FORMAT="CSV",
+            SOURCE_EVENT="wait",
+        )
+        run = transitions.create_run(conn, pipeline, SYSTEM_ACTOR)
+        wait_run = transitions.find_or_create_task_run(conn, wait, run).task_run_id
+        transitions.finish_task_run(conn, wait_run, status="SUCCESS")
+        conn.execute(
+            text("INSERT INTO AUD_TASK_EVENTS (TASK_RUN_ID, EVIDENCE) VALUES (:r, '{}')"),
+            {"r": wait_run},
+        )
+        conn.execute(
+            text("INSERT INTO AUD_EVENT_FILES (TASK_ID, FILE_PATH, TASK_RUN_ID) VALUES (:t,:p,:r)"),
+            {"t": wait, "p": admitted, "r": wait_run},
+        )
+        summary = transitions.find_or_create_task_run(conn, validate, run).task_run_id
+        attempt = transitions.queue_attempt(conn, summary, SYSTEM_ACTOR)
+    claimed = client.post(
+        "/api/v1/agent/claim",
+        headers=headers,
+        json={"version": __version__, "free_kinds": ["python", "warehouse"]},
+    )
+    assert claimed.status_code == 200 and claimed.json()["data"]["task"]["attempt_id"] == attempt
+
+    def report(operation, **fields):
+        body = {"version": __version__, "attempt_id": attempt, "operation": operation} | fields
+        return client.post("/api/v1/agent/report", headers=headers, json=body)
+
+    listed = report("EVENT_FILES", wait_code="wait")
+    assert listed.status_code == 200, listed.text
+    assert [f["path"] for f in listed.json()["data"]] == [admitted]
+    assert report("EVENT_FILES", wait_code="validate").status_code != 200  # not the named wait
+    digest = {"sha256": "a" * 64, "size_bytes": 3}
+    assert (
+        report("EVENT_FILE_RESULT", wait_code="wait", file_path=stranger, **digest).status_code
+        != 200
+    )  # a file this run's wait did not admit
+    decided = report("EVENT_FILE_RESULT", wait_code="wait", file_path=admitted, **digest)
+    assert decided.status_code == 200, decided.text
+    refused = report(
+        "EVENT_FILE_RESULT",
+        wait_code="wait",
+        file_path=admitted,
+        error_message="header wrong",
+        **digest,
+    )
+    assert refused.status_code == 200, refused.text
+    with db.engine.connect() as conn:
+        rows = conn.execute(
+            text(
+                "SELECT STATUS AS status, REASON AS reason FROM AUD_EVENT_FILE_DECISIONS "
+                "ORDER BY DECISION_ID"
+            )
+        ).all()
+    assert [(r.status, r.reason) for r in rows] == [("ACCEPTED", None), ("REFUSED", "header wrong")]

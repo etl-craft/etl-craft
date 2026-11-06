@@ -35,7 +35,7 @@ Uploads:
 ```
 
 This blanket limit (`uploads.max_file_mb`) is checked while bytes stream to disk. The validation
-task can lower it with `MAX_FILE_MB`. Its other parameters are `SCRIPT_FILE`, `FILE_FORMAT`
+task can lower it with `MAX_FILE_MB`. Its other parameters are `SOURCE_EVENT`, `SCRIPT_FILE`, `FILE_FORMAT`
 (`CSV`, `TXT`, `XLSX`), optional `ENCODING` (UTF-8), `SHEET_NAME` (first sheet) and JSON
 `INPUT_PARAMS`. Text always uses pipes and RFC 4180 quoting. XLSX needs `pip install
 'etl-craft[excel]'`; the optional openpyxl dependency is bounded to `>=3.1.5,<4`. Legacy Excel,
@@ -227,3 +227,27 @@ and Iceberg, and Databricks Delta/UniForm. Read the [recovery and permissions co
 including deferred controller recovery, doctor findings and the old-target recreation remedy.
 [Snapshot retention](erasure.md#human-locks-and-physical-retention) still controls how long
 erased values remain readable through time travel; S7.AL.6 owns the outstanding reporting work.
+
+## Files an event wait admits
+
+An ordinary pipeline can validate the files an `EVENT_WAIT` with `EVENT_FILE` admitted in the same
+run, with no upload and no uploader. Name the wait in the FILE_VALIDATION task's
+`SOURCE_EVENT=<wait task code>`; the validation task must depend on that wait with `SUCCESS`, and
+`validate` refuses a name that is not an active file wait of the pipeline. Without `SOURCE_EVENT`
+nothing changes: the task validates uploaded files, and every event file reaches later tasks as
+before.
+
+With it, the task reads the canonical paths the wait recorded for this run (no other run's
+files), checks each with `FILE_FORMAT`, `MAX_FILE_MB`, `ENCODING` and the team script exactly as for
+an upload (`task.upload` is the file; its `file_name` and `path` are the event file's), and
+records one decision per file in `AUD_EVENT_FILE_DECISIONS`: the SHA-256 and size it read, `ACCEPTED`
+or `REFUSED`, and the refusal's reason naming the file. A refused file is never loaded; if every
+file is refused the task fails naming the count. A run whose wait admitted nothing succeeds with
+0 (so `HAS_DATA` dependents skip), or fails permanently when `REQUIRE_UPLOADS=Y`.
+
+Files the wait admits then reach later tasks (`task.event_files`, `$$event_files`) only after a
+successful validation accepted them, whether or not the task depends on it. A task refuses to
+start when an accepted file's bytes differ from what validation read, naming the file and both
+digests. A retry of the validation keeps the first recorded digest: a file that changed since is
+refused, and its latest decision hides it. Deliver a corrected file under a new name. Local and
+agent execution use the same checks; an agent reads the file from its own mount of the path.

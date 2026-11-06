@@ -58,6 +58,7 @@ class TaskContext:
     owner: str | None = None
     started_at: datetime | None = None
     event_files: tuple[str, ...] = ()
+    event_digests: tuple[tuple[str, str, int], ...] = ()
     event_keys: tuple[str, ...] = ()
     event_rows: tuple[Mapping[str, Any], ...] = ()
     writer: str = SYSTEM_ACTOR.name
@@ -68,6 +69,13 @@ class TaskContext:
     _definition: Definition | None = None
     _secret_provider: str | None = field(default=None, repr=False, compare=False)
     _secret_values: Mapping[str, str] | None = field(default=None, repr=False, compare=False)
+
+
+def require_event_files_unchanged(context: TaskContext) -> None:
+    """Refuse the task when a file FILE_VALIDATION accepted changed since it was read."""
+    from etl_craft.engine.event_files import verify_unchanged
+
+    verify_unchanged({path: (sha, size) for path, sha, size in context.event_digests})
 
 
 @dataclass(frozen=True)

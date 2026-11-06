@@ -1087,6 +1087,26 @@ CREATE TRIGGER trg_truncate_aud_task_events BEFORE TRUNCATE ON AUD_TASK_EVENTS F
 CREATE TRIGGER trg_actor_guard_aud_event_files BEFORE INSERT OR UPDATE OR DELETE ON AUD_EVENT_FILES FOR EACH ROW EXECUTE FUNCTION etl_craft_guard();
 CREATE TRIGGER trg_truncate_aud_event_files BEFORE TRUNCATE ON AUD_EVENT_FILES FOR EACH STATEMENT EXECUTE FUNCTION etl_craft_guard();
 
+-- Each validation decision on a file an event wait admitted, with the digest it was read at.
+CREATE TABLE AUD_EVENT_FILE_DECISIONS (
+    DECISION_ID BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    TASK_ID BIGINT NOT NULL,
+    FILE_PATH TEXT NOT NULL,
+    VALIDATION_TASK_RUN_ID BIGINT NOT NULL REFERENCES AUD_TASK_RUN_LOG(TASK_RUN_ID),
+    SHA256 VARCHAR(64) NOT NULL,
+    SIZE_BYTES BIGINT NOT NULL,
+    STATUS VARCHAR(8) NOT NULL CHECK (STATUS IN ('ACCEPTED','REFUSED')),
+    REASON TEXT,
+    DECIDED_AT TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT fk_event_file_decision_file FOREIGN KEY (TASK_ID, FILE_PATH)
+        REFERENCES AUD_EVENT_FILES(TASK_ID, FILE_PATH),
+    CONSTRAINT ck_event_file_decision_reason CHECK ((STATUS = 'REFUSED') = (REASON IS NOT NULL))
+);
+CREATE INDEX ix_event_file_decisions_file ON AUD_EVENT_FILE_DECISIONS (TASK_ID, FILE_PATH, DECISION_ID);
+CREATE INDEX ix_event_file_decisions_run ON AUD_EVENT_FILE_DECISIONS (VALIDATION_TASK_RUN_ID);
+CREATE TRIGGER trg_actor_guard_aud_event_file_decisions BEFORE INSERT OR UPDATE OR DELETE ON AUD_EVENT_FILE_DECISIONS FOR EACH ROW EXECUTE FUNCTION etl_craft_guard();
+CREATE TRIGGER trg_truncate_aud_event_file_decisions BEFORE TRUNCATE ON AUD_EVENT_FILE_DECISIONS FOR EACH STATEMENT EXECUTE FUNCTION etl_craft_guard();
+
 -- Project-scoped object contracts; deployed warehouse structure remains authoritative.
 CREATE TABLE CFG_TABLES (
     TABLE_ID BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -2390,7 +2410,7 @@ BEGIN
         END IF;
     END IF;
     IF COALESCE(current_setting('etl_craft.purpose', true), '') <> 'retention' AND TG_OP IN ('UPDATE','DELETE','TRUNCATE') THEN
-        IF TG_TABLE_NAME IN ('aud_run_interventions','aud_actions','aud_dependency_consumption','aud_gate_decisions','aud_task_events','aud_event_files','aud_event_keys','aud_task_items','aud_project_bundles','aud_team_tables') THEN
+        IF TG_TABLE_NAME IN ('aud_run_interventions','aud_actions','aud_dependency_consumption','aud_gate_decisions','aud_task_events','aud_event_files','aud_event_file_decisions','aud_event_keys','aud_task_items','aud_project_bundles','aud_team_tables') THEN
             RAISE EXCEPTION USING MESSAGE = upper(TG_TABLE_NAME) || ' is append-only; use etl-craft retention';
         END IF;
         IF TG_TABLE_NAME ~ '^aud_cfg_.*_history$' THEN

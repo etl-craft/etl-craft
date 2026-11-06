@@ -207,6 +207,8 @@ EXPECTED = {
         "ERASURE",
         "UPLOADS",
         "UPLOAD_VALIDATION",
+        "EVENT_FILES",
+        "EVENT_FILE_RESULT",
         "BUNDLE",
         "ITEMS",
         "ITEM_EVENT",
