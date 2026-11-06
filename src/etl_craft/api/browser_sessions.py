@@ -117,7 +117,7 @@ def csrf_check(ctx: OperationContext, action: ActionName, request: Request, supp
 def cookie_context(ctx: OperationContext, request: Request) -> OperationContext:
     """Authenticate the same opaque token used by the API; pages never prove identity themselves."""
     token = request.cookies.get(SESSION, "")
-    identity = authenticate(ctx, token) if token else None
+    identity = authenticate(ctx, token, browser=True) if token else None
     if identity is None:
         raise HTTPException(401, "Sign in to continue", headers={"WWW-Authenticate": "Bearer"})
     return replace(

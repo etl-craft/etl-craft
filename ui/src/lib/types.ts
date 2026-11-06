@@ -6,6 +6,7 @@ export interface Identity {
   must_change_password: boolean;
   local_password: boolean;
   last_signin: string | null;
+  session_expires_at: string | null;
   project_permission: string | null;
   settings: { theme: string; timezone: string; default_project: string | null; page_size: number; time_display: string };
 }

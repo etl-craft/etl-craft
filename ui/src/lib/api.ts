@@ -24,10 +24,15 @@ function query(params?: Params): string {
 
 const onSignInPage = (): boolean => window.location.pathname.endsWith("/signin");
 
+export const SESSION_ENDED = "etl-craft:session-ended";
+
+/** The sign-in address that returns to the page being viewed. */
+export const signInAddress = (): string => "/app/signin?return_to=" + encodeURIComponent(window.location.pathname + window.location.search);
+
+/** The session has ended: the shell says so and offers sign-in, so nothing on the page is thrown away. */
 export function signInAgain(): void {
   if (onSignInPage()) return;
-  const back = window.location.pathname + window.location.search;
-  window.location.assign("/app/signin?return_to=" + encodeURIComponent(back));
+  window.dispatchEvent(new Event(SESSION_ENDED));
 }
 
 async function send(path: string, init: RequestInit): Promise<Response> {

@@ -4,6 +4,7 @@ import { Link, Outlet, useLocation, useNavigate, useParams } from "react-router-
 import { EnvironmentBadge, EnvironmentStrip } from "@/components/environment-badge";
 import { DropdownContent, DropdownItem, DropdownLabel, DropdownMenu, DropdownSeparator, DropdownTrigger } from "@/components/dropdown";
 import { Logo } from "@/components/logo";
+import { SessionGuard } from "@/components/session-guard";
 import { Sidebar } from "@/components/sidebar";
 import { Button } from "@/components/ui/button";
 import { useHealth, useIdentity } from "@/hooks";
@@ -62,6 +63,7 @@ export function AppShell() {
       <a href="#main" className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:bg-surface focus:p-2">
         Skip to content
       </a>
+      <SessionGuard />
       {env ? <EnvironmentStrip env={env} /> : null}
       <header className="z-30 flex h-14 shrink-0 items-center gap-3 border-b border-border bg-surface px-4">
         <Button variant="ghost" size="icon" className="lg:hidden" aria-label={open ? "Close menu" : "Open menu"} onClick={() => setOpen(!open)}>

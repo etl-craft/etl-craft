@@ -109,6 +109,9 @@ def test_auth_settings_validate_lifetime_and_issuer(tmp_path):
         "Engine": {"dev": {"Jdbc_url": "jdbc:sqlite:e.db", "Schema": "main"}},
     }
     assert parse_config(raw, tmp_path / "c.yml").auth.session_hours == 12
+    assert parse_config(raw, tmp_path / "c.yml").auth.session_idle_minutes == 60
+    raw["Auth"] = {"Session_idle_minutes": 15}
+    assert parse_config(raw, tmp_path / "c.yml").auth.session_idle_minutes == 15
     raw["Auth"] = {
         "Session_hours": 2,
         "Oidc_issuer": "https://issuer.example",
@@ -123,6 +126,7 @@ def test_auth_settings_validate_lifetime_and_issuer(tmp_path):
         {"Oidc_groups_claim": "groups"},
         {"Session_hours": True},
         {"Session_hours": 0},
+        {"Session_idle_minutes": 4},
         {"Oidc_client_id": "etl"},
         {"Oidc_issuer": "http://issuer", "Oidc_client_id": "etl"},
         {"Oidc_issuer": "https://[malformed", "Oidc_client_id": "etl"},

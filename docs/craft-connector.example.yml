@@ -230,6 +230,7 @@ Cloning:
 #   Admin_contact: "your administrator"  # recovery contact shown on sign-in
 #   Signin_notice: "Authorized use only" # optional notice, shown as text
 #   Session_hours: 12                   # value — integer 1..8760; local/browser session lifetime
+#   Session_idle_minutes: 60            # value — integer 5..10080; a browser session ends after this long without activity
 #   Refresh_days: 30                    # value — integer 1..365; server sign-in refresh lifetime
 #   Oidc_issuer: https://sso.example.com # value — exact HTTPS issuer, paired with Oidc_client_id
 #   Oidc_client_id: etl-craft            # value — public device-flow client, RS256 ID tokens

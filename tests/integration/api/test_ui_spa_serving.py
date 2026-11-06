@@ -1,9 +1,11 @@
 """The built browser interface is served under /app to a signed-in session only."""
 
 import re
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import text
 
 from etl_craft.api import ui_spa
 from etl_craft.api.app import create_app
@@ -26,7 +28,10 @@ def scene(engine_db):
         engine_db.engine, engine_db.config, Actor("owner", ActorKind.USER), role=ApiRole.ADMIN
     )
     act(ctx, ActionName.ACCOUNT_ADD, name="alice", role=ApiRole.VIEWER, password=PASSWORD)
-    return TestClient(create_app(ctx), base_url="https://testserver", follow_redirects=False)
+    client = TestClient(create_app(ctx), base_url="https://testserver", follow_redirects=False)
+    client.engine = engine_db.engine
+    client.idle_minutes = engine_db.config.auth.session_idle_minutes
+    return client
 
 
 def sign_in(client):
@@ -74,3 +79,32 @@ def test_a_missing_bundle_fails_with_the_remedy(scene, monkeypatch, tmp_path):
     response = scene.get("/app")
     assert response.status_code == 404
     assert "bundle is missing" in response.text and "make ui-build" in response.text
+
+
+def set_last_use(client, when):
+    with client.engine.begin() as conn:
+        conn.execute(
+            text("UPDATE CFG_API_TOKENS SET LAST_USED_AT=:when WHERE TOKEN_KIND='ACCESS'"),
+            {"when": when},
+        )
+
+
+def test_a_session_idle_for_too_long_is_refused_and_not_revived_by_the_refusal(scene):
+    sign_in(scene)
+    assert scene.get("/app").status_code == 200
+    set_last_use(scene, datetime.now(UTC) - timedelta(minutes=scene.idle_minutes + 1))
+    for _ in range(2):  # the refused request must not touch the session
+        response = scene.get("/app")
+        assert response.status_code == 303
+        assert response.headers["location"].startswith("/app/signin?return_to=")
+
+
+def test_the_identity_reports_the_idle_deadline_when_it_comes_before_the_session_end(scene):
+    sign_in(scene)
+    last = datetime.now(UTC) - timedelta(minutes=scene.idle_minutes - 30)
+    set_last_use(scene, last)
+    answer = scene.get("/api/v1/whoami", headers={"Accept": "application/json"})
+    ends = datetime.fromisoformat(answer.json()["session_expires_at"])
+    # the request itself may touch the session, which only moves the deadline later
+    assert ends >= last + timedelta(minutes=scene.idle_minutes) - timedelta(seconds=5)
+    assert ends < datetime.now(UTC) + timedelta(minutes=scene.idle_minutes + 1)

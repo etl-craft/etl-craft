@@ -211,3 +211,20 @@ def test_the_pages_render_cleanly_in_both_themes_and_on_a_phone(scene, scheme, w
         shoot(page, f"signin-{scheme}-{width}")
         assert [p for p in problems if "status of 404" not in p] == []
         browser.close()
+
+
+def test_a_session_that_ended_says_so_and_signing_in_returns_to_the_page(scene):
+    ctx, url, _ = scene
+    with sync_playwright() as pw:
+        browser, page, _problems = open_page(pw)
+        sign_in(page, url, "/app/projects/default/pipelines/ORDERS")
+        expect(page.get_by_role("heading", name="ORDERS")).to_be_visible()
+        with acting_as(Actor("owner", ActorKind.USER)), ctx.engine.begin() as conn:
+            conn.execute(text("UPDATE CFG_API_TOKENS SET REVOKED_AT=CURRENT_TIMESTAMP"))
+        page.evaluate("document.dispatchEvent(new Event('visibilitychange'))")  # refetch
+        dialog = page.get_by_role("dialog")
+        expect(dialog.get_by_text("Your session has ended")).to_be_visible()
+        assert page.url.endswith("/app/projects/default/pipelines/ORDERS")  # nothing was thrown away
+        dialog.get_by_role("button", name="Sign in again").click()
+        page.wait_for_url("**/app/signin?return_to=%2Fapp%2Fprojects%2Fdefault%2Fpipelines%2FORDERS")
+        browser.close()

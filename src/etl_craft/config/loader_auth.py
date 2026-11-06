@@ -11,6 +11,7 @@ from etl_craft.core.errors import ConfigurationError
 AUTH_KEYS = frozenset(
     {
         "Session_hours",
+        "Session_idle_minutes",
         "Refresh_days",
         "Oidc_issuer",
         "Oidc_client_id",
@@ -29,6 +30,7 @@ def parse_auth(
     settings = profiled_settings("Auth", raw, profile, path, resolver, nested=frozenset())
     reject_unknown(settings.settings, AUTH_KEYS, "Auth", path)
     hours = whole_number(settings, "Session_hours", 12, path, minimum=1, maximum=8760)
+    idle = whole_number(settings, "Session_idle_minutes", 60, path, minimum=5, maximum=10080)
     refresh_days = whole_number(settings, "Refresh_days", 30, path, minimum=1, maximum=365)
     issuer = settings.text("Oidc_issuer")
     client = settings.text("Oidc_client_id")
@@ -66,6 +68,7 @@ def parse_auth(
         refresh_days=refresh_days,
         oidc_groups_claim=groups,
         lockout_after=lockout,
+        session_idle_minutes=idle,
         admin_contact=settings.text("Admin_contact") or "your administrator",
         signin_notice=settings.text("Signin_notice"),
     )

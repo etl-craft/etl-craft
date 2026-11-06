@@ -35,7 +35,13 @@ from etl_craft.services.operations.personal import Settings, settings_from
 from etl_craft.services.operations.recording import recorded
 from etl_craft.services.operations.requests import NoInput, Request
 from etl_craft.services.operations.schema_status import require_current_schema
-from etl_craft.services.operations.tokens import TokenGrant, TokenView, find_token, issue_token
+from etl_craft.services.operations.tokens import (
+    TokenGrant,
+    TokenView,
+    find_token,
+    idle_deadline,
+    issue_token,
+)
 from etl_craft.services.passwords import DECOY, verify_password
 
 ACCESS_LIFETIME = timedelta(hours=1)
@@ -464,14 +470,17 @@ def whoami(ctx: OperationContext, request: IdentityInput) -> Identity:
         signin = conn.execute(
             statement(conn, "account_last_signin"), {"name": ctx.actor.name}
         ).scalar_one_or_none()
-        expiry = (
+        used = (
             None
             if ctx.credential_token_id is None
             else conn.execute(
                 statement(conn, "account_session_expiry"),
                 {"token_id": ctx.credential_token_id},
-            ).scalar_one_or_none()
+            ).one_or_none()
         )
+    expiry = as_utc(used.expires_at) if used is not None and used.expires_at else None
+    if expiry is not None and ctx.browser_session:
+        expiry = min(expiry, idle_deadline(ctx, used.created_at, used.last_used_at))
     return Identity(
         ctx.actor.name,
         str(ctx.role),
@@ -483,6 +492,6 @@ def whoami(ctx: OperationContext, request: IdentityInput) -> Identity:
         level,
         settings_from(row.ui_settings),
         None if signin is None else as_utc(signin),
-        None if expiry is None else as_utc(expiry),
+        expiry,
         environment,
     )
