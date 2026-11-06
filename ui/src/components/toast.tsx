@@ -5,13 +5,19 @@ interface Toast {
   id: number;
   text: string;
 }
+/** How long an answer stays before it closes itself; the close button dismisses it sooner. */
+export const TOAST_MS = 8000;
 const Context = React.createContext<(text: string) => void>(() => undefined);
 
 /** The one place action results appear; it outlives the button or page that asked, so a refetch cannot hide an answer. */
 export function ToastProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = React.useState<Toast[]>([]);
   const next = React.useRef(0);
-  const push = React.useCallback((text: string) => setToasts((now) => [...now, { id: next.current++, text }]), []);
+  const push = React.useCallback((text: string) => {
+    const id = next.current++;
+    setToasts((now) => [...now, { id, text }]);
+    window.setTimeout(() => setToasts((now) => now.filter((t) => t.id !== id)), TOAST_MS);
+  }, []);
   return (
     <Context.Provider value={push}>
       {children}
