@@ -9,7 +9,7 @@ from etl_craft.core.definitions import Definition, using
 from etl_craft.core.enums import YesNo
 from etl_craft.core.errors import RunStateError
 from etl_craft.core.time import as_utc
-from etl_craft.engine import run_scopes
+from etl_craft.engine import event_files, run_scopes
 from etl_craft.engine.queries import statement
 from etl_craft.engine.repository.events import run_event_data
 from etl_craft.engine.repository.tasks import TaskExecutionDetail, fetch_task_parameters
@@ -62,6 +62,9 @@ def build_task_context(
                 selection=(selected, row.exclusive_run),
             )
         event_data = run_event_data(conn, row.pipeline_run_id)
+        shown, digests = event_files.visible_files(
+            conn, definition, row.pipeline_run_id, detail.pipeline_id, event_data.files
+        )
         uploads = run_uploads(conn, row.pipeline_run_id, detail.handler) if row.has_uploads else ()
     return TaskContext(
         config=config,
@@ -82,7 +85,8 @@ def build_task_context(
         rerun=rerun,
         run_date=as_date(row.run_date),
         backfill=row.backfill == YesNo.YES,
-        event_files=event_data.files,
+        event_files=shown,
+        event_digests=tuple((p, sha, size) for p, (sha, size) in digests.items()),
         event_keys=event_data.keys,
         event_rows=event_data.rows,
         writer=row.writer,

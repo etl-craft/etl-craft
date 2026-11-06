@@ -57,10 +57,33 @@ def graph_problems(
     return problems
 
 
-def validation_problems(conn: Connection, context: TaskContext) -> list[str]:
-    """Refuse an upload-only validator on a pipeline nobody can upload to."""
-    from etl_craft.handlers.file_validation import require_uploads
+def _source_event_problems(conn: Connection, context: TaskContext, wait_code: str) -> list[str]:
+    """Require SOURCE_EVENT to name this pipeline's file wait, which validation depends on."""
+    where = f"{context.pipeline_code}.{context.task_code}"
+    row = conn.execute(
+        statement(conn, "validation_source_event"),
+        {"pipeline_id": context.pipeline_id, "task_id": context.task_id, "wait_code": wait_code},
+    ).one_or_none()
+    if row is None or row.handler != Handler.EVENT_WAIT or not row.event_file:
+        return [
+            f"{where}: SOURCE_EVENT={wait_code!r}; expected an active EVENT_WAIT task of this "
+            "pipeline that sets EVENT_FILE; name that file wait, or remove SOURCE_EVENT"
+        ]
+    if not row.waits_on:
+        return [
+            f"{where}: SOURCE_EVENT={wait_code!r} without a SUCCESS dependency on it; expected "
+            f"{where} to depend on {wait_code} with SUCCESS so its files exist when "
+            "validated; add that dependency"
+        ]
+    return []
 
+
+def validation_problems(conn: Connection, context: TaskContext) -> list[str]:
+    """Refuse a validator whose files cannot arrive, and an upload-only one nobody can feed."""
+    from etl_craft.handlers.file_validation import require_uploads, source_event
+
+    if (wait_code := source_event(context)) is not None:
+        return _source_event_problems(conn, context, wait_code)
     if not require_uploads(context):
         return []
     row = conn.execute(

@@ -33,6 +33,14 @@ from etl_craft.core.uploads import UploadFile
 from etl_craft.engine import locks, resource_locks, transitions
 from etl_craft.engine.agent_state import fence
 from etl_craft.engine.alerts import AlertState, read_alert
+from etl_craft.engine.event_files import (
+    AdmittedFile,
+    Decision,
+    ValidationScope,
+    admitted,
+    record,
+    require_source_event,
+)
 from etl_craft.engine.queries import statement
 from etl_craft.engine.repository.business_rules import (
     BusinessRule,
@@ -154,6 +162,16 @@ class TaskStore(ResourceLocker, ItemStore, Protocol):
 
     def validation_result(self, upload_id: int, reason: str | None) -> None:
         """Record this validator's decision for one admitted file."""
+        ...
+
+    def event_file_candidates(self, wait_code: str) -> tuple[AdmittedFile, ...]:
+        """List the files the named wait admitted in this run, with any recorded identity."""
+        ...
+
+    def event_file_result(
+        self, wait_code: str, path: str, digest: tuple[str, int], reason: str | None
+    ) -> None:
+        """Record this validator's decision on one file its wait admitted in this run."""
         ...
 
     def alert(self, pipelines: str | None) -> AlertState:
@@ -370,6 +388,25 @@ class LocalTaskStore:
             with using(self.definition):
                 handler = fetch_task_execution_detail(conn, self.identity.task_id).handler
             validation_result(conn, self.identity.pipeline_run_id, handler, upload_id, reason)
+
+    def event_file_candidates(self, wait_code: str) -> tuple[AdmittedFile, ...]:
+        """Read this run's admitted files and their recorded identity under the live attempt."""
+        with self.engine.connect() as conn:
+            self._assert(conn)
+            require_source_event(conn, self.definition, self.identity.task_id, wait_code)
+            identity = self.identity
+            return admitted(conn, identity.pipeline_run_id, identity.pipeline_id, wait_code)
+
+    def event_file_result(
+        self, wait_code: str, path: str, digest: tuple[str, int], reason: str | None
+    ) -> None:
+        """Fence each per-file decision against this validator's live attempt."""
+        with self.engine.begin() as conn:
+            self._assert(conn)
+            require_source_event(conn, self.definition, self.identity.task_id, wait_code)
+            i = self.identity
+            scope = ValidationScope(i.pipeline_run_id, i.pipeline_id, wait_code, i.task_run_id)
+            record(conn, scope, Decision(path, digest, reason))
 
     @property
     def session_tag(self) -> str:

@@ -325,6 +325,10 @@ def seeded_tables(db):
                     value = "LOADED"
                 if table.upper() == "AUD_UPLOADS" and lower == "status":
                     value = "QUEUED"
+                if table.upper() == "AUD_EVENT_FILE_DECISIONS":
+                    if lower == "reason":
+                        continue  # an ACCEPTED decision carries no reason
+                    value = "ACCEPTED" if lower == "status" else value
                 if table.upper() == "AUD_AGENTS" and lower == "status":
                     value = AgentStatus.ACTIVE
                 if table.upper() == "AUD_AGENT_COMMANDS" and lower == "command":
@@ -658,6 +662,7 @@ def test_terminal_attempts_and_append_only_rows_are_immutable(engine_db):
         "AUD_ATTEMPT_ACKNOWLEDGEMENTS",
         "AUD_TASK_EVENTS",
         "AUD_EVENT_FILES",
+        "AUD_EVENT_FILE_DECISIONS",
         "AUD_EVENT_KEYS",
         "AUD_TASK_ITEMS",
         "AUD_PROJECT_BUNDLES",

@@ -68,7 +68,7 @@ from etl_craft.core.landing import LandingContract
 from etl_craft.core.ownership import ResourceLocker
 from etl_craft.core.text import qualify
 from etl_craft.core.upload_reader import UploadReader as UploadReader
-from etl_craft.core.uploads import UploadFile
+from etl_craft.core.uploads import CheckedFile, UploadFile
 from etl_craft.warehouse.connection import open_warehouse
 
 Partitions = Mapping[str, int]
@@ -344,7 +344,7 @@ def _partitions(value: object) -> Partitions:
 class ValidationTask:
     """One file, its declared reader and parameters; no warehouse connection is supplied."""
 
-    upload: UploadFile
+    upload: CheckedFile
     reader: UploadReader
     task_params: Mapping[str, str]
     input_params: Mapping[str, Any]

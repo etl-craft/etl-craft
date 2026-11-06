@@ -191,7 +191,7 @@ item's text, or work done early under another item.
 | S7.I The endurance run | Planned |  | 72-hour accelerated Support Insights candidate run, faults and bounded growth evidence after S8 is running |
 | S7.J Documentation to finish | In progress | #85, #227, #277 | Generated references and guides exist; supported public contracts, complete reference and recipes remain |
 | S7.L ETL Craft logo and CLI banner | In progress | #277, banner PR | Shared mark, favicon and theme assets and the CLI banner (`etl-craft about`, bare invocation) exist; branding guidance, vector sources and the documentation logo remain |
-| S7.AL Pre-demo package gaps | In progress | #314, #315 | Slices 1–3 ship duplicate counts, current references and guarded-table validation guidance. Slices 4–6 remain. |
+| S7.AL Pre-demo package gaps | In progress | #314, #315 | Slices 1–3 ship duplicate counts, current references and guarded-table validation guidance. Slice 4 (event-file validation) is in review; slices 5–6 remain. |
 | S7.AM Protection on every warehouse | Done | #311, #312, #313 | Atomic SCD merges, in-row protection and recovery, private audit identities and provider acceptance |
 | S7.AN Always show the environment | Done | #328 | CLI context and production confirmation; designed, sandboxed alert/SLA templates and catalog environment |
 | S7.AO UI rebuild | Done | #329–#335 | Seven slices: shell, Home, runs, pipelines, tasks, uploads, insights, console, catalog, system, agents, administration, maintenance, settings, search, sign-in; the new interface is the only one, served at `/ui`, and the old pages are deleted |
@@ -1377,6 +1377,17 @@ empty-history-page handling defect, which was corrected and verified. No cloud w
   Acceptance availability: the shared dedupe oracle passed on Snowflake native and
   Iceberg, and Databricks Delta and UniForm. The exact local merge budget assertions
   remain unchanged.
+
+- **S7.AL.4 event-file validation (owner, 2026-11-06).** Choices that differ from the item text:
+  the opt-in is the FILE_VALIDATION parameter `SOURCE_EVENT=<EVENT_WAIT task code>`, for waits
+  with `EVENT_FILE` (the filesystem glob that records admitted paths in `AUD_EVENT_FILES`). One
+  new append-only table, `AUD_EVENT_FILE_DECISIONS` (migration 0086, both dialects), holds each
+  decision with the SHA-256 and size read, so no upload or uploader identity is invented and
+  `AUD_UPLOADS` and its storage are unchanged. Bytes are not copied: a path stays where the wait
+  found it and its digest pins its identity (a retry compares against the first recorded digest;
+  later tasks verify accepted digests before reading). Cloud-object events are not fetched; they
+  stay on the signal-table pattern. Agents read the file through their own mount of the path.
+  Acceptance availability: no warehouse SQL changed, so cloud acceptance was not needed.
 
 - **S7.AL.2–3 combined delivery (owner, 2026-11-03).** Slices 2 and 3 ship in one
   pull request, superseding the one-PR-per-slice instruction for these two slices.

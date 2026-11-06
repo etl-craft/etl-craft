@@ -65,7 +65,7 @@ from etl_craft.core.text import (
 from etl_craft.dialects.query_analysis import read_only_problem, read_query
 from etl_craft.dialects.warehouse.base import STORAGE_PARAMETERS
 from etl_craft.engine.repository.offsets import StoredOffset
-from etl_craft.handlers.registry import TaskContext
+from etl_craft.handlers.registry import TaskContext, require_event_files_unchanged
 from etl_craft.handlers.sql.upload_controls import check_keys as check_upload_keys
 from etl_craft.handlers.sql.watermarks import Watermark, read_watermark, source_pipelines
 from etl_craft.warehouse.connection import warehouse_dialect
@@ -171,6 +171,7 @@ class SqlTask:
 
 def read_sql_task(context: TaskContext, stored: StoredOffset | None = None) -> SqlTask:
     """Name the exact consumer when a rule scope cannot be interpreted safely."""
+    require_event_files_unchanged(context)
     try:
         return _read_sql_task(context, stored)
     except SqlGuardError as error:

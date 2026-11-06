@@ -284,6 +284,15 @@ def report(ctx: OperationContext, request: AgentTask) -> AgentReply | Awaitable[
         AgentReport.UPLOAD_VALIDATION: lambda: store.validation_result(
             required(request.upload_id, "upload_id"), request.error_message
         ),
+        AgentReport.EVENT_FILES: lambda: store.event_file_candidates(
+            required(request.wait_code, "wait_code")
+        ),
+        AgentReport.EVENT_FILE_RESULT: lambda: store.event_file_result(
+            required(request.wait_code, "wait_code"),
+            required(request.file_path, "file_path"),
+            (required(request.sha256, "sha256"), required(request.size_bytes, "size_bytes")),
+            request.error_message,
+        ),
         AgentReport.BUNDLE: lambda: bundle_report(ctx, task, request),
         AgentReport.STATE: lambda: store.state(task.task_params.get("SQL_ACTION")),
         AgentReport.ALERT: lambda: store.alert(task.task_params.get("EMAIL_PIPELINES")),
