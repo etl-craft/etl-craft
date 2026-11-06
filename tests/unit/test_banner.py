@@ -5,7 +5,15 @@ import io
 import pytest
 
 from etl_craft.cli import main
-from etl_craft.cli.banner import MARK, RED, Facts, is_terminal, render, wants_colour
+from etl_craft.cli.banner import (
+    MARK,
+    RED,
+    Facts,
+    is_terminal,
+    render,
+    wants_art,
+    wants_colour,
+)
 
 pytestmark = pytest.mark.unit
 
@@ -78,3 +86,25 @@ def test_a_bare_invocation_shows_the_banner_only_on_a_terminal(monkeypatch, caps
     assert main([]) == 2
     first, _, rest = shown.getvalue().partition("usage")
     assert MARK[0].strip() in first and "Version" in first and rest
+
+
+def test_the_mark_needs_a_wide_enough_terminal_and_honours_suppression(monkeypatch):
+    monkeypatch.setenv("TERM", "xterm")
+    monkeypatch.delenv("ETL_CRAFT_NO_BANNER", raising=False)
+    monkeypatch.setenv("COLUMNS", "120")
+    assert wants_art(Terminal(True), FACTS)
+    monkeypatch.setenv("COLUMNS", "30")
+    assert not wants_art(Terminal(True), FACTS)  # narrow: plain rows only
+    monkeypatch.setenv("COLUMNS", "120")
+    assert not wants_art(Terminal(False), FACTS)
+    monkeypatch.setenv("ETL_CRAFT_NO_BANNER", "1")
+    assert not wants_art(Terminal(True), FACTS)
+
+
+def test_suppression_leaves_a_bare_invocation_with_only_the_usage(monkeypatch):
+    monkeypatch.setenv("TERM", "xterm")
+    monkeypatch.setenv("ETL_CRAFT_NO_BANNER", "1")
+    shown = Terminal(True)
+    monkeypatch.setattr("sys.stdout", shown)
+    assert main([]) == 2
+    assert shown.getvalue().startswith("usage")

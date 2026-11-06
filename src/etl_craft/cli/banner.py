@@ -5,6 +5,7 @@ Colour and the mark appear only on a terminal that wants them.
 """
 
 import os
+import shutil
 from dataclasses import dataclass
 from typing import TextIO
 
@@ -44,6 +45,11 @@ def is_terminal(stream: TextIO) -> bool:
     return stream.isatty() and os.environ.get("TERM") != "dumb"
 
 
+def suppressed() -> bool:
+    """Whether ``ETL_CRAFT_NO_BANNER`` asks for no mark: plain rows, and nothing on a bare run."""
+    return "ETL_CRAFT_NO_BANNER" in os.environ
+
+
 def wants_colour(stream: TextIO) -> bool:
     """Colour needs a terminal and no ``NO_COLOR`` (any value, as no-color.org asks)."""
     return is_terminal(stream) and "NO_COLOR" not in os.environ
@@ -68,6 +74,15 @@ def _rows(facts: Facts) -> list[tuple[str, str]]:
     if facts.docs:
         rows.append(("Docs", facts.docs))
     return rows
+
+
+def wants_art(stream: TextIO, facts: Facts) -> bool:
+    """Draw the mark on a terminal wide enough for it beside the rows, unless suppressed."""
+    if suppressed() or not is_terminal(stream):
+        return False
+    rows = _rows(facts)
+    widest = max(len(label) + 2 + len(value) for label, value in rows)
+    return shutil.get_terminal_size().columns >= len(MARK[0]) + 2 + widest
 
 
 def render(facts: Facts, *, art: bool, colour: bool) -> str:

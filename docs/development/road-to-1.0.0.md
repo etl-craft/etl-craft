@@ -190,7 +190,7 @@ item's text, or work done early under another item.
 | S7.H Cloud acceptance | In progress | #104–#110, #208, #231, #236, #247 | Native/Iceberg and managed-engine contracts exist; complete candidate evidence and unavailable provider cases remain |
 | S7.I The endurance run | Planned |  | 72-hour accelerated Support Insights candidate run, faults and bounded growth evidence after S8 is running |
 | S7.J Documentation to finish | In progress | #85, #227, #277 | Generated references and guides exist; supported public contracts, complete reference and recipes remain |
-| S7.L ETL Craft logo and CLI banner | In progress | #277 | Shared mark, favicon and theme assets exist; complete branding guidance and interactive banner contract remain |
+| S7.L ETL Craft logo and CLI banner | In progress | #277, banner PR | Shared mark, favicon and theme assets and the CLI banner (`etl-craft about`, bare invocation) exist; branding guidance, vector sources and the documentation logo remain |
 | S7.AL Pre-demo package gaps | In progress | #314, #315 | Slices 1–3 ship duplicate counts, current references and guarded-table validation guidance. Slices 4–6 remain. |
 | S7.AM Protection on every warehouse | Done | #311, #312, #313 | Atomic SCD merges, in-row protection and recovery, private audit identities and provider acceptance |
 | S7.AN Always show the environment | Done | #328 | CLI context and production confirmation; designed, sandboxed alert/SLA templates and catalog environment |

@@ -5,7 +5,7 @@ import sys
 from collections.abc import Iterable
 from pathlib import Path
 
-from etl_craft.cli.banner import Facts, is_terminal, render, wants_colour
+from etl_craft.cli.banner import Facts, render, wants_art, wants_colour
 from etl_craft.cli.commands.common import (
     Command,
     call,
@@ -47,7 +47,7 @@ def _banner(args: argparse.Namespace, about: About) -> str:
         server=about.server_version,
         docs=about.docs_url,
     )
-    return render(facts, art=is_terminal(sys.stdout), colour=wants_colour(sys.stdout))
+    return render(facts, art=wants_art(sys.stdout, facts), colour=wants_colour(sys.stdout))
 
 
 def _about(args: argparse.Namespace, out: Output) -> int:
