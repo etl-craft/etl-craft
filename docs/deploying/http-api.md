@@ -254,7 +254,7 @@ Run-log synthesis and whole-run zip manifests remain the S7.A.3 work described b
 
 ## Browser UI reads and account changes
 
-The server-rendered `/ui` pages call the same action table. Viewer reads:
+The browser interface served at `/ui` calls the same action table. Viewer reads:
 `GET /api/v1/project-health` (optional project, after and bounded limit),
 `GET /api/v1/about`, and `GET /api/v1/projects/{project}/catalog/page?path=index.html`
 (streamed, whole-project viewers only). Health returns rolling UTC window boundaries and

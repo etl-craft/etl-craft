@@ -66,7 +66,7 @@ def test_filter_by_tag_select_pause_and_export(scene):
     with sync_playwright() as pw:
         browser, page, problems = open_page(pw, viewport={"width": 1280, "height": 900})
         page.context.set_default_timeout(8000)
-        sign_in(page, url, "/app/projects/default/pipelines")
+        sign_in(page, url, "/ui/projects/default/pipelines")
         table = page.get_by_role("table", name="Pipelines")
         expect(table.get_by_role("link", name="OPS")).to_be_visible()
         expect(table.get_by_role("link", name="SALES")).to_be_visible()
@@ -109,7 +109,7 @@ def test_a_pipeline_pauses_resumes_and_links_to_its_runs_and_tasks(scene):
     with sync_playwright() as pw:
         browser, page, problems = open_page(pw, viewport={"width": 1280, "height": 900})
         page.context.set_default_timeout(8000)
-        sign_in(page, url, "/app/projects/default/pipelines/OPS")
+        sign_in(page, url, "/ui/projects/default/pipelines/OPS")
         expect(page.get_by_role("heading", name="OPS")).to_be_visible()
         expect(page.get_by_text("Active")).to_be_visible()
         expect(page.get_by_role("list", name="Run durations, newest on the right")).to_be_visible()
@@ -141,7 +141,7 @@ def test_run_now_asks_for_a_reason_and_names_the_project(scene):
     with sync_playwright() as pw:
         browser, page, _ = open_page(pw)
         page.context.set_default_timeout(8000)
-        sign_in(page, url, "/app/projects/default/pipelines/OPS")
+        sign_in(page, url, "/ui/projects/default/pipelines/OPS")
         page.get_by_role("button", name="Run now").click()
         dialog = page.get_by_role("dialog")
         expect(dialog.get_by_text("default")).to_be_visible()
@@ -164,12 +164,12 @@ def test_scheduled_and_held_pages_list_work_and_release_a_hold(scene):
     with sync_playwright() as pw:
         browser, page, problems = open_page(pw, viewport={"width": 1280, "height": 900})
         page.context.set_default_timeout(8000)
-        sign_in(page, url, "/app/projects/default/scheduled")
+        sign_in(page, url, "/ui/projects/default/scheduled")
         nxt = page.get_by_role("table", name="Next runs")
         expect(nxt.get_by_role("link", name="OPS")).to_be_visible()
         expect(nxt.get_by_role("link", name="SALES")).to_have_count(0)  # not scheduled
         shoot(page, "scheduled")
-        page.goto(url + "/app/projects/default/held")
+        page.goto(url + "/ui/projects/default/held")
         held = page.get_by_role("table", name="Held runs and tasks")
         expect(held.get_by_text("check totals")).to_be_visible()
         shoot(page, "held")
@@ -195,11 +195,11 @@ def test_a_viewer_can_read_the_pipelines_but_not_change_them(scene):
     with sync_playwright() as pw:
         browser, page, _ = open_page(pw)
         page.context.set_default_timeout(8000)
-        sign_in(page, url, "/app/projects/default/pipelines", name="alice")
+        sign_in(page, url, "/ui/projects/default/pipelines", name="alice")
         table = page.get_by_role("table", name="Pipelines")
         expect(table.get_by_role("link", name="OPS")).to_be_visible()
         expect(table.get_by_role("checkbox")).to_have_count(0)
-        page.goto(url + "/app/projects/default/pipelines/OPS")
+        page.goto(url + "/ui/projects/default/pipelines/OPS")
         expect(page.get_by_role("heading", name="OPS")).to_be_visible()
         for name in ("Run now", "Pause", "Resume"):
             expect(page.get_by_role("button", name=name, exact=True)).to_have_count(0)
@@ -220,11 +220,11 @@ def test_the_pipeline_pages_render_cleanly_in_both_themes_and_on_a_phone(scene, 
     )
     act(ctx, ActionName.CONTROL, pipeline_code="SALES", action="PAUSE", reason="freeze")
     pages = {
-        "pipelines": "/app/projects/default/pipelines",
-        "pipeline": "/app/projects/default/pipelines/OPS",
-        "pipeline-tasks": "/app/projects/default/pipelines/OPS?tab=tasks",
-        "scheduled": "/app/projects/default/scheduled",
-        "held": "/app/projects/default/held",
+        "pipelines": "/ui/projects/default/pipelines",
+        "pipeline": "/ui/projects/default/pipelines/OPS",
+        "pipeline-tasks": "/ui/projects/default/pipelines/OPS?tab=tasks",
+        "scheduled": "/ui/projects/default/scheduled",
+        "held": "/ui/projects/default/held",
     }
     with sync_playwright() as pw:
         browser, page, problems = open_page(

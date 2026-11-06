@@ -10,7 +10,7 @@ import { DataTable } from "@/components/data-table";
 import { NextRun, PauseState, RecentRuns, TagList } from "@/components/pipeline-parts";
 import { StatusBadge } from "@/components/status";
 import { Card } from "@/components/ui/card";
-import { useCanRun, useProjectInfo, useTimezone } from "@/hooks";
+import { useCanRun, useProjectInfo, useRoleAtLeast, useTimezone } from "@/hooks";
 import { getJson, project } from "@/lib/api";
 import { pipelinePath } from "@/lib/routes";
 import type { BulkOutcome, Pipeline } from "@/lib/types";
@@ -31,6 +31,7 @@ export function Pipelines() {
   const tags = params.getAll("tag");
   const tz = useTimezone();
   const canRun = useCanRun(code);
+  const developer = useRoleAtLeast("developer");
   const info = useProjectInfo(code);
   useDocumentTitle("Pipelines", code, info.project && { type: info.project.environment_type, name: info.project.environment_name });
   const list = useQuery({ queryKey: ["pipelines", code], queryFn: () => getJson<{ pipelines: Pipeline[] }>(`${project(code)}/pipelines`), refetchInterval: 15_000 });
@@ -64,6 +65,20 @@ export function Pipelines() {
         title="Pipelines"
         subtitle={`${code} · ${tags.length ? `tagged ${tags.join(" and ")}` : "all pipelines"} · ${shown.length}`}
         actions={
+          <div className="flex flex-wrap items-start gap-2">
+          {developer ? (
+            <ActionButton<unknown>
+              code={code}
+              label="Refresh all"
+              title={`Refresh every pipeline in ${code}`}
+              effect="Validates each pipeline's current definition and pins the versions that pass."
+              endpoint="/pipelines/refresh"
+              askReason={false}
+              body={() => ({})}
+              describe={() => "Every pipeline was refreshed."}
+              size="sm"
+            />
+          ) : null}
           <CsvButton
             name={`${code}-pipelines.csv`}
             header={["pipeline", "name", "tags", "schedule", "next_run", "automatic_runs", "paused_tasks"]}
@@ -71,6 +86,7 @@ export function Pipelines() {
               p.pipeline_code, p.pipeline_name, p.tags.join(" "), p.run_schedule ?? "", p.next_run ?? "", p.paused ? `paused by ${p.paused.paused_by}: ${p.paused.reason}` : "active", p.task_pauses.length,
             ])}
           />
+          </div>
         }
       />
       {known.length ? (

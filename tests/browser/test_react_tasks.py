@@ -63,7 +63,7 @@ def test_a_failed_task_explains_itself_and_leads_to_its_attempt_and_history(scen
     with sync_playwright() as pw:
         browser, page, problems = open_page(pw, viewport={"width": 1280, "height": 1000})
         page.context.set_default_timeout(8000)
-        sign_in(page, url, f"/app/projects/default/runs/ORDERS/{bad}")
+        sign_in(page, url, f"/ui/projects/default/runs/ORDERS/{bad}")
         page.get_by_role("group", name="Task graph").get_by_role(
             "button", name="Open LOAD details"
         ).click()
@@ -91,7 +91,7 @@ def test_the_task_history_lists_runs_with_counts_and_exports_csv(scene):
     with sync_playwright() as pw:
         browser, page, problems = open_page(pw, viewport={"width": 1280, "height": 900})
         page.context.set_default_timeout(8000)
-        sign_in(page, url, "/app/projects/default/pipelines/ORDERS/tasks/LOAD")
+        sign_in(page, url, "/ui/projects/default/pipelines/ORDERS/tasks/LOAD")
         table = page.get_by_role("table", name="Task runs")
         expect(table.get_by_role("link", name=f"#{good}", exact=True)).to_be_visible()
         expect(table.get_by_role("link", name=f"#{bad}", exact=True)).to_be_visible()
@@ -109,7 +109,7 @@ def test_the_matrix_shows_every_task_against_recent_runs(scene):
     _, url, _, bad, _ = scene
     with sync_playwright() as pw:
         browser, page, problems = open_page(pw, viewport={"width": 1280, "height": 900})
-        sign_in(page, url, "/app/projects/default/pipelines/ORDERS?tab=matrix")
+        sign_in(page, url, "/ui/projects/default/pipelines/ORDERS?tab=matrix")
         matrix = page.get_by_role("table", name="Run matrix")
         expect(matrix.get_by_role("img", name=f"LOAD in run {bad}: failed")).to_be_visible()
         expect(matrix.get_by_role("img", name=f"LOAD in run {bad - 1}: success")).to_be_visible()
@@ -129,7 +129,7 @@ def test_the_items_page_says_when_a_task_recorded_none(scene):
     with sync_playwright() as pw:
         browser, page, _ = open_page(pw)
         page.context.set_default_timeout(8000)
-        sign_in(page, url, f"/app/projects/default/runs/ORDERS/{bad}/tasks/LOAD/items")
+        sign_in(page, url, f"/ui/projects/default/runs/ORDERS/{bad}/tasks/LOAD/items")
         expect(page.get_by_role("heading", name="Items of LOAD")).to_be_visible()
         expect(
             page.get_by_text("This task run recorded no items.").or_(page.get_by_role("alert"))
@@ -150,7 +150,7 @@ def test_a_viewer_reads_task_pages_without_controls(scene):
     with sync_playwright() as pw:
         browser, page, _ = open_page(pw)
         page.context.set_default_timeout(8000)
-        sign_in(page, url, f"/app/projects/default/runs/ORDERS/{bad}", name="alice")
+        sign_in(page, url, f"/ui/projects/default/runs/ORDERS/{bad}", name="alice")
         page.get_by_role("group", name="Task graph").get_by_role(
             "button", name="Open LOAD details"
         ).click()
@@ -165,10 +165,10 @@ def test_a_viewer_reads_task_pages_without_controls(scene):
 def test_the_task_pages_render_cleanly_in_both_themes_and_on_a_phone(scene, scheme, width):
     _, url, _, bad, failed = scene
     pages = {
-        "task": "/app/projects/default/pipelines/ORDERS/tasks/LOAD",
-        "attempt": f"/app/projects/default/runs/ORDERS/{bad}/tasks/LOAD/attempts/{failed}",
-        "matrix": "/app/projects/default/pipelines/ORDERS?tab=matrix",
-        "items": f"/app/projects/default/runs/ORDERS/{bad}/tasks/LOAD/items",
+        "task": "/ui/projects/default/pipelines/ORDERS/tasks/LOAD",
+        "attempt": f"/ui/projects/default/runs/ORDERS/{bad}/tasks/LOAD/attempts/{failed}",
+        "matrix": "/ui/projects/default/pipelines/ORDERS?tab=matrix",
+        "items": f"/ui/projects/default/runs/ORDERS/{bad}/tasks/LOAD/items",
     }
     with sync_playwright() as pw:
         browser, page, problems = open_page(

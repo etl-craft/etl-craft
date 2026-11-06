@@ -5,26 +5,18 @@ import logging
 from dataclasses import replace
 
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import JSONResponse, RedirectResponse, Response
 from sqlalchemy.exc import SQLAlchemyError
 from starlette.exceptions import HTTPException
 
-from etl_craft.api.browser_sessions import html_request
 from etl_craft.api.console import Console
 from etl_craft.api.gateway import Gateway, GatewayMiddleware
 from etl_craft.api.login import SIGN_IN, add_login_routes
 from etl_craft.api.routes import add_action_routes
-from etl_craft.api.ui_admin import add_admin_pages
-from etl_craft.api.ui_console import add_console_page
-from etl_craft.api.ui_errors import browser_error, http_error
+from etl_craft.api.ui_catalog import add_catalog_files
+from etl_craft.api.ui_console import add_console_routes
 from etl_craft.api.ui_headers import BrowserHeaders, protect
-from etl_craft.api.ui_insights import add_insights_page
-from etl_craft.api.ui_live import add_live_route
-from etl_craft.api.ui_monitor import add_monitor_pages
-from etl_craft.api.ui_operations import add_operations_pages
-from etl_craft.api.ui_pages import add_pages
 from etl_craft.api.ui_spa import add_spa_pages
-from etl_craft.api.ui_tasks import add_task_pages
 from etl_craft.core.errors import (
     EtlCraftError,
     MetadataError,
@@ -81,18 +73,12 @@ def create_app(
 
     _add_error_handlers(app)
     app.add_middleware(BrowserHeaders)
-    add_pages(app, ctx)
-    add_spa_pages(app, ctx)
-    add_monitor_pages(app, ctx)
-    add_live_route(app, ctx)
-    add_insights_page(app, ctx)
-    add_console_page(app, ctx, console)
-    add_admin_pages(app, ctx)
-    add_operations_pages(app, ctx)
-    add_task_pages(app, ctx)
+    add_console_routes(app, ctx, console)
+    add_catalog_files(app, ctx)
     add_login_routes(app, ctx)
     routed = frozenset(name for name, action in ACTIONS.items() if action.path is not None)
     add_action_routes(app, ctx, routed - SIGN_IN)
+    add_spa_pages(app, ctx)  # last: its shell answers every /ui path the routes above do not
     return app
 
 
@@ -110,8 +96,6 @@ def _add_error_handlers(app: FastAPI) -> None:
             if isinstance(error, (MetadataError, ResourceNotFoundError))
             else 409
         )
-        if html_request(request):
-            return browser_error(request, status, str(error))
         return JSONResponse(
             {
                 "error": type(error).__name__,
@@ -124,8 +108,6 @@ def _add_error_handlers(app: FastAPI) -> None:
     @app.exception_handler(SQLAlchemyError)
     async def storage_error(request: Request, error: SQLAlchemyError) -> Response:
         logger.error("Engine DB request failed: %s", type(error).__name__)
-        if html_request(request):
-            return browser_error(request, 503)
         return JSONResponse(
             {"error": "EngineDbError", "message": "Engine DB request failed; check the server log"},
             status_code=503,
@@ -133,16 +115,14 @@ def _add_error_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(HTTPException)
     async def http_failure(request: Request, error: HTTPException) -> Response:
-        return http_error(request, error)
+        if error.status_code == 307 and error.headers and "Location" in error.headers:
+            return RedirectResponse(error.headers["Location"], 307)
+        return JSONResponse({"detail": error.detail}, error.status_code, headers=error.headers)
 
     @app.exception_handler(Exception)
     async def unexpected(request: Request, error: Exception) -> Response:
         # The HTTP process boundary records unexpected failures without exposing their details.
         logger.exception("HTTP request %s failed", getattr(request.state, "request_id", "unknown"))
-        if html_request(request):
-            response = browser_error(request, 500)
-            protect(response.headers, getattr(request.state, "request_id", "unknown"))
-            return response
         response = JSONResponse(
             {
                 "error": "ServerError",

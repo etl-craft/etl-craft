@@ -16,7 +16,7 @@ export function Password() {
   const [again, setAgain] = React.useState("");
   const change = useMutation({
     mutationFn: () => postJson<{ message: string }>("/api/v1/account/password", { current_password: current, password: next }),
-    onSuccess: () => window.location.assign("/app/signin?changed=1"),
+    onSuccess: () => window.location.assign("/ui/signin?changed=1"),
   });
   const mismatch = again !== "" && again !== next;
   if (identity.data && !identity.data.local_password) {

@@ -16,17 +16,15 @@ from etl_craft.services.operations.actions import ACTIONS
 pytestmark = pytest.mark.unit
 
 API = Path(etl_craft.api.__file__).parent
+UI = Path(__file__).parents[2] / "ui" / "src"
 SOURCES = "".join(
     path.read_text(encoding="utf-8")
-    for pattern in ("ui_*.py", "login.py", "templates/**/*.html", "static/*.js")
-    for path in sorted(API.glob(pattern))
+    for path in sorted([*UI.rglob("*.ts"), *UI.rglob("*.tsx"), *API.glob("login.py")])
+    if ".test." not in path.name
 )
+SOURCES = "\n".join(line for line in SOURCES.splitlines() if not line.startswith("import "))
 
-COMPOSED = {
-    ActionName.DATA_PROVENANCE: '"{{ values_api }}/provenance"',
-    ActionName.DATA_UNLOCK: '"{{ values_api }}/unlock"',
-    ActionName.CONTROL_BULK: "${dialog.dataset.url}/bulk",
-}
+COMPOSED = {ActionName.DATA_PROVENANCE: 'base + "/provenance"'}
 """Routes a page builds from a prefix, with the exact text that builds them."""
 
 COVERED = {
@@ -52,7 +50,7 @@ def placed(name: ActionName) -> bool:
     assert action.path is not None
     route = action.path.split("/api/v1", 1)[1].split("{")[0].rstrip("/")
     return f"ActionName.{name.name}" in SOURCES or bool(
-        route and re.search(re.escape(route) + r"[\"'?/]", SOURCES)
+        route and re.search(re.escape(route) + r"[\"'`?/]", SOURCES)
     )
 
 

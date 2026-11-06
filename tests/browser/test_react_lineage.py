@@ -72,7 +72,7 @@ def test_refreshing_and_rebuilding_shows_the_traced_chain_and_the_api_agrees(cha
     _, url = chain
     with sync_playwright() as pw:
         browser, page, problems = open_page(pw, viewport={"width": 1280, "height": 1000})
-        sign_in(page, url, "/app/projects/default/catalog")
+        sign_in(page, url, "/ui/projects/default/catalog")
         page.get_by_role("button", name="Refresh lineage").click()
         page.get_by_role("dialog").get_by_role("button", name="Refresh lineage").click()
         done = page.get_by_role("status").filter(has_text="Lineage refreshed: 3 task(s) traced.")
@@ -153,7 +153,7 @@ def test_a_task_that_cannot_be_traced_is_named_with_its_reason_and_counted(chain
         )
     with sync_playwright() as pw:
         browser, page, _ = open_page(pw, viewport={"width": 1280, "height": 1000})
-        sign_in(page, url, "/app/projects/default/catalog")
+        sign_in(page, url, "/ui/projects/default/catalog")
         page.get_by_role("button", name="Refresh lineage").click()
         page.get_by_role("dialog").get_by_role("button", name="Refresh lineage").click()
         said = page.get_by_role("status").filter(has_text="Lineage refreshed with errors")
