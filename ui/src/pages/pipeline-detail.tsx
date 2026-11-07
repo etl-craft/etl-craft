@@ -1,33 +1,36 @@
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, Pause, Play, PlayCircle } from "lucide-react";
+import { Pause, Play, PlayCircle } from "lucide-react";
 import * as React from "react";
-import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { ActionButton } from "@/components/action-button";
 import { Field, inputClass, Loading, Notice, PageHeader, SelectField } from "@/components/common";
 import { PauseState } from "@/components/pipeline-parts";
 import { RunGraph } from "@/components/run-graph";
-import { RunMatrix } from "@/components/run-matrix";
+import { RunGrid } from "@/components/run-grid";
+import { RunOverview } from "@/components/run-overview";
 import { RunsPanel } from "@/components/runs-panel";
 import { useRuns } from "@/components/runs-table";
 import { Tabs } from "@/components/tabs";
-import { Card, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { useCanRun, useProjectInfo } from "@/hooks";
 import { getJson, project } from "@/lib/api";
-import { pipelinesPath, taskPath } from "@/lib/routes";
-import type { Graph, Pipeline } from "@/lib/types";
+import { taskPath } from "@/lib/routes";
+import { cn } from "@/lib/utils";
+import type { Graph, Pipeline, Steps } from "@/lib/types";
 import { useDocumentTitle } from "@/title";
 
 const TABS = [
+  { id: "overview", label: "Overview" },
   { id: "runs", label: "Runs" },
-  { id: "matrix", label: "Matrix" },
-  { id: "tasks", label: "Tasks" },
 ];
 
 export function PipelineDetail() {
   const { project: code = "", pipeline = "" } = useParams();
   const [params, setParams] = useSearchParams();
-  const tab = ["tasks", "matrix"].includes(params.get("tab") ?? "") ? (params.get("tab") as string) : "runs";
-  const highlighted = /^\d+$/.test(params.get("run") ?? "") ? Number(params.get("run")) : undefined;
+  const tab = params.get("tab") === "runs" ? "runs" : "overview";
+  const view = params.get("view") === "graph" ? "graph" : "grid";
+  const chosen = /^\d+$/.test(params.get("run") ?? "") ? Number(params.get("run")) : undefined;
+  const task = params.get("task");
   const filters = { pool: params.get("pool") ?? "", agent: params.get("agent") ?? "", failure_class: params.get("failure_class") ?? "" };
   const setFilter = (key: string, value: string) => {
     const next = new URLSearchParams(params);
@@ -38,14 +41,34 @@ export function PipelineDetail() {
   const navigate = useNavigate();
   const canRun = useCanRun(code);
   const info = useProjectInfo(code);
-  useDocumentTitle(pipeline, code, info.project && { type: info.project.environment_type, name: info.project.environment_name });
   const found = useQuery({
     queryKey: ["pipeline", code, pipeline],
     queryFn: () => getJson<Pipeline>(`${project(code)}/pipelines/${encodeURIComponent(pipeline)}`),
     refetchInterval: 15_000,
   });
-  const graph = useQuery({ queryKey: ["graph", code, pipeline], queryFn: () => getJson<Graph>(`${project(code)}/graph`, { pipeline_code: pipeline }), enabled: tab !== "runs" });
+  const graph = useQuery({ queryKey: ["graph", code, pipeline], queryFn: () => getJson<Graph>(`${project(code)}/graph`, { pipeline_code: pipeline }) });
   const runs = useRuns(code, pipeline).all;
+  const selected = chosen ?? runs[0]?.pipeline_run_id;
+  useDocumentTitle(selected === undefined ? pipeline : `${pipeline} #${selected}`, code, info.project && { type: info.project.environment_type, name: info.project.environment_name });
+  const steps = useQuery({
+    queryKey: ["steps", code, pipeline, selected],
+    queryFn: () => getJson<Steps>(`${project(code)}/steps`, { pipeline_code: pipeline, run_id: selected }),
+    enabled: view === "graph" && selected !== undefined,
+  });
+  const select = (runId: number, taskCode?: string) => {
+    const next = new URLSearchParams(params);
+    next.set("run", String(runId));
+    next.delete("tab");
+    if (taskCode) next.set("task", taskCode);
+    else next.delete("task");
+    setParams(next, { replace: true });
+  };
+  const choose = (key: string, value: string | null) => {
+    const next = new URLSearchParams(params);
+    if (value) next.set(key, value);
+    else next.delete(key);
+    setParams(next, { replace: true });
+  };
   const [focused, setFocused] = React.useState<string | null>(null);
   const [runDate, setRunDate] = React.useState("");
   const [then, setThen] = React.useState("wait");
@@ -54,10 +77,8 @@ export function PipelineDetail() {
   if (found.isError) return <Notice>{(found.error as Error).message}</Notice>;
   return (
     <div className="grid grid-cols-1 gap-5">
-      <Link to={pipelinesPath(code)} className="inline-flex w-fit items-center gap-1 text-sm text-muted hover:text-fg">
-        <ArrowLeft className="size-4" aria-hidden /> Pipelines
-      </Link>
       <PageHeader
+        compact
         title={pipeline}
         subtitle={p && p.pipeline_name !== pipeline ? p.pipeline_name : undefined}
         status={p ? <PauseState pipeline={p} /> : null}
@@ -126,65 +147,73 @@ export function PipelineDetail() {
           <Loading what="pipeline" />
         )}
       </PageHeader>
-      <Tabs tabs={TABS} value={tab} onChange={(id) => setParams(id === "runs" ? {} : { tab: id }, { replace: true })} />
-      <div role="tabpanel" id="tabpanel" aria-labelledby={`tab-${tab}`} className="grid grid-cols-1 gap-4">
-        {tab === "runs" ? (
-          <>
-            <RunsPanel
-              code={code}
-              pipeline={pipeline}
-              filters={{ pool: filters.pool || undefined, agent: filters.agent || undefined, failure_class: filters.failure_class || undefined }} highlight={highlighted}
-              toolbar={
-                <>
-<Field compact label="Pool">
-                <input value={filters.pool} onChange={(event) => setFilter("pool", event.target.value)} className={inputClass} placeholder="Any pool" />
-              </Field>
-              <Field compact label="Agent id">
-                <input value={filters.agent} onChange={(event) => setFilter("agent", event.target.value.replace(/\D/g, ""))} inputMode="numeric" className={inputClass} placeholder="Any agent" />
-              </Field>
-              <SelectField compact label="Failure class" value={filters.failure_class} onChange={(value) => setFilter("failure_class", value)}>
-                <option value="">Any</option>
-                {["TRANSIENT", "PERMANENT", "UNKNOWN"].map((c) => (
-                  <option key={c} value={c}>
-                    {c.charAt(0) + c.slice(1).toLowerCase()}
-                  </option>
-                ))}
-              </SelectField>
-                            </>
-              }
-            />
-          </>
-        ) : tab === "matrix" ? (
-          <Card>
-            <CardHeader>
-              <CardTitle>Task outcomes by run</CardTitle>
-              <span className="text-xs text-muted">Newest run first; a dot means the task did not start</span>
-            </CardHeader>
-            {graph.isSuccess ? <RunMatrix code={code} pipeline={pipeline} graph={graph.data} runs={runs} /> : <Loading what="tasks" className="p-4" />}
-          </Card>
-        ) : (
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Tasks and dependencies</CardTitle>
-              <span className="text-xs text-muted">Click a task for its lineage; use its arrow to open it</span>
-            </CardHeader>
-            {graph.isSuccess ? (
+      <div className="grid min-h-0 gap-4 lg:h-[calc(100dvh-12rem)] lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
+        <Card className="flex min-h-0 flex-col overflow-hidden">
+          <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-2">
+            <div role="group" aria-label="Run view" className="inline-flex rounded-md border border-border p-0.5 text-sm">
+              {(["grid", "graph"] as const).map((id) => (
+                <button key={id} type="button" aria-pressed={view === id} onClick={() => choose("view", id === "grid" ? null : id)} className={cn("cursor-pointer rounded px-2.5 py-0.5", view === id ? "bg-accent/15 font-medium text-fg" : "text-muted hover:text-fg")}>
+                  {id === "grid" ? "Grid" : "Graph"}
+                </button>
+              ))}
+            </div>
+            <span className="text-xs text-muted">{view === "grid" ? "Newest run on the right; a dot means the task did not start" : "Select a task to open it"}</span>
+          </div>
+          <div className="min-h-0 flex-1 overflow-auto">
+            {!graph.isSuccess ? (
+              graph.isError ? <Notice className="m-3">{(graph.error as Error).message}</Notice> : <Loading what="tasks" className="p-3" />
+            ) : view === "grid" ? (
+              <RunGrid code={code} pipeline={pipeline} graph={graph.data} runs={runs} selected={selected} onSelect={select} />
+            ) : (
               <RunGraph
                 graph={graph.data}
-                statuses={{}}
-                plain
+                statuses={Object.fromEntries((steps.data?.steps ?? []).map((step) => [step.task_code, step.status ?? "QUEUED"]))}
+                plain={selected === undefined}
                 focused={focused}
                 onFocus={setFocused}
-                onOpen={(task) => navigate(taskPath(code, pipeline, task))}
+                onOpen={(taskCode) => (selected === undefined ? navigate(taskPath(code, pipeline, taskCode)) : select(selected, taskCode))}
               />
-            ) : graph.isError ? (
-              <Notice className="m-4">{(graph.error as Error).message}</Notice>
-            ) : (
-              <Loading what="tasks" className="p-4" />
             )}
-          </Card>
-        )}
+          </div>
+        </Card>
+        <Card className="flex min-h-0 flex-col overflow-hidden">
+          <div className="px-3">
+            <Tabs tabs={TABS} value={tab} onChange={(id) => choose("tab", id === "overview" ? null : id)} />
+          </div>
+          <div role="tabpanel" id="tabpanel" aria-labelledby={`tab-${tab}`} className="min-h-0 flex-1 overflow-auto p-4">
+            {tab === "runs" ? (
+              <RunsPanel
+                code={code}
+                pipeline={pipeline}
+                bars={false}
+                filters={{ pool: filters.pool || undefined, agent: filters.agent || undefined, failure_class: filters.failure_class || undefined }}
+                highlight={selected}
+                toolbar={
+                  <>
+                    <Field compact label="Pool">
+                      <input value={filters.pool} onChange={(event) => setFilter("pool", event.target.value)} className={inputClass} placeholder="Any pool" />
+                    </Field>
+                    <Field compact label="Agent id">
+                      <input value={filters.agent} onChange={(event) => setFilter("agent", event.target.value.replace(/\D/g, ""))} inputMode="numeric" className={inputClass} placeholder="Any agent" />
+                    </Field>
+                    <SelectField compact label="Failure class" value={filters.failure_class} onChange={(value) => setFilter("failure_class", value)}>
+                      <option value="">Any</option>
+                      {["TRANSIENT", "PERMANENT", "UNKNOWN"].map((c) => (
+                        <option key={c} value={c}>
+                          {c.charAt(0) + c.slice(1).toLowerCase()}
+                        </option>
+                      ))}
+                    </SelectField>
+                  </>
+                }
+              />
+            ) : selected !== undefined ? (
+              <RunOverview code={code} pipeline={pipeline} runId={selected} task={task} onTask={(next) => choose("task", next)} />
+            ) : (
+              <p className="m-0 text-muted">No runs yet.</p>
+            )}
+          </div>
+        </Card>
       </div>
     </div>
   );

@@ -64,8 +64,8 @@ def test_a_failed_task_explains_itself_and_leads_to_its_attempt_and_history(scen
         browser, page, problems = open_page(pw, viewport={"width": 1280, "height": 1000})
         page.context.set_default_timeout(8000)
         sign_in(page, url, f"/ui/projects/default/runs/ORDERS/{bad}")
-        page.get_by_role("group", name="Task graph").get_by_role(
-            "button", name="Open LOAD details"
+        page.get_by_role("table", name="Run grid").get_by_role(
+            "img", name=f"LOAD in run {bad}: failed"
         ).click()
         panel = page.get_by_label("Task LOAD")
         expect(panel.get_by_text(ERROR).first).to_be_visible()
@@ -105,12 +105,12 @@ def test_the_task_history_lists_runs_with_counts_and_exports_csv(scene):
         browser.close()
 
 
-def test_the_matrix_shows_every_task_against_recent_runs(scene):
+def test_the_grid_shows_every_task_against_recent_runs(scene):
     _, url, _, bad, _ = scene
     with sync_playwright() as pw:
         browser, page, problems = open_page(pw, viewport={"width": 1280, "height": 900})
-        sign_in(page, url, "/ui/projects/default/pipelines/ORDERS?tab=matrix")
-        matrix = page.get_by_role("table", name="Run matrix")
+        sign_in(page, url, "/ui/projects/default/pipelines/ORDERS")
+        matrix = page.get_by_role("table", name="Run grid")
         expect(matrix.get_by_role("img", name=f"LOAD in run {bad}: failed")).to_be_visible()
         expect(matrix.get_by_role("img", name=f"LOAD in run {bad - 1}: success")).to_be_visible()
         expect(matrix.get_by_role("img", name=f"EXTRACT in run {bad}: success")).to_be_visible()
@@ -151,8 +151,8 @@ def test_a_viewer_reads_task_pages_without_controls(scene):
         browser, page, _ = open_page(pw)
         page.context.set_default_timeout(8000)
         sign_in(page, url, f"/ui/projects/default/runs/ORDERS/{bad}", name="alice")
-        page.get_by_role("group", name="Task graph").get_by_role(
-            "button", name="Open LOAD details"
+        page.get_by_role("table", name="Run grid").get_by_role(
+            "img", name=f"LOAD in run {bad}: failed"
         ).click()
         expect(page.get_by_label("Task LOAD").get_by_text(ERROR).first).to_be_visible()
         expect(page.get_by_role("button", name="Mark as")).to_have_count(0)
@@ -167,7 +167,7 @@ def test_the_task_pages_render_cleanly_in_both_themes_and_on_a_phone(scene, sche
     pages = {
         "task": "/ui/projects/default/pipelines/ORDERS/tasks/LOAD",
         "attempt": f"/ui/projects/default/runs/ORDERS/{bad}/tasks/LOAD/attempts/{failed}",
-        "matrix": "/ui/projects/default/pipelines/ORDERS?tab=matrix",
+        "matrix": "/ui/projects/default/pipelines/ORDERS",
         "items": f"/ui/projects/default/runs/ORDERS/{bad}/tasks/LOAD/items",
     }
     with sync_playwright() as pw:

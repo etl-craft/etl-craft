@@ -74,10 +74,13 @@ def test_home_runs_and_run_detail_lead_to_a_confirmed_recovery(scene):
         ).click()  # Operations, beside Held and paused
         page.get_by_role(
             "link", name=f"#{bad}"
-        ).first.click()  # the pipeline's runs, this one marked
-        expect(page.locator("tr[aria-current=true]")).to_have_count(1)
-        page.get_by_role("link", name=f"#{bad}").first.click()
-        expect(page.get_by_role("heading", name=f"OPS #{bad}")).to_be_visible()
+        ).first.click()  # the pipeline's workspace, this run selected
+        expect(page.get_by_role("heading", name="OPS")).to_be_visible()
+        expect(
+            page.get_by_role("table", name="Run grid").locator("[aria-current=true]")
+        ).to_have_count(1)
+        expect(page.get_by_label("Run identifier", exact=True)).to_contain_text(f"-{bad}")
+        page.get_by_role("button", name="Graph", exact=True).click()
         graph = page.get_by_role("group", name="Task graph")
         expect(graph.get_by_text("EXTRACT")).to_be_visible()
         expect(graph.get_by_text("LOAD")).to_be_visible()
@@ -141,7 +144,7 @@ def test_a_viewer_sees_the_failed_run_but_no_recover_action(scene):
     with sync_playwright() as pw:
         browser, page, _ = open_page(pw)
         sign_in(page, url, f"/ui/projects/default/runs/OPS/{bad}", name="alice")
-        expect(page.get_by_role("heading", name=f"OPS #{bad}")).to_be_visible()
+        expect(page.get_by_label("Run identifier", exact=True)).to_contain_text(f"-{bad}")
         expect(page.get_by_text("Failed", exact=True).first).to_be_visible()
         expect(page.get_by_role("button", name="Recover run")).to_have_count(0)
         browser.close()
@@ -300,9 +303,11 @@ def test_the_project_runs_list_and_a_pipeline_share_one_layout(scene):
         shoot(page, "runs-list")
         page.get_by_role("link", name=f"#{good}", exact=True).click()
         expect(
-            page.get_by_text("Run durations")
-        ).to_be_visible()  # the pipeline's own page, same layout
-        expect(page.locator("tr[aria-current=true]")).to_have_count(1)
+            page.get_by_role("table", name="Run grid")
+        ).to_be_visible()  # the pipeline's workspace, this run selected
+        expect(
+            page.get_by_role("table", name="Run grid").locator("[aria-current=true]")
+        ).to_have_count(1)
         shoot(page, "pipeline-highlight")
         assert page.url.endswith(f"?run={good}")
         assert problems == []
@@ -314,7 +319,6 @@ def test_a_task_opens_in_its_row_and_the_run_shows_its_identifier(scene):
     with sync_playwright() as pw:
         browser, page, problems = open_page(pw, viewport={"width": 1280, "height": 900})
         sign_in(page, url, f"/ui/projects/default/runs/OPS/{bad}")
-        expect(page.get_by_role("heading", name=f"OPS #{bad}")).to_be_visible()
         identifier = page.get_by_label("Run identifier", exact=True)
         expect(identifier).to_contain_text("OPS-")
         expect(identifier).to_contain_text(f"-{bad}")

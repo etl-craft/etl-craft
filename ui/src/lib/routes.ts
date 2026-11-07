@@ -8,7 +8,11 @@ export const projectsPath = "/projects";
 export const projectHomePath = (project: string): string => `/projects/${enc(project)}`;
 export const runsPath = (project: string, pipeline?: string): string =>
   `/projects/${enc(project)}/runs` + (pipeline ? `?pipeline=${enc(pipeline)}` : "");
-export const runPath = (project: string, pipeline: string, runId: number | string): string =>
+/** A run is its pipeline's workspace with the run selected; `task` opens one task of it. */
+export const runPath = (project: string, pipeline: string, runId: number | string, task?: string): string =>
+  `/projects/${enc(project)}/pipelines/${enc(pipeline)}?run=${runId}` + (task ? `&task=${enc(task)}` : "");
+/** The address an attempt or a task's items hang from, and the one older links to a run use. */
+export const runBase = (project: string, pipeline: string, runId: number | string): string =>
   `/projects/${enc(project)}/runs/${enc(pipeline)}/${runId}`;
 export const pipelinesPath = (project: string, tags: string[] = []): string =>
   `/projects/${enc(project)}/pipelines` + (tags.length ? "?" + tags.map((t) => `tag=${enc(t)}`).join("&") : "");
@@ -22,9 +26,9 @@ export const heldPath = (project: string): string => `/projects/${enc(project)}/
 export const taskPath = (project: string, pipeline: string, task: string): string =>
   `/projects/${enc(project)}/pipelines/${enc(pipeline)}/tasks/${enc(task)}`;
 export const attemptPath = (project: string, pipeline: string, runId: number | string, task: string, attemptId: number | string): string =>
-  `${runPath(project, pipeline, runId)}/tasks/${enc(task)}/attempts/${attemptId}`;
+  `${runBase(project, pipeline, runId)}/tasks/${enc(task)}/attempts/${attemptId}`;
 export const itemsPath = (project: string, pipeline: string, runId: number | string, task: string): string =>
-  `${runPath(project, pipeline, runId)}/tasks/${enc(task)}/items`;
+  `${runBase(project, pipeline, runId)}/tasks/${enc(task)}/items`;
 export const uploadsPath = (project: string, pipeline?: string): string =>
   `/projects/${enc(project)}/uploads` + (pipeline ? `?pipeline=${enc(pipeline)}` : "");
 export const consolePath = (project: string): string => `/projects/${enc(project)}/console`;

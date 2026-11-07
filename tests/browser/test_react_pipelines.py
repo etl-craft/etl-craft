@@ -112,7 +112,7 @@ def test_a_pipeline_pauses_resumes_and_links_to_its_runs_and_tasks(scene):
         sign_in(page, url, "/ui/projects/default/pipelines/OPS")
         expect(page.get_by_role("heading", name="OPS")).to_be_visible()
         expect(page.get_by_text("Active")).to_be_visible()
-        expect(page.get_by_role("list", name="Run durations, newest on the right")).to_be_visible()
+        expect(page.get_by_role("table", name="Run grid")).to_be_visible()
         shoot(page, "pipeline-runs")
         page.get_by_role("button", name="Pause", exact=True).click()
         dialog = page.get_by_role("dialog")
@@ -125,7 +125,7 @@ def test_a_pipeline_pauses_resumes_and_links_to_its_runs_and_tasks(scene):
         dialog.get_by_role("button", name="Resume", exact=True).click()
         expect(page.get_by_text("Active")).to_be_visible()
 
-        page.get_by_role("tab", name="Tasks").click()
+        page.get_by_role("button", name="Graph", exact=True).click()
         graph = page.get_by_role("group", name="Task graph")
         expect(graph.get_by_text("EXTRACT")).to_be_visible()
         graph.get_by_text("LOAD", exact=True).click()

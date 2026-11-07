@@ -198,7 +198,7 @@ item's text, or work done early under another item.
 | S7.AP Native catalog | Planned | | The catalog moves into the app from a JSON read action, built from the app's own components; the generated static site stays only for `publish-docs` |
 | S7.AQ Readable run identifiers | In progress | #347 | A label beside every run and task run id, stored by the Engine DB; accepted wherever the integer is, and shown beside it |
 | S7.AR Restarting pipelines | In progress | slice 1 PR | A pipeline setting, `RESTART_CONDITION`, starts the next run when the last one ends in a chosen status, so a file watcher runs continuously without a schedule |
-| S7.AS Project dashboard and navigation | Planned | | Home becomes a project dashboard with tabs and charts; Runs and Pipelines share one layout; the run page is compact; Projects moves into Platform; the section Project is renamed Operations |
+| S7.AS Project dashboard and navigation | In progress | | Home becomes a project dashboard with tabs and charts; a pipeline and its runs are one split workspace; Projects moves into Platform; the section Project is renamed Operations |
 | S7.M Stewardship uploads | Done (M2) | #296, #305 | Atomic receipts and safe stored names; processed layout, retention archives and verified reruns; crash recovery and guarded upload history |
 | S7.S Seed tables | Done | #308 | Typed pinned-bundle seeds replace reference tables until recorded stewardship handover |
 | S7.T Business calendars | Done | #276 | Shared holiday and weekend calendars for schedules, run dates, backfill and catch-up |
@@ -9300,19 +9300,26 @@ place.
   Pipelines (health and a trend for each), Data (the tables the pipelines write, rows written and
   freshness), Rules and Capacity. Charts come first; a table appears only where a table is the right
   answer.
-- **Runs and Pipelines share one layout**, the pipeline page's: a status and duration strip above
-  a filterable table. The Runs page lists the runs of the project with each run's string identifier
-  (S7.AQ); opening a run goes to that pipeline's shared layout with the run highlighted.
-- **The run page is compact.** One header row (state, times, identifier, controls), the task graph,
-  and one task table whose rows expand in place to show attempts, evidence and the log. No separate
-  card below the table.
+- **A pipeline and its runs are one workspace** (owner, 2026-11-07, from the Airflow DAG overview).
+  The pipeline page is split in two. Left, a grid: tasks are rows, the pipeline's recent runs are
+  columns with newest on the right, each column topped by its duration bar so a bar and its task
+  statuses share one column; a Grid and Graph toggle swaps in the task graph for the selected run.
+  Right, a panel with Overview (the selected run: state, identifier, times, controls, and one task
+  table whose rows open in place to attempts, evidence and the log) and Runs (the filterable runs
+  table). Selecting a run column or a task cell fills the panel; the address keeps the selection
+  (`?run=ID&task=CODE`), and the older run address redirects to it. Each pane scrolls on its own, so
+  the page stays one screen tall; below 1024 px the panes stack. The project-level Runs page keeps its
+  table and links into this workspace with the run selected.
+- **One list of pipelines.** The catalog's DAGs tab duplicates Pipelines: its columns (description,
+  schedule, dependencies, last run, recent success, tag filter) move into the Pipelines page, and the
+  catalog keeps Search, Warehouse and Gaps (built with S7.AP).
 - **Charts are small SVG components** in the shared component set (bars, areas, a donut,
   sparklines), like the run-duration bars already there. No chart library is added.
 
 **Slices.** (1) The navigation, the Operations section name, Projects in Platform and the
-redirect from the old Insights address. (2) The shared runs and pipelines layout with the run
-identifier (this includes S7.AQ slice 3 for the run lists). (3) The run page. (4) The Home
-dashboard and its tabs.
+redirect from the old Insights address. (2) The run identifier in the run lists (S7.AQ slice 3).
+(3) The pipeline workspace above, which replaces the separate run page. (4) The Home dashboard and
+its tabs. (5) The Pipelines list takes the catalog's DAGs columns.
 
 **Done when.** Every page in the new navigation is served by the app in light, dark and 390 px;
 the Insights page is deleted; the owner approves the screenshots of each slice on the Support
