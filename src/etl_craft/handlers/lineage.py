@@ -24,8 +24,9 @@ traced, such as
 from __future__ import annotations
 
 import json
-from collections.abc import Iterable, Mapping
-from contextlib import nullcontext
+import logging
+from collections.abc import Iterable, Iterator, Mapping
+from contextlib import contextmanager, nullcontext
 from dataclasses import asdict, dataclass, field, replace
 from datetime import datetime
 from importlib.metadata import version
@@ -675,6 +676,18 @@ def _sort_key(edge: Edge) -> tuple[str, str, str, str]:
     )
 
 
+@contextmanager
+def _sqlglot_quiet() -> Iterator[None]:
+    """Mute sqlglot's "unsupported syntax" warnings: a statement it cannot parse is reported."""
+    logger = logging.getLogger("sqlglot")
+    kept = logger.level
+    logger.setLevel(logging.ERROR)
+    try:
+        yield
+    finally:
+        logger.setLevel(kept)
+
+
 def script_lineage(sql: str, name: str, config: ConnectorConfig) -> TaskLineage:
     """Best-effort unmanaged lineage; procedure effects cannot be inferred."""
     dialect, catalog = dialect_and_catalog(config)
@@ -684,7 +697,8 @@ def script_lineage(sql: str, name: str, config: ConnectorConfig) -> TaskLineage:
     unparsed: list[str] = []
     for index, statement_sql in enumerate(split_statements(sql), 1):
         try:
-            tree = sqlglot.parse_one(statement_sql, read=dialect, error_message_context=0)
+            with _sqlglot_quiet():
+                tree = sqlglot.parse_one(statement_sql, read=dialect, error_message_context=0)
             if config.warehouse is not None:
                 tree = qualify_tables(tree, db=config.warehouse.schema or None, catalog=catalog)
         except SqlglotError:

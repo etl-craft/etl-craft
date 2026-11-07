@@ -144,6 +144,9 @@ Warehouses are optional extras. Core bundles none. `all` is core plus the UI, fo
 
 ### Fixed
 
+- Lineage no longer prints `'' contains unsupported syntax` once for every unmanaged-script
+  statement it cannot parse; such a statement is already reported as incomplete lineage.
+
 - Lineage resolves the columns the engine adds to a table it writes (`ROW_ID`, `PIPELINE_RUN_ID`,
   the audit columns of the writing action) when a later SELECT names them, so reading `row_id`,
   `active_flag` or `update_date` from a managed table is no longer reported as a lineage gap.
