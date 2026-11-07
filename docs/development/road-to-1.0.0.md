@@ -195,6 +195,8 @@ item's text, or work done early under another item.
 | S7.AM Protection on every warehouse | Done | #311, #312, #313 | Atomic SCD merges, in-row protection and recovery, private audit identities and provider acceptance |
 | S7.AN Always show the environment | Done | #328 | CLI context and production confirmation; designed, sandboxed alert/SLA templates and catalog environment |
 | S7.AO UI rebuild | Done | #329–#335 | Seven slices: shell, Home, runs, pipelines, tasks, uploads, insights, console, catalog, system, agents, administration, maintenance, settings, search, sign-in; the new interface is the only one, served at `/ui`, and the old pages are deleted |
+| S7.AP Native catalog | Planned | | The catalog moves into the app from a JSON read action, built from the app's own components; the generated static site stays only for `publish-docs` |
+| S7.AQ Readable run identifiers | In progress | #347 | A label beside every run and task run id, stored by the Engine DB; accepted wherever the integer is, and shown beside it |
 | S7.M Stewardship uploads | Done (M2) | #296, #305 | Atomic receipts and safe stored names; processed layout, retention archives and verified reruns; crash recovery and guarded upload history |
 | S7.S Seed tables | Done | #308 | Typed pinned-bundle seeds replace reference tables until recorded stewardship handover |
 | S7.T Business calendars | Done | #276 | Shared holiday and weekend calendars for schedules, run dates, backfill and catch-up |
@@ -9172,11 +9174,60 @@ script or style); it adds no server logic.
    console and the catalog entry (slice 5); system, agents, administration, personal settings,
    search and sign-in (slice 6); then the final deletion of the old UI.
 3. Final slice: serve the new UI at `/ui`, delete the Jinja/htmx templates, their page modules
-   and static files, and the `/app` alias. The catalog's static site is unchanged.
+   and static files, and the `/app` alias. The catalog's static site is unchanged; S7.AP moves
+   the catalog into the app.
 
 **Done when.** Every page is served by the new UI, the old templates and htmx assets are
 deleted, every write action goes through the confirmation dialog, and the screenshots of every
 page in light, dark and 390 px are approved by the owner.
+
+### S7.AP Native catalog
+
+Owner, 2026-11-07. The catalog's content is the product's strongest point: every pipeline, task
+and table with its lineage graph, the declared and deployed column types, rule results, triggers
+and the schema and lineage gaps. Its presentation is not: it is a static page shown in an iframe,
+with its own header, navigation and search inside the app's, always light, with browser-default
+controls (the tag filter), repeated notes on every column ("Warehouse metadata was not requested")
+and tables whose columns do not line up. The owner wants one framework that works coherently, not
+a second interface stitched into the first.
+
+**Decisions.** The catalog is rendered by the app (S7.AO's stack and shared components: the table,
+status badges, the graph, search, the shell and theme) from a JSON read action built from the
+existing catalog model, so its information does not change. The generated static site stays only
+for `publish-docs` (a site that can be shared and read offline); the app no longer embeds it. The
+site gets only the minimum restyle needed to read well, and is not developed further.
+
+**Slices.** (1) The catalog JSON read action, behind the current page, with the same facts the
+static site shows. (2) The shell, search and the list of pipelines with a real tag filter. (3) A
+pipeline's page: description, triggers, the task graph with reads and writes, task documentation.
+(4) The warehouse and a table's page: layers as one table, declared against deployed types,
+rule results, with a note shown once instead of on every column. (5) Schema and lineage gaps,
+grouped by cause and by object instead of one long cell of task links. (6) Insights, and the
+removal of the iframe page.
+
+**Done when.** Every catalog page is served by the app in light, dark and 390 px; the iframe
+page is deleted; the catalog JSON action is documented; and the owner approves the screenshots.
+
+### S7.AQ Readable run identifiers
+
+Owner, 2026-11-07. Run and task run ids are integers, which cannot be read in a list or a
+message. A label is stored beside the integer: a pipeline run is `<pipeline>-<UTC start to the
+second>-<run id>` and a task run is `<pipeline>-<task>-<UTC start>-<task run id>`, to which an
+attempt adds `-<attempt number>`. A pipeline run has no attempt number.
+
+**Decisions.** The integer stays the key; the label is a second way to select and to read, never
+the identity. The label is stored (`RUN_LABEL`, `TASK_RUN_LABEL`) and set by an insert trigger, in
+both dialects, because a run's `START_DATE` moves when a queued run is admitted and a label
+recomputed from it would change. Selecting by label takes the integers from it, reads the row,
+and refuses a label whose other parts differ from what is stored, naming the expected one.
+
+**Slices.** (1) The columns, triggers and backfill (migration 0087), and the label in the JSON and
+`status`. (2) One parser, in operations, so `--run-id`, the API and the UI's links accept the
+integer or the label. (3) The UI shows both wherever a run or task run appears.
+
+**Done when.** Every command, API field and UI link that takes or shows a run id accepts and shows
+both; a mismatched label is refused with the expected one; and an upgraded Engine DB labels its
+existing runs.
 
 ## Release candidate: the Support Insights example
 
