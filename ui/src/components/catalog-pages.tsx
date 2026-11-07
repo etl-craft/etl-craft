@@ -65,7 +65,7 @@ function Section({ title, aside, children }: { title: string; aside?: React.Reac
         <CardTitle>{title}</CardTitle>
         {aside}
       </CardHeader>
-      <div className="p-4">{children}</div>
+      <div className="overflow-x-auto p-4">{children}</div>
     </Card>
   );
 }
@@ -134,7 +134,7 @@ export function CatalogHome({ code, doc }: { code: string; doc: CatalogDoc }) {
     </div>
   );
   return (
-    <div className="grid gap-4 p-4">
+    <div className="grid min-w-0 grid-cols-1 gap-4 p-4">
       <Title icon={Table2} name={`${doc.project} catalog`} />
       <p className="m-0 text-[13px] text-muted">
         Built {formatTime(doc.generated_at, tz)}
@@ -174,7 +174,7 @@ export function PipelineObject({ code, doc, name, tab, onTab }: { code: string; 
   const tabs = [{ id: "overview", label: "Overview" }, { id: "lineage", label: "Task graph" }, { id: "runs", label: "Runs" }];
   const on = tabs.some((t) => t.id === tab) ? tab : "overview";
   return (
-    <div className="grid gap-3 p-4">
+    <div className="grid min-w-0 grid-cols-1 gap-3 p-4">
       <Crumbs code={code} trail={[{ label: "Pipelines" }, { label: pipeline.code }]} />
       <Title icon={Workflow} name={pipeline.code} copy={pipeline.code}>
         <Link className={`ml-auto text-sm ${link}`} to={pipelinePath(code, pipeline.code)}>
@@ -280,7 +280,7 @@ export function TaskObject({ code, doc, name, tab, onTab }: { code: string; doc:
   const tabs = [{ id: "overview", label: "Overview" }, { id: "lineage", label: "Column lineage" }, { id: "runs", label: "Runs" }];
   const on = tabs.some((t) => t.id === tab) ? tab : "overview";
   return (
-    <div className="grid gap-3 p-4">
+    <div className="grid min-w-0 grid-cols-1 gap-3 p-4">
       <Crumbs code={code} trail={[{ label: task.pipeline, to: catalogPath(code, "pipelines", task.pipeline) }, { label: task.code }]} />
       <Title icon={ListChecks} name={task.code} copy={task.label}>
         <Link className={`ml-auto text-sm ${link}`} to={taskPath(code, task.pipeline, task.code)}>
@@ -371,7 +371,7 @@ export function TableObject({ code, doc, name, tab, onTab }: { code: string; doc
   const lastWrite = writers.flatMap((w) => w.runs).filter((r) => r.end).sort((a, b) => (b.end ?? "").localeCompare(a.end ?? ""))[0];
   const history = writers.flatMap((w) => w.runs.map((r) => ({ ...r, task: w.label, pipeline: w.pipeline }))).sort((a, b) => (b.start ?? "").localeCompare(a.start ?? "")).slice(0, 30);
   return (
-    <div className="grid gap-3 p-4">
+    <div className="grid min-w-0 grid-cols-1 gap-3 p-4">
       <Crumbs code={code} trail={[{ label: table.schema || "schema" }, { label: table.table }]} />
       <Title icon={Table2} name={table.table} copy={table.name} />
       <Tabs tabs={tabs} value={on} onChange={onTab} />
@@ -569,7 +569,7 @@ export function GapsObject({ code, doc }: { code: string; doc: CatalogDoc }) {
   const states = [...new Set(doc.gaps.map((g) => g.state))].sort();
   const shown = doc.gaps.filter((g) => (state === "ALL" ? true : state === "OPEN" ? g.state !== "MATCHED" && g.state !== "UNCHECKED" : g.state === state));
   return (
-    <div className="grid gap-3 p-4">
+    <div className="grid min-w-0 grid-cols-1 gap-3 p-4">
       <Crumbs code={code} trail={[{ label: "Gaps" }]} />
       <Title icon={TriangleAlert} name="Schema and lineage gaps" />
       <p className="m-0 text-[13px] text-muted">Where what the project declares, what the warehouse holds and what the SQL reads disagree. Unchecked comparisons are never counted as matched.</p>
@@ -582,7 +582,7 @@ export function GapsObject({ code, doc }: { code: string; doc: CatalogDoc }) {
           </option>
         ))}
       </SelectField>
-      <Card>{shown.length ? <GapRows code={code} gaps={shown.slice(0, 500)} /> : <p className="m-0 p-4 text-muted">Nothing to show for this selection.</p>}</Card>
+      <Card className="overflow-x-auto">{shown.length ? <GapRows code={code} gaps={shown.slice(0, 500)} /> : <p className="m-0 p-4 text-muted">Nothing to show for this selection.</p>}</Card>
       {shown.length > 500 ? <p className="m-0 text-xs text-muted">The first 500 of {shown.length} are shown; narrow it by state.</p> : null}
     </div>
   );
