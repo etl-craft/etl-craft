@@ -70,16 +70,12 @@ def test_filter_by_tag_select_pause_and_export(scene):
         table = page.get_by_role("table", name="Pipelines")
         expect(table.get_by_role("link", name="OPS")).to_be_visible()
         expect(table.get_by_role("link", name="SALES")).to_be_visible()
-        page.get_by_role("group", name="Filter by tag").get_by_role(
-            "button", name="team:ops"
-        ).click()
+        page.get_by_label("Tag", exact=True).select_option("team:ops")
         expect(table.get_by_role("link", name="SALES")).to_have_count(0)
         assert "tag=team%3Aops" in page.url
         page.reload()
-        expect(page.get_by_role("button", name="team:ops")).to_have_attribute(
-            "aria-pressed", "true"
-        )
-        page.get_by_role("button", name="team:ops").click()  # clear the filter
+        expect(page.get_by_role("button", name="Remove tag team:ops")).to_be_visible()
+        page.get_by_role("button", name="Remove tag team:ops").click()  # clear the filter
         expect(table.get_by_role("link", name="SALES")).to_be_visible()
         shoot(page, "pipelines")
 
