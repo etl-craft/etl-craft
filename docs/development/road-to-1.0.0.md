@@ -9213,6 +9213,17 @@ existing catalog model, so its information does not change. The generated static
 for `publish-docs` (a site that can be shared and read offline); the app no longer embeds it. The
 site gets only the minimum restyle needed to read well, and is not developed further.
 
+**Layout (owner, 2026-11-07, from a Databricks Catalog Explorer screenshot).** The catalog is a
+two-pane explorer like Catalog Explorer: a resizable tree on the left (project, then pipelines and
+warehouse schemas, then their tasks and tables) with a search box that filters the tree and a
+refresh control, and on the right the selected object under a breadcrumb. An object page has a
+title with copy and star, its actions, and tabs. A table's tabs are Overview, Columns, Lineage,
+History and Quality; its Overview is a Description card, a Columns table with a column filter
+(name, type, declared type, comment, tags), and an "About this table" side column (owner, type,
+data source, writers, freshness, tags). A pipeline's tabs match the pipeline workspace's. What
+Databricks shows that etl-craft has no data for (Sample Data, Permissions, Policies, Popularity)
+is not shown; nothing is added to fill the layout.
+
 **Slices.** (1) The catalog JSON read action, behind the current page, with the same facts the
 static site shows. (2) The shell, search and the list of pipelines with a real tag filter. (3) A
 pipeline's page: description, triggers, the task graph with reads and writes, task documentation.
@@ -9310,6 +9321,17 @@ place.
   (`?run=ID&task=CODE`), and the older run address redirects to it. Each pane scrolls on its own, so
   the page stays one screen tall; below 1024 px the panes stack. The project-level Runs page keeps its
   table and links into this workspace with the run selected.
+- **The workspace follows the Airflow DAG page** (owner, 2026-11-07, from the Airflow 3.4 views).
+  The header is a facts row: Schedule, Latest run, Next run, Refresh, SLA, Tags, with Run now and
+  Pause. The right panel's tabs are Overview (a window selector; Runs, Failed runs, Success rate
+  and Median duration for it; the last ten runs' durations; recent failures), the selected run
+  (`Run #ID`, which opens when a run or task is selected), Runs (filterable by state, pool, agent
+  and failure class), Tasks (each task, its handler, what it waits for, its state in the selected
+  run), Details (the definition) and Documentation. Documentation shows the pipeline's
+  `DESCRIPTION`, then each task's `DOCUMENTATION`, and says which are missing. Later: an Audit log
+  tab (the project's actions on this pipeline), a Code tab (the task scripts as published), a
+  Calendar of runs, an Options menu on the grid and graph (what to show, duration or run labels),
+  and a minimap on a large graph.
 - **One list of pipelines.** The catalog's DAGs tab duplicates Pipelines: its columns (description,
   schedule, dependencies, last run, recent success, tag filter) move into the Pipelines page, and the
   catalog keeps Search, Warehouse and Gaps (built with S7.AP).

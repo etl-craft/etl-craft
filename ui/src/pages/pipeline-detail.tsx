@@ -3,7 +3,9 @@ import { Pause, Play, PlayCircle } from "lucide-react";
 import * as React from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { ActionButton } from "@/components/action-button";
-import { Field, inputClass, Loading, Notice, PageHeader, SelectField } from "@/components/common";
+import { Fact, FactList, Field, inputClass, Loading, Notice, PageHeader, SelectField } from "@/components/common";
+import { DetailsTab, DocsTab, OverviewTab, TasksTab } from "@/components/pipeline-tabs";
+import { StatusBadge } from "@/components/status";
 import { PauseState } from "@/components/pipeline-parts";
 import { RunGraph } from "@/components/run-graph";
 import { RunGrid } from "@/components/run-grid";
@@ -13,22 +15,20 @@ import { useRuns } from "@/components/runs-table";
 import { Tabs } from "@/components/tabs";
 import { SplitPane } from "@/components/split-pane";
 import { Card } from "@/components/ui/card";
-import { useCanRun, useProjectInfo } from "@/hooks";
+import { useCanRun, useProjectInfo, useTimezone } from "@/hooks";
+import { formatTime } from "@/lib/format";
 import { getJson, project } from "@/lib/api";
 import { taskPath } from "@/lib/routes";
 import { cn } from "@/lib/utils";
 import type { Graph, Pipeline, Steps } from "@/lib/types";
 import { useDocumentTitle } from "@/title";
 
-const TABS = [
-  { id: "overview", label: "Overview" },
-  { id: "runs", label: "Runs" },
-];
+const TAB_IDS = ["overview", "run", "runs", "tasks", "details", "docs"];
 
 export function PipelineDetail() {
   const { project: code = "", pipeline = "" } = useParams();
   const [params, setParams] = useSearchParams();
-  const tab = params.get("tab") === "runs" ? "runs" : "overview";
+  const asked = params.get("tab") ?? "";
   const view = params.get("view") === "graph" ? "graph" : "grid";
   const flow = params.get("flow") === "lr" ? "LR" : params.get("flow") === "tb" ? "TB" : undefined;
   const chosen = /^\d+$/.test(params.get("run") ?? "") ? Number(params.get("run")) : undefined;
@@ -41,6 +41,7 @@ export function PipelineDetail() {
     setParams(next, { replace: true });
   };
   const navigate = useNavigate();
+  const tz = useTimezone();
   const canRun = useCanRun(code);
   const info = useProjectInfo(code);
   const found = useQuery({
@@ -57,6 +58,16 @@ export function PipelineDetail() {
     queryFn: () => getJson<Steps>(`${project(code)}/steps`, { pipeline_code: pipeline, run_id: selected }),
     enabled: view === "graph" && selected !== undefined,
   });
+  const tab = TAB_IDS.includes(asked) && (asked !== "run" || selected !== undefined) ? asked : chosen !== undefined ? "run" : "overview";
+  const tabs = [
+    { id: "overview", label: "Overview" },
+    ...(selected !== undefined ? [{ id: "run", label: `Run #${selected}` }] : []),
+    { id: "runs", label: "Runs" },
+    { id: "tasks", label: "Tasks" },
+    { id: "details", label: "Details" },
+    { id: "docs", label: "Documentation" },
+  ];
+  const state = params.get("status") ?? "";
   const select = (runId: number, taskCode?: string) => {
     const next = new URLSearchParams(params);
     next.set("run", String(runId));
@@ -140,11 +151,22 @@ export function PipelineDetail() {
         }
       >
         {p ? (
-          <p className="m-0 text-[13px] text-muted">
-            {p.run_schedule ? <>Schedule <code className="font-mono">{p.run_schedule}</code></> : "Not scheduled"}
-            {p.restart_note ? <> · {p.restart_note.toLowerCase()}</> : null}
-            {p.sla_in_hours ? ` · SLA ${p.sla_in_hours} h` : ""} · {p.refresh_type.toLowerCase()} refresh
-          </p>
+          <FactList inline>
+            <Fact inline label="Schedule">{p.run_schedule ? <code className="font-mono">{p.run_schedule}</code> : "Not scheduled"}</Fact>
+            <Fact inline label="Latest run">
+              {runs[0] ? (
+                <span className="inline-flex items-center gap-1.5">
+                  <StatusBadge status={runs[0].status} /> {formatTime(runs[0].start_date, tz)}
+                </span>
+              ) : (
+                "None yet"
+              )}
+            </Fact>
+            <Fact inline label="Next run">{p.next_run ? formatTime(p.next_run, tz) : (p.restart_note ?? "—")}</Fact>
+            <Fact inline label="Refresh">{p.refresh_type.toLowerCase()}</Fact>
+            {p.sla_in_hours ? <Fact inline label="SLA">{p.sla_in_hours} h</Fact> : null}
+            {p.tags.length ? <Fact inline label="Tags">{p.tags.join(", ")}</Fact> : null}
+          </FactList>
         ) : (
           <Loading what="pipeline" />
         )}
@@ -199,7 +221,7 @@ export function PipelineDetail() {
         right={
         <Card className="flex min-h-0 flex-1 flex-col overflow-hidden">
           <div className="px-3">
-            <Tabs tabs={TABS} value={tab} onChange={(id) => choose("tab", id === "overview" ? null : id)} />
+            <Tabs tabs={tabs} value={tab} onChange={(id) => choose("tab", id)} />
           </div>
           <div role="tabpanel" id="tabpanel" aria-labelledby={`tab-${tab}`} className="min-h-0 flex-1 overflow-auto p-4">
             {tab === "runs" ? (
@@ -207,10 +229,19 @@ export function PipelineDetail() {
                 code={code}
                 pipeline={pipeline}
                 bars={false}
+                status={state || undefined}
                 filters={{ pool: filters.pool || undefined, agent: filters.agent || undefined, failure_class: filters.failure_class || undefined }}
                 highlight={selected}
                 toolbar={
                   <>
+                    <SelectField compact label="State" value={state} onChange={(value) => choose("status", value || null)}>
+                      <option value="">All states</option>
+                      {["FAILED", "IN-PROGRESS", "SUCCESS", "SKIPPED", "LOST"].map((s) => (
+                        <option key={s} value={s}>
+                          {s === "IN-PROGRESS" ? "Running" : s.charAt(0) + s.slice(1).toLowerCase()}
+                        </option>
+                      ))}
+                    </SelectField>
                     <Field compact label="Pool">
                       <input value={filters.pool} onChange={(event) => setFilter("pool", event.target.value)} className={inputClass} placeholder="Any pool" />
                     </Field>
@@ -228,10 +259,18 @@ export function PipelineDetail() {
                   </>
                 }
               />
-            ) : selected !== undefined ? (
+            ) : tab === "run" && selected !== undefined ? (
               <RunOverview code={code} pipeline={pipeline} runId={selected} task={task} onTask={(next) => choose("task", next)} />
+            ) : !p || !graph.isSuccess ? (
+              <Loading what="pipeline" />
+            ) : tab === "tasks" ? (
+              <TasksTab code={code} pipeline={pipeline} graph={graph.data} runId={selected} />
+            ) : tab === "details" ? (
+              <DetailsTab pipeline={p} graph={graph.data} project={code} />
+            ) : tab === "docs" ? (
+              <DocsTab code={code} pipeline={p} graph={graph.data} />
             ) : (
-              <p className="m-0 text-muted">No runs yet.</p>
+              <OverviewTab code={code} pipeline={p} runs={runs} />
             )}
           </div>
         </Card>

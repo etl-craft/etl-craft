@@ -234,6 +234,8 @@ export interface Pipeline {
   auto_restart_condition?: string;
   /** The condition in words when it adds to or replaces the schedule; null for the schedule alone. */
   restart_note?: string | null;
+  /** What the pipeline does (its `DESCRIPTION`); absent from a server that predates it. */
+  description?: string | null;
   sla_in_hours: number | null;
   paused: Pause | null;
   tags: string[];

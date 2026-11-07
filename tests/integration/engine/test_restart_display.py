@@ -29,3 +29,19 @@ def test_the_view_and_the_catalog_say_how_a_watcher_restarts(engine_db):
     assert views["WATCH"].restart_note == "Restarts after a success or a skipped run"
     catalog = build_catalog(engine_db.engine, engine_db.config)
     assert catalog.pipelines["WATCH"].row.auto_restart_condition == "SUCCESS|SKIPPED"
+
+
+def test_the_list_and_the_detail_carry_the_pipelines_description(engine_db):
+    with engine_db.engine.begin() as conn:
+        documented = add_pipeline(conn, "DOCUMENTED")
+        add_pipeline(conn, "PLAIN")
+        conn.execute(
+            text("UPDATE CFG_PIPELINES SET DESCRIPTION=:text WHERE PIPELINE_ID=:i"),
+            {"text": "Loads the orders and publishes the mart.", "i": documented},
+        )
+    ctx = OperationContext(engine_db.engine, engine_db.config, SYSTEM_ACTOR, role=ApiRole.ADMIN)
+    listed = {p.pipeline_code: p for p in act(ctx, ActionName.PIPELINES).pipelines}
+    assert listed["DOCUMENTED"].description == "Loads the orders and publishes the mart."
+    assert listed["PLAIN"].description is None
+    detail = act(ctx, ActionName.PIPELINE, pipeline_code="DOCUMENTED")
+    assert detail.description == "Loads the orders and publishes the mart."

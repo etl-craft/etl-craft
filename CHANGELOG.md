@@ -6,6 +6,11 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+- The UI's pipeline page follows the Airflow DAG page: a facts row (schedule, latest run, next run), and
+  tabs for Overview (runs, failures, success rate and median duration over a window, the last ten
+  runs), the selected run, Runs (now filterable by state), Tasks, Details and Documentation (the
+  pipeline's `DESCRIPTION` and each task's `DOCUMENTATION`). The pipeline views
+  (`etl-craft/pipeline/1`, `etl-craft/pipeline-list/1`) gain `description`.
 - The pipeline workspace's panes resize (drag the divider, or focus it and use the arrow keys; Home resets;
   the width is remembered in the browser). The Graph view fills its pane and keeps the whole graph in
   view as it is resized, laid out top to bottom in a tall pane or left to right in a wide one, with
