@@ -215,7 +215,7 @@ export function RunGraph({
         </p>
       )}
       <ReactFlow
-        key={wide ? "wide" : "fit"}
+        key={`${wide ? "wide" : "fit"}:${shown}:${nodes.map((n) => n.id).join("|")}`}
         nodes={nodes}
         edges={edges}
         nodeTypes={nodeTypes}

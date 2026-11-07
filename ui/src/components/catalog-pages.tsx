@@ -68,7 +68,7 @@ function Section({ title, aside, fill, className, children }: { title: string; a
         <CardTitle>{title}</CardTitle>
         {aside}
       </CardHeader>
-      <div className={cn(fill ? "min-h-0 flex-1 overflow-auto" : "overflow-x-auto p-4")}>{children}</div>
+      <div data-scroll-area={fill ? "" : undefined} className={cn(fill ? "min-h-0 flex-1 overflow-auto" : "overflow-x-auto p-4")}>{children}</div>
     </Card>
   );
 }
@@ -78,7 +78,7 @@ function ObjectPage({ header, fit, children }: { header: React.ReactNode; fit?: 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
       <div className="grid shrink-0 gap-3 px-4 pt-4">{header}</div>
-      <div className={cn("min-h-0 min-w-0 flex-1 p-4", fit ? "flex flex-col overflow-auto @3xl:overflow-hidden" : "overflow-auto")}>{children}</div>
+      <div data-scroll-area className={cn("min-h-0 min-w-0 flex-1 p-4", fit ? "flex flex-col overflow-auto @3xl:overflow-hidden" : "overflow-auto")}>{children}</div>
     </div>
   );
 }

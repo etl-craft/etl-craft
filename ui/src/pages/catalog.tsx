@@ -173,7 +173,7 @@ export function Catalog() {
                   <ArrowLeft className="size-4" aria-hidden /> All catalog objects
                 </Link>
               ) : null}
-              {kind ? content : <div className="min-h-0 flex-1 overflow-auto">{content}</div>}
+              {kind ? content : <div data-scroll-area className="min-h-0 flex-1 overflow-auto">{content}</div>}
             </Card>
           }
         />

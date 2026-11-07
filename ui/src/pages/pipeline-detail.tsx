@@ -248,7 +248,7 @@ export function PipelineDetail() {
           <div className="px-3">
             <Tabs tabs={tabs} value={tab} onChange={(id) => choose("tab", id)} />
           </div>
-          <div role="tabpanel" id="tabpanel" aria-labelledby={`tab-${tab}`} className="min-h-0 flex-1 overflow-auto p-4">
+          <div role="tabpanel" id="tabpanel" data-scroll-area aria-labelledby={`tab-${tab}`} className="min-h-0 flex-1 overflow-auto p-4">
             {tab === "runs" ? (
               <RunsPanel
                 code={code}

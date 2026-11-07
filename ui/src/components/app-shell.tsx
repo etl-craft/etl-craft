@@ -182,7 +182,7 @@ export function AppShell() {
             }}
           />
         </aside>
-        <main id="main" className={cn("min-w-0 flex-1 overflow-y-auto", fill && "lg:overflow-hidden")}>
+        <main id="main" data-scroll-area className={cn("min-w-0 flex-1 overflow-y-auto", fill && "lg:overflow-hidden")}>
           <div className={cn("w-full px-3 py-3 sm:px-4", fill ? "flex min-h-full flex-col gap-2 lg:h-full lg:min-h-0" : "mx-auto max-w-[1920px] py-4")}>
             {unavailable && ready ? (
               <Notice>
