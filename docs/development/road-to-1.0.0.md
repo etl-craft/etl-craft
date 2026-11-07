@@ -197,7 +197,7 @@ item's text, or work done early under another item.
 | S7.AO UI rebuild | Done | #329–#335 | Seven slices: shell, Home, runs, pipelines, tasks, uploads, insights, console, catalog, system, agents, administration, maintenance, settings, search, sign-in; the new interface is the only one, served at `/ui`, and the old pages are deleted |
 | S7.AP Native catalog | Planned | | The catalog moves into the app from a JSON read action, built from the app's own components; the generated static site stays only for `publish-docs` |
 | S7.AQ Readable run identifiers | In progress | #347 | A label beside every run and task run id, stored by the Engine DB; accepted wherever the integer is, and shown beside it |
-| S7.AR Restarting pipelines | Planned | | A pipeline setting, `RESTART_CONDITION`, starts the next run when the last one ends in a chosen status, so a file watcher runs continuously without a schedule |
+| S7.AR Restarting pipelines | In progress | slice 1 PR | A pipeline setting, `RESTART_CONDITION`, starts the next run when the last one ends in a chosen status, so a file watcher runs continuously without a schedule |
 | S7.M Stewardship uploads | Done (M2) | #296, #305 | Atomic receipts and safe stored names; processed layout, retention archives and verified reruns; crash recovery and guarded upload history |
 | S7.S Seed tables | Done | #308 | Typed pinned-bundle seeds replace reference tables until recorded stewardship handover |
 | S7.T Business calendars | Done | #276 | Shared holiday and weekend calendars for schedules, run dates, backfill and catch-up |
@@ -1380,6 +1380,17 @@ empty-history-page handling defect, which was corrected and verified. No cloud w
   Acceptance availability: the shared dedupe oracle passed on Snowflake native and
   Iceberg, and Databricks Delta and UniForm. The exact local merge budget assertions
   remain unchanged.
+
+- **S7.AR restarting pipelines (owner, 2026-11-07).** Choices that differ from the item text: the
+  pipeline setting is `AUTO_RESTART_CONDITION`, not `RESTART_CONDITION`, and it also takes
+  `SCHEDULE` (the default: the pipeline's `RUN_SCHEDULE` starts it, as today) and keeps `NONE`
+  (only a person or a trigger starts it). `SCHEDULE` combines with the endings, so `SCHEDULE|SUCCESS`
+  restarts at once after a success and otherwise follows the schedule; `ALWAYS` is `SUCCESS|SKIPPED|
+  FAILURE` and never a cancel. The environment setting is `Orchestration.Allowed_auto_restarts`, which
+  replaces `Orchestration.Allow_schedule` with the same values (default everything; `NONE` is the old
+  `Allow_schedule: false`). It only suppresses automatic starts in that environment: a pipeline's
+  condition stays valid and validates everywhere, so one set of config files serves dev, test and
+  prod. Acceptance availability: no warehouse SQL changed, so cloud acceptance was not needed.
 
 - **S7.AL.4 event-file validation (owner, 2026-11-06).** Choices that differ from the item text:
   the opt-in is the FILE_VALIDATION parameter `SOURCE_EVENT=<EVENT_WAIT task code>`, for waits
