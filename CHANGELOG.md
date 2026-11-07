@@ -305,6 +305,9 @@ Warehouses are optional extras. Core bundles none. `all` is core plus the UI, fo
 - A pipeline's `AUTO_RESTART_CONDITION` is shown in words wherever its schedule is: the pipeline views
   (`restart_note`, with `auto_restart_condition`), the Pipelines list and a pipeline's page, and the catalog
   ("Restarts after a success or a skipped run"; "Not started automatically" for `NONE`).
+- The run page is compact: one header with the run's string identifier (and a button to copy it), its facts on
+  one line, and its key and logs in a single menu. A task's details (state, controls, why it waits, each
+  attempt with its evidence and log) open in place under its row in the task list, not in a card below it.
 
 - The project's Runs page and a pipeline's Runs tab share one layout: a strip of the latest runs' durations,
   a toolbar of filters, then the table. Each run shows its string identifier beside its number. A run opened

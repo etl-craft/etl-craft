@@ -1,8 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, Copy, Download, LifeBuoy } from "lucide-react";
+import { ArrowLeft, ChevronDown, ChevronRight, Copy, Download, LifeBuoy } from "lucide-react";
 import * as React from "react";
 import { Link, useParams } from "react-router-dom";
 import { Fact, FactList, Loading, Notice, PageHeader } from "@/components/common";
+import { DropdownContent, DropdownItem, DropdownMenu, DropdownTrigger } from "@/components/dropdown";
 import { ActionButton } from "@/components/action-button";
 import { AttemptDetails } from "@/components/attempt-details";
 import { useToast } from "@/components/toast";
@@ -49,74 +50,74 @@ function Why({ code, pipeline, runId, task }: { code: string; pipeline: string; 
   );
 }
 
-function TaskPanel({ code, pipeline, runId, task, handler }: { code: string; pipeline: string; runId: number; task: string; handler?: string }) {
+/** What a task row opens in place: its state, controls, why it waits, and each attempt with its evidence and log. */
+function TaskDetails({ code, pipeline, runId, task, handler }: { code: string; pipeline: string; runId: number; task: string; handler?: string }) {
   const history = useQuery({
     queryKey: ["task-history", code, pipeline, runId, task],
     queryFn: () => getJson<TaskHistory>(`${project(code)}/history`, { pipeline_code: pipeline, run_id: runId, task_code: task }),
   });
   const run = history.data?.entries[0];
   return (
-    <Card aria-label={`Task ${task}`}>
-      <CardHeader>
-        <CardTitle>{task}</CardTitle>
-        <span className="flex items-center gap-3">
-          <Link to={taskPath(code, pipeline, task)} className="text-xs text-accent hover:underline">
-            Task history
+    <section aria-label={`Task ${task}`} className="grid gap-3 border-l-2 border-accent bg-surface-2 p-4">
+      <div className="flex flex-wrap items-center gap-3 text-xs">
+        <Link to={taskPath(code, pipeline, task)} className="text-accent hover:underline">
+          Task history
+        </Link>
+        {handler === "PYTHON" ? (
+          <Link to={itemsPath(code, pipeline, runId, task)} className="text-accent hover:underline">
+            Items
           </Link>
-          {handler === "PYTHON" ? (
-            <Link to={itemsPath(code, pipeline, runId, task)} className="text-xs text-accent hover:underline">
-              Items
-            </Link>
-          ) : null}
-          {run ? <StatusBadge status={run.status} /> : null}
-        </span>
-      </CardHeader>
-      <div className="grid gap-4 p-4">
-        {history.isPending ? <Loading what="task" /> : null}
-        {history.isError ? <Notice>{(history.error as Error).message}</Notice> : null}
-        {history.isSuccess && !run ? <p className="m-0 text-muted">This task has not started under this run.</p> : null}
-        {run?.error_message ? <Notice mono>{run.error_message}</Notice> : null}
-        <ScopeControls code={code} pipeline={pipeline} runId={runId} task={task} />
-        {run && run.status !== "SUCCESS" ? <Why code={code} pipeline={pipeline} runId={runId} task={task} /> : null}
-        {run && run.attempts.length === 0 ? (
-          <p className="m-0 text-muted">No attempt was started for this task{run.status === "SKIPPED" ? ": an upstream outcome skipped it" : ""}.</p>
         ) : null}
-        {run?.attempts.map((attempt) => (
-          <div key={attempt.attempt_id} className="grid gap-2 rounded-md border border-border p-3">
-            <AttemptDetails code={code} attempt={attempt} />
-            <Link to={attemptPath(code, pipeline, runId, task, attempt.attempt_id)} className="w-fit text-xs text-accent hover:underline">
-              Open attempt {attempt.attempt_number}
-            </Link>
-          </div>
-        ))}
       </div>
-    </Card>
+      {history.isPending ? <Loading what="task" /> : null}
+      {history.isError ? <Notice>{(history.error as Error).message}</Notice> : null}
+      {history.isSuccess && !run ? <p className="m-0 text-muted">This task has not started under this run.</p> : null}
+      {run?.error_message ? <Notice mono>{run.error_message}</Notice> : null}
+      <ScopeControls code={code} pipeline={pipeline} runId={runId} task={task} />
+      {run && run.status !== "SUCCESS" ? <Why code={code} pipeline={pipeline} runId={runId} task={task} /> : null}
+      {run && run.attempts.length === 0 ? (
+        <p className="m-0 text-muted">No attempt was started for this task{run.status === "SKIPPED" ? ": an upstream outcome skipped it" : ""}.</p>
+      ) : null}
+      {run?.attempts.map((attempt) => (
+        <div key={attempt.attempt_id} className="grid gap-2 rounded-md border border-border bg-surface p-3">
+          <AttemptDetails code={code} attempt={attempt} />
+          <Link to={attemptPath(code, pipeline, runId, task, attempt.attempt_id)} className="w-fit text-xs text-accent hover:underline">
+            Open attempt {attempt.attempt_number}
+          </Link>
+        </div>
+      ))}
+    </section>
   );
 }
 
-/** The run's own log and every attempt's log, downloaded as the API streams them; and, while it runs, fencing of expired owners. */
+/** The run's key and logs, as the API streams them, and, while it runs, fencing of expired owners: one menu, not a row of buttons. */
 function RunTools({ code, run, canRun }: { code: string; run: RunView; canRun: boolean }) {
   const query = `pipeline_code=${encodeURIComponent(run.pipeline_code)}&run_id=${run.pipeline_run_id}`;
+  const toast = useToast();
   const file = (path: string, name: string, label: string) => (
-    <Button asChild size="sm">
+    <DropdownItem asChild>
       <a href={`${project(code)}${path}?${query}`} download={name}>
         <Download className="size-4" aria-hidden /> {label}
       </a>
-    </Button>
+    </DropdownItem>
   );
-  const toast = useToast();
   return (
-    <div className="flex flex-wrap gap-2">
-      <Button
-        size="sm"
-        onClick={() => {
-          void navigator.clipboard.writeText(run.run_key).then(() => toast("Run key copied."));
-        }}
-      >
-        <Copy className="size-4" aria-hidden /> Copy run key
-      </Button>
-      {file("/run-log", `run-${run.pipeline_run_id}.log`, "Download run log")}
-      {file("/run-zip", `run-${run.pipeline_run_id}-logs.zip`, "Download logs (zip)")}
+    <div className="flex flex-wrap items-center gap-2">
+      <DropdownMenu>
+        <DropdownTrigger asChild>
+          <Button size="sm" variant="outline" aria-label="Run key and logs">
+            Logs and key
+            <ChevronDown className="size-3.5" aria-hidden />
+          </Button>
+        </DropdownTrigger>
+        <DropdownContent align="end">
+          <DropdownItem onSelect={() => void navigator.clipboard.writeText(run.run_key).then(() => toast("Run key copied."))}>
+            <Copy className="size-4" aria-hidden /> Copy run key
+          </DropdownItem>
+          {file("/run-log", `run-${run.pipeline_run_id}.log`, "Download run log")}
+          {file("/run-zip", `run-${run.pipeline_run_id}-logs.zip`, "Download logs (zip)")}
+        </DropdownContent>
+      </DropdownMenu>
       {canRun && !run.end_date ? (
         <ActionButton<{ message: string }>
           code={code}
@@ -168,6 +169,7 @@ export function RunDetail() {
   const { project: code = "", pipeline = "", runId = "" } = useParams();
   const id = Number(runId);
   const tz = useTimezone();
+  const toast = useToast();
   const info = useProjectInfo(code);
   const [focused, setFocused] = React.useState<string | null>(null);
   const [opened, setOpened] = React.useState<string | null>(null);
@@ -205,43 +207,64 @@ export function RunDetail() {
     );
   }
   const r = run.data;
+  const toggle = (task: string) => (opened === task ? setOpened(null) : open(task));
   return (
-    <div className="grid grid-cols-1 gap-5">
+    <div className="grid grid-cols-1 gap-4">
       <Link to={runsPath(code, pipeline)} className="inline-flex w-fit items-center gap-1 text-sm text-muted hover:text-fg">
         <ArrowLeft className="size-4" aria-hidden /> {pipeline} runs
       </Link>
       <PageHeader
+        compact
         title={
           <>
             {pipeline} <span className="num text-muted">#{runId}</span>
           </>
         }
         status={r ? <StatusBadge status={r.status} /> : null}
-        actions={r ? <RecoverRun code={code} run={r} canRun={canRun} /> : null}
+        actions={
+          r ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <RunTools code={code} run={r} canRun={canRun} />
+              <RecoverRun code={code} run={r} canRun={canRun} />
+            </div>
+          ) : null
+        }
       >
         {r ? (
-          <FactList>
-            <Fact label="Started">{formatTime(r.start_date, tz)}</Fact>
-            <Fact label="Ended">{formatTime(r.end_date, tz)}</Fact>
-            <Fact label="Duration">{formatDuration(r.start_date, r.end_date)}</Fact>
-            <Fact label="Logical date">{r.run_date ?? "—"}</Fact>
-            <Fact label="Trigger">{r.trigger_kind.toLowerCase()}</Fact>
-            <Fact label="Started by">{r.started_by ?? "—"}</Fact>
-            <Fact label="Run key">
-              <span className="break-all">{r.run_key}</span>
-            </Fact>
-            {r.sla_status ? <Fact label="SLA">{r.sla_status}</Fact> : null}
-          </FactList>
+          <>
+            {r.run_label ? (
+              <p className="m-0 flex items-center gap-2 font-mono text-xs text-muted" aria-label="Run identifier">
+                <span className="break-all">{r.run_label}</span>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="size-6"
+                  aria-label="Copy the run identifier"
+                  onClick={() => void navigator.clipboard.writeText(r.run_label ?? "").then(() => toast("Run identifier copied."))}
+                >
+                  <Copy className="size-3.5" aria-hidden />
+                </Button>
+              </p>
+            ) : null}
+            <FactList inline>
+              <Fact inline label="Started">{formatTime(r.start_date, tz)}</Fact>
+              <Fact inline label="Ended">{formatTime(r.end_date, tz)}</Fact>
+              <Fact inline label="Duration">{formatDuration(r.start_date, r.end_date)}</Fact>
+              <Fact inline label="Logical date">{r.run_date ?? "—"}</Fact>
+              <Fact inline label="Trigger">{r.trigger_kind.toLowerCase()}</Fact>
+              <Fact inline label="Started by">{r.started_by ?? "—"}</Fact>
+              {r.sla_status ? <Fact inline label="SLA">{r.sla_status}</Fact> : null}
+            </FactList>
+          </>
         ) : (
           <Loading what="run" />
         )}
       </PageHeader>
-      {r ? <RunTools code={code} run={r} canRun={canRun} /> : null}
       <ScopeControls code={code} pipeline={pipeline} runId={id} elsewhere={["RECOVER"]} />
       <Card>
         <CardHeader>
           <CardTitle>Tasks</CardTitle>
-          <span className="text-xs text-muted">Click a task for its lineage; use its arrow for status, attempts and log</span>
+          <span className="text-xs text-muted">Click a task for its lineage; use its arrow, or a row below, for status, attempts and log</span>
         </CardHeader>
         {graph.isSuccess ? <RunGraph graph={graph.data} statuses={statuses} focused={focused} onFocus={setFocused} onOpen={open} /> : graph.isError ? <Notice className="m-4">{(graph.error as Error).message}</Notice> : <Loading what="graph" className="p-4" />}
       </Card>
@@ -249,6 +272,9 @@ export function RunDetail() {
         <Table aria-label="Task list">
           <thead>
             <tr>
+              <Th className="w-8">
+                <span className="sr-only">Details</span>
+              </Th>
               <Th>Task</Th>
               <Th>Status</Th>
               <Th>Handler</Th>
@@ -256,28 +282,48 @@ export function RunDetail() {
             </tr>
           </thead>
           <tbody>
-            {ordered.map((step) => (
-              <tr key={step.task_code} className={step.task_code === opened ? "bg-surface-2" : "hover:bg-surface-2"}>
-                <Td>
-                  <button type="button" className="cursor-pointer font-medium text-accent hover:underline" aria-pressed={step.task_code === opened} onClick={() => open(step.task_code)}>
-                    {step.task_code}
-                  </button>
-                </Td>
-                <Td>
-                  <StatusBadge status={step.status ?? "QUEUED"} />
-                </Td>
-                <Td>{step.handler}</Td>
-                <Td className="text-muted">{step.run_condition ? step.run_condition.toLowerCase() : "all upstream succeed"}</Td>
-              </tr>
-            ))}
+            {ordered.map((step) => {
+              const isOpen = step.task_code === opened;
+              return (
+                <React.Fragment key={step.task_code}>
+                  <tr className={isOpen ? "bg-surface-2" : "hover:bg-surface-2"}>
+                    <Td className="w-8">
+                      <button
+                        type="button"
+                        className="flex cursor-pointer items-center text-muted hover:text-fg"
+                        aria-expanded={isOpen}
+                        aria-label={`${isOpen ? "Hide" : "Show"} details of ${step.task_code}`}
+                        onClick={() => toggle(step.task_code)}
+                      >
+                        {isOpen ? <ChevronDown className="size-4" aria-hidden /> : <ChevronRight className="size-4" aria-hidden />}
+                      </button>
+                    </Td>
+                    <Td>
+                      <button type="button" className="cursor-pointer font-medium text-accent hover:underline" aria-pressed={isOpen} onClick={() => toggle(step.task_code)}>
+                        {step.task_code}
+                      </button>
+                    </Td>
+                    <Td>
+                      <StatusBadge status={step.status ?? "QUEUED"} />
+                    </Td>
+                    <Td>{step.handler}</Td>
+                    <Td className="text-muted">{step.run_condition ? step.run_condition.toLowerCase() : "all upstream succeed"}</Td>
+                  </tr>
+                  {isOpen ? (
+                    <tr>
+                      <td colSpan={5} className="p-0">
+                        <div ref={panel}>
+                          <TaskDetails code={code} pipeline={pipeline} runId={id} task={step.task_code} handler={step.handler} />
+                        </div>
+                      </td>
+                    </tr>
+                  ) : null}
+                </React.Fragment>
+              );
+            })}
           </tbody>
         </Table>
       </Card>
-      {opened ? (
-        <div ref={panel}>
-          <TaskPanel code={code} pipeline={pipeline} runId={id} task={opened} handler={steps.data?.steps.find((x) => x.task_code === opened)?.handler} />
-        </div>
-      ) : null}
     </div>
   );
 }
