@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { lazy, StrictMode, Suspense } from "react";
+import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { AppShell } from "@/components/app-shell";
@@ -21,6 +21,7 @@ import { Insights, InsightsRedirect } from "@/pages/insights";
 import { Items } from "@/pages/items";
 import { HomeEntry, ProjectList } from "@/pages/home";
 import { PipelineDetail } from "@/pages/pipeline-detail";
+import { RunRedirect } from "@/pages/run-redirect";
 import { Pipelines } from "@/pages/pipelines";
 import { Scheduled } from "@/pages/scheduled";
 import { Task } from "@/pages/task";
@@ -32,7 +33,6 @@ import "@fontsource-variable/jetbrains-mono";
 import "./index.css";
 
 applyTheme(initialTheme());
-const RunDetail = lazy(() => import("@/pages/run-detail").then((m) => ({ default: m.RunDetail })));
 const client = new QueryClient({ defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: true, staleTime: 5_000 } } });
 
 createRoot(document.getElementById("root")!).render(
@@ -66,7 +66,7 @@ createRoot(document.getElementById("root")!).render(
             <Route path="projects/:project/runs" element={<Runs />} />
             <Route path="projects/:project/runs/:pipeline/:runId/tasks/:task/attempts/:attemptId" element={<Attempt />} />
             <Route path="projects/:project/runs/:pipeline/:runId/tasks/:task/items" element={<Items />} />
-            <Route path="projects/:project/runs/:pipeline/:runId" element={<Suspense fallback={<p className="text-muted">Loading run…</p>}><RunDetail /></Suspense>} />
+            <Route path="projects/:project/runs/:pipeline/:runId" element={<RunRedirect />} />
             <Route path="*" element={<p className="text-muted">That page does not exist. Use the navigation to go Home.</p>} />
           </Route>
         </Routes>

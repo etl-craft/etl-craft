@@ -8,11 +8,11 @@ import { RunsTable, useRuns, type RunFilters } from "@/components/runs-table";
  * the project's Runs page both use it, so they look and behave alike. The toolbar, the filters of the scope,
  * sits between the strip and the table.
  */
-export function RunsPanel({ code, pipeline, status, filters = {}, highlight, toolbar }: { code: string; pipeline?: string; status?: string; filters?: RunFilters; highlight?: number; toolbar?: React.ReactNode }) {
+export function RunsPanel({ code, pipeline, status, filters = {}, highlight, toolbar, bars = true }: { bars?: boolean; code: string; pipeline?: string; status?: string; filters?: RunFilters; highlight?: number; toolbar?: React.ReactNode }) {
   const { all } = useRuns(code, pipeline, filters);
   return (
     <>
-      {all.length ? (
+      {bars && all.length ? (
         <Card>
           <CardHeader>
             <CardTitle>Run durations</CardTitle>

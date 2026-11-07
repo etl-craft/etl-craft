@@ -50,12 +50,12 @@ describe("the shared runs layout", () => {
     expect(screen.getByText("SETUP-2026-11-07 02:27:37-5")).toBeTruthy();
   });
 
-  it("opens a run's pipeline with the run highlighted from the project's list, and the run itself from a pipeline's", () => {
+  it("opens a run in its pipeline workspace from both lists", () => {
     const { unmount } = panel(undefined);
     expect(screen.getByRole("link", { name: "#6" }).getAttribute("href")).toBe("/projects/demo/pipelines/REF?run=6");
     unmount();
     panel("REF");
-    expect(screen.getByRole("link", { name: "#6" }).getAttribute("href")).toBe("/projects/demo/runs/REF/6");
+    expect(screen.getByRole("link", { name: "#6" }).getAttribute("href")).toBe("/projects/demo/pipelines/REF?run=6");
   });
 
   it("marks the highlighted run and no other", () => {
