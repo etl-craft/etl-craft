@@ -6,6 +6,10 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+- The pipeline workspace's panes resize (drag the divider, or focus it and use the arrow keys; Home resets;
+  the width is remembered in the browser). The Graph view fills its pane and keeps the whole graph in
+  view as it is resized, laid out top to bottom in a tall pane or left to right in a wide one, with
+  Horizontal and Vertical buttons to choose.
 - The UI's Runs page filters by pipeline tag, like the Pipelines page (`?tag=` repeats to require every
   tag), and both always show the tag filter: with no tags declared it says where they come from
   (`PIPELINE_PARAMETERS.TAGS`).

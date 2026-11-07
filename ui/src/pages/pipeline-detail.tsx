@@ -11,6 +11,7 @@ import { RunOverview } from "@/components/run-overview";
 import { RunsPanel } from "@/components/runs-panel";
 import { useRuns } from "@/components/runs-table";
 import { Tabs } from "@/components/tabs";
+import { SplitPane } from "@/components/split-pane";
 import { Card } from "@/components/ui/card";
 import { useCanRun, useProjectInfo } from "@/hooks";
 import { getJson, project } from "@/lib/api";
@@ -29,6 +30,7 @@ export function PipelineDetail() {
   const [params, setParams] = useSearchParams();
   const tab = params.get("tab") === "runs" ? "runs" : "overview";
   const view = params.get("view") === "graph" ? "graph" : "grid";
+  const flow = params.get("flow") === "lr" ? "LR" : params.get("flow") === "tb" ? "TB" : undefined;
   const chosen = /^\d+$/.test(params.get("run") ?? "") ? Number(params.get("run")) : undefined;
   const task = params.get("task");
   const filters = { pool: params.get("pool") ?? "", agent: params.get("agent") ?? "", failure_class: params.get("failure_class") ?? "" };
@@ -147,8 +149,11 @@ export function PipelineDetail() {
           <Loading what="pipeline" />
         )}
       </PageHeader>
-      <div className="grid min-h-0 gap-4 lg:h-[calc(100dvh-12rem)] lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
-        <Card className="flex min-h-0 flex-col overflow-hidden">
+      <SplitPane
+        id="pipeline"
+        className="lg:h-[calc(100dvh-12rem)]"
+        left={
+        <Card className="flex min-h-0 flex-1 flex-col overflow-hidden">
           <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-2">
             <div role="group" aria-label="Run view" className="inline-flex rounded-md border border-border p-0.5 text-sm">
               {(["grid", "graph"] as const).map((id) => (
@@ -157,15 +162,28 @@ export function PipelineDetail() {
                 </button>
               ))}
             </div>
-            <span className="text-xs text-muted">{view === "grid" ? "Newest run on the right; a dot means the task did not start" : "Select a task to open it"}</span>
+            {view === "graph" ? (
+              <div role="group" aria-label="Graph direction" className="inline-flex rounded-md border border-border p-0.5 text-xs">
+                {([["LR", "Horizontal"], ["TB", "Vertical"]] as const).map(([id, label]) => (
+                  <button key={id} type="button" aria-pressed={flow === id} title={flow === id ? `${label}; select again for automatic` : label} onClick={() => choose("flow", flow === id ? null : id.toLowerCase())} className={cn("cursor-pointer rounded px-2 py-0.5", flow === id ? "bg-accent/15 font-medium text-fg" : "text-muted hover:text-fg")}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <span className="text-xs text-muted">Newest run on the right; a dot means the task did not start</span>
+            )}
           </div>
-          <div className="min-h-0 flex-1 overflow-auto">
+          <div className={cn("relative min-h-0 flex-1", view === "grid" && "overflow-auto")}>
             {!graph.isSuccess ? (
               graph.isError ? <Notice className="m-3">{(graph.error as Error).message}</Notice> : <Loading what="tasks" className="p-3" />
             ) : view === "grid" ? (
               <RunGrid code={code} pipeline={pipeline} graph={graph.data} runs={runs} selected={selected} onSelect={select} />
             ) : (
+              <div className="absolute inset-0">
               <RunGraph
+                fill
+                direction={flow}
                 graph={graph.data}
                 statuses={Object.fromEntries((steps.data?.steps ?? []).map((step) => [step.task_code, step.status ?? "QUEUED"]))}
                 plain={selected === undefined}
@@ -173,10 +191,13 @@ export function PipelineDetail() {
                 onFocus={setFocused}
                 onOpen={(taskCode) => (selected === undefined ? navigate(taskPath(code, pipeline, taskCode)) : select(selected, taskCode))}
               />
+              </div>
             )}
           </div>
         </Card>
-        <Card className="flex min-h-0 flex-col overflow-hidden">
+        }
+        right={
+        <Card className="flex min-h-0 flex-1 flex-col overflow-hidden">
           <div className="px-3">
             <Tabs tabs={TABS} value={tab} onChange={(id) => choose("tab", id === "overview" ? null : id)} />
           </div>
@@ -214,7 +235,8 @@ export function PipelineDetail() {
             )}
           </div>
         </Card>
-      </div>
+        }
+      />
     </div>
   );
 }
