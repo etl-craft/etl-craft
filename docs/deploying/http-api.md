@@ -75,9 +75,8 @@ Except for sign-in, `/health` and `/metrics`, every resource endpoint requires `
 `developer` includes operator access, and `admin` can also create, list and revoke tokens
 through `/api/v1/tokens`.
 Token values and hashes are absent from token listings and audit arguments. The token table
-is excluded from metadata snapshots and warehouse cloning. Safe lifecycle versions live in
-`AUD_CFG_API_TOKENS_HISTORY` and appear in `AUD_METADATA_CHANGES`; these contain no token
-value or hash. Account versions live in `AUD_CFG_ACCOUNTS_HISTORY`; password hashes never
+is excluded from metadata snapshots and warehouse cloning. A token keeps only its current row, with no history table; the audit
+table `AUD_ACTIONS` records who created and revoked it. Account versions live in `AUD_CFG_ACCOUNTS_HISTORY`; password hashes never
 enter these histories, metadata exports or warehouse mirrors. Revocation sets `ACTIVE_FLAG='N'`;
 inactive credentials also fail authentication,
 even without a revocation timestamp. Storage uses the common `CREATE_DATE` and update fields;

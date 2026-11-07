@@ -53,9 +53,6 @@ def test_agent_tokens_upgrade_bind_latest_registration_and_revoke_unused(
             ),
             {"id": ids["registered"]},
         )
-        old_history = conn.execute(
-            text("SELECT COUNT(*) AS count FROM AUD_CFG_API_TOKENS_HISTORY")
-        ).scalar_one()
     migrations.apply_pending_migrations(db.engine)
     with db.engine.connect() as conn:
         rows = {
@@ -73,12 +70,9 @@ def test_agent_tokens_upgrade_bind_latest_registration_and_revoke_unused(
         assert rows["unused"].revoked_at is not None and rows["unused"].active_flag == "N"
         assert rows["service"].expires_at is None and rows["service"].revoked_at is None
         assert all(row.last_used_at is None for row in rows.values())
-        assert (
-            conn.execute(
-                text("SELECT COUNT(*) AS count FROM AUD_CFG_API_TOKENS_HISTORY")
-            ).scalar_one()
-            >= old_history
-        )
+        assert not conn.execute(
+            text("SELECT 1 AS found FROM AUD_METADATA_CHANGES WHERE TABLE_NAME='CFG_API_TOKENS'")
+        ).first()
 
 
 def test_rebuilt_tokens_keep_deleted_identity_high_water(empty_engine_db, tmp_path, monkeypatch):

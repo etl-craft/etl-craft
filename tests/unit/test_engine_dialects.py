@@ -137,7 +137,6 @@ def test_both_schemas_define_the_same_tables_and_columns_in_order():
         "CFG_TABLES",
         "CFG_COLUMNS",
         "AUD_SOURCE_COLUMNS_BASELINE",
-        "AUD_CFG_API_TOKENS_HISTORY",
         "AUD_CFG_SOURCE_COLUMNS_HISTORY",
         "AUD_CFG_PIPELINES_HISTORY",
         "AUD_CFG_BUSINESS_RULES_HISTORY",

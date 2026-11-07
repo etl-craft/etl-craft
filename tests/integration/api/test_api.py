@@ -427,31 +427,12 @@ def test_run_history_cursor_is_bounded_and_exact(api):
     assert last["before"] is None
 
 
-def test_token_metadata_does_not_capture_hash_or_accept_project_scope(api):
+def test_token_changes_are_not_captured_and_accept_no_project_scope(api):
     ctx, client, creds, _run, _attempt = api
     with ctx.engine.begin() as conn:
-        changes = (
-            conn.execute(
-                text(
-                    "SELECT AFTER_JSON FROM AUD_METADATA_CHANGES WHERE TABLE_NAME='CFG_API_TOKENS'"
-                )
-            )
-            .scalars()
-            .all()
-        )
-        assert changes
-        for change in changes:
-            assert "token_sha256" not in str(change).lower()
-            for credential in creds.values():
-                assert credential.token not in str(change)
-        assert "TOKEN_SHA256" not in {
-            column["name"].upper()
-            for column in sql_inspect(conn).get_columns(
-                "aud_cfg_api_tokens_history"
-                if conn.dialect.name == "postgresql"
-                else "AUD_CFG_API_TOKENS_HISTORY"
-            )
-        }
+        assert not conn.execute(
+            text("SELECT 1 AS found FROM AUD_METADATA_CHANGES WHERE TABLE_NAME='CFG_API_TOKENS'")
+        ).first()
         conn.execute(
             text("UPDATE CFG_API_TOKENS SET PROJECT_ID=1 WHERE TOKEN_ID=:id"),
             {"id": creds["viewer"].metadata.token_id},

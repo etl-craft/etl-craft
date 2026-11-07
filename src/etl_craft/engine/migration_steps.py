@@ -133,14 +133,11 @@ def check_account_token_identities(conn: Connection) -> LegacyRows:
 
 
 def _record_accounts(conn: Connection, state: LegacyRows, target: Target) -> None:
-    """Keep account creation and changed token ownership in existing typed histories."""
+    """Keep account creation in its typed history."""
     dialect = for_engine(conn)
     dialect.refresh_metadata_triggers(conn)
     dialect.record_config_baseline(
         conn, ("CFG_ACCOUNTS",), migration=migration.get(), actor=current_actor()
-    )
-    dialect.record_config_conversion(
-        conn, "CFG_API_TOKENS", "TOKEN_ID", migration=migration.get(), actor=current_actor()
     )
 
 

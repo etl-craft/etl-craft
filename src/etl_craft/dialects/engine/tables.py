@@ -22,6 +22,9 @@ CONFIG_TABLES = frozenset(
     }
 )
 
+HISTORYLESS_TABLES = frozenset({"CFG_API_TOKENS"})
+"""Config tables that keep no history: a credential is its current row."""
+
 AUDIT_TABLES = frozenset(
     {
         "AUD_UPLOADS",
@@ -78,7 +81,6 @@ AUDIT_TABLES = frozenset(
         "AUD_CFG_TABLES_HISTORY",
         "AUD_CFG_COLUMNS_HISTORY",
         "AUD_CFG_SOURCE_COLUMNS_HISTORY",
-        "AUD_CFG_API_TOKENS_HISTORY",
         "AUD_CFG_ACCOUNTS_HISTORY",
         "AUD_CFG_GROUPS_HISTORY",
         "AUD_CFG_GROUP_MEMBERS_HISTORY",
