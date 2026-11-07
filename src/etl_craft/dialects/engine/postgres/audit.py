@@ -20,6 +20,7 @@ from etl_craft.dialects.engine.metadata import (
     require_config_base,
 )
 from etl_craft.dialects.engine.tables import (
+    HISTORYLESS_TABLES,
     OWNED_CONFIG_TABLES,
     retired_history,
     team_config,
@@ -257,9 +258,7 @@ def _configure_table(
                 f"CREATE TRIGGER {quote(trigger)} BEFORE {event} ON {quote(table)} "
                 f"FOR EACH {level} EXECUTE FUNCTION {function}"
             )
-    if table.upper() not in OWNED_CONFIG_TABLES or (
-        not history and table.upper() == "CFG_API_TOKENS"
-    ):
+    if table.upper() not in OWNED_CONFIG_TABLES:
         return False
     if enforce_base:
         require_config_base(conn, table)
@@ -282,7 +281,7 @@ def _configure_table(
         or columns[0].name
     )
     trigger = "trg_changes_" + table.lower()
-    if trigger not in triggers:
+    if trigger not in triggers and table.upper() not in HISTORYLESS_TABLES:
         literal = primary.replace("'", "''")
         conn.exec_driver_sql(
             f"CREATE TRIGGER {quote(trigger)} AFTER INSERT OR UPDATE OR DELETE "
@@ -300,7 +299,7 @@ def _configure_table(
             f"CREATE TRIGGER {quote(trigger)} BEFORE INSERT OR UPDATE ON {quote(table)} "
             "FOR EACH ROW EXECUTE FUNCTION trg_set_audit_columns()"
         )
-    return True
+    return table.upper() not in HISTORYLESS_TABLES
 
 
 def _freeze_archived(conn: Connection) -> None:
