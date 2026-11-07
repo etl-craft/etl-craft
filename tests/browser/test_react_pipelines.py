@@ -241,3 +241,29 @@ def test_the_pipeline_pages_render_cleanly_in_both_themes_and_on_a_phone(scene, 
             shoot(page, f"{name}-{scheme}-{width}")
         assert problems == []
         browser.close()
+
+
+def test_the_panes_resize_and_the_graph_stays_whole(scene):
+    _, url, _ = scene
+    with sync_playwright() as pw:
+        browser, page, problems = open_page(pw, viewport={"width": 1440, "height": 900})
+        page.context.set_default_timeout(8000)
+        sign_in(page, url, "/ui/projects/default/pipelines/OPS?view=graph")
+        graph = page.get_by_role("group", name="Task graph")
+        expect(graph.get_by_text("EXTRACT")).to_be_visible()
+        divider = page.get_by_role("separator", name="Resize the panes")
+        before = int(divider.get_attribute("aria-valuenow"))
+        box = divider.bounding_box()
+        page.mouse.move(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
+        page.mouse.down()
+        page.mouse.move(box["x"] + 240, box["y"] + box["height"] / 2, steps=5)
+        page.mouse.up()
+        assert int(divider.get_attribute("aria-valuenow")) > before
+        divider.focus()
+        page.keyboard.press("Home")
+        assert int(divider.get_attribute("aria-valuenow")) == before
+        expect(graph.get_by_text("EXTRACT")).to_be_visible()  # a resize refits the graph
+        page.get_by_role("button", name="Horizontal").click()
+        assert "flow=lr" in page.url
+        assert problems == []
+        browser.close()

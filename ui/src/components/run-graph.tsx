@@ -8,8 +8,11 @@ import { cn } from "@/lib/utils";
 
 type Focus = "none" | "focus" | "lineage" | "dim";
 
+export type Direction = "LR" | "TB";
+
 interface TaskData extends Record<string, unknown> {
   label: string;
+  vertical: boolean;
   status: string;
   focus: Focus;
   onOpen: (task: string) => void;
@@ -21,6 +24,10 @@ const HEIGHT = 52;
 const GAP_X = 70;
 const GAP_Y = 24;
 const MAX_ROWS = 4;
+/** Top to bottom, a wave of many tasks wraps into rows of this many. */
+const MAX_COLS = 3;
+const GAP_ROW = 56;
+const GAP_COL = 40;
 
 const NODE_TONE: Record<Focus, string> = {
   none: "border-border-strong",
@@ -37,7 +44,7 @@ function Task({ data }: NodeProps<TaskNode>) {
       data-focus={data.focus}
       className={cn("flex h-[52px] w-[230px] items-center gap-2 rounded-md border bg-surface pl-2.5 pr-2 text-[13px] shadow-sm transition-opacity", NODE_TONE[data.focus])}
     >
-      <Handle type="target" position={Position.Left} className="!size-1.5 !border-0 !bg-border-strong" />
+      <Handle type="target" position={data.vertical ? Position.Top : Position.Left} className="!size-1.5 !border-0 !bg-border-strong" />
       <span className={cn("grid size-7 shrink-0 place-items-center rounded-full", plain ? "bg-idle-bg text-idle" : toneClass(data.status))} title={statusLabel}>
         <Icon aria-hidden className={cn("size-4", spin && "animate-spin")} />
       </span>
@@ -57,7 +64,7 @@ function Task({ data }: NodeProps<TaskNode>) {
       >
         <ArrowUpRight aria-hidden className="size-4" />
       </button>
-      <Handle type="source" position={Position.Right} className="!size-1.5 !border-0 !bg-border-strong" />
+      <Handle type="source" position={data.vertical ? Position.Bottom : Position.Right} className="!size-1.5 !border-0 !bg-border-strong" />
     </div>
   );
 }
@@ -93,23 +100,28 @@ export function layout(
   focused: string | null,
   onOpen: (task: string) => void = () => undefined,
   plain = false,
+  direction: Direction = "LR",
 ): { nodes: TaskNode[]; edges: Edge[]; height: number; columns: number } {
   const lineage = focused ? lineageOf(graph, focused) : null;
   const stateOf = (code: string): Focus => (!lineage ? "none" : code === focused ? "focus" : lineage.has(code) ? "lineage" : "dim");
   // A wave of many tasks wraps into extra columns; every column is centred on the tallest one.
-  const rowsOf = (wave: string[]) => Math.min(wave.length, MAX_ROWS);
+  const vertical = direction === "TB";
+  const per = vertical ? MAX_COLS : MAX_ROWS;
+  const rowsOf = (wave: string[]) => Math.min(wave.length, per);
   const tallest = Math.max(1, ...graph.waves.map(rowsOf));
   let column = 0;
   const nodes: TaskNode[] = graph.waves.flatMap((wave) => {
-    const lift = ((tallest - rowsOf(wave)) * (HEIGHT + GAP_Y)) / 2;
+    const lift = ((tallest - rowsOf(wave)) * (vertical ? WIDTH + GAP_COL : HEIGHT + GAP_Y)) / 2;
     const placed = wave.map((code, index) => ({
       id: code,
       type: "task" as const,
-      position: { x: (column + Math.floor(index / MAX_ROWS)) * (WIDTH + GAP_X), y: lift + (index % MAX_ROWS) * (HEIGHT + GAP_Y) },
-      data: { label: code, status: statuses[code] ?? (plain ? "" : "QUEUED"), focus: stateOf(code), onOpen },
+      position: vertical
+        ? { x: lift + (index % per) * (WIDTH + GAP_COL), y: (column + Math.floor(index / per)) * (HEIGHT + GAP_ROW) }
+        : { x: (column + Math.floor(index / per)) * (WIDTH + GAP_X), y: lift + (index % per) * (HEIGHT + GAP_Y) },
+      data: { label: code, vertical, status: statuses[code] ?? (plain ? "" : "QUEUED"), focus: stateOf(code), onOpen },
       draggable: false,
     }));
-    column += Math.max(1, Math.ceil(wave.length / MAX_ROWS));
+    column += Math.max(1, Math.ceil(wave.length / per));
     return placed;
   });
   const edges: Edge[] = Object.entries(graph.depends_on).flatMap(([task, deps]) =>
@@ -145,6 +157,8 @@ export function RunGraph({
   onFocus,
   onOpen,
   plain,
+  fill,
+  direction,
 }: {
   graph: Graph;
   statuses: Record<string, string>;
@@ -153,18 +167,27 @@ export function RunGraph({
   onOpen: (task: string) => void;
   /** Show task definitions only, with no run status. */
   plain?: boolean;
+  /** Take the height of the container and keep the whole graph in view as it is resized. */
+  fill?: boolean;
+  /** Left to right or top to bottom; when omitted a filled graph picks the one that suits its pane's shape. */
+  direction?: Direction;
 }) {
   const frame = React.useRef<HTMLDivElement>(null);
   const [width, setWidth] = React.useState(0);
+  const [frameHeight, setFrameHeight] = React.useState(0);
   React.useEffect(() => {
     const element = frame.current;
     if (!element) return;
-    const observer = new ResizeObserver(([entry]) => setWidth(entry?.contentRect.width ?? 0));
+    const observer = new ResizeObserver(([entry]) => {
+      setWidth(entry?.contentRect.width ?? 0);
+      setFrameHeight(entry?.contentRect.height ?? 0);
+    });
     observer.observe(element);
     return () => observer.disconnect();
   }, []);
   const flow = React.useRef<ReactFlowInstance | null>(null);
-  const { nodes, edges, height, columns } = layout(graph, statuses, focused, onOpen, plain);
+  const shown: Direction = direction ?? (fill && frameHeight > width ? "TB" : "LR");
+  const { nodes, edges, height, columns } = layout(graph, statuses, focused, onOpen, plain, shown);
   // Bring a focused task into view when it is off-screen; leave the view alone when it is visible.
   React.useEffect(() => {
     const instance = flow.current;
@@ -176,10 +199,14 @@ export function RunGraph({
     void instance.setCenter(node.position.x + WIDTH / 2, node.position.y + HEIGHT / 2, { zoom, duration: 250 });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focused]);
+  // Resizing the pane refits the whole graph, so a divider drag never hides a task.
+  React.useEffect(() => {
+    if (fill && width > 0 && frameHeight > 0) void flow.current?.fitView({ padding: 0.1, minZoom: 0.15, maxZoom: 1 });
+  }, [fill, width, frameHeight, shown]);
   // A graph wider than its card keeps readable boxes starting at the left; a small one is fitted whole.
-  const wide = width > 0 && columns * (WIDTH + GAP_X) - GAP_X + 48 > width;
+  const wide = !fill && width > 0 && columns * (WIDTH + GAP_X) - GAP_X + 48 > width;
   return (
-    <div ref={frame} style={{ height }} role="group" aria-label="Task graph" className="relative w-full">
+    <div ref={frame} style={fill ? undefined : { height }} role="group" aria-label="Task graph" className={cn("relative w-full", fill && "h-full min-h-64")}>
       {edges.length === 0 ? (
         <p className="absolute left-3 top-2 z-10 m-0 text-xs text-muted">No dependencies between these tasks: they can run at the same time.</p>
       ) : (
@@ -193,9 +220,9 @@ export function RunGraph({
         edges={edges}
         nodeTypes={nodeTypes}
         fitView={!wide}
-        fitViewOptions={{ padding: 0.12, minZoom: 0.8, maxZoom: 1 }}
+        fitViewOptions={fill ? { padding: 0.1, minZoom: 0.15, maxZoom: 1 } : { padding: 0.12, minZoom: 0.8, maxZoom: 1 }}
         defaultViewport={wide ? { x: 24, y: 40, zoom: 0.9 } : undefined}
-        minZoom={0.5}
+        minZoom={fill ? 0.15 : 0.5}
         maxZoom={1.5}
         nodesDraggable={false}
         nodesConnectable={false}
