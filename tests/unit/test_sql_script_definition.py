@@ -105,6 +105,13 @@ def test_unparseable_procedure_is_unmanaged_and_does_not_invent_lineage(context)
     assert lineage.targets == ()
 
 
+def test_a_statement_lineage_cannot_parse_is_reported_without_a_sqlglot_warning(context, caplog):
+    with caplog.at_level("WARNING", logger="sqlglot"):
+        lineage = script_lineage("VACUUM t", "P.T", context.config)
+    assert "incomplete lineage for statement(s) 1" in lineage.error
+    assert not [record for record in caplog.records if record.name == "sqlglot"]
+
+
 @pytest.mark.parametrize(
     "sql",
     [
