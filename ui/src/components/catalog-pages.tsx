@@ -17,6 +17,7 @@ import { pipelineGraph, tableLineage, typeOf, type CatalogDoc, type CatalogEdge,
 import { formatDuration, formatTime } from "@/lib/format";
 import { catalogPath, pipelinePath, taskPath } from "@/lib/routes";
 import type { RunView, TablePreview } from "@/lib/types";
+import { cn } from "@/lib/utils";
 
 const link = "text-accent hover:underline";
 
@@ -60,15 +61,25 @@ function Title({ icon: Icon, name, copy, children }: { icon: typeof Table2; name
   );
 }
 
-function Section({ title, aside, children }: { title: string; aside?: React.ReactNode; children: React.ReactNode }) {
+function Section({ title, aside, fill, className, children }: { title: string; aside?: React.ReactNode; fill?: boolean; className?: string; children: React.ReactNode }) {
   return (
-    <Card>
-      <CardHeader>
+    <Card className={cn(fill && "flex min-h-0 flex-1 flex-col", className)}>
+      <CardHeader className="shrink-0">
         <CardTitle>{title}</CardTitle>
         {aside}
       </CardHeader>
-      <div className="overflow-x-auto p-4">{children}</div>
+      <div className={cn(fill ? "min-h-0 flex-1 overflow-auto" : "overflow-x-auto p-4")}>{children}</div>
     </Card>
+  );
+}
+
+/** An object's page: its breadcrumb, title and tabs stay put, and its body scrolls under them (`fit`: the body arranges itself to the window instead). */
+function ObjectPage({ header, fit, children }: { header: React.ReactNode; fit?: boolean; children: React.ReactNode }) {
+  return (
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+      <div className="grid shrink-0 gap-3 px-4 pt-4">{header}</div>
+      <div className={cn("min-h-0 min-w-0 flex-1 p-4", fit ? "flex flex-col overflow-auto @3xl:overflow-hidden" : "overflow-auto")}>{children}</div>
+    </div>
   );
 }
 
@@ -176,7 +187,8 @@ export function PipelineObject({ code, doc, name, tab, onTab }: { code: string; 
   const tabs = [{ id: "overview", label: "Overview" }, { id: "lineage", label: "Task graph" }, { id: "runs", label: "Runs" }];
   const on = tabs.some((t) => t.id === tab) ? tab : "overview";
   return (
-    <div className="grid min-w-0 grid-cols-1 gap-3 p-4">
+    <ObjectPage header={
+      <>
       <Crumbs code={code} trail={[{ label: "Pipelines" }, { label: pipeline.code }]} />
       <Title icon={Workflow} name={pipeline.code} copy={pipeline.code}>
         <Link className={`ml-auto text-sm ${link}`} to={pipelinePath(code, pipeline.code)}>
@@ -184,6 +196,8 @@ export function PipelineObject({ code, doc, name, tab, onTab }: { code: string; 
         </Link>
       </Title>
       <Tabs tabs={tabs} value={on} onChange={onTab} />
+      </>
+    }>
       {on === "overview" ? (
         <div className="grid gap-4 @3xl:grid-cols-[minmax(0,1fr)_15rem]">
           <div className="grid min-w-0 grid-cols-1 gap-4">
@@ -239,7 +253,7 @@ export function PipelineObject({ code, doc, name, tab, onTab }: { code: string; 
           <RunsTable code={code} pipeline={pipeline.code} runs={pipeline.runs} />
         </Section>
       )}
-    </div>
+    </ObjectPage>
   );
 }
 
@@ -282,7 +296,8 @@ export function TaskObject({ code, doc, name, tab, onTab }: { code: string; doc:
   const tabs = [{ id: "overview", label: "Overview" }, { id: "lineage", label: "Column lineage" }, { id: "runs", label: "Runs" }];
   const on = tabs.some((t) => t.id === tab) ? tab : "overview";
   return (
-    <div className="grid min-w-0 grid-cols-1 gap-3 p-4">
+    <ObjectPage header={
+      <>
       <Crumbs code={code} trail={[{ label: task.pipeline, to: catalogPath(code, "pipelines", task.pipeline) }, { label: task.code }]} />
       <Title icon={ListChecks} name={task.code} copy={task.label}>
         <Link className={`ml-auto text-sm ${link}`} to={taskPath(code, task.pipeline, task.code)}>
@@ -290,6 +305,8 @@ export function TaskObject({ code, doc, name, tab, onTab }: { code: string; doc:
         </Link>
       </Title>
       <Tabs tabs={tabs} value={on} onChange={onTab} />
+      </>
+    }>
       {on === "overview" ? (
         <div className="grid gap-4 @3xl:grid-cols-[minmax(0,1fr)_15rem]">
           <div className="grid min-w-0 grid-cols-1 gap-4">
@@ -345,7 +362,7 @@ export function TaskObject({ code, doc, name, tab, onTab }: { code: string; doc:
           <RunsTable code={code} pipeline={task.pipeline} runs={task.runs} task />
         </Section>
       )}
-    </div>
+    </ObjectPage>
   );
 }
 
@@ -424,16 +441,19 @@ export function TableObject({ code, doc, name, tab, onTab }: { code: string; doc
   const lastWrite = writers.flatMap((w) => w.runs).filter((r) => r.end).sort((a, b) => (b.end ?? "").localeCompare(a.end ?? ""))[0];
   const history = writers.flatMap((w) => w.runs.map((r) => ({ ...r, task: w.label, pipeline: w.pipeline }))).sort((a, b) => (b.start ?? "").localeCompare(a.start ?? "")).slice(0, 30);
   return (
-    <div className="grid min-w-0 grid-cols-1 gap-3 p-4">
+    <ObjectPage fit={on === "overview"} header={
+      <>
       <Crumbs code={code} trail={[{ label: table.schema || "schema" }, { label: table.table }]} />
       <Title icon={Table2} name={table.table} copy={table.name} />
       <Tabs tabs={tabs} value={on} onChange={onTab} />
+      </>
+    }>
       {on === "overview" ? (
-        <div className="grid gap-4 @3xl:grid-cols-[minmax(0,1fr)_15rem]">
-          <div className="grid min-w-0 grid-cols-1 gap-4">
-            <Section title="Description">
+        <div className="grid min-h-0 gap-4 @3xl:flex-1 @3xl:grid-cols-[minmax(0,1fr)_15rem] @3xl:grid-rows-[minmax(0,1fr)]">
+          <div className="flex min-h-0 min-w-0 flex-col gap-4">
+            <Section title="Description" className="shrink-0">
               {writers.length ? (
-                <div className="grid gap-2 text-[13px]">
+                <div className="grid max-h-28 gap-2 overflow-auto text-[13px]">
                   <p className="m-0 whitespace-pre-wrap">{writers.find((w) => w.documentation)?.documentation || <span className="text-muted">{writers[0]!.label} has no documentation.</span>}</p>
                   {writers.length > 1 ? <p className="m-0 text-xs text-muted">Written by {writers.length} tasks; each is listed under About this table.</p> : null}
                 </div>
@@ -441,17 +461,17 @@ export function TableObject({ code, doc, name, tab, onTab }: { code: string; doc
                 <p className="m-0 text-muted">No task writes this table, so nothing describes it.</p>
               )}
             </Section>
-            <Section title={`Columns (${table.columns.length})`} aside={<input type="search" aria-label="Filter columns" placeholder="Filter columns…" value={filter} onChange={(event) => setFilter(event.target.value)} className="h-8 w-48 rounded-md border border-border-strong bg-surface px-2 text-[13px]" />}>
+            <Section fill className="max-h-96 @3xl:max-h-none" title={`Columns (${table.columns.length})`} aside={<input type="search" aria-label="Filter columns" placeholder="Filter columns…" value={filter} onChange={(event) => setFilter(event.target.value)} className="h-8 w-48 rounded-md border border-border-strong bg-surface px-2 text-[13px]" />}>
               {shown.length ? (
-                <div className="-m-4 overflow-auto">
+                <div>
                   <Table aria-label="Columns">
                     <thead>
                       <tr>
-                        <Th>Column</Th>
-                        <Th>Type</Th>
-                        <Th>Declared</Th>
-                        <Th>Nullable</Th>
-                        <Th>Comment</Th>
+                        <Th className="sticky top-0 z-10 bg-surface-2">Column</Th>
+                        <Th className="sticky top-0 z-10 bg-surface-2">Type</Th>
+                        <Th className="sticky top-0 z-10 bg-surface-2">Declared</Th>
+                        <Th className="sticky top-0 z-10 bg-surface-2">Nullable</Th>
+                        <Th className="sticky top-0 z-10 bg-surface-2">Comment</Th>
                       </tr>
                     </thead>
                     <tbody>
@@ -478,7 +498,7 @@ export function TableObject({ code, doc, name, tab, onTab }: { code: string; doc
               )}
             </Section>
           </div>
-          <aside aria-label="About this table" className="grid min-w-0 content-start gap-3">
+          <aside aria-label="About this table" className="grid min-h-0 min-w-0 content-start gap-3 overflow-auto">
             <h2 className="m-0 text-sm font-semibold">About this table</h2>
             <FactList className="grid-cols-1 sm:grid-cols-1 lg:grid-cols-1">
               <Fact label="Schema">{table.schema || "—"}</Fact>
@@ -596,7 +616,7 @@ export function TableObject({ code, doc, name, tab, onTab }: { code: string; doc
           </Section>
         </div>
       )}
-    </div>
+    </ObjectPage>
   );
 }
 
@@ -640,7 +660,8 @@ export function GapsObject({ code, doc }: { code: string; doc: CatalogDoc }) {
   const states = [...new Set(doc.gaps.map((g) => g.state))].sort();
   const shown = doc.gaps.filter((g) => (state === "ALL" ? true : state === "OPEN" ? g.state !== "MATCHED" && g.state !== "UNCHECKED" : g.state === state));
   return (
-    <div className="grid min-w-0 grid-cols-1 gap-3 p-4">
+    <ObjectPage header={
+      <>
       <Crumbs code={code} trail={[{ label: "Gaps" }]} />
       <Title icon={TriangleAlert} name="Schema and lineage gaps" />
       <p className="m-0 text-[13px] text-muted">Where what the project declares, what the warehouse holds and what the SQL reads disagree. Unchecked comparisons are never counted as matched.</p>
@@ -653,8 +674,10 @@ export function GapsObject({ code, doc }: { code: string; doc: CatalogDoc }) {
           </option>
         ))}
       </SelectField>
+      </>
+    }>
       <Card className="overflow-x-auto">{shown.length ? <GapRows code={code} gaps={shown.slice(0, 500)} /> : <p className="m-0 p-4 text-muted">Nothing to show for this selection.</p>}</Card>
       {shown.length > 500 ? <p className="m-0 text-xs text-muted">The first 500 of {shown.length} are shown; narrow it by state.</p> : null}
-    </div>
+    </ObjectPage>
   );
 }

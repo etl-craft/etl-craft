@@ -167,13 +167,13 @@ export function Catalog() {
             </Card>
           }
           right={
-            <Card className="@container min-h-0 flex-1 overflow-auto">
+            <Card className="@container flex min-h-0 flex-1 flex-col overflow-hidden">
               {kind ? (
                 <Link to={catalogPath(code)} className="m-4 mb-0 inline-flex w-fit items-center gap-1 text-sm text-accent hover:underline lg:hidden">
                   <ArrowLeft className="size-4" aria-hidden /> All catalog objects
                 </Link>
               ) : null}
-              {content}
+              {kind ? content : <div className="min-h-0 flex-1 overflow-auto">{content}</div>}
             </Card>
           }
         />

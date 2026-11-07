@@ -14,6 +14,8 @@ from etl_craft.core.errors import (
     UsageError,
 )
 from etl_craft.core.text import is_safe_identifier
+from etl_craft.dialects.warehouse.preview import preview_statement
+from etl_craft.engine.repository.pipelines import with_suggestions
 from etl_craft.handlers.resources import LocalLocker
 from etl_craft.services.catalog.collect import collect_catalog
 from etl_craft.services.operations.context import OperationContext
@@ -81,9 +83,15 @@ def preview_table(ctx: OperationContext, request: PreviewInput) -> TablePreview:
     catalog = collect_catalog(ctx.engine, ctx.config, with_warehouse=False, record_lineage=False)
     table = catalog.tables.get(request.table)
     if table is None or table.external:
+        known = [name for name, t in catalog.tables.items() if not t.external]
         raise ResourceNotFoundError(
-            f"table {request.table!r}: not a table in the project's catalog; expected a name as "
-            "the catalog shows it, such as ods.orders"
+            with_suggestions(
+                f"table {request.table!r}: not a table in the project's catalog; a preview reads "
+                "only tables the project declares (tables.csv) or that a task reads or writes, "
+                "named as the catalog shows them, such as ods.orders",
+                request.table,
+                known,
+            )
         )
     database, schema, name = catalog.where(request.table)
     parts = [part for part in (database or active_catalog(ctx.config), schema, name) if part]
@@ -97,9 +105,8 @@ def preview_table(ctx: OperationContext, request: PreviewInput) -> TablePreview:
             open_warehouse(ctx.config, LocalLocker(ctx.engine, ctx.config)) as warehouse,
             warehouse.connect() as conn,
         ):
-            result = conn.execute(
-                text(f"SELECT * FROM {'.'.join(parts)} LIMIT {request.limit + 1}")
-            )
+            statement = preview_statement(".".join(parts), request.limit + 1)
+            result = conn.execute(text(statement))
             columns = tuple(map(str, result.keys()))
             fetched = result.fetchmany(request.limit + 1)
     except SQLAlchemyError as error:
