@@ -24,6 +24,7 @@ from pathlib import Path
 from etl_craft.config import ConnectorConfig
 from etl_craft.core.errors import UsageError
 from etl_craft.core.filelock import file_lock
+from etl_craft.core.restart import restart_note
 from etl_craft.services.catalog.collect import (
     Catalog,
     TaskAsset,
@@ -387,7 +388,7 @@ class _Writer(Pages):
                     f'<span data-pipeline-tags="{_e(" ".join(p.row.tags))}">'
                     f"{tag_chips(p.row.tags)}</span>",
                     _e(p.row.description),
-                    _e(p.row.run_schedule),
+                    _e(p.row.run_schedule or restart_note(p.row.auto_restart_condition) or ""),
                     _e(p.row.refresh_type),
                     ", ".join(self._link(pipeline_url(u), u, "") for u, _ in p.depends_on),
                     str(len(p.tasks)),

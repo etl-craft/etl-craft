@@ -119,6 +119,7 @@ export function PipelineDetail() {
         {p ? (
           <p className="m-0 text-[13px] text-muted">
             {p.run_schedule ? <>Schedule <code className="font-mono">{p.run_schedule}</code></> : "Not scheduled"}
+            {p.restart_note ? <> · {p.restart_note.toLowerCase()}</> : null}
             {p.sla_in_hours ? ` · SLA ${p.sla_in_hours} h` : ""} · {p.refresh_type.toLowerCase()} refresh
           </p>
         ) : (

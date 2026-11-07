@@ -64,3 +64,23 @@ def restart_statuses(value: str) -> frozenset[RunStatus]:
     if AutoRestartCondition.ALWAYS in parts:
         return frozenset(_STATUS.values())
     return frozenset(_STATUS[AutoRestartCondition(part)] for part in parts if part in set(_ENDINGS))
+
+
+_WORDS = {
+    AutoRestartCondition.SUCCESS: "a success",
+    AutoRestartCondition.SKIPPED: "a skipped run",
+    AutoRestartCondition.FAILURE: "a failure",
+    AutoRestartCondition.ALWAYS: "every ending",
+}
+
+
+def restart_note(value: str) -> str | None:
+    """Say how the value starts a pipeline beyond its schedule, or ``None`` when only that does."""
+    parts = parse_auto_restart(value).split("|")
+    if AutoRestartCondition.NONE in parts:
+        return "Not started automatically"
+    endings = [_WORDS[AutoRestartCondition(part)] for part in parts if part in _WORDS]
+    if not endings:
+        return None
+    named = endings[0] if len(endings) == 1 else f"{', '.join(endings[:-1])} or {endings[-1]}"
+    return f"Restarts after {named}"
