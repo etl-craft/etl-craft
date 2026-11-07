@@ -49,8 +49,8 @@ def _render(args: argparse.Namespace, out: Output, done: StatusView | StatusList
 def _text_status(out: Output, done: StatusView) -> None:
     run = done.run
     out.line(
-        f"{run.pipeline_code}: pipeline_run_id={run.pipeline_run_id} key={run.run_key} "
-        f"kind={run.trigger_kind} run_date={run.run_date} status={run.status}"
+        f"{run.pipeline_code}: pipeline_run_id={run.pipeline_run_id} label={run.run_label} "
+        f"key={run.run_key} kind={run.trigger_kind} run_date={run.run_date} status={run.status}"
     )
     out.line(
         f"start={run.start_date} duration_seconds={done.duration_seconds} SLA={run.sla_status} "

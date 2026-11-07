@@ -1,0 +1,29 @@
+-- A readable identifier beside each integer run id, written once when the run is created.
+ALTER TABLE AUD_PIPELINES_RUN_LOG ADD COLUMN RUN_LABEL VARCHAR NOT NULL DEFAULT '';
+ALTER TABLE AUD_TASK_RUN_LOG ADD COLUMN TASK_RUN_LABEL VARCHAR NOT NULL DEFAULT '';
+UPDATE AUD_PIPELINES_RUN_LOG r SET RUN_LABEL =
+    (SELECT p.PIPELINE_CODE FROM CFG_PIPELINES p WHERE p.PIPELINE_ID = r.PIPELINE_ID)
+    || '-' || to_char(r.START_DATE AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS') || '-' || r.PIPELINE_RUN_ID;
+UPDATE AUD_TASK_RUN_LOG k SET TASK_RUN_LABEL =
+    (SELECT p.PIPELINE_CODE || '-' || t.TASK_CODE FROM CFG_TASKS t JOIN CFG_PIPELINES p ON p.PIPELINE_ID = t.PIPELINE_ID
+     WHERE t.TASK_ID = k.TASK_ID)
+    || '-' || to_char(k.START_DATE AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS') || '-' || k.TASK_RUN_ID;
+
+-- The label is set by the database when the row is inserted, so every insert path names a run.
+CREATE OR REPLACE FUNCTION etl_craft_run_label() RETURNS trigger AS $$
+BEGIN
+    IF TG_TABLE_NAME = 'aud_pipelines_run_log' THEN
+        NEW.RUN_LABEL := (SELECT p.PIPELINE_CODE FROM CFG_PIPELINES p WHERE p.PIPELINE_ID = NEW.PIPELINE_ID)
+            || '-' || to_char(NEW.START_DATE AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS') || '-' || NEW.PIPELINE_RUN_ID;
+    ELSE
+        NEW.TASK_RUN_LABEL := (SELECT p.PIPELINE_CODE || '-' || t.TASK_CODE FROM CFG_TASKS t JOIN CFG_PIPELINES p ON p.PIPELINE_ID = t.PIPELINE_ID
+            WHERE t.TASK_ID = NEW.TASK_ID)
+            || '-' || to_char(NEW.START_DATE AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS') || '-' || NEW.TASK_RUN_ID;
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+CREATE TRIGGER trg_run_label_aud_pipelines_run_log BEFORE INSERT ON AUD_PIPELINES_RUN_LOG
+    FOR EACH ROW EXECUTE FUNCTION etl_craft_run_label();
+CREATE TRIGGER trg_run_label_aud_task_run_log BEFORE INSERT ON AUD_TASK_RUN_LOG
+    FOR EACH ROW EXECUTE FUNCTION etl_craft_run_label();

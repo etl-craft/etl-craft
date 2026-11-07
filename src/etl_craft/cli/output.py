@@ -156,6 +156,9 @@ class Output:
         else:
             assert isinstance(done, (OperationResult, BackfillView, ReconciliationView))
             self.line(done.message)
+            label = getattr(getattr(done, "run", None), "run_label", "")
+            if label:  # beside the id, off the result line that scripts read
+                print(f"run label: {label}", file=self.stderr)
 
     def rows(self, rows: Iterable[Iterable[object]]) -> None:
         """Write one tab-separated line per row; ``None`` becomes an empty field."""

@@ -102,6 +102,13 @@ Warehouses are optional extras. Core bundles none. `all` is core plus the UI, fo
 
 ### Added
 
+- Every pipeline run and task run has a readable label beside its integer id, set by the Engine DB
+  when the run is created and never changed: `<pipeline>-<UTC start>-<run id>` for a run (for example
+  `ORDERS-2026-11-07 02:27:37-4`) and `<pipeline>-<task>-<UTC start>-<task run id>` for a task run, to
+  which an attempt adds `-<attempt number>`. Migration 0087 adds the `RUN_LABEL` and `TASK_RUN_LABEL`
+  columns and labels existing runs. `status` prints `label=`, the run's JSON has `run_label`, and a
+  task run's JSON has `task_run_label`; `run` prints `run label: ...` on standard error.
+
 - `reconcile --attest-ended --reason REASON` recovers missing terminal process evidence only
   after expiry/fencing, tagged-query absence and original-agent-instance checks. Process
   attestations are recorded as ATTESTED with the operator, reason and verified checks;
