@@ -276,6 +276,11 @@ Warehouses are optional extras. Core bundles none. `all` is core plus the UI, fo
 - Long tables in the browser interface scroll inside a bounded box with their header kept in view,
   and the runs list loads older runs as its end is scrolled into view instead of offering a
   "Load older runs" button.
+- The browser interface stays in the project: Home and the logo open the project in use (the one
+  in the address, else the last one opened, else the account's default project, else the only
+  project), and System health, Agents and Administration keep it in the project menu and sidebar.
+  The project list shows only when several projects are active and none is chosen. A disabled
+  project is not offered, and opening its address says it is not available.
 
 - Upload-bound APPEND_TABLE and OVERWRITE_TABLE allow unprotected staging targets without
   CREATED_BY/UPDATED_BY. Declared actors still receive per-upload account stamps; protected

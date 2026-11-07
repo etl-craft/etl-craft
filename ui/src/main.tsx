@@ -19,7 +19,7 @@ import { System } from "@/pages/system";
 import { Held } from "@/pages/held";
 import { Insights } from "@/pages/insights";
 import { Items } from "@/pages/items";
-import { Home } from "@/pages/home";
+import { HomeEntry, ProjectHome } from "@/pages/home";
 import { PipelineDetail } from "@/pages/pipeline-detail";
 import { Pipelines } from "@/pages/pipelines";
 import { Scheduled } from "@/pages/scheduled";
@@ -43,7 +43,8 @@ createRoot(document.getElementById("root")!).render(
         <Routes>
           <Route path="signin" element={<SignIn />} />
           <Route element={<AppShell />}>
-            <Route index element={<Home />} />
+            <Route index element={<HomeEntry />} />
+            <Route path="projects/:project" element={<ProjectHome />} />
             <Route path="system" element={<System />} />
             <Route path="agents" element={<Agents />} />
             <Route path="admin" element={<Admin />} />

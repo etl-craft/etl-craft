@@ -1,6 +1,7 @@
 import { ChevronDown, LogOut, Menu, Moon, Sun, X } from "lucide-react";
 import * as React from "react";
 import { Link, Outlet, useLocation, useNavigate, useParams } from "react-router-dom";
+import { Notice } from "@/components/common";
 import { EnvironmentBadge, EnvironmentStrip } from "@/components/environment-badge";
 import { DropdownContent, DropdownItem, DropdownLabel, DropdownMenu, DropdownSeparator, DropdownTrigger } from "@/components/dropdown";
 import { Logo } from "@/components/logo";
@@ -9,10 +10,11 @@ import { SessionGuard } from "@/components/session-guard";
 import { ShortcutsDialog } from "@/components/shortcuts-dialog";
 import { Sidebar } from "@/components/sidebar";
 import { Button } from "@/components/ui/button";
-import { useHealth, useIdentity } from "@/hooks";
+import { useActiveProject, useHealth, useIdentity } from "@/hooks";
 import { signOut } from "@/lib/api";
+import { rememberProject } from "@/lib/project-memory";
 import { rememberVisit } from "@/lib/recent";
-import { aboutPath, passwordPath, runsPath, searchPath, settingsPath } from "@/lib/routes";
+import { aboutPath, homePath, passwordPath, projectHomePath, runsPath, searchPath, settingsPath } from "@/lib/routes";
 import { applyTheme, initialTheme, type Theme } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 
@@ -27,7 +29,8 @@ function readCollapsed(): boolean {
 }
 
 export function AppShell() {
-  const { project: code } = useParams();
+  const { project: addressed } = useParams();
+  const { code, ready } = useActiveProject();
   const location = useLocation();
   const navigate = useNavigate();
   const searchBox = React.useRef<HTMLInputElement>(null);
@@ -61,6 +64,10 @@ export function AppShell() {
   React.useEffect(() => {
     if (code) rememberVisit(code, location.pathname);
   }, [code, location.pathname]);
+  const unavailable = Boolean(addressed) && health.isSuccess && !health.data.projects.some((p) => p.project === addressed);
+  React.useEffect(() => {
+    if (addressed && !unavailable && health.isSuccess) rememberProject(addressed);
+  }, [addressed, unavailable, health.isSuccess]);
   const env = current ? { type: current.environment_type, name: current.environment_name } : null;
   const admin = identity.data?.role === "admin";
 
@@ -76,7 +83,7 @@ export function AppShell() {
         <Button variant="ghost" size="icon" className="lg:hidden" aria-label={open ? "Close menu" : "Open menu"} onClick={() => setOpen(!open)}>
           {open ? <X className="size-5" /> : <Menu className="size-5" />}
         </Button>
-        <Link to="/" className="flex items-center gap-2 font-semibold">
+        <Link to={code ? projectHomePath(code) : homePath} className="flex items-center gap-2 font-semibold">
           <Logo className="size-8" />
           <span className="hidden sm:inline">etl-craft</span>
         </Link>
@@ -175,7 +182,13 @@ export function AppShell() {
         <main id="main" className="min-w-0 flex-1 overflow-y-auto">
           <div className="mx-auto w-full max-w-[1400px] px-4 py-6 sm:px-6">
             <LiveStatus className="mb-3 justify-end" />
-            <Outlet />
+            {unavailable && ready ? (
+              <Notice>
+                Project {addressed} is not available: it is disabled, or this account cannot see it. Choose another project from the menu above.
+              </Notice>
+            ) : (
+              <Outlet />
+            )}
           </div>
         </main>
       </div>

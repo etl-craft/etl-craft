@@ -17,7 +17,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { NavLink } from "react-router-dom";
-import { adminPath, agentsPath, systemPath, catalogPath, consolePath, heldPath, homePath, maintenancePath, insightsPath, pipelinesPath, runsPath, scheduledPath, uploadsPath } from "@/lib/routes";
+import { adminPath, agentsPath, systemPath, catalogPath, consolePath, heldPath, homePath, maintenancePath, insightsPath, pipelinesPath, projectHomePath, runsPath, scheduledPath, uploadsPath } from "@/lib/routes";
 import { cn } from "@/lib/utils";
 
 interface Item {
@@ -33,7 +33,7 @@ function sections(code: string | undefined, admin: boolean): { title: string; it
     {
       title: "Overview",
       items: [
-        { label: "Home", icon: House, to: homePath },
+        { label: "Home", icon: House, to: code ? projectHomePath(code) : homePath },
         ...(code ? [{ label: "Runs", icon: ListChecks, to: runsPath(code) }] : []),
       ],
     },
@@ -102,7 +102,7 @@ export function Sidebar({
                 </>
               );
               return to ? (
-                <NavLink key={label} to={to} end={to === homePath} title={collapsed ? label : undefined} className={({ isActive }) => row(collapsed, isActive)}>
+                <NavLink key={label} to={to} end={to === homePath || to === (code ? projectHomePath(code) : homePath)} title={collapsed ? label : undefined} className={({ isActive }) => row(collapsed, isActive)}>
                   {content}
                 </NavLink>
               ) : (
