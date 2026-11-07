@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { createColumnHelper } from "@tanstack/react-table";
-import { Link, useParams, useSearchParams } from "react-router-dom";
+import { Link, Navigate, useLocation, useParams, useSearchParams } from "react-router-dom";
 import { ActionButton } from "@/components/action-button";
 import { CsvButton } from "@/components/csv-button";
 import { Field, FactList, inputClass, Loading, Notice, PageHeader, Stat } from "@/components/common";
@@ -13,6 +13,7 @@ import { getJson, project } from "@/lib/api";
 import { formatTime, measured, percent, seconds } from "@/lib/format";
 import { catalogPath, pipelinePath, runPath } from "@/lib/routes";
 import type { DayInsight, FailureInsight, GapInsight, Insights as InsightsView, Pipeline, PipelineInsight, RuleInsight, RunView, TaskInsight } from "@/lib/types";
+import { projectHomePath } from "@/lib/routes";
 import { useDocumentTitle } from "@/title";
 
 const pipelineCol = createColumnHelper<PipelineInsight>();
@@ -24,13 +25,20 @@ const runCol = createColumnHelper<RunView>();
 const dayCol = createColumnHelper<DayInsight>();
 const num = (v: number | null) => <span className="num">{measured(v)}</span>;
 
+/** The old address of this page: Home is the project's insights, so it opens Home with its filters. */
+export function InsightsRedirect() {
+  const { project = "" } = useParams();
+  const { search } = useLocation();
+  return <Navigate to={projectHomePath(project) + search} replace />;
+}
+
 export function Insights() {
   const { project: code = "" } = useParams();
   const [params, setParams] = useSearchParams();
   const tz = useTimezone();
   const developer = useRoleAtLeast("developer");
   const info = useProjectInfo(code);
-  useDocumentTitle("Insights", code, info.project && { type: info.project.environment_type, name: info.project.environment_name });
+  useDocumentTitle("Home", code, info.project && { type: info.project.environment_type, name: info.project.environment_name });
   const chosen = params.getAll("pipeline");
   const from = params.get("from") ?? "";
   const to = params.get("to") ?? "";
@@ -59,7 +67,7 @@ export function Insights() {
   return (
     <div className="grid grid-cols-1 gap-5">
       <PageHeader
-        title="Pipeline insights"
+        title="Home"
         subtitle={d ? `Runs started from ${formatTime(d.window_start, tz)} up to ${formatTime(d.window_end, tz)}. Rates use finished runs; counts a task did not report are shown as Not measured, never 0.` : code}
       >
         <div className="flex flex-wrap items-end gap-3">

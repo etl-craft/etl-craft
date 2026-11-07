@@ -1,6 +1,6 @@
 import { useQueries } from "@tanstack/react-query";
 import { CircleCheck, CircleX, Clock, Hourglass, LoaderCircle, type LucideIcon } from "lucide-react";
-import { Link, Navigate, useParams } from "react-router-dom";
+import { Link, Navigate } from "react-router-dom";
 import { Eyebrow, Fact, FactList, Loading, Notice, PageHeader } from "@/components/common";
 import { EnvironmentBadge } from "@/components/environment-badge";
 import { StatusBadge } from "@/components/status";
@@ -93,18 +93,14 @@ function ProjectCard({ p, failures, since }: { p: ProjectCounts; failures: Histo
 export function HomeEntry() {
   const { code, ready } = useActiveProject();
   if (!ready) return <Loading what="projects" />;
-  return code ? <Navigate to={projectHomePath(code)} replace /> : <Home />;
+  return code ? <Navigate to={projectHomePath(code)} replace /> : <ProjectList choose />;
 }
 
-export function ProjectHome() {
-  const { project = "" } = useParams();
-  return <Home only={project} />;
-}
-
-export function Home({ only }: { only?: string }) {
-  useDocumentTitle("Home");
+/** Every project the account can see, as cards; ``choose`` says why when none is open yet. */
+export function ProjectList({ choose = false }: { choose?: boolean }) {
+  useDocumentTitle("Projects");
   const health = useHealth();
-  const projects = (health.data?.projects ?? []).filter((p) => !only || p.project === only);
+  const projects = health.data?.projects ?? [];
   const since = health.data?.window_start ?? "";
   const failing = projects.filter((p) => p.failed > 0);
   const histories = useQueries({
@@ -123,7 +119,7 @@ export function Home({ only }: { only?: string }) {
   return (
     <div className="grid grid-cols-1 gap-6">
       <PageHeader
-        title="Home"
+        title="Projects"
         subtitle={
           health.isError
             ? "The project list could not be read."
@@ -133,7 +129,7 @@ export function Home({ only }: { only?: string }) {
         }
       />
       {health.isError ? <Notice>{(health.error as Error).message}</Notice> : null}
-      {!only && projects.length > 1 ? (
+      {choose && projects.length > 1 ? (
         <Notice>
           Several projects are available and none is chosen. Open one, or set a default project in <Link to={settingsPath} className="underline">Personal settings</Link> so Home opens it.
         </Notice>

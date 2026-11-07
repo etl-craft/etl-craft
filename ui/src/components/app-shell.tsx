@@ -14,7 +14,7 @@ import { useActiveProject, useHealth, useIdentity } from "@/hooks";
 import { signOut } from "@/lib/api";
 import { rememberProject } from "@/lib/project-memory";
 import { rememberVisit } from "@/lib/recent";
-import { aboutPath, homePath, passwordPath, projectHomePath, runsPath, searchPath, settingsPath } from "@/lib/routes";
+import { aboutPath, homePath, passwordPath, projectHomePath, searchPath, settingsPath } from "@/lib/routes";
 import { applyTheme, initialTheme, type Theme } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 
@@ -98,7 +98,7 @@ export function AppShell() {
             <DropdownLabel>Projects</DropdownLabel>
             {(health.data?.projects ?? []).map((p) => (
               <DropdownItem key={p.project} asChild>
-                <Link to={runsPath(p.project)} className="justify-between gap-4">
+                <Link to={projectHomePath(p.project)} className="justify-between gap-4">
                   <span>{p.project}</span>
                   <EnvironmentBadge env={{ type: p.environment_type, name: p.environment_name }} />
                 </Link>

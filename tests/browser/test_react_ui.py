@@ -68,10 +68,10 @@ def test_home_runs_and_run_detail_lead_to_a_confirmed_recovery(scene):
     with sync_playwright() as pw:
         browser, page, problems = open_page(pw)
         sign_in(page, url)
-        expect(page).to_have_title("Home · etl-craft")
-        card = page.get_by_role("link", name="default", exact=True)
-        expect(card).to_be_visible()
-        expect(page.get_by_text("1 failed run in the last 24 hours")).to_be_visible()
+        expect(page.get_by_role("heading", name="Home", exact=True)).to_be_visible()
+        page.get_by_role(
+            "link", name="Runs", exact=True
+        ).click()  # Operations, beside Held and paused
         page.get_by_role("link", name=f"#{bad}").first.click()
         expect(page.get_by_role("heading", name=f"OPS #{bad}")).to_be_visible()
         graph = page.get_by_role("group", name="Task graph")
