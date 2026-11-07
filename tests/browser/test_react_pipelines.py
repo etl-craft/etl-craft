@@ -283,7 +283,7 @@ def test_a_pipeline_has_an_overview_tasks_details_and_documentation(scene):
         ).not_to_have_count(0)
         page.get_by_role("tab", name="Details").click()
         expect(page.get_by_text("Refresh", exact=True).last).to_be_visible()
-        page.get_by_role("tab", name="Documentation").click()
+        page.get_by_role("tab", name="Docs").click()
         expect(page.get_by_text("About this pipeline")).to_be_visible()
         expect(page.get_by_role("region", name="Task documentation")).to_be_visible()
         assert problems == []

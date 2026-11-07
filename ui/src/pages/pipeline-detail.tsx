@@ -72,7 +72,7 @@ export function PipelineDetail() {
     { id: "audit", label: "Audit log" },
     { id: "code", label: "Code" },
     { id: "details", label: "Details" },
-    { id: "docs", label: "Documentation" },
+    { id: "docs", label: "Docs" },
   ];
   const state = params.get("status") ?? "";
   const select = (runId: number, taskCode?: string) => {

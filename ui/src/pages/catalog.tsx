@@ -7,10 +7,12 @@ import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { failureText, useProjectInfo, useRoleAtLeast } from "@/hooks";
 import { ApiError, getJson, project } from "@/lib/api";
 import { useCatalog } from "@/lib/catalog";
-import type { CatalogKind } from "@/lib/routes";
+import { catalogPath, type CatalogKind } from "@/lib/routes";
+import { cn } from "@/lib/utils";
 import type { LineageRefresh, Report } from "@/lib/types";
 import { useDocumentTitle } from "@/title";
-import { useParams, useSearchParams } from "react-router-dom";
+import { ArrowLeft } from "lucide-react";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 import { CatalogHome, GapsObject, PipelineObject, TableObject, TaskObject } from "@/components/catalog-pages";
 import { CatalogTree } from "@/components/catalog-tree";
 import { SplitPane } from "@/components/split-pane";
@@ -160,11 +162,20 @@ export function Catalog() {
           initial={0.26}
           className="lg:h-[calc(100dvh-13rem)]"
           left={
-            <Card className="flex min-h-0 flex-1 flex-col overflow-hidden">
+            <Card className={cn("flex min-h-0 flex-1 flex-col overflow-hidden", kind && "max-lg:hidden")}>
               <CatalogTree code={code} doc={doc} selected={{ kind, name }} />
             </Card>
           }
-          right={<Card className="@container min-h-0 flex-1 overflow-auto">{content}</Card>}
+          right={
+            <Card className="@container min-h-0 flex-1 overflow-auto">
+              {kind ? (
+                <Link to={catalogPath(code)} className="m-4 mb-0 inline-flex w-fit items-center gap-1 text-sm text-accent hover:underline lg:hidden">
+                  <ArrowLeft className="size-4" aria-hidden /> All catalog objects
+                </Link>
+              ) : null}
+              {content}
+            </Card>
+          }
         />
       ) : null}
     </div>

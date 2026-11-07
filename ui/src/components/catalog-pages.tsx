@@ -72,7 +72,7 @@ function Section({ title, aside, children }: { title: string; aside?: React.Reac
 
 const Links = ({ code, labels, kind }: { code: string; labels: string[]; kind: "tasks" | "tables" }) =>
   labels.length ? (
-    <span className="flex flex-wrap gap-x-3 gap-y-0.5">
+    <span className="flex min-w-0 flex-wrap gap-x-3 gap-y-0.5 break-all">
       {labels.map((label) => (
         <Link key={label} className={link} to={catalogPath(code, kind, label)}>
           {label}
@@ -184,7 +184,7 @@ export function PipelineObject({ code, doc, name, tab, onTab }: { code: string; 
       <Tabs tabs={tabs} value={on} onChange={onTab} />
       {on === "overview" ? (
         <div className="grid gap-4 @3xl:grid-cols-[minmax(0,1fr)_15rem]">
-          <div className="grid min-w-0 gap-4">
+          <div className="grid min-w-0 grid-cols-1 gap-4">
             <Section title="Description">
               <p className="m-0 whitespace-pre-wrap text-[13px]">{pipeline.description || <span className="text-muted">No description. Set DESCRIPTION on the pipeline.</span>}</p>
             </Section>
@@ -215,7 +215,7 @@ export function PipelineObject({ code, doc, name, tab, onTab }: { code: string; 
               </Table>
             </Section>
           </div>
-          <aside aria-label="About this pipeline" className="grid content-start gap-3">
+          <aside aria-label="About this pipeline" className="grid min-w-0 content-start gap-3">
             <h2 className="m-0 text-sm font-semibold">About this pipeline</h2>
             <FactList className="grid-cols-1 sm:grid-cols-1 lg:grid-cols-1">
               <Fact label="Schedule">{pipeline.schedule ? <code className="font-mono">{pipeline.schedule}</code> : "Not scheduled"}</Fact>
@@ -290,7 +290,7 @@ export function TaskObject({ code, doc, name, tab, onTab }: { code: string; doc:
       <Tabs tabs={tabs} value={on} onChange={onTab} />
       {on === "overview" ? (
         <div className="grid gap-4 @3xl:grid-cols-[minmax(0,1fr)_15rem]">
-          <div className="grid min-w-0 gap-4">
+          <div className="grid min-w-0 grid-cols-1 gap-4">
             <Section title="Description">
               <p className="m-0 whitespace-pre-wrap text-[13px]">{task.documentation || <span className="text-muted">No documentation. Set the task's DOCUMENTATION parameter.</span>}</p>
             </Section>
@@ -323,7 +323,7 @@ export function TaskObject({ code, doc, name, tab, onTab }: { code: string; doc:
               </Section>
             ) : null}
           </div>
-          <aside aria-label="About this task" className="grid content-start gap-3">
+          <aside aria-label="About this task" className="grid min-w-0 content-start gap-3">
             <h2 className="m-0 text-sm font-semibold">About this task</h2>
             <FactList className="grid-cols-1 sm:grid-cols-1 lg:grid-cols-1">
               <Fact label="Pipeline">{task.pipeline}</Fact>
@@ -377,7 +377,7 @@ export function TableObject({ code, doc, name, tab, onTab }: { code: string; doc
       <Tabs tabs={tabs} value={on} onChange={onTab} />
       {on === "overview" ? (
         <div className="grid gap-4 @3xl:grid-cols-[minmax(0,1fr)_15rem]">
-          <div className="grid min-w-0 gap-4">
+          <div className="grid min-w-0 grid-cols-1 gap-4">
             <Section title="Description">
               {writers.length ? (
                 <div className="grid gap-2 text-[13px]">
@@ -425,7 +425,7 @@ export function TableObject({ code, doc, name, tab, onTab }: { code: string; doc
               )}
             </Section>
           </div>
-          <aside aria-label="About this table" className="grid content-start gap-3">
+          <aside aria-label="About this table" className="grid min-w-0 content-start gap-3">
             <h2 className="m-0 text-sm font-semibold">About this table</h2>
             <FactList className="grid-cols-1 sm:grid-cols-1 lg:grid-cols-1">
               <Fact label="Schema">{table.schema || "—"}</Fact>
@@ -443,8 +443,8 @@ export function TableObject({ code, doc, name, tab, onTab }: { code: string; doc
           </aside>
         </div>
       ) : on === "lineage" ? (
-        <div className="grid gap-4">
-          <div className="h-[24rem] overflow-hidden rounded-lg border border-border">
+        <div className="grid min-w-0 grid-cols-1 gap-4">
+          <div className="h-[30rem] overflow-hidden rounded-lg border border-border">
             <RunGraph fill plain graph={tableLineage(doc, table.name)} statuses={{}} focused={focused ?? table.name} onFocus={setFocused} onOpen={(next) => navigate(catalogPath(code, "tables", next))} />
           </div>
           <Section
@@ -501,7 +501,7 @@ export function TableObject({ code, doc, name, tab, onTab }: { code: string; doc
           )}
         </Section>
       ) : (
-        <div className="grid gap-4">
+        <div className="grid min-w-0 grid-cols-1 gap-4">
           <Section title={`Rules (${rules.length})`}>
             {rules.length ? (
               <ul className="m-0 grid list-none gap-2 p-0 text-[13px]">
