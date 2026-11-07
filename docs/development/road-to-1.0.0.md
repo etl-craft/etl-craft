@@ -197,6 +197,7 @@ item's text, or work done early under another item.
 | S7.AO UI rebuild | Done | #329–#335 | Seven slices: shell, Home, runs, pipelines, tasks, uploads, insights, console, catalog, system, agents, administration, maintenance, settings, search, sign-in; the new interface is the only one, served at `/ui`, and the old pages are deleted |
 | S7.AP Native catalog | Planned | | The catalog moves into the app from a JSON read action, built from the app's own components; the generated static site stays only for `publish-docs` |
 | S7.AQ Readable run identifiers | In progress | #347 | A label beside every run and task run id, stored by the Engine DB; accepted wherever the integer is, and shown beside it |
+| S7.AR Restarting pipelines | Planned | | A pipeline setting, `RESTART_CONDITION`, starts the next run when the last one ends in a chosen status, so a file watcher runs continuously without a schedule |
 | S7.M Stewardship uploads | Done (M2) | #296, #305 | Atomic receipts and safe stored names; processed layout, retention archives and verified reruns; crash recovery and guarded upload history |
 | S7.S Seed tables | Done | #308 | Typed pinned-bundle seeds replace reference tables until recorded stewardship handover |
 | S7.T Business calendars | Done | #276 | Shared holiday and weekend calendars for schedules, run dates, backfill and catch-up |
@@ -9228,6 +9229,40 @@ integer or the label. (3) The UI shows both wherever a run or task run appears.
 **Done when.** Every command, API field and UI link that takes or shows a run id accepts and shows
 both; a mismatched label is refused with the expected one; and an upgraded Engine DB labels its
 existing runs.
+
+### S7.AR Restarting pipelines
+
+Owner, 2026-11-07. A file or event watcher should not need a schedule: it waits until the source
+arrives, processes it to the end and starts the next run, and it stops only when a run fails.
+Today the demo's Gamma pipeline gets this from a five-minute schedule with `OVERLAP_POLICY=SKIP`,
+which leaves up to five minutes between runs, a skipped run about every wait timeout, and no way
+to say "continue unless the last run failed".
+
+**Decisions.** A pipeline setting `RESTART_CONDITION` (a `CFG_PIPELINES` column and a
+`pipelines.csv` column, typed in the pipeline history, one enum in `core.enums`). It is a
+`|`-separated set of the statuses a run can end with: `SUCCESS`, `SKIPPED`, `FAILURE`, plus
+`NONE` (the default: no restart) and `ALWAYS` (every ending). When a run ends in a listed status
+the controller starts the next run of the same pipeline, with its own trigger kind, recorded and
+audited like a scheduled run. It follows every existing rule: one exclusive run at a time,
+pause and holds (a paused pipeline does not restart; a resume starts the pending restart),
+calendars, SLA, and run-state transitions. A run that ends in a status not listed stops the
+chain until an operator recovers or marks it; the run that then ends in a listed status restarts
+it. A restart is created no sooner than a fixed 15 seconds after the previous run ended, so a run
+that ends at once cannot spin; that interval is documented, not a setting. A schedule may be set as
+well: its ticks are skipped while a chain's run is active, as for any active run. The setting is
+for data movement (a watcher or a stream reader); the S8 demo's Gamma pipeline is the first user.
+
+**Slices.** (1) The Engine DB column in both dialects with matching `schema.sql`, the enum,
+the config-file column, `validate` and `config apply` (values refused by name), history, and the
+docs and examples. (2) The controller starts the next run when a run ends in a listed status,
+with races tested against two controllers and against pause, hold, recover and `mark`.
+(3) The catalog and UI show the setting and a restarting pipeline's state; the demo's Gamma
+pipeline drops its schedule and sets `RESTART_CONDITION=SUCCESS|SKIPPED`.
+
+**Done when.** A pipeline with `RESTART_CONDITION=SUCCESS|SKIPPED` and an event wait runs
+continuously with no schedule, a failed run stops the chain, and recovering it resumes the chain;
+two controllers never start two next runs; every new failure names the object, the value found,
+what was expected and the remedy; and an upgraded Engine DB keeps every pipeline at `NONE`.
 
 ## Release candidate: the Support Insights example
 
