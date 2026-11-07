@@ -10,10 +10,10 @@ import { Tabs } from "@/components/tabs";
 import { useToast } from "@/components/toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, Td, Th } from "@/components/ui/table";
+import { columnsOf, DataTable } from "@/components/data-table";
 import { useRoleAtLeast, useTimezone } from "@/hooks";
 import { getJson, project } from "@/lib/api";
-import { pipelineGraph, tableLineage, typeOf, type CatalogDoc, type CatalogEdge, type CatalogRun, type CatalogTable, type CatalogTask } from "@/lib/catalog";
+import { pipelineGraph, tableLineage, typeOf, type CatalogColumn, type CatalogDoc, type CatalogEdge, type CatalogRun, type CatalogTable, type CatalogTask } from "@/lib/catalog";
 import { formatDuration, formatTime } from "@/lib/format";
 import { catalogPath, pipelinePath, taskPath } from "@/lib/routes";
 import type { RunView, TablePreview } from "@/lib/types";
@@ -101,34 +101,19 @@ function RunsTable({ code, pipeline, runs, task }: { code: string; pipeline: str
   const tz = useTimezone();
   if (!runs.length) return <p className="m-0 text-muted">No runs recorded in the last build.</p>;
   return (
-    <Table aria-label="Recent runs">
-      <thead>
-        <tr>
-          <Th>Run</Th>
-          <Th>Status</Th>
-          <Th>Started</Th>
-          <Th>Duration</Th>
-          {task ? <Th>Written</Th> : null}
-        </tr>
-      </thead>
-      <tbody>
-        {runs.map((run) => (
-          <tr key={run.pipeline_run_id}>
-            <Td>
-              <Link className={`num ${link}`} to={`${pipelinePath(code, pipeline)}?run=${run.pipeline_run_id}`}>
-                #{run.pipeline_run_id}
-              </Link>
-            </Td>
-            <Td>
-              <StatusBadge status={run.status} />
-            </Td>
-            <Td>{formatTime(run.start, tz)}</Td>
-            <Td>{formatDuration(run.start, run.end)}</Td>
-            {task ? <Td className="num text-muted">{[["+", run.insert_count], ["~", run.update_count], ["−", run.delete_count]].filter(([, n]) => n).map(([s, n]) => `${s}${n}`).join(" ") || "—"}</Td> : null}
-          </tr>
-        ))}
-      </tbody>
-    </Table>
+    <DataTable
+      quiet
+      label="Recent runs"
+      data={runs}
+      initialSort={[{ id: "run", desc: true }]}
+      columns={columnsOf<CatalogRun>([
+        { id: "run", header: "Run", value: (r) => r.pipeline_run_id, size: 90, cell: (r) => <Link className={`num ${link}`} to={`${pipelinePath(code, pipeline)}?run=${r.pipeline_run_id}`}>#{r.pipeline_run_id}</Link> },
+        { id: "status", header: "Status", value: (r) => r.status, size: 130, cell: (r) => <StatusBadge status={r.status} /> },
+        { id: "started", header: "Started", value: (r) => r.start, size: 190, cell: (r) => formatTime(r.start, tz) },
+        { id: "duration", header: "Duration", value: (r) => (r.start && r.end ? new Date(r.end).getTime() - new Date(r.start).getTime() : null), size: 110, cell: (r) => formatDuration(r.start, r.end) },
+        ...(task ? [{ id: "written", header: "Written", value: (r: CatalogRun) => (r.insert_count ?? 0) + (r.update_count ?? 0) + (r.delete_count ?? 0), size: 120, cell: (r: CatalogRun) => [["+", r.insert_count], ["~", r.update_count], ["−", r.delete_count]].filter(([, n]) => n).map(([sign, n]) => `${sign}${n}`).join(" ") || "—" }] : []),
+      ])}
+    />
   );
 }
 
@@ -205,30 +190,17 @@ export function PipelineObject({ code, doc, name, tab, onTab }: { code: string; 
               <p className="m-0 whitespace-pre-wrap text-[13px]">{pipeline.description || <span className="text-muted">No description. Set DESCRIPTION on the pipeline.</span>}</p>
             </Section>
             <Section title={`Tasks (${tasks.length})`}>
-              <Table aria-label="Tasks">
-                <thead>
-                  <tr>
-                    <Th>Task</Th>
-                    <Th>Handler</Th>
-                    <Th>Reads</Th>
-                    <Th>Writes</Th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {tasks.map((t) => (
-                    <tr key={t.label}>
-                      <Td>
-                        <Link className={`font-medium ${link}`} to={catalogPath(code, "tasks", t.label)}>
-                          {t.code}
-                        </Link>
-                      </Td>
-                      <Td>{t.handler}</Td>
-                      <Td>{t.sources.length ? <Links code={code} labels={t.sources} kind="tables" /> : <span className="text-muted">—</span>}</Td>
-                      <Td>{t.target ? <Links code={code} labels={[t.target]} kind="tables" /> : <span className="text-muted">—</span>}</Td>
-                    </tr>
-                  ))}
-                </tbody>
-              </Table>
+              <DataTable
+                quiet
+                label="Tasks"
+                data={tasks}
+                columns={columnsOf<CatalogTask>([
+                  { id: "task", header: "Task", value: (t) => t.code, size: 240, cell: (t) => <Link className={`font-medium ${link}`} to={catalogPath(code, "tasks", t.label)}>{t.code}</Link> },
+                  { id: "handler", header: "Handler", value: (t) => t.handler, size: 120 },
+                  { id: "reads", header: "Reads", value: (t) => t.sources.join(" "), size: 260, cell: (t) => (t.sources.length ? <Links code={code} labels={t.sources} kind="tables" /> : <span className="text-muted">—</span>) },
+                  { id: "writes", header: "Writes", value: (t) => t.target ?? "", size: 240, cell: (t) => (t.target ? <Links code={code} labels={[t.target]} kind="tables" /> : <span className="text-muted">—</span>) },
+                ])}
+              />
             </Section>
           </div>
           <aside aria-label="About this pipeline" className="grid min-w-0 content-start gap-3">
@@ -260,30 +232,17 @@ export function PipelineObject({ code, doc, name, tab, onTab }: { code: string; 
 function ColumnLineage({ code, edges }: { code: string; edges: CatalogEdge[] }) {
   if (!edges.length) return <p className="m-0 text-muted">No column lineage was traced for this selection.</p>;
   return (
-    <Table aria-label="Column lineage">
-      <thead>
-        <tr>
-          <Th>Column</Th>
-          <Th>Made from</Th>
-          <Th>How</Th>
-          <Th>Task</Th>
-        </tr>
-      </thead>
-      <tbody>
-        {edges.map((e, i) => (
-          <tr key={i}>
-            <Td className="font-mono text-xs">{e.target_object}.{e.target_column}</Td>
-            <Td className="font-mono text-xs">{e.source_object ? `${e.source_object}.${e.source_column}` : "a constant"}</Td>
-            <Td className="text-muted">{e.transformation.toLowerCase()}</Td>
-            <Td>
-              <Link className={link} to={catalogPath(code, "tasks", e.task)}>
-                {e.task}
-              </Link>
-            </Td>
-          </tr>
-        ))}
-      </tbody>
-    </Table>
+    <DataTable
+      quiet
+      label="Column lineage"
+      data={edges}
+      columns={columnsOf<CatalogEdge>([
+        { id: "column", header: "Column", value: (e) => `${e.target_object}.${e.target_column}`, size: 300, cell: (e) => <span className="font-mono text-xs">{e.target_object}.{e.target_column}</span> },
+        { id: "from", header: "Made from", value: (e) => (e.source_object ? `${e.source_object}.${e.source_column}` : "a constant"), size: 300, cell: (e) => <span className="font-mono text-xs">{e.source_object ? `${e.source_object}.${e.source_column}` : "a constant"}</span> },
+        { id: "how", header: "How", value: (e) => e.transformation, size: 140, cell: (e) => <span className="text-muted">{e.transformation.toLowerCase()}</span> },
+        { id: "task", header: "Task", value: (e) => e.task, size: 260, cell: (e) => <Link className={link} to={catalogPath(code, "tasks", e.task)}>{e.task}</Link> },
+      ])}
+    />
   );
 }
 
@@ -384,28 +343,12 @@ function TableData({ code, table }: { code: string; table: string }) {
       </p>
       {data.length ? (
         <div className="max-h-[calc(100dvh-22rem)] overflow-auto rounded-lg border border-border">
-          <Table aria-label="Rows">
-            <thead>
-              <tr>
-                {columns.map((c) => (
-                  <Th key={c} className="sticky top-0 whitespace-nowrap bg-surface-2">
-                    {c}
-                  </Th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {data.map((row, i) => (
-                <tr key={i}>
-                  {row.map((value, j) => (
-                    <Td key={j} className="max-w-72 truncate font-mono text-xs" title={value ?? undefined}>
-                      {value === null ? <span className="text-muted">null</span> : value}
-                    </Td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </Table>
+          <DataTable
+            quiet
+            label="Rows"
+            data={data}
+            columns={columnsOf<(string | null)[]>(columns.map((name, index) => ({ id: `${index}:${name}`, header: name, value: (row) => row[index] ?? null, size: 170, cell: (row) => (row[index] === null ? <span className="text-muted">null</span> : <span className="font-mono text-xs">{row[index]}</span>) })))}
+          />
         </div>
       ) : null}
     </div>
@@ -463,36 +406,18 @@ export function TableObject({ code, doc, name, tab, onTab }: { code: string; doc
             </Section>
             <Section fill className="max-h-96 @3xl:max-h-none" title={`Columns (${table.columns.length})`} aside={<input type="search" aria-label="Filter columns" placeholder="Filter columns…" value={filter} onChange={(event) => setFilter(event.target.value)} className="h-8 w-48 rounded-md border border-border-strong bg-surface px-2 text-[13px]" />}>
               {shown.length ? (
-                <div>
-                  <Table aria-label="Columns">
-                    <thead>
-                      <tr>
-                        <Th className="sticky top-0 z-10 bg-surface-2">Column</Th>
-                        <Th className="sticky top-0 z-10 bg-surface-2">Type</Th>
-                        <Th className="sticky top-0 z-10 bg-surface-2">Declared</Th>
-                        <Th className="sticky top-0 z-10 bg-surface-2">Nullable</Th>
-                        <Th className="sticky top-0 z-10 bg-surface-2">Comment</Th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {shown.map((c) => {
-                        const differs = c.declared_type && c.warehouse_type && c.declared_type.toLowerCase() !== c.warehouse_type.toLowerCase();
-                        return (
-                          <tr key={c.name}>
-                            <Td className="font-mono text-xs font-medium">
-                              {c.name}
-                              {c.engine_managed ? <span className="ml-1.5 rounded bg-idle-bg px-1 text-[10px] text-idle">engine</span> : null}
-                            </Td>
-                            <Td className="font-mono text-xs">{typeOf(c)}</Td>
-                            <Td className={differs ? "font-mono text-xs text-warn" : "font-mono text-xs text-muted"}>{c.declared_type ?? "—"}</Td>
-                            <Td className="text-muted">{c.warehouse_nullable ?? c.declared_nullable ?? "—"}</Td>
-                            <Td className="text-muted">{c.comment ?? ""}</Td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </Table>
-                </div>
+                <DataTable
+                  quiet
+                  label="Columns"
+                  data={shown}
+                  columns={columnsOf<CatalogColumn>([
+                    { id: "column", header: "Column", value: (c) => c.name, size: 260, cell: (c) => <span className="font-mono text-xs font-medium">{c.name}{c.engine_managed ? <span className="ml-1.5 rounded bg-idle-bg px-1 text-[10px] text-idle">engine</span> : null}</span> },
+                    { id: "type", header: "Type", value: (c) => typeOf(c), size: 200, cell: (c) => <span className="font-mono text-xs">{typeOf(c)}</span> },
+                    { id: "declared", header: "Declared", value: (c) => c.declared_type ?? "", size: 200, cell: (c) => <span className={c.declared_type && c.warehouse_type && c.declared_type.toLowerCase() !== c.warehouse_type.toLowerCase() ? "font-mono text-xs text-warn" : "font-mono text-xs text-muted"}>{c.declared_type ?? "—"}</span> },
+                    { id: "nullable", header: "Nullable", value: (c) => c.warehouse_nullable ?? c.declared_nullable ?? "", size: 100, cell: (c) => <span className="text-muted">{c.warehouse_nullable ?? c.declared_nullable ?? "—"}</span> },
+                    { id: "comment", header: "Comment", value: (c) => c.comment ?? "", size: 300, cell: (c) => <span className="text-muted">{c.comment ?? ""}</span> },
+                  ])}
+                />
               ) : (
                 <p className="m-0 text-muted">{table.columns.length ? "No column matches." : "No columns are declared or reported for this table."}</p>
               )}
@@ -557,36 +482,19 @@ export function TableObject({ code, doc, name, tab, onTab }: { code: string; doc
       ) : on === "history" ? (
         <Section title="Recent writes">
           {history.length ? (
-            <Table aria-label="Recent writes">
-              <thead>
-                <tr>
-                  <Th>Task</Th>
-                  <Th>Run</Th>
-                  <Th>Status</Th>
-                  <Th>Started</Th>
-                  <Th>Duration</Th>
-                  <Th>Rows</Th>
-                </tr>
-              </thead>
-              <tbody>
-                {history.map((r) => (
-                  <tr key={`${r.task}-${r.pipeline_run_id}`}>
-                    <Td>
-                      <Link className={link} to={catalogPath(code, "tasks", r.task)}>
-                        {r.task}
-                      </Link>
-                    </Td>
-                    <Td className="num">#{r.pipeline_run_id}</Td>
-                    <Td>
-                      <StatusBadge status={r.status} />
-                    </Td>
-                    <Td>{formatTime(r.start, tz)}</Td>
-                    <Td>{formatDuration(r.start, r.end)}</Td>
-                    <Td className="num text-muted">{[["+", r.insert_count], ["~", r.update_count], ["−", r.delete_count]].filter(([, n]) => n).map(([s, n]) => `${s}${n}`).join(" ") || "—"}</Td>
-                  </tr>
-                ))}
-              </tbody>
-            </Table>
+            <DataTable
+              quiet
+              label="Recent writes"
+              data={history}
+              columns={columnsOf<(typeof history)[number]>([
+                { id: "task", header: "Task", value: (r) => r.task, size: 280, cell: (r) => <Link className={link} to={catalogPath(code, "tasks", r.task)}>{r.task}</Link> },
+                { id: "run", header: "Run", value: (r) => r.pipeline_run_id, size: 90, cell: (r) => <span className="num">#{r.pipeline_run_id}</span> },
+                { id: "status", header: "Status", value: (r) => r.status, size: 130, cell: (r) => <StatusBadge status={r.status} /> },
+                { id: "started", header: "Started", value: (r) => r.start, size: 190, cell: (r) => formatTime(r.start, tz) },
+                { id: "duration", header: "Duration", value: (r) => (r.start && r.end ? new Date(r.end).getTime() - new Date(r.start).getTime() : null), size: 110, cell: (r) => formatDuration(r.start, r.end) },
+                { id: "rows", header: "Rows", value: (r) => (r.insert_count ?? 0) + (r.update_count ?? 0) + (r.delete_count ?? 0), size: 120, cell: (r) => [["+", r.insert_count], ["~", r.update_count], ["−", r.delete_count]].filter(([, n]) => n).map(([sign, n]) => `${sign}${n}`).join(" ") || "—" },
+              ])}
+            />
           ) : (
             <p className="m-0 text-muted">No task that writes this table has a recorded run.</p>
           )}
@@ -622,35 +530,19 @@ export function TableObject({ code, doc, name, tab, onTab }: { code: string; doc
 
 function GapRows({ code, gaps }: { code: string; gaps: CatalogDoc["gaps"] }) {
   return (
-    <Table aria-label="Gaps">
-      <thead>
-        <tr>
-          <Th>Object</Th>
-          <Th>Attribute</Th>
-          <Th>State</Th>
-          <Th>Declared</Th>
-          <Th>Deployed</Th>
-          <Th>Why</Th>
-        </tr>
-      </thead>
-      <tbody>
-        {gaps.map((g, i) => (
-          <tr key={i}>
-            <Td className="font-mono text-xs">
-              <Link className={link} to={catalogPath(code, "tables", g.table)}>
-                {g.table}
-              </Link>
-              {g.column ? `.${g.column}` : ""}
-            </Td>
-            <Td>{g.attribute.toLowerCase().replace(/_/g, " ")}</Td>
-            <Td>{g.state.toLowerCase().replace(/_/g, " ")}</Td>
-            <Td className="font-mono text-xs">{g.declared ?? "—"}</Td>
-            <Td className="font-mono text-xs">{g.deployed ?? "—"}</Td>
-            <Td className="text-muted">{g.reason}</Td>
-          </tr>
-        ))}
-      </tbody>
-    </Table>
+    <DataTable
+      quiet
+      label="Gaps"
+      data={gaps}
+      columns={columnsOf<CatalogDoc["gaps"][number]>([
+        { id: "object", header: "Object", value: (g) => `${g.table}${g.column ? `.${g.column}` : ""}`, size: 300, cell: (g) => <span className="font-mono text-xs"><Link className={link} to={catalogPath(code, "tables", g.table)}>{g.table}</Link>{g.column ? `.${g.column}` : ""}</span> },
+        { id: "attribute", header: "Attribute", value: (g) => g.attribute, size: 150, cell: (g) => g.attribute.toLowerCase().replace(/_/g, " ") },
+        { id: "state", header: "State", value: (g) => g.state, size: 140, cell: (g) => g.state.toLowerCase().replace(/_/g, " ") },
+        { id: "declared", header: "Declared", value: (g) => g.declared ?? "", size: 160, cell: (g) => <span className="font-mono text-xs">{g.declared ?? "—"}</span> },
+        { id: "deployed", header: "Deployed", value: (g) => g.deployed ?? "", size: 160, cell: (g) => <span className="font-mono text-xs">{g.deployed ?? "—"}</span> },
+        { id: "why", header: "Why", value: (g) => g.reason, size: 380, cell: (g) => <span className="text-muted">{g.reason}</span> },
+      ])}
+    />
   );
 }
 

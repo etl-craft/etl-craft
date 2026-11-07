@@ -4,7 +4,7 @@ import { Link } from "react-router-dom";
 import { Fact, FactList, Loading, Notice, SelectField } from "@/components/common";
 import { RunBars } from "@/components/pipeline-parts";
 import { StatusBadge, toneClass } from "@/components/status";
-import { Table, Td, Th } from "@/components/ui/table";
+import { columnsOf, DataTable } from "@/components/data-table";
 import { useTimezone } from "@/hooks";
 import { getJson, project } from "@/lib/api";
 import { formatDuration, formatTime } from "@/lib/format";
@@ -56,7 +56,7 @@ export function OverviewTab({ code, pipeline, runs }: { code: string; pipeline: 
         <Tile label="Median duration" value={median === null ? "—" : formatDuration("1970-01-01T00:00:00Z", new Date(median * 1000).toISOString())} />
       </div>
       <section className="grid gap-2" aria-label="Latest run durations">
-        <h3 className="m-0 text-sm font-semibold">Last {Math.min(10, runs.length)} runs</h3>
+        <h3 className="m-0 text-sm font-semibold">{runs.length === 1 ? "The only run" : `Last ${Math.min(10, runs.length)} runs`}</h3>
         {runs.length ? <RunBars project={code} runs={runs.slice(0, 10)} /> : <p className="m-0 text-muted">No runs yet.</p>}
       </section>
       <section className="grid gap-2" aria-label="Recent failures">
@@ -108,30 +108,17 @@ export function TasksTab({ code, pipeline, graph, runId }: { code: string; pipel
       {error ? <Notice>{error.message}</Notice> : null}
       {loading ? <Loading what="tasks" /> : null}
       <div className="overflow-hidden rounded-lg border border-border">
-        <Table aria-label="Pipeline tasks">
-          <thead>
-            <tr>
-              <Th>Task</Th>
-              <Th>Handler</Th>
-              <Th>Waits for</Th>
-              {runId !== undefined ? <Th>{`Run #${runId}`}</Th> : null}
-            </tr>
-          </thead>
-          <tbody>
-            {tasks.map((task) => (
-              <tr key={task}>
-                <Td>
-                  <Link className="font-medium text-accent hover:underline" to={taskPath(code, pipeline, task)}>
-                    {task}
-                  </Link>
-                </Td>
-                <Td>{definitions.get(task)?.handler ?? "…"}</Td>
-                <Td className="text-muted">{(graph.depends_on[task] ?? []).map(([upstream]) => upstream).join(", ") || "—"}</Td>
-                {runId !== undefined ? <Td>{status.has(task) ? <StatusBadge status={status.get(task)!} /> : "—"}</Td> : null}
-              </tr>
-            ))}
-          </tbody>
-        </Table>
+        <DataTable
+          quiet
+          label="Pipeline tasks"
+          data={tasks}
+          columns={columnsOf<string>([
+            { id: "task", header: "Task", value: (t) => t, size: 280, cell: (t) => <Link className="font-medium text-accent hover:underline" to={taskPath(code, pipeline, t)}>{t}</Link> },
+            { id: "handler", header: "Handler", value: (t) => definitions.get(t)?.handler ?? "", size: 130, cell: (t) => definitions.get(t)?.handler ?? "…" },
+            { id: "waits", header: "Waits for", value: (t) => (graph.depends_on[t] ?? []).map(([upstream]) => upstream).join(", "), size: 320, cell: (t) => <span className="text-muted">{(graph.depends_on[t] ?? []).map(([upstream]) => upstream).join(", ") || "—"}</span> },
+            ...(runId !== undefined ? [{ id: "state", header: `Run #${runId}`, value: (t: string) => status.get(t) ?? "", size: 150, cell: (t: string) => (status.has(t) ? <StatusBadge status={status.get(t)!} /> : "—") }] : []),
+          ])}
+        />
       </div>
     </div>
   );
@@ -233,26 +220,17 @@ export function AuditTab({ code, pipeline }: { code: string; pipeline: string })
       <section className="grid gap-2" aria-label="Commands">
         <h3 className="m-0 text-sm font-semibold">Commands ({actions.length})</h3>
         {actions.length ? (
-          <Table aria-label="Commands run on this pipeline">
-            <thead>
-              <tr>
-                <Th>When</Th>
-                <Th>Who</Th>
-                <Th>Command</Th>
-                <Th>Outcome</Th>
-              </tr>
-            </thead>
-            <tbody>
-              {actions.slice(0, 50).map((a) => (
-                <tr key={a.action_id}>
-                  <Td className="whitespace-nowrap">{formatTime(a.at, tz)}</Td>
-                  <Td>{a.actor}</Td>
-                  <Td>{a.command}</Td>
-                  <Td className="text-muted">{a.outcome.toLowerCase()}</Td>
-                </tr>
-              ))}
-            </tbody>
-          </Table>
+          <DataTable
+            quiet
+            label="Commands run on this pipeline"
+            data={actions.slice(0, 50)}
+            columns={columnsOf<(typeof actions)[number]>([
+              { id: "when", header: "When", value: (a) => a.at, size: 200, cell: (a) => formatTime(a.at, tz) },
+              { id: "who", header: "Who", value: (a) => a.actor, size: 160 },
+              { id: "command", header: "Command", value: (a) => a.command, size: 320 },
+              { id: "outcome", header: "Outcome", value: (a) => a.outcome, size: 140, cell: (a) => <span className="text-muted">{a.outcome.toLowerCase()}</span> },
+            ])}
+          />
         ) : (
           <p className="m-0 text-muted">No command has been recorded for this pipeline.</p>
         )}
@@ -260,26 +238,17 @@ export function AuditTab({ code, pipeline }: { code: string; pipeline: string })
       <section className="grid gap-2" aria-label="Metadata changes">
         <h3 className="m-0 text-sm font-semibold">Metadata changes ({changes.length})</h3>
         {changes.length ? (
-          <Table aria-label="Metadata changes">
-            <thead>
-              <tr>
-                <Th>When</Th>
-                <Th>Who</Th>
-                <Th>Table</Th>
-                <Th>Change</Th>
-              </tr>
-            </thead>
-            <tbody>
-              {changes.slice(0, 50).map((c) => (
-                <tr key={c.change_id}>
-                  <Td className="whitespace-nowrap">{formatTime(c.at, tz)}</Td>
-                  <Td>{c.actor}</Td>
-                  <Td className="font-mono text-xs">{c.table_name}</Td>
-                  <Td className="text-muted">{c.operation.toLowerCase()}</Td>
-                </tr>
-              ))}
-            </tbody>
-          </Table>
+          <DataTable
+            quiet
+            label="Metadata changes"
+            data={changes.slice(0, 50)}
+            columns={columnsOf<(typeof changes)[number]>([
+              { id: "when", header: "When", value: (c) => c.at, size: 200, cell: (c) => formatTime(c.at, tz) },
+              { id: "who", header: "Who", value: (c) => c.actor, size: 160 },
+              { id: "table", header: "Table", value: (c) => c.table_name, size: 280, cell: (c) => <span className="font-mono text-xs">{c.table_name}</span> },
+              { id: "change", header: "Change", value: (c) => c.operation, size: 140, cell: (c) => <span className="text-muted">{c.operation.toLowerCase()}</span> },
+            ])}
+          />
         ) : (
           <p className="m-0 text-muted">No metadata change has been recorded for this pipeline.</p>
         )}

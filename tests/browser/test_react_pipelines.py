@@ -294,3 +294,30 @@ def test_a_pipeline_has_an_overview_tasks_and_details_and_a_way_back(scene):
         expect(page.get_by_role("table", name="Pipelines")).to_be_visible()
         assert problems == []
         browser.close()
+
+
+def test_a_narrow_grid_hides_the_oldest_runs_never_the_newest(scene):
+    _, url, _ = scene
+    with sync_playwright() as pw:
+        browser, page, problems = open_page(pw, viewport={"width": 1100, "height": 800})
+        page.context.set_default_timeout(8000)
+        sign_in(page, url, "/ui/projects/default/pipelines/SALES")
+        divider = page.get_by_role("separator", name="Resize the panes")
+        divider.focus()
+        for _ in range(30):
+            page.keyboard.press("ArrowLeft")  # the grid pane at its narrowest
+        grid = page.get_by_role("table", name="Run grid")
+        headers = grid.locator("thead th a")
+        assert headers.count() >= 2
+        area = grid.locator("xpath=ancestor::div[@dir='rtl']").bounding_box()
+        newest = headers.last.bounding_box()
+        assert newest["x"] + newest["width"] <= area["x"] + area["width"] + 1, (
+            "the newest run is cut off"
+        )
+        assert newest["x"] >= area["x"], "the newest run is outside the grid"
+        task = grid.locator("tbody th").first.bounding_box()
+        assert (
+            task["x"] >= area["x"] - 1 and task["width"] >= 120
+        )  # the task list keeps a readable width
+        assert problems == []
+        browser.close()

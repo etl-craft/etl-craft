@@ -118,7 +118,7 @@ export function AppShell() {
               if (q) navigate(searchPath(code, q));
             }}
           >
-            <input ref={searchBox} name="q" type="search" aria-label="Search pipelines, tasks, tables and runs" placeholder="Search  ( / )" className="h-9 w-full rounded-md border border-border-strong bg-surface px-3 text-sm" />
+            <input ref={searchBox} name="q" type="search" aria-label="Search pipelines, tasks, tables and runs" placeholder="Search (press /)" className="h-9 w-full rounded-md border border-border-strong bg-surface px-3 text-sm" />
           </form>
         ) : null}
         <div className="ml-auto flex items-center gap-1">

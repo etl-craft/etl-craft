@@ -10,7 +10,7 @@ import { AuditTab, CalendarTab, DetailsTab, OverviewTab, TasksTab } from "@/comp
 import { StatusBadge } from "@/components/status";
 import { PauseState } from "@/components/pipeline-parts";
 import { RunGraph } from "@/components/run-graph";
-import { RunGrid } from "@/components/run-grid";
+import { DEFAULT_RUNS, RunGrid } from "@/components/run-grid";
 import { RunOverview } from "@/components/run-overview";
 import { RunsPanel } from "@/components/runs-panel";
 import { useRuns } from "@/components/runs-table";
@@ -22,7 +22,7 @@ import { formatTime } from "@/lib/format";
 import { getJson, project } from "@/lib/api";
 import { pipelinesPath, taskPath } from "@/lib/routes";
 import { cn } from "@/lib/utils";
-import type { Graph, Pipeline, Steps } from "@/lib/types";
+import type { Graph, Pipeline, RunView, Steps } from "@/lib/types";
 import { useDocumentTitle } from "@/title";
 
 const TAB_IDS = ["overview", "run", "runs", "tasks", "calendar", "audit", "details"];
@@ -54,8 +54,29 @@ export function PipelineDetail() {
     refetchInterval: 15_000,
   });
   const graph = useQuery({ queryKey: ["graph", code, pipeline], queryFn: () => getJson<Graph>(`${project(code)}/graph`, { pipeline_code: pipeline }) });
-  const runs = useRuns(code, pipeline).all;
+  const list = useRuns(code, pipeline);
+  const all = list.all;
+  const runsKey = `etl-craft-runs:${code}:${pipeline}`;
+  const remembered = (() => {
+    try {
+      return Number(window.localStorage.getItem(runsKey));
+    } catch {
+      return 0;
+    }
+  })();
+  // The address wins, then what this pipeline's grid was last set to, then the default.
+  const wanted = Math.min(200, Math.max(1, Number(params.get("runs")) || remembered || DEFAULT_RUNS));
+  // The runs asked for are loaded a page at a time until there are enough.
+  const { hasNextPage, isFetchingNextPage, fetchNextPage } = list.runs;
+  React.useEffect(() => {
+    if (all.length < wanted && hasNextPage && !isFetchingNextPage) void fetchNextPage();
+  }, [all.length, wanted, hasNextPage, isFetchingNextPage, fetchNextPage]);
+  const runs = all;
+  const gridRuns = runs.slice(0, wanted);
   const selected = chosen ?? runs[0]?.pipeline_run_id;
+  // A link to a run older than the grid's columns still opens it: the run is read by its number and shown as a column of its own.
+  const outside = selected !== undefined && !gridRuns.some((r) => r.pipeline_run_id === selected);
+  const extraRun = useQuery({ queryKey: ["run", code, selected], queryFn: () => getJson<RunView>(`${project(code)}/runs/${selected}`), enabled: outside });
   useDocumentTitle(selected === undefined ? pipeline : `${pipeline} #${selected}`, code, info.project && { type: info.project.environment_type, name: info.project.environment_name });
   const steps = useQuery({
     queryKey: ["steps", code, pipeline, selected],
@@ -80,6 +101,15 @@ export function PipelineDetail() {
     if (taskCode) next.set("task", taskCode);
     else next.delete("task");
     setParams(next, { replace: true });
+  };
+  const apply = (value: string) => {
+    const n = Math.min(200, Math.max(1, Math.round(Number(value)) || DEFAULT_RUNS));
+    try {
+      window.localStorage.setItem(runsKey, String(n));
+    } catch {
+      /* the count lasts for this page only */
+    }
+    choose("runs", null);
   };
   const choose = (key: string, value: string | null) => {
     const next = new URLSearchParams(params);
@@ -182,7 +212,7 @@ export function PipelineDetail() {
         className="lg:min-h-0 lg:flex-1"
         left={
         <Card className="flex min-h-0 flex-1 flex-col overflow-hidden">
-          <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-2">
+          <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5 border-b border-border px-3 py-2">
             <div role="group" aria-label="Run view" className="inline-flex rounded-md border border-border p-0.5 text-sm">
               {(["grid", "graph"] as const).map((id) => (
                 <button key={id} type="button" aria-pressed={view === id} onClick={() => choose("view", id === "grid" ? null : id)} className={cn("cursor-pointer rounded px-2.5 py-0.5", view === id ? "bg-accent/15 font-medium text-fg" : "text-muted hover:text-fg")}>
@@ -200,7 +230,20 @@ export function PipelineDetail() {
               </div>
             ) : (
               <div className="flex items-center gap-2">
-                <span className="hidden text-xs text-muted xl:inline">Newest on the right; a dot: not started</span>
+                <label className="flex items-center gap-1.5 text-xs text-muted">
+                  Runs
+                  <input
+                    key={wanted}
+                    type="number"
+                    min={1}
+                    max={200}
+                    defaultValue={wanted}
+                    aria-label="How many runs to show"
+                    className="h-8 w-16 rounded-md border border-border-strong bg-surface px-2 text-[13px] text-fg"
+                    onBlur={(event) => apply(event.currentTarget.value)}
+                    onKeyDown={(event) => event.key === "Enter" && apply(event.currentTarget.value)}
+                  />
+                </label>
                 <DropdownMenu>
                   <DropdownTrigger asChild>
                     <Button size="sm" variant="outline">
@@ -221,11 +264,11 @@ export function PipelineDetail() {
               </div>
             )}
           </div>
-          <div className={cn("relative min-h-0 flex-1", view === "grid" && "overflow-auto")}>
+          <div className="relative min-h-0 flex-1 overflow-hidden">
             {!graph.isSuccess ? (
               graph.isError ? <Notice className="m-3">{(graph.error as Error).message}</Notice> : <Loading what="tasks" className="p-3" />
             ) : view === "grid" ? (
-              <RunGrid code={code} pipeline={pipeline} graph={graph.data} runs={runs} selected={selected} onSelect={select} bars={!hideBars} labels={byTime ? "time" : "id"} />
+              <RunGrid code={code} pipeline={pipeline} graph={graph.data} runs={gridRuns} extra={outside && extraRun.data?.pipeline_code === pipeline ? extraRun.data : undefined} selected={selected} onSelect={select} bars={!hideBars} labels={byTime ? "time" : "id"} />
             ) : (
               <div className="absolute inset-0">
               <RunGraph
