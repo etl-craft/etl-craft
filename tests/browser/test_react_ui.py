@@ -241,11 +241,13 @@ def test_a_run_offers_its_logs_and_a_running_run_offers_reconcile(scene):
     with sync_playwright() as pw:
         browser, page, problems = open_page(pw, viewport={"width": 1280, "height": 900})
         sign_in(page, url, f"/ui/projects/default/runs/OPS/{good}")
-        link = page.get_by_role("link", name="Download run log")
+        page.get_by_role("button", name="Run key and logs").click()  # the logs are in one menu
+        link = page.get_by_role("menuitem", name="Download run log")
         expect(link).to_have_attribute(
             "href", f"/api/v1/projects/default/run-log?pipeline_code=OPS&run_id={good}"
         )
-        expect(page.get_by_role("link", name="Download logs (zip)")).to_be_visible()
+        expect(page.get_by_role("menuitem", name="Download logs (zip)")).to_be_visible()
+        page.keyboard.press("Escape")
         expect(page.get_by_role("button", name="Reconcile")).to_have_count(0)  # it has ended
         page.goto(url + f"/ui/projects/default/runs/OPS/{running}")
         page.get_by_role("button", name="Reconcile", exact=True).click()
@@ -265,7 +267,8 @@ def test_shortcuts_copy_run_key_and_live_status_are_offered(scene):
         page.context.grant_permissions(["clipboard-read", "clipboard-write"], origin=url)
         sign_in(page, url, f"/ui/projects/default/runs/OPS/{good}")
         expect(page.get_by_role("status").filter(has_text="Live")).to_be_visible()
-        page.get_by_role("button", name="Copy run key").click()
+        page.get_by_role("button", name="Run key and logs").click()
+        page.get_by_role("menuitem", name="Copy run key").click()
         expect(page.get_by_role("status").filter(has_text="Run key copied.")).to_be_visible()
         page.keyboard.press("?")
         dialog = page.get_by_role("dialog")
@@ -302,5 +305,26 @@ def test_the_project_runs_list_and_a_pipeline_share_one_layout(scene):
         expect(page.locator("tr[aria-current=true]")).to_have_count(1)
         shoot(page, "pipeline-highlight")
         assert page.url.endswith(f"?run={good}")
+        assert problems == []
+        browser.close()
+
+
+def test_a_task_opens_in_its_row_and_the_run_shows_its_identifier(scene):
+    _, url, _, bad = scene
+    with sync_playwright() as pw:
+        browser, page, problems = open_page(pw, viewport={"width": 1280, "height": 900})
+        sign_in(page, url, f"/ui/projects/default/runs/OPS/{bad}")
+        expect(page.get_by_role("heading", name=f"OPS #{bad}")).to_be_visible()
+        identifier = page.get_by_label("Run identifier", exact=True)
+        expect(identifier).to_contain_text("OPS-")
+        expect(identifier).to_contain_text(f"-{bad}")
+        table = page.get_by_role("table", name="Task list")
+        expect(page.get_by_label("Task LOAD")).to_have_count(0)
+        table.get_by_role("button", name="Show details of LOAD").click()
+        details = table.get_by_label("Task LOAD")  # inside the table, directly under its row
+        expect(details).to_be_visible()
+        shoot(page, "run-page")
+        table.get_by_role("button", name="Hide details of LOAD").click()
+        expect(page.get_by_label("Task LOAD")).to_have_count(0)
         assert problems == []
         browser.close()
