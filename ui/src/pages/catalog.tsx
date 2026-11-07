@@ -94,7 +94,7 @@ export function Catalog() {
   );
 
   return (
-    <div className="grid grid-cols-1 gap-3">
+    <div className="flex min-h-0 flex-1 flex-col gap-2">
       <PageHeader
         compact
         title="Catalog"
@@ -160,7 +160,7 @@ export function Catalog() {
         <SplitPane
           id="catalog"
           initial={0.26}
-          className="lg:h-[calc(100dvh-13rem)]"
+          className="lg:min-h-0 lg:flex-1"
           left={
             <Card className={cn("flex min-h-0 flex-1 flex-col overflow-hidden", kind && "max-lg:hidden")}>
               <CatalogTree code={code} doc={doc} selected={{ kind, name }} />

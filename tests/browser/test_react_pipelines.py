@@ -269,7 +269,7 @@ def test_the_panes_resize_and_the_graph_stays_whole(scene):
         browser.close()
 
 
-def test_a_pipeline_has_an_overview_tasks_details_and_documentation(scene):
+def test_a_pipeline_has_an_overview_tasks_and_details_and_a_way_back(scene):
     _, url, _ = scene
     with sync_playwright() as pw:
         browser, page, problems = open_page(pw, viewport={"width": 1440, "height": 900})
@@ -283,8 +283,14 @@ def test_a_pipeline_has_an_overview_tasks_details_and_documentation(scene):
         ).not_to_have_count(0)
         page.get_by_role("tab", name="Details").click()
         expect(page.get_by_text("Refresh", exact=True).last).to_be_visible()
-        page.get_by_role("tab", name="Docs").click()
-        expect(page.get_by_text("About this pipeline")).to_be_visible()
-        expect(page.get_by_role("region", name="Task documentation")).to_be_visible()
+        expect(page.get_by_role("region", name="Task definitions")).to_be_visible()
+        expect(
+            page.get_by_role("link", name="Open the documentation in the catalog")
+        ).to_be_visible()
+        expect(page.get_by_role("tab", name="Docs")).to_have_count(
+            0
+        )  # documented once, in the catalog
+        page.get_by_role("link", name="Back to Pipelines").click()
+        expect(page.get_by_role("table", name="Pipelines")).to_be_visible()
         assert problems == []
         browser.close()

@@ -8,7 +8,7 @@ import { Table, Td, Th } from "@/components/ui/table";
 import { useTimezone } from "@/hooks";
 import { getJson, project } from "@/lib/api";
 import { formatDuration, formatTime } from "@/lib/format";
-import { taskPath } from "@/lib/routes";
+import { catalogPath, taskPath } from "@/lib/routes";
 import type { AuditRecords, Graph, Pipeline, RunView, Steps, TaskDefinition } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -137,49 +137,51 @@ export function TasksTab({ code, pipeline, graph, runId }: { code: string; pipel
   );
 }
 
-/** The pipeline's definition as the project's files set it. */
-export function DetailsTab({ pipeline, graph, project: code }: { pipeline: Pipeline; graph?: Graph; project: string }) {
+/** The pipeline as its files define it: its settings, then each task's handler and parameters. What the pipeline and its tasks are for is documented in the catalog. */
+export function DetailsTab({ code, pipeline, graph }: { code: string; pipeline: Pipeline; graph?: Graph }) {
   const tz = useTimezone();
-  return (
-    <FactList className="sm:grid-cols-2 lg:grid-cols-2">
-      <Fact label="Pipeline">{pipeline.pipeline_code}</Fact>
-      <Fact label="Name">{pipeline.pipeline_name}</Fact>
-      <Fact label="Project">{code}</Fact>
-      <Fact label="Refresh">{pipeline.refresh_type.toLowerCase()}</Fact>
-      <Fact label="Schedule">{pipeline.run_schedule ? <code className="font-mono">{pipeline.run_schedule}</code> : "Not scheduled"}</Fact>
-      <Fact label="Restarts">{pipeline.restart_note ?? "On its schedule only"}</Fact>
-      <Fact label="Next run">{pipeline.next_run ? formatTime(pipeline.next_run, tz) : (pipeline.schedule_problem ?? "—")}</Fact>
-      <Fact label="SLA">{pipeline.sla_in_hours ? `${pipeline.sla_in_hours} h` : "None"}</Fact>
-      <Fact label="Automatic runs">{pipeline.paused ? `Paused by ${pipeline.paused.paused_by}: ${pipeline.paused.reason}` : "On"}</Fact>
-      <Fact label="Tasks">{graph ? graph.waves.flat().length : "…"}</Fact>
-      <Fact label="Tags">{pipeline.tags.length ? pipeline.tags.join(", ") : "None"}</Fact>
-    </FactList>
-  );
-}
-
-/** What the pipeline does, then what each task does, from `DESCRIPTION` and each task's `DOCUMENTATION`. */
-export function DocsTab({ code, pipeline, graph }: { code: string; pipeline: Pipeline; graph: Graph }) {
-  const tasks = graph.waves.flat();
+  const tasks = graph ? graph.waves.flat() : [];
   const { definitions, loading, error } = useTaskDefinitions(code, pipeline.pipeline_code, tasks);
   return (
     <div className="grid gap-4">
-      <section className="grid gap-1" aria-label="About this pipeline">
-        <h3 className="m-0 text-sm font-semibold">About this pipeline</h3>
-        <p className="m-0 whitespace-pre-wrap text-[13px]">{pipeline.description || <span className="text-muted">No description. Set DESCRIPTION on the pipeline.</span>}</p>
-      </section>
-      {error ? <Notice>{error.message}</Notice> : null}
-      {loading ? <Loading what="task documentation" /> : null}
-      <section className="grid gap-3" aria-label="Task documentation">
-        <h3 className="m-0 text-sm font-semibold">Tasks</h3>
+      <FactList className="sm:grid-cols-2 lg:grid-cols-3">
+        <Fact label="Pipeline">{pipeline.pipeline_code}</Fact>
+        <Fact label="Name">{pipeline.pipeline_name}</Fact>
+        <Fact label="Refresh">{pipeline.refresh_type.toLowerCase()}</Fact>
+        <Fact label="Schedule">{pipeline.run_schedule ? <code className="font-mono">{pipeline.run_schedule}</code> : "Not scheduled"}</Fact>
+        <Fact label="Restarts">{pipeline.restart_note ?? "On its schedule only"}</Fact>
+        <Fact label="Next run">{pipeline.next_run ? formatTime(pipeline.next_run, tz) : (pipeline.schedule_problem ?? "—")}</Fact>
+        <Fact label="SLA">{pipeline.sla_in_hours ? `${pipeline.sla_in_hours} h` : "None"}</Fact>
+        <Fact label="Automatic runs">{pipeline.paused ? `Paused by ${pipeline.paused.paused_by}: ${pipeline.paused.reason}` : "On"}</Fact>
+        <Fact label="Tasks">{tasks.length}</Fact>
+        <Fact label="Tags">{pipeline.tags.length ? pipeline.tags.join(", ") : "None"}</Fact>
+      </FactList>
+      <p className="m-0 text-[13px]">
+        <Link className="text-accent hover:underline" to={catalogPath(code, "pipelines", pipeline.pipeline_code)}>
+          Open the documentation in the catalog
+        </Link>
+        <span className="text-muted"> for what this pipeline and its tasks do, what they read and write, and their lineage.</span>
+      </p>
+      <section className="grid gap-2" aria-label="Task definitions">
+        <h3 className="m-0 text-sm font-semibold">Task definitions</h3>
+        {error ? <Notice>{error.message}</Notice> : null}
+        {loading ? <Loading what="task definitions" /> : null}
         {tasks.map((task) => {
-          const text = definitions.get(task)?.parameters.DOCUMENTATION;
+          const def = definitions.get(task);
           return (
-            <div key={task} className="grid gap-0.5 border-l-2 border-border pl-3">
-              <Link className="w-fit font-medium text-accent hover:underline" to={taskPath(code, pipeline.pipeline_code, task)}>
-                {task}
-              </Link>
-              <p className="m-0 whitespace-pre-wrap text-[13px]">{text || <span className="text-muted">No documentation. Set the task's DOCUMENTATION parameter.</span>}</p>
-            </div>
+            <details key={task} className="rounded-md border border-border">
+              <summary className="cursor-pointer px-3 py-2 text-[13px] font-medium">
+                {task} <span className="font-normal text-muted">{def?.handler ?? ""}</span>
+              </summary>
+              <dl className="m-0 grid gap-x-4 gap-y-1 border-t border-border p-3 text-xs sm:grid-cols-[max-content_1fr]">
+                {Object.entries(def?.parameters ?? {}).map(([name, value]) => (
+                  <React.Fragment key={name}>
+                    <dt className="font-mono text-muted">{name}</dt>
+                    <dd className="m-0 whitespace-pre-wrap break-words font-mono">{value}</dd>
+                  </React.Fragment>
+                ))}
+              </dl>
+            </details>
           );
         })}
       </section>
@@ -282,36 +284,6 @@ export function AuditTab({ code, pipeline }: { code: string; pipeline: string })
           <p className="m-0 text-muted">No metadata change has been recorded for this pipeline.</p>
         )}
       </section>
-    </div>
-  );
-}
-
-/** The pipeline as its files define it: each task's handler and parameters, which is what runs. */
-export function DefinitionTab({ code, pipeline, graph }: { code: string; pipeline: string; graph: Graph }) {
-  const tasks = graph.waves.flat();
-  const { definitions, loading, error } = useTaskDefinitions(code, pipeline, tasks);
-  return (
-    <div className="grid gap-2">
-      {error ? <Notice>{error.message}</Notice> : null}
-      {loading ? <Loading what="task definitions" /> : null}
-      {tasks.map((task) => {
-        const def = definitions.get(task);
-        return (
-          <details key={task} className="rounded-md border border-border">
-            <summary className="cursor-pointer px-3 py-2 text-[13px] font-medium">
-              {task} <span className="font-normal text-muted">{def?.handler ?? ""}</span>
-            </summary>
-            <dl className="m-0 grid gap-x-4 gap-y-1 border-t border-border p-3 text-xs sm:grid-cols-[max-content_1fr]">
-              {Object.entries(def?.parameters ?? {}).map(([name, value]) => (
-                <React.Fragment key={name}>
-                  <dt className="font-mono text-muted">{name}</dt>
-                  <dd className="m-0 whitespace-pre-wrap break-words font-mono">{value}</dd>
-                </React.Fragment>
-              ))}
-            </dl>
-          </details>
-        );
-      })}
     </div>
   );
 }

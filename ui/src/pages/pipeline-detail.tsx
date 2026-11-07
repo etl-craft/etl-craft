@@ -6,7 +6,7 @@ import { ActionButton } from "@/components/action-button";
 import { DropdownContent, DropdownItem, DropdownLabel, DropdownMenu, DropdownTrigger } from "@/components/dropdown";
 import { Button } from "@/components/ui/button";
 import { Fact, FactList, Field, inputClass, Loading, Notice, PageHeader, SelectField } from "@/components/common";
-import { AuditTab, CalendarTab, DefinitionTab, DetailsTab, DocsTab, OverviewTab, TasksTab } from "@/components/pipeline-tabs";
+import { AuditTab, CalendarTab, DetailsTab, OverviewTab, TasksTab } from "@/components/pipeline-tabs";
 import { StatusBadge } from "@/components/status";
 import { PauseState } from "@/components/pipeline-parts";
 import { RunGraph } from "@/components/run-graph";
@@ -20,12 +20,12 @@ import { Card } from "@/components/ui/card";
 import { useCanRun, useProjectInfo, useTimezone } from "@/hooks";
 import { formatTime } from "@/lib/format";
 import { getJson, project } from "@/lib/api";
-import { taskPath } from "@/lib/routes";
+import { pipelinesPath, taskPath } from "@/lib/routes";
 import { cn } from "@/lib/utils";
 import type { Graph, Pipeline, Steps } from "@/lib/types";
 import { useDocumentTitle } from "@/title";
 
-const TAB_IDS = ["overview", "run", "runs", "tasks", "calendar", "audit", "code", "details", "docs"];
+const TAB_IDS = ["overview", "run", "runs", "tasks", "calendar", "audit", "details"];
 
 export function PipelineDetail() {
   const { project: code = "", pipeline = "" } = useParams();
@@ -70,9 +70,7 @@ export function PipelineDetail() {
     { id: "tasks", label: "Tasks" },
     { id: "calendar", label: "Calendar" },
     { id: "audit", label: "Audit log" },
-    { id: "code", label: "Code" },
     { id: "details", label: "Details" },
-    { id: "docs", label: "Docs" },
   ];
   const state = params.get("status") ?? "";
   const select = (runId: number, taskCode?: string) => {
@@ -96,9 +94,10 @@ export function PipelineDetail() {
 
   if (found.isError) return <Notice>{(found.error as Error).message}</Notice>;
   return (
-    <div className="grid grid-cols-1 gap-5">
+    <div className="flex min-h-0 flex-1 flex-col gap-2">
       <PageHeader
         compact
+        back={{ to: pipelinesPath(code), label: "Pipelines" }}
         title={pipeline}
         subtitle={p && p.pipeline_name !== pipeline ? p.pipeline_name : undefined}
         status={p ? <PauseState pipeline={p} /> : null}
@@ -180,7 +179,7 @@ export function PipelineDetail() {
       </PageHeader>
       <SplitPane
         id="pipeline"
-        className="lg:h-[calc(100dvh-12rem)]"
+        className="lg:min-h-0 lg:flex-1"
         left={
         <Card className="flex min-h-0 flex-1 flex-col overflow-hidden">
           <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-2">
@@ -295,12 +294,8 @@ export function PipelineDetail() {
               <CalendarTab runs={runs} />
             ) : tab === "audit" ? (
               <AuditTab code={code} pipeline={pipeline} />
-            ) : tab === "code" ? (
-              <DefinitionTab code={code} pipeline={pipeline} graph={graph.data} />
             ) : tab === "details" ? (
-              <DetailsTab pipeline={p} graph={graph.data} project={code} />
-            ) : tab === "docs" ? (
-              <DocsTab code={code} pipeline={p} graph={graph.data} />
+              <DetailsTab code={code} pipeline={p} graph={graph.data} />
             ) : (
               <OverviewTab code={code} pipeline={p} runs={runs} />
             )}

@@ -6,6 +6,12 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+- A table's catalog page has a Data tab: the first 100 rows, read from the warehouse, for developers and
+  above (`etl-craft catalog preview --table T`, `GET /api/v1/projects/{project}/table-preview`,
+  `etl-craft/table-preview/1`). Only catalog tables are read, and each request is audited.
+- The pipeline page has a back arrow, and Details now holds the task definitions; pipeline documentation
+  lives only in the catalog. The workspace and the catalog fill the window instead of a centred column, and
+  the table Lineage tab is split into a graph (with depth and direction) and Column lineage.
 - The UI's Catalog is a data explorer rendered by the app instead of the generated pages in a frame: a
   resizable tree of pipelines, tasks and warehouse tables with search, and pages for a table (Overview with
   its columns, Lineage, History, Quality), a pipeline, a task and the schema and lineage gaps.

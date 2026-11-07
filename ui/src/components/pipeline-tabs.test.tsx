@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it } from "vitest";
-import { DocsTab, OverviewTab } from "@/components/pipeline-tabs";
+import { DetailsTab, OverviewTab } from "@/components/pipeline-tabs";
 import type { Graph, Pipeline, RunView } from "@/lib/types";
 
 const pipeline = { pipeline_code: "REF", pipeline_name: "REF", refresh_type: "FULL", run_schedule: null, sla_in_hours: null, paused: null, tags: [], task_pauses: [], next_run: null, schedule_problem: null, recent_runs: [], description: "Copies the reference tables." } as unknown as Pipeline;
@@ -23,17 +23,12 @@ function shown(node: React.ReactNode, definitions: Record<string, string | undef
   );
 }
 
-describe("the pipeline documentation tab", () => {
-  it("shows the pipeline's description and each task's documentation, and says what is missing", () => {
-    shown(<DocsTab code="demo" pipeline={pipeline} graph={graph} />, { copy_agents: "Copies the agents table.", copy_types: undefined });
-    expect(screen.getByText("Copies the reference tables.")).toBeTruthy();
-    expect(screen.getByText("Copies the agents table.")).toBeTruthy();
-    expect(screen.getByText(/Set the task's DOCUMENTATION parameter/)).toBeTruthy();
-  });
-
-  it("asks for a description when there is none", () => {
-    shown(<DocsTab code="demo" pipeline={{ ...pipeline, description: null }} graph={graph} />, { copy_agents: "x", copy_types: "y" });
-    expect(screen.getByText(/Set DESCRIPTION on the pipeline/)).toBeTruthy();
+describe("the pipeline details tab", () => {
+  it("lists the task definitions and points to the catalog for what the pipeline is for", () => {
+    shown(<DetailsTab code="demo" pipeline={pipeline} graph={graph} />, { copy_agents: "Copies the agents table.", copy_types: undefined });
+    expect(screen.getByRole("link", { name: /Open the documentation in the catalog/ }).getAttribute("href")).toBe("/projects/demo/catalog/pipelines/REF");
+    expect(screen.getByText("copy_agents")).toBeTruthy();
+    expect(screen.getByText("copy_types")).toBeTruthy();
   });
 });
 

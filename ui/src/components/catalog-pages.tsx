@@ -1,7 +1,8 @@
+import { useQuery } from "@tanstack/react-query";
 import { Copy, Table2, Workflow, ListChecks, TriangleAlert } from "lucide-react";
 import * as React from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Fact, FactList, Notice, SelectField } from "@/components/common";
+import { Fact, FactList, Loading, Notice, SelectField } from "@/components/common";
 import { RunBars } from "@/components/pipeline-parts";
 import { RunGraph } from "@/components/run-graph";
 import { StatusBadge } from "@/components/status";
@@ -10,11 +11,12 @@ import { useToast } from "@/components/toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, Td, Th } from "@/components/ui/table";
-import { useTimezone } from "@/hooks";
+import { useRoleAtLeast, useTimezone } from "@/hooks";
+import { getJson, project } from "@/lib/api";
 import { pipelineGraph, tableLineage, typeOf, type CatalogDoc, type CatalogEdge, type CatalogRun, type CatalogTable, type CatalogTask } from "@/lib/catalog";
 import { formatDuration, formatTime } from "@/lib/format";
 import { catalogPath, pipelinePath, taskPath } from "@/lib/routes";
-import type { RunView } from "@/lib/types";
+import type { RunView, TablePreview } from "@/lib/types";
 
 const link = "text-accent hover:underline";
 
@@ -352,6 +354,47 @@ function describe(doc: CatalogDoc, table: CatalogTable): CatalogTask[] {
   return table.writers.map((label) => doc.tasks.find((t) => t.label === label)).filter((t): t is CatalogTask => Boolean(t));
 }
 
+/** The first rows of the table, read from the warehouse when the tab opens. */
+function TableData({ code, table }: { code: string; table: string }) {
+  const rows = useQuery({ queryKey: ["table-preview", code, table], queryFn: () => getJson<TablePreview>(`${project(code)}/table-preview`, { table, limit: 100 }), retry: false, staleTime: 30_000 });
+  if (rows.isPending) return <Loading what="the rows" />;
+  if (rows.isError) return <Notice>{(rows.error as Error).message}</Notice>;
+  const { columns, rows: data, more, limit } = rows.data;
+  return (
+    <div className="grid min-w-0 gap-2">
+      <p className="m-0 text-xs text-muted">
+        {data.length ? `${more ? `The first ${limit} rows` : `${data.length} row${data.length === 1 ? "" : "s"}`}, read from the warehouse now. Long values are cut.` : "The table has no rows."}
+      </p>
+      {data.length ? (
+        <div className="max-h-[calc(100dvh-22rem)] overflow-auto rounded-lg border border-border">
+          <Table aria-label="Rows">
+            <thead>
+              <tr>
+                {columns.map((c) => (
+                  <Th key={c} className="sticky top-0 whitespace-nowrap bg-surface-2">
+                    {c}
+                  </Th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {data.map((row, i) => (
+                <tr key={i}>
+                  {row.map((value, j) => (
+                    <Td key={j} className="max-w-72 truncate font-mono text-xs" title={value ?? undefined}>
+                      {value === null ? <span className="text-muted">null</span> : value}
+                    </Td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </Table>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 /** A table, as a data explorer shows it: description, columns with their types, then lineage, history and quality. */
 export function TableObject({ code, doc, name, tab, onTab }: { code: string; doc: CatalogDoc; name: string; tab: string; onTab: (tab: string) => void }) {
   const navigate = useNavigate();
@@ -359,12 +402,22 @@ export function TableObject({ code, doc, name, tab, onTab }: { code: string; doc
   const [filter, setFilter] = React.useState("");
   const [column, setColumn] = React.useState("");
   const [focused, setFocused] = React.useState<string | null>(null);
+  const [depth, setDepth] = React.useState("2");
+  const [direction, setDirection] = React.useState<"both" | "up" | "down">("both");
+  const developer = useRoleAtLeast("developer");
   const table = doc.tables.find((t) => t.name === name);
   if (!table) return <Notice className="m-4">No table {name} in this catalog build.</Notice>;
   const writers = describe(doc, table);
   const rules = doc.rules.filter((r) => table.rules.includes(r.id));
   const gaps = doc.gaps.filter((g) => g.table === table.name && g.state !== "MATCHED");
-  const tabs = [{ id: "overview", label: "Overview" }, { id: "lineage", label: "Lineage" }, { id: "history", label: "History" }, { id: "quality", label: "Quality" }];
+  const tabs = [
+    { id: "overview", label: "Overview" },
+    ...(developer ? [{ id: "data", label: "Data" }] : []),
+    { id: "lineage", label: "Lineage" },
+    { id: "columns", label: "Column lineage" },
+    { id: "history", label: "History" },
+    { id: "quality", label: "Quality" },
+  ];
   const on = tabs.some((t) => t.id === tab) ? tab : "overview";
   const shown = table.columns.filter((c) => !filter || `${c.name} ${c.comment ?? ""} ${typeOf(c)}`.toLowerCase().includes(filter.toLowerCase()));
   const edges = doc.column_edges.filter((e) => e.target_object === table.name && (!column || e.target_column === column));
@@ -442,27 +495,45 @@ export function TableObject({ code, doc, name, tab, onTab }: { code: string; doc
             </FactList>
           </aside>
         </div>
+      ) : on === "data" ? (
+        <TableData code={code} table={table.name} />
       ) : on === "lineage" ? (
-        <div className="grid min-w-0 grid-cols-1 gap-4">
-          <div className="h-[30rem] overflow-hidden rounded-lg border border-border">
-            <RunGraph fill plain graph={tableLineage(doc, table.name)} statuses={{}} focused={focused ?? table.name} onFocus={setFocused} onOpen={(next) => navigate(catalogPath(code, "tables", next))} />
+        <div className="grid min-w-0 gap-2">
+          <div className="flex flex-wrap items-end gap-3">
+            <SelectField compact label="Direction" value={direction} onChange={(v) => setDirection(v as typeof direction)}>
+              <option value="both">Upstream and downstream</option>
+              <option value="up">Upstream only</option>
+              <option value="down">Downstream only</option>
+            </SelectField>
+            <SelectField compact label="Depth" value={depth} onChange={setDepth}>
+              {["1", "2", "3", "4"].map((d) => (
+                <option key={d} value={d}>
+                  {d} step{d === "1" ? "" : "s"}
+                </option>
+              ))}
+            </SelectField>
+            <span className="pb-1 text-xs text-muted">Select a table to open it.</span>
           </div>
-          <Section
-            title="Column lineage"
-            aside={
-              <SelectField compact label="Column" value={column} onChange={setColumn}>
-                <option value="">All columns</option>
-                {table.columns.map((c) => (
-                  <option key={c.name} value={c.name}>
-                    {c.name}
-                  </option>
-                ))}
-              </SelectField>
-            }
-          >
-            <ColumnLineage code={code} edges={edges} />
-          </Section>
+          <div className="h-[calc(100dvh-24rem)] min-h-72 overflow-hidden rounded-lg border border-border">
+            <RunGraph fill plain graph={tableLineage(doc, table.name, Number(depth), direction)} statuses={{}} focused={focused ?? table.name} onFocus={setFocused} onOpen={(next) => navigate(catalogPath(code, "tables", next))} />
+          </div>
         </div>
+      ) : on === "columns" ? (
+        <Section
+          title="Column lineage"
+          aside={
+            <SelectField compact label="Column" value={column} onChange={setColumn}>
+              <option value="">All columns</option>
+              {table.columns.map((c) => (
+                <option key={c.name} value={c.name}>
+                  {c.name}
+                </option>
+              ))}
+            </SelectField>
+          }
+        >
+          <ColumnLineage code={code} edges={edges} />
+        </Section>
       ) : on === "history" ? (
         <Section title="Recent writes">
           {history.length ? (

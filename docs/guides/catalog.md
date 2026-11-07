@@ -25,8 +25,10 @@ project's pipelines with their tasks, and the warehouse's schemas with their tab
 also finds columns, and on the right the selected object under a breadcrumb.
 
 - A **table** has Overview (a description from the tasks that write it, its columns with a filter, and an
-  *About this table* column), Lineage (the tables upstream and downstream, then the columns each is made
-  from), History (the recent writes) and Quality (its business rules and its schema and lineage gaps).
+  *About this table* column), Data (the first 100 rows, for developers; see [the browser
+  UI](browser-ui.md#previewing-a-tables-rows)), Lineage (the tables upstream and downstream, to a depth you
+  choose), Column lineage (the columns each column is made from), History (the recent writes) and Quality
+  (its business rules and its schema and lineage gaps).
 - A **pipeline** has Overview (description, tasks with what they read and write, schedule, SLA, tags),
   a task graph and its recent runs, with a link to the pipeline workspace.
 - A **task** has its documentation, reads and writes, column lineage and recent runs.

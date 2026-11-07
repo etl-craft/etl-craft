@@ -1,5 +1,6 @@
-import type { LucideIcon } from "lucide-react";
+import { ArrowLeft, type LucideIcon } from "lucide-react";
 import * as React from "react";
+import { Link } from "react-router-dom";
 import { cn } from "@/lib/utils";
 
 /** A failure or refusal, always announced to assistive technology. */
@@ -33,6 +34,7 @@ export function PageHeader({
   subtitle,
   actions,
   compact,
+  back,
   children,
 }: {
   title: React.ReactNode;
@@ -41,19 +43,26 @@ export function PageHeader({
   actions?: React.ReactNode;
   /** A smaller title and tighter spacing, for a page whose body is the point (a run). */
   compact?: boolean;
+  /** Where the arrow before the title leads back to, such as the list this page is one row of. */
+  back?: { to: string; label: string };
   children?: React.ReactNode;
 }) {
   return (
-    <header className={cn("flex flex-wrap items-start justify-between", compact ? "gap-3" : "gap-4")}>
-      <div className="grid min-w-0 gap-2">
-        <div className="flex flex-wrap items-center gap-3">
+    <header className={cn("flex flex-wrap items-start justify-between gap-y-2", compact ? "gap-x-3" : "gap-x-4")}>
+      <div className={cn("grid min-w-0 flex-1", compact ? "gap-1" : "gap-2")}>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          {back ? (
+            <Link to={back.to} aria-label={`Back to ${back.label}`} title={`Back to ${back.label}`} className="-ml-1 grid size-8 place-items-center rounded-md text-muted hover:bg-surface-2 hover:text-fg">
+              <ArrowLeft className="size-4" aria-hidden />
+            </Link>
+          ) : null}
           <h1 className={cn("m-0 font-semibold", compact ? "text-xl" : "text-2xl")}>{title}</h1>
           {status}
         </div>
         {subtitle ? <p className="m-0 text-sm text-muted">{subtitle}</p> : null}
         {children}
       </div>
-      {actions}
+      {actions ? <div className="shrink-0">{actions}</div> : null}
     </header>
   );
 }

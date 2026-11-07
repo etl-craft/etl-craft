@@ -782,3 +782,40 @@ def test_catalog_header_keeps_environment_through_incremental_rebuild(project, t
     write_site(replace(catalog, environment_label="UAT · Owner <review>"), config, folder)
     for name in ("index.html", "pipelines/SALES.html"):
         assert "default · UAT · Owner &lt;review&gt;</strong>" in (folder / name).read_text()
+
+
+def test_a_developer_previews_the_first_rows_of_a_catalog_table_and_nothing_else(project):
+    import duckdb
+
+    from etl_craft.core.actor import SYSTEM_ACTOR
+    from etl_craft.core.enums import ActionName, ApiRole
+    from etl_craft.core.errors import PermissionDeniedError, ResourceNotFoundError
+    from etl_craft.services.operations import OperationContext
+    from fixtures.actions import act
+
+    engine, config, root = project
+    with duckdb.connect(str(root / "analytics.duckdb")) as conn:
+        conn.execute("CREATE SCHEMA sales")
+        conn.execute("CREATE TABLE sales.orders (id BIGINT, note VARCHAR)")
+        conn.execute("INSERT INTO sales.orders SELECT range, NULL FROM range(150)")
+        conn.execute("UPDATE sales.orders SET note=repeat('x', 500) WHERE id=1")
+
+    def ctx(role):
+        return OperationContext(engine, config, SYSTEM_ACTOR, role=role)
+
+    preview = act(ctx(ApiRole.DEVELOPER), ActionName.TABLE_PREVIEW, table="sales.orders")
+    assert preview.columns == ("id", "note")
+    assert len(preview.rows) == 100 and preview.more and preview.limit == 100
+    note = {row[0]: row[1] for row in preview.rows}
+    assert (
+        note["0"] is None and note["1"] == "x" * 199 + "…"
+    )  # a null stays null; a long value is cut
+    few = act(ctx(ApiRole.DEVELOPER), ActionName.TABLE_PREVIEW, table="sales.orders", limit=5)
+    assert len(few.rows) == 5 and few.more
+    with pytest.raises(UsageError, match="expected 1 to 100"):
+        act(ctx(ApiRole.DEVELOPER), ActionName.TABLE_PREVIEW, table="sales.orders", limit=101)
+    # only a table the catalog lists is read, and only by a developer or above
+    with pytest.raises(ResourceNotFoundError, match="not a table in the project's catalog"):
+        act(ctx(ApiRole.DEVELOPER), ActionName.TABLE_PREVIEW, table="main.secrets")
+    with pytest.raises(PermissionDeniedError):
+        act(ctx(ApiRole.VIEWER), ActionName.TABLE_PREVIEW, table="sales.orders")

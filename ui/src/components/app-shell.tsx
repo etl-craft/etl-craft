@@ -32,6 +32,8 @@ export function AppShell() {
   const { project: addressed } = useParams();
   const { code, ready } = useActiveProject();
   const location = useLocation();
+  // A workspace page (a pipeline, the catalog) fills the screen and its panes scroll on their own.
+  const fill = /^\/projects\/[^/]+\/(pipelines\/[^/]+|catalog(\/.*)?)$/.test(location.pathname);
   const navigate = useNavigate();
   const searchBox = React.useRef<HTMLInputElement>(null);
   const [shortcuts, setShortcuts] = React.useState(false);
@@ -120,6 +122,7 @@ export function AppShell() {
           </form>
         ) : null}
         <div className="ml-auto flex items-center gap-1">
+          <LiveStatus className="mr-2 hidden sm:flex" />
           <Button variant="ghost" size="icon" aria-label={theme === "dark" ? "Use the light theme" : "Use the dark theme"} onClick={() => {
             const next: Theme = theme === "dark" ? "light" : "dark";
             applyTheme(next, true);
@@ -179,9 +182,8 @@ export function AppShell() {
             }}
           />
         </aside>
-        <main id="main" className="min-w-0 flex-1 overflow-y-auto">
-          <div className="mx-auto w-full max-w-[1400px] px-4 py-6 sm:px-6">
-            <LiveStatus className="mb-3 justify-end" />
+        <main id="main" className={cn("min-w-0 flex-1 overflow-y-auto", fill && "lg:overflow-hidden")}>
+          <div className={cn("w-full px-3 py-3 sm:px-4", fill ? "flex min-h-full flex-col gap-2 lg:h-full lg:min-h-0" : "mx-auto max-w-[1920px] py-4")}>
             {unavailable && ready ? (
               <Notice>
                 Project {addressed} is not available: it is disabled, or this account cannot see it. Choose another project from the menu above.

@@ -80,6 +80,21 @@ The corresponding API reads are `GET /api/v1/project-health`, `GET /api/v1/about
 relative generated HTML, CSS, JavaScript or SVG files, without traversal, encodings or symlinks.
 CLI and API stream the same bytes.
 
+## Previewing a table's rows
+
+A table's page in the catalog has a **Data** tab for developers and administrators: the first 100
+rows, read from the warehouse when the tab opens, with long values cut at 200 characters.
+
+```sh
+etl-craft --project SALES catalog preview --table ods.orders --limit 20
+```
+
+`GET /api/v1/projects/{project}/table-preview?table=ods.orders&limit=100` returns the same rows
+(`etl-craft/table-preview/1`: columns, rows as text, `more`). Only a table the project's catalog lists
+is read, only by whole-project accounts with the developer role or above, and every request is
+recorded in the audit log like an administrator's access reads, because it reads business rows. A
+viewer sees no Data tab. It is a preview, not a query tool: it takes no SQL.
+
 ## Pipelines, runs and controls
 
 **Pipelines** in the sidebar lists the project's pipelines you may view: tags, schedule, the

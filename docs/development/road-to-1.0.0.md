@@ -1401,8 +1401,10 @@ empty-history-page handling defect, which was corrected and verified. No cloud w
   pages and served by the existing catalog-file read (`CATALOG_PAGE`, path `catalog.json`), so it has the
   same build, project check and access rule as the site and no new action exists; its shape is
   `etl-craft/catalog/1`. The catalog's own Insights page is not rebuilt: its gap counts are the explorer's
-  front page, and Home becomes the dashboard (S7.AS slice 4). The pipeline workspace's "Code" tab shows
+  front page, and Home becomes the dashboard (S7.AS slice 4). The pipeline workspace's Details tab shows
   each task's definition (handler and parameters), not script sources, which the API does not serve.
+  `TABLE_PREVIEW` is the first API read of business rows; it is a developer-role read recorded in the
+  audit log, which is why `test_reads_record_only_explicit_admin_access_audits` lists it.
 
 - **S7.AL.4 event-file validation (owner, 2026-11-06).** Choices that differ from the item text:
   the opt-in is the FILE_VALIDATION parameter `SOURCE_EVENT=<EVENT_WAIT task code>`, for waits
@@ -9230,7 +9232,9 @@ History and Quality; its Overview is a Description card, a Columns table with a 
 (name, type, declared type, comment, tags), and an "About this table" side column (owner, type,
 data source, writers, freshness, tags). A pipeline's tabs match the pipeline workspace's. What
 Databricks shows that etl-craft has no data for (Sample Data, Permissions, Policies, Popularity)
-is not shown; nothing is added to fill the layout.
+is not shown; nothing is added to fill the layout, with one exception the owner asked for: a Data tab
+on a table, the first 100 rows read from the warehouse for developers and above, audited, with no SQL
+input. A query console is a separate decision (a design note, not part of this item).
 
 **Slices.** (1) The catalog JSON read action, behind the current page, with the same facts the
 static site shows. (2) The shell, search and the list of pipelines with a real tag filter. (3) A
@@ -9335,11 +9339,11 @@ place.
   and Median duration for it; the last ten runs' durations; recent failures), the selected run
   (`Run #ID`, which opens when a run or task is selected), Runs (filterable by state, pool, agent
   and failure class), Tasks (each task, its handler, what it waits for, its state in the selected
-  run), Details (the definition) and Documentation. Documentation shows the pipeline's
-  `DESCRIPTION`, then each task's `DOCUMENTATION`, and says which are missing. Later: an Audit log
-  tab (the project's actions on this pipeline), a Code tab (the task scripts as published), a
-  Calendar of runs, an Options menu on the grid and graph (what to show, duration or run labels),
-  and a minimap on a large graph.
+  run), Calendar, Audit log and Details (the pipeline's settings and each task's definition). What a
+  pipeline and its tasks are for is documented once, in the catalog (owner, 2026-11-07: two panels
+  duplicated), and Details links to it. A back arrow returns to the Pipelines list. Workspace pages fill
+  the window and their panes scroll on their own; the content column is no longer capped at 1400 px.
+  Later: an Options menu beyond the grid's, and a minimap on a large graph.
 - **One list of pipelines.** The catalog's DAGs tab duplicates Pipelines: its columns (description,
   schedule, dependencies, last run, recent success, tag filter) move into the Pipelines page, and the
   catalog keeps Search, Warehouse and Gaps (built with S7.AP).

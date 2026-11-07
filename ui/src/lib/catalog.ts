@@ -164,7 +164,7 @@ function waves(nodes: string[], dependsOn: Record<string, [string, string][]>): 
 }
 
 /** The tables upstream and downstream of one, up to `depth` steps each way, as a graph the task graph component draws. */
-export function tableLineage(doc: CatalogDoc, name: string, depth = 3): Graph {
+export function tableLineage(doc: CatalogDoc, name: string, depth = 2, direction: "both" | "up" | "down" = "both"): Graph {
   const into = new Map<string, string[]>();
   const out = new Map<string, string[]>();
   for (const e of doc.table_edges) {
@@ -179,8 +179,8 @@ export function tableLineage(doc: CatalogDoc, name: string, depth = 3): Graph {
       frontier.forEach((n) => keep.add(n));
     }
   };
-  walk(name, into);
-  walk(name, out);
+  if (direction !== "down") walk(name, into);
+  if (direction !== "up") walk(name, out);
   const dependsOn: Record<string, [string, string][]> = {};
   for (const e of doc.table_edges) if (keep.has(e.source) && keep.has(e.target)) dependsOn[e.target] = [...(dependsOn[e.target] ?? []), [e.source, "SUCCESS"]];
   return { waves: waves([...keep], dependsOn), conditional: [], depends_on: dependsOn };

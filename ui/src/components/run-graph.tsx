@@ -201,7 +201,7 @@ export function RunGraph({
   }, [focused]);
   // Resizing the pane refits the whole graph, so a divider drag never hides a task.
   React.useEffect(() => {
-    if (fill && width > 0 && frameHeight > 0) void flow.current?.fitView({ padding: 0.1, minZoom: 0.15, maxZoom: 1 });
+    if (fill && width > 0 && frameHeight > 0) void flow.current?.fitView({ padding: 0.08, minZoom: 0.15, maxZoom: 1.3 });
   }, [fill, width, frameHeight, shown]);
   // A graph wider than its card keeps readable boxes starting at the left; a small one is fitted whole.
   const wide = !fill && width > 0 && columns * (WIDTH + GAP_X) - GAP_X + 48 > width;
@@ -220,7 +220,7 @@ export function RunGraph({
         edges={edges}
         nodeTypes={nodeTypes}
         fitView={!wide}
-        fitViewOptions={fill ? { padding: 0.1, minZoom: 0.15, maxZoom: 1 } : { padding: 0.12, minZoom: 0.8, maxZoom: 1 }}
+        fitViewOptions={fill ? { padding: 0.08, minZoom: 0.15, maxZoom: 1.3 } : { padding: 0.12, minZoom: 0.8, maxZoom: 1 }}
         defaultViewport={wide ? { x: 24, y: 40, zoom: 0.9 } : undefined}
         minZoom={fill ? 0.15 : 0.5}
         maxZoom={1.5}

@@ -590,3 +590,11 @@ export interface AuditRecords {
   actions: AuditActionRecord[];
   changes: AuditChangeRecord[];
 }
+
+export interface TablePreview {
+  table: string;
+  columns: string[];
+  rows: (string | null)[][];
+  limit: number;
+  more: boolean;
+}
