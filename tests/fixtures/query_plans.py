@@ -479,6 +479,10 @@ FULL_READS = {
     ("catalog_lineage_cache", "cfg_pipelines"): "Builds complete active-pipeline lineage.",
     ("controller_active_runs", "cfg_pipelines"): "Finds active definitions for the working set.",
     ("controller_schedules", "cfg_pipelines"): "Checks the schedule of every active pipeline.",
+    (
+        "controller_restarts",
+        "cfg_pipelines",
+    ): "Checks the restart condition of every active pipeline.",
     ("metadata_codes", "cfg_pipelines"): "Loads the complete identifier-to-code map.",
     ("permission_pipelines", "cfg_pipelines"): "Lists all pipelines for permission evaluation.",
     ("sql_tasks", "cfg_pipelines"): "Validates SQL tasks across all active pipelines.",
