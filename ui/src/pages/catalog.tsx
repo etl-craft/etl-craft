@@ -13,7 +13,7 @@ import type { LineageRefresh, Report } from "@/lib/types";
 import { useDocumentTitle } from "@/title";
 import { ArrowLeft } from "lucide-react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
-import { CatalogHome, GapsObject, PipelineObject, TableObject, TaskObject } from "@/components/catalog-pages";
+import { CatalogHome, GapsObject, PipelineObject, TableObject, TablesList, TaskObject } from "@/components/catalog-pages";
 import { CatalogTree } from "@/components/catalog-tree";
 import { SplitPane } from "@/components/split-pane";
 
@@ -85,6 +85,8 @@ export function Catalog() {
     <PipelineObject code={code} doc={doc} name={name} tab={tab} onTab={onTab} />
   ) : kind === "tasks" && name ? (
     <TaskObject code={code} doc={doc} name={name} tab={tab} onTab={onTab} />
+  ) : kind === "tables" && !name ? (
+    <TablesList code={code} doc={doc} />
   ) : kind === "tables" && name ? (
     <TableObject key={name} code={code} doc={doc} name={name} tab={tab} onTab={onTab} />
   ) : kind === "gaps" ? (

@@ -228,7 +228,16 @@ export function AuditTab({ code, pipeline }: { code: string; pipeline: string })
   const audit = useQuery({ queryKey: ["audit", code, pipeline], queryFn: () => getJson<AuditRecords>(`${project(code)}/audit`, { pipeline_code: pipeline }) });
   if (audit.isError) return <Notice>{(audit.error as Error).message}</Notice>;
   if (!audit.data) return <Loading what="the audit log" />;
-  const { actions, changes } = audit.data;
+  const { actions } = audit.data;
+  // Many edits made together (a config apply) are one line with a count, not one line each.
+  const grouped = new Map<string, { change: (typeof audit.data.changes)[number]; count: number }>();
+  for (const c of audit.data.changes) {
+    const key = `${c.at.slice(0, 16)}|${c.actor}|${c.table_name}|${c.operation}`;
+    const found = grouped.get(key);
+    if (found) found.count += 1;
+    else grouped.set(key, { change: c, count: 1 });
+  }
+  const changes = [...grouped.values()];
   return (
     <div className="grid gap-4">
       <section className="grid gap-2" aria-label="Commands">
@@ -249,16 +258,17 @@ export function AuditTab({ code, pipeline }: { code: string; pipeline: string })
         )}
       </section>
       <section className="grid gap-2" aria-label="Metadata changes">
-        <h3 className="m-0 text-sm font-semibold">Metadata changes ({changes.length})</h3>
+        <h3 className="m-0 text-sm font-semibold">Metadata changes ({audit.data.changes.length})</h3>
         {changes.length ? (
           <DataTable
             label="Metadata changes"
             data={changes.slice(0, 50)}
             columns={columnsOf<(typeof changes)[number]>([
-              { id: "when", header: "When", value: (c) => c.at, size: 200, cell: (c) => formatTime(c.at, tz) },
-              { id: "who", header: "Who", value: (c) => c.actor, size: 160 },
-              { id: "table", header: "Table", value: (c) => c.table_name, size: 280, cell: (c) => <span className="font-mono text-xs">{c.table_name}</span> },
-              { id: "change", header: "Change", value: (c) => c.operation, size: 140, cell: (c) => <span className="text-muted">{c.operation.toLowerCase()}</span> },
+              { id: "when", header: "When", value: (g) => g.change.at, size: 200, cell: (g) => formatTime(g.change.at, tz) },
+              { id: "who", header: "Who", value: (g) => g.change.actor, size: 160 },
+              { id: "table", header: "Table", value: (g) => g.change.table_name, size: 280, cell: (g) => <span className="font-mono text-xs">{g.change.table_name}</span> },
+              { id: "change", header: "Change", value: (g) => g.change.operation, size: 140, cell: (g) => <span className="text-muted">{g.change.operation.toLowerCase()}</span> },
+              { id: "count", header: "Rows", value: (g) => g.count, size: 90 },
             ])}
           />
         ) : (

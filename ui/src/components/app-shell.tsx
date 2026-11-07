@@ -2,6 +2,7 @@ import { ChevronDown, LogOut, Menu, Moon, Sun, X } from "lucide-react";
 import * as React from "react";
 import { Link, Outlet, useLocation, useNavigate, useParams } from "react-router-dom";
 import { Notice } from "@/components/common";
+import { SearchBox } from "@/components/search-box";
 import { EnvironmentBadge, EnvironmentStrip } from "@/components/environment-badge";
 import { DropdownContent, DropdownItem, DropdownLabel, DropdownMenu, DropdownSeparator, DropdownTrigger } from "@/components/dropdown";
 import { Logo } from "@/components/logo";
@@ -14,7 +15,7 @@ import { useActiveProject, useHealth, useIdentity } from "@/hooks";
 import { signOut } from "@/lib/api";
 import { rememberProject } from "@/lib/project-memory";
 import { rememberVisit } from "@/lib/recent";
-import { aboutPath, homePath, passwordPath, projectHomePath, searchPath, settingsPath } from "@/lib/routes";
+import { aboutPath, homePath, passwordPath, projectHomePath, settingsPath } from "@/lib/routes";
 import { applyTheme, initialTheme, type Theme } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 
@@ -108,19 +109,7 @@ export function AppShell() {
             ))}
           </DropdownContent>
         </DropdownMenu>
-        {code ? (
-          <form
-            role="search"
-            className="ml-2 hidden max-w-sm flex-1 sm:block"
-            onSubmit={(event) => {
-              event.preventDefault();
-              const q = String(new FormData(event.currentTarget).get("q") ?? "").trim();
-              if (q) navigate(searchPath(code, q));
-            }}
-          >
-            <input ref={searchBox} name="q" type="search" aria-label="Search pipelines, tasks, tables and runs" placeholder="Search (press /)" className="h-9 w-full rounded-md border border-border-strong bg-surface px-3 text-sm" />
-          </form>
-        ) : null}
+        {code ? <SearchBox ref={searchBox} code={code} /> : null}
         <div className="ml-auto flex items-center gap-1">
           <LiveStatus className="mr-2 hidden sm:flex" />
           <Button variant="ghost" size="icon" aria-label={theme === "dark" ? "Use the light theme" : "Use the dark theme"} onClick={() => {

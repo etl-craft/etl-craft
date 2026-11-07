@@ -82,6 +82,7 @@ export function CatalogTree({ code, doc, selected }: { code: string; doc: Catalo
         <input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search pipelines, tables, columns" className="h-8 w-full rounded-md border border-border-strong bg-surface pl-8 pr-2 text-[13px]" />
       </label>
       <ul role="tree" aria-label="Catalog objects" className="m-0 min-h-0 flex-1 list-none overflow-auto p-0">
+        <Leaf to={catalogPath(code, "tables")} label="All tables" icon={Table2} current={selected.kind === "tables" && !selected.name} />
         <Leaf to={catalogPath(code, "gaps")} label="Schema and lineage gaps" icon={TriangleAlert} current={selected.kind === "gaps"} />
         <Group id="pipelines" label={`Pipelines (${pipelines.length})`} icon={Workflow} open={expanded("pipelines")} toggle={toggle}>
           {pipelines.map((p) => (

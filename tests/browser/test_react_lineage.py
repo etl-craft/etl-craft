@@ -164,3 +164,36 @@ def test_a_task_that_cannot_be_traced_is_named_with_its_reason_and_counted(chain
         rebuild(page)
         expect(page.get_by_role("tree", name="Catalog objects")).to_be_visible()
         browser.close()
+
+
+def test_all_tables_lists_every_table_and_filters_by_name(chain):
+    _, url = chain
+    with sync_playwright() as pw:
+        browser, page, problems = open_page(pw, viewport={"width": 1280, "height": 1000})
+        sign_in(page, url, "/ui/projects/default/catalog")
+        page.get_by_role("button", name="Refresh lineage").click()
+        page.get_by_role("dialog").get_by_role("button", name="Refresh lineage").click()
+        expect(page.get_by_role("status").filter(has_text="Lineage refreshed")).to_be_visible()
+        rebuild(page)
+        page.get_by_role("tree", name="Catalog objects").get_by_role(
+            "treeitem", name="All tables"
+        ).click()
+        table = page.get_by_role("table", name="All tables")
+        expect(table.get_by_role("link", name="sales.orders")).to_be_visible()
+        expect(table.get_by_role("link", name="mart.daily")).to_be_visible()
+        page.get_by_label("Find a table").fill("mart")
+        expect(table.get_by_role("link", name="sales.orders")).to_have_count(0)
+        expect(table.get_by_role("link", name="mart.daily")).to_be_visible()
+        # a table's page leads with how fresh and how checked it is
+        table.get_by_role("link", name="mart.daily").click()
+        expect(page.get_by_text("Last written")).to_be_visible()
+        expect(page.get_by_text("Open gaps")).to_be_visible()
+        page.get_by_role("tab", name="Lineage", exact=True).click()
+        page.get_by_role("button", name="List", exact=True).click()
+        expect(
+            page.get_by_role("table", name="Upstream and downstream tables").get_by_role(
+                "link", name="sales.orders"
+            )
+        ).to_be_visible()
+        assert [p for p in problems if "status of 404" not in p] == []
+        browser.close()

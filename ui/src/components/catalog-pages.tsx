@@ -13,8 +13,8 @@ import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { columnsOf, DataTable } from "@/components/data-table";
 import { useRoleAtLeast, useTimezone } from "@/hooks";
 import { getJson, project } from "@/lib/api";
-import { isOpenGap, pipelineGraph, tableLineage, typeOf, type CatalogColumn, type CatalogDoc, type CatalogEdge, type CatalogRun, type CatalogTable, type CatalogTask } from "@/lib/catalog";
-import { describeCron, formatDuration, formatTime } from "@/lib/format";
+import { impact, isOpenGap, pipelineGraph, tableLineage, typeOf, type CatalogColumn, type CatalogDoc, type ImpactRow, type CatalogEdge, type CatalogRun, type CatalogTable, type CatalogTask } from "@/lib/catalog";
+import { describeCron, formatDuration, formatTime, relative } from "@/lib/format";
 import { catalogPath, pipelinePath, taskPath } from "@/lib/routes";
 import type { RunView, TablePreview } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -379,7 +379,9 @@ export function TableObject({ code, doc, name, tab, onTab }: { code: string; doc
   const [column, setColumn] = React.useState("");
   const [focused, setFocused] = React.useState<string | null>(null);
   const [depth, setDepth] = React.useState("2");
+  const [asList, setAsList] = React.useState(false);
   const [showAll, setShowAll] = React.useState(false);
+  const [now] = React.useState(() => Date.now());
   const [direction, setDirection] = React.useState<"both" | "up" | "down">("both");
   const developer = useRoleAtLeast("developer");
   const table = doc.tables.find((t) => t.name === name);
@@ -399,12 +401,33 @@ export function TableObject({ code, doc, name, tab, onTab }: { code: string; doc
   const shown = table.columns.filter((c) => !filter || `${c.name} ${c.comment ?? ""} ${typeOf(c)}`.toLowerCase().includes(filter.toLowerCase()));
   const edges = doc.column_edges.filter((e) => e.target_object === table.name && (!column || e.target_column === column));
   const lastWrite = writers.flatMap((w) => w.runs).filter((r) => r.end).sort((a, b) => (b.end ?? "").localeCompare(a.end ?? ""))[0];
+  const lastRun = writers.flatMap((w) => w.runs).sort((a, b) => (b.start ?? "").localeCompare(a.start ?? ""))[0];
+  const failingRules = rules.filter((r) => r.observations[0]?.passed === "N").length;
+  const openGaps = doc.gaps.filter((g) => g.table === table.name && isOpenGap(g)).length;
   const history = writers.flatMap((w) => w.runs.map((r) => ({ ...r, task: w.label, pipeline: w.pipeline }))).sort((a, b) => (b.start ?? "").localeCompare(a.start ?? "")).slice(0, 30);
   return (
-    <ObjectPage fit={on === "overview"} header={
+    <ObjectPage fit={on === "overview" || on === "lineage"} header={
       <>
       <Crumbs code={code} trail={[{ label: table.schema || "schema" }, { label: table.table }]} />
       <Title icon={Table2} name={table.table} copy={table.name} />
+      <FactList inline>
+        <Fact inline label="Last written">
+          {lastWrite ? <span title={formatTime(lastWrite.end, tz)}>{relative(lastWrite.end, now)}</span> : "no run recorded"}
+        </Fact>
+        {lastRun ? (
+          <Fact inline label="Last write">
+            <StatusBadge status={lastRun.status} />
+          </Fact>
+        ) : null}
+        <Fact inline label="Rules">
+          {rules.length ? <span className={failingRules ? "text-bad" : undefined}>{failingRules ? `${failingRules} failing of ${rules.length}` : `${rules.length} passing`}</span> : "no checks"}
+        </Fact>
+        <Fact inline label="Open gaps">
+          {openGaps ? <span className="text-warn">{openGaps}</span> : "none"}
+        </Fact>
+        <Fact inline label="Written by">{table.writers.length} task{table.writers.length === 1 ? "" : "s"}</Fact>
+        <Fact inline label="Read by">{table.readers.length} task{table.readers.length === 1 ? "" : "s"}</Fact>
+      </FactList>
       <Tabs tabs={tabs} value={on} onChange={onTab} />
       </>
     }>
@@ -459,8 +482,8 @@ export function TableObject({ code, doc, name, tab, onTab }: { code: string; doc
       ) : on === "data" ? (
         <TableData code={code} table={table.name} />
       ) : on === "lineage" ? (
-        <div className="grid min-w-0 gap-2">
-          <div className="flex flex-wrap items-end gap-3">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-2">
+          <div className="flex shrink-0 flex-wrap items-end gap-3">
             <SelectField compact label="Direction" value={direction} onChange={(v) => setDirection(v as typeof direction)}>
               <option value="both">Upstream and downstream</option>
               <option value="up">Upstream only</option>
@@ -473,11 +496,32 @@ export function TableObject({ code, doc, name, tab, onTab }: { code: string; doc
                 </option>
               ))}
             </SelectField>
-            <span className="pb-1 text-xs text-muted">Select a table to open it.</span>
+            <div role="group" aria-label="Lineage view" className="inline-flex rounded-md border border-border p-0.5 text-sm">
+              {([false, true] as const).map((list) => (
+                <button key={String(list)} type="button" aria-pressed={asList === list} onClick={() => setAsList(list)} className={cn("cursor-pointer rounded px-2.5 py-1", asList === list ? "bg-accent/15 font-medium text-fg" : "text-muted hover:text-fg")}>
+                  {list ? "List" : "Graph"}
+                </button>
+              ))}
+            </div>
+            <span className="pb-1 text-xs text-muted">{asList ? "Every table that feeds this one, or is fed by it." : "Select a table to open it."}</span>
           </div>
-          <div className="h-[calc(100dvh-24rem)] min-h-72 overflow-hidden rounded-lg border border-border">
-            <RunGraph fill plain graph={tableLineage(doc, table.name, Number(depth), direction)} statuses={{}} focused={focused ?? table.name} onFocus={setFocused} onOpen={(next) => navigate(catalogPath(code, "tables", next))} />
-          </div>
+          {asList ? (
+            <DataTable
+              label="Upstream and downstream tables"
+              data={impact(doc, table.name, Number(depth), direction)}
+              empty="No table feeds this one or is fed by it."
+              columns={columnsOf<ImpactRow>([
+                { id: "direction", header: "Direction", value: (r) => r.direction, size: 130 },
+                { id: "table", header: "Table", value: (r) => r.table, size: 300, cell: (r) => <Link className={link} to={catalogPath(code, "tables", r.table)}>{r.table}</Link> },
+                { id: "steps", header: "Steps away", value: (r) => r.steps, size: 120 },
+                { id: "task", header: "Through task", value: (r) => r.task, size: 300, cell: (r) => <Link className={link} to={catalogPath(code, "tasks", r.task)}>{r.task}</Link> },
+              ])}
+            />
+          ) : (
+            <div className="min-h-72 flex-1 overflow-hidden rounded-lg border border-border">
+              <RunGraph fill plain graph={tableLineage(doc, table.name, Number(depth), direction)} statuses={{}} focused={focused ?? table.name} onFocus={setFocused} onOpen={(next) => navigate(catalogPath(code, "tables", next))} />
+            </div>
+          )}
         </div>
       ) : on === "columns" ? (
         <Section
@@ -594,5 +638,60 @@ export function GapsObject({ code, doc }: { code: string; doc: CatalogDoc }) {
       <Card className="overflow-x-auto">{shown.length ? <GapRows code={code} gaps={shown.slice(0, 500)} /> : <p className="m-0 p-4 text-muted">Nothing to show for this selection.</p>}</Card>
       {shown.length > 500 ? <p className="m-0 text-xs text-muted">The first 500 of {shown.length} are shown; narrow it by state.</p> : null}
     </ObjectPage>
+  );
+}
+
+/** Every table of the project in one sortable list: how fresh it is, whether it is checked and documented. */
+export function TablesList({ code, doc }: { code: string; doc: CatalogDoc }) {
+  const [now] = React.useState(() => Date.now());
+  const tz = useTimezone();
+  const [text, setText] = React.useState("");
+  const [schema, setSchema] = React.useState("");
+  const tables = doc.tables.filter((t) => !t.external);
+  const schemas = [...new Set(tables.map((t) => t.schema))].sort();
+  const rows = tables
+    .filter((t) => (!schema || t.schema === schema) && (!text || t.name.toLowerCase().includes(text.toLowerCase())))
+    .map((t) => {
+      const writers = t.writers.map((w) => doc.tasks.find((task) => task.label === w)).filter((w): w is CatalogTask => Boolean(w));
+      const last = writers.flatMap((w) => w.runs).filter((r) => r.end).sort((a, b) => (b.end ?? "").localeCompare(a.end ?? ""))[0];
+      return { table: t, last: last?.end ?? null, documented: writers.some((w) => w.documentation), gaps: doc.gaps.filter((g) => g.table === t.name && isOpenGap(g)).length };
+    });
+  return (
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 p-4">
+      <Title icon={Table2} name="All tables" />
+      <div className="flex flex-wrap items-end gap-3">
+        <label className="grid gap-1 text-xs text-muted">
+          Find a table
+          <input type="search" value={text} onChange={(event) => setText(event.target.value)} placeholder="Name contains…" className="h-9 w-64 rounded-md border border-border-strong bg-surface px-2 text-sm text-fg" />
+        </label>
+        <SelectField compact label="Schema" value={schema} onChange={setSchema}>
+          <option value="">All schemas</option>
+          {schemas.map((s) => (
+            <option key={s} value={s}>
+              {s}
+            </option>
+          ))}
+        </SelectField>
+        <span className="pb-2 text-xs text-muted">{rows.length} of {tables.length} tables</span>
+      </div>
+      <div data-scroll-area className="min-h-0 flex-1 overflow-auto rounded-lg border border-border">
+        <DataTable
+          label="All tables"
+          data={rows}
+          empty="No table matches."
+          initialSort={[{ id: "table", desc: false }]}
+          columns={columnsOf<(typeof rows)[number]>([
+            { id: "table", header: "Table", value: (r) => r.table.name, size: 300, cell: (r) => <Link className={`font-medium ${link}`} to={catalogPath(code, "tables", r.table.name)}>{r.table.name}</Link> },
+            { id: "written", header: "Last written", value: (r) => r.last, size: 150, cell: (r) => (r.last ? <span title={formatTime(r.last, tz)}>{relative(r.last, now)}</span> : <span className="text-muted">no run recorded</span>) },
+            { id: "writers", header: "Written by", value: (r) => r.table.writers.length, size: 120 },
+            { id: "readers", header: "Read by", value: (r) => r.table.readers.length, size: 110 },
+            { id: "rules", header: "Rules", value: (r) => r.table.rules.length, size: 90 },
+            { id: "gaps", header: "Open gaps", value: (r) => r.gaps, size: 110, cell: (r) => (r.gaps ? <span className="text-warn">{r.gaps}</span> : "0") },
+            { id: "columns", header: "Columns", value: (r) => r.table.columns.length, size: 100 },
+            { id: "docs", header: "Documented", value: (r) => (r.documented ? "Yes" : "No"), size: 120, cell: (r) => (r.documented ? "Yes" : <span className="text-muted">No</span>) },
+          ])}
+        />
+      </div>
+    </div>
   );
 }

@@ -202,3 +202,33 @@ export function pipelineGraph(doc: CatalogDoc, pipeline: CatalogPipeline): Graph
   }
   return { waves: waves([...byLabel.values()].map((t) => t.code), dependsOn), conditional: [], depends_on: dependsOn };
 }
+
+export interface ImpactRow {
+  table: string;
+  direction: "Upstream" | "Downstream";
+  steps: number;
+  task: string;
+}
+
+/** Every table upstream and downstream of one, how many steps away, and the task that makes the nearest step. */
+export function impact(doc: CatalogDoc, name: string, depth = 4, direction: "both" | "up" | "down" = "both"): ImpactRow[] {
+  const rows: ImpactRow[] = [];
+  const walk = (label: ImpactRow["direction"], next: (table: string) => { table: string; task: string }[]) => {
+    const seen = new Set([name]);
+    let frontier = [name];
+    for (let steps = 1; steps <= depth; steps++) {
+      const found: string[] = [];
+      for (const from of frontier)
+        for (const hop of next(from)) {
+          if (seen.has(hop.table)) continue;
+          seen.add(hop.table);
+          found.push(hop.table);
+          rows.push({ table: hop.table, direction: label, steps, task: hop.task });
+        }
+      frontier = found;
+    }
+  };
+  if (direction !== "down") walk("Upstream", (t) => doc.table_edges.filter((e) => e.target === t).map((e) => ({ table: e.source, task: e.task })));
+  if (direction !== "up") walk("Downstream", (t) => doc.table_edges.filter((e) => e.source === t).map((e) => ({ table: e.target, task: e.task })));
+  return rows;
+}

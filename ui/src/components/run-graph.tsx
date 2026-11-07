@@ -49,7 +49,7 @@ function Task({ data }: NodeProps<TaskNode>) {
         <Icon aria-hidden className={cn("size-4", spin && "animate-spin")} />
       </span>
       <span className="grid min-w-0 flex-1">
-        <span className="truncate font-medium" title={data.label}>{data.label}</span>
+        <span className="line-clamp-2 break-all font-medium leading-tight" title={data.label}>{data.label}</span>
         {plain ? null : <span className="text-xs text-muted">{statusLabel}</span>}
       </span>
       <button

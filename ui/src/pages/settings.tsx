@@ -44,14 +44,25 @@ export function Settings() {
             save.mutate(form);
           }}
         >
-          <SelectField label="Theme" value={form.theme} onChange={(theme) => set({ theme })}>
-            {["system", "light", "dark"].map((t) => (
-              <option key={t}>{t}</option>
-            ))}
-          </SelectField>
-          <Field label="Timezone (IANA name, such as UTC, Europe/London or Asia/Kolkata)">
-            <input required className={inputClass} value={form.timezone} onChange={(e) => set({ timezone: e.target.value })} />
+          <fieldset className="m-0 grid gap-1.5 border-0 p-0">
+            <legend className="mb-1 text-sm font-medium">Theme</legend>
+            <div className="flex flex-wrap gap-4">
+              {[["system", "Match my system"], ["light", "Light"], ["dark", "Dark"]].map(([value, label]) => (
+                <label key={value} className="flex cursor-pointer items-center gap-2 text-sm">
+                  <input type="radio" name="theme" value={value} checked={form.theme === value} onChange={() => set({ theme: value })} />
+                  {label}
+                </label>
+              ))}
+            </div>
+          </fieldset>
+          <Field label="Timezone">
+            <input required list="timezones" className={inputClass} value={form.timezone} onChange={(e) => set({ timezone: e.target.value })} placeholder="UTC, Europe/London, Asia/Kolkata" />
           </Field>
+          <datalist id="timezones">
+            {(typeof Intl.supportedValuesOf === "function" ? Intl.supportedValuesOf("timeZone") : ["UTC"]).map((zone) => (
+              <option key={zone} value={zone} />
+            ))}
+          </datalist>
           <SelectField label="Default project (opened after sign-in)" value={form.default_project ?? ""} onChange={(p) => set({ default_project: p || null })}>
             <option value="">All visible projects</option>
             {(health.data?.projects ?? []).map((p) => (

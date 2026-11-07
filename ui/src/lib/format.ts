@@ -74,3 +74,12 @@ export function describeCron(expression: string | null): string | null {
   }
   return null;
 }
+
+/** How far a time is from now, as "in 2 h" or "3 min ago": the exact time stays in a tooltip. */
+export function relative(iso: string | null, now: number): string {
+  if (!iso) return "—";
+  const seconds = Math.round((new Date(iso).getTime() - now) / 1000);
+  const abs = Math.abs(seconds);
+  const [n, unit] = abs < 60 ? [abs, "s"] : abs < 3600 ? [Math.round(abs / 60), "min"] : abs < 86_400 ? [Math.round(abs / 3600), "h"] : [Math.round(abs / 86_400), "d"];
+  return seconds >= 0 ? `in ${n} ${unit}` : `${n} ${unit} ago`;
+}

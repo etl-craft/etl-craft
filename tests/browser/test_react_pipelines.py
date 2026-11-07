@@ -2,6 +2,7 @@
 
 import json
 import os
+import re
 from pathlib import Path
 
 import pytest
@@ -325,5 +326,26 @@ def test_a_narrow_grid_hides_the_oldest_runs_never_the_newest(scene):
         assert (
             task["x"] >= area["x"] - 1 and task["width"] >= 120
         )  # the task list keeps a readable width
+        assert problems == []
+        browser.close()
+
+
+def test_the_top_search_groups_matches_as_you_type_and_opens_one(scene):
+    _, url, _ = scene
+    with sync_playwright() as pw:
+        browser, page, problems = open_page(pw, viewport={"width": 1280, "height": 900})
+        page.context.set_default_timeout(8000)
+        sign_in(page, url, "/ui/projects/default/pipelines")
+        box = page.get_by_role("combobox", name="Search pipelines, tasks, tables and runs")
+        box.fill("OPS")
+        matches = page.get_by_role("listbox", name="Matches")
+        expect(matches.get_by_role("group", name="Pipelines")).to_be_visible()
+        box.press("ArrowDown")
+        box.press("Enter")
+        expect(page).to_have_url(re.compile(r"/pipelines/OPS"))
+        # Enter with nothing picked lists every result
+        box.fill("SALES")
+        box.press("Enter")
+        expect(page).to_have_url(re.compile(r"/search\?q=SALES"))
         assert problems == []
         browser.close()
