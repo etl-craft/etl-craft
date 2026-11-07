@@ -273,6 +273,10 @@ Warehouses are optional extras. Core bundles none. `all` is core plus the UI, fo
 
 ### Changed
 
+- Long tables in the browser interface scroll inside a bounded box with their header kept in view,
+  and the runs list loads older runs as its end is scrolled into view instead of offering a
+  "Load older runs" button.
+
 - Upload-bound APPEND_TABLE and OVERWRITE_TABLE allow unprotected staging targets without
   CREATED_BY/UPDATED_BY. Declared actors still receive per-upload account stamps; protected
   and SCD targets retain full audit requirements. Every upload-bound managed write requires
