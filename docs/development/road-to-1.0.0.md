@@ -1390,7 +1390,10 @@ empty-history-page handling defect, which was corrected and verified. No cloud w
   replaces `Orchestration.Allow_schedule` with the same values (default everything; `NONE` is the old
   `Allow_schedule: false`). It only suppresses automatic starts in that environment: a pipeline's
   condition stays valid and validates everywhere, so one set of config files serves dev, test and
-  prod. Acceptance availability: no warehouse SQL changed, so cloud acceptance was not needed.
+  prod. Slice 2 adds the trigger kind `RESTART` (migration 0089; on SQLite the run log is rebuilt, as in
+  migration 0044) so a restart is visible and queryable; the run key `restart:<previous run id>` makes
+  two controllers start one next run. Acceptance availability: no warehouse SQL changed, so cloud
+  acceptance was not needed.
 
 - **S7.AL.4 event-file validation (owner, 2026-11-06).** Choices that differ from the item text:
   the opt-in is the FILE_VALIDATION parameter `SOURCE_EVENT=<EVENT_WAIT task code>`, for waits

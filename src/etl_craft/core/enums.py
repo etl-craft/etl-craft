@@ -192,6 +192,7 @@ class TriggerKind(StrEnum):
     ORCHESTRATOR = "ORCHESTRATOR"
     STAND_IN = "STAND_IN"
     PIPELINE_TASK = "PIPELINE_TASK"
+    RESTART = "RESTART"
 
 
 class HttpScheme(StrEnum):

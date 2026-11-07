@@ -6,6 +6,19 @@ itself, locally or on a cluster, without using an agent slot; a whole-pipeline `
 same. A frequent schedule with `OVERLAP_POLICY='SKIP'` leaves one run waiting instead of building
 a queue of empty runs.
 
+## Restarting a pipeline
+
+A watcher does not need a schedule. Set the pipeline's `AUTO_RESTART_CONDITION` to the endings that
+should start the next run, for example `SUCCESS|SKIPPED`, and give the wait `EVENT_TIMEOUT_MINUTES=NONE`
+(or a long budget with `EVENT_ON_TIMEOUT=SKIP`). The run waits for the file, processes it to the end,
+and the controller starts the next run at once: no five-minute gap, and no run per tick while idle.
+A run that ends in a status that is not listed, such as `FAILED`, stops the chain until an operator
+recovers or marks it; a recovered run that ends in a listed status restarts it. A cancelled run never
+restarts. A restart is made at least 15 seconds after the previous run ended.
+
+`Orchestration.Allowed_auto_restarts` decides what may start on its own in an environment. In dev
+and test, `NONE` leaves the pipeline's condition and schedule in the config, valid, and starts nothing.
+
 ## What to wait for
 
 - **A file on a local or mounted filesystem:** `EVENT_FILE`, a glob. This is what event waits are
