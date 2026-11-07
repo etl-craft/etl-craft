@@ -1,14 +1,14 @@
 import { useQueries } from "@tanstack/react-query";
 import { CircleCheck, CircleX, Clock, Hourglass, LoaderCircle, type LucideIcon } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, Navigate, useParams } from "react-router-dom";
 import { Eyebrow, Fact, FactList, Loading, Notice, PageHeader } from "@/components/common";
 import { EnvironmentBadge } from "@/components/environment-badge";
 import { StatusBadge } from "@/components/status";
 import { Card, CardHeader } from "@/components/ui/card";
-import { useHealth, useTimezone } from "@/hooks";
+import { useActiveProject, useHealth, useTimezone } from "@/hooks";
 import { getJson, project } from "@/lib/api";
 import { formatAgo, formatTime } from "@/lib/format";
-import { runPath, runsPath } from "@/lib/routes";
+import { projectHomePath, runPath, runsPath, settingsPath } from "@/lib/routes";
 import type { History, ProjectCounts } from "@/lib/types";
 import { useDocumentTitle } from "@/title";
 import { cn } from "@/lib/utils";
@@ -89,10 +89,22 @@ function ProjectCard({ p, failures, since }: { p: ProjectCounts; failures: Histo
   );
 }
 
-export function Home() {
+/** Home opens the project in use; the list is only for choosing when no project is known. */
+export function HomeEntry() {
+  const { code, ready } = useActiveProject();
+  if (!ready) return <Loading what="projects" />;
+  return code ? <Navigate to={projectHomePath(code)} replace /> : <Home />;
+}
+
+export function ProjectHome() {
+  const { project = "" } = useParams();
+  return <Home only={project} />;
+}
+
+export function Home({ only }: { only?: string }) {
   useDocumentTitle("Home");
   const health = useHealth();
-  const projects = health.data?.projects ?? [];
+  const projects = (health.data?.projects ?? []).filter((p) => !only || p.project === only);
   const since = health.data?.window_start ?? "";
   const failing = projects.filter((p) => p.failed > 0);
   const histories = useQueries({
@@ -121,6 +133,11 @@ export function Home() {
         }
       />
       {health.isError ? <Notice>{(health.error as Error).message}</Notice> : null}
+      {!only && projects.length > 1 ? (
+        <Notice>
+          Several projects are available and none is chosen. Open one, or set a default project in <Link to={settingsPath} className="underline">Personal settings</Link> so Home opens it.
+        </Notice>
+      ) : null}
       {health.isPending ? <Loading what="projects" /> : null}
       <div className="grid gap-4 xl:grid-cols-2">
         {[...projects]

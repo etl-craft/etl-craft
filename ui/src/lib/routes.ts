@@ -2,6 +2,8 @@
 const enc = encodeURIComponent;
 
 export const homePath = "/";
+/** A project's own home: its status card, so Home never leaves the project. */
+export const projectHomePath = (project: string): string => `/projects/${enc(project)}`;
 export const runsPath = (project: string, pipeline?: string): string =>
   `/projects/${enc(project)}/runs` + (pipeline ? `?pipeline=${enc(pipeline)}` : "");
 export const runPath = (project: string, pipeline: string, runId: number | string): string =>
