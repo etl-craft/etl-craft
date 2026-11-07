@@ -9,7 +9,12 @@ from sqlalchemy.engine import Connection
 
 from etl_craft.core.actor import migration_project, scoped_actor
 from etl_craft.core.errors import MigrationError
-from etl_craft.dialects.engine.tables import AUDIT_TABLES, CONFIG_TABLES, retired_history
+from etl_craft.dialects.engine.tables import (
+    AUDIT_TABLES,
+    CONFIG_TABLES,
+    HISTORYLESS_TABLES,
+    retired_history,
+)
 
 ADMIN_TABLES = frozenset(
     {
@@ -71,7 +76,9 @@ def missing_guards(conn: Connection) -> list[str]:
                 f"trg_audit_{table.lower()}_{op}" for op in ("insert", "update", "delete")
             )
         else:
-            expected.update({f"trg_changes_{table.lower()}", f"trg_audit_{table.lower()}"})
+            expected.add(f"trg_audit_{table.lower()}")
+            if table not in HISTORYLESS_TABLES:
+                expected.add(f"trg_changes_{table.lower()}")
     archived = {table for table in tables if retired_history(table)}
     events = ("insert", "update", "delete") if conn.dialect.name == "sqlite" else ("insert",)
     expected.update(f"trg_frozen_{table.lower()}_{event}" for table in archived for event in events)

@@ -9,6 +9,9 @@ All notable changes are recorded here. The format follows
 - The UI shows a pipeline and its runs as one workspace: a grid of tasks against recent runs, each run
   topped by its duration bar, beside a panel with the selected run and its tasks, which open in place.
   A run's address is its pipeline's with `?run=ID`; the older run address redirects to it.
+- A token is its current row: the Engine DB keeps no `AUD_CFG_API_TOKENS_HISTORY` table, so a token's
+  last-use date no longer writes a history version. Create and revoke stay in `AUD_ACTIONS`. A
+  development Engine DB that applied the earlier migrations is recreated.
 - `etl-craft config plan --bundle latest|ID` and `config apply --bundle latest|ID` read a published
   bundle's `config/`, so a CI runner with only a developer token (project CAN_MANAGE) can apply what it
   published over `--api` (`GET /api/v1/projects/{project}/config/plan` and `POST .../config/apply`).

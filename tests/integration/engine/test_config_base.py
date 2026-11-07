@@ -112,32 +112,14 @@ def test_token_lifecycle_is_attributed_without_credentials(engine_db, monkeypatc
     act(replace(ctx, actor=BOB), ActionName.TOKEN_REVOKE, token_id=created.metadata.token_id)
     assert tokens.authenticate(ctx, created.token) is None
     with engine_db.engine.connect() as conn:
-        rows = conn.execute(
-            text(
-                "SELECT CREATED_BY, CREATE_DATE, UPDATED_BY, ACTIVE_FLAG, ACTOR "
-                "FROM AUD_CFG_API_TOKENS_HISTORY ORDER BY CHANGE_ID"
-            )
-        ).all()
-        assert [(r[0], r[2], r[3], r[4]) for r in rows] == [
-            ("alice", "alice", "Y", "alice"),
-            ("alice", "dashboard", "Y", "dashboard"),
-            ("alice", "bob", "N", "bob"),
-            ("alice", "bob", "Y", "bob"),
-            ("alice", "bob", "Y", "bob"),
-            ("alice", "bob", "N", "bob"),
-        ]
-        assert {as_utc(row[1]) for row in rows} == {created.metadata.created_at}
-        history = conn.execute(
-            text(
-                "SELECT BEFORE_JSON, AFTER_JSON FROM AUD_METADATA_CHANGES "
-                "WHERE TABLE_NAME='CFG_API_TOKENS'"
-            )
-        ).all()
-        assert created.token not in str(history)
-        assert sha256_hex(created.token.encode()) not in str(history)
-        assert rotated not in str(history)
-        assert sha256_hex(rotated.encode()) not in str(history)
-        assert "token_sha256" not in str(history).lower()
+        row = conn.execute(
+            text("SELECT CREATED_BY, CREATE_DATE, UPDATED_BY, ACTIVE_FLAG FROM CFG_API_TOKENS")
+        ).one()
+        assert (row[0], row[2], row[3]) == ("alice", "bob", "N")
+        assert as_utc(row[1]) == created.metadata.created_at
+        assert not conn.execute(
+            text("SELECT 1 AS found FROM AUD_METADATA_CHANGES WHERE TABLE_NAME='CFG_API_TOKENS'")
+        ).first()
     for flag in (None, "x"):
         with pytest.raises(DBAPIError), engine_db.engine.begin() as conn:
             conn.execute(text("UPDATE CFG_API_TOKENS SET ACTIVE_FLAG=:flag"), {"flag": flag})
@@ -192,9 +174,7 @@ def test_upgrade_preserves_tokens_creation_history_and_rolls_back(empty_engine_d
                 ),
                 {"id": missing},
             )
-            # Model token guards without a token history table.
             conn.exec_driver_sql("DROP VIEW AUD_METADATA_CHANGES")
-            conn.exec_driver_sql("DROP TABLE AUD_CFG_API_TOKENS_HISTORY")
             if conn.dialect.name == "sqlite":
                 conn.exec_driver_sql(
                     "CREATE INDEX custom_token_created ON CFG_API_TOKENS(CREATED_AT)"
