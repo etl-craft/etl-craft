@@ -1,5 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useParams } from "react-router-dom";
 import { ApiError, getJson, postJson, project } from "@/lib/api";
+import { readProject } from "@/lib/project-memory";
 import type { Identity, ProjectHealth } from "@/lib/types";
 
 export function useIdentity(code?: string) {
@@ -15,6 +17,23 @@ export function useHealth() {
     queryFn: () => getJson<ProjectHealth>("/api/v1/project-health"),
     refetchInterval: 30_000,
   });
+}
+
+/**
+ * The project the interface is working in: the one in the address, else the last one opened, else
+ * the account's default project, else the only project there is. Each must still be active, so a
+ * disabled project is never offered. ``undefined`` means the person has to choose.
+ */
+export function useActiveProject(): { code: string | undefined; ready: boolean; choices: string[] } {
+  const { project: addressed } = useParams();
+  const health = useHealth();
+  const identity = useIdentity();
+  const choices = (health.data?.projects ?? []).map((p) => p.project);
+  const ready = health.isSuccess && identity.isSuccess;
+  const found = [addressed, readProject(), identity.data?.settings.default_project, choices.length === 1 ? choices[0] : null].find(
+    (code) => code && (code === addressed || choices.includes(code)),
+  );
+  return { code: found ?? undefined, ready, choices };
 }
 
 export const useProjectInfo = (code: string | undefined) => {
