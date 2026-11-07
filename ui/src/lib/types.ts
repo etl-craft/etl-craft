@@ -568,3 +568,25 @@ export interface Redirect {
   redirect?: string;
   interval?: number;
 }
+
+export interface AuditActionRecord {
+  action_id: number;
+  at: string;
+  actor: string;
+  kind: string;
+  command: string;
+  outcome: string;
+}
+
+export interface AuditChangeRecord {
+  change_id: number;
+  at: string;
+  actor: string;
+  table_name: string;
+  operation: string;
+}
+
+export interface AuditRecords {
+  actions: AuditActionRecord[];
+  changes: AuditChangeRecord[];
+}

@@ -3,13 +3,14 @@ import * as React from "react";
 import { Link } from "react-router-dom";
 import { Fact, FactList, Loading, Notice, SelectField } from "@/components/common";
 import { RunBars } from "@/components/pipeline-parts";
-import { StatusBadge } from "@/components/status";
+import { StatusBadge, toneClass } from "@/components/status";
 import { Table, Td, Th } from "@/components/ui/table";
 import { useTimezone } from "@/hooks";
 import { getJson, project } from "@/lib/api";
 import { formatDuration, formatTime } from "@/lib/format";
 import { taskPath } from "@/lib/routes";
-import type { Graph, Pipeline, RunView, Steps, TaskDefinition } from "@/lib/types";
+import type { AuditRecords, Graph, Pipeline, RunView, Steps, TaskDefinition } from "@/lib/types";
+import { cn } from "@/lib/utils";
 
 const WINDOWS: Record<string, { label: string; hours: number }> = {
   "24h": { label: "Last 24 hours", hours: 24 },
@@ -182,6 +183,135 @@ export function DocsTab({ code, pipeline, graph }: { code: string; pipeline: Pip
           );
         })}
       </section>
+    </div>
+  );
+}
+
+const DAY = 86_400_000;
+const WEEKS = 12;
+const day = (ms: number) => new Date(ms).toISOString().slice(0, 10);
+
+/** Runs by day over twelve weeks, each day coloured by its worst run: a gap in a column shows where nothing ran. */
+export function CalendarTab({ runs }: { runs: RunView[] }) {
+  const [today] = React.useState(() => Date.now());
+  const byDay = new Map<string, RunView[]>();
+  for (const run of runs) if (run.start_date) byDay.set(run.start_date.slice(0, 10), [...(byDay.get(run.start_date.slice(0, 10)) ?? []), run]);
+  const last = new Date(today);
+  const monday = today - ((last.getUTCDay() + 6) % 7) * DAY - (WEEKS - 1) * 7 * DAY;
+  const weeks = Array.from({ length: WEEKS }, (_, w) => Array.from({ length: 7 }, (_, d) => monday + (w * 7 + d) * DAY));
+  const worst = (list: RunView[]) => (list.some((r) => r.status === "FAILED" || r.status === "LOST") ? "FAILED" : list.some((r) => r.status === "IN-PROGRESS") ? "IN-PROGRESS" : "SUCCESS");
+  return (
+    <div className="grid gap-3">
+      <div className="flex gap-1 overflow-x-auto" role="grid" aria-label="Runs by day">
+        {weeks.map((week) => (
+          <div key={week[0]} className="grid gap-1" role="row">
+            {week.map((ms) => {
+              const key = day(ms);
+              const list = byDay.get(key) ?? [];
+              const label = `${key}: ${list.length ? `${list.length} run${list.length === 1 ? "" : "s"}, ${list.filter((r) => r.status === "FAILED" || r.status === "LOST").length} failed` : "no runs"}`;
+              return <span key={key} role="gridcell" aria-label={label} title={label} className={cn("size-5 rounded-sm border", ms > today ? "border-transparent" : list.length ? cn(toneClass(worst(list)), "border-current") : "border-border bg-surface-2")} />;
+            })}
+          </div>
+        ))}
+      </div>
+      <p className="m-0 text-xs text-muted">The last {WEEKS} weeks, oldest on the left, Monday at the top. Only the runs loaded for this pipeline are counted.</p>
+    </div>
+  );
+}
+
+/** What was done to this pipeline: the commands run on it and the metadata changes to it. */
+export function AuditTab({ code, pipeline }: { code: string; pipeline: string }) {
+  const tz = useTimezone();
+  const audit = useQuery({ queryKey: ["audit", code, pipeline], queryFn: () => getJson<AuditRecords>(`${project(code)}/audit`, { pipeline_code: pipeline }) });
+  if (audit.isError) return <Notice>{(audit.error as Error).message}</Notice>;
+  if (!audit.data) return <Loading what="the audit log" />;
+  const { actions, changes } = audit.data;
+  return (
+    <div className="grid gap-4">
+      <section className="grid gap-2" aria-label="Commands">
+        <h3 className="m-0 text-sm font-semibold">Commands ({actions.length})</h3>
+        {actions.length ? (
+          <Table aria-label="Commands run on this pipeline">
+            <thead>
+              <tr>
+                <Th>When</Th>
+                <Th>Who</Th>
+                <Th>Command</Th>
+                <Th>Outcome</Th>
+              </tr>
+            </thead>
+            <tbody>
+              {actions.slice(0, 50).map((a) => (
+                <tr key={a.action_id}>
+                  <Td className="whitespace-nowrap">{formatTime(a.at, tz)}</Td>
+                  <Td>{a.actor}</Td>
+                  <Td>{a.command}</Td>
+                  <Td className="text-muted">{a.outcome.toLowerCase()}</Td>
+                </tr>
+              ))}
+            </tbody>
+          </Table>
+        ) : (
+          <p className="m-0 text-muted">No command has been recorded for this pipeline.</p>
+        )}
+      </section>
+      <section className="grid gap-2" aria-label="Metadata changes">
+        <h3 className="m-0 text-sm font-semibold">Metadata changes ({changes.length})</h3>
+        {changes.length ? (
+          <Table aria-label="Metadata changes">
+            <thead>
+              <tr>
+                <Th>When</Th>
+                <Th>Who</Th>
+                <Th>Table</Th>
+                <Th>Change</Th>
+              </tr>
+            </thead>
+            <tbody>
+              {changes.slice(0, 50).map((c) => (
+                <tr key={c.change_id}>
+                  <Td className="whitespace-nowrap">{formatTime(c.at, tz)}</Td>
+                  <Td>{c.actor}</Td>
+                  <Td className="font-mono text-xs">{c.table_name}</Td>
+                  <Td className="text-muted">{c.operation.toLowerCase()}</Td>
+                </tr>
+              ))}
+            </tbody>
+          </Table>
+        ) : (
+          <p className="m-0 text-muted">No metadata change has been recorded for this pipeline.</p>
+        )}
+      </section>
+    </div>
+  );
+}
+
+/** The pipeline as its files define it: each task's handler and parameters, which is what runs. */
+export function DefinitionTab({ code, pipeline, graph }: { code: string; pipeline: string; graph: Graph }) {
+  const tasks = graph.waves.flat();
+  const { definitions, loading, error } = useTaskDefinitions(code, pipeline, tasks);
+  return (
+    <div className="grid gap-2">
+      {error ? <Notice>{error.message}</Notice> : null}
+      {loading ? <Loading what="task definitions" /> : null}
+      {tasks.map((task) => {
+        const def = definitions.get(task);
+        return (
+          <details key={task} className="rounded-md border border-border">
+            <summary className="cursor-pointer px-3 py-2 text-[13px] font-medium">
+              {task} <span className="font-normal text-muted">{def?.handler ?? ""}</span>
+            </summary>
+            <dl className="m-0 grid gap-x-4 gap-y-1 border-t border-border p-3 text-xs sm:grid-cols-[max-content_1fr]">
+              {Object.entries(def?.parameters ?? {}).map(([name, value]) => (
+                <React.Fragment key={name}>
+                  <dt className="font-mono text-muted">{name}</dt>
+                  <dd className="m-0 whitespace-pre-wrap break-words font-mono">{value}</dd>
+                </React.Fragment>
+              ))}
+            </dl>
+          </details>
+        );
+      })}
     </div>
   );
 }

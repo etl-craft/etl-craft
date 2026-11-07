@@ -147,7 +147,7 @@ def test_the_catalog_says_when_nothing_is_built_and_offers_the_rebuild(scene):
     with sync_playwright() as pw:
         browser, page, _ = open_page(pw, viewport={"width": 1280, "height": 1000})
         sign_in(page, url, "/ui/projects/default/catalog")
-        expect(page.get_by_role("heading", name="default catalog")).to_be_visible()
+        expect(page.get_by_role("heading", name="Catalog", exact=True)).to_be_visible()
         expect(page.get_by_role("button", name="Validate metadata")).to_be_visible()
         expect(page.get_by_role("button", name="Rebuild catalog")).to_be_visible()
         expect(page.get_by_text("catalog is not generated")).to_be_visible()
@@ -161,13 +161,9 @@ def test_the_catalog_says_when_nothing_is_built_and_offers_the_rebuild(scene):
         expect(
             page.get_by_role("status").filter(has_text="The catalog was rebuilt.")
         ).to_be_visible()
-        expect(page.get_by_title("default generated catalog")).to_be_visible()
-        built = page.frame_locator("iframe[title='default generated catalog']")
-        expect(
-            built.get_by_text("etl-craft catalog")
-        ).to_be_visible()  # the catalog, not a sign-in page
-        expect(built.get_by_text("1 pipeline(s)")).to_be_visible()
-        expect(built.get_by_text("Sign in")).to_have_count(0)
+        expect(page.get_by_role("tree", name="Catalog objects")).to_be_visible()
+        expect(page.get_by_role("heading", name="default catalog")).to_be_visible()
+        expect(page.get_by_text("Pipelines", exact=True).first).to_be_visible()
         expect(page.get_by_text("catalog is not generated")).to_have_count(0)
         page.get_by_role("button", name="Validate metadata").click()
         expect(

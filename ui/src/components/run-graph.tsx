@@ -1,6 +1,6 @@
 import { ArrowUpRight, Box } from "lucide-react";
 import * as React from "react";
-import { Background, Controls, Handle, MarkerType, Position, ReactFlow, type Edge, type Node, type NodeProps, type ReactFlowInstance } from "@xyflow/react";
+import { Background, Controls, Handle, MiniMap, MarkerType, Position, ReactFlow, type Edge, type Node, type NodeProps, type ReactFlowInstance } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { statusMeta, toneClass } from "@/components/status";
 import type { Graph } from "@/lib/types";
@@ -236,6 +236,7 @@ export function RunGraph({
       >
         <Background gap={20} color="var(--border)" />
         <Controls showInteractive={false} position="bottom-right" />
+        {fill && nodes.length > 12 ? <MiniMap pannable zoomable position="bottom-left" aria-label="Graph overview" className="!bg-surface-2" nodeColor="var(--border-strong)" maskColor="rgba(120,120,120,0.15)" /> : null}
       </ReactFlow>
     </div>
   );

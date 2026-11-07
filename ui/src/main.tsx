@@ -60,7 +60,7 @@ createRoot(document.getElementById("root")!).render(
             <Route path="projects/:project/uploads" element={<Uploads />} />
             <Route path="projects/:project/insights" element={<InsightsRedirect />} />
             <Route path="projects/:project/console" element={<Console />} />
-            <Route path="projects/:project/catalog" element={<Catalog />} />
+            <Route path="projects/:project/catalog/*" element={<Catalog />} />
             <Route path="projects/:project/scheduled" element={<Scheduled />} />
             <Route path="projects/:project/held" element={<Held />} />
             <Route path="projects/:project/runs" element={<Runs />} />

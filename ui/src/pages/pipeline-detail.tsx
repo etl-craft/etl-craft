@@ -1,10 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
-import { Pause, Play, PlayCircle } from "lucide-react";
+import { Check, ChevronDown, Pause, Play, PlayCircle } from "lucide-react";
 import * as React from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { ActionButton } from "@/components/action-button";
+import { DropdownContent, DropdownItem, DropdownLabel, DropdownMenu, DropdownTrigger } from "@/components/dropdown";
+import { Button } from "@/components/ui/button";
 import { Fact, FactList, Field, inputClass, Loading, Notice, PageHeader, SelectField } from "@/components/common";
-import { DetailsTab, DocsTab, OverviewTab, TasksTab } from "@/components/pipeline-tabs";
+import { AuditTab, CalendarTab, DefinitionTab, DetailsTab, DocsTab, OverviewTab, TasksTab } from "@/components/pipeline-tabs";
 import { StatusBadge } from "@/components/status";
 import { PauseState } from "@/components/pipeline-parts";
 import { RunGraph } from "@/components/run-graph";
@@ -23,13 +25,15 @@ import { cn } from "@/lib/utils";
 import type { Graph, Pipeline, Steps } from "@/lib/types";
 import { useDocumentTitle } from "@/title";
 
-const TAB_IDS = ["overview", "run", "runs", "tasks", "details", "docs"];
+const TAB_IDS = ["overview", "run", "runs", "tasks", "calendar", "audit", "code", "details", "docs"];
 
 export function PipelineDetail() {
   const { project: code = "", pipeline = "" } = useParams();
   const [params, setParams] = useSearchParams();
   const asked = params.get("tab") ?? "";
   const view = params.get("view") === "graph" ? "graph" : "grid";
+  const hideBars = params.get("bars") === "off";
+  const byTime = params.get("columns") === "time";
   const flow = params.get("flow") === "lr" ? "LR" : params.get("flow") === "tb" ? "TB" : undefined;
   const chosen = /^\d+$/.test(params.get("run") ?? "") ? Number(params.get("run")) : undefined;
   const task = params.get("task");
@@ -64,6 +68,9 @@ export function PipelineDetail() {
     ...(selected !== undefined ? [{ id: "run", label: `Run #${selected}` }] : []),
     { id: "runs", label: "Runs" },
     { id: "tasks", label: "Tasks" },
+    { id: "calendar", label: "Calendar" },
+    { id: "audit", label: "Audit log" },
+    { id: "code", label: "Code" },
     { id: "details", label: "Details" },
     { id: "docs", label: "Documentation" },
   ];
@@ -193,14 +200,33 @@ export function PipelineDetail() {
                 ))}
               </div>
             ) : (
-              <span className="text-xs text-muted">Newest run on the right; a dot means the task did not start</span>
+              <div className="flex items-center gap-2">
+                <span className="hidden text-xs text-muted xl:inline">Newest on the right; a dot: not started</span>
+                <DropdownMenu>
+                  <DropdownTrigger asChild>
+                    <Button size="sm" variant="outline">
+                      Options
+                      <ChevronDown className="size-3.5" aria-hidden />
+                    </Button>
+                  </DropdownTrigger>
+                  <DropdownContent>
+                    <DropdownLabel>Grid</DropdownLabel>
+                    <DropdownItem onSelect={() => choose("bars", hideBars ? null : "off")}>
+                      <Check className={cn("size-4", hideBars && "invisible")} aria-hidden /> Duration bars
+                    </DropdownItem>
+                    <DropdownItem onSelect={() => choose("columns", byTime ? null : "time")}>
+                      <Check className={cn("size-4", !byTime && "invisible")} aria-hidden /> Label columns by start time
+                    </DropdownItem>
+                  </DropdownContent>
+                </DropdownMenu>
+              </div>
             )}
           </div>
           <div className={cn("relative min-h-0 flex-1", view === "grid" && "overflow-auto")}>
             {!graph.isSuccess ? (
               graph.isError ? <Notice className="m-3">{(graph.error as Error).message}</Notice> : <Loading what="tasks" className="p-3" />
             ) : view === "grid" ? (
-              <RunGrid code={code} pipeline={pipeline} graph={graph.data} runs={runs} selected={selected} onSelect={select} />
+              <RunGrid code={code} pipeline={pipeline} graph={graph.data} runs={runs} selected={selected} onSelect={select} bars={!hideBars} labels={byTime ? "time" : "id"} />
             ) : (
               <div className="absolute inset-0">
               <RunGraph
@@ -265,6 +291,12 @@ export function PipelineDetail() {
               <Loading what="pipeline" />
             ) : tab === "tasks" ? (
               <TasksTab code={code} pipeline={pipeline} graph={graph.data} runId={selected} />
+            ) : tab === "calendar" ? (
+              <CalendarTab runs={runs} />
+            ) : tab === "audit" ? (
+              <AuditTab code={code} pipeline={pipeline} />
+            ) : tab === "code" ? (
+              <DefinitionTab code={code} pipeline={pipeline} graph={graph.data} />
             ) : tab === "details" ? (
               <DetailsTab pipeline={p} graph={graph.data} project={code} />
             ) : tab === "docs" ? (

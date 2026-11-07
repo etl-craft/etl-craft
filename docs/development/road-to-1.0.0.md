@@ -195,7 +195,7 @@ item's text, or work done early under another item.
 | S7.AM Protection on every warehouse | Done | #311, #312, #313 | Atomic SCD merges, in-row protection and recovery, private audit identities and provider acceptance |
 | S7.AN Always show the environment | Done | #328 | CLI context and production confirmation; designed, sandboxed alert/SLA templates and catalog environment |
 | S7.AO UI rebuild | Done | #329–#335 | Seven slices: shell, Home, runs, pipelines, tasks, uploads, insights, console, catalog, system, agents, administration, maintenance, settings, search, sign-in; the new interface is the only one, served at `/ui`, and the old pages are deleted |
-| S7.AP Native catalog | Planned | | The catalog moves into the app from a JSON read action, built from the app's own components; the generated static site stays only for `publish-docs` |
+| S7.AP Native catalog | In progress | | The catalog moves into the app from a JSON read action, built from the app's own components; the generated static site stays only for `publish-docs` |
 | S7.AQ Readable run identifiers | In progress | #347 | A label beside every run and task run id, stored by the Engine DB; accepted wherever the integer is, and shown beside it |
 | S7.AR Restarting pipelines | In progress | slice 1 PR | A pipeline setting, `RESTART_CONDITION`, starts the next run when the last one ends in a chosen status, so a file watcher runs continuously without a schedule |
 | S7.AS Project dashboard and navigation | In progress | | Home becomes a project dashboard with tabs and charts; a pipeline and its runs are one split workspace; Projects moves into Platform; the section Project is renamed Operations |
@@ -1395,6 +1395,14 @@ empty-history-page handling defect, which was corrected and verified. No cloud w
   migration 0044) so a restart is visible and queryable; the run key `restart:<previous run id>` makes
   two controllers start one next run. Acceptance availability: no warehouse SQL changed, so cloud
   acceptance was not needed.
+
+- **S7.AP native catalog and S7.AS workspace (owner, 2026-11-07).** Choices that differ from the item
+  text: the catalog's "JSON read action" is `catalog.json`, written by `generate-docs` beside the HTML
+  pages and served by the existing catalog-file read (`CATALOG_PAGE`, path `catalog.json`), so it has the
+  same build, project check and access rule as the site and no new action exists; its shape is
+  `etl-craft/catalog/1`. The catalog's own Insights page is not rebuilt: its gap counts are the explorer's
+  front page, and Home becomes the dashboard (S7.AS slice 4). The pipeline workspace's "Code" tab shows
+  each task's definition (handler and parameters), not script sources, which the API does not serve.
 
 - **S7.AL.4 event-file validation (owner, 2026-11-06).** Choices that differ from the item text:
   the opt-in is the FILE_VALIDATION parameter `SOURCE_EVENT=<EVENT_WAIT task code>`, for waits

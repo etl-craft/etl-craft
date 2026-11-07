@@ -272,6 +272,16 @@ def test_the_site_has_a_page_per_asset_and_a_search_index(project, tmp_path):
     # Nothing is loaded from anywhere but the site itself.
     for page in folder.rglob("*.html"):
         assert not re.search(r"(src|href)=\"(https?:)?//", page.read_text("utf-8")), page
+    document = json.loads((folder / "catalog.json").read_text("utf-8"))
+    assert document["schema"] == "etl-craft/catalog/1"
+    orders = next(t for t in document["tables"] if t["name"] == "sales.orders")
+    assert (orders["schema"], orders["table"]) == ("sales", "orders")
+    assert "SALES.convert" in orders["writers"]
+    assert {c["name"] for c in orders["columns"]} >= {"amount_usd"}
+    convert = next(t for t in document["tasks"] if t["label"] == "SALES.convert")
+    assert convert["target"] == "sales.orders" and "JOIN ref.rates" not in str(convert)
+    assert {p["code"] for p in document["pipelines"]} >= {"SALES", "MART"}
+    assert any(e["target_object"] == "sales.orders" for e in document["column_edges"])
     index_js = (folder / "search-index.js").read_text("utf-8")
     entries = json.loads(index_js.removeprefix("window.CATALOG_INDEX = ").rstrip(";\n"))
     kinds = {kind for kind, *_ in entries}

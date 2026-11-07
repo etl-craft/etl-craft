@@ -97,7 +97,7 @@ def test_filter_by_tag_select_pause_and_export(scene):
             page.get_by_role("button", name="Export CSV").click()
         content = Path(download.value.path()).read_text(encoding="utf-8")
         assert content.startswith(
-            "pipeline,name,tags,schedule,next_run,automatic_runs,paused_tasks"
+            "pipeline,name,description,tags,schedule,next_run,automatic_runs,paused_tasks"
         )
         assert "SALES" in content and "paused by owner: month-end freeze" in content
         assert problems == []
