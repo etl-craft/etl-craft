@@ -1,24 +1,21 @@
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, ChevronDown, ChevronRight, Copy, Download, LifeBuoy } from "lucide-react";
+import { ChevronDown, ChevronRight, Copy, Download, LifeBuoy } from "lucide-react";
 import * as React from "react";
-import { Link, useParams } from "react-router-dom";
-import { Fact, FactList, Loading, Notice, PageHeader } from "@/components/common";
+import { Link } from "react-router-dom";
+import { Fact, FactList, Loading, Notice } from "@/components/common";
 import { DropdownContent, DropdownItem, DropdownMenu, DropdownTrigger } from "@/components/dropdown";
 import { ActionButton } from "@/components/action-button";
 import { AttemptDetails } from "@/components/attempt-details";
 import { useToast } from "@/components/toast";
 import { ScopeControls } from "@/components/scope-controls";
-import { RunGraph } from "@/components/run-graph";
 import { StatusBadge } from "@/components/status";
 import { Button } from "@/components/ui/button";
-import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, Td, Th } from "@/components/ui/table";
-import { useCanRun, useProjectInfo, useTimezone } from "@/hooks";
+import { useCanRun, useTimezone } from "@/hooks";
 import { getJson, project } from "@/lib/api";
 import { formatDuration, formatTime } from "@/lib/format";
-import { attemptPath, itemsPath, runsPath, taskPath } from "@/lib/routes";
+import { attemptPath, itemsPath, taskPath } from "@/lib/routes";
 import type { Capabilities, ControlView, Explanation, Graph, RunView, Steps, TaskHistory } from "@/lib/types";
-import { useDocumentTitle } from "@/title";
 
 const RECOVERABLE = new Set(["FAILED", "LOST", "STOPPED", "ABORTED"]);
 
@@ -165,110 +162,66 @@ function RecoverRun({ code, run, canRun }: { code: string; run: RunView; canRun:
   );
 }
 
-export function RunDetail() {
-  const { project: code = "", pipeline = "", runId = "" } = useParams();
-  const id = Number(runId);
+/**
+ * The selected run: its state, identifier, times and controls, and one task table whose rows open in place
+ * to the task's attempts, evidence and log. The task open is the address's, so a grid cell can open it.
+ */
+export function RunOverview({ code, pipeline, runId, task, onTask }: { code: string; pipeline: string; runId: number; task: string | null; onTask: (task: string | null) => void }) {
   const tz = useTimezone();
   const toast = useToast();
-  const info = useProjectInfo(code);
-  const [focused, setFocused] = React.useState<string | null>(null);
-  const [opened, setOpened] = React.useState<string | null>(null);
+  const canRun = useCanRun(code);
   const panel = React.useRef<HTMLDivElement>(null);
-  const open = (task: string) => {
-    setFocused(task);
-    setOpened(task);
-  };
   React.useEffect(() => {
-    if (opened) panel.current?.scrollIntoView({ block: "nearest" });
-  }, [opened]);
+    if (task) panel.current?.scrollIntoView({ block: "nearest" });
+  }, [task]);
   const live = (status?: string) => (status === "IN-PROGRESS" ? 5_000 : false);
-
   const run = useQuery({
-    queryKey: ["run", code, id],
-    queryFn: () => getJson<RunView>(`${project(code)}/runs/${id}`),
+    queryKey: ["run", code, runId],
+    queryFn: () => getJson<RunView>(`${project(code)}/runs/${runId}`),
     refetchInterval: (query) => live(query.state.data?.status),
   });
   const steps = useQuery({
-    queryKey: ["steps", code, pipeline, id],
-    queryFn: () => getJson<Steps>(`${project(code)}/steps`, { pipeline_code: pipeline, run_id: id }),
+    queryKey: ["steps", code, pipeline, runId],
+    queryFn: () => getJson<Steps>(`${project(code)}/steps`, { pipeline_code: pipeline, run_id: runId }),
     refetchInterval: () => live(run.data?.status),
   });
   const graph = useQuery({ queryKey: ["graph", code, pipeline], queryFn: () => getJson<Graph>(`${project(code)}/graph`, { pipeline_code: pipeline }) });
-
-  useDocumentTitle(`${pipeline} #${runId}`, code, info.project && { type: info.project.environment_type, name: info.project.environment_name });
-  const statuses = Object.fromEntries((steps.data?.steps ?? []).map((s) => [s.task_code, s.status ?? "QUEUED"]));
-  const order = new Map((graph.data?.waves ?? []).flat().map((task, index) => [task, index]));
+  const order = new Map((graph.data?.waves ?? []).flat().map((name, index) => [name, index]));
   const ordered = [...(steps.data?.steps ?? [])].sort((a, b) => (order.get(a.task_code) ?? 0) - (order.get(b.task_code) ?? 0));
-  const canRun = useCanRun(code);
-
-  if (run.isError) {
-    return (
-      <Notice>{(run.error as Error).message}</Notice>
-    );
-  }
+  if (run.isError) return <Notice>{(run.error as Error).message}</Notice>;
   const r = run.data;
-  const toggle = (task: string) => (opened === task ? setOpened(null) : open(task));
+  if (!r) return <Loading what="run" />;
   return (
-    <div className="grid grid-cols-1 gap-4">
-      <Link to={runsPath(code, pipeline)} className="inline-flex w-fit items-center gap-1 text-sm text-muted hover:text-fg">
-        <ArrowLeft className="size-4" aria-hidden /> {pipeline} runs
-      </Link>
-      <PageHeader
-        compact
-        title={
-          <>
-            {pipeline} <span className="num text-muted">#{runId}</span>
-          </>
-        }
-        status={r ? <StatusBadge status={r.status} /> : null}
-        actions={
-          r ? (
-            <div className="flex flex-wrap items-center gap-2">
-              <RunTools code={code} run={r} canRun={canRun} />
-              <RecoverRun code={code} run={r} canRun={canRun} />
-            </div>
-          ) : null
-        }
-      >
-        {r ? (
-          <>
-            {r.run_label ? (
-              <p className="m-0 flex items-center gap-2 font-mono text-xs text-muted" aria-label="Run identifier">
-                <span className="break-all">{r.run_label}</span>
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  className="size-6"
-                  aria-label="Copy the run identifier"
-                  onClick={() => void navigator.clipboard.writeText(r.run_label ?? "").then(() => toast("Run identifier copied."))}
-                >
-                  <Copy className="size-3.5" aria-hidden />
-                </Button>
-              </p>
-            ) : null}
-            <FactList inline>
-              <Fact inline label="Started">{formatTime(r.start_date, tz)}</Fact>
-              <Fact inline label="Ended">{formatTime(r.end_date, tz)}</Fact>
-              <Fact inline label="Duration">{formatDuration(r.start_date, r.end_date)}</Fact>
-              <Fact inline label="Logical date">{r.run_date ?? "—"}</Fact>
-              <Fact inline label="Trigger">{r.trigger_kind.toLowerCase()}</Fact>
-              <Fact inline label="Started by">{r.started_by ?? "—"}</Fact>
-              {r.sla_status ? <Fact inline label="SLA">{r.sla_status}</Fact> : null}
-            </FactList>
-          </>
-        ) : (
-          <Loading what="run" />
-        )}
-      </PageHeader>
-      <ScopeControls code={code} pipeline={pipeline} runId={id} elsewhere={["RECOVER"]} />
-      <Card>
-        <CardHeader>
-          <CardTitle>Tasks</CardTitle>
-          <span className="text-xs text-muted">Click a task for its lineage; use its arrow, or a row below, for status, attempts and log</span>
-        </CardHeader>
-        {graph.isSuccess ? <RunGraph graph={graph.data} statuses={statuses} focused={focused} onFocus={setFocused} onOpen={open} /> : graph.isError ? <Notice className="m-4">{(graph.error as Error).message}</Notice> : <Loading what="graph" className="p-4" />}
-      </Card>
-      <Card>
+    <div className="grid gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <StatusBadge status={r.status} />
+          <span className="num text-muted">#{r.pipeline_run_id}</span>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <RunTools code={code} run={r} canRun={canRun} />
+          <RecoverRun code={code} run={r} canRun={canRun} />
+        </div>
+      </div>
+      {r.run_label ? (
+        <p className="m-0 flex items-center gap-2 font-mono text-xs text-muted" aria-label="Run identifier">
+          <span className="break-all">{r.run_label}</span>
+          <Button size="icon" variant="ghost" className="size-6" aria-label="Copy the run identifier" onClick={() => void navigator.clipboard.writeText(r.run_label ?? "").then(() => toast("Run identifier copied."))}>
+            <Copy className="size-3.5" aria-hidden />
+          </Button>
+        </p>
+      ) : null}
+      <FactList inline>
+        <Fact inline label="Started">{formatTime(r.start_date, tz)}</Fact>
+        <Fact inline label="Ended">{formatTime(r.end_date, tz)}</Fact>
+        <Fact inline label="Duration">{formatDuration(r.start_date, r.end_date)}</Fact>
+        <Fact inline label="Logical date">{r.run_date ?? "—"}</Fact>
+        <Fact inline label="Trigger">{r.trigger_kind.toLowerCase()}</Fact>
+        <Fact inline label="Started by">{r.started_by ?? "—"}</Fact>
+        {r.sla_status ? <Fact inline label="SLA">{r.sla_status}</Fact> : null}
+      </FactList>
+      <ScopeControls code={code} pipeline={pipeline} runId={runId} elsewhere={["RECOVER"]} />
+      <div className="overflow-hidden rounded-lg border border-border">
         <Table aria-label="Task list">
           <thead>
             <tr>
@@ -283,23 +236,18 @@ export function RunDetail() {
           </thead>
           <tbody>
             {ordered.map((step) => {
-              const isOpen = step.task_code === opened;
+              const isOpen = step.task_code === task;
+              const toggle = () => onTask(isOpen ? null : step.task_code);
               return (
                 <React.Fragment key={step.task_code}>
                   <tr className={isOpen ? "bg-surface-2" : "hover:bg-surface-2"}>
                     <Td className="w-8">
-                      <button
-                        type="button"
-                        className="flex cursor-pointer items-center text-muted hover:text-fg"
-                        aria-expanded={isOpen}
-                        aria-label={`${isOpen ? "Hide" : "Show"} details of ${step.task_code}`}
-                        onClick={() => toggle(step.task_code)}
-                      >
+                      <button type="button" className="flex cursor-pointer items-center text-muted hover:text-fg" aria-expanded={isOpen} aria-label={`${isOpen ? "Hide" : "Show"} details of ${step.task_code}`} onClick={toggle}>
                         {isOpen ? <ChevronDown className="size-4" aria-hidden /> : <ChevronRight className="size-4" aria-hidden />}
                       </button>
                     </Td>
                     <Td>
-                      <button type="button" className="cursor-pointer font-medium text-accent hover:underline" aria-pressed={isOpen} onClick={() => toggle(step.task_code)}>
+                      <button type="button" className="cursor-pointer font-medium text-accent hover:underline" aria-pressed={isOpen} onClick={toggle}>
                         {step.task_code}
                       </button>
                     </Td>
@@ -313,7 +261,7 @@ export function RunDetail() {
                     <tr>
                       <td colSpan={5} className="p-0">
                         <div ref={panel}>
-                          <TaskDetails code={code} pipeline={pipeline} runId={id} task={step.task_code} handler={step.handler} />
+                          <TaskDetails code={code} pipeline={pipeline} runId={runId} task={step.task_code} handler={step.handler} />
                         </div>
                       </td>
                     </tr>
@@ -323,7 +271,7 @@ export function RunDetail() {
             })}
           </tbody>
         </Table>
-      </Card>
+      </div>
     </div>
   );
 }

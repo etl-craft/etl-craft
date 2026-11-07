@@ -9,6 +9,9 @@ All notable changes are recorded here. The format follows
 - The UI's Runs page filters by pipeline tag, like the Pipelines page (`?tag=` repeats to require every
   tag), and both always show the tag filter: with no tags declared it says where they come from
   (`PIPELINE_PARAMETERS.TAGS`).
+- The UI shows a pipeline and its runs as one workspace: a grid of tasks against recent runs, each run
+  topped by its duration bar, beside a panel with the selected run and its tasks, which open in place.
+  A run's address is its pipeline's with `?run=ID`; the older run address redirects to it.
 - A token is its current row: the Engine DB keeps no `AUD_CFG_API_TOKENS_HISTORY` table, so a token's
   last-use date no longer writes a history version. Create and revoke stay in `AUD_ACTIONS`. A
   development Engine DB that applied the earlier migrations is recreated.
