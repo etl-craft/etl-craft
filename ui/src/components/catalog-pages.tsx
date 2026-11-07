@@ -11,10 +11,11 @@ import { useToast } from "@/components/toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { columnsOf, DataTable } from "@/components/data-table";
+import { When } from "@/components/when";
 import { useRoleAtLeast, useTimezone } from "@/hooks";
 import { getJson, project } from "@/lib/api";
 import { impact, isOpenGap, pipelineGraph, tableLineage, typeOf, type CatalogColumn, type CatalogDoc, type ImpactRow, type CatalogEdge, type CatalogRun, type CatalogTable, type CatalogTask } from "@/lib/catalog";
-import { describeCron, formatDuration, formatTime, relative } from "@/lib/format";
+import { describeCron, formatDuration, formatTime } from "@/lib/format";
 import { catalogPath, pipelinePath, taskPath } from "@/lib/routes";
 import type { RunView, TablePreview } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -412,7 +413,7 @@ export function TableObject({ code, doc, name, tab, onTab }: { code: string; doc
       <Title icon={Table2} name={table.table} copy={table.name} />
       <FactList inline>
         <Fact inline label="Last written">
-          {lastWrite ? <span title={formatTime(lastWrite.end, tz)}>{relative(lastWrite.end, now)}</span> : "no run recorded"}
+          {lastWrite?.end ? <When iso={lastWrite.end} now={now} /> : "no run recorded"}
         </Fact>
         {lastRun ? (
           <Fact inline label="Last write">
@@ -644,7 +645,6 @@ export function GapsObject({ code, doc }: { code: string; doc: CatalogDoc }) {
 /** Every table of the project in one sortable list: how fresh it is, whether it is checked and documented. */
 export function TablesList({ code, doc }: { code: string; doc: CatalogDoc }) {
   const [now] = React.useState(() => Date.now());
-  const tz = useTimezone();
   const [text, setText] = React.useState("");
   const [schema, setSchema] = React.useState("");
   const tables = doc.tables.filter((t) => !t.external);
@@ -682,7 +682,7 @@ export function TablesList({ code, doc }: { code: string; doc: CatalogDoc }) {
           initialSort={[{ id: "table", desc: false }]}
           columns={columnsOf<(typeof rows)[number]>([
             { id: "table", header: "Table", value: (r) => r.table.name, size: 300, cell: (r) => <Link className={`font-medium ${link}`} to={catalogPath(code, "tables", r.table.name)}>{r.table.name}</Link> },
-            { id: "written", header: "Last written", value: (r) => r.last, size: 150, cell: (r) => (r.last ? <span title={formatTime(r.last, tz)}>{relative(r.last, now)}</span> : <span className="text-muted">no run recorded</span>) },
+            { id: "written", header: "Last written", value: (r) => r.last, size: 150, cell: (r) => (r.last ? <When iso={r.last} now={now} /> : <span className="text-muted">no run recorded</span>) },
             { id: "writers", header: "Written by", value: (r) => r.table.writers.length, size: 120 },
             { id: "readers", header: "Read by", value: (r) => r.table.readers.length, size: 110 },
             { id: "rules", header: "Rules", value: (r) => r.table.rules.length, size: 90 },
