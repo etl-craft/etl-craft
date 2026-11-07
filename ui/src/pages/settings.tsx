@@ -8,6 +8,7 @@ import { failureText, useHealth, useIdentity, useTimezone } from "@/hooks";
 import { postJson } from "@/lib/api";
 import { formatTime } from "@/lib/format";
 import { applyTheme } from "@/lib/theme";
+import { readWrap, saveWrap } from "@/components/data-table";
 import type { PersonalSettings } from "@/lib/types";
 import { useDocumentTitle } from "@/title";
 
@@ -72,6 +73,14 @@ export function Settings() {
             </Button>
           </div>
         </form>
+      </Card>
+      <Card className="max-w-xl p-5">
+        <h2 className="mt-0 text-base font-semibold">In this browser</h2>
+        <label className="flex cursor-pointer items-center gap-2 text-sm">
+          <input type="checkbox" defaultChecked={readWrap()} onChange={(event) => saveWrap(event.target.checked)} />
+          Wrap long text in tables to two lines
+        </label>
+        <p className="mb-0 mt-1 text-xs text-muted">Takes effect when a page is opened. Off shows one line per row.</p>
       </Card>
       <p className="m-0 text-sm text-muted">Last sign-in: {formatTime(identity.data?.last_signin ?? null, tz)}</p>
     </div>

@@ -136,6 +136,12 @@ export function useCatalog(code: string) {
   });
 }
 
+/** The comparison outcomes that are not a problem: they match, were not checked, or are expected. */
+const FINE = new Set(["Matched", "Unchecked", "Not declared", "Expected before first deployment"]);
+
+/** Whether a gap is something to act on, as the build words its states. */
+export const isOpenGap = (gap: CatalogGap): boolean => !FINE.has(gap.state);
+
 /** The warehouse tables, grouped by schema, as the tree shows them. */
 export function schemasOf(doc: CatalogDoc): { schema: string; tables: CatalogTable[] }[] {
   const groups = new Map<string, CatalogTable[]>();

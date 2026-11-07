@@ -33,7 +33,7 @@ export function AppShell() {
   const { code, ready } = useActiveProject();
   const location = useLocation();
   // A workspace page (a pipeline, the catalog) fills the screen and its panes scroll on their own.
-  const fill = /^\/projects\/[^/]+\/(pipelines\/[^/]+|catalog(\/.*)?)$/.test(location.pathname);
+  const fill = /^\/projects\/[^/]+(\/(pipelines\/[^/]+|catalog(\/.*)?))?$/.test(location.pathname);
   const navigate = useNavigate();
   const searchBox = React.useRef<HTMLInputElement>(null);
   const [shortcuts, setShortcuts] = React.useState(false);

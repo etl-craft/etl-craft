@@ -9353,7 +9353,8 @@ place.
 **Slices.** (1) The navigation, the Operations section name, Projects in Platform and the
 redirect from the old Insights address. (2) The run identifier in the run lists (S7.AQ slice 3).
 (3) The pipeline workspace above, which replaces the separate run page. (4) The Home dashboard and
-its tabs. (5) The Pipelines list takes the catalog's DAGs columns.
+its tabs. (5) The Pipelines list takes the catalog's DAGs columns. Slice 4 is built: Home is a tabbed dashboard (owner,
+2026-11-07: Insights was still a scrolling sheet).
 
 **Done when.** Every page in the new navigation is served by the app in light, dark and 390 px;
 the Insights page is deleted; the owner approves the screenshots of each slice on the Support

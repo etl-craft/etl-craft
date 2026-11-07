@@ -18,7 +18,7 @@ import { Tabs } from "@/components/tabs";
 import { SplitPane } from "@/components/split-pane";
 import { Card } from "@/components/ui/card";
 import { useCanRun, useProjectInfo, useTimezone } from "@/hooks";
-import { formatTime } from "@/lib/format";
+import { describeCron, formatTime } from "@/lib/format";
 import { getJson, project } from "@/lib/api";
 import { pipelinesPath, taskPath } from "@/lib/routes";
 import { cn } from "@/lib/utils";
@@ -188,7 +188,7 @@ export function PipelineDetail() {
       >
         {p ? (
           <FactList inline>
-            <Fact inline label="Schedule">{p.run_schedule ? <code className="font-mono">{p.run_schedule}</code> : "Not scheduled"}</Fact>
+            <Fact inline label="Schedule">{p.run_schedule ? <span title={p.run_schedule}>{describeCron(p.run_schedule) ?? <code className="font-mono">{p.run_schedule}</code>}</span> : "Not scheduled"}</Fact>
             <Fact inline label="Latest run">
               {runs[0] ? (
                 <span className="inline-flex items-center gap-1.5">

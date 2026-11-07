@@ -63,7 +63,6 @@ export function Catalog() {
   const developer = useRoleAtLeast("developer");
   const admin = useRoleAtLeast("admin");
   const info = useProjectInfo(code);
-  useDocumentTitle("Catalog", code, info.project && { type: info.project.environment_type, name: info.project.environment_name });
   const [refreshed, setRefreshed] = React.useState<LineageRefresh | null>(null);
   // The built catalog is the last build; a missing build is shown in place of the explorer, with Rebuild still reachable.
   const built = useCatalog(code);
@@ -73,6 +72,7 @@ export function Catalog() {
   const [first = "", ...others] = rest.split("/").filter(Boolean);
   const kind = (KINDS as string[]).includes(first) ? (first as CatalogKind) : undefined;
   const name = others.join("/") || undefined;
+  useDocumentTitle(kind === "gaps" ? "Catalog gaps" : name ? `${name} · Catalog` : "Catalog", code, info.project && { type: info.project.environment_type, name: info.project.environment_name });
   const tab = params.get("tab") ?? "overview";
   const onTab = (next: string) => {
     const copy = new URLSearchParams(params);
@@ -106,7 +106,7 @@ export function Catalog() {
             </Button>
             {developer ? (
               <>
-                <ActionButton<Done> code={code} label="Rebuild catalog" title="Rebuild the catalog" effect="Generates the catalog again from the current metadata." endpoint="/docs" body={() => ({})} askReason={false} describe={(r) => r.message ?? "The catalog was rebuilt."} onDone={() => void built.refetch()} variant="primary" />
+                <ActionButton<Done> code={code} label="Rebuild catalog" title="Rebuild the catalog" effect="Generates the catalog again from the current metadata." endpoint="/docs" body={() => ({})} askReason={false} describe={(r) => r.message ?? "The catalog was rebuilt."} onDone={() => void built.refetch()} />
                 <ActionButton<LineageRefresh>
                   code={code}
                   label="Refresh lineage"

@@ -45,7 +45,7 @@ export interface Selection {
 
 const WRAP_KEY = "etl-craft-wrap-text";
 
-function readWrap(): boolean {
+export function readWrap(): boolean {
   try {
     return window.localStorage.getItem(WRAP_KEY) !== "0";
   } catch {
@@ -84,7 +84,7 @@ function widest<T>(column: Column<T>, data: T[]): number {
   return Math.min(60, Math.max(0, ...data.slice(0, 100).map((row, index) => { const v = value(row, index); return typeof v === "string" || typeof v === "number" ? String(v).length : 0; })));
 }
 
-function saveWrap(on: boolean): void {
+export function saveWrap(on: boolean): void {
   try {
     window.localStorage.setItem(WRAP_KEY, on ? "1" : "0");
   } catch {
@@ -141,7 +141,6 @@ export function DataTable<T>({
   empty,
   more,
   highlight,
-  quiet,
 }: {
   data: T[];
   columns: Column<T>[];
@@ -156,8 +155,6 @@ export function DataTable<T>({
   more?: More;
   /** The one row the person came for: marked, and scrolled into view. */
   highlight?: (row: T) => boolean;
-  /** Leave out the wrap toggle: for a small table inside a page that has its own. */
-  quiet?: boolean;
 }) {
   const [sorting, setSorting] = React.useState<SortingState>(initialSort ?? []);
   const [sizing, setSizing] = React.useState<ColumnSizingState>(() => readWidths(label));
@@ -174,22 +171,12 @@ export function DataTable<T>({
     getSortedRowModel: getSortedRowModel(),
   });
   React.useEffect(() => saveWidths(label, sizing), [label, sizing]);
-  const [wrap, setWrap] = React.useState(readWrap);
+  const wrap = React.useMemo(readWrap, []);
   const all = data.length > 0 && !!selection && !!rowId && data.every((row) => selection.ids.has(rowId(row)));
   if (empty !== undefined && data.length === 0) return <p className="m-0 p-4 text-muted">{empty}</p>;
   return (
     <>
-      {quiet ? null : <label className="flex cursor-pointer items-center justify-end gap-2 px-3 py-1.5 text-xs text-muted">
-        <input
-          type="checkbox"
-          checked={wrap}
-          onChange={(event) => {
-            setWrap(event.target.checked);
-            saveWrap(event.target.checked);
-          }}
-        />
-        Wrap text
-      </label>}
+
     <Table aria-label={label} more={more} className="table-fixed" style={{ minWidth: table.getTotalSize() }}>
       <thead>
         {table.getHeaderGroups().map((group) => (
@@ -227,8 +214,10 @@ export function DataTable<T>({
                         event.preventDefault();
                         table.setColumnSizing((current) => ({ ...current, [header.column.id]: Math.min(900, Math.max(64, header.column.getSize() + step)) }));
                       }}
-                      className={cn("absolute right-0 top-0 h-full w-2 cursor-col-resize touch-none select-none hover:bg-accent/40 focus-visible:bg-accent/60", header.column.getIsResizing() && "bg-accent/60")}
-                    />
+                      className={cn("group absolute right-0 top-0 flex h-full w-3 cursor-col-resize touch-none select-none items-center justify-center outline-none", header.column.getIsResizing() ? "bg-accent/20" : "hover:bg-accent/15 focus-visible:bg-accent/20")}
+                    >
+                      <span aria-hidden className={cn("h-4 w-px rounded-full bg-border-strong transition-all group-hover:h-5 group-hover:w-0.5 group-hover:bg-accent group-focus-visible:h-5 group-focus-visible:w-0.5 group-focus-visible:bg-accent", header.column.getIsResizing() && "h-5 w-0.5 bg-accent")} />
+                    </div>
                   ) : null}
                 </Th>
               );

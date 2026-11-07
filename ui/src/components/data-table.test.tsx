@@ -1,7 +1,7 @@
 import { createColumnHelper } from "@tanstack/react-table";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it } from "vitest";
-import { columnsOf, DataTable } from "@/components/data-table";
+import { columnsOf, DataTable, saveWrap } from "@/components/data-table";
 
 interface Row {
   name: string;
@@ -52,13 +52,21 @@ describe("the shared table", () => {
     expect(width()).toBe("216px");
   });
 
-  it("wraps long text by default with every row the same height, and unwraps to one line", () => {
-    render(<DataTable label="Things" data={rows} columns={columnsOf<Row>([{ id: "name", header: "Name", value: (r) => r.name }])} />);
+  it("wraps long text by default with every row the same height, and one line when the preference is off", () => {
+    const { unmount } = render(<DataTable label="Things" data={rows} columns={columnsOf<Row>([{ id: "name", header: "Name", value: (r) => r.name }])} />);
     const body = within(screen.getByRole("table", { name: "Things" })).getAllByRole("row").slice(1);
     expect(new Set(body.map((r) => r.className.match(/h-\d+/)?.[0])).size).toBe(1);
     expect(body[0]!.className).toContain("h-14");
     expect(body[0]!.querySelector(".line-clamp-2")).toBeTruthy();
-    fireEvent.click(screen.getByLabelText("Wrap text"));
+    unmount();
+    saveWrap(false);
+    render(<DataTable label="Things" data={rows} columns={columnsOf<Row>([{ id: "name", header: "Name", value: (r) => r.name }])} />);
     expect(within(screen.getByRole("table", { name: "Things" })).getAllByRole("row")[1]!.className).toContain("h-10");
+  });
+
+  it("shows a divider between columns without having to find it with the pointer", () => {
+    render(<DataTable label="Things" data={rows} columns={columnsOf<Row>([{ id: "name", header: "Name", value: (r) => r.name }])} />);
+    const handle = screen.getByRole("separator", { name: "Resize the Name column" });
+    expect(handle.querySelector("span")).toBeTruthy(); // the line is always drawn
   });
 });

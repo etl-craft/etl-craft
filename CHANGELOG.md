@@ -6,6 +6,12 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+- Home is a dashboard that fits the window instead of one long page of tables: tabs for Overview (headline
+  tiles, runs per day, average duration per day, success rate by pipeline and the latest runs), Pipelines,
+  Data, Quality, Failures and Latest runs, with 24 h, 7 day and 30 day presets. Charts are drawn in the app
+  (no chart library) with a readout on hover or focus. Gaps are counted correctly (matched, undeclared and
+  expected checks are not open gaps), the Quality tab of a table lists only real gaps, destructive buttons are
+  outlined in red until confirmed, and wrap-text is one setting in Personal settings.
 - A table's catalog page has a Data tab: the first 100 rows, read from the warehouse, for developers and
   above (`etl-craft catalog preview --table T`, `GET /api/v1/projects/{project}/table-preview`,
   `etl-craft/table-preview/1`). Only catalog tables are read, and each request is audited.

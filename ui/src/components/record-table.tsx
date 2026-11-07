@@ -7,7 +7,6 @@ export function RecordTable({ records, label, hide = [] }: { records: Record<str
   const keys = [...new Set(records.flatMap((record) => Object.keys(record)))].filter((c) => !hide.includes(c));
   return (
     <DataTable
-      quiet
       label={label}
       data={records}
       columns={columnsOf<Record<string, unknown>>(keys.map((key) => ({ id: key, header: key.replaceAll("_", " "), value: (record) => text(record[key]), size: 180, cell: (record) => <span className="font-mono text-xs">{text(record[key])}</span> })))}

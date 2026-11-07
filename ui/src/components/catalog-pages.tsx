@@ -13,8 +13,8 @@ import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { columnsOf, DataTable } from "@/components/data-table";
 import { useRoleAtLeast, useTimezone } from "@/hooks";
 import { getJson, project } from "@/lib/api";
-import { pipelineGraph, tableLineage, typeOf, type CatalogColumn, type CatalogDoc, type CatalogEdge, type CatalogRun, type CatalogTable, type CatalogTask } from "@/lib/catalog";
-import { formatDuration, formatTime } from "@/lib/format";
+import { isOpenGap, pipelineGraph, tableLineage, typeOf, type CatalogColumn, type CatalogDoc, type CatalogEdge, type CatalogRun, type CatalogTable, type CatalogTask } from "@/lib/catalog";
+import { describeCron, formatDuration, formatTime } from "@/lib/format";
 import { catalogPath, pipelinePath, taskPath } from "@/lib/routes";
 import type { RunView, TablePreview } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -102,7 +102,6 @@ function RunsTable({ code, pipeline, runs, task }: { code: string; pipeline: str
   if (!runs.length) return <p className="m-0 text-muted">No runs recorded in the last build.</p>;
   return (
     <DataTable
-      quiet
       label="Recent runs"
       data={runs}
       initialSort={[{ id: "run", desc: true }]}
@@ -124,7 +123,7 @@ export function CatalogHome({ code, doc }: { code: string; doc: CatalogDoc }) {
   const columns = tables.reduce((n, t) => n + t.columns.length, 0);
   const undocumented = doc.tasks.filter((t) => !t.documentation).length;
   const unwritten = tables.filter((t) => t.writers.length === 0);
-  const open = doc.gaps.filter((g) => g.state !== "MATCHED" && g.state !== "UNCHECKED");
+  const open = doc.gaps.filter(isOpenGap);
   const tile = (label: string, value: number | string) => (
     <div className="grid gap-1 rounded-lg border border-border bg-surface p-3">
       <span className="text-xs text-muted">{label}</span>
@@ -144,7 +143,9 @@ export function CatalogHome({ code, doc }: { code: string; doc: CatalogDoc }) {
         {tile("Tables", tables.length)}
         {tile("Columns", columns)}
         {tile("Rules", doc.rules.length)}
-        {tile("Open gaps", open.length)}
+        <Link to={catalogPath(code, "gaps")} aria-label={`${open.length} open gaps`} className="rounded-lg hover:ring-2 hover:ring-accent">
+          {tile("Open gaps", open.length)}
+        </Link>
       </div>
       <Section title="Needs attention">
         <ul className="m-0 grid list-none gap-1 p-0 text-[13px]">
@@ -163,6 +164,7 @@ export function CatalogHome({ code, doc }: { code: string; doc: CatalogDoc }) {
 
 /** A pipeline: what it does, its tasks, how they connect, and its latest runs. */
 export function PipelineObject({ code, doc, name, tab, onTab }: { code: string; doc: CatalogDoc; name: string; tab: string; onTab: (tab: string) => void }) {
+  const tz = useTimezone();
   const navigate = useNavigate();
   const pipeline = doc.pipelines.find((p) => p.code === name);
   const [focused, setFocused] = React.useState<string | null>(null);
@@ -191,7 +193,6 @@ export function PipelineObject({ code, doc, name, tab, onTab }: { code: string; 
             </Section>
             <Section title={`Tasks (${tasks.length})`}>
               <DataTable
-                quiet
                 label="Tasks"
                 data={tasks}
                 columns={columnsOf<CatalogTask>([
@@ -206,13 +207,30 @@ export function PipelineObject({ code, doc, name, tab, onTab }: { code: string; 
           <aside aria-label="About this pipeline" className="grid min-w-0 content-start gap-3">
             <h2 className="m-0 text-sm font-semibold">About this pipeline</h2>
             <FactList className="grid-cols-1 sm:grid-cols-1 lg:grid-cols-1">
-              <Fact label="Schedule">{pipeline.schedule ? <code className="font-mono">{pipeline.schedule}</code> : "Not scheduled"}</Fact>
+              {pipeline.runs[0] ? (
+                <Fact label="Last run">
+                  <span className="inline-flex flex-wrap items-center gap-1.5">
+                    <StatusBadge status={pipeline.runs[0].status} /> {formatTime(pipeline.runs[0].start, tz)}
+                  </span>
+                </Fact>
+              ) : null}
+              <Fact label="Schedule">{pipeline.schedule ? <span title={pipeline.schedule}>{describeCron(pipeline.schedule) ?? <code className="font-mono">{pipeline.schedule}</code>}</span> : "Not scheduled"}</Fact>
               <Fact label="Refresh">{pipeline.refresh_type.toLowerCase()}</Fact>
-              <Fact label="SLA">{pipeline.sla_in_hours ? `${pipeline.sla_in_hours} h` : "None"}</Fact>
-              <Fact label="Tags">{pipeline.tags.length ? pipeline.tags.join(", ") : "None"}</Fact>
-              <Fact label="Paused">{pipeline.paused ? `${pipeline.paused.paused_by}: ${pipeline.paused.reason}` : "No"}</Fact>
-              <Fact label="Waits for">{pipeline.depends_on.length ? pipeline.depends_on.map(([p]) => p).join(", ") : "No other pipeline"}</Fact>
-              <Fact label="Waited on by">{pipeline.depended_on_by.length ? pipeline.depended_on_by.join(", ") : "No other pipeline"}</Fact>
+              {pipeline.sla_in_hours ? <Fact label="SLA">{pipeline.sla_in_hours} h</Fact> : null}
+              {pipeline.tags.length ? (
+                <Fact label="Tags">
+                  <span className="flex flex-wrap gap-1">
+                    {pipeline.tags.map((tag) => (
+                      <span key={tag} className="rounded bg-idle-bg px-1.5 py-0.5 text-xs text-idle">
+                        {tag}
+                      </span>
+                    ))}
+                  </span>
+                </Fact>
+              ) : null}
+              {pipeline.paused ? <Fact label="Paused">{`${pipeline.paused.paused_by}: ${pipeline.paused.reason}`}</Fact> : null}
+              {pipeline.depends_on.length ? <Fact label="Waits for">{pipeline.depends_on.map(([p]) => p).join(", ")}</Fact> : null}
+              {pipeline.depended_on_by.length ? <Fact label="Waited on by">{pipeline.depended_on_by.join(", ")}</Fact> : null}
             </FactList>
           </aside>
         </div>
@@ -233,7 +251,6 @@ function ColumnLineage({ code, edges }: { code: string; edges: CatalogEdge[] }) 
   if (!edges.length) return <p className="m-0 text-muted">No column lineage was traced for this selection.</p>;
   return (
     <DataTable
-      quiet
       label="Column lineage"
       data={edges}
       columns={columnsOf<CatalogEdge>([
@@ -344,7 +361,6 @@ function TableData({ code, table }: { code: string; table: string }) {
       {data.length ? (
         <div className="max-h-[calc(100dvh-22rem)] overflow-auto rounded-lg border border-border">
           <DataTable
-            quiet
             label="Rows"
             data={data}
             columns={columnsOf<(string | null)[]>(columns.map((name, index) => ({ id: `${index}:${name}`, header: name, value: (row) => row[index] ?? null, size: 170, cell: (row) => (row[index] === null ? <span className="text-muted">null</span> : <span className="font-mono text-xs">{row[index]}</span>) })))}
@@ -363,13 +379,14 @@ export function TableObject({ code, doc, name, tab, onTab }: { code: string; doc
   const [column, setColumn] = React.useState("");
   const [focused, setFocused] = React.useState<string | null>(null);
   const [depth, setDepth] = React.useState("2");
+  const [showAll, setShowAll] = React.useState(false);
   const [direction, setDirection] = React.useState<"both" | "up" | "down">("both");
   const developer = useRoleAtLeast("developer");
   const table = doc.tables.find((t) => t.name === name);
   if (!table) return <Notice className="m-4">No table {name} in this catalog build.</Notice>;
   const writers = describe(doc, table);
   const rules = doc.rules.filter((r) => table.rules.includes(r.id));
-  const gaps = doc.gaps.filter((g) => g.table === table.name && g.state !== "MATCHED");
+  const gaps = doc.gaps.filter((g) => g.table === table.name && (showAll || isOpenGap(g)));
   const tabs = [
     { id: "overview", label: "Overview" },
     ...(developer ? [{ id: "data", label: "Data" }] : []),
@@ -407,7 +424,6 @@ export function TableObject({ code, doc, name, tab, onTab }: { code: string; doc
             <Section fill className="max-h-96 @3xl:max-h-none" title={`Columns (${table.columns.length})`} aside={<input type="search" aria-label="Filter columns" placeholder="Filter columns…" value={filter} onChange={(event) => setFilter(event.target.value)} className="h-8 w-48 rounded-md border border-border-strong bg-surface px-2 text-[13px]" />}>
               {shown.length ? (
                 <DataTable
-                  quiet
                   label="Columns"
                   data={shown}
                   columns={columnsOf<CatalogColumn>([
@@ -481,9 +497,9 @@ export function TableObject({ code, doc, name, tab, onTab }: { code: string; doc
         </Section>
       ) : on === "history" ? (
         <Section title="Recent writes">
+          {writers.some((w) => w.runs.length === 0) ? <p className="mt-0 text-xs text-muted">No run is recorded for {writers.filter((w) => w.runs.length === 0).map((w) => w.label).join(", ")}.</p> : null}
           {history.length ? (
             <DataTable
-              quiet
               label="Recent writes"
               data={history}
               columns={columnsOf<(typeof history)[number]>([
@@ -519,8 +535,16 @@ export function TableObject({ code, doc, name, tab, onTab }: { code: string; doc
               <p className="m-0 text-muted">No business rule checks this table.</p>
             )}
           </Section>
-          <Section title={`Gaps (${gaps.length})`}>
-            {gaps.length ? <GapRows code={code} gaps={gaps} /> : <p className="m-0 text-muted">{table.warehouse_checked ? "Every checked attribute matches." : "The warehouse was not compared in this build."}</p>}
+          <Section
+            title={`${showAll ? "Everything checked" : "Gaps"} (${gaps.length})`}
+            aside={
+              <label className="flex cursor-pointer items-center gap-2 text-xs text-muted">
+                <input type="checkbox" checked={showAll} onChange={(event) => setShowAll(event.target.checked)} />
+                Show matched and undeclared too
+              </label>
+            }
+          >
+            {gaps.length ? <GapRows code={code} gaps={gaps} /> : <p className="m-0 text-muted">{table.warehouse_checked ? "No gaps: every checked attribute matches or is not declared." : "The warehouse was not compared in this build."}</p>}
           </Section>
         </div>
       )}
@@ -531,7 +555,6 @@ export function TableObject({ code, doc, name, tab, onTab }: { code: string; doc
 function GapRows({ code, gaps }: { code: string; gaps: CatalogDoc["gaps"] }) {
   return (
     <DataTable
-      quiet
       label="Gaps"
       data={gaps}
       columns={columnsOf<CatalogDoc["gaps"][number]>([
@@ -550,7 +573,7 @@ function GapRows({ code, gaps }: { code: string; gaps: CatalogDoc["gaps"] }) {
 export function GapsObject({ code, doc }: { code: string; doc: CatalogDoc }) {
   const [state, setState] = React.useState("OPEN");
   const states = [...new Set(doc.gaps.map((g) => g.state))].sort();
-  const shown = doc.gaps.filter((g) => (state === "ALL" ? true : state === "OPEN" ? g.state !== "MATCHED" && g.state !== "UNCHECKED" : g.state === state));
+  const shown = doc.gaps.filter((g) => (state === "ALL" ? true : state === "OPEN" ? isOpenGap(g) : g.state === state));
   return (
     <ObjectPage header={
       <>

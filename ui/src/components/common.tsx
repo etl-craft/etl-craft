@@ -95,7 +95,7 @@ export function Fact({
 /** Facts in a grid; `inline` makes one wrapping line of "label value" pairs, for a compact header. */
 export function FactList({ children, className, inline }: { children: React.ReactNode; className?: string; inline?: boolean }) {
   return (
-    <dl className={cn("m-0 text-[13px]", inline ? "flex flex-wrap gap-x-6 gap-y-1" : "grid grid-cols-2 gap-x-8 gap-y-3 sm:grid-cols-3 lg:grid-cols-5", className)}>
+    <dl className={cn("m-0 text-[13px]", inline ? "flex flex-wrap items-baseline gap-x-6 gap-y-1" : "grid grid-cols-2 gap-x-8 gap-y-3 sm:grid-cols-3 lg:grid-cols-5", className)}>
       {children}
     </dl>
   );

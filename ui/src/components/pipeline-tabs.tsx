@@ -109,7 +109,6 @@ export function TasksTab({ code, pipeline, graph, runId }: { code: string; pipel
       {loading ? <Loading what="tasks" /> : null}
       <div className="overflow-hidden rounded-lg border border-border">
         <DataTable
-          quiet
           label="Pipeline tasks"
           data={tasks}
           columns={columnsOf<string>([
@@ -189,21 +188,36 @@ export function CalendarTab({ runs }: { runs: RunView[] }) {
   const monday = today - ((last.getUTCDay() + 6) % 7) * DAY - (WEEKS - 1) * 7 * DAY;
   const weeks = Array.from({ length: WEEKS }, (_, w) => Array.from({ length: 7 }, (_, d) => monday + (w * 7 + d) * DAY));
   const worst = (list: RunView[]) => (list.some((r) => r.status === "FAILED" || r.status === "LOST") ? "FAILED" : list.some((r) => r.status === "IN-PROGRESS") ? "IN-PROGRESS" : "SUCCESS");
+  const names = ["Mon", "", "Wed", "", "Fri", "", ""];
   return (
-    <div className="grid gap-3">
-      <div className="flex gap-1 overflow-x-auto" role="grid" aria-label="Runs by day">
-        {weeks.map((week) => (
-          <div key={week[0]} className="grid gap-1" role="row">
-            {week.map((ms) => {
-              const key = day(ms);
-              const list = byDay.get(key) ?? [];
-              const label = `${key}: ${list.length ? `${list.length} run${list.length === 1 ? "" : "s"}, ${list.filter((r) => r.status === "FAILED" || r.status === "LOST").length} failed` : "no runs"}`;
-              return <span key={key} role="gridcell" aria-label={label} title={label} className={cn("size-5 rounded-sm border", ms > today ? "border-transparent" : list.length ? cn(toneClass(worst(list)), "border-current") : "border-border bg-surface-2")} />;
-            })}
-          </div>
-        ))}
+    <div className="grid gap-2">
+      <div className="flex gap-1 overflow-x-auto pb-1" role="grid" aria-label="Runs by day">
+        <div className="grid gap-1 pt-5 pr-1 text-[10px] leading-5 text-muted" aria-hidden>
+          {names.map((n, i) => (
+            <span key={i} className="h-5">
+              {n}
+            </span>
+          ))}
+        </div>
+        {weeks.map((week, w) => {
+          const month = new Date(week[0]!).toLocaleString("en", { month: "short", timeZone: "UTC" });
+          const previous = w > 0 ? new Date(weeks[w - 1]![0]!).toLocaleString("en", { month: "short", timeZone: "UTC" }) : "";
+          return (
+            <div key={week[0]} className="grid gap-1" role="row">
+              <span className="h-4 text-[10px] leading-4 text-muted" aria-hidden>
+                {month !== previous ? month : ""}
+              </span>
+              {week.map((ms) => {
+                const key = day(ms);
+                const list = byDay.get(key) ?? [];
+                const label = `${key}: ${list.length ? `${list.length} run${list.length === 1 ? "" : "s"}, ${list.filter((r) => r.status === "FAILED" || r.status === "LOST").length} failed` : "no runs"}`;
+                return <span key={key} role="gridcell" aria-label={label} title={label} className={cn("size-5 rounded-sm border", ms > today ? "border-transparent" : list.length ? cn(toneClass(worst(list)), "border-current") : "border-border bg-surface-2")} />;
+              })}
+            </div>
+          );
+        })}
       </div>
-      <p className="m-0 text-xs text-muted">The last {WEEKS} weeks, oldest on the left, Monday at the top. Only the runs loaded for this pipeline are counted.</p>
+      <p className="m-0 text-xs text-muted">Each square is a day, oldest week on the left. A red square had a failed run; hover a square for its counts.</p>
     </div>
   );
 }
@@ -221,7 +235,6 @@ export function AuditTab({ code, pipeline }: { code: string; pipeline: string })
         <h3 className="m-0 text-sm font-semibold">Commands ({actions.length})</h3>
         {actions.length ? (
           <DataTable
-            quiet
             label="Commands run on this pipeline"
             data={actions.slice(0, 50)}
             columns={columnsOf<(typeof actions)[number]>([
@@ -239,7 +252,6 @@ export function AuditTab({ code, pipeline }: { code: string; pipeline: string })
         <h3 className="m-0 text-sm font-semibold">Metadata changes ({changes.length})</h3>
         {changes.length ? (
           <DataTable
-            quiet
             label="Metadata changes"
             data={changes.slice(0, 50)}
             columns={columnsOf<(typeof changes)[number]>([
