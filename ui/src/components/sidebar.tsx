@@ -2,9 +2,9 @@ import {
   Activity,
   BookOpen,
   CalendarClock,
-  ChartNoAxesColumn,
   Cpu,
   House,
+  LayoutList,
   ListChecks,
   PanelLeftClose,
   PanelLeftOpen,
@@ -17,7 +17,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { NavLink } from "react-router-dom";
-import { adminPath, agentsPath, systemPath, catalogPath, consolePath, heldPath, homePath, maintenancePath, insightsPath, pipelinesPath, projectHomePath, runsPath, scheduledPath, uploadsPath } from "@/lib/routes";
+import { adminPath, agentsPath, systemPath, catalogPath, consolePath, heldPath, homePath, maintenancePath, pipelinesPath, projectHomePath, projectsPath, runsPath, scheduledPath, uploadsPath } from "@/lib/routes";
 import { cn } from "@/lib/utils";
 
 interface Item {
@@ -34,20 +34,23 @@ function sections(code: string | undefined, admin: boolean): { title: string; it
       title: "Overview",
       items: [
         { label: "Home", icon: House, to: code ? projectHomePath(code) : homePath },
-        ...(code ? [{ label: "Runs", icon: ListChecks, to: runsPath(code) }] : []),
+        ...(code
+          ? [
+              { label: "Pipelines", icon: Workflow, to: pipelinesPath(code) },
+              { label: "Catalog", icon: BookOpen, to: catalogPath(code) },
+            ]
+          : []),
       ],
     },
     ...(code
       ? [
           {
-            title: "Project",
+            title: "Operations",
             items: [
-              { label: "Pipelines", icon: Workflow, to: pipelinesPath(code) },
+              { label: "Runs", icon: ListChecks, to: runsPath(code) },
               { label: "Scheduled runs", icon: CalendarClock, to: scheduledPath(code) },
               { label: "Held and paused", icon: PauseCircle, to: heldPath(code) },
               { label: "Uploads", icon: Upload, to: uploadsPath(code) },
-              { label: "Insights", icon: ChartNoAxesColumn, to: insightsPath(code) },
-              { label: "Catalog", icon: BookOpen, to: catalogPath(code) },
               { label: "Console", icon: SquareTerminal, to: consolePath(code) },
               ...(admin ? [{ label: "Maintenance", icon: Wrench, to: maintenancePath(code) }] : []),
             ],
@@ -57,6 +60,7 @@ function sections(code: string | undefined, admin: boolean): { title: string; it
     {
       title: "Platform",
       items: [
+        { label: "Projects", icon: LayoutList, to: projectsPath },
         { label: "System health", icon: Activity, to: systemPath },
         { label: "Agents", icon: Cpu, to: agentsPath },
         ...(admin ? [{ label: "Administration", icon: ShieldCheck, to: adminPath() }] : []),
@@ -102,7 +106,7 @@ export function Sidebar({
                 </>
               );
               return to ? (
-                <NavLink key={label} to={to} end={to === homePath || to === (code ? projectHomePath(code) : homePath)} title={collapsed ? label : undefined} className={({ isActive }) => row(collapsed, isActive)}>
+                <NavLink key={label} to={to} end={to === homePath || to === projectsPath || to === (code ? projectHomePath(code) : homePath)} title={collapsed ? label : undefined} className={({ isActive }) => row(collapsed, isActive)}>
                   {content}
                 </NavLink>
               ) : (

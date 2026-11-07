@@ -57,8 +57,8 @@ def test_insights_summarises_runs_and_filters_through_the_address(scene):
     _, url = scene
     with sync_playwright() as pw:
         browser, page, problems = open_page(pw, viewport={"width": 1280, "height": 1000})
-        sign_in(page, url, "/ui/projects/default/insights")
-        expect(page.get_by_role("heading", name="Pipeline insights")).to_be_visible()
+        sign_in(page, url, "/ui/projects/default")
+        expect(page.get_by_role("heading", name="Home", exact=True)).to_be_visible()
         expect(page.get_by_role("term").filter(has_text="Success rate")).to_be_visible()
         expect(page.get_by_role("list", name="Runs per day")).to_be_visible()
         pipelines = page.get_by_role("table", name="Pipelines")
@@ -182,7 +182,7 @@ def test_the_catalog_says_when_nothing_is_built_and_offers_the_rebuild(scene):
 def test_the_pages_render_cleanly_in_both_themes_and_on_a_phone(scene, scheme, width):
     _, url = scene
     pages = {
-        "insights": "/ui/projects/default/insights",
+        "insights": "/ui/projects/default",
         "console": "/ui/projects/default/console",
         "catalog": "/ui/projects/default/catalog",
     }
@@ -199,4 +199,20 @@ def test_the_pages_render_cleanly_in_both_themes_and_on_a_phone(scene, scheme, w
             assert overflow <= 0, f"{name} scrolls sideways by {overflow}px at {width}px"
             shoot(page, f"{name}-{scheme}-{width}")
         assert [p for p in problems if "status of 404" not in p] == []
+        browser.close()
+
+
+def test_platform_lists_the_projects_and_the_old_insights_address_opens_home(scene):
+    _, url = scene
+    with sync_playwright() as pw:
+        browser, page, problems = open_page(pw, viewport={"width": 1280, "height": 800})
+        sign_in(page, url, "/ui/projects/default")
+        page.get_by_role("link", name="Projects", exact=True).click()
+        expect(page.get_by_role("heading", name="Projects", exact=True)).to_be_visible()
+        expect(page.get_by_role("link", name="default", exact=True)).to_be_visible()
+        shoot(page, "projects")
+        page.goto(url + "/ui/projects/default/insights?pipeline=ORDERS")
+        expect(page.get_by_role("heading", name="Home", exact=True)).to_be_visible()
+        assert page.url.endswith("/ui/projects/default?pipeline=ORDERS")
+        assert problems == []
         browser.close()

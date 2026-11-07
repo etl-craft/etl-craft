@@ -17,9 +17,9 @@ import { Settings } from "@/pages/settings";
 import { SignIn } from "@/pages/signin";
 import { System } from "@/pages/system";
 import { Held } from "@/pages/held";
-import { Insights } from "@/pages/insights";
+import { Insights, InsightsRedirect } from "@/pages/insights";
 import { Items } from "@/pages/items";
-import { HomeEntry, ProjectHome } from "@/pages/home";
+import { HomeEntry, ProjectList } from "@/pages/home";
 import { PipelineDetail } from "@/pages/pipeline-detail";
 import { Pipelines } from "@/pages/pipelines";
 import { Scheduled } from "@/pages/scheduled";
@@ -44,7 +44,8 @@ createRoot(document.getElementById("root")!).render(
           <Route path="signin" element={<SignIn />} />
           <Route element={<AppShell />}>
             <Route index element={<HomeEntry />} />
-            <Route path="projects/:project" element={<ProjectHome />} />
+            <Route path="projects" element={<ProjectList />} />
+            <Route path="projects/:project" element={<Insights />} />
             <Route path="system" element={<System />} />
             <Route path="agents" element={<Agents />} />
             <Route path="admin" element={<Admin />} />
@@ -57,7 +58,7 @@ createRoot(document.getElementById("root")!).render(
             <Route path="projects/:project/pipelines/:pipeline" element={<PipelineDetail />} />
             <Route path="projects/:project/pipelines/:pipeline/tasks/:task" element={<Task />} />
             <Route path="projects/:project/uploads" element={<Uploads />} />
-            <Route path="projects/:project/insights" element={<Insights />} />
+            <Route path="projects/:project/insights" element={<InsightsRedirect />} />
             <Route path="projects/:project/console" element={<Console />} />
             <Route path="projects/:project/catalog" element={<Catalog />} />
             <Route path="projects/:project/scheduled" element={<Scheduled />} />
