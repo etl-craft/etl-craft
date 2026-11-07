@@ -118,7 +118,16 @@ def test_the_quick_start_runs_as_written(tmp_path):
     )
     assert repeated.returncode == 0, repeated.stderr
     with sqlite3.connect(project / "engine.db") as conn:
-        assert conn.execute("SELECT COUNT(*) FROM AUD_METADATA_CHANGES").fetchone()[0] == count
+        after = conn.execute("SELECT COUNT(*) FROM AUD_METADATA_CHANGES").fetchone()[0]
+        newest = conn.execute(
+            "SELECT * FROM AUD_METADATA_CHANGES ORDER BY 1 DESC LIMIT ?",
+            (max(after - count, 0) + 1,),
+        )
+        named = [column[0] for column in newest.description]
+        assert after == count, (
+            f"repeating prepare.py metadata recorded {after - count} more config change(s); "
+            f"newest rows ({', '.join(named)}): {newest.fetchall()}"
+        )
     migration = project / "migrations" / "0001_demo.sql"
     original = migration.read_bytes()
     seed = project / "metadata" / "demo.sql"
