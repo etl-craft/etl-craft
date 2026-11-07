@@ -82,7 +82,7 @@ def _table(catalog: Catalog, name: str, asset: TableAsset) -> dict[str, Any]:
 
 
 def catalog_document(catalog: Catalog) -> dict[str, Any]:
-    """The whole catalog as plain JSON values."""
+    """Return the whole catalog as plain JSON values."""
     return {
         "schema": SCHEMA,
         "generated_at": catalog.generated_at.isoformat(),
