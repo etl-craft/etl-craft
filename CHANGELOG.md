@@ -6,6 +6,19 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+- The UI's Catalog is a data explorer rendered by the app instead of the generated pages in a frame: a
+  resizable tree of pipelines, tasks and warehouse tables with search, and pages for a table (Overview with
+  its columns, Lineage, History, Quality), a pipeline, a task and the schema and lineage gaps.
+  `generate-docs` writes `catalog.json` beside the HTML site for it (`etl-craft/catalog/1`); the site is
+  unchanged and still what `publish-docs` publishes.
+- The pipeline page gains the rest of the Airflow DAG page: Calendar, Audit log and Code (each task's
+  definition) tabs, an Options menu on the grid (duration bars, column labels) and a minimap on large graphs.
+  The Pipelines list shows each pipeline's description.
+- The UI's pipeline page follows the Airflow DAG page: a facts row (schedule, latest run, next run), and
+  tabs for Overview (runs, failures, success rate and median duration over a window, the last ten
+  runs), the selected run, Runs (now filterable by state), Tasks, Details and Documentation (the
+  pipeline's `DESCRIPTION` and each task's `DOCUMENTATION`). The pipeline views
+  (`etl-craft/pipeline/1`, `etl-craft/pipeline-list/1`) gain `description`.
 - The pipeline workspace's panes resize (drag the divider, or focus it and use the arrow keys; Home resets;
   the width is remembered in the browser). The Graph view fills its pane and keeps the whole graph in
   view as it is resized, laid out top to bottom in a tall pane or left to right in a wide one, with

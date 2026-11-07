@@ -15,7 +15,7 @@ const columns = createColumnHelper<SearchHit>();
 /** The page a hit opens: tables are in the generated catalog, everything else in the interface. */
 function hitLink(code: string, hit: SearchHit): { to: string } {
   const pipeline = hit.pipeline_code ?? "";
-  if (hit.kind === "TABLE") return { to: catalogPath(code, hit.catalog_path ?? undefined) };
+  if (hit.kind === "TABLE") return { to: catalogPath(code, "tables", hit.label) };
   if (hit.kind === "RUN" && hit.run_id !== null) return { to: runPath(code, pipeline, hit.run_id) };
   if (hit.kind === "TASK") return { to: taskPath(code, pipeline, hit.label) };
   return { to: pipelinePath(code, pipeline) };

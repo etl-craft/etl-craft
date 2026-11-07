@@ -81,9 +81,9 @@ export function Pipelines() {
           ) : null}
           <CsvButton
             name={`${code}-pipelines.csv`}
-            header={["pipeline", "name", "tags", "schedule", "next_run", "automatic_runs", "paused_tasks"]}
+            header={["pipeline", "name", "description", "tags", "schedule", "next_run", "automatic_runs", "paused_tasks"]}
             rows={(selected.length ? shown.filter((p) => chosen.has(p.pipeline_code)) : shown).map((p) => [
-              p.pipeline_code, p.pipeline_name, p.tags.join(" "), p.run_schedule ?? "", p.next_run ?? "", p.paused ? `paused by ${p.paused.paused_by}: ${p.paused.reason}` : "active", p.task_pauses.length,
+              p.pipeline_code, p.pipeline_name, p.description ?? "", p.tags.join(" "), p.run_schedule ?? "", p.next_run ?? "", p.paused ? `paused by ${p.paused.paused_by}: ${p.paused.reason}` : "active", p.task_pauses.length,
             ])}
           />
           </div>
@@ -127,6 +127,7 @@ export function Pipelines() {
                 </span>
               ),
             }),
+            columns.display({ id: "description", header: "Description", cell: (c) => <span className="line-clamp-2 max-w-md text-[13px] text-muted" title={c.row.original.description ?? undefined}>{c.row.original.description ?? "—"}</span> }),
             columns.display({ id: "tags", header: "Tags", cell: (c) => <TagList tags={c.row.original.tags} /> }),
             columns.accessor("run_schedule", { header: "Schedule", enableSorting: false, cell: (c) => (c.getValue() ? <code className="whitespace-nowrap font-mono text-xs">{c.getValue()}</code> : <span className="whitespace-nowrap text-muted">Not scheduled</span>) }),
             columns.display({ id: "next", header: "Next run", cell: (c) => <NextRun pipeline={c.row.original} timeZone={tz} /> }),

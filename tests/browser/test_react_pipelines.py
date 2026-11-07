@@ -97,7 +97,7 @@ def test_filter_by_tag_select_pause_and_export(scene):
             page.get_by_role("button", name="Export CSV").click()
         content = Path(download.value.path()).read_text(encoding="utf-8")
         assert content.startswith(
-            "pipeline,name,tags,schedule,next_run,automatic_runs,paused_tasks"
+            "pipeline,name,description,tags,schedule,next_run,automatic_runs,paused_tasks"
         )
         assert "SALES" in content and "paused by owner: month-end freeze" in content
         assert problems == []
@@ -265,5 +265,26 @@ def test_the_panes_resize_and_the_graph_stays_whole(scene):
         expect(graph.get_by_text("EXTRACT")).to_be_visible()  # a resize refits the graph
         page.get_by_role("button", name="Horizontal").click()
         assert "flow=lr" in page.url
+        assert problems == []
+        browser.close()
+
+
+def test_a_pipeline_has_an_overview_tasks_details_and_documentation(scene):
+    _, url, _ = scene
+    with sync_playwright() as pw:
+        browser, page, problems = open_page(pw, viewport={"width": 1440, "height": 900})
+        page.context.set_default_timeout(8000)
+        sign_in(page, url, "/ui/projects/default/pipelines/OPS")
+        expect(page.get_by_role("tab", name="Overview")).to_have_attribute("aria-selected", "true")
+        expect(page.get_by_text("Failed runs", exact=True)).to_be_visible()
+        page.get_by_role("tab", name="Tasks").click()
+        expect(
+            page.get_by_role("table", name="Pipeline tasks").get_by_role("link")
+        ).not_to_have_count(0)
+        page.get_by_role("tab", name="Details").click()
+        expect(page.get_by_text("Refresh", exact=True).last).to_be_visible()
+        page.get_by_role("tab", name="Docs").click()
+        expect(page.get_by_text("About this pipeline")).to_be_visible()
+        expect(page.get_by_role("region", name="Task documentation")).to_be_visible()
         assert problems == []
         browser.close()

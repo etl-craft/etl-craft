@@ -15,7 +15,7 @@ const COLUMNS = 25;
  * Every task against the pipeline's recent runs, newest on the right, like the duration bars above it: one glance shows where and when a task
  * started failing. A column header selects a run; a cell selects the run and opens that task in it.
  */
-export function RunGrid({ code, pipeline, graph, runs, selected, onSelect }: { code: string; pipeline: string; graph: Graph; runs: RunView[]; selected?: number; onSelect: (runId: number, task?: string) => void }) {
+export function RunGrid({ code, pipeline, graph, runs, selected, onSelect, bars = true, labels = "id" }: { code: string; pipeline: string; graph: Graph; runs: RunView[]; selected?: number; onSelect: (runId: number, task?: string) => void; bars?: boolean; labels?: "id" | "time" }) {
   const tasks = graph.waves.flat();
   const latest = runs.slice(0, COLUMNS);
   const newest = latest[0]?.pipeline_run_id;
@@ -38,6 +38,7 @@ export function RunGrid({ code, pipeline, graph, runs, selected, onSelect }: { c
       {cells.some((c) => c.isPending) ? <Loading what="the grid" className="p-3" /> : null}
       <table aria-label="Run grid" className="w-full border-separate border-spacing-0 text-[13px]">
         <thead>
+          {bars ? (
           <tr>
             <th scope="col" className="sticky left-0 top-0 z-20 h-20 bg-surface px-3 text-left align-bottom text-xs font-medium text-muted">
               Duration
@@ -60,12 +61,13 @@ export function RunGrid({ code, pipeline, graph, runs, selected, onSelect }: { c
               </td>
             ))}
           </tr>
+          ) : null}
           <tr>
-            <th scope="col" className="sticky left-0 top-20 z-20 bg-surface-2 px-3 py-1.5 text-left text-xs font-medium text-muted">
+            <th scope="col" className={cn("sticky left-0 z-20 bg-surface-2 px-3 py-1.5 text-left text-xs font-medium text-muted", bars ? "top-20" : "top-0")}>
               Task
             </th>
             {shown.map((run) => (
-              <th key={run.pipeline_run_id} scope="col" className={cn("sticky top-20 z-10 px-0.5 py-1.5 text-center text-xs font-medium", run.pipeline_run_id === selected ? "bg-accent/15 text-fg" : "bg-surface-2 text-muted")}>
+              <th key={run.pipeline_run_id} scope="col" className={cn("sticky z-10 px-0.5 py-1.5 text-center text-xs font-medium", bars ? "top-20" : "top-0", run.pipeline_run_id === selected ? "bg-accent/15 text-fg" : "bg-surface-2 text-muted")}>
                 <Link
                   className="num hover:text-accent hover:underline"
                   to={runPath(code, pipeline, run.pipeline_run_id)}
@@ -75,7 +77,7 @@ export function RunGrid({ code, pipeline, graph, runs, selected, onSelect }: { c
                   }}
                   aria-current={run.pipeline_run_id === selected ? "true" : undefined}
                 >
-                  {run.pipeline_run_id}
+                  {labels === "time" && run.start_date ? new Date(run.start_date).toISOString().slice(5, 16).replace("T", " ") : run.pipeline_run_id}
                 </Link>
               </th>
             ))}

@@ -60,6 +60,7 @@ def pipeline_view(conn: Connection, pipeline_id: int) -> PipelineView:
         resumes(conn, pipeline_id)[:1],
         auto_restart_condition=detail.auto_restart_condition,
         restart_note=restart_note(detail.auto_restart_condition),
+        description=detail.description,
     )
 
 
