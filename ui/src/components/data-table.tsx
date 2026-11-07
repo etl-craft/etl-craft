@@ -1,7 +1,7 @@
 import { flexRender, getCoreRowModel, getSortedRowModel, useReactTable, type ColumnDef, type SortingState } from "@tanstack/react-table";
 import { ArrowDown, ArrowUp } from "lucide-react";
 import * as React from "react";
-import { Table, Td, Th } from "@/components/ui/table";
+import { Table, Td, Th, type More } from "@/components/ui/table";
 
 // TanStack types a column by its value, so a table's mixed columns share one loose type here.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -44,6 +44,7 @@ export function DataTable<T>({
   rowLabel,
   selection,
   empty,
+  more,
 }: {
   data: T[];
   columns: Column<T>[];
@@ -54,6 +55,8 @@ export function DataTable<T>({
   selection?: Selection;
   /** Shown instead of the table when there are no rows. */
   empty?: string;
+  /** The list continues on the server: the next rows load as the end is scrolled into view. */
+  more?: More;
 }) {
   const [sorting, setSorting] = React.useState<SortingState>(initialSort ?? []);
   const table = useReactTable({ data, columns, state: { sorting }, onSortingChange: setSorting, getCoreRowModel: getCoreRowModel(), getSortedRowModel: getSortedRowModel() });
@@ -73,7 +76,7 @@ export function DataTable<T>({
         />
         Wrap text
       </label>
-    <Table aria-label={label}>
+    <Table aria-label={label} more={more}>
       <thead>
         {table.getHeaderGroups().map((group) => (
           <tr key={group.id}>

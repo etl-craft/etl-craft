@@ -5,7 +5,6 @@ import { Loading, Notice } from "@/components/common";
 import { createColumnHelper } from "@tanstack/react-table";
 import { DataTable } from "@/components/data-table";
 import { StatusBadge } from "@/components/status";
-import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { useTimezone } from "@/hooks";
 import { getJson, project } from "@/lib/api";
@@ -48,7 +47,8 @@ export function RunsTable({ code, pipeline, status, filters = {} }: { code: stri
           label="Pipeline runs"
           data={rows}
           initialSort={[{ id: "id", desc: true }]}
-          empty={runs.isSuccess ? (status ? `None of the ${all.length} loaded runs is ${status.toLowerCase()}. Load more or clear the status filter.` : "No runs yet.") : undefined}
+          empty={runs.isSuccess && !runs.hasNextPage ? (status ? `None of the ${all.length} runs is ${status.toLowerCase()}. Clear the status filter.` : "No runs yet.") : undefined}
+          more={{ hasMore: Boolean(runs.hasNextPage), loading: runs.isFetchingNextPage, load: () => void runs.fetchNextPage() }}
           columns={[
             columns.accessor("pipeline_run_id", {
               id: "id",
@@ -69,18 +69,6 @@ export function RunsTable({ code, pipeline, status, filters = {} }: { code: stri
           ]}
         />
         {runs.isPending ? <Loading what="runs" className="p-4" /> : null}
-        <div className="flex items-center justify-between gap-3 border-t border-border px-3 py-2 text-xs text-muted">
-          <span>
-            {rows.length} shown{status ? ` of ${all.length} loaded` : ""}
-          </span>
-          {runs.hasNextPage ? (
-            <Button size="sm" onClick={() => void runs.fetchNextPage()} disabled={runs.isFetchingNextPage}>
-              {runs.isFetchingNextPage ? "Loading…" : "Load older runs"}
-            </Button>
-          ) : (
-            <span>All runs loaded</span>
-          )}
-        </div>
       </Card>
     </>
   );
