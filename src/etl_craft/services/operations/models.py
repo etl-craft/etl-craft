@@ -49,6 +49,8 @@ class RunView:
     child_run_ids: tuple[int, ...] = ()
     bundle_id: str | None = None
     metadata_version: str | None = None
+    run_label: str = ""
+    """Pipeline, UTC start to the second and run id, fixed when the run is created."""
     newer_metadata_available: bool = False
     item_progress: str | None = None
     rules: tuple[RuleObservation, ...] = ()
@@ -141,6 +143,8 @@ class TaskRunView:
     rules: tuple[RuleObservation, ...] = ()
 
     standing_pause: TaskPause | None = None
+    task_run_label: str = ""
+    """Pipeline, task, UTC start to the second and task run id; an attempt adds its number."""
 
 
 @dataclass(frozen=True)
