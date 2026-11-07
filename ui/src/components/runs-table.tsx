@@ -9,7 +9,7 @@ import { Card } from "@/components/ui/card";
 import { useTimezone } from "@/hooks";
 import { getJson, project } from "@/lib/api";
 import { formatDuration, formatTime } from "@/lib/format";
-import { runPath } from "@/lib/routes";
+import { pipelineRunPath, runPath } from "@/lib/routes";
 import type { History, RunView } from "@/lib/types";
 
 const PAGE = 50;
@@ -35,7 +35,9 @@ export function useRuns(code: string, pipeline?: string, filters: RunFilters = {
   return { runs, all };
 }
 
-export function RunsTable({ code, pipeline, status, filters = {} }: { code: string; pipeline?: string; status?: string; filters?: RunFilters }) {
+/** The runs of the project, or of one pipeline, as a table. A run opens its own page from a pipeline's list, and
+ * its pipeline's list with the run highlighted from the project's. */
+export function RunsTable({ code, pipeline, status, filters = {}, highlight }: { code: string; pipeline?: string; status?: string; filters?: RunFilters; highlight?: number }) {
   const tz = useTimezone();
   const { runs, all } = useRuns(code, pipeline, filters);
   const rows = React.useMemo(() => (status ? all.filter((run) => run.status === status) : all), [all, status]);
@@ -46,6 +48,7 @@ export function RunsTable({ code, pipeline, status, filters = {} }: { code: stri
         <DataTable
           label="Pipeline runs"
           data={rows}
+          highlight={highlight === undefined ? undefined : (run) => run.pipeline_run_id === highlight}
           initialSort={[{ id: "id", desc: true }]}
           empty={runs.isSuccess && !runs.hasNextPage ? (status ? `None of the ${all.length} runs is ${status.toLowerCase()}. Clear the status filter.` : "No runs yet.") : undefined}
           more={{ hasMore: Boolean(runs.hasNextPage), loading: runs.isFetchingNextPage, load: () => void runs.fetchNextPage() }}
@@ -54,10 +57,18 @@ export function RunsTable({ code, pipeline, status, filters = {} }: { code: stri
               id: "id",
               header: "Run",
               cell: (c) => (
-                <Link className="num font-medium text-accent hover:underline" to={runPath(code, c.row.original.pipeline_code, c.getValue())}>
-                  #{c.getValue()}
+                <Link
+                  className="font-medium text-accent hover:underline"
+                  to={pipeline ? runPath(code, c.row.original.pipeline_code, c.getValue()) : pipelineRunPath(code, c.row.original.pipeline_code, c.getValue())}
+                >
+                  <span className="num">#{c.getValue()}</span>
                 </Link>
               ),
+            }),
+            columns.accessor("run_label", {
+              id: "label",
+              header: "Identifier",
+              cell: (c) => <span className="whitespace-nowrap font-mono text-xs text-muted">{c.getValue() || "—"}</span>,
             }),
             ...(pipeline ? [] : [columns.accessor("pipeline_code", { id: "pipeline", header: "Pipeline", cell: (c) => <span className="font-medium">{c.getValue()}</span> })]),
             columns.accessor("status", { header: "Status", cell: (c) => <StatusBadge status={c.getValue()} /> }),

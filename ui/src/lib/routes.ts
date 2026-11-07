@@ -14,6 +14,9 @@ export const pipelinesPath = (project: string, tags: string[] = []): string =>
   `/projects/${enc(project)}/pipelines` + (tags.length ? "?" + tags.map((t) => `tag=${enc(t)}`).join("&") : "");
 export const pipelinePath = (project: string, pipeline: string, tab?: string): string =>
   `/projects/${enc(project)}/pipelines/${enc(pipeline)}` + (tab ? `?tab=${tab}` : "");
+/** A pipeline's runs with one run highlighted: where the project's run list leads. */
+export const pipelineRunPath = (project: string, pipeline: string, runId: number | string): string =>
+  `/projects/${enc(project)}/pipelines/${enc(pipeline)}?run=${runId}`;
 export const scheduledPath = (project: string): string => `/projects/${enc(project)}/scheduled`;
 export const heldPath = (project: string): string => `/projects/${enc(project)}/held`;
 export const taskPath = (project: string, pipeline: string, task: string): string =>

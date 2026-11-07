@@ -72,6 +72,10 @@ def test_home_runs_and_run_detail_lead_to_a_confirmed_recovery(scene):
         page.get_by_role(
             "link", name="Runs", exact=True
         ).click()  # Operations, beside Held and paused
+        page.get_by_role(
+            "link", name=f"#{bad}"
+        ).first.click()  # the pipeline's runs, this one marked
+        expect(page.locator("tr[aria-current=true]")).to_have_count(1)
         page.get_by_role("link", name=f"#{bad}").first.click()
         expect(page.get_by_role("heading", name=f"OPS #{bad}")).to_be_visible()
         graph = page.get_by_role("group", name="Task graph")
@@ -271,5 +275,32 @@ def test_shortcuts_copy_run_key_and_live_status_are_offered(scene):
         page.get_by_role("button", name="Account menu").click()
         page.get_by_role("menuitem", name="Keyboard shortcuts").click()
         expect(page.get_by_role("dialog").get_by_text("opens this list")).to_be_visible()
+        assert problems == []
+        browser.close()
+
+
+def shoot(page, name):
+    shots = os.environ.get("ETL_CRAFT_UI_SCREENSHOTS")
+    if shots:
+        Path(shots).mkdir(parents=True, exist_ok=True)
+        page.screenshot(path=f"{shots}/{name}.png")
+
+
+def test_the_project_runs_list_and_a_pipeline_share_one_layout(scene):
+    _, url, good, _bad = scene
+    with sync_playwright() as pw:
+        browser, page, problems = open_page(pw, viewport={"width": 1280, "height": 800})
+        sign_in(page, url, "/ui/projects/default/runs")
+        expect(page.get_by_text("Run durations")).to_be_visible()
+        expect(page.get_by_role("columnheader", name="Identifier")).to_be_visible()
+        expect(page.get_by_text("OPS-").first).to_be_visible()  # the string identifier, beside #id
+        shoot(page, "runs-list")
+        page.get_by_role("link", name=f"#{good}", exact=True).click()
+        expect(
+            page.get_by_text("Run durations")
+        ).to_be_visible()  # the pipeline's own page, same layout
+        expect(page.locator("tr[aria-current=true]")).to_have_count(1)
+        shoot(page, "pipeline-highlight")
+        assert page.url.endswith(f"?run={good}")
         assert problems == []
         browser.close()

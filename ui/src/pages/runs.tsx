@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useParams, useSearchParams } from "react-router-dom";
 import { PageHeader, SelectField } from "@/components/common";
-import { RunsTable } from "@/components/runs-table";
+import { RunsPanel } from "@/components/runs-panel";
 import { Button } from "@/components/ui/button";
 import { useProjectInfo } from "@/hooks";
 import { getJson, project } from "@/lib/api";
@@ -31,8 +31,13 @@ export function Runs() {
       <PageHeader
         title="Pipeline runs"
         subtitle={code}
-        actions={
-          <div className="flex flex-wrap items-end gap-3">
+      />
+      <RunsPanel
+        code={code}
+        pipeline={pipeline || undefined}
+        status={status || undefined}
+        toolbar={
+          <>
             <SelectField compact label="Pipeline" value={pipeline} onChange={(value) => set("pipeline", value)}>
               <option value="">All pipelines</option>
               {(pipelines.data?.pipelines ?? []).map((p) => (
@@ -54,10 +59,9 @@ export function Runs() {
                 Clear filters
               </Button>
             ) : null}
-          </div>
+                    </>
         }
       />
-      <RunsTable code={code} pipeline={pipeline || undefined} status={status || undefined} />
     </div>
   );
 }
