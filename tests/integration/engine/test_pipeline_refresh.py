@@ -262,7 +262,7 @@ def test_upgrade_seeds_the_last_complete_successful_run_and_preserves_it(
     previous = tmp_path / "before-refresh"
     previous.mkdir()
     for migration in db.dialect.migrations_dir().glob("*.sql"):
-        if migration.name < "0067":
+        if migration.name < "0067" or migration.name.startswith("0088"):
             shutil.copy2(migration, previous / migration.name)
     with monkeypatch.context() as patch:
         patch.setattr(EngineDialect, "migrations_dir", lambda self: previous)
