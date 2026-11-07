@@ -155,3 +155,17 @@ def test_the_command_line_follows_the_same_idle_rule_as_the_browser(scene):
     renewed = scene.post("/api/v1/login/refresh", json={"token": refresh})
     assert renewed.status_code == 400
     assert "without activity; run `etl-craft login` again" in renewed.json()["message"]
+
+
+def test_a_forged_challenge_cookie_never_reaches_the_page(scene):
+    forged = '"><script>alert(1)</script>' + "a" * 20
+    scene.cookies.set(CSRF, forged, domain="testserver.local")
+    page = scene.get("/ui/signin", headers={"cookie": f"{CSRF}={forged}"})
+    shown = re.search(r'name="csrf-token" content="([^"]+)"', page.text).group(1)
+    assert "<script>" not in page.text and forged not in page.text
+    assert re.fullmatch(r"[A-Za-z0-9_-]{43}", shown)  # a fresh token, not the forged text
+
+
+def test_a_well_formed_challenge_cookie_is_kept(scene):
+    page = scene.get("/ui/signin", headers={"cookie": f"{CSRF}={'A' * 43}"})
+    assert re.search(r'name="csrf-token" content="A{43}"', page.text)

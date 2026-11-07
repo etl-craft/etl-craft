@@ -1,6 +1,7 @@
 """Serve the built browser interface at ``/ui``; it calls only ``/api/v1`` as the session."""
 
 import secrets
+from html import escape
 from pathlib import Path
 from urllib.parse import quote
 
@@ -60,7 +61,9 @@ def add_spa_pages(app: FastAPI, ctx: OperationContext) -> None:
                 back = request.query_params.get("return_to", "/ui")
                 return RedirectResponse(browser.return_path(back), 303)
         fresh = None if browser.has_challenge(request) else secrets.token_urlsafe(32)
-        token = fresh or request.cookies[browser.CSRF]
+        # An existing cookie passed has_challenge's exact shape; it is escaped as well, because the
+        # value goes into the page.
+        token = fresh or escape(request.cookies[browser.CSRF], quote=True)
         response = HTMLResponse(_document().replace(CSRF_SLOT, token))
         if fresh is not None:
             browser.challenge(response, fresh, ctx.config.auth.session_hours)
