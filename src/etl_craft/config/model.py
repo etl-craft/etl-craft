@@ -29,6 +29,7 @@ from etl_craft.core.enums import (
 )
 from etl_craft.core.errors import ConfigurationError
 from etl_craft.core.resources import Sizing
+from etl_craft.core.restart import EVERYTHING
 
 CONFIG_FILENAME = "craft-connector.yml"
 PROJECT_DIRNAME = "etl-craft"
@@ -293,8 +294,11 @@ class ConnectorConfig:
     max_warehouse_queries: int | None = None
     retries: int | None = None
     email_recipients: list[str] | None = None
-    allow_schedule: bool = True
-    """Whether this environment's controller starts pipelines on their ``RUN_SCHEDULE``."""
+    allowed_auto_restarts: str = EVERYTHING
+    """What this environment's controller may start on its own: schedule ticks and run endings.
+
+    A pipeline's ``AUTO_RESTART_CONDITION`` stays valid everywhere; this only suppresses starts.
+    """
     email: EmailProfile | None = None
     email_template: str | None = None
     limits: ExecutionLimits = field(default_factory=ExecutionLimits)

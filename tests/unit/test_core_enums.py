@@ -88,6 +88,7 @@ EXPECTED = {
         "Expected before first deployment",
     },
     enums.NonBusinessDay: {"SKIP", "NEXT_BUSINESS_DAY"},
+    enums.AutoRestartCondition: {"NONE", "SCHEDULE", "SUCCESS", "SKIPPED", "FAILURE", "ALWAYS"},
     enums.YesNo: {"Y", "N"},
     enums.RunStatus: {"QUEUED", "IN-PROGRESS", "SUCCESS", "FAILED", "SKIPPED", "CANCELLED"},
     enums.AttemptStatus: {

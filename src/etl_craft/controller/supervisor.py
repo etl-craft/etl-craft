@@ -20,6 +20,7 @@ from etl_craft.core.definitions import Definition, using
 from etl_craft.core.enums import RunStatus, YesNo
 from etl_craft.core.errors import ConfigurationError, EngineDbError, EtlCraftError
 from etl_craft.core.outage import OutageBudget
+from etl_craft.core.restart import schedule_allowed
 from etl_craft.engine.metrics import install
 from etl_craft.engine.queries import statement
 from etl_craft.engine.repository import controllers
@@ -200,8 +201,11 @@ def serve(ctx: OperationContext, stop: threading.Event) -> None:
             controller_id = controllers.start(ctx.engine)
             metrics.leader = True
             logger.info("controller_id=%s: controller active", controller_id)
-            if not ctx.config.allow_schedule:
-                logger.info("Orchestration.Allow_schedule is false: no scheduled pipeline runs")
+            if not schedule_allowed(ctx.config.allowed_auto_restarts):
+                logger.info(
+                    "Orchestration.Allowed_auto_restarts=%s: no scheduled pipeline runs",
+                    ctx.config.allowed_auto_restarts,
+                )
             try:
                 while not stop.is_set():
                     try:

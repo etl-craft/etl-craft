@@ -2,13 +2,14 @@
 
 import json
 import re
-from collections.abc import Container
+from collections.abc import Callable, Container
 from datetime import date
 from decimal import Decimal, InvalidOperation
 
 from etl_craft.core.business_rules import rule_shape_problem
 from etl_craft.core.enums import RunCondition
 from etl_craft.core.errors import MetadataFileError
+from etl_craft.core.restart import parse_auto_restart
 from etl_craft.core.text import is_metadata_code, is_safe_identifier
 from etl_craft.engine.repository.config_rows import (
     BUSINESS_RULES,
@@ -112,6 +113,10 @@ def _identifier_problem(table: ConfigTable, values: dict[str, Value]) -> str | N
     return None
 
 
+_TEXT_PARSERS: dict[str, Callable[[str], Value]] = {}
+"""The columns whose text is read by one function; filled below, after the functions exist."""
+
+
 def parse_cell(column: Column, cell: str) -> Value:
     """Return a cell's value in its column's type; ``MetadataFileError`` says what was expected."""
     if cell == "":
@@ -136,13 +141,8 @@ def parse_cell(column: Column, cell: str) -> Value:
         if column.minimum is not None and number < column.minimum:
             raise MetadataFileError(f"{number} is less than {column.minimum}")
         return number
-    if column.kind == "float":
-        return parse_decimal(cell)
-    if column.kind == "date":
-        return parse_date(cell)
-    if column.kind == "json":
-        return parse_object(cell)
-    return cell
+    parser = _TEXT_PARSERS.get(column.kind)
+    return cell if parser is None else parser(cell)
 
 
 def parse_decimal(cell: str) -> float:
@@ -175,3 +175,13 @@ def parse_object(cell: str) -> dict[str, object]:
     if not isinstance(parsed, dict):
         raise MetadataFileError("is not a JSON object; write it as {...}")
     return parsed
+
+
+_TEXT_PARSERS.update(
+    {
+        "float": parse_decimal,
+        "date": parse_date,
+        "json": parse_object,
+        "endings": parse_auto_restart,
+    }
+)

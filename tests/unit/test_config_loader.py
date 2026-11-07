@@ -1022,12 +1022,23 @@ def test_unknown_orchestration_setting_names_the_key_and_file(tmp_path, key):
     assert "unknown key" in str(refused.value)
 
 
-def test_allow_schedule_is_set_per_environment(tmp_path):
-    profiles = {"dev": {"Allow_schedule": False}, "prod": {}}
+def test_allowed_auto_restarts_is_set_per_environment(tmp_path):
+    profiles = {"dev": {"Allowed_auto_restarts": "NONE"}, "prod": {}}
     dev = _write(tmp_path, _minimal(Orchestration={"Profile": "dev", **profiles}))
-    assert load_config(dev).allow_schedule is False
+    assert load_config(dev).allowed_auto_restarts == "NONE"
     prod = _write(tmp_path, _minimal(Orchestration={"Profile": "prod", **profiles}))
-    assert load_config(prod).allow_schedule is True
+    assert load_config(prod).allowed_auto_restarts == "SCHEDULE|ALWAYS"
+
+
+def test_allowed_auto_restarts_refuses_a_bad_value_and_the_old_setting_is_not_an_alias(tmp_path):
+    bad = _write(
+        tmp_path, _minimal(Orchestration={"Allowed_auto_restarts": "when it feels like it"})
+    )
+    with pytest.raises(ConfigurationError, match=r"Allowed_auto_restarts='when it feels like it'"):
+        load_config(bad)
+    old = _write(tmp_path, _minimal(Orchestration={"Allow_schedule": False}))
+    with pytest.raises(ConfigurationError, match="Allow_schedule"):
+        load_config(old)
 
 
 def test_the_old_ingestion_slot_setting_is_not_an_alias(tmp_path):

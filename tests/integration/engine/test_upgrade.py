@@ -272,7 +272,8 @@ def test_ending_evidence_upgrade_keeps_existing_observations_unclassified(empty_
     db = empty_engine_db
     install(db, "0.3.0")
     for file in migrations.migration_streams(db.engine)[0].files:
-        if "0019" <= file.version < "0085":
+        # 0088 adds the pipeline column the run snapshot reads when the current code creates a run.
+        if "0019" <= file.version < "0085" or file.version.startswith("0088"):
             migrations._apply(db.engine, file)
     with db.engine.begin() as conn:
         pipeline = add_pipeline(conn, "EVIDENCE_UPGRADE")

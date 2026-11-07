@@ -102,6 +102,15 @@ Warehouses are optional extras. Core bundles none. `all` is core plus the UI, fo
 
 ### Added
 
+- A pipeline setting `AUTO_RESTART_CONDITION` (a `pipelines.csv` column and `CFG_PIPELINES` column;
+  migration 0088): `SCHEDULE` (default), `NONE`, or `SUCCESS`, `SKIPPED` and `FAILURE` (or `ALWAYS` for
+  all three) joined with `|`, for what may start the pipeline on its own. This release stores, validates,
+  exports and keeps it in the pipeline history; refused values name the value and the allowed ones. The
+  controller does not restart pipelines yet.
+- `Orchestration.Allowed_auto_restarts` replaces `Orchestration.Allow_schedule`: the same values, set per
+  environment, for what that environment's controller may start on its own (default everything;
+  `NONE` is the old `Allow_schedule: false`). The old key is refused as unknown.
+
 - Every pipeline run and task run has a readable label beside its integer id, set by the Engine DB
   when the run is created and never changed: `<pipeline>-<UTC start>-<run id>` for a run (for example
   `ORDERS-2026-11-07 02:27:37-4`) and `<pipeline>-<task>-<UTC start>-<task run id>` for a task run, to

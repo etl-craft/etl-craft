@@ -270,9 +270,9 @@ def test_sqlite_catchup_bound_requires_a_positive_whole_number(engine_db):
             )
 
 
-def test_allow_schedule_false_starts_no_scheduled_runs(engine_db):
+def test_allowed_auto_restarts_none_starts_no_scheduled_runs(engine_db):
     _, ctx = configure(engine_db)
-    off = replace(ctx, config=replace(ctx.config, allow_schedule=False))
+    off = replace(ctx, config=replace(ctx.config, allowed_auto_restarts="NONE"))
     Schedules().refresh(off, NOW)
     with ctx.engine.connect() as conn:
         count = conn.execute(text("SELECT COUNT(*) FROM AUD_PIPELINES_RUN_LOG")).scalar_one()

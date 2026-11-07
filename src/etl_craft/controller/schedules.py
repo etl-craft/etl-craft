@@ -12,6 +12,7 @@ from etl_craft.controller.catalog import CatalogSchedule
 from etl_craft.core.actor import acting_as, current_actor
 from etl_craft.core.calendars import Tick
 from etl_craft.core.enums import InterventionAction, RunStatus, TriggerKind, YesNo
+from etl_craft.core.restart import schedule_allowed
 from etl_craft.engine.queries import statement
 from etl_craft.engine.repository.intervention_rows import record_intervention
 from etl_craft.engine.run_creation import RunCreation, create
@@ -33,7 +34,7 @@ class Schedules:
     ) -> None:
         """Record missed ticks and enqueue due work in short transactions."""
         self.catalog.refresh(ctx, now, stop)
-        if not ctx.config.allow_schedule:
+        if not schedule_allowed(ctx.config.allowed_auto_restarts):
             return
         with ctx.engine.connect() as conn:
             rows = conn.execute(
