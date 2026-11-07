@@ -89,7 +89,7 @@ export function Pipelines() {
           </div>
         }
       />
-      <TagFilter known={known} selected={tags} onToggle={toggleTag} />
+      <TagFilter known={known} selected={tags} onToggle={toggleTag} onClear={() => setParams(new URLSearchParams(), { replace: true })} />
       {list.isError ? <Notice>{(list.error as Error).message}</Notice> : null}
       <Card>
         {selected.length && canRun ? (

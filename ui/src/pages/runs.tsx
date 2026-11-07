@@ -75,9 +75,7 @@ export function Runs() {
                 Clear filters
               </Button>
             ) : null}
-            <div className="basis-full">
-              <TagFilter known={known} selected={tags} onToggle={toggleTag} />
-            </div>
+            <TagFilter known={known} selected={tags} onToggle={toggleTag} onClear={() => set("tag", "")} />
           </>
         }
       />
