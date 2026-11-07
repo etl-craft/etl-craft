@@ -26,6 +26,9 @@ from fixtures.terminal import login_answers, setup_answers, terminal_run
 pytestmark = [pytest.mark.e2e_pip, pytest.mark.timeout(1800)]
 
 PAGE = REPO / "docs" / "quick-start.md"
+# A token's last use is recorded in the same history, but it is not a config change.
+NOT_TOKENS = "TABLE_NAME <> 'CFG_API_TOKENS'"
+CONFIG_CHANGES = f"SELECT COUNT(*) FROM AUD_METADATA_CHANGES WHERE {NOT_TOKENS}"
 BLOCK = re.compile(r"^( *)```(\w+)\n(.*?)^\1```", re.MULTILINE | re.DOTALL)
 RUNS = ("etl-craft ", "python prepare.py ")
 
@@ -102,7 +105,7 @@ def test_the_quick_start_runs_as_written(tmp_path):
     assert (project / "catalog" / "index.html").is_file()
 
     with sqlite3.connect(project / "engine.db") as conn:
-        count = conn.execute("SELECT COUNT(*) FROM AUD_METADATA_CHANGES").fetchone()[0]
+        count = conn.execute(CONFIG_CHANGES).fetchone()[0]
         assert count > 0
         assert conn.execute(
             "SELECT VERSION FROM SCHEMA_MIGRATIONS WHERE SOURCE='PROJECT'"
@@ -118,7 +121,16 @@ def test_the_quick_start_runs_as_written(tmp_path):
     )
     assert repeated.returncode == 0, repeated.stderr
     with sqlite3.connect(project / "engine.db") as conn:
-        assert conn.execute("SELECT COUNT(*) FROM AUD_METADATA_CHANGES").fetchone()[0] == count
+        after = conn.execute(CONFIG_CHANGES).fetchone()[0]
+        newest = conn.execute(
+            f"SELECT * FROM AUD_METADATA_CHANGES WHERE {NOT_TOKENS} ORDER BY 1 DESC LIMIT ?",
+            (max(after - count, 0) + 1,),
+        )
+        named = [column[0] for column in newest.description]
+        assert after == count, (
+            f"repeating prepare.py metadata recorded {after - count} more config change(s); "
+            f"newest rows ({', '.join(named)}): {newest.fetchall()}"
+        )
     migration = project / "migrations" / "0001_demo.sql"
     original = migration.read_bytes()
     seed = project / "metadata" / "demo.sql"

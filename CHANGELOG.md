@@ -249,6 +249,11 @@ Warehouses are optional extras. Core bundles none. `all` is core plus the UI, fo
 
 ### Security
 
+- The browser interface's page shell no longer puts the request's challenge cookie into the page
+  unescaped (a code-scanning reflected-XSS finding): the cookie was already accepted only in its
+  exact shape, and is now escaped as well. `oauthlib` 4.0.1 (a Databricks connector dependency) and
+  `minimatch` 11.0.1 (a UI build tool) replace versions with published advisories.
+
 - Admins can register, preview, list and lift standing personal-data erasures with `erase`
   (`--project`, `--table`, `--column`, `--value`, `--reason`, `--dry-run`, `--list`, `--lift`)
   and `/api/v1/projects/{project}/erasure`. The admin page previews coverage before confirmation.

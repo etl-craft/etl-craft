@@ -58,11 +58,6 @@ def has_challenge(request: Request) -> bool:
     return re.fullmatch(r"[A-Za-z0-9_-]{43}", request.cookies.get(CSRF, "")) is not None
 
 
-def csrf_value(request: Request) -> str:
-    """Keep an existing well-formed challenge; never echo arbitrary cookie text."""
-    return request.cookies[CSRF] if has_challenge(request) else secrets.token_urlsafe(32)
-
-
 def csrf_check(ctx: OperationContext, action: ActionName, request: Request, supplied: str) -> None:
     """Browser changes require the host-only double-submit challenge and a same-site origin."""
     expected = request.cookies.get(CSRF, "")
