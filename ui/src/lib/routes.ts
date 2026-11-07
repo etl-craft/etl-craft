@@ -2,6 +2,8 @@
 const enc = encodeURIComponent;
 
 export const homePath = "/";
+/** Every project the account can see, as cards. */
+export const projectsPath = "/projects";
 /** A project's own home: its status card, so Home never leaves the project. */
 export const projectHomePath = (project: string): string => `/projects/${enc(project)}`;
 export const runsPath = (project: string, pipeline?: string): string =>
@@ -22,7 +24,6 @@ export const itemsPath = (project: string, pipeline: string, runId: number | str
   `${runPath(project, pipeline, runId)}/tasks/${enc(task)}/items`;
 export const uploadsPath = (project: string, pipeline?: string): string =>
   `/projects/${enc(project)}/uploads` + (pipeline ? `?pipeline=${enc(pipeline)}` : "");
-export const insightsPath = (project: string): string => `/projects/${enc(project)}/insights`;
 export const consolePath = (project: string): string => `/projects/${enc(project)}/console`;
 export const catalogPath = (project: string, page?: string): string => `/projects/${enc(project)}/catalog` + (page ? `?page=${enc(page)}` : "");
 /** The generated catalog site, served by the same-origin file route. */

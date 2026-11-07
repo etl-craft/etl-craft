@@ -198,6 +198,7 @@ item's text, or work done early under another item.
 | S7.AP Native catalog | Planned | | The catalog moves into the app from a JSON read action, built from the app's own components; the generated static site stays only for `publish-docs` |
 | S7.AQ Readable run identifiers | In progress | #347 | A label beside every run and task run id, stored by the Engine DB; accepted wherever the integer is, and shown beside it |
 | S7.AR Restarting pipelines | In progress | slice 1 PR | A pipeline setting, `RESTART_CONDITION`, starts the next run when the last one ends in a chosen status, so a file watcher runs continuously without a schedule |
+| S7.AS Project dashboard and navigation | Planned | | Home becomes a project dashboard with tabs and charts; Runs and Pipelines share one layout; the run page is compact; Projects moves into Platform; the section Project is renamed Operations |
 | S7.M Stewardship uploads | Done (M2) | #296, #305 | Atomic receipts and safe stored names; processed layout, retention archives and verified reruns; crash recovery and guarded upload history |
 | S7.S Seed tables | Done | #308 | Typed pinned-bundle seeds replace reference tables until recorded stewardship handover |
 | S7.T Business calendars | Done | #276 | Shared holiday and weekend calendars for schedules, run dates, backfill and catch-up |
@@ -9277,6 +9278,45 @@ pipeline drops its schedule and sets `RESTART_CONDITION=SUCCESS|SKIPPED`.
 continuously with no schedule, a failed run stops the chain, and recovering it resumes the chain;
 two controllers never start two next runs; every new failure names the object, the value found,
 what was expected and the remedy; and an upgraded Engine DB keeps every pipeline at `NONE`.
+
+### S7.AS Project dashboard and navigation
+
+Owner, 2026-11-07, after reviewing the rebuilt interface on the Support Insights demo. The
+navigation groups pages by where they happen to sit in the code, the project-level Runs page is a
+bare table, the run page is a long scroll (header, graph, task table, then a separate attempt
+card), and Insights is a stack of tables. The owner wants the Databricks and Airflow pattern: a
+project dashboard as Home, one shared layout for runs and pipelines, and details that open in
+place.
+
+**Decisions.**
+
+- **Navigation.** OVERVIEW: Home (the project dashboard), Pipelines, Catalog. OPERATIONS (the
+  section formerly called Project): Runs, Scheduled runs, Held and paused, Uploads, Console,
+  Maintenance. PLATFORM: Projects (a projects-list icon; the list or cards of the projects the
+  account can see, with environment, governance and the day's counts), System health, Agents,
+  Administration. Insights stops being a page of its own: its panels become Home.
+- **Home is a dashboard** with header tabs. Overview: tiles (runs, success rate, failures, SLA
+  misses, queued), runs by status over time, duration trend, recent failures. Further tabs:
+  Pipelines (health and a trend for each), Data (the tables the pipelines write, rows written and
+  freshness), Rules and Capacity. Charts come first; a table appears only where a table is the right
+  answer.
+- **Runs and Pipelines share one layout**, the pipeline page's: a status and duration strip above
+  a filterable table. The Runs page lists the runs of the project with each run's string identifier
+  (S7.AQ); opening a run goes to that pipeline's shared layout with the run highlighted.
+- **The run page is compact.** One header row (state, times, identifier, controls), the task graph,
+  and one task table whose rows expand in place to show attempts, evidence and the log. No separate
+  card below the table.
+- **Charts are small SVG components** in the shared component set (bars, areas, a donut,
+  sparklines), like the run-duration bars already there. No chart library is added.
+
+**Slices.** (1) The navigation, the Operations section name, Projects in Platform and the
+redirect from the old Insights address. (2) The shared runs and pipelines layout with the run
+identifier (this includes S7.AQ slice 3 for the run lists). (3) The run page. (4) The Home
+dashboard and its tabs.
+
+**Done when.** Every page in the new navigation is served by the app in light, dark and 390 px;
+the Insights page is deleted; the owner approves the screenshots of each slice on the Support
+Insights demo.
 
 ## Release candidate: the Support Insights example
 

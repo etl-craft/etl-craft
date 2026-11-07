@@ -302,6 +302,12 @@ Warehouses are optional extras. Core bundles none. `all` is core plus the UI, fo
 
 ### Changed
 
+- The browser interface's navigation is regrouped: Overview (Home, Pipelines, Catalog), Operations (Runs,
+  Scheduled runs, Held and paused, Uploads, Console, Maintenance; the section formerly called Project) and
+  Platform (Projects, System health, Agents, Administration). Projects, the list of projects as cards, is a
+  Platform page. Insights is no longer a page of its own: its panels are the project's Home, and the old
+  address opens Home with its filters.
+
 - Long tables in the browser interface scroll inside a bounded box with their header kept in view,
   and the runs list loads older runs as its end is scrolled into view instead of offering a
   "Load older runs" button.
