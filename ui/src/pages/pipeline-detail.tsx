@@ -4,10 +4,11 @@ import * as React from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { ActionButton } from "@/components/action-button";
 import { Field, inputClass, Loading, Notice, PageHeader, SelectField } from "@/components/common";
-import { PauseState, RunBars } from "@/components/pipeline-parts";
+import { PauseState } from "@/components/pipeline-parts";
 import { RunGraph } from "@/components/run-graph";
 import { RunMatrix } from "@/components/run-matrix";
-import { RunsTable, useRuns } from "@/components/runs-table";
+import { RunsPanel } from "@/components/runs-panel";
+import { useRuns } from "@/components/runs-table";
 import { Tabs } from "@/components/tabs";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { useCanRun, useProjectInfo } from "@/hooks";
@@ -26,6 +27,7 @@ export function PipelineDetail() {
   const { project: code = "", pipeline = "" } = useParams();
   const [params, setParams] = useSearchParams();
   const tab = ["tasks", "matrix"].includes(params.get("tab") ?? "") ? (params.get("tab") as string) : "runs";
+  const highlighted = /^\d+$/.test(params.get("run") ?? "") ? Number(params.get("run")) : undefined;
   const filters = { pool: params.get("pool") ?? "", agent: params.get("agent") ?? "", failure_class: params.get("failure_class") ?? "" };
   const setFilter = (key: string, value: string) => {
     const next = new URLSearchParams(params);
@@ -127,19 +129,13 @@ export function PipelineDetail() {
       <div role="tabpanel" id="tabpanel" aria-labelledby={`tab-${tab}`} className="grid grid-cols-1 gap-4">
         {tab === "runs" ? (
           <>
-            {runs.length ? (
-              <Card>
-                <CardHeader>
-                  <CardTitle>Run durations</CardTitle>
-                  <span className="text-xs text-muted">Newest on the right; select a bar to open its run</span>
-                </CardHeader>
-                <div className="p-4">
-                  <RunBars project={code} runs={runs.slice(0, 40)} />
-                </div>
-              </Card>
-            ) : null}
-            <div className="flex flex-wrap items-end gap-3">
-              <Field compact label="Pool">
+            <RunsPanel
+              code={code}
+              pipeline={pipeline}
+              filters={{ pool: filters.pool || undefined, agent: filters.agent || undefined, failure_class: filters.failure_class || undefined }} highlight={highlighted}
+              toolbar={
+                <>
+<Field compact label="Pool">
                 <input value={filters.pool} onChange={(event) => setFilter("pool", event.target.value)} className={inputClass} placeholder="Any pool" />
               </Field>
               <Field compact label="Agent id">
@@ -153,8 +149,9 @@ export function PipelineDetail() {
                   </option>
                 ))}
               </SelectField>
-            </div>
-            <RunsTable code={code} pipeline={pipeline} filters={{ pool: filters.pool || undefined, agent: filters.agent || undefined, failure_class: filters.failure_class || undefined }} />
+                            </>
+              }
+            />
           </>
         ) : tab === "matrix" ? (
           <Card>

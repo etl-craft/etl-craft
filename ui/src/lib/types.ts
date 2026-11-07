@@ -32,6 +32,8 @@ export interface ProjectHealth {
 export interface RunView {
   pipeline_code: string;
   pipeline_run_id: number;
+  /** Pipeline, UTC start and run id, fixed when the run was created; empty on a server that predates it. */
+  run_label?: string;
   run_key: string;
   trigger_kind: string;
   run_date: string | null;

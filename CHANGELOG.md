@@ -294,6 +294,10 @@ Warehouses are optional extras. Core bundles none. `all` is core plus the UI, fo
 
 ### Changed
 
+- The project's Runs page and a pipeline's Runs tab share one layout: a strip of the latest runs' durations,
+  a toolbar of filters, then the table. Each run shows its string identifier beside its number. A run opened
+  from the project's list leads to its pipeline's runs with that run highlighted.
+
 - The browser interface's navigation is regrouped: Overview (Home, Pipelines, Catalog), Operations (Runs,
   Scheduled runs, Held and paused, Uploads, Console, Maintenance; the section formerly called Project) and
   Platform (Projects, System health, Agents, Administration). Projects, the list of projects as cards, is a

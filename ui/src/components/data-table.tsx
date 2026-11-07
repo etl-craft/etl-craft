@@ -2,6 +2,9 @@ import { flexRender, getCoreRowModel, getSortedRowModel, useReactTable, type Col
 import { ArrowDown, ArrowUp } from "lucide-react";
 import * as React from "react";
 import { Table, Td, Th, type More } from "@/components/ui/table";
+import { cn } from "@/lib/utils";
+
+const scrollTo = (row: HTMLTableRowElement | null) => row?.scrollIntoView({ block: "nearest" });
 
 // TanStack types a column by its value, so a table's mixed columns share one loose type here.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -45,6 +48,7 @@ export function DataTable<T>({
   selection,
   empty,
   more,
+  highlight,
 }: {
   data: T[];
   columns: Column<T>[];
@@ -57,6 +61,8 @@ export function DataTable<T>({
   empty?: string;
   /** The list continues on the server: the next rows load as the end is scrolled into view. */
   more?: More;
+  /** The one row the person came for: marked, and scrolled into view. */
+  highlight?: (row: T) => boolean;
 }) {
   const [sorting, setSorting] = React.useState<SortingState>(initialSort ?? []);
   const table = useReactTable({ data, columns, state: { sorting }, onSortingChange: setSorting, getCoreRowModel: getCoreRowModel(), getSortedRowModel: getSortedRowModel() });
@@ -105,7 +111,12 @@ export function DataTable<T>({
       </thead>
       <tbody>
         {table.getRowModel().rows.map((row) => (
-          <tr key={row.id} className="hover:bg-surface-2">
+          <tr
+            key={row.id}
+            ref={highlight?.(row.original) ? scrollTo : undefined}
+            aria-current={highlight?.(row.original) ? "true" : undefined}
+            className={cn("hover:bg-surface-2", highlight?.(row.original) && "bg-sidebar-active")}
+          >
             {selection && rowId ? (
               <Td>
                 <input
