@@ -32,19 +32,22 @@ export function PageHeader({
   status,
   subtitle,
   actions,
+  compact,
   children,
 }: {
   title: React.ReactNode;
   status?: React.ReactNode;
   subtitle?: React.ReactNode;
   actions?: React.ReactNode;
+  /** A smaller title and tighter spacing, for a page whose body is the point (a run). */
+  compact?: boolean;
   children?: React.ReactNode;
 }) {
   return (
-    <header className="flex flex-wrap items-start justify-between gap-4">
+    <header className={cn("flex flex-wrap items-start justify-between", compact ? "gap-3" : "gap-4")}>
       <div className="grid min-w-0 gap-2">
         <div className="flex flex-wrap items-center gap-3">
-          <h1 className="m-0 text-2xl font-semibold">{title}</h1>
+          <h1 className={cn("m-0 font-semibold", compact ? "text-xl" : "text-2xl")}>{title}</h1>
           {status}
         </div>
         {subtitle ? <p className="m-0 text-sm text-muted">{subtitle}</p> : null}
@@ -59,15 +62,18 @@ export function Fact({
   label,
   icon: Icon,
   valueClassName,
+  inline,
   children,
 }: {
   label: string;
   icon?: LucideIcon;
   valueClassName?: string;
+  /** Label and value on one line, as in a FactList that is `inline`. */
+  inline?: boolean;
   children: React.ReactNode;
 }) {
   return (
-    <div className="grid gap-0.5">
+    <div className={inline ? "flex items-baseline gap-1.5" : "grid gap-0.5"}>
       <dt className="flex items-center gap-1.5 text-xs text-muted">
         {Icon ? <Icon aria-hidden className="size-3.5" /> : null}
         {label}
@@ -77,8 +83,13 @@ export function Fact({
   );
 }
 
-export function FactList({ children, className }: { children: React.ReactNode; className?: string }) {
-  return <dl className={cn("m-0 grid grid-cols-2 gap-x-8 gap-y-3 text-[13px] sm:grid-cols-3 lg:grid-cols-5", className)}>{children}</dl>;
+/** Facts in a grid; `inline` makes one wrapping line of "label value" pairs, for a compact header. */
+export function FactList({ children, className, inline }: { children: React.ReactNode; className?: string; inline?: boolean }) {
+  return (
+    <dl className={cn("m-0 text-[13px]", inline ? "flex flex-wrap gap-x-6 gap-y-1" : "grid grid-cols-2 gap-x-8 gap-y-3 sm:grid-cols-3 lg:grid-cols-5", className)}>
+      {children}
+    </dl>
+  );
 }
 
 export function SelectField({
