@@ -30,7 +30,6 @@ from etl_craft.config.loader_engine import parse_engine
 from etl_craft.config.loader_helpers import (
     CONNECTION_FIELDS,
     SECRETS_KEYS,
-    flag,
     mapping,
     parse_source,
     profiled_settings,
@@ -42,6 +41,7 @@ from etl_craft.config.loader_helpers import (
 )
 from etl_craft.config.loader_orchestration import (
     ORCHESTRATION_KEYS,
+    parse_allowed_auto_restarts,
     parse_dependency_gates,
     parse_limits,
     parse_project,
@@ -271,7 +271,7 @@ def parse_config(raw: object, path: Path, *, agent: bool = False) -> ConnectorCo
         max_warehouse_queries=parse_warehouse_limit(raw, global_profile, path, resolver),
         retries=whole_number(orchestration, "Retries", None, path),
         email_recipients=string_list(orchestration, "Email_recipients", path),
-        allow_schedule=flag(orchestration, "Allow_schedule", True, path),
+        allowed_auto_restarts=parse_allowed_auto_restarts(orchestration, path),
         retry_on=parse_retry_on(orchestration, path),
         email=email,
         email_template=orchestration.text("Email_template"),

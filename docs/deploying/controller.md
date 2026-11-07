@@ -69,10 +69,13 @@ and weekdays `SUN`–`SAT` are supported. Sunday is 0 or 7. The macros are `@hou
 following [cron's day-field rule](https://man7.org/linux/man-pages/man5/crontab.5.html).
 A NULL schedule creates no automatic runs.
 
-`Orchestration.Allow_schedule: false` in an environment's profile turns schedules off for that
-environment only: its controller creates no scheduled runs, while manual runs, `--init-only`
-runs and catalog builds continue. The same metadata keeps its schedules in other environments.
-When schedules are turned on again, each pipeline's `CATCHUP` and `MAX_CATCHUP_RUNS` decide
+`Orchestration.Allowed_auto_restarts` in an environment's profile says what its controller may start
+on its own: `SCHEDULE` for schedule ticks, run endings (`SUCCESS`, `SKIPPED`, `FAILURE`, or `ALWAYS`
+for all three) for restarts, joined with `|`. The default allows everything. `NONE`, for example in
+dev and test, turns every automatic start off for that environment only: its controller creates no
+scheduled runs, while manual runs, `--init-only` runs and catalog builds continue. The same metadata
+keeps its schedules and restart conditions, and still validates, in other environments. When
+automatic starts are turned on again, each pipeline's `CATCHUP` and `MAX_CATCHUP_RUNS` decide
 which ticks from the off period run, as after a controller outage.
 
 `SCHEDULE_TIMEZONE` is an IANA name. NULL uses `Orchestration.Timezone`, which defaults to

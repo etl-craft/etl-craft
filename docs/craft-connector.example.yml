@@ -67,8 +67,11 @@ Orchestration:
     Dependency_gates: WARN             # value — ENFORCE (default) | WARN | OFF. WARN
                                        # and OFF let a run go ahead when its dependencies on
                                        # other pipelines are not satisfied, and record the bypass
-    Allow_schedule: false              # value — default true; false: this environment's
-                                       # controller starts no runs from RUN_SCHEDULE
+    Allowed_auto_restarts: NONE        # value — default SCHEDULE|ALWAYS (everything); what this
+                                       # environment's controller may start on its own: NONE, or
+                                       # SCHEDULE and run endings (ALWAYS, or SUCCESS | SKIPPED |
+                                       # FAILURE) joined with |. Pipelines stay valid; only their
+                                       # automatic starts are suppressed here
     Retries: 1                         # value
   sit:
     Retries: 1                         # value

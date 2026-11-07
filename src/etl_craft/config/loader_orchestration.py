@@ -7,7 +7,8 @@ from pathlib import Path
 from etl_craft.config.loader_helpers import Profiled, flag, whole_number
 from etl_craft.config.model import ExecutionLimits
 from etl_craft.core.enums import GatePolicy, RetryOn, enum_value
-from etl_craft.core.errors import ConfigurationError
+from etl_craft.core.errors import ConfigurationError, MetadataFileError
+from etl_craft.core.restart import EVERYTHING, parse_auto_restart
 from etl_craft.core.text import is_metadata_code
 
 ORCHESTRATION_KEYS = frozenset(
@@ -27,7 +28,7 @@ ORCHESTRATION_KEYS = frozenset(
         "Retries",
         "Retry_on",
         "Email_recipients",
-        "Allow_schedule",
+        "Allowed_auto_restarts",
         "Dependency_gates",
         "Email",
         "Email_template",
@@ -90,6 +91,20 @@ def parse_limits(settings: Profiled, path: Path) -> ExecutionLimits:
             settings, "Local_warehouse_slots", None, path, minimum=1
         ),
     )
+
+
+def parse_allowed_auto_restarts(settings: Profiled, path: Path) -> str:
+    """Read what this environment lets start on its own; reject a typo rather than allow more."""
+    raw = settings.text("Allowed_auto_restarts")
+    if raw is None:
+        return EVERYTHING
+    try:
+        return parse_auto_restart(raw)
+    except MetadataFileError as error:
+        raise ConfigurationError(
+            f"{path}: Orchestration.Allowed_auto_restarts={raw!r}: {error}; set it to NONE or to "
+            "SCHEDULE and run endings joined with |"
+        ) from error
 
 
 def parse_retry_on(settings: Profiled, path: Path) -> RetryOn:

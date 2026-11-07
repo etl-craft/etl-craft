@@ -544,6 +544,21 @@ class TlsMode(StrEnum):
     SSL = "SSL"
 
 
+class AutoRestartCondition(StrEnum):
+    """What may start a pipeline on its own: its schedule, or a run ending in a chosen status.
+
+    ``NONE`` starts nothing automatically. ``ALWAYS`` is every ending an operator did not cause:
+    ``SUCCESS``, ``SKIPPED`` and ``FAILURE``; a cancelled run never restarts.
+    """
+
+    NONE = "NONE"
+    SCHEDULE = "SCHEDULE"
+    SUCCESS = "SUCCESS"
+    SKIPPED = "SKIPPED"
+    FAILURE = "FAILURE"
+    ALWAYS = "ALWAYS"
+
+
 class NonBusinessDay(StrEnum):
     """What a pipeline's schedule does with a tick on a day its calendar is closed."""
 
