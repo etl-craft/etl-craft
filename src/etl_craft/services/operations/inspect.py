@@ -12,6 +12,7 @@ from etl_craft.core.enums import ApiRole, RunCondition, RunStatus
 from etl_craft.core.errors import ConfigurationError, ResourceNotFoundError
 from etl_craft.core.file_bytes import open_regular
 from etl_craft.core.graph import build_graph
+from etl_craft.core.restart import restart_note
 from etl_craft.core.time import as_utc
 from etl_craft.engine.connection import read_snapshot
 from etl_craft.engine.logs import (
@@ -105,6 +106,8 @@ def list_pipelines(ctx: OperationContext, request: TagFilter) -> PipelineListVie
                     pause,
                     tags,
                     tuple(p for p in task_pauses if p.pipeline_id == row.pipeline_id),
+                    auto_restart_condition=row.auto_restart_condition,
+                    restart_note=restart_note(row.auto_restart_condition),
                 )
             )
         return PipelineListView(summarize(conn, views, datetime.now(UTC), _pinned(ctx)))

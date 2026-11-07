@@ -230,6 +230,10 @@ export interface Pipeline {
   pipeline_name: string;
   refresh_type: string;
   run_schedule: string | null;
+  /** What may start it on its own; absent from a server that predates the setting. */
+  auto_restart_condition?: string;
+  /** The condition in words when it adds to or replaces the schedule; null for the schedule alone. */
+  restart_note?: string | null;
   sla_in_hours: number | null;
   paused: Pause | null;
   tags: string[];

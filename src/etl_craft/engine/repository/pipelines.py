@@ -77,6 +77,7 @@ class PipelineDetail:
     sla_in_hours: float | None
     refresh_type: str
     created_by: str | None
+    auto_restart_condition: str = "SCHEDULE"
     create_date: datetime | None = None
     schedule_timezone: str | None = None
     schedule_start_date: date | None = None

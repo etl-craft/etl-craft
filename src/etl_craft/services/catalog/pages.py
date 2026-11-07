@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 from etl_craft.core.enums import DependencyType, RunStatus
+from etl_craft.core.restart import restart_note
 from etl_craft.engine.repository.catalog import Consumption, RunSummary
 from etl_craft.services.catalog.collect import (
     Catalog,
@@ -207,6 +208,7 @@ class Pages:
                 ("Name", _e(row.pipeline_name)),
                 ("Tags", tag_chips(row.tags, "../")),
                 ("Schedule", _e(row.run_schedule)),
+                ("Restart", _e(restart_note(row.auto_restart_condition) or "")),
                 ("Refresh", _e(row.refresh_type)),
                 ("SLA", _e(f"{row.sla_in_hours:g} hours") if row.sla_in_hours else ""),
                 (

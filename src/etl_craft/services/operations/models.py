@@ -178,6 +178,10 @@ class PipelineView:
     next_run: datetime | None = None
     schedule_problem: str | None = None
     recent_runs: tuple[RecentRun, ...] = ()
+    auto_restart_condition: str = "SCHEDULE"
+    """What may start the pipeline on its own: its schedule, or a run ending in a listed status."""
+    restart_note: str | None = None
+    """The condition in words when it adds to or replaces the schedule; ``None`` otherwise."""
 
 
 @dataclass(frozen=True)

@@ -48,7 +48,7 @@ export function PauseState({ pipeline }: { pipeline: Pipeline }) {
 }
 
 export function NextRun({ pipeline, timeZone }: { pipeline: Pipeline; timeZone: string }) {
-  if (!pipeline.run_schedule) return <span className="text-muted">Not scheduled</span>;
+  if (!pipeline.run_schedule) return <span className="text-muted">{pipeline.restart_note ?? "Not scheduled"}</span>;
   if (pipeline.next_run) return <span className="num whitespace-nowrap">{formatTime(pipeline.next_run, timeZone)}</span>;
   return <span className="text-warn">{pipeline.paused ? "Paused" : (pipeline.schedule_problem ?? "No next run")}</span>;
 }
