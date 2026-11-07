@@ -13,6 +13,7 @@ from datetime import UTC, datetime
 from sqlalchemy.exc import SQLAlchemyError
 
 from etl_craft.controller.leadership import leadership
+from etl_craft.controller.restarts import Restarts
 from etl_craft.controller.retention import RetentionSchedule
 from etl_craft.controller.schedules import Schedules
 from etl_craft.core.actor import ActorKind, acting_as
@@ -99,6 +100,7 @@ class _Supervisor:
     pool: LocalPool | QueuePool
     working: WorkingSet = field(default_factory=WorkingSet)
     schedules: Schedules = field(default_factory=Schedules)
+    restarts: Restarts = field(default_factory=Restarts)
     retention: RetentionSchedule = field(default_factory=RetentionSchedule)
     jobs: Jobs = field(default_factory=dict)
     next_heartbeat: float = 0.0
@@ -117,7 +119,7 @@ class _Supervisor:
             context.run(steps.close)
 
     def supervise_once(self, controller_id: int) -> None:
-        """Heartbeat, reconcile, admit due schedules, advance runs and adopt unowned ones."""
+        """Heartbeat, reconcile, admit due schedules and restarts, advance and adopt runs."""
         if time.monotonic() >= self.next_heartbeat:
             controllers.heartbeat(self.ctx.engine, controller_id)
             self.next_heartbeat = time.monotonic() + 15
@@ -125,6 +127,7 @@ class _Supervisor:
         cascade_children(self.ctx)
         settle_ended_parent_waits(self.ctx.engine, datetime.now(UTC))
         self.schedules.refresh(self.ctx, datetime.now(UTC), self.stop)
+        self.restarts.refresh(self.ctx, datetime.now(UTC), self.stop)
         self.retention.refresh(self.ctx, datetime.now(UTC), self.stop)
         for run_id in list(self.jobs):
             self.advance(run_id)

@@ -102,6 +102,14 @@ Warehouses are optional extras. Core bundles none. `all` is core plus the UI, fo
 
 ### Added
 
+- The controller restarts a pipeline when its last run ended in a status `AUTO_RESTART_CONDITION` names,
+  as a run with the new trigger kind `RESTART` and the key `restart:<previous run id>` (migration 0089
+  widens the trigger-kind check on both Engine DBs; on SQLite it rebuilds the run log). A restart is made
+  at least 15 seconds after the previous run ended, only when no run is active, the pipeline and its
+  project are active and the pipeline is not paused; a cancelled run never restarts; two controllers
+  cannot start two next runs. `Orchestration.Allowed_auto_restarts` suppresses the restarts and the
+  schedule ticks its environment does not allow.
+
 - A pipeline setting `AUTO_RESTART_CONDITION` (a `pipelines.csv` column and `CFG_PIPELINES` column;
   migration 0088): `SCHEDULE` (default), `NONE`, or `SUCCESS`, `SKIPPED` and `FAILURE` (or `ALWAYS` for
   all three) joined with `|`, for what may start the pipeline on its own. This release stores, validates,

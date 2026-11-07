@@ -133,6 +133,7 @@ EXPECTED = {
         "ORCHESTRATOR",
         "STAND_IN",
         "PIPELINE_TASK",
+        "RESTART",
     },
     enums.ActorKind: {"USER", "SERVICE", "SYSTEM"},
     enums.TokenKind: {"SERVICE", "ACCESS", "REFRESH", "AGENT", "ATTEMPT"},
