@@ -234,6 +234,8 @@ export interface Pipeline {
   auto_restart_condition?: string;
   /** The condition in words when it adds to or replaces the schedule; null for the schedule alone. */
   restart_note?: string | null;
+  /** What the pipeline does (its `DESCRIPTION`); absent from a server that predates it. */
+  description?: string | null;
   sla_in_hours: number | null;
   paused: Pause | null;
   tags: string[];
@@ -565,4 +567,34 @@ export interface SsoStart {
 export interface Redirect {
   redirect?: string;
   interval?: number;
+}
+
+export interface AuditActionRecord {
+  action_id: number;
+  at: string;
+  actor: string;
+  kind: string;
+  command: string;
+  outcome: string;
+}
+
+export interface AuditChangeRecord {
+  change_id: number;
+  at: string;
+  actor: string;
+  table_name: string;
+  operation: string;
+}
+
+export interface AuditRecords {
+  actions: AuditActionRecord[];
+  changes: AuditChangeRecord[];
+}
+
+export interface TablePreview {
+  table: string;
+  columns: string[];
+  rows: (string | null)[][];
+  limit: number;
+  more: boolean;
 }

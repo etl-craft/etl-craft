@@ -191,6 +191,16 @@ export function RunOverview({ code, pipeline, runId, task, onTask }: { code: str
   if (run.isError) return <Notice>{(run.error as Error).message}</Notice>;
   const r = run.data;
   if (!r) return <Loading what="run" />;
+  if (r.pipeline_code !== pipeline)
+    return (
+      <Notice>
+        Run #{r.pipeline_run_id} belongs to {r.pipeline_code}, not {pipeline}.{" "}
+        <Link className="underline" to={`/projects/${encodeURIComponent(code)}/pipelines/${encodeURIComponent(r.pipeline_code)}?run=${r.pipeline_run_id}`}>
+          Open it in {r.pipeline_code}
+        </Link>
+        .
+      </Notice>
+    );
   return (
     <div className="grid gap-4">
       <div className="flex flex-wrap items-center justify-between gap-2">

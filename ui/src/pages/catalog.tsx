@@ -1,15 +1,21 @@
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import * as React from "react";
 import { ActionButton } from "@/components/action-button";
 import { Loading, Notice, PageHeader } from "@/components/common";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { failureText, useProjectInfo, useRoleAtLeast } from "@/hooks";
-import { ApiError, getJson, getText, project } from "@/lib/api";
-import { catalogSite } from "@/lib/routes";
+import { ApiError, getJson, project } from "@/lib/api";
+import { useCatalog } from "@/lib/catalog";
+import { catalogPath, type CatalogKind } from "@/lib/routes";
+import { cn } from "@/lib/utils";
 import type { LineageRefresh, Report } from "@/lib/types";
 import { useDocumentTitle } from "@/title";
-import { useParams, useSearchParams } from "react-router-dom";
+import { ArrowLeft } from "lucide-react";
+import { Link, useParams, useSearchParams } from "react-router-dom";
+import { CatalogHome, GapsObject, PipelineObject, TableObject, TablesList, TaskObject } from "@/components/catalog-pages";
+import { CatalogTree } from "@/components/catalog-tree";
+import { SplitPane } from "@/components/split-pane";
 
 type Done = { message?: string };
 
@@ -49,27 +55,52 @@ function LineageResult({ result }: { result: LineageRefresh }) {
   );
 }
 
+const KINDS: CatalogKind[] = ["pipelines", "tasks", "tables", "gaps"];
+
 export function Catalog() {
-  const { project: code = "" } = useParams();
-  const [params] = useSearchParams();
+  const { project: code = "", "*": rest = "" } = useParams();
+  const [params, setParams] = useSearchParams();
   const developer = useRoleAtLeast("developer");
   const admin = useRoleAtLeast("admin");
   const info = useProjectInfo(code);
-  useDocumentTitle("Catalog", code, info.project && { type: info.project.environment_type, name: info.project.environment_name });
-  const [frame, setFrame] = React.useState(0);
   const [refreshed, setRefreshed] = React.useState<LineageRefresh | null>(null);
-  // The built site is the last build; a missing build is shown in place of the frame, with Rebuild still reachable.
-  const built = useQuery({ queryKey: ["catalog-built", code, frame], queryFn: () => getText(`${project(code)}/catalog/page`, { path: "index.html" }).then(() => true), retry: false });
+  // The built catalog is the last build; a missing build is shown in place of the explorer, with Rebuild still reachable.
+  const built = useCatalog(code);
   const validate = useMutation({ mutationFn: () => getJson<Report>(`${project(code)}/validation`) });
   const report = validate.data;
-  const rebuilt = () => setFrame((n) => n + 1);
-  const missing = built.error instanceof ApiError ? built.error.message : null;
+  const missing = built.error instanceof ApiError ? built.error.message : built.error ? (built.error as Error).message : null;
+  const [first = "", ...others] = rest.split("/").filter(Boolean);
+  const kind = (KINDS as string[]).includes(first) ? (first as CatalogKind) : undefined;
+  const name = others.join("/") || undefined;
+  useDocumentTitle(kind === "gaps" ? "Catalog gaps" : name ? `${name} · Catalog` : "Catalog", code, info.project && { type: info.project.environment_type, name: info.project.environment_name });
+  const tab = params.get("tab") ?? "overview";
+  const onTab = (next: string) => {
+    const copy = new URLSearchParams(params);
+    if (next === "overview") copy.delete("tab");
+    else copy.set("tab", next);
+    setParams(copy, { replace: true });
+  };
+  const doc = built.data;
+  const content = !doc ? null : kind === "pipelines" && name ? (
+    <PipelineObject code={code} doc={doc} name={name} tab={tab} onTab={onTab} />
+  ) : kind === "tasks" && name ? (
+    <TaskObject code={code} doc={doc} name={name} tab={tab} onTab={onTab} />
+  ) : kind === "tables" && !name ? (
+    <TablesList code={code} doc={doc} />
+  ) : kind === "tables" && name ? (
+    <TableObject key={name} code={code} doc={doc} name={name} tab={tab} onTab={onTab} />
+  ) : kind === "gaps" ? (
+    <GapsObject code={code} doc={doc} />
+  ) : (
+    <CatalogHome code={code} doc={doc} />
+  );
 
   return (
-    <div className="grid grid-cols-1 gap-4">
+    <div className="flex min-h-0 flex-1 flex-col gap-2">
       <PageHeader
-        title={`${code} catalog`}
-        subtitle="Generated project catalog. It shows the last build; rebuild it after metadata changes."
+        compact
+        title="Catalog"
+        subtitle={doc ? `${doc.project} · ${doc.environment}` : code}
         actions={
           <div className="flex flex-wrap items-start gap-2" role="group" aria-label="Catalog actions">
             <Button onClick={() => validate.mutate()} disabled={validate.isPending}>
@@ -77,7 +108,7 @@ export function Catalog() {
             </Button>
             {developer ? (
               <>
-                <ActionButton<Done> code={code} label="Rebuild catalog" title="Rebuild the catalog" effect="Generates the catalog again from the current metadata." endpoint="/docs" body={() => ({})} askReason={false} describe={(r) => r.message ?? "The catalog was rebuilt."} onDone={rebuilt} variant="primary" />
+                <ActionButton<Done> code={code} label="Rebuild catalog" title="Rebuild the catalog" effect="Generates the catalog again from the current metadata." endpoint="/docs" body={() => ({})} askReason={false} describe={(r) => r.message ?? "The catalog was rebuilt."} onDone={() => void built.refetch()} />
                 <ActionButton<LineageRefresh>
                   code={code}
                   label="Refresh lineage"
@@ -127,12 +158,28 @@ export function Catalog() {
           {missing.replace(/[.\s]+$/, "")}.{developer ? " Use Rebuild catalog above." : ""}
         </Notice>
       ) : null}
-      {built.isSuccess ? <iframe key={frame} title={`${code} generated catalog`} src={catalogSite(code, params.get("page") ?? undefined)} onLoad={embedCatalog} className="h-[78vh] w-full rounded-lg border border-border bg-surface" /> : null}
+      {doc ? (
+        <SplitPane
+          id="catalog"
+          initial={0.26}
+          className="lg:min-h-0 lg:flex-1"
+          left={
+            <Card className={cn("flex min-h-0 flex-1 flex-col overflow-hidden", kind && "max-lg:hidden")}>
+              <CatalogTree code={code} doc={doc} selected={{ kind, name }} />
+            </Card>
+          }
+          right={
+            <Card className="@container flex min-h-0 flex-1 flex-col overflow-hidden">
+              {kind ? (
+                <Link to={catalogPath(code)} className="m-4 mb-0 inline-flex w-fit items-center gap-1 text-sm text-accent hover:underline lg:hidden">
+                  <ArrowLeft className="size-4" aria-hidden /> All catalog objects
+                </Link>
+              ) : null}
+              {kind ? content : <div data-scroll-area className="min-h-0 flex-1 overflow-auto">{content}</div>}
+            </Card>
+          }
+        />
+      ) : null}
     </div>
   );
-}
-
-/** The shell already shows the project, environment, brand and theme, so the framed catalog keeps only its navigation and search. */
-function embedCatalog(event: React.SyntheticEvent<HTMLIFrameElement>): void {
-  event.currentTarget.contentDocument?.body.classList.add("embedded");
 }

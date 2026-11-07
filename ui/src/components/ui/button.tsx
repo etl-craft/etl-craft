@@ -9,7 +9,8 @@ const button = cva(
     variants: {
       variant: {
         primary: "bg-accent text-accent-fg hover:opacity-90",
-        danger: "bg-bad text-surface hover:opacity-90",
+        danger: "border border-bad/50 bg-surface text-bad hover:bg-bad-bg",
+        dangerSolid: "bg-bad text-surface hover:opacity-90",
         outline: "border border-border-strong bg-surface text-fg hover:bg-surface-2",
         ghost: "text-fg hover:bg-surface-2",
       },

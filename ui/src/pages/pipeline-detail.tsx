@@ -1,35 +1,39 @@
 import { useQuery } from "@tanstack/react-query";
-import { Pause, Play, PlayCircle } from "lucide-react";
+import { Check, ChevronDown, Pause, Play, PlayCircle } from "lucide-react";
 import * as React from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { ActionButton } from "@/components/action-button";
-import { Field, inputClass, Loading, Notice, PageHeader, SelectField } from "@/components/common";
+import { DropdownContent, DropdownItem, DropdownLabel, DropdownMenu, DropdownTrigger } from "@/components/dropdown";
+import { Button } from "@/components/ui/button";
+import { Fact, FactList, Field, inputClass, Loading, Notice, PageHeader, SelectField } from "@/components/common";
+import { AuditTab, CalendarTab, DetailsTab, OverviewTab, TasksTab } from "@/components/pipeline-tabs";
+import { StatusBadge } from "@/components/status";
 import { PauseState } from "@/components/pipeline-parts";
 import { RunGraph } from "@/components/run-graph";
-import { RunGrid } from "@/components/run-grid";
+import { DEFAULT_RUNS, RunGrid } from "@/components/run-grid";
 import { RunOverview } from "@/components/run-overview";
 import { RunsPanel } from "@/components/runs-panel";
 import { useRuns } from "@/components/runs-table";
 import { Tabs } from "@/components/tabs";
 import { SplitPane } from "@/components/split-pane";
 import { Card } from "@/components/ui/card";
-import { useCanRun, useProjectInfo } from "@/hooks";
+import { useCanRun, useProjectInfo, useTimezone } from "@/hooks";
+import { describeCron, formatTime } from "@/lib/format";
 import { getJson, project } from "@/lib/api";
-import { taskPath } from "@/lib/routes";
+import { pipelinesPath, taskPath } from "@/lib/routes";
 import { cn } from "@/lib/utils";
-import type { Graph, Pipeline, Steps } from "@/lib/types";
+import type { Graph, Pipeline, RunView, Steps } from "@/lib/types";
 import { useDocumentTitle } from "@/title";
 
-const TABS = [
-  { id: "overview", label: "Overview" },
-  { id: "runs", label: "Runs" },
-];
+const TAB_IDS = ["overview", "run", "runs", "tasks", "calendar", "audit", "details"];
 
 export function PipelineDetail() {
   const { project: code = "", pipeline = "" } = useParams();
   const [params, setParams] = useSearchParams();
-  const tab = params.get("tab") === "runs" ? "runs" : "overview";
+  const asked = params.get("tab") ?? "";
   const view = params.get("view") === "graph" ? "graph" : "grid";
+  const hideBars = params.get("bars") === "off";
+  const byTime = params.get("columns") === "time";
   const flow = params.get("flow") === "lr" ? "LR" : params.get("flow") === "tb" ? "TB" : undefined;
   const chosen = /^\d+$/.test(params.get("run") ?? "") ? Number(params.get("run")) : undefined;
   const task = params.get("task");
@@ -41,6 +45,7 @@ export function PipelineDetail() {
     setParams(next, { replace: true });
   };
   const navigate = useNavigate();
+  const tz = useTimezone();
   const canRun = useCanRun(code);
   const info = useProjectInfo(code);
   const found = useQuery({
@@ -49,14 +54,46 @@ export function PipelineDetail() {
     refetchInterval: 15_000,
   });
   const graph = useQuery({ queryKey: ["graph", code, pipeline], queryFn: () => getJson<Graph>(`${project(code)}/graph`, { pipeline_code: pipeline }) });
-  const runs = useRuns(code, pipeline).all;
+  const list = useRuns(code, pipeline);
+  const all = list.all;
+  const runsKey = `etl-craft-runs:${code}:${pipeline}`;
+  const remembered = (() => {
+    try {
+      return Number(window.localStorage.getItem(runsKey));
+    } catch {
+      return 0;
+    }
+  })();
+  // The address wins, then what this pipeline's grid was last set to, then the default.
+  const wanted = Math.min(200, Math.max(1, Number(params.get("runs")) || remembered || DEFAULT_RUNS));
+  // The runs asked for are loaded a page at a time until there are enough.
+  const { hasNextPage, isFetchingNextPage, fetchNextPage } = list.runs;
+  React.useEffect(() => {
+    if (all.length < wanted && hasNextPage && !isFetchingNextPage) void fetchNextPage();
+  }, [all.length, wanted, hasNextPage, isFetchingNextPage, fetchNextPage]);
+  const runs = all;
+  const gridRuns = runs.slice(0, wanted);
   const selected = chosen ?? runs[0]?.pipeline_run_id;
+  // A link to a run older than the grid's columns still opens it: the run is read by its number and shown as a column of its own.
+  const outside = selected !== undefined && !gridRuns.some((r) => r.pipeline_run_id === selected);
+  const extraRun = useQuery({ queryKey: ["run", code, selected], queryFn: () => getJson<RunView>(`${project(code)}/runs/${selected}`), enabled: outside });
   useDocumentTitle(selected === undefined ? pipeline : `${pipeline} #${selected}`, code, info.project && { type: info.project.environment_type, name: info.project.environment_name });
   const steps = useQuery({
     queryKey: ["steps", code, pipeline, selected],
     queryFn: () => getJson<Steps>(`${project(code)}/steps`, { pipeline_code: pipeline, run_id: selected }),
     enabled: view === "graph" && selected !== undefined,
   });
+  const tab = TAB_IDS.includes(asked) && (asked !== "run" || selected !== undefined) ? asked : chosen !== undefined ? "run" : "overview";
+  const tabs = [
+    { id: "overview", label: "Overview" },
+    ...(selected !== undefined ? [{ id: "run", label: `Run #${selected}` }] : []),
+    { id: "runs", label: "Runs" },
+    { id: "tasks", label: "Tasks" },
+    { id: "calendar", label: "Calendar" },
+    { id: "audit", label: "Audit log" },
+    { id: "details", label: "Details" },
+  ];
+  const state = params.get("status") ?? "";
   const select = (runId: number, taskCode?: string) => {
     const next = new URLSearchParams(params);
     next.set("run", String(runId));
@@ -64,6 +101,15 @@ export function PipelineDetail() {
     if (taskCode) next.set("task", taskCode);
     else next.delete("task");
     setParams(next, { replace: true });
+  };
+  const apply = (value: string) => {
+    const n = Math.min(200, Math.max(1, Math.round(Number(value)) || DEFAULT_RUNS));
+    try {
+      window.localStorage.setItem(runsKey, String(n));
+    } catch {
+      /* the count lasts for this page only */
+    }
+    choose("runs", null);
   };
   const choose = (key: string, value: string | null) => {
     const next = new URLSearchParams(params);
@@ -78,9 +124,10 @@ export function PipelineDetail() {
 
   if (found.isError) return <Notice>{(found.error as Error).message}</Notice>;
   return (
-    <div className="grid grid-cols-1 gap-5">
+    <div className="flex min-h-0 flex-1 flex-col gap-2">
       <PageHeader
         compact
+        back={{ to: pipelinesPath(code), label: "Pipelines" }}
         title={pipeline}
         subtitle={p && p.pipeline_name !== pipeline ? p.pipeline_name : undefined}
         status={p ? <PauseState pipeline={p} /> : null}
@@ -140,21 +187,32 @@ export function PipelineDetail() {
         }
       >
         {p ? (
-          <p className="m-0 text-[13px] text-muted">
-            {p.run_schedule ? <>Schedule <code className="font-mono">{p.run_schedule}</code></> : "Not scheduled"}
-            {p.restart_note ? <> · {p.restart_note.toLowerCase()}</> : null}
-            {p.sla_in_hours ? ` · SLA ${p.sla_in_hours} h` : ""} · {p.refresh_type.toLowerCase()} refresh
-          </p>
+          <FactList inline>
+            <Fact inline label="Schedule">{p.run_schedule ? <span title={p.run_schedule}>{describeCron(p.run_schedule) ?? <code className="font-mono">{p.run_schedule}</code>}</span> : "Not scheduled"}</Fact>
+            <Fact inline label="Latest run">
+              {runs[0] ? (
+                <span className="inline-flex items-center gap-1.5">
+                  <StatusBadge status={runs[0].status} /> {formatTime(runs[0].start_date, tz)}
+                </span>
+              ) : (
+                "None yet"
+              )}
+            </Fact>
+            <Fact inline label="Next run">{p.next_run ? formatTime(p.next_run, tz) : (p.restart_note ?? "—")}</Fact>
+            <Fact inline label="Refresh">{p.refresh_type.toLowerCase()}</Fact>
+            {p.sla_in_hours ? <Fact inline label="SLA">{p.sla_in_hours} h</Fact> : null}
+            {p.tags.length ? <Fact inline label="Tags">{p.tags.join(", ")}</Fact> : null}
+          </FactList>
         ) : (
           <Loading what="pipeline" />
         )}
       </PageHeader>
       <SplitPane
         id="pipeline"
-        className="lg:h-[calc(100dvh-12rem)]"
+        className="lg:min-h-0 lg:flex-1"
         left={
         <Card className="flex min-h-0 flex-1 flex-col overflow-hidden">
-          <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-2">
+          <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5 border-b border-border px-3 py-2">
             <div role="group" aria-label="Run view" className="inline-flex rounded-md border border-border p-0.5 text-sm">
               {(["grid", "graph"] as const).map((id) => (
                 <button key={id} type="button" aria-pressed={view === id} onClick={() => choose("view", id === "grid" ? null : id)} className={cn("cursor-pointer rounded px-2.5 py-0.5", view === id ? "bg-accent/15 font-medium text-fg" : "text-muted hover:text-fg")}>
@@ -171,14 +229,46 @@ export function PipelineDetail() {
                 ))}
               </div>
             ) : (
-              <span className="text-xs text-muted">Newest run on the right; a dot means the task did not start</span>
+              <div className="flex items-center gap-2">
+                <label className="flex items-center gap-1.5 text-xs text-muted">
+                  Runs
+                  <input
+                    key={wanted}
+                    type="number"
+                    min={1}
+                    max={200}
+                    defaultValue={wanted}
+                    aria-label="How many runs to show"
+                    className="h-8 w-16 rounded-md border border-border-strong bg-surface px-2 text-[13px] text-fg"
+                    onBlur={(event) => apply(event.currentTarget.value)}
+                    onKeyDown={(event) => event.key === "Enter" && apply(event.currentTarget.value)}
+                  />
+                </label>
+                <DropdownMenu>
+                  <DropdownTrigger asChild>
+                    <Button size="sm" variant="outline">
+                      Options
+                      <ChevronDown className="size-3.5" aria-hidden />
+                    </Button>
+                  </DropdownTrigger>
+                  <DropdownContent>
+                    <DropdownLabel>Grid</DropdownLabel>
+                    <DropdownItem onSelect={() => choose("bars", hideBars ? null : "off")}>
+                      <Check className={cn("size-4", hideBars && "invisible")} aria-hidden /> Duration bars
+                    </DropdownItem>
+                    <DropdownItem onSelect={() => choose("columns", byTime ? null : "time")}>
+                      <Check className={cn("size-4", !byTime && "invisible")} aria-hidden /> Label columns by start time
+                    </DropdownItem>
+                  </DropdownContent>
+                </DropdownMenu>
+              </div>
             )}
           </div>
-          <div className={cn("relative min-h-0 flex-1", view === "grid" && "overflow-auto")}>
+          <div className="relative min-h-0 flex-1 overflow-hidden">
             {!graph.isSuccess ? (
               graph.isError ? <Notice className="m-3">{(graph.error as Error).message}</Notice> : <Loading what="tasks" className="p-3" />
             ) : view === "grid" ? (
-              <RunGrid code={code} pipeline={pipeline} graph={graph.data} runs={runs} selected={selected} onSelect={select} />
+              <RunGrid code={code} pipeline={pipeline} graph={graph.data} runs={gridRuns} extra={outside && extraRun.data?.pipeline_code === pipeline ? extraRun.data : undefined} selected={selected} onSelect={select} bars={!hideBars} labels={byTime ? "time" : "id"} />
             ) : (
               <div className="absolute inset-0">
               <RunGraph
@@ -199,18 +289,27 @@ export function PipelineDetail() {
         right={
         <Card className="flex min-h-0 flex-1 flex-col overflow-hidden">
           <div className="px-3">
-            <Tabs tabs={TABS} value={tab} onChange={(id) => choose("tab", id === "overview" ? null : id)} />
+            <Tabs tabs={tabs} value={tab} onChange={(id) => choose("tab", id)} />
           </div>
-          <div role="tabpanel" id="tabpanel" aria-labelledby={`tab-${tab}`} className="min-h-0 flex-1 overflow-auto p-4">
+          <div role="tabpanel" id="tabpanel" data-scroll-area aria-labelledby={`tab-${tab}`} className="min-h-0 flex-1 overflow-auto p-4">
             {tab === "runs" ? (
               <RunsPanel
                 code={code}
                 pipeline={pipeline}
                 bars={false}
+                status={state || undefined}
                 filters={{ pool: filters.pool || undefined, agent: filters.agent || undefined, failure_class: filters.failure_class || undefined }}
                 highlight={selected}
                 toolbar={
                   <>
+                    <SelectField compact label="State" value={state} onChange={(value) => choose("status", value || null)}>
+                      <option value="">All states</option>
+                      {["FAILED", "IN-PROGRESS", "SUCCESS", "SKIPPED", "LOST"].map((s) => (
+                        <option key={s} value={s}>
+                          {s === "IN-PROGRESS" ? "Running" : s.charAt(0) + s.slice(1).toLowerCase()}
+                        </option>
+                      ))}
+                    </SelectField>
                     <Field compact label="Pool">
                       <input value={filters.pool} onChange={(event) => setFilter("pool", event.target.value)} className={inputClass} placeholder="Any pool" />
                     </Field>
@@ -228,10 +327,20 @@ export function PipelineDetail() {
                   </>
                 }
               />
-            ) : selected !== undefined ? (
+            ) : tab === "run" && selected !== undefined ? (
               <RunOverview code={code} pipeline={pipeline} runId={selected} task={task} onTask={(next) => choose("task", next)} />
+            ) : !p || !graph.isSuccess ? (
+              <Loading what="pipeline" />
+            ) : tab === "tasks" ? (
+              <TasksTab code={code} pipeline={pipeline} graph={graph.data} runId={selected} />
+            ) : tab === "calendar" ? (
+              <CalendarTab runs={runs} />
+            ) : tab === "audit" ? (
+              <AuditTab code={code} pipeline={pipeline} />
+            ) : tab === "details" ? (
+              <DetailsTab code={code} pipeline={p} graph={graph.data} />
             ) : (
-              <p className="m-0 text-muted">No runs yet.</p>
+              <OverviewTab code={code} pipeline={p} runs={runs} />
             )}
           </div>
         </Card>

@@ -108,6 +108,7 @@ def list_pipelines(ctx: OperationContext, request: TagFilter) -> PipelineListVie
                     tuple(p for p in task_pauses if p.pipeline_id == row.pipeline_id),
                     auto_restart_condition=row.auto_restart_condition,
                     restart_note=restart_note(row.auto_restart_condition),
+                    description=row.description,
                 )
             )
         return PipelineListView(summarize(conn, views, datetime.now(UTC), _pinned(ctx)))

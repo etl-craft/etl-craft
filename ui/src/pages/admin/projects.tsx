@@ -76,11 +76,14 @@ export function PoolsTab() {
   return (
     <div className="grid gap-5">
       <ListState query={list} what="pools" />
+      <p className="m-0 max-w-3xl text-[13px] text-muted">
+        A pool is a group of agents that share a kind of work, such as ingestion or warehouse tasks. A task runs in the pool named by its POOL parameter, or in its project&apos;s default pool, and only an agent registered in that pool claims it. A pool you add does nothing until a task or project names it and an agent registers in it; disabling one is refused while a project or task still names it.
+      </p>
       <Card>
         <CardHeader>
           <CardTitle>Pools · {rows.length}</CardTitle>
           <div className="flex flex-wrap gap-2">
-            <FormAction label="Add pool" title="Add a pool" effect="Creates a pool that projects and tasks can name." endpoint="/pools" variant="primary" describe={done("Pool added.")} fields={fields} />
+            <FormAction label="Add pool" title="Add a pool" effect="Creates the pool's name. Nothing else changes: no task uses it until a project names it as its default pool or a task sets POOL to it, and no work runs in it until an agent registers in it." endpoint="/pools" variant="primary" describe={done("Pool added.")} fields={fields} />
             <FormAction label="Change description" title="Change a pool's description" effect="Only the description changes." endpoint="/pools/set" describe={done("Pool changed.")} fields={fields} />
           </div>
         </CardHeader>

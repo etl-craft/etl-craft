@@ -6,6 +6,31 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+- Home is a dashboard that fits the window instead of one long page of tables: tabs for Overview (headline
+  tiles, runs per day, average duration per day, success rate by pipeline and the latest runs), Pipelines,
+  Data, Quality, Failures and Latest runs, with 24 h, 7 day and 30 day presets. Charts are drawn in the app
+  (no chart library) with a readout on hover or focus. Gaps are counted correctly (matched, undeclared and
+  expected checks are not open gaps), the Quality tab of a table lists only real gaps, destructive buttons are
+  outlined in red until confirmed, and wrap-text is one setting in Personal settings.
+- A table's catalog page has a Data tab: the first 100 rows, read from the warehouse, for developers and
+  above (`etl-craft catalog preview --table T`, `GET /api/v1/projects/{project}/table-preview`,
+  `etl-craft/table-preview/1`). Only catalog tables are read, and each request is audited.
+- The pipeline page has a back arrow, and Details now holds the task definitions; pipeline documentation
+  lives only in the catalog. The workspace and the catalog fill the window instead of a centred column, and
+  the table Lineage tab is split into a graph (with depth and direction) and Column lineage.
+- The UI's Catalog is a data explorer rendered by the app instead of the generated pages in a frame: a
+  resizable tree of pipelines, tasks and warehouse tables with search, and pages for a table (Overview with
+  its columns, Lineage, History, Quality), a pipeline, a task and the schema and lineage gaps.
+  `generate-docs` writes `catalog.json` beside the HTML site for it (`etl-craft/catalog/1`); the site is
+  unchanged and still what `publish-docs` publishes.
+- The pipeline page gains the rest of the Airflow DAG page: Calendar, Audit log and Code (each task's
+  definition) tabs, an Options menu on the grid (duration bars, column labels) and a minimap on large graphs.
+  The Pipelines list shows each pipeline's description.
+- The UI's pipeline page follows the Airflow DAG page: a facts row (schedule, latest run, next run), and
+  tabs for Overview (runs, failures, success rate and median duration over a window, the last ten
+  runs), the selected run, Runs (now filterable by state), Tasks, Details and Documentation (the
+  pipeline's `DESCRIPTION` and each task's `DOCUMENTATION`). The pipeline views
+  (`etl-craft/pipeline/1`, `etl-craft/pipeline-list/1`) gain `description`.
 - The pipeline workspace's panes resize (drag the divider, or focus it and use the arrow keys; Home resets;
   the width is remembered in the browser). The Graph view fills its pane and keeps the whole graph in
   view as it is resized, laid out top to bottom in a tall pane or left to right in a wide one, with

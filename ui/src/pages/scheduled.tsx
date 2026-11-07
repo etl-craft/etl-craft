@@ -1,13 +1,14 @@
 import { useQuery } from "@tanstack/react-query";
 import { createColumnHelper } from "@tanstack/react-table";
+import * as React from "react";
 import { Link, useParams } from "react-router-dom";
 import { Loading, Notice, PageHeader } from "@/components/common";
 import { DataTable } from "@/components/data-table";
 import { PauseState, RecentRuns } from "@/components/pipeline-parts";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
-import { useProjectInfo, useTimezone } from "@/hooks";
+import { When } from "@/components/when";
+import { useProjectInfo } from "@/hooks";
 import { getJson, project } from "@/lib/api";
-import { formatTime } from "@/lib/format";
 import { pipelinePath } from "@/lib/routes";
 import type { Pipeline } from "@/lib/types";
 import { useDocumentTitle } from "@/title";
@@ -16,7 +17,7 @@ const columns = createColumnHelper<Pipeline>();
 
 export function Scheduled() {
   const { project: code = "" } = useParams();
-  const tz = useTimezone();
+  const [now] = React.useState(() => Date.now());
   const info = useProjectInfo(code);
   useDocumentTitle("Scheduled runs", code, info.project && { type: info.project.environment_type, name: info.project.environment_name });
   const list = useQuery({ queryKey: ["pipelines", code], queryFn: () => getJson<{ pipelines: Pipeline[] }>(`${project(code)}/pipelines`), refetchInterval: 15_000 });
@@ -46,7 +47,7 @@ export function Scheduled() {
           data={upcoming}
           empty={list.isSuccess ? "No scheduled pipeline has a next run." : undefined}
           columns={[
-            columns.accessor("next_run", { header: "Next run", enableSorting: false, cell: (c) => <span className="num whitespace-nowrap">{formatTime(c.getValue(), tz)}</span> }),
+            columns.accessor("next_run", { header: "Next run", enableSorting: false, cell: (c) => <span className="num whitespace-nowrap"><span className="font-medium"><When iso={c.getValue()} now={now} /></span></span> }),
             link,
             schedule,
             columns.display({ id: "recent", header: "Recent runs", cell: (c) => <RecentRuns project={code} pipeline={c.row.original} /> }),

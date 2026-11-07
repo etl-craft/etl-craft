@@ -300,6 +300,7 @@ class ActionName(StrEnum):
     PROJECT_HEALTH = "project-health"
     ABOUT = "about"
     CATALOG_PAGE = "catalog page"
+    TABLE_PREVIEW = "table preview"
     ACCOUNT_UNLOCK = "account unlock"
     ANNOUNCE_ADD = "announce add"
     ANNOUNCE_LIST = "announce list"

@@ -182,6 +182,8 @@ class PipelineView:
     """What may start the pipeline on its own: its schedule, or a run ending in a listed status."""
     restart_note: str | None = None
     """The condition in words when it adds to or replaces the schedule; ``None`` otherwise."""
+    description: str | None = None
+    """The pipeline's ``DESCRIPTION``: what it does, shown beside its tasks' documentation."""
 
 
 @dataclass(frozen=True)

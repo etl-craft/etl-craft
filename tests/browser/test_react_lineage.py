@@ -1,6 +1,7 @@
 """Catalog lineage in the new interface: refresh it, rebuild the catalog, read the traced paths."""
 
 import os
+import re
 from pathlib import Path
 
 import pytest
@@ -61,7 +62,7 @@ def chain(site):
 def rebuild(page):
     page.get_by_role("button", name="Rebuild catalog").click()
     page.get_by_role("dialog").get_by_role("button", name="Rebuild catalog").click()
-    expect(page.get_by_title("default generated catalog")).to_be_visible()
+    expect(page.get_by_role("tree", name="Catalog objects")).to_be_visible()
 
 
 def squashed(locator):
@@ -80,31 +81,29 @@ def test_refreshing_and_rebuilding_shows_the_traced_chain_and_the_api_agrees(cha
         expect(page.get_by_text("3 of 3 task(s) traced")).to_be_visible()
         rebuild(page)
 
-        # the catalog's own pages, inside the frame, name the same writers and readers
-        frame = page.frame_locator("iframe[title='default generated catalog']")
-        expect(frame.get_by_text("Untraced SQL tasks")).to_be_visible()
-        expect(frame.locator("header.top .brand")).to_be_hidden()  # the shell shows the brand
-        expect(frame.locator("header.top nav")).to_be_visible()
-        frame.get_by_role("link", name="Warehouse").first.click()
-        expect(frame.get_by_text("Read by").first).to_be_visible()
-        warehouse = squashed(frame.locator("body"))
-        for table in (
-            "mart Table Columns Written by Read by Pipelines Rules daily 6 MART.daily MART",
-            "raw Table Columns Written by Read by Pipelines Rules orders 3 INGEST.stage INGEST",
-            "ref Table Columns Written by Read by Pipelines Rules rates 1 SALES.convert SALES",
-            "sales Table Columns Written by Read by Pipelines Rules orders 7 SALES.convert"
-            " MART.daily MART, SALES",
-            "staging Table Columns Written by Read by Pipelines Rules orders 7 INGEST.stage"
-            " SALES.convert INGEST, SALES",
-        ):
-            assert table in warehouse, table
-        frame.locator("a[href='tables/sales.orders.html']").first.click()
-        expect(frame.get_by_text("Table rule results")).to_be_visible()
-        table = squashed(frame.locator("body"))
-        assert "Written by SALES.convert Read by MART.daily" in table
-        assert "staging.orders.id copy (SALES.convert)" in table
-        assert "ref.rates.rate o.amount * r.rate (SALES.convert)" in table
-        assert "staging.orders.amount o.amount * r.rate (SALES.convert)" in table
+        # the explorer names the same writers and readers
+        tree = page.get_by_role("tree", name="Catalog objects")
+        expect(tree.get_by_text("Warehouse (", exact=False)).to_be_visible()
+        expect(page.get_by_text("Untraced", exact=False)).to_have_count(0)
+        tree.get_by_role("treeitem", name=re.compile("^sales")).click()
+        tree.get_by_role("treeitem", name="orders", exact=True).click()
+        expect(page.get_by_role("heading", name="orders")).to_be_visible()
+        about = page.get_by_label("About this table")
+        expect(about.get_by_role("link", name="SALES.convert")).to_be_visible()
+        expect(about.get_by_role("link", name="MART.daily")).to_be_visible()
+        page.get_by_role("tab", name="Lineage", exact=True).click()
+        graph = page.get_by_role("group", name="Task graph")
+        expect(graph).to_be_visible()
+        # narrowing the graph redraws it: no leftover edge to a table that is no longer drawn
+        page.get_by_label("Direction").select_option("down")
+        page.get_by_label("Depth").select_option("1")
+        expect(graph.locator("[data-focus]")).to_have_count(2)
+        expect(graph.locator(".react-flow__edge")).to_have_count(1)
+        page.get_by_role("tab", name="Column lineage").click()
+        lineage = page.get_by_role("table", name="Column lineage")
+        expect(lineage).to_contain_text("staging.orders.amount")
+        expect(lineage).to_contain_text("ref.rates.rate")
+        expect(lineage).to_contain_text("SALES.convert")
         shoot(page, "catalog-table")
 
         # the same trace through the action the command line uses, column by column
@@ -163,6 +162,38 @@ def test_a_task_that_cannot_be_traced_is_named_with_its_reason_and_counted(chain
         expect(untraced).to_contain_text("must be a read-only SELECT")
         shoot(page, "catalog-lineage-errors")
         rebuild(page)
-        frame = page.frame_locator("iframe[title='default generated catalog']")
-        expect(frame.get_by_text("1 task(s)")).to_be_visible()  # Untraced SQL tasks
+        expect(page.get_by_role("tree", name="Catalog objects")).to_be_visible()
+        browser.close()
+
+
+def test_all_tables_lists_every_table_and_filters_by_name(chain):
+    _, url = chain
+    with sync_playwright() as pw:
+        browser, page, problems = open_page(pw, viewport={"width": 1280, "height": 1000})
+        sign_in(page, url, "/ui/projects/default/catalog")
+        page.get_by_role("button", name="Refresh lineage").click()
+        page.get_by_role("dialog").get_by_role("button", name="Refresh lineage").click()
+        expect(page.get_by_role("status").filter(has_text="Lineage refreshed")).to_be_visible()
+        rebuild(page)
+        page.get_by_role("tree", name="Catalog objects").get_by_role(
+            "treeitem", name="All tables"
+        ).click()
+        table = page.get_by_role("table", name="All tables")
+        expect(table.get_by_role("link", name="sales.orders")).to_be_visible()
+        expect(table.get_by_role("link", name="mart.daily")).to_be_visible()
+        page.get_by_label("Find a table").fill("mart")
+        expect(table.get_by_role("link", name="sales.orders")).to_have_count(0)
+        expect(table.get_by_role("link", name="mart.daily")).to_be_visible()
+        # a table's page leads with how fresh and how checked it is
+        table.get_by_role("link", name="mart.daily").click()
+        expect(page.get_by_text("Last written")).to_be_visible()
+        expect(page.get_by_text("Open gaps")).to_be_visible()
+        page.get_by_role("tab", name="Lineage", exact=True).click()
+        page.get_by_role("button", name="List", exact=True).click()
+        expect(
+            page.get_by_role("table", name="Upstream and downstream tables").get_by_role(
+                "link", name="sales.orders"
+            )
+        ).to_be_visible()
+        assert [p for p in problems if "status of 404" not in p] == []
         browser.close()

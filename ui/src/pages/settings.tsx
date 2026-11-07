@@ -8,6 +8,7 @@ import { failureText, useHealth, useIdentity, useTimezone } from "@/hooks";
 import { postJson } from "@/lib/api";
 import { formatTime } from "@/lib/format";
 import { applyTheme } from "@/lib/theme";
+import { readWrap, saveWrap } from "@/components/data-table";
 import type { PersonalSettings } from "@/lib/types";
 import { useDocumentTitle } from "@/title";
 
@@ -43,14 +44,25 @@ export function Settings() {
             save.mutate(form);
           }}
         >
-          <SelectField label="Theme" value={form.theme} onChange={(theme) => set({ theme })}>
-            {["system", "light", "dark"].map((t) => (
-              <option key={t}>{t}</option>
-            ))}
-          </SelectField>
-          <Field label="Timezone (IANA name, such as UTC, Europe/London or Asia/Kolkata)">
-            <input required className={inputClass} value={form.timezone} onChange={(e) => set({ timezone: e.target.value })} />
+          <fieldset className="m-0 grid gap-1.5 border-0 p-0">
+            <legend className="mb-1 text-sm font-medium">Theme</legend>
+            <div className="flex flex-wrap gap-4">
+              {[["system", "Match my system"], ["light", "Light"], ["dark", "Dark"]].map(([value, label]) => (
+                <label key={value} className="flex cursor-pointer items-center gap-2 text-sm">
+                  <input type="radio" name="theme" value={value} checked={form.theme === value} onChange={() => set({ theme: value })} />
+                  {label}
+                </label>
+              ))}
+            </div>
+          </fieldset>
+          <Field label="Timezone">
+            <input required list="timezones" className={inputClass} value={form.timezone} onChange={(e) => set({ timezone: e.target.value })} placeholder="UTC, Europe/London, Asia/Kolkata" />
           </Field>
+          <datalist id="timezones">
+            {(typeof Intl.supportedValuesOf === "function" ? Intl.supportedValuesOf("timeZone") : ["UTC"]).map((zone) => (
+              <option key={zone} value={zone} />
+            ))}
+          </datalist>
           <SelectField label="Default project (opened after sign-in)" value={form.default_project ?? ""} onChange={(p) => set({ default_project: p || null })}>
             <option value="">All visible projects</option>
             {(health.data?.projects ?? []).map((p) => (
@@ -72,6 +84,14 @@ export function Settings() {
             </Button>
           </div>
         </form>
+      </Card>
+      <Card className="max-w-xl p-5">
+        <h2 className="mt-0 text-base font-semibold">In this browser</h2>
+        <label className="flex cursor-pointer items-center gap-2 text-sm">
+          <input type="checkbox" defaultChecked={readWrap()} onChange={(event) => saveWrap(event.target.checked)} />
+          Wrap long text in tables to two lines
+        </label>
+        <p className="mb-0 mt-1 text-xs text-muted">Takes effect when a page is opened. Off shows one line per row.</p>
       </Card>
       <p className="m-0 text-sm text-muted">Last sign-in: {formatTime(identity.data?.last_signin ?? null, tz)}</p>
     </div>

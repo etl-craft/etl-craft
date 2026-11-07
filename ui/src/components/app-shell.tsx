@@ -2,6 +2,7 @@ import { ChevronDown, LogOut, Menu, Moon, Sun, X } from "lucide-react";
 import * as React from "react";
 import { Link, Outlet, useLocation, useNavigate, useParams } from "react-router-dom";
 import { Notice } from "@/components/common";
+import { SearchBox } from "@/components/search-box";
 import { EnvironmentBadge, EnvironmentStrip } from "@/components/environment-badge";
 import { DropdownContent, DropdownItem, DropdownLabel, DropdownMenu, DropdownSeparator, DropdownTrigger } from "@/components/dropdown";
 import { Logo } from "@/components/logo";
@@ -14,7 +15,7 @@ import { useActiveProject, useHealth, useIdentity } from "@/hooks";
 import { signOut } from "@/lib/api";
 import { rememberProject } from "@/lib/project-memory";
 import { rememberVisit } from "@/lib/recent";
-import { aboutPath, homePath, passwordPath, projectHomePath, searchPath, settingsPath } from "@/lib/routes";
+import { aboutPath, homePath, passwordPath, projectHomePath, settingsPath } from "@/lib/routes";
 import { applyTheme, initialTheme, type Theme } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 
@@ -32,6 +33,8 @@ export function AppShell() {
   const { project: addressed } = useParams();
   const { code, ready } = useActiveProject();
   const location = useLocation();
+  // A workspace page (a pipeline, the catalog) fills the screen and its panes scroll on their own.
+  const fill = /^\/projects\/[^/]+(\/(pipelines\/[^/]+|catalog(\/.*)?))?$/.test(location.pathname);
   const navigate = useNavigate();
   const searchBox = React.useRef<HTMLInputElement>(null);
   const [shortcuts, setShortcuts] = React.useState(false);
@@ -106,20 +109,9 @@ export function AppShell() {
             ))}
           </DropdownContent>
         </DropdownMenu>
-        {code ? (
-          <form
-            role="search"
-            className="ml-2 hidden max-w-sm flex-1 sm:block"
-            onSubmit={(event) => {
-              event.preventDefault();
-              const q = String(new FormData(event.currentTarget).get("q") ?? "").trim();
-              if (q) navigate(searchPath(code, q));
-            }}
-          >
-            <input ref={searchBox} name="q" type="search" aria-label="Search pipelines, tasks, tables and runs" placeholder="Search  ( / )" className="h-9 w-full rounded-md border border-border-strong bg-surface px-3 text-sm" />
-          </form>
-        ) : null}
+        {code ? <SearchBox ref={searchBox} code={code} /> : null}
         <div className="ml-auto flex items-center gap-1">
+          <LiveStatus className="mr-2 hidden sm:flex" />
           <Button variant="ghost" size="icon" aria-label={theme === "dark" ? "Use the light theme" : "Use the dark theme"} onClick={() => {
             const next: Theme = theme === "dark" ? "light" : "dark";
             applyTheme(next, true);
@@ -179,9 +171,8 @@ export function AppShell() {
             }}
           />
         </aside>
-        <main id="main" className="min-w-0 flex-1 overflow-y-auto">
-          <div className="mx-auto w-full max-w-[1400px] px-4 py-6 sm:px-6">
-            <LiveStatus className="mb-3 justify-end" />
+        <main id="main" data-scroll-area className={cn("min-w-0 flex-1 overflow-y-auto", fill && "lg:overflow-hidden")}>
+          <div className={cn("w-full px-3 py-3 sm:px-4", fill ? "flex min-h-full flex-col gap-2 lg:h-full lg:min-h-0" : "mx-auto max-w-[1920px] py-4")}>
             {unavailable && ready ? (
               <Notice>
                 Project {addressed} is not available: it is disabled, or this account cannot see it. Choose another project from the menu above.

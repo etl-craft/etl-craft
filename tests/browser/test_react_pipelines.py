@@ -2,6 +2,7 @@
 
 import json
 import os
+import re
 from pathlib import Path
 
 import pytest
@@ -70,14 +71,20 @@ def test_filter_by_tag_select_pause_and_export(scene):
         table = page.get_by_role("table", name="Pipelines")
         expect(table.get_by_role("link", name="OPS")).to_be_visible()
         expect(table.get_by_role("link", name="SALES")).to_be_visible()
-        page.get_by_role("button", name="Tags").click()
+        page.get_by_role("group", name="Filter by tag").get_by_role("button", name="Tags").click()
         page.get_by_role("checkbox", name="team:ops").click()
         page.keyboard.press("Escape")
         expect(table.get_by_role("link", name="SALES")).to_have_count(0)
         assert "tag=team%3Aops" in page.url
         page.reload()
-        expect(page.get_by_role("button", name="Tags (1 selected)")).to_be_visible()
-        page.get_by_role("button", name="Tags (1 selected)").click()
+        expect(
+            page.get_by_role("group", name="Filter by tag").get_by_role(
+                "button", name="Tags (1 selected)"
+            )
+        ).to_be_visible()
+        page.get_by_role("group", name="Filter by tag").get_by_role(
+            "button", name="Tags (1 selected)"
+        ).click()
         page.get_by_role("button", name="Clear", exact=True).click()  # clear the filter
         page.keyboard.press("Escape")
         expect(table.get_by_role("link", name="SALES")).to_be_visible()
@@ -97,7 +104,7 @@ def test_filter_by_tag_select_pause_and_export(scene):
             page.get_by_role("button", name="Export CSV").click()
         content = Path(download.value.path()).read_text(encoding="utf-8")
         assert content.startswith(
-            "pipeline,name,tags,schedule,next_run,automatic_runs,paused_tasks"
+            "pipeline,name,description,tags,schedule,next_run,automatic_runs,paused_tasks"
         )
         assert "SALES" in content and "paused by owner: month-end freeze" in content
         assert problems == []
@@ -265,5 +272,80 @@ def test_the_panes_resize_and_the_graph_stays_whole(scene):
         expect(graph.get_by_text("EXTRACT")).to_be_visible()  # a resize refits the graph
         page.get_by_role("button", name="Horizontal").click()
         assert "flow=lr" in page.url
+        assert problems == []
+        browser.close()
+
+
+def test_a_pipeline_has_an_overview_tasks_and_details_and_a_way_back(scene):
+    _, url, _ = scene
+    with sync_playwright() as pw:
+        browser, page, problems = open_page(pw, viewport={"width": 1440, "height": 900})
+        page.context.set_default_timeout(8000)
+        sign_in(page, url, "/ui/projects/default/pipelines/OPS")
+        expect(page.get_by_role("tab", name="Overview")).to_have_attribute("aria-selected", "true")
+        expect(page.get_by_text("Failed runs", exact=True)).to_be_visible()
+        page.get_by_role("tab", name="Tasks").click()
+        expect(
+            page.get_by_role("table", name="Pipeline tasks").get_by_role("link")
+        ).not_to_have_count(0)
+        page.get_by_role("tab", name="Details").click()
+        expect(page.get_by_text("Refresh", exact=True).last).to_be_visible()
+        expect(page.get_by_role("region", name="Task definitions")).to_be_visible()
+        expect(
+            page.get_by_role("link", name="Open the documentation in the catalog")
+        ).to_be_visible()
+        expect(page.get_by_role("tab", name="Docs")).to_have_count(
+            0
+        )  # documented once, in the catalog
+        page.get_by_role("link", name="Back to Pipelines").click()
+        expect(page.get_by_role("table", name="Pipelines")).to_be_visible()
+        assert problems == []
+        browser.close()
+
+
+def test_a_narrow_grid_hides_the_oldest_runs_never_the_newest(scene):
+    _, url, _ = scene
+    with sync_playwright() as pw:
+        browser, page, problems = open_page(pw, viewport={"width": 1100, "height": 800})
+        page.context.set_default_timeout(8000)
+        sign_in(page, url, "/ui/projects/default/pipelines/SALES")
+        divider = page.get_by_role("separator", name="Resize the panes")
+        divider.focus()
+        for _ in range(30):
+            page.keyboard.press("ArrowLeft")  # the grid pane at its narrowest
+        grid = page.get_by_role("table", name="Run grid")
+        headers = grid.locator("thead th a")
+        assert headers.count() >= 2
+        area = grid.locator("xpath=ancestor::div[@dir='rtl']").bounding_box()
+        newest = headers.last.bounding_box()
+        assert newest["x"] + newest["width"] <= area["x"] + area["width"] + 1, (
+            "the newest run is cut off"
+        )
+        assert newest["x"] >= area["x"], "the newest run is outside the grid"
+        task = grid.locator("tbody th").first.bounding_box()
+        assert (
+            task["x"] >= area["x"] - 1 and task["width"] >= 120
+        )  # the task list keeps a readable width
+        assert problems == []
+        browser.close()
+
+
+def test_the_top_search_groups_matches_as_you_type_and_opens_one(scene):
+    _, url, _ = scene
+    with sync_playwright() as pw:
+        browser, page, problems = open_page(pw, viewport={"width": 1280, "height": 900})
+        page.context.set_default_timeout(8000)
+        sign_in(page, url, "/ui/projects/default/pipelines")
+        box = page.get_by_role("combobox", name="Search pipelines, tasks, tables and runs")
+        box.fill("OPS")
+        matches = page.get_by_role("listbox", name="Matches")
+        expect(matches.get_by_role("group", name="Pipelines")).to_be_visible()
+        box.press("ArrowDown")
+        box.press("Enter")
+        expect(page).to_have_url(re.compile(r"/pipelines/OPS"))
+        # Enter with nothing picked lists every result
+        box.fill("SALES")
+        box.press("Enter")
+        expect(page).to_have_url(re.compile(r"/search\?q=SALES"))
         assert problems == []
         browser.close()

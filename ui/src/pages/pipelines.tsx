@@ -29,6 +29,7 @@ export function Pipelines() {
   const { project: code = "" } = useParams();
   const [params, setParams] = useSearchParams();
   const tags = params.getAll("tag");
+  const text = params.get("q") ?? "";
   const tz = useTimezone();
   const canRun = useCanRun(code);
   const developer = useRoleAtLeast("developer");
@@ -37,13 +38,22 @@ export function Pipelines() {
   const list = useQuery({ queryKey: ["pipelines", code], queryFn: () => getJson<{ pipelines: Pipeline[] }>(`${project(code)}/pipelines`), refetchInterval: 15_000 });
   const all = React.useMemo(() => list.data?.pipelines ?? [], [list.data]);
   const known = React.useMemo(() => [...new Set(all.flatMap((p) => p.tags))].sort(), [all]);
-  const shown = React.useMemo(() => all.filter((p) => tags.every((t) => p.tags.includes(t))), [all, tags]);
+  const shown = React.useMemo(() => all.filter((p) => tags.every((t) => p.tags.includes(t)) && (!text || `${p.pipeline_code} ${p.pipeline_name} ${p.description ?? ""}`.toLowerCase().includes(text.toLowerCase()))), [all, tags, text]);
   const [chosen, setChosen] = React.useState<ReadonlySet<string>>(new Set());
   const selected = shown.filter((p) => chosen.has(p.pipeline_code)).map((p) => p.pipeline_code);
 
   const toggleTag = (tag: string) => {
-    const next = tags.includes(tag) ? tags.filter((t) => t !== tag) : [...tags, tag];
-    setParams(new URLSearchParams(next.map((t) => ["tag", t])), { replace: true });
+    const next = new URLSearchParams(window.location.search);
+    const now = next.getAll("tag");
+    next.delete("tag");
+    (now.includes(tag) ? now.filter((t) => t !== tag) : [...now, tag]).forEach((t) => next.append("tag", t));
+    setParams(next, { replace: true });
+  };
+  const find = (value: string) => {
+    const next = new URLSearchParams(window.location.search);
+    if (value) next.set("q", value);
+    else next.delete("q");
+    setParams(next, { replace: true });
   };
   const bulk = (action: "PAUSE" | "RESUME", verb: string) => (
     <ActionButton<{ outcomes: BulkOutcome[] }>
@@ -81,15 +91,19 @@ export function Pipelines() {
           ) : null}
           <CsvButton
             name={`${code}-pipelines.csv`}
-            header={["pipeline", "name", "tags", "schedule", "next_run", "automatic_runs", "paused_tasks"]}
+            header={["pipeline", "name", "description", "tags", "schedule", "next_run", "automatic_runs", "paused_tasks"]}
             rows={(selected.length ? shown.filter((p) => chosen.has(p.pipeline_code)) : shown).map((p) => [
-              p.pipeline_code, p.pipeline_name, p.tags.join(" "), p.run_schedule ?? "", p.next_run ?? "", p.paused ? `paused by ${p.paused.paused_by}: ${p.paused.reason}` : "active", p.task_pauses.length,
+              p.pipeline_code, p.pipeline_name, p.description ?? "", p.tags.join(" "), p.run_schedule ?? "", p.next_run ?? "", p.paused ? `paused by ${p.paused.paused_by}: ${p.paused.reason}` : "active", p.task_pauses.length,
             ])}
           />
           </div>
         }
       />
-      <TagFilter known={known} selected={tags} onToggle={toggleTag} onClear={() => setParams(new URLSearchParams(), { replace: true })} />
+      <div className="flex flex-wrap items-center gap-3">
+        <input type="search" aria-label="Find a pipeline" value={text} onChange={(event) => find(event.target.value)} placeholder="Find by name or description" className="h-9 w-72 rounded-md border border-border-strong bg-surface px-3 text-sm" />
+        <TagFilter known={known} selected={tags} onToggle={toggleTag} onClear={() => setParams(new URLSearchParams(), { replace: true })} />
+        <span className="text-xs text-muted">{shown.length} of {all.length} pipelines</span>
+      </div>
       {list.isError ? <Notice>{(list.error as Error).message}</Notice> : null}
       <Card>
         {selected.length && canRun ? (
@@ -127,10 +141,12 @@ export function Pipelines() {
                 </span>
               ),
             }),
+            columns.display({ id: "description", header: "Description", cell: (c) => <span className="line-clamp-2 max-w-md text-[13px] text-muted" title={c.row.original.description ?? undefined}>{c.row.original.description ?? "—"}</span> }),
             columns.display({ id: "tags", header: "Tags", cell: (c) => <TagList tags={c.row.original.tags} /> }),
             columns.accessor("run_schedule", { header: "Schedule", enableSorting: false, cell: (c) => (c.getValue() ? <code className="whitespace-nowrap font-mono text-xs">{c.getValue()}</code> : <span className="whitespace-nowrap text-muted">Not scheduled</span>) }),
             columns.display({ id: "next", header: "Next run", cell: (c) => <NextRun pipeline={c.row.original} timeZone={tz} /> }),
             columns.display({ id: "recent", header: "Recent runs", cell: (c) => <RecentRuns project={code} pipeline={c.row.original} /> }),
+            ...(all.some((p) => p.sla_in_hours) ? [
             columns.display({
               id: "sla",
               header: "SLA",
@@ -139,7 +155,8 @@ export function Pipelines() {
                 const latest = p.recent_runs[0]?.sla_status;
                 return latest ? <StatusBadge status={latest} /> : <span className="text-muted">{p.sla_in_hours ? "No run yet" : "—"}</span>;
               },
-            }),
+            })
+            ] : []),
             columns.display({ id: "auto", header: "Automatic runs", cell: (c) => <PauseState pipeline={c.row.original} /> }),
           ]}
         />

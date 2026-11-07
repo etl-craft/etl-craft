@@ -122,12 +122,12 @@ def test_the_runs_table_filters_by_status_and_pipeline_in_the_address(scene):
         table = page.get_by_role("table", name="Pipeline runs")
         expect(table.get_by_role("link", name=f"#{good}")).to_be_visible()
         expect(table.get_by_role("link", name=f"#{bad}")).to_be_visible()
-        page.get_by_label("Status").select_option("FAILED")
+        page.get_by_role("combobox", name="Status").select_option("FAILED")
         expect(table.get_by_role("link", name=f"#{good}")).to_have_count(0)
         expect(table.get_by_role("link", name=f"#{bad}")).to_be_visible()
         assert "status=FAILED" in page.url
         page.reload()
-        expect(page.get_by_label("Status")).to_have_value("FAILED")
+        expect(page.get_by_role("combobox", name="Status")).to_have_value("FAILED")
         browser.close()
 
 

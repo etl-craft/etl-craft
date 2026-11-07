@@ -44,7 +44,7 @@ export function SplitPane({ id, left, right, initial = 0.42, className }: { id: 
     event.preventDefault();
   };
   return (
-    <div ref={frame} style={{ "--split": `${ratio * 100}%` } as React.CSSProperties} className={cn("grid min-h-0 gap-4 lg:gap-0 lg:grid-cols-[var(--split)_0.75rem_minmax(0,1fr)]", className)}>
+    <div ref={frame} style={{ "--split": `${ratio * 100}%` } as React.CSSProperties} className={cn("grid min-h-0 gap-3 lg:grid-cols-[var(--split)_0.75rem_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)] lg:gap-0", className)}>
       <div className="flex min-h-0 min-w-0 flex-col">{left}</div>
       <div
         role="separator"

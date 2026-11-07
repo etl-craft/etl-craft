@@ -195,7 +195,7 @@ item's text, or work done early under another item.
 | S7.AM Protection on every warehouse | Done | #311, #312, #313 | Atomic SCD merges, in-row protection and recovery, private audit identities and provider acceptance |
 | S7.AN Always show the environment | Done | #328 | CLI context and production confirmation; designed, sandboxed alert/SLA templates and catalog environment |
 | S7.AO UI rebuild | Done | #329–#335 | Seven slices: shell, Home, runs, pipelines, tasks, uploads, insights, console, catalog, system, agents, administration, maintenance, settings, search, sign-in; the new interface is the only one, served at `/ui`, and the old pages are deleted |
-| S7.AP Native catalog | Planned | | The catalog moves into the app from a JSON read action, built from the app's own components; the generated static site stays only for `publish-docs` |
+| S7.AP Native catalog | In progress | | The catalog moves into the app from a JSON read action, built from the app's own components; the generated static site stays only for `publish-docs` |
 | S7.AQ Readable run identifiers | In progress | #347 | A label beside every run and task run id, stored by the Engine DB; accepted wherever the integer is, and shown beside it |
 | S7.AR Restarting pipelines | In progress | slice 1 PR | A pipeline setting, `RESTART_CONDITION`, starts the next run when the last one ends in a chosen status, so a file watcher runs continuously without a schedule |
 | S7.AS Project dashboard and navigation | In progress | | Home becomes a project dashboard with tabs and charts; a pipeline and its runs are one split workspace; Projects moves into Platform; the section Project is renamed Operations |
@@ -1395,6 +1395,16 @@ empty-history-page handling defect, which was corrected and verified. No cloud w
   migration 0044) so a restart is visible and queryable; the run key `restart:<previous run id>` makes
   two controllers start one next run. Acceptance availability: no warehouse SQL changed, so cloud
   acceptance was not needed.
+
+- **S7.AP native catalog and S7.AS workspace (owner, 2026-11-07).** Choices that differ from the item
+  text: the catalog's "JSON read action" is `catalog.json`, written by `generate-docs` beside the HTML
+  pages and served by the existing catalog-file read (`CATALOG_PAGE`, path `catalog.json`), so it has the
+  same build, project check and access rule as the site and no new action exists; its shape is
+  `etl-craft/catalog/1`. The catalog's own Insights page is not rebuilt: its gap counts are the explorer's
+  front page, and Home becomes the dashboard (S7.AS slice 4). The pipeline workspace's Details tab shows
+  each task's definition (handler and parameters), not script sources, which the API does not serve.
+  `TABLE_PREVIEW` is the first API read of business rows; it is a developer-role read recorded in the
+  audit log, which is why `test_reads_record_only_explicit_admin_access_audits` lists it.
 
 - **S7.AL.4 event-file validation (owner, 2026-11-06).** Choices that differ from the item text:
   the opt-in is the FILE_VALIDATION parameter `SOURCE_EVENT=<EVENT_WAIT task code>`, for waits
@@ -9213,6 +9223,19 @@ existing catalog model, so its information does not change. The generated static
 for `publish-docs` (a site that can be shared and read offline); the app no longer embeds it. The
 site gets only the minimum restyle needed to read well, and is not developed further.
 
+**Layout (owner, 2026-11-07, from a Databricks Catalog Explorer screenshot).** The catalog is a
+two-pane explorer like Catalog Explorer: a resizable tree on the left (project, then pipelines and
+warehouse schemas, then their tasks and tables) with a search box that filters the tree and a
+refresh control, and on the right the selected object under a breadcrumb. An object page has a
+title with copy and star, its actions, and tabs. A table's tabs are Overview, Columns, Lineage,
+History and Quality; its Overview is a Description card, a Columns table with a column filter
+(name, type, declared type, comment, tags), and an "About this table" side column (owner, type,
+data source, writers, freshness, tags). A pipeline's tabs match the pipeline workspace's. What
+Databricks shows that etl-craft has no data for (Sample Data, Permissions, Policies, Popularity)
+is not shown; nothing is added to fill the layout, with one exception the owner asked for: a Data tab
+on a table, the first 100 rows read from the warehouse for developers and above, audited, with no SQL
+input. A query console is a separate decision (a design note, not part of this item).
+
 **Slices.** (1) The catalog JSON read action, behind the current page, with the same facts the
 static site shows. (2) The shell, search and the list of pipelines with a real tag filter. (3) A
 pipeline's page: description, triggers, the task graph with reads and writes, task documentation.
@@ -9310,6 +9333,17 @@ place.
   (`?run=ID&task=CODE`), and the older run address redirects to it. Each pane scrolls on its own, so
   the page stays one screen tall; below 1024 px the panes stack. The project-level Runs page keeps its
   table and links into this workspace with the run selected.
+- **The workspace follows the Airflow DAG page** (owner, 2026-11-07, from the Airflow 3.4 views).
+  The header is a facts row: Schedule, Latest run, Next run, Refresh, SLA, Tags, with Run now and
+  Pause. The right panel's tabs are Overview (a window selector; Runs, Failed runs, Success rate
+  and Median duration for it; the last ten runs' durations; recent failures), the selected run
+  (`Run #ID`, which opens when a run or task is selected), Runs (filterable by state, pool, agent
+  and failure class), Tasks (each task, its handler, what it waits for, its state in the selected
+  run), Calendar, Audit log and Details (the pipeline's settings and each task's definition). What a
+  pipeline and its tasks are for is documented once, in the catalog (owner, 2026-11-07: two panels
+  duplicated), and Details links to it. A back arrow returns to the Pipelines list. Workspace pages fill
+  the window and their panes scroll on their own; the content column is no longer capped at 1400 px.
+  Later: an Options menu beyond the grid's, and a minimap on a large graph.
 - **One list of pipelines.** The catalog's DAGs tab duplicates Pipelines: its columns (description,
   schedule, dependencies, last run, recent success, tag filter) move into the Pipelines page, and the
   catalog keeps Search, Warehouse and Gaps (built with S7.AP).
@@ -9319,7 +9353,8 @@ place.
 **Slices.** (1) The navigation, the Operations section name, Projects in Platform and the
 redirect from the old Insights address. (2) The run identifier in the run lists (S7.AQ slice 3).
 (3) The pipeline workspace above, which replaces the separate run page. (4) The Home dashboard and
-its tabs. (5) The Pipelines list takes the catalog's DAGs columns.
+its tabs. (5) The Pipelines list takes the catalog's DAGs columns. Slice 4 is built: Home is a tabbed dashboard (owner,
+2026-11-07: Insights was still a scrolling sheet).
 
 **Done when.** Every page in the new navigation is served by the app in light, dark and 390 px;
 the Insights page is deleted; the owner approves the screenshots of each slice on the Support

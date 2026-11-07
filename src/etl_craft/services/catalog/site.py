@@ -29,6 +29,7 @@ from etl_craft.services.catalog.collect import (
     Catalog,
     TaskAsset,
 )
+from etl_craft.services.catalog.document import catalog_document
 from etl_craft.services.catalog.gap_html import gaps_page
 from etl_craft.services.catalog.gaps import gap_snapshot
 from etl_craft.services.catalog.html import escape as _e
@@ -137,6 +138,9 @@ class _Writer(Pages):
             encoding="utf-8",
         )
         c = self.catalog
+        (self.folder / "catalog.json").write_text(
+            json.dumps(catalog_document(c), ensure_ascii=True), encoding="utf-8"
+        )
         self._gap_pages()
         self._page("index.html", "etl-craft catalog", "", self._home, "search", [])
         self._page("dags.html", "DAGs", "", self._dags, "dags", [])

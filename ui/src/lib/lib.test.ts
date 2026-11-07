@@ -1,77 +1,44 @@
 import { describe, expect, it } from "vitest";
-import { environmentLabel, isProduction } from "@/lib/environment";
-import { formatAgo, formatDuration, formatTime } from "@/lib/format";
-import { layout, lineageOf } from "@/components/run-graph";
+import { impact, isOpenGap, type CatalogDoc, type CatalogGap } from "@/lib/catalog";
+import { describeCron, relative } from "@/lib/format";
 
-describe("environment", () => {
-  it("makes production unmistakable and keeps names for the rest", () => {
-    expect(environmentLabel({ type: "PROD", name: "eu" })).toBe("PRODUCTION");
-    expect(environmentLabel({ type: "UAT", name: "eu" })).toBe("UAT · eu");
-    expect(environmentLabel({ type: "CUSTOM", name: null })).toBe("CUSTOM");
-    expect(isProduction({ type: "PROD", name: null })).toBe(true);
-    expect(isProduction({ type: "UAT", name: null })).toBe(false);
+describe("a schedule in words", () => {
+  it("describes the common shapes and leaves the rest to the expression", () => {
+    expect(describeCron("*/15 * * * *")).toBe("Every 15 minutes");
+    expect(describeCron("*/15 0-1,3-23 * * *")).toBe("Every 15 minutes, except hour 02");
+    expect(describeCron("0 */6 * * *")).toBe("Every 6 hours");
+    expect(describeCron("0 2 * * *")).toBe("Daily at 02:00");
+    expect(describeCron("0 * * * *")).toBe("Every hour");
+    expect(describeCron("0 9 * * 1")).toBeNull(); // a weekday needs the expression itself
+    expect(describeCron(null)).toBeNull();
   });
 });
 
-describe("format", () => {
-  it("shows the zone with every time", () => {
-    expect(formatTime("2026-11-05T12:00:00+00:00", "Europe/London")).toMatch(/GMT$/);
-    expect(formatTime("2026-11-05T12:00:00+00:00", "America/New_York")).toMatch(/GMT-5$/);
-    expect(formatTime(null, "UTC")).toBe("—");
-  });
-  it("formats durations and ages", () => {
-    expect(formatDuration("2026-11-05T12:00:00Z", "2026-11-05T12:00:12Z")).toBe("12s");
-    expect(formatDuration("2026-11-05T12:00:00Z", "2026-11-05T12:03:07Z")).toBe("3m 07s");
-    expect(formatDuration("2026-11-05T12:00:00Z", "2026-11-05T14:05:00Z")).toBe("2h 05m");
-    expect(formatAgo("2026-11-05T12:00:00Z", Date.parse("2026-11-05T12:10:00Z"))).toBe("10m ago");
+describe("a time from now", () => {
+  it("says how far, in the nearest unit, in either direction", () => {
+    const now = Date.parse("2026-11-07T12:00:00Z");
+    expect(relative("2026-11-07T14:14:00Z", now)).toBe("in 2 h");
+    expect(relative("2026-11-07T11:57:00Z", now)).toBe("3 min ago");
+    expect(relative("2026-11-04T12:00:00Z", now)).toBe("3 d ago");
+    expect(relative(null, now)).toBe("—");
   });
 });
 
-describe("graph layout", () => {
-  const graph = {
-    waves: [["extract"], ["load", "audit"], ["alert"]],
-    conditional: ["alert"],
-    depends_on: {
-      extract: [],
-      load: [["extract", "SUCCESS"]],
-      audit: [["extract", "SUCCESS"]],
-      alert: [["load", "FAILURE"]],
-    },
-  } as unknown as Parameters<typeof layout>[0];
-  it("puts each wave in a column and draws one edge per dependency row", () => {
-    const { nodes, edges } = layout(graph, { extract: "SUCCESS", load: "FAILED" }, "load");
-    const x = Object.fromEntries(nodes.map((n) => [n.id, n.position.x]));
-    expect(x.extract).toBeLessThan(x.load as number);
-    expect(x.load).toBe(x.audit);
-    expect(x.load).toBeLessThan(x.alert as number);
-    expect(edges.map((e) => e.id).sort()).toEqual(["extract->audit", "extract->load", "load->alert"]);
-    expect(edges.find((e) => e.id === "load->alert")?.label).toBe("failure");
-    expect(edges.find((e) => e.id === "extract->load")?.label).toBeUndefined();
+describe("the catalog's gaps and impact", () => {
+  it("does not call a match, an unchecked or an undeclared comparison an open gap", () => {
+    const gap = (state: string) => ({ state }) as CatalogGap;
+    expect(["Matched", "Unchecked", "Not declared", "Expected before first deployment"].some((s) => isOpenGap(gap(s)))).toBe(false);
+    expect(["Type mismatch", "Deployed only", "Lineage gap"].every((s) => isOpenGap(gap(s)))).toBe(true);
   });
-  it("shows a task the run has not reached as queued, and marks the selection", () => {
-    const { nodes } = layout(graph, {}, "audit");
-    expect(nodes.find((n) => n.id === "alert")?.data.status).toBe("QUEUED");
-    expect(nodes.filter((n) => n.data.focus === "focus").map((n) => n.id)).toEqual(["audit"]);
-  });
-  it("wraps a wide wave into columns of at most four", () => {
-    const wide = { waves: [["a", "b", "c", "d", "e", "f"], ["g"]], conditional: [], depends_on: {} } as unknown as Parameters<typeof layout>[0];
-    const { nodes } = layout(wide, {}, null);
-    const at = (id: string) => nodes.find((n) => n.id === id)!.position;
-    expect(at("a").x).toBe(at("d").x);
-    expect(at("e").x).toBeGreaterThan(at("a").x);
-    expect(at("g").x).toBeGreaterThan(at("e").x);
-  });
-  it("highlights the focused task's whole lineage and dims the rest", () => {
-    const chain = {
-      waves: [["a"], ["b", "x"], ["c"]],
-      conditional: [],
-      depends_on: { a: [], b: [["a", "SUCCESS"]], x: [["a", "SUCCESS"]], c: [["b", "SUCCESS"]] },
-    } as unknown as Parameters<typeof layout>[0];
-    expect([...lineageOf(chain, "b")].sort()).toEqual(["a", "b", "c"]);
-    const { nodes, edges } = layout(chain, {}, "b");
-    const state = Object.fromEntries(nodes.map((n) => [n.id, n.data.focus]));
-    expect(state).toEqual({ a: "lineage", b: "focus", x: "dim", c: "lineage" });
-    expect(edges.find((e) => e.id === "a->x")?.style?.opacity).toBe(0.25);
-    expect(edges.find((e) => e.id === "b->c")?.style?.opacity).toBe(1);
+
+  it("lists what is upstream and downstream with the steps and the task that makes the first one", () => {
+    const doc = { table_edges: [{ source: "a", target: "b", task: "P.t1" }, { source: "b", target: "c", task: "P.t2" }, { source: "c", target: "d", task: "P.t3" }] } as unknown as CatalogDoc;
+    const rows = impact(doc, "b", 4);
+    expect(rows).toEqual([
+      { table: "a", direction: "Upstream", steps: 1, task: "P.t1" },
+      { table: "c", direction: "Downstream", steps: 1, task: "P.t2" },
+      { table: "d", direction: "Downstream", steps: 2, task: "P.t3" },
+    ]);
+    expect(impact(doc, "b", 1, "down").map((r) => r.table)).toEqual(["c"]);
   });
 });

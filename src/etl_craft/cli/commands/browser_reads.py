@@ -19,6 +19,8 @@ from etl_craft.core.enums import ActionName
 from etl_craft.services.operations import sessions
 from etl_craft.services.operations.about import About
 from etl_craft.services.operations.catalog_pages import CatalogInput, CatalogPage
+from etl_craft.services.operations.previews import ROWS as PREVIEW_ROWS
+from etl_craft.services.operations.previews import PreviewInput, TablePreview
 from etl_craft.services.operations.requests import NoInput
 
 
@@ -62,9 +64,44 @@ def _catalog_options(parser: argparse.ArgumentParser) -> None:
     page = verbs.add_parser("page", help="Read an existing generated page without rebuilding it.")
     page.add_argument("--path", default="index.html")
     page.add_argument("--output", type=Path)
+    preview = verbs.add_parser("preview", help="Read the first rows of a table the catalog lists.")
+    configure_output(preview)
+    preview.add_argument(
+        "--json",
+        dest="output_format",
+        action="store_const",
+        const="json",
+        help="Print the rows as one JSON document.",
+    )
+    preview.add_argument(
+        "--table", required=True, help="The table as the catalog names it, such as ods.orders."
+    )
+    preview.add_argument(
+        "--limit",
+        type=int,
+        default=PREVIEW_ROWS,
+        help=f"How many rows to read, at most {PREVIEW_ROWS}.",
+    )
+
+
+def _preview(args: argparse.Namespace, out: Output) -> int:
+    result = call(args, ActionName.TABLE_PREVIEW, PreviewInput(table=args.table, limit=args.limit))
+    assert isinstance(result, TablePreview)
+
+    def show() -> None:
+        out.line("\t".join(result.columns))
+        for row in result.rows:
+            out.line("\t".join("" if value is None else value for value in row))
+        if result.more:
+            out.line(f"(the first {result.limit} rows; the table has more)")
+
+    out.result(result, args.output_format, text=show)
+    return 0
 
 
 def _catalog(args: argparse.Namespace, out: Output) -> int:
+    if args.catalog_verb == "preview":
+        return _preview(args, out)
     page = call(args, ActionName.CATALOG_PAGE, CatalogInput(path=args.path))
     assert isinstance(page, Iterable)
     try:
@@ -92,5 +129,5 @@ CATALOG = Command(
     "Read the selected project's existing generated catalog.",
     _catalog,
     _catalog_options,
-    actions=(ActionName.CATALOG_PAGE,),
+    actions=(ActionName.CATALOG_PAGE, ActionName.TABLE_PREVIEW),
 )
