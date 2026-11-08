@@ -199,6 +199,15 @@ def test_the_pages_render_cleanly_in_both_themes_and_on_a_phone(scene, scheme, w
         "accounts": "/ui/admin?tab=accounts",
         "projects-admin": "/ui/admin?tab=projects",
         "maintenance": "/ui/projects/default/maintenance",
+        "pipelines": "/ui/projects/default/pipelines",
+        "runs": "/ui/projects/default/runs",
+        "scheduled": "/ui/projects/default/scheduled",
+        "held": "/ui/projects/default/held",
+        "uploads": "/ui/projects/default/uploads",
+        "console": "/ui/projects/default/console",
+        "catalog": "/ui/projects/default/catalog",
+        "password": "/ui/password",
+        "projects": "/ui/projects",
     }
     with sync_playwright() as pw:
         browser, page, problems = open_page(
@@ -209,6 +218,10 @@ def test_the_pages_render_cleanly_in_both_themes_and_on_a_phone(scene, scheme, w
             page.goto(url + path)
             page.wait_for_load_state("networkidle")
             expect(page.locator("main")).to_be_visible()
+            if name != "projects":  # the project chooser is a root page
+                expect(
+                    page.locator("main").get_by_role("button", name="Back").first
+                ).to_be_visible()
             overflow = page.evaluate("document.documentElement.scrollWidth - window.innerWidth")
             assert overflow <= 0, f"{name} scrolls sideways by {overflow}px at {width}px"
             shoot(page, f"{name}-{scheme}-{width}")

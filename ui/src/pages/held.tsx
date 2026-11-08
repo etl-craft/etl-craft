@@ -39,7 +39,7 @@ export function Held() {
         <CardHeader>
           <CardTitle>Held runs and tasks · {held.data?.holds.length ?? 0}</CardTitle>
         </CardHeader>
-        <DataTable
+        <DataTable find
           label="Held runs and tasks"
           data={held.data?.holds ?? []}
           empty={held.isSuccess ? "Nothing is held." : undefined}
@@ -78,7 +78,7 @@ export function Held() {
         <CardHeader>
           <CardTitle>Paused pipelines · {paused.length}</CardTitle>
         </CardHeader>
-        <DataTable
+        <DataTable find
           label="Paused pipelines"
           data={paused}
           empty={list.isSuccess ? "No pipeline is paused." : undefined}
@@ -115,7 +115,7 @@ export function Held() {
         <CardHeader>
           <CardTitle>Paused tasks · {tasks.length}</CardTitle>
         </CardHeader>
-        <DataTable
+        <DataTable find
           label="Paused tasks"
           data={tasks}
           empty={list.isSuccess ? "No task is paused." : undefined}

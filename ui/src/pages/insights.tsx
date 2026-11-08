@@ -198,7 +198,7 @@ export function Insights() {
                   />
                 }
               >
-                <DataTable
+                <DataTable find
                   label="Pipelines"
                   data={d.per_pipeline}
                   empty="No pipeline ran in this window."
@@ -243,7 +243,7 @@ export function Insights() {
                     />
                   }
                 >
-                  <DataTable
+                  <DataTable find
                     label="Rows by task"
                     data={d.tasks}
                     empty="No successful task runs in this window."
@@ -265,7 +265,7 @@ export function Insights() {
             {tab === "quality" ? <Quality code={code} d={d} developer={developer} tz={tz} /> : null}
             {tab === "failures" ? (
               <TablePanel title="Failures">
-                <DataTable
+                <DataTable find
                   label="Failures"
                   data={d.failures}
                   empty="No failed or lost attempts in this window."
@@ -281,7 +281,7 @@ export function Insights() {
             ) : null}
             {tab === "runs" ? (
               <TablePanel title="Latest runs">
-                <DataTable
+                <DataTable find
                   label="Latest runs"
                   data={d.latest}
                   empty="No runs in this window."
@@ -363,7 +363,7 @@ function Quality({ code, d, developer, tz }: { code: string; d: InsightsView; de
   return (
     <div className="grid min-h-0 flex-1 gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,26rem)]">
       <TablePanel title="Data quality rules" note="Valid and eligible row counts are not recorded, so no quality percentage is shown.">
-        <DataTable
+        <DataTable find
           label="Data quality rules"
           data={d.rules}
           empty="No business rules ran in this window."

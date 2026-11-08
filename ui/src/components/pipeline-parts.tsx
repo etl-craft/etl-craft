@@ -1,7 +1,7 @@
 import { CirclePause } from "lucide-react";
 import * as React from "react";
 import { Link } from "react-router-dom";
-import { StatusMark, solidClass, statusMeta } from "@/components/status";
+import { solidClass, statusMeta } from "@/components/status";
 import { formatDuration, formatTime } from "@/lib/format";
 import { runPath } from "@/lib/routes";
 import type { Pipeline, RunView } from "@/lib/types";
@@ -9,19 +9,28 @@ import { cn } from "@/lib/utils";
 
 /** A pipeline's newest runs as status marks; each opens its run. */
 export function RecentRuns({ project, pipeline }: { project: string; pipeline: Pipeline }) {
-  if (pipeline.recent_runs.length === 0) return <span className="text-muted">No runs yet</span>;
+  const runs = pipeline.recent_runs;
+  if (runs.length === 0) return <span className="text-muted">No runs yet</span>;
+  // Oldest first, so the newest run is at the right edge like the grid's.
+  const ordered = [...runs].sort((a, b) => a.pipeline_run_id - b.pipeline_run_id);
+  const ok = runs.filter((r) => r.status === "SUCCESS").length;
   return (
-    <span className="flex items-center gap-1">
-      {pipeline.recent_runs.map((run) => (
-        <Link
-          key={run.pipeline_run_id}
-          to={runPath(project, pipeline.pipeline_code, run.pipeline_run_id)}
-          aria-label={`Run ${run.pipeline_run_id}, ${statusMeta(run.status).label}`}
-          title={`Run ${run.pipeline_run_id}: ${statusMeta(run.status).label}`}
-        >
-          <StatusMark status={run.status} />
-        </Link>
-      ))}
+    <span className="flex items-center gap-2">
+      <span role="list" aria-label="Recent runs, newest on the right" className="flex items-end gap-px">
+        {ordered.map((run) => (
+          <Link
+            key={run.pipeline_run_id}
+            role="listitem"
+            to={runPath(project, pipeline.pipeline_code, run.pipeline_run_id)}
+            aria-label={`Run ${run.pipeline_run_id}, ${statusMeta(run.status).label}`}
+            title={`Run ${run.pipeline_run_id}: ${statusMeta(run.status).label}`}
+            className={cn("h-4 w-1.5 rounded-xs hover:brightness-110", solidClass(run.status))}
+          />
+        ))}
+      </span>
+      <span className="num text-xs text-muted">
+        {ok}/{runs.length} ok
+      </span>
     </span>
   );
 }

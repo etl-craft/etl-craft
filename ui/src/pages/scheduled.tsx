@@ -44,7 +44,7 @@ export function Scheduled() {
         <CardHeader>
           <CardTitle>Next runs · {upcoming.length}</CardTitle>
         </CardHeader>
-        <DataTable
+        <DataTable find
           label="Next runs"
           data={upcoming}
           empty={list.isSuccess ? "No scheduled pipeline has a next run." : undefined}
@@ -61,7 +61,7 @@ export function Scheduled() {
           <CardHeader>
             <CardTitle>Scheduled but not running · {stalled.length}</CardTitle>
           </CardHeader>
-          <DataTable
+          <DataTable find
             label="Scheduled but not running"
             data={stalled}
             columns={[

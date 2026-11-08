@@ -32,7 +32,7 @@ export const itemsPath = (project: string, pipeline: string, runId: number | str
 export const uploadsPath = (project: string, pipeline?: string): string =>
   `/projects/${enc(project)}/uploads` + (pipeline ? `?pipeline=${enc(pipeline)}` : "");
 export const consolePath = (project: string): string => `/projects/${enc(project)}/console`;
-export type CatalogKind = "pipelines" | "tasks" | "tables" | "gaps";
+export type CatalogKind = "pipelines" | "tasks" | "tables" | "gaps" | "insights";
 /** The catalog, or one object in it: a pipeline, a task (`PIPELINE.task`), a table (`schema.table`) or the gaps. */
 export const catalogPath = (project: string, kind?: CatalogKind, name?: string, tab?: string): string =>
   `/projects/${enc(project)}/catalog` + (kind ? `/${kind}` + (name ? `/${enc(name)}` : "") : "") + (tab ? `?tab=${tab}` : "");

@@ -131,7 +131,7 @@ export function Uploads() {
             <CardHeader>
               <CardTitle>Recent files for {chosen}</CardTitle>
             </CardHeader>
-            <DataTable
+            <DataTable find
               label="Recent files"
               data={files.data?.uploads ?? []}
               empty={files.isSuccess ? `No files uploaded to ${chosen} yet.` : undefined}

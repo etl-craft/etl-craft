@@ -42,6 +42,47 @@ function HistoryBack() {
   );
 }
 
+/** Text with every occurrence of the search words marked, so a result shows why it matched. */
+export function Highlight({ text, words }: { text: string; words: string }) {
+  const needle = words.trim();
+  if (!needle) return <>{text}</>;
+  const escaped = needle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const parts = text.split(new RegExp(`(${escaped})`, "i"));
+  return (
+    <>
+      {parts.map((part, i) =>
+        part.toLowerCase() === needle.toLowerCase() ? (
+          <mark key={i} className="rounded-xs bg-warn-bg px-0.5 text-inherit">
+            {part}
+          </mark>
+        ) : (
+          <React.Fragment key={i}>{part}</React.Fragment>
+        ),
+      )}
+    </>
+  );
+}
+
+/** Previous and next for a list shown a page at a time: "26 to 50 of 130". */
+export function Pager({ page, size, total, onPage }: { page: number; size: number; total: number; onPage: (page: number) => void }) {
+  const pages = Math.max(1, Math.ceil(total / size));
+  if (total <= size) return null;
+  const from = (page - 1) * size + 1;
+  return (
+    <nav aria-label="Pages" className="flex items-center justify-end gap-3 border-t border-border px-3 py-1.5 text-xs text-muted">
+      <span className="num">
+        {from} to {Math.min(total, page * size)} of {total}
+      </span>
+      <button type="button" disabled={page <= 1} onClick={() => onPage(page - 1)} className="cursor-pointer rounded-sm border border-border-strong px-2 py-0.5 enabled:hover:bg-surface-2 disabled:opacity-40">
+        Previous
+      </button>
+      <button type="button" disabled={page >= pages} onClick={() => onPage(page + 1)} className="cursor-pointer rounded-sm border border-border-strong px-2 py-0.5 enabled:hover:bg-surface-2 disabled:opacity-40">
+        Next
+      </button>
+    </nav>
+  );
+}
+
 /** One setting as a row: what it is and why on the left, its control on the right, a divider below. */
 export function SettingRow({ title, hint, children }: { title: string; hint?: React.ReactNode; children: React.ReactNode }) {
   return (

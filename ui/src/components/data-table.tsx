@@ -160,7 +160,16 @@ export function DataTable<T>({
   find?: boolean;
 }) {
   const [sorting, setSorting] = React.useState<SortingState>(initialSort ?? []);
-  const [query, setQuery] = React.useState("");
+  // The filter text lives in the address, so a filtered list can be shared or reloaded: one parameter per table.
+  const param = `find-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
+  const [query, setQuery] = React.useState(() => (find ? (new URLSearchParams(window.location.search).get(param) ?? "") : ""));
+  const change = (text: string) => {
+    setQuery(text);
+    const next = new URL(window.location.href);
+    if (text) next.searchParams.set(param, text);
+    else next.searchParams.delete(param);
+    window.history.replaceState(window.history.state, "", next);
+  };
   const [sizing, setSizing] = React.useState<ColumnSizingState>(() => readWidths(label));
   const prepared = React.useMemo(() => sortable(columns, data), [columns, data]);
   const table = useReactTable({
@@ -184,7 +193,7 @@ export function DataTable<T>({
     <>
     {find ? (
       <div className="flex items-center gap-3 border-b border-border px-3 py-1.5">
-        <input type="search" aria-label={`Filter ${label}`} placeholder="Filter" value={query} onChange={(event) => setQuery(event.target.value)} className="h-7 w-56 rounded-sm border border-border-strong bg-surface px-2 text-xs" />
+        <input type="search" aria-label={`Filter ${label}`} placeholder="Filter" value={query} onChange={(event) => change(event.target.value)} className="h-7 w-56 rounded-sm border border-border-strong bg-surface px-2 text-xs" />
         {query ? <span className="text-xs text-muted">{table.getRowModel().rows.length} of {data.length}</span> : null}
       </div>
     ) : null}

@@ -153,6 +153,10 @@ Warehouses are optional extras. Core bundles none. `all` is core plus the UI, fo
   it, at each sign-in. `Auth.Oidc_bind_by_email` lets an account created with only an email take its provider
   subject at the first sign-in whose verified email matches it alone; the bind is audited.
 - The Accounts page shows each account's email and name.
+- The web interface also gains a back arrow on every page, highlighted search matches with kind filters and
+  paging, keyboard navigation in the catalog tree, a catalog Insights page (coverage, open gaps, most read tables),
+  a status strip with its success count for each pipeline's recent runs, and filter boxes whose text is kept in the
+  address.
 - The web interface gains: a divider between a pipeline's task list and run matrix that resizes both together
   (the newest run always stays in view), row menus for agent actions, a "Go to" list in the top search,
   breadcrumbs and back buttons on task and attempt pages, a searchable log with a first-error jump, links from

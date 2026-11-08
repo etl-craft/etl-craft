@@ -3,6 +3,7 @@ import { fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it } from "vitest";
 import { TableObject } from "@/components/catalog-pages";
+import { CatalogInsights } from "@/components/catalog-insights";
 import { CatalogTree } from "@/components/catalog-tree";
 import { pipelineGraph, tableLineage, type CatalogDoc } from "@/lib/catalog";
 
@@ -32,6 +33,24 @@ describe("the catalog tree", () => {
     expect(within(tree).getByRole("treeitem", { name: "orders" })).toBeTruthy(); // stg.orders, by its column
     expect(within(tree).queryByRole("treeitem", { name: /^ods/ })).toBeNull();
     expect(screen.getByRole("status").textContent).toBe("1 object match");
+  });
+
+  it("moves between items with the arrow keys and opens and closes groups with left and right", () => {
+    wrap(<CatalogTree code="demo" doc={doc} selected={{}} />);
+    const items = () => screen.getAllByRole("treeitem");
+    items()[0]!.focus();
+    expect(items()[0]!.tabIndex).toBe(0);
+    expect(items()[1]!.tabIndex).toBe(-1); // one stop for Tab; the arrows do the rest
+    fireEvent.keyDown(items()[0]!, { key: "ArrowDown" });
+    expect(document.activeElement).toBe(items()[1]);
+    fireEvent.keyDown(items()[1]!, { key: "End" });
+    expect(document.activeElement).toBe(items()[items().length - 1]);
+    const pipelines = screen.getByRole("treeitem", { name: /^Pipelines/ });
+    pipelines.focus();
+    fireEvent.keyDown(pipelines, { key: "ArrowLeft" });
+    expect(pipelines.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.keyDown(pipelines, { key: "ArrowRight" });
+    expect(pipelines.getAttribute("aria-expanded")).toBe("true");
   });
 
   it("opens what the page shows and closes a group on a click", () => {
@@ -72,5 +91,14 @@ describe("the catalog graphs", () => {
     const graph = pipelineGraph(doc, doc.pipelines[0]!);
     expect(graph.waves).toEqual([["a"], ["b"]]);
     expect(graph.depends_on.b).toEqual([["a", "SUCCESS"]]);
+  });
+});
+
+describe("the catalog insights", () => {
+  it("counts what is documented, written and read, and lists the tables no task writes", () => {
+    wrap(<CatalogInsights code="demo" doc={doc} />);
+    expect(screen.getByText("Tasks documented")).toBeTruthy();
+    expect(screen.getByText("Tables written by a task")).toBeTruthy();
+    expect(screen.getByRole("region", { name: "Tables no task writes" })).toBeTruthy();
   });
 });

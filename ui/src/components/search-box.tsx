@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import * as React from "react";
 import { useNavigate } from "react-router-dom";
+import { Highlight } from "@/components/common";
 import { hitLink } from "@/pages/search";
 import { getJson, project } from "@/lib/api";
 import { agentsPath, catalogPath, consolePath, heldPath, maintenancePath, pipelinesPath, projectHomePath, runsPath, scheduledPath, searchPath, settingsPath, systemPath, uploadsPath } from "@/lib/routes";
@@ -133,7 +134,7 @@ export const SearchBox = React.forwardRef<HTMLInputElement, { code: string }>(fu
                 const mine = index;
                 return (
                   <button key={`${h.kind}:${h.label}:${h.run_id ?? ""}:${h.pipeline_code ?? ""}`} type="button" role="option" aria-selected={at === mine} onMouseEnter={() => setAt(mine)} onClick={() => go(hitLink(code, h).to)} className={cn("flex w-full cursor-pointer items-baseline gap-2 rounded-sm px-3 py-1.5 text-left text-sm", at === mine && "bg-accent/15")}>
-                    <span className="truncate font-medium">{h.label}</span>
+                    <span className="truncate font-medium"><Highlight text={h.label} words={typed} /></span>
                     <span className="truncate text-xs text-muted">{h.detail}</span>
                   </button>
                 );

@@ -40,7 +40,7 @@ export function Agents() {
         <CardHeader>
           <CardTitle>Registered agents · {rows.length}</CardTitle>
         </CardHeader>
-        <DataTable
+        <DataTable find
           label="Agents"
           data={rows}
           empty={list.isSuccess ? "No agents have registered. Start one with etl-craft agent and an agent token. Deployments that run tasks on the controller's host do not use agents." : undefined}
