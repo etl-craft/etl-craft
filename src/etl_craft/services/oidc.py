@@ -237,9 +237,14 @@ def _claims(token: str, issuer: str, client: str, nonce: str) -> dict[str, objec
         raise ConfigurationError(
             "OIDC ID token: expected a signed RS256 token; check client registration"
         )
-    for key, expected in (("iss", issuer), ("nonce", nonce), ("azp", client)):
+    for key, expected in (("iss", issuer), ("azp", client)):
         found = claims.get(key, client if key == "azp" else None)
         _check_claim(key, found, expected)
+    # The device flow (RFC 8628) has no nonce parameter, so an issuer such as Dex may leave the
+    # claim out; the token still came straight from the token endpoint for this device code. A
+    # nonce that is present must be ours.
+    if "nonce" in claims:
+        _check_claim("nonce", claims["nonce"], nonce)
     if claims.get("aud") not in (client, [client]):
         _check_claim("aud", claims.get("aud"), client)
     now = time.time()

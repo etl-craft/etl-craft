@@ -155,6 +155,16 @@ The session stores **group IDs**, so a rename keeps the identity and reusing a n
 transfer an old session's access to another group. Explicit Engine DB memberships are checked
 on every request as well.
 
+!!! warning "The ID token's nonce is optional"
+    The device flow (RFC 8628) has no nonce parameter, and Dex, Google and Keycloak do not echo one,
+    so etl-craft accepts an ID token that has no `nonce` claim. A `nonce` that is present must match
+    the one sent, or the sign-in is refused. The token still has to name the configured issuer, the
+    client as audience and authorized party, and be current. It is read from the issuer's token
+    endpoint over TLS in answer to this sign-in's one-time device code, not from a browser redirect,
+    which is the case a nonce exists to protect. The trade-off is that nothing ties the token to
+    this particular request beyond that exchange, so use only an issuer you trust, over HTTPS, and
+    keep the device code private.
+
 SSO reads the `email`, `email_verified`, `given_name`, `family_name` and `name` claims (the device
 request asks for `openid email profile`). A sign-in refreshes the account's first name, last name
 and, only when the issuer marks it verified, its email.

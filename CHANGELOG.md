@@ -148,6 +148,9 @@ Warehouses are optional extras. Core bundles none. `all` is core plus the UI, fo
   Projects admin page): what may start its runs by itself, in the values `Orchestration.Allowed_auto_restarts`
   takes. The narrower of the controller's setting and the project's applies, so one Engine DB can run a DEV
   project on schedule and keep a PROD project to person-started runs.
+- An SSO ID token without a `nonce` claim is accepted, because the device flow has no nonce parameter and
+  issuers such as Dex, Google and Keycloak do not echo one; a `nonce` that is present must still match. The security
+  guide warns about the trade-off.
 - Accounts have a first and last name (migration 0092, `account add --first-name --last-name`). SSO now asks
   the issuer for `email` and `profile` and refreshes an account's names, and its email when the issuer verified
   it, at each sign-in. `Auth.Oidc_bind_by_email` lets an account created with only an email take its provider

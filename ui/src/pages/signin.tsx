@@ -1,5 +1,5 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { ExternalLink } from "lucide-react";
+import { Check, Copy, ExternalLink } from "lucide-react";
 import * as React from "react";
 import { useSearchParams } from "react-router-dom";
 import { Field, inputClass, Loading, Notice, PageHeader } from "@/components/common";
@@ -14,6 +14,7 @@ import { useDocumentTitle } from "@/title";
 /** Waits for the person to approve at the identity provider, then follows the redirect the server gives. */
 function SsoWait({ grant, returnTo }: { grant: SsoStart; returnTo: string }) {
   const [status, setStatus] = React.useState("Waiting for approval…");
+  const [copied, setCopied] = React.useState(false);
   React.useEffect(() => {
     let live = true;
     const end = Date.now() + grant.expires_in * 1000;
@@ -25,8 +26,8 @@ function SsoWait({ grant, returnTo }: { grant: SsoStart; returnTo: string }) {
         const answer = await postJson<Redirect>("/api/v1/login/sso/poll", { device_code: grant.device_code, nonce: grant.nonce, _return_to: returnTo });
         if (answer.redirect) return window.location.assign(answer.redirect);
         return poll(Math.max(1, interval + (answer.interval ?? 0)));
-      } catch {
-        return setStatus("SSO sign-in refused or expired. Start again.");
+      } catch (error) {
+        return setStatus(`SSO sign-in refused: ${failureText(error)} Start again.`);
       }
     };
     void poll(Math.max(1, grant.interval));
@@ -38,7 +39,18 @@ function SsoWait({ grant, returnTo }: { grant: SsoStart; returnTo: string }) {
     <div className="grid gap-2 rounded-md border border-border p-4 text-sm">
       <h2 className="m-0 text-base font-semibold">Approve SSO sign-in</h2>
       <p className="m-0">
-        Code: <strong className="font-mono">{grant.user_code}</strong>
+        Code: <strong className="font-mono">{grant.user_code}</strong>{" "}
+        <button
+          type="button"
+          aria-label="Copy the code"
+          title="Copy the code"
+          onClick={() => {
+            void navigator.clipboard?.writeText(grant.user_code).then(() => setCopied(true));
+          }}
+          className="ml-1 inline-grid size-6 cursor-pointer place-items-center rounded-sm align-middle text-muted hover:bg-surface-2 hover:text-fg"
+        >
+          {copied ? <Check className="size-3.5 text-ok" aria-hidden /> : <Copy className="size-3.5" aria-hidden />}
+        </button>
       </p>
       <a className="inline-flex items-center gap-1 text-accent hover:underline" href={grant.verification_uri} target="_blank" rel="noopener noreferrer">
         Open your identity provider <ExternalLink className="size-3.5" aria-hidden />

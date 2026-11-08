@@ -138,3 +138,27 @@ def test_names_come_from_the_given_and_family_claims_or_the_full_name():
     assert _person({"name": "Ada King Lovelace"}) == ("Ada King", "Lovelace")
     assert _person({"name": "Ada"}) == ("Ada", None)
     assert _person({"given_name": 7}) == (None, None)
+
+
+def test_an_issuer_that_leaves_out_the_nonce_is_accepted_and_a_wrong_one_is_not(issuer):
+    auth, state = issuer
+    state["omit_claims"] = ("nonce",)
+    grant = start_device(auth)
+    assert poll_device(auth, grant.device_code, grant.nonce) == IdentityClaims("known-subject")
+    state["omit_claims"] = ()
+    with pytest.raises(ConfigurationError, match="nonce: value differs"):
+        poll_device(auth, grant.device_code, "another-sign-in")
+
+
+def test_profile_claims_are_read_with_the_verified_flag(issuer):
+    auth, state = issuer
+    state["extra_claims"] = {
+        "email": "ada@example.com",
+        "email_verified": True,
+        "given_name": "Ada",
+        "family_name": "Lovelace",
+    }
+    grant = start_device(auth)
+    assert poll_device(auth, grant.device_code, grant.nonce) == IdentityClaims(
+        "known-subject", (), "ada@example.com", True, "Ada", "Lovelace"
+    )

@@ -65,6 +65,8 @@ def issuer(tmp_path, monkeypatch):
                     "exp": time.time() + 60,
                     **state.get("extra_claims", {}),
                 }
+                for omitted in state.get("omit_claims", ()):
+                    claims.pop(omitted, None)
                 self.reply(
                     {"id_token": encode({"alg": "RS256"}) + "." + encode(claims) + ".signature"}
                 )
