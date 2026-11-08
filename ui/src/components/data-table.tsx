@@ -177,6 +177,8 @@ export function DataTable<T>({
     columns: prepared,
     state: { sorting, columnSizing: sizing, globalFilter: find ? query : "" },
     globalFilterFn: "includesString",
+    // Every column counts, whatever its first row holds: the default leaves out a column whose first value is empty.
+    getColumnCanGlobalFilter: () => true,
     onSortingChange: setSorting,
     onColumnSizingChange: setSizing,
     columnResizeMode: "onChange",

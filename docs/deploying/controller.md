@@ -150,6 +150,10 @@ on a dedicated connection. SQLite holds an OS file lock beside its database file
 controllers must reach the same file. A second controller exits with the current controller's id and host.
 Leadership lasts until local agents have stopped and the lock is released.
 
+A project's `ALLOWED_AUTO_RESTARTS` that excludes `SCHEDULE` stops its ticks without moving their
+cursor, so allowing schedules again replays the ticks missed meanwhile as `CATCHUP` says (one run, or up to
+`MAX_CATCHUP_RUNS`), as after a controller outage; pause the pipeline instead when no replay is wanted.
+
 `AUD_CONTROLLERS` records the process id, host, version, start, heartbeat and clean stop times, and the
 `Orchestration.Allowed_auto_restarts` the controller runs with (shown by `about` and in the web interface).
 The starting caller is recorded; background supervision and automatic shutdown use the system

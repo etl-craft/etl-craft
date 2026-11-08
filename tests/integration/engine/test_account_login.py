@@ -191,6 +191,60 @@ def test_an_account_edits_its_own_names_only_when_the_deployment_allows_it(proje
         act(allowed, ActionName.ACCOUNT_SETTINGS, first_name="x" * 129)
 
 
+def test_the_cli_invites_by_email_without_asking_for_a_password(project, monkeypatch, capsys):
+    ctx = project
+    service = act(ctx, ActionName.TOKEN_CREATE, name="automation", role=ApiRole.ADMIN)
+    monkeypatch.setenv("ETL_CRAFT_TOKEN", service.token)
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: False)  # a prompt would be refused
+    argv = ["account", "add", "--name", "ada", "--role", "viewer", "--email", "ada@example.com"]
+    assert main([*argv, "--no-password"]) == 0
+    capsys.readouterr()
+    found = row(ctx, "ada")
+    assert found.email == "ada@example.com" and found.subject is None
+    with ctx.engine.connect() as conn:
+        hash_ = conn.execute(
+            text("SELECT PASSWORD_HASH FROM CFG_ACCOUNTS WHERE ACCOUNT_NAME='ada'")
+        ).scalar_one()
+    assert hash_ is None
+
+
+def test_a_subject_held_by_a_disabled_account_is_refused_cleanly_not_as_a_server_error(project):
+    ctx = binding(project)
+    user(ctx, "old", "sub-1")
+    act(ctx, ActionName.ACCOUNT_DISABLE, name="old")
+    invited(ctx)
+    with pytest.raises(UsageError, match="no active registered"):
+        sessions.sign_in_subject(ctx, IdentityClaims("sub-1", (), "a@example.com", True))
+    assert row(ctx).subject is None
+
+
+def test_the_issuer_fills_an_empty_name_but_not_over_a_name_the_account_may_edit(project):
+    ctx = project
+    user(ctx, subject="sub-1")
+    sessions.sign_in_subject(ctx, IdentityClaims("sub-1", (), None, False, "Al", "Ice"))
+    editable = replace(
+        ctx, config=replace(ctx.config, auth=replace(ctx.config.auth, names_editable=True))
+    )
+    with acting_as(SYSTEM_ACTOR), ctx.engine.begin() as conn:
+        conn.execute(text("UPDATE CFG_ACCOUNTS SET FIRST_NAME='Alice' WHERE ACCOUNT_NAME='alice'"))
+    sessions.sign_in_subject(editable, IdentityClaims("sub-1", (), None, False, "Al", "Ice"))
+    assert row(ctx).first_name == "Alice"  # the account's own edit stands
+    sessions.sign_in_subject(ctx, IdentityClaims("sub-1", (), None, False, "Al", "Ice"))
+    assert row(ctx).first_name == "Al"  # where names are not editable the issuer decides
+
+
+def test_a_name_longer_than_a_column_is_refused_at_registration(project):
+    with pytest.raises(UsageError, match="first_name expected at most 128"):
+        act(
+            project,
+            ActionName.ACCOUNT_ADD,
+            name="bob",
+            role=ApiRole.VIEWER,
+            email="b@x.test",
+            first_name="x" * 129,
+        )
+
+
 def test_account_controls_require_a_proven_admin(project):
     ctx = project
     with pytest.raises(PermissionDeniedError, match="admin role is required"):

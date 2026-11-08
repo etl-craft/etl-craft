@@ -128,9 +128,9 @@ def save_settings(ctx: OperationContext, request: SettingsPatch) -> Settings:
     names = {"first_name": request.first_name, "last_name": request.last_name}
     if any(value is not None for value in names.values()) and not ctx.config.auth.names_editable:
         raise UsageError(
-            "first and last names are set by your administrator here; ask them to change them, "
-            "or to set Auth.Names_editable: true in craft-connector.yml so accounts may edit "
-            "their own"
+            "first and last names come from your account's registration and your single sign-on "
+            "provider here; an administrator can let accounts edit their own with "
+            "Auth.Names_editable: true in craft-connector.yml"
         )
     with locks.ACCOUNTS.hold(ctx.engine), ctx.engine.begin() as conn:
         row = find_account(conn, ctx.actor.name)

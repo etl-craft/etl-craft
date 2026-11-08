@@ -5,6 +5,7 @@ from datetime import UTC, datetime, timedelta
 from typing import ClassVar
 
 from sqlalchemy.engine import Row
+from sqlalchemy.exc import IntegrityError
 
 from etl_craft.core.actor import Actor, ActorKind, acting_as
 from etl_craft.core.enums import (
@@ -329,10 +330,8 @@ def sign_in_subject(ctx: OperationContext, claims: oidc.IdentityClaims) -> Sessi
         name = conn.execute(
             statement(conn, "account_subject"), {"subject": claims.subject}
         ).scalar_one_or_none()
-    bound = False
     if name is None:
         name = _bind_by_email(ctx, claims)
-        bound = name is not None
     if name is None:
         with recorded(ctx, ActionName.LOGIN, {"oidc_subject": claims.subject}):
             raise UsageError(
@@ -343,7 +342,7 @@ def sign_in_subject(ctx: OperationContext, claims: oidc.IdentityClaims) -> Sessi
                     else ""
                 )
             )
-    _refresh_profile(ctx, name, claims, bound)
+    _refresh_profile(ctx, name, claims)
     return _sign_in(ctx, name, claims=claims)
 
 
@@ -365,6 +364,17 @@ def _bind_by_email(ctx: OperationContext, claims: oidc.IdentityClaims) -> str | 
     if len(names) != 1:
         return None
     name = names[0]
+    try:
+        done = _bind(ctx, name, claims)
+    except IntegrityError:
+        # A disabled account still holds this subject: the attempt is recorded as refused and
+        # left to an administrator.
+        return None
+    return name if done else None
+
+
+def _bind(ctx: OperationContext, name: str, claims: oidc.IdentityClaims) -> bool:
+    """Write the subject onto the account, recorded as a sign-in by that account."""
     with locks.ACCOUNTS.hold(ctx.engine, wait_seconds=30):
         caller = replace(ctx, actor=Actor(name, ActorKind.USER))
         with (
@@ -377,16 +387,19 @@ def _bind_by_email(ctx: OperationContext, claims: oidc.IdentityClaims) -> str | 
             acting_as(caller.actor),
             ctx.engine.begin() as conn,
         ):
-            done = conn.execute(
-                statement(conn, "account_bind_subject"), {"name": name, "subject": claims.subject}
+            found = conn.execute(
+                statement(conn, "account_bind_subject"),
+                {"name": name, "subject": claims.subject},
             ).first()
-    return name if done is not None else None
+    return found is not None
 
 
-def _refresh_profile(
-    ctx: OperationContext, name: str, claims: oidc.IdentityClaims, bound: bool
-) -> None:
-    """Keep the account's names, and its email when verified, as the issuer states them."""
+def _refresh_profile(ctx: OperationContext, name: str, claims: oidc.IdentityClaims) -> None:
+    """Keep the account's names, and its email when verified, as the issuer states them.
+
+    Where accounts may edit their own names (``Auth.Names_editable``) the issuer only fills a name
+    that is empty, so a person's own edit is not undone at the next sign-in.
+    """
     with ctx.engine.connect() as conn:
         row = find_account(conn, name)
     if row is None:
@@ -394,15 +407,19 @@ def _refresh_profile(
     email = claims.email if claims.email and claims.email_verified else None
     new = {"email": email, "first_name": claims.first_name, "last_name": claims.last_name}
     old = {"email": row.email, "first_name": row.first_name, "last_name": row.last_name}
-    changed = {k: v for k, v in new.items() if v is not None and v != old[k]}
-    if not changed and not bound:
+    keep_own = ctx.config.auth.names_editable
+    changed = {
+        k: v
+        for k, v in new.items()
+        if v is not None and v != old[k] and not (keep_own and k != "email" and old[k])
+    }
+    if not changed:
         return
-    if changed:
-        with acting_as(Actor(name, ActorKind.USER)), ctx.engine.begin() as conn:
-            conn.execute(
-                statement(conn, "account_profile"),
-                {"name": name, "email": None, "first_name": None, "last_name": None} | changed,
-            )
+    with acting_as(Actor(name, ActorKind.USER)), ctx.engine.begin() as conn:
+        conn.execute(
+            statement(conn, "account_profile"),
+            {"name": name, "email": None, "first_name": None, "last_name": None} | changed,
+        )
 
 
 def start_sso(ctx: OperationContext, request: NoInput) -> SsoStart:

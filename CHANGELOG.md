@@ -148,6 +148,9 @@ Warehouses are optional extras. Core bundles none. `all` is core plus the UI, fo
   Projects admin page): what may start its runs by itself, in the values `Orchestration.Allowed_auto_restarts`
   takes. The narrower of the controller's setting and the project's applies, so one Engine DB can run a DEV
   project on schedule and keep a PROD project to person-started runs.
+- `account add --no-password` invites a user by email for SSO binding. A name longer than 128 characters is refused
+  at registration, an SSO sign-in no longer overwrites a name an account may edit, and a project setting the controller
+  cannot read stops that project's automatic starts and is logged once instead of failing the controller tick.
 - A pipeline's recent runs (`GET /api/v1/pipelines`, `etl-craft status --json`) carry each run's `start_date` and
   `end_date`, and the Pipelines list draws them as a duration spark line. Durations are written the same way
   everywhere in the web interface, the session warning uses the chosen timezone, a pipeline address `?run=` takes a

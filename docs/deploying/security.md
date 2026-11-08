@@ -175,7 +175,8 @@ request asks for `openid email profile`). A sign-in refreshes the account's firs
 and, only when the issuer marks it verified, its email.
 
 To invite someone before their provider subject is known, create the account with only an email
-(`etl-craft account add --name ada --role viewer --email ada@example.com`) and set
+(`etl-craft account add --name ada --role viewer --email ada@example.com --no-password`; without
+`--no-password` the command asks for a password, and an account with a password is never bound) and set
 `Auth.Oidc_bind_by_email: true`. The first SSO sign-in whose verified email matches exactly one
 active account with no password and no subject binds that subject to the account; the bind is
 recorded as a sign-in by that account. An unverified email, no match, or two matches is refused and

@@ -131,3 +131,13 @@ def test_a_project_that_allows_no_automatic_start_is_not_restarted(engine_db):
         conn.execute(text("UPDATE CFG_PROJECTS SET ALLOWED_AUTO_RESTARTS='SCHEDULE|ALWAYS'"))
     Restarts().refresh(context(engine_db), end + COOLDOWN)
     assert len(runs(engine_db, pipeline)) == 2
+
+
+def test_a_project_setting_the_controller_cannot_read_stops_that_project_without_an_error(
+    engine_db,
+):
+    pipeline, _, end = ended(engine_db, "SUCCESS", "SUCCESS")
+    with engine_db.engine.begin() as conn:
+        conn.execute(text("UPDATE CFG_PROJECTS SET ALLOWED_AUTO_RESTARTS='FOO'"))
+    Restarts().refresh(context(engine_db), end + COOLDOWN)  # must not raise
+    assert len(runs(engine_db, pipeline)) == 1

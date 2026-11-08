@@ -287,3 +287,13 @@ def test_a_project_that_allows_no_automatic_start_starts_no_scheduled_runs(engin
     with ctx.engine.connect() as conn:
         count = conn.execute(text("SELECT COUNT(*) FROM AUD_PIPELINES_RUN_LOG")).scalar_one()
     assert count == 0
+
+
+def test_a_project_setting_the_controller_cannot_read_starts_no_scheduled_runs(engine_db):
+    _, ctx = configure(engine_db)
+    with ctx.engine.begin() as conn:
+        conn.execute(text("UPDATE CFG_PROJECTS SET ALLOWED_AUTO_RESTARTS='FOO'"))
+    Schedules().refresh(ctx, NOW)  # must not raise
+    with ctx.engine.connect() as conn:
+        count = conn.execute(text("SELECT COUNT(*) FROM AUD_PIPELINES_RUN_LOG")).scalar_one()
+    assert count == 0

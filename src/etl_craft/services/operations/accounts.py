@@ -80,6 +80,9 @@ class AccountAdd(Request):
                 "an account with only an email signs in through SSO once the issuer verifies it "
                 "(Auth.Oidc_bind_by_email)"
             )
+        for flag, value in (("first_name", self.first_name), ("last_name", self.last_name)):
+            if value is not None and len(value.strip()) > 128:
+                raise UsageError(f"account {self.name!r}: {flag} expected at most 128 characters")
         if self.oidc_subject is not None and not self.oidc_subject.strip():
             raise UsageError(
                 f"account {self.name!r}: `oidc_subject` is empty; supply the provider subject"
@@ -196,8 +199,8 @@ def add_account(ctx: OperationContext, request: AccountAdd) -> Accounts:
                         "kind": request.kind,
                         "role": request.role,
                         "email": request.email,
-                        "first_name": request.first_name,
-                        "last_name": request.last_name,
+                        "first_name": (request.first_name and request.first_name.strip()) or None,
+                        "last_name": (request.last_name and request.last_name.strip()) or None,
                         "oidc_subject": request.oidc_subject,
                         "password_hash": password_hash,
                         "actor": ctx.actor.name,

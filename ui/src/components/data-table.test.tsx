@@ -69,4 +69,19 @@ describe("the shared table", () => {
     const handle = screen.getByRole("separator", { name: "Resize the Name column" });
     expect(handle.querySelector("span")).toBeTruthy(); // the line is always drawn
   });
+
+  it("filters on a column whose first value is empty", () => {
+    interface Person {
+      name: string;
+      email: string | null;
+    }
+    const people: Person[] = [
+      { name: "owner", email: null },
+      { name: "ada", email: "ada@example.com" },
+    ];
+    const col = createColumnHelper<Person>();
+    render(<DataTable find label="Things" data={people} columns={[col.accessor("name", { header: "Name" }), col.accessor("email", { header: "Email" })]} />);
+    fireEvent.change(screen.getByRole("searchbox", { name: "Filter Things" }), { target: { value: "example.com" } });
+    expect(names()).toEqual(["adaada@example.com"]);
+  });
 });

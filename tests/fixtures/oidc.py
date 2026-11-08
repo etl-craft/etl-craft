@@ -38,7 +38,9 @@ def issuer(tmp_path, monkeypatch):
         def do_POST(self):
             data = parse_qs(self.rfile.read(int(self.headers["Content-Length"])).decode())
             state["requests"].append((self.path, data))
-            if self.path == "/device":
+            if self.path == "/device" and state.get("device_status"):
+                self.reply({"error": "invalid_client"}, state["device_status"])
+            elif self.path == "/device":
                 state["nonce"] = data["nonce"][0]
                 self.reply(
                     {

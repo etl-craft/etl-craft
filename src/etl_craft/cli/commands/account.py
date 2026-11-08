@@ -25,6 +25,11 @@ def _configure(parser: argparse.ArgumentParser) -> None:
         required=True,
     )
     add.add_argument("--email")
+    add.add_argument(
+        "--no-password",
+        action="store_true",
+        help="Invite by email: no password is set, and SSO binds the account at first sign-in.",
+    )
     add.add_argument("--first-name")
     add.add_argument("--last-name")
     add.add_argument("--oidc-subject")
@@ -77,7 +82,7 @@ def _run(args: argparse.Namespace, out: Output) -> int:
         out.result(saved, args.output_format, text=lambda: out.line("Personal settings saved."))
         return 0
     if args.account_verb == "add":
-        user = args.kind == AccountKind.USER and not args.oidc_subject
+        user = args.kind == AccountKind.USER and not args.oidc_subject and not args.no_password
         request: object = request_from(
             args, accounts.AccountAdd, password=password(confirm=True) if user else None
         )

@@ -88,10 +88,10 @@ def test_oidc_clock_leeway_and_discovery_cache(issuer, monkeypatch):
     original = oidc._request
     discoveries = []
 
-    def counted(url, data=None):
+    def counted(url, data=None, **options):
         if url.endswith("openid-configuration"):
             discoveries.append(url)
-        return original(url, data)
+        return original(url, data, **options)
 
     monkeypatch.setattr(oidc, "_request", counted)
     grant = start_device(auth)
@@ -172,3 +172,10 @@ def test_a_pending_poll_is_read_from_the_body_whether_the_issuer_answers_400_or_
     state["errors"] = ["authorization_pending", "slow_down"]
     assert poll_device(auth, grant.device_code, grant.nonce) == 0
     assert poll_device(auth, grant.device_code, grant.nonce) == 5
+
+
+def test_a_401_from_the_device_authorization_endpoint_is_a_plain_http_failure(issuer):
+    auth, state = issuer
+    state["device_status"] = 401
+    with pytest.raises(ConfigurationError, match="HTTP 401"):
+        start_device(auth)

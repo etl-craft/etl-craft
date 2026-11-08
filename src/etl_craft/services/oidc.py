@@ -49,7 +49,9 @@ def _endpoint(value: object) -> str:
     )
 
 
-def _request(url: str, data: dict[str, str] | None = None) -> dict[str, object]:
+def _request(
+    url: str, data: dict[str, str] | None = None, *, error_statuses: tuple[int, ...] = (400,)
+) -> dict[str, object]:
     url = _endpoint(url)
     location = url.partition("?")[0]
     request = Request(
@@ -61,9 +63,9 @@ def _request(url: str, data: dict[str, str] | None = None) -> dict[str, object]:
         try:
             response = build_opener(_NoRedirects()).open(request, timeout=15)
         except HTTPError as error:
-            # RFC 8628 answers a pending or slowed poll with 400; Dex uses 401. Either way the body
-            # carries the OAuth error, which the caller reads.
-            if data is None or error.code not in (400, 401):
+            # RFC 8628 answers a pending or slowed poll with 400; Dex uses 401. The caller names
+            # which statuses carry an OAuth error in the body.
+            if data is None or error.code not in error_statuses:
                 raise ConfigurationError(
                     f"OIDC endpoint {location}: HTTP {error.code}; check provider configuration"
                 ) from error
@@ -180,6 +182,8 @@ def poll_device(auth: AuthConfig, device_code: str, nonce: str) -> IdentityClaim
             "device_code": device_code,
             "grant_type": "urn:ietf:params:oauth:grant-type:device_code",
         },
+        # Only a poll can be pending; any other 401 stays the plain HTTP failure.
+        error_statuses=(400, 401),
     )
     error = response.get("error")
     if error == "authorization_pending":
