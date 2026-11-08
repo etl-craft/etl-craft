@@ -1,3 +1,4 @@
+import { AutoStartNotice } from "@/components/auto-start-notice";
 import { TagFilter } from "@/components/tag-filter";
 import { useQuery } from "@tanstack/react-query";
 import { createColumnHelper } from "@tanstack/react-table";
@@ -99,6 +100,7 @@ export function Pipelines() {
           </div>
         }
       />
+      <AutoStartNotice />
       <div className="flex flex-wrap items-center gap-3">
         <input type="search" aria-label="Find a pipeline" value={text} onChange={(event) => find(event.target.value)} placeholder="Find by name or description" className="h-9 w-72 rounded-md border border-border-strong bg-surface px-3 text-sm" />
         <TagFilter known={known} selected={tags} onToggle={toggleTag} onClear={() => setParams(new URLSearchParams(), { replace: true })} />

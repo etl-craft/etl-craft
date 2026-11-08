@@ -73,6 +73,7 @@ export function AccountsTab() {
           empty={list.isSuccess ? "No accounts." : undefined}
           columns={[
             columns.accessor("name", { header: "Account", cell: (c) => <span className="font-medium">{c.getValue()}</span> }),
+            columns.accessor("email", { header: "Email", cell: (c) => c.getValue() ?? <span className="text-muted">—</span> }),
             columns.accessor("kind", { header: "Kind" }),
             columns.accessor("role", { header: "Role" }),
             columns.display({

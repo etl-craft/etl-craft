@@ -24,8 +24,8 @@ def active_controller(engine: Engine) -> str:
     )
 
 
-def start(engine: Engine) -> int:
-    """Record a leader only after its session lock has been acquired."""
+def start(engine: Engine, allowed_auto_restarts: str) -> int:
+    """Record a leader and the automatic starts it allows, once its session lock is held."""
     actor = current_actor()
     now = datetime.now(UTC)
     with engine.begin() as conn:
@@ -39,6 +39,7 @@ def start(engine: Engine) -> int:
                     "now": now,
                     "actor": actor.name,
                     "kind": actor.kind.value,
+                    "allowed": allowed_auto_restarts,
                 },
             ).scalar_one()
         )

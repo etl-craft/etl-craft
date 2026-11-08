@@ -201,7 +201,7 @@ def serve(ctx: OperationContext, stop: threading.Event) -> None:
             from etl_craft.engine.upload_recovery import recover_uploads
 
             recover_uploads(ctx.engine, ctx.config)
-            controller_id = controllers.start(ctx.engine)
+            controller_id = controllers.start(ctx.engine, ctx.config.allowed_auto_restarts)
             metrics.leader = True
             logger.info("controller_id=%s: controller active", controller_id)
             if not schedule_allowed(ctx.config.allowed_auto_restarts):

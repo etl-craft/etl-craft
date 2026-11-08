@@ -150,7 +150,8 @@ on a dedicated connection. SQLite holds an OS file lock beside its database file
 controllers must reach the same file. A second controller exits with the current controller's id and host.
 Leadership lasts until local agents have stopped and the lock is released.
 
-`AUD_CONTROLLERS` records the process id, host, version, start, heartbeat and clean stop times.
+`AUD_CONTROLLERS` records the process id, host, version, start, heartbeat and clean stop times, and the
+`Orchestration.Allowed_auto_restarts` the controller runs with (shown by `about` and in the web interface).
 The starting caller is recorded; background supervision and automatic shutdown use the system
 actor. Heartbeats are refreshed every 15 seconds. An unclosed history row after a crash does
 not constitute leadership and is not given an invented stop time.

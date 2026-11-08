@@ -140,6 +140,11 @@ Warehouses are optional extras. Core bundles none. `all` is core plus the UI, fo
 
 ### Added
 
+- The controller records the `Orchestration.Allowed_auto_restarts` it runs with on its `AUD_CONTROLLERS` row
+  (migration 0090), `etl-craft about` and `GET /api/v1/about` report it for each live controller, and the web
+  interface says so on Scheduled runs and Pipelines when schedules or automatic restarts are off, instead of
+  showing next-run times that never start.
+- The Accounts page shows each account's email.
 - The web interface gains: a divider between a pipeline's task list and run matrix that resizes both together
   (the newest run always stays in view), row menus for agent actions, a "Go to" list in the top search,
   breadcrumbs and back buttons on task and attempt pages, a searchable log with a first-error jump, links from

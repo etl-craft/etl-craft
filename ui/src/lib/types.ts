@@ -413,6 +413,7 @@ export interface ControllerVersion {
   controller_id: number;
   version: string;
   heartbeat_at: string;
+  allowed_auto_restarts: string;
 }
 
 export interface About {
