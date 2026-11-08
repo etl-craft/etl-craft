@@ -18,7 +18,7 @@ import { Tabs } from "@/components/tabs";
 import { SplitPane } from "@/components/split-pane";
 import { Card } from "@/components/ui/card";
 import { useCanRun, useProjectInfo, useTimezone } from "@/hooks";
-import { describeCron, formatTime } from "@/lib/format";
+import { describeCron, formatDuration, formatTime } from "@/lib/format";
 import { getJson, project } from "@/lib/api";
 import { pipelinesPath, taskPath } from "@/lib/routes";
 import { cn } from "@/lib/utils";
@@ -78,6 +78,7 @@ export function PipelineDetail() {
   const outside = selected !== undefined && !gridRuns.some((r) => r.pipeline_run_id === selected);
   const extraRun = useQuery({ queryKey: ["run", code, selected], queryFn: () => getJson<RunView>(`${project(code)}/runs/${selected}`), enabled: outside });
   useDocumentTitle(selected === undefined ? pipeline : `${pipeline} #${selected}`, code, info.project && { type: info.project.environment_type, name: info.project.environment_name });
+  const selectedRun = [...runs, ...(extraRun.data ? [extraRun.data] : [])].find((r) => r.pipeline_run_id === selected);
   const steps = useQuery({
     queryKey: ["steps", code, pipeline, selected],
     queryFn: () => getJson<Steps>(`${project(code)}/steps`, { pipeline_code: pipeline, run_id: selected }),
@@ -270,7 +271,16 @@ export function PipelineDetail() {
             ) : view === "grid" ? (
               <RunGrid code={code} pipeline={pipeline} graph={graph.data} runs={gridRuns} extra={outside && extraRun.data?.pipeline_code === pipeline ? extraRun.data : undefined} selected={selected} onSelect={select} bars={!hideBars} labels={byTime ? "time" : "id"} />
             ) : (
-              <div className="absolute inset-0">
+              <div className="absolute inset-0 flex flex-col">
+              {selectedRun ? (
+                <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-b border-border bg-surface-2 px-3 py-1.5 text-xs">
+                  <span className="font-medium">Run {selectedRun.pipeline_run_id}</span>
+                  <StatusBadge status={selectedRun.status} />
+                  <span className="text-muted">{formatTime(selectedRun.start_date, tz)}</span>
+                  <span className="num text-muted">{formatDuration(selectedRun.start_date, selectedRun.end_date)}</span>
+                </div>
+              ) : null}
+              <div className="relative min-h-0 flex-1">
               <RunGraph
                 fill
                 direction={flow}
@@ -281,6 +291,7 @@ export function PipelineDetail() {
                 onFocus={setFocused}
                 onOpen={(taskCode) => (selected === undefined ? navigate(taskPath(code, pipeline, taskCode)) : select(selected, taskCode))}
               />
+              </div>
               </div>
             )}
           </div>

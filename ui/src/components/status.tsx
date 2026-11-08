@@ -71,6 +71,17 @@ const SOLID: Record<Tone, string> = {
   idle: "bg-idle-solid text-white",
 };
 
+const EDGE: Record<Tone, string> = {
+  ok: "border-l-ok-solid",
+  bad: "border-l-bad-solid",
+  run: "border-l-run-solid",
+  warn: "border-l-warn-solid",
+  idle: "border-l-idle-solid",
+};
+
+/** The colour of a left edge that marks a card with its status. */
+export const edgeClass = (status: string): string => EDGE[statusMeta(status).tone];
+
 /** The same mark filled solid, for grids where many marks sit edge to edge. */
 export const solidClass = (status: string): string => SOLID[statusMeta(status).tone];
 
