@@ -121,6 +121,7 @@ class Identity:
     first_name: str | None = None
     last_name: str | None = None
     email: str | None = None
+    names_editable: bool = False
 
 
 @dataclass(frozen=True)
@@ -575,4 +576,5 @@ def whoami(ctx: OperationContext, request: IdentityInput) -> Identity:
         row.first_name,
         row.last_name,
         row.email,
+        ctx.config.auth.names_editable,
     )

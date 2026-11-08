@@ -21,15 +21,21 @@ export function Settings() {
   const toast = useToast();
   const client = useQueryClient();
   const [edit, setEdit] = React.useState<PersonalSettings | null>(null);
+  const [first, setFirst] = React.useState<string | null>(null);
+  const [last, setLast] = React.useState<string | null>(null);
+  // Only names the person changed are sent, and only where the deployment lets accounts edit them.
+  const names = () => ({ ...(first === null ? {} : { first_name: first }), ...(last === null ? {} : { last_name: last }) });
   const [density, setDensity] = React.useState<Density>(storedDensity);
   const saved = identity.data?.settings;
   const form = edit ?? saved;
   const save = useMutation({
-    mutationFn: (body: PersonalSettings) => postJson<PersonalSettings>("/api/v1/account/settings", { theme: body.theme, timezone: body.timezone, default_project: body.default_project ?? "", page_size: body.page_size, time_display: body.time_display }),
+    mutationFn: (body: PersonalSettings) => postJson<PersonalSettings>("/api/v1/account/settings", { ...names(), theme: body.theme, timezone: body.timezone, default_project: body.default_project ?? "", page_size: body.page_size, time_display: body.time_display }),
     onSuccess: (result) => {
       if (result.theme === "light" || result.theme === "dark") applyTheme(result.theme, true);
       toast("Settings saved.");
       setEdit(null);
+      setFirst(null);
+      setLast(null);
       void client.invalidateQueries({ queryKey: ["whoami"] });
     },
   });
@@ -55,6 +61,20 @@ export function Settings() {
         save.mutate(form);
       }}
     >
+      {identity.data?.names_editable ? (
+        <>
+          <SettingRow title="First name" hint="Shown in the account menu.">
+            <input aria-label="First name" maxLength={128} className={inputClass} value={first ?? identity.data.first_name ?? ""} onChange={(e) => setFirst(e.target.value)} />
+          </SettingRow>
+          <SettingRow title="Last name">
+            <input aria-label="Last name" maxLength={128} className={inputClass} value={last ?? identity.data.last_name ?? ""} onChange={(e) => setLast(e.target.value)} />
+          </SettingRow>
+        </>
+      ) : (
+        <SettingRow title="Name" hint="Set by your administrator or your single sign-on provider.">
+          <span className="text-sm">{[identity.data?.first_name, identity.data?.last_name].filter(Boolean).join(" ") || <span className="text-muted">Not set</span>}</span>
+        </SettingRow>
+      )}
       <SettingRow title="Theme" hint="Light, dark, or follow your system.">
         {radios("theme", form.theme, [["system", "Match my system"], ["light", "Light"], ["dark", "Dark"]], (theme) => set({ theme }))}
       </SettingRow>
@@ -102,7 +122,7 @@ export function Settings() {
         )}
       </SettingRow>
       <div className="flex flex-wrap items-center gap-3 px-4 py-3">
-        <Button type="submit" variant="primary" disabled={!edit || save.isPending}>
+        <Button type="submit" variant="primary" disabled={(!edit && first === null && last === null) || save.isPending}>
           {save.isPending ? "Saving…" : "Save settings"}
         </Button>
         {save.isError ? <Notice className="py-1.5">{failureText(save.error)}</Notice> : null}

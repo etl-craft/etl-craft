@@ -17,7 +17,7 @@ import { getJson, project } from "@/lib/api";
 import { useCatalog } from "@/lib/catalog";
 import { formatTime, measured, percent, seconds } from "@/lib/format";
 import { catalogPath, pipelinePath, runPath } from "@/lib/routes";
-import type { AgentsView, FailureInsight, Insights as InsightsView, Pipeline, PipelineInsight, RuleInsight, RunView, TaskInsight } from "@/lib/types";
+import type { AgentsView, FailureInsight, Insights as InsightsView, Pipeline, PipelineInsight, RuleInsight, TaskInsight } from "@/lib/types";
 import { projectHomePath } from "@/lib/routes";
 import { useDocumentTitle } from "@/title";
 
@@ -25,7 +25,6 @@ const pipelineCol = createColumnHelper<PipelineInsight>();
 const taskCol = createColumnHelper<TaskInsight>();
 const failureCol = createColumnHelper<FailureInsight>();
 const ruleCol = createColumnHelper<RuleInsight>();
-const runCol = createColumnHelper<RunView>();
 const num = (v: number | null) => <span className="num">{measured(v)}</span>;
 
 /** The old address of this page: Home is the project's insights, so it opens Home with its filters. */
@@ -72,13 +71,12 @@ function Capacity() {
 
 const TABS = [
   { id: "overview", label: "Overview" },
+  { id: "capacity", label: "Capacity" },
+  { id: "catalog", label: "Catalog" },
   { id: "pipelines", label: "Pipelines" },
   { id: "data", label: "Data" },
   { id: "quality", label: "Quality" },
   { id: "failures", label: "Failures" },
-  { id: "runs", label: "Latest runs" },
-  { id: "catalog", label: "Catalog" },
-  { id: "capacity", label: "Capacity" },
 ];
 
 const RANGES: { id: string; label: string; days: number }[] = [
@@ -287,23 +285,6 @@ export function Insights() {
                     failureCol.accessor("status", { header: "Status", cell: (c) => <StatusBadge status={c.getValue()} /> }),
                     failureCol.accessor("failure_class", { header: "Failure class", cell: (c) => c.getValue() ?? "Unknown" }),
                     failureCol.accessor("attempts", { header: "Attempts", cell: (c) => <span className="num">{c.getValue()}</span> }),
-                  ]}
-                />
-              </TablePanel>
-            ) : null}
-            {tab === "runs" ? (
-              <TablePanel title="Latest runs">
-                <DataTable find
-                  label="Latest runs"
-                  data={d.latest}
-                  empty="No runs in this window."
-                  columns={[
-                    runCol.accessor("pipeline_run_id", { header: "Run", cell: (c) => <Link className="num font-medium text-accent hover:underline" to={runPath(code, c.row.original.pipeline_code, c.getValue())}>#{c.getValue()}</Link> }),
-                    runCol.accessor("pipeline_code", { header: "Pipeline" }),
-                    runCol.accessor("status", { header: "Status", cell: (c) => <StatusBadge status={c.getValue()} /> }),
-                    runCol.accessor("sla_status", { header: "SLA", cell: (c) => (c.getValue() ? <StatusBadge status={c.getValue() as string} /> : "") }),
-                    runCol.accessor("start_date", { header: "Started", cell: (c) => when(c.getValue()) }),
-                    runCol.accessor("trigger_kind", { header: "Trigger", cell: (c) => <span className="text-muted">{c.getValue().toLowerCase()}</span> }),
                   ]}
                 />
               </TablePanel>

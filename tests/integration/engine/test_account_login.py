@@ -172,6 +172,25 @@ def test_an_sso_sign_in_refreshes_names_and_only_a_verified_email(project):
     assert (who.first_name, who.last_name, who.email) == ("Al", "Ice", "x@example.com")
 
 
+def test_an_account_edits_its_own_names_only_when_the_deployment_allows_it(project):
+    ctx = project
+    user(ctx)
+    alice = replace(ctx, actor=Actor("alice", ActorKind.USER), role=ApiRole.VIEWER)
+    with pytest.raises(UsageError, match=r"Auth\.Names_editable"):
+        act(alice, ActionName.ACCOUNT_SETTINGS, first_name="Al")
+    assert row(ctx).first_name is None
+    auth = replace(ctx.config.auth, names_editable=True)
+    allowed = replace(alice, config=replace(ctx.config, auth=auth))
+    act(allowed, ActionName.ACCOUNT_SETTINGS, first_name=" Al ", last_name="Ice")
+    found = row(ctx)
+    assert (found.first_name, found.last_name) == ("Al", "Ice")
+    who = act(allowed, ActionName.WHOAMI, project=None)
+    assert who.names_editable is True
+    assert act(alice, ActionName.WHOAMI, project=None).names_editable is False
+    with pytest.raises(UsageError, match="at most 128"):
+        act(allowed, ActionName.ACCOUNT_SETTINGS, first_name="x" * 129)
+
+
 def test_account_controls_require_a_proven_admin(project):
     ctx = project
     with pytest.raises(PermissionDeniedError, match="admin role is required"):

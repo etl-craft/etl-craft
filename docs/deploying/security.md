@@ -165,6 +165,11 @@ on every request as well.
     this particular request beyond that exchange, so use only an issuer you trust, over HTTPS, and
     keep the device code private.
 
+Names are set by an administrator, or by SSO claims at sign-in. With `Auth.Names_editable: true` each
+account may also edit its own first and last name in Personal settings (or with
+`etl-craft account settings --first-name --last-name`); with the default `false` the change is
+refused and the page shows no fields.
+
 SSO reads the `email`, `email_verified`, `given_name`, `family_name` and `name` claims (the device
 request asks for `openid email profile`). A sign-in refreshes the account's first name, last name
 and, only when the issuer marks it verified, its email.

@@ -10,6 +10,7 @@ export interface Identity {
   first_name?: string | null;
   last_name?: string | null;
   email?: string | null;
+  names_editable?: boolean;
   project_permission: string | null;
   settings: { theme: string; timezone: string; default_project: string | null; page_size: number; time_display: string };
 }

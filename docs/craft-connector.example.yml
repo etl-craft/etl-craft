@@ -239,6 +239,7 @@ Cloning:
 #   Oidc_client_id: etl-craft            # value — public device-flow client, RS256 ID tokens
 
 #   Oidc_groups_claim: groups             # optional claim of group names; needs OIDC settings above
+#   Names_editable: true                  # let each account edit its own first and last name in Personal settings
 #   Oidc_bind_by_email: true              # link a first SSO sign-in to the one account registered with its verified email
 
 # Optional immutable publications; omit Artifacts for local working-tree development.

@@ -80,6 +80,7 @@ def test_settings_save_and_the_password_change_ends_the_session(scene):
     with sync_playwright() as pw:
         browser, page, problems = open_page(pw)
         sign_in(page, url, "/ui/settings")
+        expect(page.get_by_label("First name")).to_have_count(0)  # names are not editable here
         save = page.get_by_role("button", name="Save settings")
         expect(save).to_be_disabled()
         page.get_by_label("Page size").fill("30")

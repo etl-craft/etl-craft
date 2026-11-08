@@ -148,6 +148,9 @@ Warehouses are optional extras. Core bundles none. `all` is core plus the UI, fo
   Projects admin page): what may start its runs by itself, in the values `Orchestration.Allowed_auto_restarts`
   takes. The narrower of the controller's setting and the project's applies, so one Engine DB can run a DEV
   project on schedule and keep a PROD project to person-started runs.
+- `Auth.Names_editable` (default `false`) lets each account edit its own first and last name in Personal settings
+  and with `account settings --first-name --last-name`; otherwise the change is refused with the setting named.
+  `whoami` reports `names_editable`.
 - SSO sign-in reads a pending or slowed device-flow poll from the response body when the issuer answers 401 as well
   as 400, so Dex, which uses 401, no longer fails the sign-in while the person is still approving.
 - An SSO ID token without a `nonce` claim is accepted, because the device flow has no nonce parameter and

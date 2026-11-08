@@ -54,6 +54,8 @@ def _configure(parser: argparse.ArgumentParser) -> None:
     settings.add_argument("--default-project")
     settings.add_argument("--page-size", type=int)
     settings.add_argument("--time-display", type=TimeDisplay, choices=tuple(TimeDisplay))
+    settings.add_argument("--first-name", help="Your first name; needs Auth.Names_editable.")
+    settings.add_argument("--last-name", help="Your last name; needs Auth.Names_editable.")
     configure_output(settings)
 
 
