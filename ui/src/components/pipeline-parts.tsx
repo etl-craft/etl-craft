@@ -14,17 +14,21 @@ export function RecentRuns({ project, pipeline }: { project: string; pipeline: P
   // Oldest first, so the newest run is at the right edge like the grid's.
   const ordered = [...runs].sort((a, b) => a.pipeline_run_id - b.pipeline_run_id);
   const ok = runs.filter((r) => r.status === "SUCCESS").length;
+  // Bar height is the run's duration against the longest shown; a run without times is the shortest bar.
+  const seconds = (r: (typeof runs)[number]) => (r.start_date && r.end_date ? Math.max(0, (new Date(r.end_date).getTime() - new Date(r.start_date).getTime()) / 1000) : 0);
+  const longest = Math.max(1, ...ordered.map(seconds));
   return (
     <span className="flex items-center gap-2">
-      <span role="list" aria-label="Recent runs, newest on the right" className="flex items-end gap-px">
+      <span role="list" aria-label="Recent runs, newest on the right" className="flex h-5 items-end gap-px">
         {ordered.map((run) => (
           <Link
             key={run.pipeline_run_id}
             role="listitem"
             to={runPath(project, pipeline.pipeline_code, run.pipeline_run_id)}
             aria-label={`Run ${run.pipeline_run_id}, ${statusMeta(run.status).label}`}
-            title={`Run ${run.pipeline_run_id}: ${statusMeta(run.status).label}`}
-            className={cn("h-4 w-1.5 rounded-xs hover:brightness-110", solidClass(run.status))}
+            title={`Run ${run.pipeline_run_id}: ${statusMeta(run.status).label}${run.start_date && run.end_date ? ` · ${formatDuration(run.start_date, run.end_date)}` : ""}`}
+            style={{ height: `${Math.round(4 + (seconds(run) / longest) * 16)}px` }}
+            className={cn("w-1.5 rounded-xs hover:brightness-110", solidClass(run.status))}
           />
         ))}
       </span>

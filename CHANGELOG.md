@@ -148,6 +148,10 @@ Warehouses are optional extras. Core bundles none. `all` is core plus the UI, fo
   Projects admin page): what may start its runs by itself, in the values `Orchestration.Allowed_auto_restarts`
   takes. The narrower of the controller's setting and the project's applies, so one Engine DB can run a DEV
   project on schedule and keep a PROD project to person-started runs.
+- A pipeline's recent runs (`GET /api/v1/pipelines`, `etl-craft status --json`) carry each run's `start_date` and
+  `end_date`, and the Pipelines list draws them as a duration spark line. Durations are written the same way
+  everywhere in the web interface, the session warning uses the chosen timezone, a pipeline address `?run=` takes a
+  run's readable label as well as its integer, and a Maintenance card's action sits in its own footer.
 - `Auth.Names_editable` (default `false`) lets each account edit its own first and last name in Personal settings
   and with `account settings --first-name --last-name`; otherwise the change is refused with the setting named.
   `whoami` reports `names_editable`.

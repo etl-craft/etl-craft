@@ -8,6 +8,7 @@ from sqlalchemy.engine import Connection
 
 from etl_craft.core.enums import RunStatus, SlaStatus
 from etl_craft.core.errors import EtlCraftError
+from etl_craft.core.time import as_utc
 from etl_craft.engine.queries import statement
 from etl_craft.engine.schedule_ticks import cursor, schedule
 from etl_craft.services.operations.models import PipelineView, RecentRun
@@ -29,6 +30,8 @@ def summarize(
                 row.pipeline_run_id,
                 RunStatus(row.status),
                 None if row.sla_status is None else SlaStatus(row.sla_status),
+                None if row.start_date is None else as_utc(row.start_date),
+                None if row.end_date is None else as_utc(row.end_date),
             )
         )
     ticks = _next_runs(

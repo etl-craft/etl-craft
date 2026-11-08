@@ -1,9 +1,11 @@
 -- Each active pipeline's five newest runs, newest first; one index range per pipeline.
 SELECT p.PIPELINE_ID AS pipeline_id, r.PIPELINE_RUN_ID AS pipeline_run_id,
-       r.STATUS AS status, r.SLA_STATUS AS sla_status
+       r.STATUS AS status, r.SLA_STATUS AS sla_status,
+       r.START_DATE AS start_date, r.END_DATE AS end_date
 FROM CFG_PIPELINES p
 CROSS JOIN LATERAL (
-    SELECT recent.PIPELINE_RUN_ID, recent.STATUS, recent.SLA_STATUS
+    SELECT recent.PIPELINE_RUN_ID, recent.STATUS, recent.SLA_STATUS,
+           recent.START_DATE, recent.END_DATE
     FROM AUD_PIPELINES_RUN_LOG recent
     WHERE recent.PIPELINE_ID = p.PIPELINE_ID
     ORDER BY recent.PIPELINE_RUN_ID DESC

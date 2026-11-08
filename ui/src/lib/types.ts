@@ -228,6 +228,9 @@ export interface RecentRun {
   pipeline_run_id: number;
   status: RunStatus;
   sla_status: string | null;
+  /** Absent from a server that predates them. */
+  start_date?: string | null;
+  end_date?: string | null;
 }
 
 export interface Pipeline {

@@ -10,7 +10,7 @@ import { StatusBadge } from "@/components/status";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { useProjectInfo, useTimezone } from "@/hooks";
 import { getJson, project } from "@/lib/api";
-import { formatDuration, formatTime } from "@/lib/format";
+import { formatDuration, formatSeconds, formatTime } from "@/lib/format";
 import { pipelinePath, pipelinesPath, runPath } from "@/lib/routes";
 import type { Pipeline, TaskDefinition, TaskHistory, TaskOffset, TaskRunView } from "@/lib/types";
 import { useDocumentTitle } from "@/title";
@@ -60,7 +60,7 @@ export function Task() {
         <FactList className="lg:grid-cols-4">
           <Fact label="Runs shown">{runs.length}</Fact>
           <Fact label="Succeeded">{runs.filter((r) => r.status === "SUCCESS").length} of {runs.length}</Fact>
-          <Fact label="Average duration">{average === null ? "No finished runs" : formatDuration("2000-01-01T00:00:00Z", new Date(Date.parse("2000-01-01T00:00:00Z") + average * 1000).toISOString())}</Fact>
+          <Fact label="Average duration">{average === null ? "No finished runs" : formatSeconds(average)}</Fact>
         </FactList>
       </PageHeader>
       {history.isError ? <Notice>{(history.error as Error).message}</Notice> : null}

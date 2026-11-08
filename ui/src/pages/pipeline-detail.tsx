@@ -19,7 +19,7 @@ import { SplitPane } from "@/components/split-pane";
 import { Card } from "@/components/ui/card";
 import { autoStarts } from "@/lib/auto-starts";
 import { useAutoStarts, useCanRun, useProjectInfo, useTimezone } from "@/hooks";
-import { describeCron, formatDuration, formatTime } from "@/lib/format";
+import { describeCron, formatDuration, formatTime, runIdOf } from "@/lib/format";
 import { getJson, project } from "@/lib/api";
 import { pipelinesPath, taskPath } from "@/lib/routes";
 import { cn } from "@/lib/utils";
@@ -36,7 +36,8 @@ export function PipelineDetail() {
   const hideBars = params.get("bars") === "off";
   const byTime = params.get("columns") === "time";
   const flow = params.get("flow") === "lr" ? "LR" : params.get("flow") === "tb" ? "TB" : undefined;
-  const chosen = /^\d+$/.test(params.get("run") ?? "") ? Number(params.get("run")) : undefined;
+  const asLabel = params.get("run") ?? "";
+  const chosen = runIdOf(asLabel);
   const task = params.get("task");
   const filters = { pool: params.get("pool") ?? "", agent: params.get("agent") ?? "", failure_class: params.get("failure_class") ?? "" };
   const setFilter = (key: string, value: string) => {
@@ -210,6 +211,11 @@ export function PipelineDetail() {
           <Loading what="pipeline" />
         )}
       </PageHeader>
+      {!/^\d*$/.test(asLabel) && selectedRun?.run_label && selectedRun.run_label !== asLabel ? (
+        <Notice className="mx-3 my-2">
+          The address names run {asLabel}, but run {selectedRun.pipeline_run_id} is {selectedRun.run_label}; the label in the address is stale or mistyped.
+        </Notice>
+      ) : null}
       <SplitPane
         id="pipeline"
         className="lg:min-h-0 lg:flex-1"

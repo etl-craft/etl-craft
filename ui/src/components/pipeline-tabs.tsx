@@ -7,7 +7,7 @@ import { StatusBadge, toneClass } from "@/components/status";
 import { columnsOf, DataTable } from "@/components/data-table";
 import { useTimezone } from "@/hooks";
 import { getJson, project } from "@/lib/api";
-import { formatDuration, formatTime } from "@/lib/format";
+import { formatDuration, formatSeconds, formatTime } from "@/lib/format";
 import { catalogPath, taskPath } from "@/lib/routes";
 import type { AuditRecords, Graph, Pipeline, RunView, Steps, TaskDefinition } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -53,7 +53,7 @@ export function OverviewTab({ code, pipeline, runs }: { code: string; pipeline: 
         <Tile label="Runs" value={inWindow.length} />
         <Tile label="Failed runs" value={failed.length} tone={failed.length ? "bad" : undefined} />
         <Tile label="Success rate" value={rate === null ? "—" : `${rate}%`} />
-        <Tile label="Median duration" value={median === null ? "—" : formatDuration("1970-01-01T00:00:00Z", new Date(median * 1000).toISOString())} />
+        <Tile label="Median duration" value={median === null ? "—" : formatSeconds(median)} />
       </div>
       <section className="grid gap-2" aria-label="Latest run durations">
         <h3 className="m-0 text-sm font-semibold">{runs.length === 1 ? "The only run" : `Last ${Math.min(10, runs.length)} runs`}</h3>
