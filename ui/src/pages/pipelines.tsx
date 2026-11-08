@@ -143,11 +143,11 @@ export function Pipelines() {
                 </span>
               ),
             }),
+            columns.display({ id: "recent", header: "Recent runs", cell: (c) => <RecentRuns project={code} pipeline={c.row.original} /> }),
             columns.display({ id: "description", header: "Description", cell: (c) => <span className="line-clamp-2 max-w-md text-[13px] text-muted" title={c.row.original.description ?? undefined}>{c.row.original.description ?? "—"}</span> }),
             columns.display({ id: "tags", header: "Tags", cell: (c) => <TagList tags={c.row.original.tags} /> }),
             columns.accessor("run_schedule", { header: "Schedule", enableSorting: false, cell: (c) => (c.getValue() ? <code className="whitespace-nowrap font-mono text-xs">{c.getValue()}</code> : <span className="whitespace-nowrap text-muted">Not scheduled</span>) }),
             columns.display({ id: "next", header: "Next run", cell: (c) => <NextRun pipeline={c.row.original} timeZone={tz} /> }),
-            columns.display({ id: "recent", header: "Recent runs", cell: (c) => <RecentRuns project={code} pipeline={c.row.original} /> }),
             ...(all.some((p) => p.sla_in_hours) ? [
             columns.display({
               id: "sla",
