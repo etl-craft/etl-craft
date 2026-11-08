@@ -482,6 +482,8 @@ export interface Account {
   kind: string;
   role: string;
   email: string | null;
+  first_name: string | null;
+  last_name: string | null;
   active_flag: string;
   failed_signins: number;
   locked_at: string | null;

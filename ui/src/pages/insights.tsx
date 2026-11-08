@@ -143,7 +143,7 @@ export function Insights() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-2">
-      <PageHeader
+      <PageHeader back={null}
         compact
         title="Home"
         subtitle={d ? `Runs started ${formatTime(d.window_start, tz)} to ${formatTime(d.window_end, tz)}; rates use finished runs.` : code}

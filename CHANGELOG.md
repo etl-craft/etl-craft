@@ -148,7 +148,11 @@ Warehouses are optional extras. Core bundles none. `all` is core plus the UI, fo
   Projects admin page): what may start its runs by itself, in the values `Orchestration.Allowed_auto_restarts`
   takes. The narrower of the controller's setting and the project's applies, so one Engine DB can run a DEV
   project on schedule and keep a PROD project to person-started runs.
-- The Accounts page shows each account's email.
+- Accounts have a first and last name (migration 0092, `account add --first-name --last-name`). SSO now asks
+  the issuer for `email` and `profile` and refreshes an account's names, and its email when the issuer verified
+  it, at each sign-in. `Auth.Oidc_bind_by_email` lets an account created with only an email take its provider
+  subject at the first sign-in whose verified email matches it alone; the bind is audited.
+- The Accounts page shows each account's email and name.
 - The web interface gains: a divider between a pipeline's task list and run matrix that resizes both together
   (the newest run always stays in view), row menus for agent actions, a "Go to" list in the top search,
   breadcrumbs and back buttons on task and attempt pages, a searchable log with a first-error jump, links from

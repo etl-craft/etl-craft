@@ -18,6 +18,8 @@ def service_token(engine, name="test-admin"):
                 "kind": AccountKind.SERVICE,
                 "role": ApiRole.ADMIN,
                 "email": None,
+                "first_name": None,
+                "last_name": None,
                 "password_hash": None,
                 "oidc_subject": None,
                 "actor": SYSTEM_ACTOR.name,

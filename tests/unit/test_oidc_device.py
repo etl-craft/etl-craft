@@ -16,7 +16,7 @@ def test_device_sign_in_checks_tls_and_returns_only_a_verified_subject(issuer):
     assert grant.user_code == "ABCD-EFGH"
     assert grant.verification_uri.endswith("/verify")
     assert poll_device(auth, grant.device_code, grant.nonce) == IdentityClaims("known-subject")
-    assert state["requests"][0][1]["scope"] == ["openid"]
+    assert state["requests"][0][1]["scope"] == ["openid email profile"]
     assert state["requests"][1][1]["grant_type"] == ["urn:ietf:params:oauth:grant-type:device_code"]
     assert state["requests"][1][1]["device_code"] == ["private-device-code"]
 
@@ -129,3 +129,12 @@ def test_oidc_refuses_non_https_token_endpoint_and_does_not_cache_failure(issuer
     assert auth.oidc_issuer not in oidc._DISCOVERY
     invalid[0] = False
     assert start_device(auth).device_code
+
+
+def test_names_come_from_the_given_and_family_claims_or_the_full_name():
+    from etl_craft.services.oidc import _person
+
+    assert _person({"given_name": " Ada ", "family_name": "Lovelace"}) == ("Ada", "Lovelace")
+    assert _person({"name": "Ada King Lovelace"}) == ("Ada King", "Lovelace")
+    assert _person({"name": "Ada"}) == ("Ada", None)
+    assert _person({"given_name": 7}) == (None, None)

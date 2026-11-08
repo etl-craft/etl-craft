@@ -25,6 +25,8 @@ def _configure(parser: argparse.ArgumentParser) -> None:
         required=True,
     )
     add.add_argument("--email")
+    add.add_argument("--first-name")
+    add.add_argument("--last-name")
     add.add_argument("--oidc-subject")
     configure_output(add)
     configure_output(
@@ -94,7 +96,8 @@ def _run(args: argparse.Namespace, out: Output) -> int:
         done,
         args.output_format,
         text=lambda: out.rows(
-            (a.name, a.kind, a.role, a.active_flag, a.email) for a in done.accounts
+            (a.name, a.kind, a.role, a.active_flag, a.email, a.first_name, a.last_name)
+            for a in done.accounts
         ),
     )
     return 0

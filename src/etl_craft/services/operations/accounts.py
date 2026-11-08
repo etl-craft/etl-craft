@@ -29,6 +29,8 @@ class Account:
     kind: AccountKind
     role: ApiRole
     email: str | None
+    first_name: str | None
+    last_name: str | None
     oidc_subject: str | None
     active_flag: YesNo
     failed_signins: int = 0
@@ -55,6 +57,8 @@ class AccountAdd(Request):
     role: ApiRole
     kind: AccountKind = AccountKind.USER
     email: str | None = None
+    first_name: str | None = None
+    last_name: str | None = None
     oidc_subject: str | None = None
     password: str | None = None
     recovery: bool = False
@@ -70,8 +74,12 @@ class AccountAdd(Request):
             raise UsageError(
                 f"account {self.name!r}: SERVICE expects a token, not `password` or `oidc_subject`"
             )
-        if self.kind == AccountKind.USER and not (self.password or self.oidc_subject):
-            raise UsageError(f"account {self.name!r}: USER requires `password` or `oidc_subject`")
+        if self.kind == AccountKind.USER and not (self.password or self.oidc_subject or self.email):
+            raise UsageError(
+                f"account {self.name!r}: USER requires `password`, `oidc_subject` or `email`; "
+                "an account with only an email signs in through SSO once the issuer verifies it "
+                "(Auth.Oidc_bind_by_email)"
+            )
         if self.oidc_subject is not None and not self.oidc_subject.strip():
             raise UsageError(
                 f"account {self.name!r}: `oidc_subject` is empty; supply the provider subject"
@@ -188,6 +196,8 @@ def add_account(ctx: OperationContext, request: AccountAdd) -> Accounts:
                         "kind": request.kind,
                         "role": request.role,
                         "email": request.email,
+                        "first_name": request.first_name,
+                        "last_name": request.last_name,
                         "oidc_subject": request.oidc_subject,
                         "password_hash": password_hash,
                         "actor": ctx.actor.name,

@@ -14,9 +14,11 @@ import pytest
 from sqlalchemy import inspect, text
 from sqlalchemy.exc import IntegrityError
 
+from etl_craft.core.actor import acting_as
 from etl_craft.dialects.engine import build_engine
 from etl_craft.engine.migrations import apply_pending_migrations
 from etl_craft.engine.schema import init_db
+from etl_craft.services.passwords import hash_password
 from fixtures.catalog import snapshot
 from fixtures.engine_db import engine_config, sqlite_engine_db
 from fixtures.released_schema import install
@@ -171,8 +173,20 @@ def test_browser_account_migration_retains_real_users_and_sessions(
         db.engine, project_default=tmp_path / "migrations", warehouse_dialect="duckdb"
     )
     ctx = OperationContext(db.engine, db.config, SYSTEM_ACTOR, role=ApiRole.ADMIN)
-    act(ctx, ActionName.ACCOUNT_ADD, name="owner", role=ApiRole.ADMIN, password="owner password")
-    act(ctx, ActionName.ACCOUNT_ADD, name="alice", role=ApiRole.VIEWER, password="local password")
+    # The schema is still the one before browser accounts, so the accounts are written as that
+    # release wrote them rather than through the current operation.
+    with acting_as(SYSTEM_ACTOR), db.engine.begin() as conn:
+        for name, role, password in (
+            ("owner", ApiRole.ADMIN, "owner password"),
+            ("alice", ApiRole.VIEWER, "local password"),
+        ):
+            conn.execute(
+                text(
+                    "INSERT INTO CFG_ACCOUNTS (ACCOUNT_NAME, ACCOUNT_KIND, ROLE, PASSWORD_HASH, "
+                    "CREATED_BY, UPDATED_BY) VALUES (:n, 'USER', :r, :h, 'etl-craft', 'etl-craft')"
+                ),
+                {"n": name, "r": role, "h": hash_password(password)},
+            )
     with db.engine.connect() as conn:
         before = conn.execute(
             text(

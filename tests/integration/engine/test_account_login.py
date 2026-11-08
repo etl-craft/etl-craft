@@ -109,6 +109,66 @@ def test_sso_requires_a_registered_active_user(project):
         sessions.sign_in_subject(ctx, IdentityClaims("external-id"))
 
 
+def binding(ctx, *, allow=True):
+    auth = replace(ctx.config.auth, oidc_bind_by_email=allow)
+    return replace(ctx, config=replace(ctx.config, auth=auth))
+
+
+def invited(ctx, email="a@example.com"):
+    act(ctx, ActionName.ACCOUNT_ADD, name="alice", role=ApiRole.VIEWER, email=email)
+
+
+def row(ctx, name="alice"):
+    with ctx.engine.connect() as conn:
+        return conn.execute(
+            text(
+                "SELECT OIDC_SUBJECT AS subject, EMAIL AS email, FIRST_NAME AS first_name, "
+                "LAST_NAME AS last_name FROM CFG_ACCOUNTS WHERE ACCOUNT_NAME=:n"
+            ),
+            {"n": name},
+        ).one()
+
+
+def test_a_first_sso_sign_in_binds_the_account_registered_with_its_verified_email(project):
+    ctx = binding(project)
+    invited(ctx)
+    claims = IdentityClaims("sub-1", (), "A@Example.com", True, "Ada", "Lovelace")
+    session = sessions.sign_in_subject(ctx, claims)
+    assert tokens.authenticate(ctx, session.access_token).name == "alice"
+    found = row(ctx)
+    assert (found.subject, found.first_name, found.last_name) == ("sub-1", "Ada", "Lovelace")
+    assert sessions.sign_in_subject(ctx, claims)  # the next sign-in matches by subject
+
+
+def test_binding_by_email_refuses_what_it_cannot_trust(project):
+    ctx = binding(project)
+    invited(ctx)
+    refused = (
+        (ctx, IdentityClaims("s", (), "a@example.com", False)),  # the issuer did not verify it
+        (ctx, IdentityClaims("s", (), "other@example.com", True)),  # no account has it
+        (ctx, IdentityClaims("s")),  # no email at all
+        (binding(ctx, allow=False), IdentityClaims("s", (), "a@example.com", True)),  # switched off
+    )
+    for caller, claims in refused:
+        with pytest.raises(UsageError, match="no active registered"):
+            sessions.sign_in_subject(caller, claims)
+    assert row(ctx).subject is None
+    user(ctx, "bob", "bob-sub")
+    act(ctx, ActionName.ACCOUNT_ADD, name="carol", role=ApiRole.VIEWER, email="a@example.com")
+    with pytest.raises(UsageError, match="no active registered"):  # two accounts share the email
+        sessions.sign_in_subject(ctx, IdentityClaims("s2", (), "a@example.com", True))
+
+
+def test_an_sso_sign_in_refreshes_names_and_only_a_verified_email(project):
+    ctx = project
+    user(ctx, subject="sub-1")
+    sessions.sign_in_subject(ctx, IdentityClaims("sub-1", (), "x@example.com", False, "Al", "Ice"))
+    found = row(ctx)
+    assert (found.email, found.first_name, found.last_name) == (None, "Al", "Ice")
+    sessions.sign_in_subject(ctx, IdentityClaims("sub-1", (), "x@example.com", True))
+    assert row(ctx).email == "x@example.com"
+
+
 def test_account_controls_require_a_proven_admin(project):
     ctx = project
     with pytest.raises(PermissionDeniedError, match="admin role is required"):

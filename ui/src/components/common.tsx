@@ -1,6 +1,6 @@
 import { ArrowLeft, type LucideIcon } from "lucide-react";
 import * as React from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 
 /** The path to the page from the project's lists, each part a link except the last. */
@@ -22,6 +22,23 @@ export function Breadcrumbs({ trail }: { trail: { label: string; to?: string }[]
         </React.Fragment>
       ))}
     </nav>
+  );
+}
+
+/** The arrow before a title when the page names no parent: one step back in this tab's history, or Home when it is the first page opened. */
+function HistoryBack() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  return (
+    <button
+      type="button"
+      aria-label="Back"
+      title="Back"
+      onClick={() => (location.key === "default" ? navigate("/") : navigate(-1))}
+      className="-ml-1 grid size-8 cursor-pointer place-items-center rounded-md text-muted hover:bg-surface-2 hover:text-fg"
+    >
+      <ArrowLeft className="size-4" aria-hidden />
+    </button>
   );
 }
 
@@ -78,14 +95,15 @@ export function PageHeader({
   actions?: React.ReactNode;
   /** A smaller title and tighter spacing, for a page whose body is the point (a run). */
   compact?: boolean;
-  /** Where the arrow before the title leads back to, such as the list this page is one row of. */
-  back?: { to: string; label: string };
+  /** Where the arrow before the title leads back to, such as the list this page is one row of. Without one the arrow goes back in history; `null` shows none, as on Home. */
+  back?: { to: string; label: string } | null;
   children?: React.ReactNode;
 }) {
   return (
     <header className={cn("flex flex-wrap items-start justify-between gap-y-2", compact ? "gap-x-3" : "gap-x-4")}>
       <div className={cn("grid min-w-0 flex-1", compact ? "gap-1" : "gap-2")}>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          {back === undefined ? <HistoryBack /> : null}
           {back ? (
             <Link to={back.to} aria-label={`Back to ${back.label}`} title={`Back to ${back.label}`} className="-ml-1 grid size-8 place-items-center rounded-md text-muted hover:bg-surface-2 hover:text-fg">
               <ArrowLeft className="size-4" aria-hidden />

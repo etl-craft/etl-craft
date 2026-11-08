@@ -1,6 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { Notice, Stat } from "@/components/common";
+import { MemoryRouter } from "react-router-dom";
+import { Notice, PageHeader, Stat } from "@/components/common";
 
 describe("Stat", () => {
   it("says an absent value quietly and a number loudly", () => {
@@ -25,5 +26,22 @@ describe("Notice", () => {
     );
     expect(screen.getByRole("alert")).toHaveTextContent("refused");
     expect(screen.getByRole("status")).toHaveTextContent("nothing built yet");
+  });
+});
+
+describe("PageHeader", () => {
+  it("has a back arrow unless the page is a root", () => {
+    const { rerender } = render(
+      <MemoryRouter>
+        <PageHeader title="Runs" />
+      </MemoryRouter>,
+    );
+    expect(screen.getByRole("button", { name: "Back" })).toBeTruthy();
+    rerender(
+      <MemoryRouter>
+        <PageHeader title="Home" back={null} />
+      </MemoryRouter>,
+    );
+    expect(screen.queryByRole("button", { name: "Back" })).toBeNull();
   });
 });

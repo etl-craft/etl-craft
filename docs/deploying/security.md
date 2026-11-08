@@ -155,6 +155,17 @@ The session stores **group IDs**, so a rename keeps the identity and reusing a n
 transfer an old session's access to another group. Explicit Engine DB memberships are checked
 on every request as well.
 
+SSO reads the `email`, `email_verified`, `given_name`, `family_name` and `name` claims (the device
+request asks for `openid email profile`). A sign-in refreshes the account's first name, last name
+and, only when the issuer marks it verified, its email.
+
+To invite someone before their provider subject is known, create the account with only an email
+(`etl-craft account add --name ada --role viewer --email ada@example.com`) and set
+`Auth.Oidc_bind_by_email: true`. The first SSO sign-in whose verified email matches exactly one
+active account with no password and no subject binds that subject to the account; the bind is
+recorded as a sign-in by that account. An unverified email, no match, or two matches is refused and
+left to an administrator, who can still register a subject with `--oidc-subject`.
+
 Refresh tokens are not rotated: the same token works until it expires or its session is
 signed out. A stolen refresh token can be used for that entire time. Use a short
 `Auth.Refresh_days` lifetime and run `etl-craft logout` for a lost device.
