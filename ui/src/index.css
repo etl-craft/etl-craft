@@ -21,7 +21,7 @@
   --run-fg: #1d4ed8; --run-bg: #dbeafe;
   --warn-fg: #8a3b0a; --warn-bg: #fef0c7;
   --idle-fg: #475467; --idle-bg: #eef0f3;
-  --ok-solid: #1f8a4c; --bad-solid: #d92d20; --run-solid: #2563eb; --warn-solid: #d9820b; --idle-solid: #8b95a5;
+  --ok-solid: #22b45a; --bad-solid: #ef4437; --run-solid: #2f7bf6; --warn-solid: #f09a0c; --idle-solid: #8b95a5;
   --env-prod: #b42318; --env-prod-fg: #ffffff;
   --env-other: #3f4a5a; --env-other-fg: #ffffff;
   --mark-a: #3a6cf7; --mark-b: #1b44c4; --mark-glyph: #ffffff;
@@ -46,7 +46,7 @@
   --run-fg: #9bbbff; --run-bg: #14284d;
   --warn-fg: #fcd34d; --warn-bg: #3a2a08;
   --idle-fg: #b0b8c4; --idle-bg: #232a34;
-  --ok-solid: #2fa862; --bad-solid: #e5484d; --run-solid: #3b82f6; --warn-solid: #e59a1f; --idle-solid: #5b6573;
+  --ok-solid: #34d27b; --bad-solid: #ff5a5f; --run-solid: #4c8dff; --warn-solid: #f5a524; --idle-solid: #5b6573;
   --env-prod: #c9372c; --env-prod-fg: #ffffff;
   --env-other: #3a4553; --env-other-fg: #f1f4f8;
   --mark-a: #9dbaff; --mark-b: #6d93f2; --mark-glyph: #0c1426;
@@ -135,7 +135,6 @@ code, pre, .font-mono { font-feature-settings: "calt"; letter-spacing: 0; }
 /* Pages that fill the window are edge-to-edge: panes meet at 1px dividers instead of floating as separate cards. */
 [data-edge] > div { gap: 0 !important; }
 [data-edge] > header, [data-edge] > div > header { padding: 6px 12px; border-bottom: 1px solid var(--border); background: var(--surface); }
-[data-edge] > [data-card], [data-pane] > [data-card] { border-width: 0; border-radius: 0; }
-[data-edge] > [data-card] { border-bottom-width: 1px; }
+[data-edge] [data-card] { border-width: 0 0 1px; border-radius: 0; }
 [data-edge] :has(> [data-card]) { gap: 0 !important; }
-[data-edge] :has(> [data-card]) > [data-card] { border-width: 0 1px 1px 0; border-radius: 0; }
+[data-edge] :has(> [data-card]) > [data-card]:not(:last-child) { border-right-width: 1px; }

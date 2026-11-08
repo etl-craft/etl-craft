@@ -1,7 +1,7 @@
 import { CirclePause } from "lucide-react";
 import * as React from "react";
 import { Link } from "react-router-dom";
-import { StatusMark, statusMeta, toneClass } from "@/components/status";
+import { StatusMark, solidClass, statusMeta } from "@/components/status";
 import { formatDuration, formatTime } from "@/lib/format";
 import { runPath } from "@/lib/routes";
 import type { Pipeline, RunView } from "@/lib/types";
@@ -73,15 +73,15 @@ export function RunBars({ project, runs }: { project: string; runs: RunView[] })
   const seconds = (run: RunView) => (run.start_date ? Math.max(0, ((run.end_date ? new Date(run.end_date).getTime() : now) - new Date(run.start_date).getTime()) / 1000) : 0);
   const longest = Math.max(1, ...ordered.map(seconds));
   return (
-    <ul className="m-0 flex h-20 list-none items-end justify-end gap-1 p-0" aria-label="Run durations, newest on the right">
+    <ul className="m-0 flex h-20 list-none items-end justify-end gap-0.5 p-0" aria-label="Run durations, newest on the right">
       {ordered.map((run) => (
-        <li key={run.pipeline_run_id} className="flex h-full min-w-1.5 max-w-6 flex-1 items-end">
+        <li key={run.pipeline_run_id} className="flex h-full min-w-1.5 max-w-3 flex-1 items-end">
           <Link
             to={runPath(project, run.pipeline_code, run.pipeline_run_id)}
             title={`Run ${run.pipeline_run_id} · ${statusMeta(run.status).label} · ${formatDuration(run.start_date, run.end_date)}`}
             aria-label={`Run ${run.pipeline_run_id}, ${statusMeta(run.status).label}, ${formatDuration(run.start_date, run.end_date)}`}
             style={{ height: `${Math.max(10, (seconds(run) / longest) * 100)}%` }}
-            className={cn("w-full rounded-sm", toneClass(run.status), "border border-current opacity-90 hover:opacity-100")}
+            className={cn("w-full rounded-xs hover:brightness-110", solidClass(run.status))}
           />
         </li>
       ))}

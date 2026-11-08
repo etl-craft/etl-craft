@@ -22,7 +22,7 @@ const seconds = (run: RunView) => (run.start_date && run.end_date ? (new Date(ru
 
 function Tile({ label, value, tone }: { label: string; value: React.ReactNode; tone?: "bad" }) {
   return (
-    <div className="grid gap-1 rounded-lg border border-border bg-surface p-3">
+    <div data-card className="grid gap-1 rounded-sm border border-border bg-surface p-3">
       <span className="text-xs text-muted">{label}</span>
       <span className={tone === "bad" ? "text-2xl font-semibold text-bad" : "text-2xl font-semibold"}>{value}</span>
     </div>
@@ -107,7 +107,7 @@ export function TasksTab({ code, pipeline, graph, runId }: { code: string; pipel
     <div className="grid gap-3">
       {error ? <Notice>{error.message}</Notice> : null}
       {loading ? <Loading what="tasks" /> : null}
-      <div className="overflow-hidden rounded-lg border border-border">
+      <div data-card className="overflow-hidden rounded-sm border border-border">
         <DataTable
           label="Pipeline tasks"
           data={tasks}

@@ -36,7 +36,8 @@ export function RunGrid({ code, pipeline, graph, runs, extra, selected, onSelect
     return () => watch?.disconnect();
   }, []);
   const widest = Math.max(...tasks.map((t) => t.length), 4);
-  const taskWidth = Math.round(Math.min(Math.max(widest * 7.4 + 28, 128), Math.max(128, pane * 0.45)));
+  const [dragged, setDragged] = React.useState<number | null>(null);
+  const taskWidth = dragged ?? Math.round(Math.min(Math.max(widest * 7.4 + 28, 128), Math.max(128, pane * 0.45)));
   // A run chosen from elsewhere is brought into view.
   React.useEffect(() => {
     box.current?.querySelector("[aria-current=true]")?.scrollIntoView({ inline: "nearest", block: "nearest" });
@@ -66,7 +67,7 @@ export function RunGrid({ code, pipeline, graph, runs, extra, selected, onSelect
       <div dir="ltr" className="w-max min-w-full">
       {failed?.error ? <Notice className="m-3">{(failed.error as Error).message}</Notice> : null}
       {cells.some((c) => c.isPending) ? <Loading what="the grid" className="p-3" /> : null}
-      <table aria-label="Run grid" style={{ width: taskWidth + shown.length * 28, minWidth: "100%" }} className="table-fixed border-separate border-spacing-0 text-[13px]">
+      <table aria-label="Run grid" style={{ width: taskWidth + shown.length * 20 }} className="table-fixed border-separate border-spacing-0 text-[13px]">
         <thead>
           {bars ? (
           <tr>
@@ -74,7 +75,7 @@ export function RunGrid({ code, pipeline, graph, runs, extra, selected, onSelect
               Duration
             </th>
             {shown.map((run) => (
-              <td key={run.pipeline_run_id} className={cn("sticky top-0 z-10 h-20 min-w-7 px-0.5 align-bottom", apart(run) && "border-l-2 border-dashed border-border-strong", run.pipeline_run_id === selected ? "bg-accent/10" : "bg-surface")}>
+              <td key={run.pipeline_run_id} className={cn("sticky top-0 z-10 h-20 min-w-5 px-0.5 align-bottom", apart(run) && "border-l-2 border-dashed border-border-strong", run.pipeline_run_id === selected ? "bg-accent/10" : "bg-surface")}>
                 <div className="flex h-full items-end justify-center pb-1">
                   <Link
                     to={runPath(code, pipeline, run.pipeline_run_id)}
@@ -85,7 +86,7 @@ export function RunGrid({ code, pipeline, graph, runs, extra, selected, onSelect
                     title={`Run ${run.pipeline_run_id} · ${statusMeta(run.status).label} · ${formatDuration(run.start_date, run.end_date)}`}
                     aria-label={`Run ${run.pipeline_run_id}, ${statusMeta(run.status).label}, ${formatDuration(run.start_date, run.end_date)}`}
                     style={{ height: `${Math.max(10, (seconds(run) / longest) * 100)}%` }}
-                    className={cn("w-2.5 rounded-xs opacity-90 hover:opacity-100", solidClass(run.status))}
+                    className={cn("w-3 rounded-xs hover:brightness-110", solidClass(run.status))}
                   />
                 </div>
               </td>
@@ -95,9 +96,27 @@ export function RunGrid({ code, pipeline, graph, runs, extra, selected, onSelect
           <tr>
             <th scope="col" style={{ width: taskWidth, minWidth: taskWidth, maxWidth: taskWidth }} className={cn("sticky left-0 z-20 bg-surface-2 px-3 py-1.5 text-left text-xs font-medium text-muted", bars ? "top-20" : "top-0")}>
               Task
+              <span
+                role="separator"
+                aria-orientation="vertical"
+                aria-label="Resize the task column"
+                className="absolute right-0 top-0 h-full w-1.5 cursor-col-resize border-r border-border-strong hover:border-accent hover:border-r-2"
+                onPointerDown={(event) => {
+                  event.preventDefault();
+                  const from = event.clientX;
+                  const start = taskWidth;
+                  const move = (e: PointerEvent) => setDragged(Math.min(480, Math.max(96, start + e.clientX - from)));
+                  const stop = () => {
+                    window.removeEventListener("pointermove", move);
+                    window.removeEventListener("pointerup", stop);
+                  };
+                  window.addEventListener("pointermove", move);
+                  window.addEventListener("pointerup", stop);
+                }}
+              />
             </th>
             {shown.map((run) => (
-              <th key={run.pipeline_run_id} scope="col" className={cn("sticky z-10 min-w-7 px-0.5 py-1.5 text-center text-xs font-medium", bars ? "top-20" : "top-0", apart(run) && "border-l-2 border-dashed border-border-strong", run.pipeline_run_id === selected ? "bg-accent/15 text-fg" : "bg-surface-2 text-muted")}>
+              <th key={run.pipeline_run_id} scope="col" className={cn("sticky z-10 min-w-5 px-0.5 py-1.5 text-center text-xs font-medium", bars ? "top-20" : "top-0", apart(run) && "border-l-2 border-dashed border-border-strong", run.pipeline_run_id === selected ? "bg-accent/15 text-fg" : "bg-surface-2 text-muted")}>
                 <Link
                   className="num hover:text-accent hover:underline"
                   to={runPath(code, pipeline, run.pipeline_run_id)}

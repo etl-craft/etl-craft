@@ -126,7 +126,7 @@ export function CatalogHome({ code, doc }: { code: string; doc: CatalogDoc }) {
   const unwritten = tables.filter((t) => t.writers.length === 0);
   const open = doc.gaps.filter(isOpenGap);
   const tile = (label: string, value: number | string) => (
-    <div className="grid gap-1 rounded-lg border border-border bg-surface p-3">
+    <div data-card className="grid gap-1 rounded-sm border border-border bg-surface p-3">
       <span className="text-xs text-muted">{label}</span>
       <span className="text-2xl font-semibold">{value}</span>
     </div>
@@ -236,7 +236,7 @@ export function PipelineObject({ code, doc, name, tab, onTab }: { code: string; 
           </aside>
         </div>
       ) : on === "lineage" ? (
-        <div className="h-[28rem] overflow-hidden rounded-lg border border-border">
+        <div data-card className="h-[28rem] overflow-hidden rounded-sm border border-border">
           <RunGraph fill plain graph={graph} statuses={{}} focused={focused} onFocus={setFocused} onOpen={(task) => navigate(catalogPath(code, "tasks", `${pipeline.code}.${task}`))} />
         </div>
       ) : (
@@ -360,7 +360,7 @@ function TableData({ code, table }: { code: string; table: string }) {
         {data.length ? `${more ? `The first ${limit} rows` : `${data.length} row${data.length === 1 ? "" : "s"}`}, read from the warehouse now. Long values are cut.` : "The table has no rows."}
       </p>
       {data.length ? (
-        <div className="max-h-[calc(100dvh-22rem)] overflow-auto rounded-lg border border-border">
+        <div data-card className="max-h-[calc(100dvh-22rem)] overflow-auto rounded-sm border border-border">
           <DataTable
             label="Rows"
             data={data}
@@ -519,7 +519,7 @@ export function TableObject({ code, doc, name, tab, onTab }: { code: string; doc
               ])}
             />
           ) : (
-            <div className="min-h-72 flex-1 overflow-hidden rounded-lg border border-border">
+            <div data-card className="min-h-72 flex-1 overflow-hidden rounded-sm border border-border">
               <RunGraph fill plain graph={tableLineage(doc, table.name, Number(depth), direction)} statuses={{}} focused={focused ?? table.name} onFocus={setFocused} onOpen={(next) => navigate(catalogPath(code, "tables", next))} />
             </div>
           )}
