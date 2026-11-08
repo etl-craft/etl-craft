@@ -231,7 +231,7 @@ export function DataTable<T>({
             key={row.id}
             ref={highlight?.(row.original) ? scrollTo : undefined}
             aria-current={highlight?.(row.original) ? "true" : undefined}
-            className={cn("hover:bg-surface-2", wrap ? "h-14" : "h-10", highlight?.(row.original) && "bg-sidebar-active")}
+            className={cn("hover:bg-surface-2", wrap ? "h-11" : "h-8", highlight?.(row.original) && "bg-sidebar-active")}
           >
             {selection && rowId ? (
               <Td>

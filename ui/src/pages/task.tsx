@@ -45,6 +45,7 @@ export function Task() {
         ]}
       />
       <PageHeader
+        back={{ to: pipelinePath(code, pipeline, "tasks"), label: `${pipeline} tasks` }}
         title={task}
         subtitle={`${pipeline} · ${code}`}
         status={paused ? <span className="text-warn">Paused by {paused.actor}: {paused.reason}</span> : null}

@@ -34,6 +34,7 @@ export function Attempt() {
         ]}
       />
       <PageHeader
+        back={{ to: taskPath(code, pipeline, task), label: `${task}` }}
         title={`Attempt ${a?.attempt_number ?? ""} of ${task}`}
         subtitle={
           <>

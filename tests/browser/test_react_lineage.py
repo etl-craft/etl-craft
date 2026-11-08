@@ -91,7 +91,7 @@ def test_refreshing_and_rebuilding_shows_the_traced_chain_and_the_api_agrees(cha
         about = page.get_by_label("About this table")
         expect(about.get_by_role("link", name="SALES.convert")).to_be_visible()
         expect(about.get_by_role("link", name="MART.daily")).to_be_visible()
-        page.get_by_role("tab", name="Lineage", exact=True).click()
+        page.get_by_role("tab", name="Object lineage", exact=True).click()
         graph = page.get_by_role("group", name="Task graph")
         expect(graph).to_be_visible()
         # narrowing the graph redraws it: no leftover edge to a table that is no longer drawn
@@ -188,7 +188,7 @@ def test_all_tables_lists_every_table_and_filters_by_name(chain):
         table.get_by_role("link", name="mart.daily").click()
         expect(page.get_by_text("Last written")).to_be_visible()
         expect(page.get_by_text("Open gaps")).to_be_visible()
-        page.get_by_role("tab", name="Lineage", exact=True).click()
+        page.get_by_role("tab", name="Object lineage", exact=True).click()
         page.get_by_role("button", name="List", exact=True).click()
         expect(
             page.get_by_role("table", name="Upstream and downstream tables").get_by_role(

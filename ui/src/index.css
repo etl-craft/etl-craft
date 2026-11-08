@@ -138,3 +138,8 @@ code, pre, .font-mono { font-feature-settings: "calt"; letter-spacing: 0; }
 [data-edge] [data-card] { border-width: 0 0 1px; border-radius: 0; }
 [data-edge] :has(> [data-card]) { gap: 0 !important; }
 [data-edge] :has(> [data-card]) > [data-card]:not(:last-child) { border-right-width: 1px; }
+/* Pages that scroll keep their content off the window edge; cards and tables run edge to edge. */
+[data-edge]:not([data-fill]) > div > :not(header):not([data-card]):not([role=tablist]) { margin-inline: 12px; }
+[data-edge]:not([data-fill]) > div > :first-child:not(header) { margin-top: 8px; }
+[data-edge]:not([data-fill]) > div { gap: 8px !important; padding-bottom: 12px; }
+[data-edge] > div > * { min-width: 0; }

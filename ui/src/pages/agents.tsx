@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { createColumnHelper } from "@tanstack/react-table";
 import { Loading, Notice, PageHeader } from "@/components/common";
-import { ActionButton } from "@/components/action-button";
+import { RowActions, type RowAction } from "@/components/row-actions";
 import { DataTable } from "@/components/data-table";
 import { StatusBadge } from "@/components/status";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,21 +14,16 @@ import { useDocumentTitle } from "@/title";
 const columns = createColumnHelper<AgentRow>();
 const reply = (r: { message?: string }) => r.message ?? "Command sent to the agent.";
 
-function Command({ agent, command, label, effect, danger }: { agent: AgentRow; command: string; label: string; effect: string; danger?: boolean }) {
-  return (
-    <ActionButton<{ message?: string }>
-      label={label}
-      title={`${label} agent ${agent.agent_id}`}
-      effect={`${effect} Agent ${agent.agent_id} on ${agent.host}.`}
-      endpoint="/agents/commands"
-      body={() => ({ agent_id: agent.agent_id, command })}
-      describe={reply}
-      askReason={false}
-      variant={danger ? "danger" : "outline"}
-      size="sm"
-    />
-  );
-}
+const command = (agent: AgentRow, name: string, label: string, effect: string, danger?: boolean): RowAction => ({
+  label,
+  title: `${label} agent ${agent.agent_id}`,
+  effect: `${effect} Agent ${agent.agent_id} on ${agent.host}.`,
+  endpoint: "/agents/commands",
+  body: () => ({ agent_id: agent.agent_id, command: name }),
+  describe: reply,
+  askReason: false,
+  danger,
+});
 
 export function Agents() {
   useDocumentTitle("Agents");
@@ -67,11 +62,14 @@ export function Agents() {
                     cell: (c) => {
                       const a = c.row.original;
                       return (
-                        <div className="flex gap-2">
-                          {a.status === "ACTIVE" ? <Command agent={a} command="DRAIN" label="Drain" effect="Stops this agent claiming new tasks; its running tasks finish." /> : null}
-                          {a.status === "DRAINING" ? <Command agent={a} command="RESUME" label="Resume" effect="Lets this agent claim new tasks again." /> : null}
-                          {a.status !== "GONE" ? <Command agent={a} command="STOP" label="Stop" danger effect="Stops the agent process; its running attempts are stopped and retried under their retry rules." /> : null}
-                        </div>
+                        <RowActions
+                          name={`agent ${a.agent_id}`}
+                          actions={[
+                            ...(a.status === "ACTIVE" ? [command(a, "DRAIN", "Drain", "Stops this agent claiming new tasks; its running tasks finish.")] : []),
+                            ...(a.status === "DRAINING" ? [command(a, "RESUME", "Resume", "Lets this agent claim new tasks again.")] : []),
+                            ...(a.status !== "GONE" ? [command(a, "STOP", "Stop", "Stops the agent process; its running attempts are stopped and retried under their retry rules.", true)] : []),
+                          ]}
+                        />
                       );
                     },
                   }),

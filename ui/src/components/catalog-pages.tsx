@@ -393,7 +393,7 @@ export function TableObject({ code, doc, name, tab, onTab }: { code: string; doc
   const tabs = [
     { id: "overview", label: "Overview" },
     ...(developer ? [{ id: "data", label: "Data" }] : []),
-    { id: "lineage", label: "Lineage" },
+    { id: "lineage", label: "Object lineage" },
     { id: "columns", label: "Column lineage" },
     { id: "history", label: "History" },
     { id: "quality", label: "Quality" },
@@ -401,8 +401,15 @@ export function TableObject({ code, doc, name, tab, onTab }: { code: string; doc
   const on = tabs.some((t) => t.id === tab) ? tab : "overview";
   const shown = table.columns.filter((c) => !filter || `${c.name} ${c.comment ?? ""} ${typeOf(c)}`.toLowerCase().includes(filter.toLowerCase()));
   const edges = doc.column_edges.filter((e) => e.target_object === table.name && (!column || e.target_column === column));
-  const lastWrite = writers.flatMap((w) => w.runs).filter((r) => r.end).sort((a, b) => (b.end ?? "").localeCompare(a.end ?? ""))[0];
-  const lastRun = writers.flatMap((w) => w.runs).sort((a, b) => (b.start ?? "").localeCompare(a.start ?? ""))[0];
+  const everyRun = writers.flatMap((w) => w.runs.map((r) => ({ ...r, pipeline: w.pipeline })));
+  const lastWrite = everyRun.filter((r) => r.end).sort((a, b) => (b.end ?? "").localeCompare(a.end ?? ""))[0];
+  const lastRun = everyRun.sort((a, b) => (b.start ?? "").localeCompare(a.start ?? ""))[0];
+  const runLink = (r: { pipeline: string; pipeline_run_id: number }) => `${pipelinePath(code, r.pipeline)}?run=${r.pipeline_run_id}`;
+  const toTab = (id: string, label: string, children: React.ReactNode) => (
+    <button type="button" className="cursor-pointer text-accent hover:underline" title={`Open ${label}`} onClick={() => onTab(id)}>
+      {children}
+    </button>
+  );
   const failingRules = rules.filter((r) => r.observations[0]?.passed === "N").length;
   const openGaps = doc.gaps.filter((g) => g.table === table.name && isOpenGap(g)).length;
   const history = writers.flatMap((w) => w.runs.map((r) => ({ ...r, task: w.label, pipeline: w.pipeline }))).sort((a, b) => (b.start ?? "").localeCompare(a.start ?? "")).slice(0, 30);
@@ -413,21 +420,29 @@ export function TableObject({ code, doc, name, tab, onTab }: { code: string; doc
       <Title icon={Table2} name={table.table} copy={table.name} />
       <FactList inline>
         <Fact inline label="Last written">
-          {lastWrite?.end ? <When iso={lastWrite.end} now={now} /> : "no run recorded"}
+          {lastWrite?.end ? (
+            <Link className="text-accent hover:underline" to={runLink(lastWrite)} title={`Open run ${lastWrite.pipeline_run_id} of ${lastWrite.pipeline}`}>
+              <When iso={lastWrite.end} now={now} />
+            </Link>
+          ) : (
+            "no run recorded"
+          )}
         </Fact>
         {lastRun ? (
           <Fact inline label="Last write">
-            <StatusBadge status={lastRun.status} />
+            <Link to={runLink(lastRun)} title={`Open run ${lastRun.pipeline_run_id} of ${lastRun.pipeline}`}>
+              <StatusBadge status={lastRun.status} />
+            </Link>
           </Fact>
         ) : null}
         <Fact inline label="Rules">
-          {rules.length ? <span className={failingRules ? "text-bad" : undefined}>{failingRules ? `${failingRules} failing of ${rules.length}` : `${rules.length} passing`}</span> : "no checks"}
+          {rules.length ? toTab("quality", "the rule results", failingRules ? `${failingRules} failing of ${rules.length}` : `${rules.length} passing`) : "no checks"}
         </Fact>
         <Fact inline label="Open gaps">
-          {openGaps ? <span className="text-warn">{openGaps}</span> : "none"}
+          {openGaps ? toTab("quality", "the gaps", openGaps) : "none"}
         </Fact>
-        <Fact inline label="Written by">{table.writers.length} task{table.writers.length === 1 ? "" : "s"}</Fact>
-        <Fact inline label="Read by">{table.readers.length} task{table.readers.length === 1 ? "" : "s"}</Fact>
+        <Fact inline label="Written by">{table.writers.length ? toTab("overview", "the writing tasks", `${table.writers.length} task${table.writers.length === 1 ? "" : "s"}`) : "no task"}</Fact>
+        <Fact inline label="Read by">{table.readers.length ? toTab("overview", "the reading tasks", `${table.readers.length} task${table.readers.length === 1 ? "" : "s"}`) : "no task"}</Fact>
       </FactList>
       <Tabs tabs={tabs} value={on} onChange={onTab} />
       </>
@@ -549,7 +564,7 @@ export function TableObject({ code, doc, name, tab, onTab }: { code: string; doc
               data={history}
               columns={columnsOf<(typeof history)[number]>([
                 { id: "task", header: "Task", value: (r) => r.task, size: 280, cell: (r) => <Link className={link} to={catalogPath(code, "tasks", r.task)}>{r.task}</Link> },
-                { id: "run", header: "Run", value: (r) => r.pipeline_run_id, size: 90, cell: (r) => <span className="num">#{r.pipeline_run_id}</span> },
+                { id: "run", header: "Run", value: (r) => r.pipeline_run_id, size: 90, cell: (r) => <Link className={`num ${link}`} to={`${pipelinePath(code, r.pipeline)}?run=${r.pipeline_run_id}`}>#{r.pipeline_run_id}</Link> },
                 { id: "status", header: "Status", value: (r) => r.status, size: 130, cell: (r) => <StatusBadge status={r.status} /> },
                 { id: "started", header: "Started", value: (r) => r.start, size: 190, cell: (r) => formatTime(r.start, tz) },
                 { id: "duration", header: "Duration", value: (r) => (r.start && r.end ? new Date(r.end).getTime() - new Date(r.start).getTime() : null), size: 110, cell: (r) => formatDuration(r.start, r.end) },

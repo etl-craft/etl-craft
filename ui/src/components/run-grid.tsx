@@ -24,6 +24,7 @@ export function RunGrid({ code, pipeline, graph, runs, extra, selected, onSelect
   const shown = [...latest, ...(extra && !latest.some((r) => r.pipeline_run_id === extra.pipeline_run_id) ? [extra] : [])].sort((a, b) => a.pipeline_run_id - b.pipeline_run_id);
   const apart = (run: RunView) => extra !== undefined && run.pipeline_run_id === extra.pipeline_run_id && !latest.some((r) => r.pipeline_run_id === run.pipeline_run_id);
   const box = React.useRef<HTMLDivElement>(null);
+  const hasRuns = shown.length > 0;
   // The task column is as wide as the longest task code, up to this much of the pane: it gives way only so far.
   const [pane, setPane] = React.useState(0);
   React.useLayoutEffect(() => {
@@ -34,10 +35,12 @@ export function RunGrid({ code, pipeline, graph, runs, extra, selected, onSelect
     const watch = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(measure);
     watch?.observe(element);
     return () => watch?.disconnect();
-  }, []);
+  }, [hasRuns]);
   const widest = Math.max(...tasks.map((t) => t.length), 4);
   const [dragged, setDragged] = React.useState<number | null>(null);
   const taskWidth = dragged ?? Math.round(Math.min(Math.max(widest * 7.4 + 28, 128), Math.max(128, pane * 0.45)));
+  // The task column takes the width the runs do not need, so the last run sits against the pane's edge.
+  const taskColumn = Math.max(taskWidth, pane - shown.length * 20);
   // A run chosen from elsewhere is brought into view.
   React.useEffect(() => {
     box.current?.querySelector("[aria-current=true]")?.scrollIntoView({ inline: "nearest", block: "nearest" });
@@ -67,11 +70,11 @@ export function RunGrid({ code, pipeline, graph, runs, extra, selected, onSelect
       <div dir="ltr" className="w-max min-w-full">
       {failed?.error ? <Notice className="m-3">{(failed.error as Error).message}</Notice> : null}
       {cells.some((c) => c.isPending) ? <Loading what="the grid" className="p-3" /> : null}
-      <table aria-label="Run grid" style={{ width: taskWidth + shown.length * 20 }} className="table-fixed border-separate border-spacing-0 text-[13px]">
+      <table aria-label="Run grid" style={{ width: taskColumn + shown.length * 20 }} className="table-fixed border-separate border-spacing-0 text-[13px]">
         <thead>
           {bars ? (
           <tr>
-            <th scope="col" style={{ width: taskWidth, minWidth: taskWidth, maxWidth: taskWidth }} className="sticky left-0 top-0 z-20 h-20 bg-surface px-3 text-left align-bottom text-xs font-medium text-muted">
+            <th scope="col" style={{ width: taskColumn, minWidth: taskColumn, maxWidth: taskColumn }} className="sticky left-0 top-0 z-20 h-20 bg-surface px-3 text-left align-bottom text-xs font-medium text-muted">
               Duration
             </th>
             {shown.map((run) => (
@@ -94,7 +97,7 @@ export function RunGrid({ code, pipeline, graph, runs, extra, selected, onSelect
           </tr>
           ) : null}
           <tr>
-            <th scope="col" style={{ width: taskWidth, minWidth: taskWidth, maxWidth: taskWidth }} className={cn("sticky left-0 z-20 bg-surface-2 px-3 py-1.5 text-left text-xs font-medium text-muted", bars ? "top-20" : "top-0")}>
+            <th scope="col" style={{ width: taskColumn, minWidth: taskColumn, maxWidth: taskColumn }} className={cn("sticky left-0 z-20 bg-surface-2 px-3 py-1.5 text-left text-xs font-medium text-muted", bars ? "top-20" : "top-0")}>
               Task
               <span
                 role="separator"
@@ -135,7 +138,7 @@ export function RunGrid({ code, pipeline, graph, runs, extra, selected, onSelect
         <tbody>
           {tasks.map((task, row) => (
             <tr key={task}>
-              <th scope="row" style={{ width: taskWidth, minWidth: taskWidth, maxWidth: taskWidth }} className="sticky left-0 z-10 h-7 truncate border-t border-border bg-surface px-3 py-0.5 text-left font-medium" title={task}>
+              <th scope="row" style={{ width: taskColumn, minWidth: taskColumn, maxWidth: taskColumn }} className="sticky left-0 z-10 h-7 truncate border-t border-border bg-surface px-3 py-0.5 text-left font-medium" title={task}>
                 {task}
               </th>
               {shown.map((run) => {
