@@ -22,7 +22,7 @@ export function DropdownContent({ className, ...props }: React.ComponentProps<ty
 export function DropdownItem({ className, ...props }: React.ComponentProps<typeof Menu.Item>) {
   return (
     <Menu.Item
-      className={cn("flex cursor-pointer items-center gap-2 rounded px-2.5 py-1.5 outline-none data-[highlighted]:bg-surface-2", className)}
+      className={cn("flex cursor-pointer items-center gap-2 rounded-sm px-2.5 py-1.5 outline-none data-[highlighted]:bg-surface-2", className)}
       {...props}
     />
   );

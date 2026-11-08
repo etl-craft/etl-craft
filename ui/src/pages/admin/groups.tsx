@@ -47,6 +47,7 @@ export function GroupsTab() {
           </div>
         </CardHeader>
         <DataTable
+          find
           label="Groups"
           data={groups}
           empty={list.isSuccess ? "No groups yet." : undefined}

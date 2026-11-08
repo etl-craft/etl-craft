@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 /** A headline number with a line of context: the form for one value, not a chart. */
 export function KpiTile({ label, value, hint, tone }: { label: string; value: React.ReactNode; hint?: React.ReactNode; tone?: "bad" | "warn" | "ok" }) {
   return (
-    <div className="grid min-w-0 gap-0.5 rounded-lg border border-border bg-surface px-3 py-2.5">
+    <div data-card className="grid min-w-0 gap-0.5 rounded-sm border border-border bg-surface px-3 py-2.5">
       <span className="truncate text-xs text-muted">{label}</span>
       <span className={cn("truncate text-2xl font-semibold leading-tight", tone === "bad" && "text-bad", tone === "warn" && "text-warn", tone === "ok" && "text-ok")}>{value}</span>
       <span className="truncate text-xs text-muted">{hint ?? " "}</span>
@@ -17,7 +17,7 @@ export function KpiTile({ label, value, hint, tone }: { label: string; value: Re
 /** A titled panel whose body fills the rest of its height. */
 export function Panel({ title, aside, className, children }: { title: string; aside?: React.ReactNode; className?: string; children: React.ReactNode }) {
   return (
-    <section aria-label={title} className={cn("flex min-h-0 min-w-0 flex-col rounded-lg border border-border bg-surface", className)}>
+    <section data-card aria-label={title} className={cn("flex min-h-0 min-w-0 flex-col rounded-lg border border-border bg-surface", className)}>
       <header className="flex shrink-0 items-center justify-between gap-2 border-b border-border px-3 py-2">
         <h2 className="m-0 truncate text-sm font-semibold">{title}</h2>
         {aside}

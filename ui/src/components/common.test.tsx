@@ -1,6 +1,7 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { Notice, Stat } from "@/components/common";
+import { MemoryRouter } from "react-router-dom";
+import { Highlight, Notice, PageHeader, Pager, Stat } from "@/components/common";
 
 describe("Stat", () => {
   it("says an absent value quietly and a number loudly", () => {
@@ -25,5 +26,40 @@ describe("Notice", () => {
     );
     expect(screen.getByRole("alert")).toHaveTextContent("refused");
     expect(screen.getByRole("status")).toHaveTextContent("nothing built yet");
+  });
+});
+
+describe("PageHeader", () => {
+  it("has a back arrow unless the page is a root", () => {
+    const { rerender } = render(
+      <MemoryRouter>
+        <PageHeader title="Runs" />
+      </MemoryRouter>,
+    );
+    expect(screen.getByRole("button", { name: "Back" })).toBeTruthy();
+    rerender(
+      <MemoryRouter>
+        <PageHeader title="Home" back={null} />
+      </MemoryRouter>,
+    );
+    expect(screen.queryByRole("button", { name: "Back" })).toBeNull();
+  });
+});
+
+describe("Highlight and Pager", () => {
+  it("marks every occurrence of the words, whatever their case, and treats them as plain text", () => {
+    const { container } = render(<Highlight text="Orders and orders (a.b)" words="orders" />);
+    expect(container.querySelectorAll("mark").length).toBe(2);
+    const dotted = render(<Highlight text="a.b axb" words="a.b" />);
+    expect(dotted.container.querySelectorAll("mark").length).toBe(1);
+  });
+
+  it("shows the range, and moves a page at a time", () => {
+    const seen: number[] = [];
+    render(<Pager page={2} size={25} total={60} onPage={(p) => seen.push(p)} />);
+    expect(screen.getByText("26 to 50 of 60")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    fireEvent.click(screen.getByRole("button", { name: "Previous" }));
+    expect(seen).toEqual([3, 1]);
   });
 });

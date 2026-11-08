@@ -149,7 +149,7 @@ export function Console() {
               .sort()
               .map((name) => (
                 <li key={name}>
-                  <button type="button" onClick={() => { setValue(name + " "); input.current?.focus(); }} className="cursor-pointer rounded border border-border bg-surface px-2 py-1 font-mono text-xs hover:bg-surface-2">
+                  <button type="button" onClick={() => { setValue(name + " "); input.current?.focus(); }} className="cursor-pointer rounded-sm border border-border bg-surface px-2 py-1 font-mono text-xs hover:bg-surface-2">
                     {name}
                   </button>
                 </li>

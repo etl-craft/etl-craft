@@ -24,7 +24,7 @@ from fixtures.metadata import add_pipeline, add_task, start_run
 def test_only_one_leader_and_session_release_not_history_controls_restart(engine_db):
     engine = engine_db.engine
     with leadership(engine):
-        first = controllers.start(engine)
+        first = controllers.start(engine, "SCHEDULE|ALWAYS")
         with (
             pytest.raises(RunRefusedError, match=f"controller {first} on .* is active"),
             leadership(engine),
@@ -32,7 +32,7 @@ def test_only_one_leader_and_session_release_not_history_controls_restart(engine
             pytest.fail("second leader entered")
     # An unclosed history row cannot prevent the replacement from owning the session lock.
     with leadership(engine):
-        second = controllers.start(engine)
+        second = controllers.start(engine, "SCHEDULE|ALWAYS")
         assert second > first
         controllers.heartbeat(engine, second, stopped=True)
     with engine.connect() as conn:
@@ -373,3 +373,16 @@ def test_a_leader_whose_lock_was_taken_meanwhile_stops(engine_db):
             pytest.raises(RunRefusedError, match="took over while this controller's Engine DB"),
         ):
             leader.wait(threading.Event())
+
+
+def test_a_controller_records_the_automatic_starts_it_allows(engine_db):
+    engine = engine_db.engine
+    with leadership(engine):
+        started = controllers.start(engine, "NONE")
+        with engine.connect() as conn:
+            allowed = conn.execute(
+                text("SELECT ALLOWED_AUTO_RESTARTS FROM AUD_CONTROLLERS WHERE CONTROLLER_ID=:id"),
+                {"id": started},
+            ).scalar_one()
+        controllers.heartbeat(engine, started, stopped=True)
+    assert allowed == "NONE"

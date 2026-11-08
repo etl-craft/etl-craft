@@ -26,7 +26,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
           <div key={toast.id} className="flex items-start gap-3 rounded-lg border border-border-strong bg-surface p-3 text-sm shadow-xl">
             <CircleCheck aria-hidden className="mt-0.5 size-4 shrink-0 text-ok" />
             <p className="m-0 min-w-0 flex-1 break-words">{toast.text}</p>
-            <button type="button" aria-label="Dismiss" className="cursor-pointer rounded p-0.5 text-muted hover:text-fg" onClick={() => setToasts((now) => now.filter((t) => t.id !== toast.id))}>
+            <button type="button" aria-label="Dismiss" className="cursor-pointer rounded-sm p-0.5 text-muted hover:text-fg" onClick={() => setToasts((now) => now.filter((t) => t.id !== toast.id))}>
               <X aria-hidden className="size-4" />
             </button>
           </div>

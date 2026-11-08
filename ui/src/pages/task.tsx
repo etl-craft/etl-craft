@@ -1,8 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { createColumnHelper } from "@tanstack/react-table";
-import { ArrowLeft } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
-import { Fact, FactList, Loading, Notice, PageHeader, ParamList } from "@/components/common";
+import { Breadcrumbs, Fact, FactList, Loading, Notice, PageHeader, ParamList } from "@/components/common";
 import { CsvButton } from "@/components/csv-button";
 import { DataTable } from "@/components/data-table";
 import { OffsetCard } from "@/components/offset-card";
@@ -11,8 +10,8 @@ import { StatusBadge } from "@/components/status";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { useProjectInfo, useTimezone } from "@/hooks";
 import { getJson, project } from "@/lib/api";
-import { formatDuration, formatTime } from "@/lib/format";
-import { pipelinePath, runPath } from "@/lib/routes";
+import { formatDuration, formatSeconds, formatTime } from "@/lib/format";
+import { pipelinePath, pipelinesPath, runPath } from "@/lib/routes";
 import type { Pipeline, TaskDefinition, TaskHistory, TaskOffset, TaskRunView } from "@/lib/types";
 import { useDocumentTitle } from "@/title";
 
@@ -37,10 +36,16 @@ export function Task() {
   const paused = pipe.data?.task_pauses.find((p) => p.task_code === task);
   return (
     <div className="grid grid-cols-1 gap-5">
-      <Link to={pipelinePath(code, pipeline, "tasks")} className="inline-flex w-fit items-center gap-1 text-sm text-muted hover:text-fg">
-        <ArrowLeft className="size-4" aria-hidden /> {pipeline} tasks
-      </Link>
+      <Breadcrumbs
+        trail={[
+          { label: "Pipelines", to: pipelinesPath(code) },
+          { label: pipeline, to: pipelinePath(code, pipeline) },
+          { label: "Tasks", to: pipelinePath(code, pipeline, "tasks") },
+          { label: task },
+        ]}
+      />
       <PageHeader
+        back={{ to: pipelinePath(code, pipeline, "tasks"), label: `${pipeline} tasks` }}
         title={task}
         subtitle={`${pipeline} · ${code}`}
         status={paused ? <span className="text-warn">Paused by {paused.actor}: {paused.reason}</span> : null}
@@ -55,7 +60,7 @@ export function Task() {
         <FactList className="lg:grid-cols-4">
           <Fact label="Runs shown">{runs.length}</Fact>
           <Fact label="Succeeded">{runs.filter((r) => r.status === "SUCCESS").length} of {runs.length}</Fact>
-          <Fact label="Average duration">{average === null ? "No finished runs" : formatDuration("2000-01-01T00:00:00Z", new Date(Date.parse("2000-01-01T00:00:00Z") + average * 1000).toISOString())}</Fact>
+          <Fact label="Average duration">{average === null ? "No finished runs" : formatSeconds(average)}</Fact>
         </FactList>
       </PageHeader>
       {history.isError ? <Notice>{(history.error as Error).message}</Notice> : null}

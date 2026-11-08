@@ -7,6 +7,10 @@ export interface Identity {
   local_password: boolean;
   last_signin: string | null;
   session_expires_at: string | null;
+  first_name?: string | null;
+  last_name?: string | null;
+  email?: string | null;
+  names_editable?: boolean;
   project_permission: string | null;
   settings: { theme: string; timezone: string; default_project: string | null; page_size: number; time_display: string };
 }
@@ -21,6 +25,7 @@ export interface ProjectCounts {
   failed: number;
   sla_misses: number;
   queued_tasks: number;
+  allowed_auto_restarts: string;
 }
 
 export interface ProjectHealth {
@@ -223,6 +228,9 @@ export interface RecentRun {
   pipeline_run_id: number;
   status: RunStatus;
   sla_status: string | null;
+  /** Absent from a server that predates them. */
+  start_date?: string | null;
+  end_date?: string | null;
 }
 
 export interface Pipeline {
@@ -413,6 +421,7 @@ export interface ControllerVersion {
   controller_id: number;
   version: string;
   heartbeat_at: string;
+  allowed_auto_restarts: string;
 }
 
 export interface About {
@@ -480,6 +489,8 @@ export interface Account {
   kind: string;
   role: string;
   email: string | null;
+  first_name: string | null;
+  last_name: string | null;
   active_flag: string;
   failed_signins: number;
   locked_at: string | null;
@@ -529,6 +540,7 @@ export interface ProjectRow {
   governance: string;
   schema_check_schedule: string | null;
   schema_check_on_demand: string;
+  allowed_auto_restarts: string;
 }
 
 export interface PoolRow {

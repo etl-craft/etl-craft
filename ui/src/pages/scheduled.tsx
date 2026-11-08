@@ -6,6 +6,7 @@ import { Loading, Notice, PageHeader } from "@/components/common";
 import { DataTable } from "@/components/data-table";
 import { PauseState, RecentRuns } from "@/components/pipeline-parts";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
+import { AutoStartNotice } from "@/components/auto-start-notice";
 import { When } from "@/components/when";
 import { useProjectInfo } from "@/hooks";
 import { getJson, project } from "@/lib/api";
@@ -36,13 +37,14 @@ export function Scheduled() {
   return (
     <div className="grid grid-cols-1 gap-5">
       <PageHeader title="Scheduled runs" subtitle={`${code} · what runs next`} />
+      <AutoStartNotice code={code} />
       {list.isError ? <Notice>{(list.error as Error).message}</Notice> : null}
       {list.isPending ? <Loading what="schedules" /> : null}
       <Card>
         <CardHeader>
           <CardTitle>Next runs · {upcoming.length}</CardTitle>
         </CardHeader>
-        <DataTable
+        <DataTable find
           label="Next runs"
           data={upcoming}
           empty={list.isSuccess ? "No scheduled pipeline has a next run." : undefined}
@@ -59,7 +61,7 @@ export function Scheduled() {
           <CardHeader>
             <CardTitle>Scheduled but not running · {stalled.length}</CardTitle>
           </CardHeader>
-          <DataTable
+          <DataTable find
             label="Scheduled but not running"
             data={stalled}
             columns={[

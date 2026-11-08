@@ -140,6 +140,49 @@ Warehouses are optional extras. Core bundles none. `all` is core plus the UI, fo
 
 ### Added
 
+- The controller records the `Orchestration.Allowed_auto_restarts` it runs with on its `AUD_CONTROLLERS` row
+  (migration 0090), `etl-craft about` and `GET /api/v1/about` report it for each live controller, and the web
+  interface says so on Scheduled runs and Pipelines when schedules or automatic restarts are off, instead of
+  showing next-run times that never start.
+- A project has its own `ALLOWED_AUTO_RESTARTS` (migration 0091, `project add|set --allowed-auto-restarts`, the
+  Projects admin page): what may start its runs by itself, in the values `Orchestration.Allowed_auto_restarts`
+  takes. The narrower of the controller's setting and the project's applies, so one Engine DB can run a DEV
+  project on schedule and keep a PROD project to person-started runs.
+- `account add --no-password` invites a user by email for SSO binding. A name longer than 128 characters is refused
+  at registration, an SSO sign-in no longer overwrites a name an account may edit, and a project setting the controller
+  cannot read stops that project's automatic starts and is logged once instead of failing the controller tick.
+- A pipeline's recent runs (`GET /api/v1/pipelines`, `etl-craft status --json`) carry each run's `start_date` and
+  `end_date`, and the Pipelines list draws them as a duration spark line. Durations are written the same way
+  everywhere in the web interface, the session warning uses the chosen timezone, a pipeline address `?run=` takes a
+  run's readable label as well as its integer, and a Maintenance card's action sits in its own footer.
+- `Auth.Names_editable` (default `false`) lets each account edit its own first and last name in Personal settings
+  and with `account settings --first-name --last-name`; otherwise the change is refused with the setting named.
+  `whoami` reports `names_editable`.
+- SSO sign-in reads a pending or slowed device-flow poll from the response body when the issuer answers 401 as well
+  as 400, so Dex, which uses 401, no longer fails the sign-in while the person is still approving.
+- An SSO ID token without a `nonce` claim is accepted, because the device flow has no nonce parameter and
+  issuers such as Dex, Google and Keycloak do not echo one; a `nonce` that is present must still match. The security
+  guide warns about the trade-off.
+- Accounts have a first and last name (migration 0092, `account add --first-name --last-name`). SSO now asks
+  the issuer for `email` and `profile` and refreshes an account's names, and its email when the issuer verified
+  it, at each sign-in. `Auth.Oidc_bind_by_email` lets an account created with only an email take its provider
+  subject at the first sign-in whose verified email matches it alone; the bind is audited.
+- The Accounts page shows each account's email and name.
+- `etl-craft whoami` and `GET /api/v1/whoami` report the account's first name, last name and email, and the
+  account menu shows the name. Catalog coverage (documented, written, read, with rules, open gaps) is the Catalog
+  tab of Home, and the automatic-start banner says "everything" or "nothing" instead of the raw setting.
+- The web interface also gains a back arrow on every page, highlighted search matches with kind filters and
+  paging, keyboard navigation in the catalog tree, a catalog Insights page (coverage, open gaps, most read tables),
+  a status strip with its success count for each pipeline's recent runs, and filter boxes whose text is kept in the
+  address.
+- The web interface gains: a divider between a pipeline's task list and run matrix that resizes both together
+  (the newest run always stays in view), row menus for agent actions, a "Go to" list in the top search,
+  breadcrumbs and back buttons on task and attempt pages, a searchable log with a first-error jump, links from
+  a table's header facts to the writing run, rule results, gaps and the writing and reading tasks, filters on
+  the Accounts, Tokens, Groups, Access and Gaps tables, a table density setting (this browser), a file drop
+  zone for uploads and a Capacity tab on Home.
+- The web interface uses small corner radii (2 to 6 px), square solid status marks, narrower duration bars and edge-to-edge panes that meet at 1 px dividers instead of floating cards.
+
 - The controller restarts a pipeline when its last run ended in a status `AUTO_RESTART_CONDITION` names,
   as a run with the new trigger kind `RESTART` and the key `restart:<previous run id>` (migration 0089
   widens the trigger-kind check on both Engine DBs; on SQLite it rebuilds the run log). A restart is made

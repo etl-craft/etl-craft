@@ -91,6 +91,7 @@ export function Catalog() {
     <TableObject key={name} code={code} doc={doc} name={name} tab={tab} onTab={onTab} />
   ) : kind === "gaps" ? (
     <GapsObject code={code} doc={doc} />
+
   ) : (
     <CatalogHome code={code} doc={doc} />
   );

@@ -231,7 +231,7 @@ export function RunOverview({ code, pipeline, runId, task, onTask }: { code: str
         {r.sla_status ? <Fact inline label="SLA">{r.sla_status}</Fact> : null}
       </FactList>
       <ScopeControls code={code} pipeline={pipeline} runId={runId} elsewhere={["RECOVER"]} />
-      <div className="overflow-hidden rounded-lg border border-border">
+      <div data-card className="overflow-hidden rounded-sm border border-border">
         <Table aria-label="Task list">
           <thead>
             <tr>

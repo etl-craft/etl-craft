@@ -154,6 +154,8 @@ class RecentRun:
     pipeline_run_id: int
     status: RunStatus
     sla_status: SlaStatus | None
+    start_date: datetime | None = None
+    end_date: datetime | None = None
 
 
 @dataclass(frozen=True)

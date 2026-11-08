@@ -1,7 +1,100 @@
 import { ArrowLeft, type LucideIcon } from "lucide-react";
 import * as React from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
+
+/** The path to the page from the project's lists, each part a link except the last. */
+export function Breadcrumbs({ trail }: { trail: { label: string; to?: string }[] }) {
+  return (
+    <nav aria-label="Breadcrumb" className="flex flex-wrap items-center gap-1 text-xs text-muted">
+      {trail.map((part, i) => (
+        <React.Fragment key={`${i}:${part.label}`}>
+          {i > 0 ? <span aria-hidden>/</span> : null}
+          {part.to ? (
+            <Link to={part.to} className="hover:text-fg hover:underline">
+              {part.label}
+            </Link>
+          ) : (
+            <span aria-current="page" className="text-fg">
+              {part.label}
+            </span>
+          )}
+        </React.Fragment>
+      ))}
+    </nav>
+  );
+}
+
+/** The arrow before a title when the page names no parent: one step back in this tab's history, or Home when it is the first page opened. */
+function HistoryBack() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  return (
+    <button
+      type="button"
+      aria-label="Back"
+      title="Back"
+      onClick={() => (location.key === "default" ? navigate("/") : navigate(-1))}
+      className="-ml-1 grid size-8 cursor-pointer place-items-center rounded-md text-muted hover:bg-surface-2 hover:text-fg"
+    >
+      <ArrowLeft className="size-4" aria-hidden />
+    </button>
+  );
+}
+
+/** Text with every occurrence of the search words marked, so a result shows why it matched. */
+export function Highlight({ text, words }: { text: string; words: string }) {
+  const needle = words.trim();
+  if (!needle) return <>{text}</>;
+  const escaped = needle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const parts = text.split(new RegExp(`(${escaped})`, "i"));
+  return (
+    <>
+      {parts.map((part, i) =>
+        part.toLowerCase() === needle.toLowerCase() ? (
+          <mark key={i} className="rounded-xs bg-warn-bg px-0.5 text-inherit">
+            {part}
+          </mark>
+        ) : (
+          <React.Fragment key={i}>{part}</React.Fragment>
+        ),
+      )}
+    </>
+  );
+}
+
+/** Previous and next for a list shown a page at a time: "26 to 50 of 130". */
+export function Pager({ page, size, total, onPage }: { page: number; size: number; total: number; onPage: (page: number) => void }) {
+  const pages = Math.max(1, Math.ceil(total / size));
+  if (total <= size) return null;
+  const from = (page - 1) * size + 1;
+  return (
+    <nav aria-label="Pages" className="flex items-center justify-end gap-3 border-t border-border px-3 py-1.5 text-xs text-muted">
+      <span className="num">
+        {from} to {Math.min(total, page * size)} of {total}
+      </span>
+      <button type="button" disabled={page <= 1} onClick={() => onPage(page - 1)} className="cursor-pointer rounded-sm border border-border-strong px-2 py-0.5 enabled:hover:bg-surface-2 disabled:opacity-40">
+        Previous
+      </button>
+      <button type="button" disabled={page >= pages} onClick={() => onPage(page + 1)} className="cursor-pointer rounded-sm border border-border-strong px-2 py-0.5 enabled:hover:bg-surface-2 disabled:opacity-40">
+        Next
+      </button>
+    </nav>
+  );
+}
+
+/** One setting as a row: what it is and why on the left, its control on the right, a divider below. */
+export function SettingRow({ title, hint, children }: { title: string; hint?: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <div className="grid gap-2 border-b border-border px-4 py-3 md:grid-cols-[minmax(0,18rem)_minmax(0,1fr)] md:gap-8">
+      <div className="grid content-start gap-0.5">
+        <span className="text-sm font-medium">{title}</span>
+        {hint ? <span className="text-xs text-muted">{hint}</span> : null}
+      </div>
+      <div className="min-w-0 max-w-md">{children}</div>
+    </div>
+  );
+}
 
 /** A failure or refusal, always announced to assistive technology. */
 export function Notice({ children, mono, info, className }: { children: React.ReactNode; mono?: boolean; info?: boolean; className?: string }) {
@@ -43,26 +136,27 @@ export function PageHeader({
   actions?: React.ReactNode;
   /** A smaller title and tighter spacing, for a page whose body is the point (a run). */
   compact?: boolean;
-  /** Where the arrow before the title leads back to, such as the list this page is one row of. */
-  back?: { to: string; label: string };
+  /** Where the arrow before the title leads back to, such as the list this page is one row of. Without one the arrow goes back in history; `null` shows none, as on Home. */
+  back?: { to: string; label: string } | null;
   children?: React.ReactNode;
 }) {
   return (
     <header className={cn("flex flex-wrap items-start justify-between gap-y-2", compact ? "gap-x-3" : "gap-x-4")}>
       <div className={cn("grid min-w-0 flex-1", compact ? "gap-1" : "gap-2")}>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          {back === undefined ? <HistoryBack /> : null}
           {back ? (
             <Link to={back.to} aria-label={`Back to ${back.label}`} title={`Back to ${back.label}`} className="-ml-1 grid size-8 place-items-center rounded-md text-muted hover:bg-surface-2 hover:text-fg">
               <ArrowLeft className="size-4" aria-hidden />
             </Link>
           ) : null}
-          <h1 className={cn("m-0 font-semibold", compact ? "text-xl" : "text-2xl")}>{title}</h1>
+          <h1 className={cn("m-0 font-semibold", compact ? "text-lg" : "text-xl")}>{title}</h1>
           {status}
         </div>
         {subtitle ? <p className="m-0 text-sm text-muted">{subtitle}</p> : null}
         {children}
       </div>
-      {actions ? <div className="shrink-0">{actions}</div> : null}
+      {actions ? <div className="shrink-0 max-sm:w-full">{actions}</div> : null}
     </header>
   );
 }
@@ -87,7 +181,7 @@ export function Fact({
         {Icon ? <Icon aria-hidden className="size-3.5" /> : null}
         {label}
       </dt>
-      <dd className={cn("num m-0", valueClassName)}>{children}</dd>
+      <dd className={cn("num m-0", inline && "min-w-0 truncate", valueClassName)}>{children}</dd>
     </div>
   );
 }
@@ -106,16 +200,19 @@ export function SelectField({
   value,
   onChange,
   compact,
+  hideLabel,
   children,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   compact?: boolean;
+  /** The label stays for assistive technology; a row around the control already names it. */
+  hideLabel?: boolean;
   children: React.ReactNode;
 }) {
   return (
-    <Field label={label} compact={compact}>
+    <Field label={label} compact={compact} hideLabel={hideLabel}>
       <select value={value} onChange={(event) => onChange(event.target.value)} className={cn(inputClass, "min-w-40")}>
         {children}
       </select>
@@ -126,10 +223,10 @@ export function SelectField({
 export const inputClass = "h-9 w-full rounded-md border border-border-strong bg-surface px-2 text-sm text-fg max-sm:h-11";
 
 /** A labelled control: one style for every form; `compact` is the small muted label used above toolbar filters. */
-export function Field({ label, compact, children }: { label: string; compact?: boolean; children: React.ReactNode }) {
+export function Field({ label, compact, hideLabel, children }: { label: string; compact?: boolean; hideLabel?: boolean; children: React.ReactNode }) {
   return (
     <label className={cn("grid gap-1", compact ? "text-xs text-muted" : "text-sm")}>
-      <span className={compact ? undefined : "font-medium"}>{label}</span>
+      <span className={hideLabel ? "sr-only" : compact ? undefined : "font-medium"}>{label}</span>
       {children}
     </label>
   );

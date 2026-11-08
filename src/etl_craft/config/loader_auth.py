@@ -3,7 +3,7 @@
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from etl_craft.config.loader_helpers import profiled_settings, reject_unknown, whole_number
+from etl_craft.config.loader_helpers import flag, profiled_settings, reject_unknown, whole_number
 from etl_craft.config.model import AuthConfig
 from etl_craft.config.resolve import Resolver
 from etl_craft.core.errors import ConfigurationError
@@ -16,6 +16,8 @@ AUTH_KEYS = frozenset(
         "Oidc_issuer",
         "Oidc_client_id",
         "Oidc_groups_claim",
+        "Oidc_bind_by_email",
+        "Names_editable",
         "Lockout_after",
         "Admin_contact",
         "Signin_notice",
@@ -60,6 +62,9 @@ def parse_auth(
                 f"{path}: Auth.Oidc_issuer is invalid; expected a credential-free HTTPS issuer URL "
                 "without a query or fragment; correct the setting"
             )
+    bind = flag(settings, "Oidc_bind_by_email", False, path)
+    if bind and not issuer:
+        raise ConfigurationError(f"{path}: Auth.Oidc_bind_by_email requires Auth.Oidc_issuer")
     lockout = whole_number(settings, "Lockout_after", 5, path, minimum=0, maximum=1000000)
     return AuthConfig(
         hours,
@@ -67,6 +72,8 @@ def parse_auth(
         client,
         refresh_days=refresh_days,
         oidc_groups_claim=groups,
+        oidc_bind_by_email=bool(bind),
+        names_editable=bool(flag(settings, "Names_editable", False, path)),
         lockout_after=lockout,
         session_idle_minutes=idle,
         admin_contact=settings.text("Admin_contact") or "your administrator",

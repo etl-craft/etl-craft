@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { impact, isOpenGap, type CatalogDoc, type CatalogGap } from "@/lib/catalog";
-import { describeCron, relative } from "@/lib/format";
+import { describeCron, formatSeconds, relative, runIdOf } from "@/lib/format";
 
 describe("a schedule in words", () => {
   it("describes the common shapes and leaves the rest to the expression", () => {
@@ -40,5 +40,20 @@ describe("the catalog's gaps and impact", () => {
       { table: "d", direction: "Downstream", steps: 2, task: "P.t3" },
     ]);
     expect(impact(doc, "b", 1, "down").map((r) => r.table)).toEqual(["c"]);
+  });
+});
+
+describe("run addresses and durations", () => {
+  it("reads the run id from the integer or from the end of a label", () => {
+    expect(runIdOf("9")).toBe(9);
+    expect(runIdOf("SI_REFERENCE-2026-11-07 11:47:50-9")).toBe(9);
+    expect(runIdOf("A-B-2026-11-07 11:47:50-142")).toBe(142);
+    expect(runIdOf("SI_REFERENCE-nonsense")).toBeUndefined();
+    expect(runIdOf(null)).toBeUndefined();
+  });
+  it("writes every duration the same way", () => {
+    expect(formatSeconds(45)).toBe("45s");
+    expect(formatSeconds(126)).toBe("2m 06s");
+    expect(formatSeconds(3900)).toBe("1h 05m");
   });
 });

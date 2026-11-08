@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useParams } from "react-router-dom";
 import { ApiError, getJson, postJson, project } from "@/lib/api";
 import { readProject } from "@/lib/project-memory";
-import type { Identity, ProjectHealth } from "@/lib/types";
+import type { About, Identity, ProjectHealth } from "@/lib/types";
 
 export function useIdentity(code?: string) {
   return useQuery({
@@ -76,3 +76,12 @@ export function useRoleAtLeast(minimum: "operator" | "developer" | "admin"): boo
 
 export const failureText = (error: unknown): string | null =>
   error instanceof ApiError ? error.message : error ? "The request did not complete." : null;
+
+/**
+ * What the running controller allows to start runs by itself: "NONE" means no schedule or automatic restart
+ * starts anything, so only people and triggers do. Absent until a controller has reported.
+ */
+export function useAutoStarts(): string | undefined {
+  const about = useQuery({ queryKey: ["about"], queryFn: () => getJson<About>("/api/v1/about"), refetchInterval: 15_000 });
+  return about.data?.controllers[0]?.allowed_auto_restarts;
+}

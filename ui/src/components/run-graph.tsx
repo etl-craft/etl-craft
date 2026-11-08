@@ -2,7 +2,7 @@ import { ArrowUpRight, Box } from "lucide-react";
 import * as React from "react";
 import { Background, Controls, Handle, MarkerType, Position, ReactFlow, type Edge, type Node, type NodeProps, type ReactFlowInstance } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { statusMeta, toneClass } from "@/components/status";
+import { edgeClass, solidClass, statusMeta } from "@/components/status";
 import type { Graph } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -42,10 +42,10 @@ function Task({ data }: NodeProps<TaskNode>) {
   return (
     <div
       data-focus={data.focus}
-      className={cn("flex h-[52px] w-[230px] items-center gap-2 rounded-md border bg-surface pl-2.5 pr-2 text-[13px] shadow-sm transition-opacity", NODE_TONE[data.focus])}
+      className={cn("flex h-[52px] w-[230px] items-center gap-2 rounded-sm border border-l-[4px] bg-surface pl-2.5 pr-2 text-[13px] transition-opacity", plain ? "border-l-border-strong" : edgeClass(data.status), NODE_TONE[data.focus])}
     >
       <Handle type="target" position={data.vertical ? Position.Top : Position.Left} className="!size-1.5 !border-0 !bg-border-strong" />
-      <span className={cn("grid size-7 shrink-0 place-items-center rounded-full", plain ? "bg-idle-bg text-idle" : toneClass(data.status))} title={statusLabel}>
+      <span className={cn("grid size-7 shrink-0 place-items-center rounded-sm", plain ? "bg-idle-bg text-idle" : solidClass(data.status))} title={statusLabel}>
         <Icon aria-hidden className={cn("size-4", spin && "animate-spin")} />
       </span>
       <span className="grid min-w-0 flex-1">

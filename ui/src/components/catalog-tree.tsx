@@ -10,12 +10,20 @@ export interface Selection {
   name?: string;
 }
 
-const row = "flex min-w-0 items-center gap-1.5 rounded px-1.5 py-1 text-[13px] hover:bg-surface-2";
+/** Which tree item can be reached with Tab: the one last focused, so the rest are reached with the arrow keys. */
+const Roving = React.createContext<{ active: string | null; first: string | null }>({ active: null, first: null });
+
+const row = "flex min-w-0 items-center gap-1.5 rounded-sm px-1.5 py-1 text-[13px] hover:bg-surface-2";
+
+function useTab(key: string): 0 | -1 {
+  const { active, first } = React.useContext(Roving);
+  return (active ?? first) === key ? 0 : -1;
+}
 
 function Group({ id, label, icon: Icon, open, toggle, children }: { id: string; label: string; icon: typeof Database; open: boolean; toggle: (id: string) => void; children: React.ReactNode }) {
   return (
     <li role="none">
-      <button type="button" role="treeitem" aria-expanded={open} onClick={() => toggle(id)} className={cn(row, "w-full cursor-pointer text-left font-medium")}>
+      <button type="button" role="treeitem" data-key={id} tabIndex={useTab(id)} aria-expanded={open} onClick={() => toggle(id)} className={cn(row, "w-full cursor-pointer text-left font-medium")}>
         {open ? <ChevronDown aria-hidden className="size-3.5 shrink-0" /> : <ChevronRight aria-hidden className="size-3.5 shrink-0" />}
         <Icon aria-hidden className="size-4 shrink-0 text-muted" />
         <span className="truncate">{label}</span>
@@ -32,7 +40,7 @@ function Group({ id, label, icon: Icon, open, toggle, children }: { id: string; 
 function Leaf({ to, label, icon: Icon, current, title }: { to: string; label: string; icon: typeof Database; current: boolean; title?: string }) {
   return (
     <li role="none">
-      <Link to={to} role="treeitem" aria-current={current ? "page" : undefined} title={title ?? label} className={cn(row, current && "bg-accent/15 font-medium")}>
+      <Link to={to} role="treeitem" data-key={to} tabIndex={useTab(to)} aria-current={current ? "page" : undefined} title={title ?? label} className={cn(row, current && "bg-accent/15 font-medium")}>
         <Icon aria-hidden className="size-4 shrink-0 text-muted" />
         <span className="truncate">{label}</span>
       </Link>
@@ -48,6 +56,7 @@ export function CatalogTree({ code, doc, selected }: { code: string; doc: Catalo
   const [query, setQuery] = React.useState("");
   const [opened, setOpened] = React.useState<Set<string>>(() => new Set());
   const [closed, setClosed] = React.useState<Set<string>>(() => new Set());
+  const [active, setActive] = React.useState<string | null>(null);
   const needle = query.trim().toLowerCase();
   // What the selection sits in is open, so the tree always shows where the page is.
   const along = new Set(["pipelines", "warehouse"]);
@@ -81,7 +90,44 @@ export function CatalogTree({ code, doc, selected }: { code: string; doc: Catalo
         <Search aria-hidden className="pointer-events-none absolute left-2 top-2 size-4 text-muted" />
         <input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search pipelines, tables, columns" className="h-8 w-full rounded-md border border-border-strong bg-surface pl-8 pr-2 text-[13px]" />
       </label>
-      <ul role="tree" aria-label="Catalog objects" className="m-0 min-h-0 flex-1 list-none overflow-auto p-0">
+      <Roving.Provider value={{ active, first: catalogPath(code, "tables") }}>
+      <ul
+        role="tree"
+        aria-label="Catalog objects"
+        className="m-0 min-h-0 flex-1 list-none overflow-auto p-0"
+        onFocus={(event) => setActive((event.target as HTMLElement).dataset.key ?? null)}
+        onKeyDown={(event) => {
+          const item = (event.target as HTMLElement).closest<HTMLElement>("[role=treeitem]");
+          if (!item) return;
+          const items = [...event.currentTarget.querySelectorAll<HTMLElement>("[role=treeitem]")];
+          const at = items.indexOf(item);
+          const open = item.getAttribute("aria-expanded");
+          const go = (target: HTMLElement | undefined) => {
+            if (!target) return;
+            event.preventDefault();
+            target.focus();
+          };
+          if (event.key === "ArrowDown") go(items[at + 1]);
+          else if (event.key === "ArrowUp") go(items[at - 1]);
+          else if (event.key === "Home") go(items[0]);
+          else if (event.key === "End") go(items[items.length - 1]);
+          else if (event.key === "ArrowRight") {
+            if (open === "false") {
+              event.preventDefault();
+              item.click();
+            } else if (open === "true") go(items[at + 1]);
+          } else if (event.key === "ArrowLeft") {
+            if (open === "true") {
+              event.preventDefault();
+              item.click();
+            } else {
+              // The nearest group above this item that holds it.
+              const parent = item.closest("ul[role=group]")?.previousElementSibling as HTMLElement | null;
+              if (parent?.getAttribute("role") === "treeitem") go(parent);
+            }
+          }
+        }}
+      >
         <Leaf to={catalogPath(code, "tables")} label="All tables" icon={Table2} current={selected.kind === "tables" && !selected.name} />
         <Leaf to={catalogPath(code, "gaps")} label="Schema and lineage gaps" icon={TriangleAlert} current={selected.kind === "gaps"} />
         <Group id="pipelines" label={`Pipelines (${pipelines.length})`} icon={Workflow} open={expanded("pipelines")} toggle={toggle}>
@@ -106,6 +152,7 @@ export function CatalogTree({ code, doc, selected }: { code: string; doc: Catalo
           ))}
         </Group>
       </ul>
+      </Roving.Provider>
       {needle ? (
         <p className="m-0 px-1 text-xs text-muted" role="status">
           {found ? `${found} object${found === 1 ? "" : "s"} match` : "Nothing matches."}

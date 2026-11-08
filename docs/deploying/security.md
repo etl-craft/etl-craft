@@ -155,6 +155,33 @@ The session stores **group IDs**, so a rename keeps the identity and reusing a n
 transfer an old session's access to another group. Explicit Engine DB memberships are checked
 on every request as well.
 
+!!! warning "The ID token's nonce is optional"
+    The device flow (RFC 8628) has no nonce parameter, and Dex, Google and Keycloak do not echo one,
+    so etl-craft accepts an ID token that has no `nonce` claim. A `nonce` that is present must match
+    the one sent, or the sign-in is refused. The token still has to name the configured issuer, the
+    client as audience and authorized party, and be current. It is read from the issuer's token
+    endpoint over TLS in answer to this sign-in's one-time device code, not from a browser redirect,
+    which is the case a nonce exists to protect. The trade-off is that nothing ties the token to
+    this particular request beyond that exchange, so use only an issuer you trust, over HTTPS, and
+    keep the device code private.
+
+Names are set by an administrator, or by SSO claims at sign-in. With `Auth.Names_editable: true` each
+account may also edit its own first and last name in Personal settings (or with
+`etl-craft account settings --first-name --last-name`); with the default `false` the change is
+refused and the page shows no fields.
+
+SSO reads the `email`, `email_verified`, `given_name`, `family_name` and `name` claims (the device
+request asks for `openid email profile`). A sign-in refreshes the account's first name, last name
+and, only when the issuer marks it verified, its email.
+
+To invite someone before their provider subject is known, create the account with only an email
+(`etl-craft account add --name ada --role viewer --email ada@example.com --no-password`; without
+`--no-password` the command asks for a password, and an account with a password is never bound) and set
+`Auth.Oidc_bind_by_email: true`. The first SSO sign-in whose verified email matches exactly one
+active account with no password and no subject binds that subject to the account; the bind is
+recorded as a sign-in by that account. An unverified email, no match, or two matches is refused and
+left to an administrator, who can still register a subject with `--oidc-subject`.
+
 Refresh tokens are not rotated: the same token works until it expires or its session is
 signed out. A stolen refresh token can be used for that entire time. Use a short
 `Auth.Refresh_days` lifetime and run `etl-craft logout` for a lost device.

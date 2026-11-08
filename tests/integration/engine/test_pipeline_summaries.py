@@ -66,6 +66,7 @@ def test_list_gives_next_run_problems_and_the_five_newest_runs(engine_db):
     newest = views["DAILY"].recent_runs
     assert [r.pipeline_run_id for r in newest] == sorted(runs, reverse=True)[:5]
     assert newest[0].sla_status == "BREACHED" and newest[1].sla_status is None
+    assert all(r.start_date is not None for r in newest)  # a spark line needs each run's times
     assert views["MANUAL"].recent_runs == ()
 
 

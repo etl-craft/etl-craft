@@ -15,7 +15,20 @@ export function formatTime(iso: string | null, timeZone: string): string {
 
 export function formatDuration(start: string | null, end: string | null, now = Date.now()): string {
   if (!start) return "—";
-  const seconds = Math.max(0, Math.round(((end ? new Date(end).getTime() : now) - new Date(start).getTime()) / 1000));
+  return formatSeconds(((end ? new Date(end).getTime() : now) - new Date(start).getTime()) / 1000);
+}
+
+/** The run id in a run's address or search: the integer itself, or the integer ending a readable label such as SALES-2026-11-07 11:47:50-9. */
+export function runIdOf(value: string | null | undefined): number | undefined {
+  const text = (value ?? "").trim();
+  if (/^\d+$/.test(text)) return Number(text);
+  const label = /^.+-\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}-(\d+)$/.exec(text);
+  return label ? Number(label[1]) : undefined;
+}
+
+/** A length of time the way every duration is written: 45s, 2m 06s, 1h 05m. */
+export function formatSeconds(value: number): string {
+  const seconds = Math.max(0, Math.round(value));
   if (seconds < 60) return `${seconds}s`;
   const minutes = Math.floor(seconds / 60);
   if (minutes < 60) return `${minutes}m ${String(seconds % 60).padStart(2, "0")}s`;

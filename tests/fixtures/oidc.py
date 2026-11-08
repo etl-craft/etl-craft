@@ -38,7 +38,9 @@ def issuer(tmp_path, monkeypatch):
         def do_POST(self):
             data = parse_qs(self.rfile.read(int(self.headers["Content-Length"])).decode())
             state["requests"].append((self.path, data))
-            if self.path == "/device":
+            if self.path == "/device" and state.get("device_status"):
+                self.reply({"error": "invalid_client"}, state["device_status"])
+            elif self.path == "/device":
                 state["nonce"] = data["nonce"][0]
                 self.reply(
                     {
@@ -50,7 +52,7 @@ def issuer(tmp_path, monkeypatch):
                     }
                 )
             elif state["errors"]:
-                self.reply({"error": state["errors"].pop(0)})
+                self.reply({"error": state["errors"].pop(0)}, state.get("error_status", 200))
             else:
 
                 def encode(obj):
@@ -65,12 +67,14 @@ def issuer(tmp_path, monkeypatch):
                     "exp": time.time() + 60,
                     **state.get("extra_claims", {}),
                 }
+                for omitted in state.get("omit_claims", ()):
+                    claims.pop(omitted, None)
                 self.reply(
                     {"id_token": encode({"alg": "RS256"}) + "." + encode(claims) + ".signature"}
                 )
 
-        def reply(self, value):
-            self.send_response(200)
+        def reply(self, value, status=200):
+            self.send_response(status)
             self.send_header("Content-Type", "application/json")
             self.end_headers()
             self.wfile.write(json.dumps(value).encode())

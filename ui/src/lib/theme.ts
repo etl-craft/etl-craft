@@ -25,3 +25,26 @@ export function applyTheme(theme: Theme, remember = false): void {
     /* the choice lasts for this page only */
   }
 }
+
+export type Density = "compact" | "default" | "comfortable";
+const DENSITY_KEY = "etl-craft-density";
+
+export function storedDensity(): Density {
+  try {
+    const value = window.localStorage.getItem(DENSITY_KEY);
+    return value === "compact" || value === "comfortable" ? value : "default";
+  } catch {
+    return "default";
+  }
+}
+
+/** Row height for every table, kept in this browser only. */
+export function applyDensity(density: Density, remember = false): void {
+  document.documentElement.dataset.density = density;
+  if (!remember) return;
+  try {
+    window.localStorage.setItem(DENSITY_KEY, density);
+  } catch {
+    /* the choice lasts for this page only */
+  }
+}

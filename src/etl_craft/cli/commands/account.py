@@ -25,6 +25,13 @@ def _configure(parser: argparse.ArgumentParser) -> None:
         required=True,
     )
     add.add_argument("--email")
+    add.add_argument(
+        "--no-password",
+        action="store_true",
+        help="Invite by email: no password is set, and SSO binds the account at first sign-in.",
+    )
+    add.add_argument("--first-name")
+    add.add_argument("--last-name")
     add.add_argument("--oidc-subject")
     configure_output(add)
     configure_output(
@@ -52,6 +59,8 @@ def _configure(parser: argparse.ArgumentParser) -> None:
     settings.add_argument("--default-project")
     settings.add_argument("--page-size", type=int)
     settings.add_argument("--time-display", type=TimeDisplay, choices=tuple(TimeDisplay))
+    settings.add_argument("--first-name", help="Your first name; needs Auth.Names_editable.")
+    settings.add_argument("--last-name", help="Your last name; needs Auth.Names_editable.")
     configure_output(settings)
 
 
@@ -73,7 +82,7 @@ def _run(args: argparse.Namespace, out: Output) -> int:
         out.result(saved, args.output_format, text=lambda: out.line("Personal settings saved."))
         return 0
     if args.account_verb == "add":
-        user = args.kind == AccountKind.USER and not args.oidc_subject
+        user = args.kind == AccountKind.USER and not args.oidc_subject and not args.no_password
         request: object = request_from(
             args, accounts.AccountAdd, password=password(confirm=True) if user else None
         )
@@ -94,7 +103,8 @@ def _run(args: argparse.Namespace, out: Output) -> int:
         done,
         args.output_format,
         text=lambda: out.rows(
-            (a.name, a.kind, a.role, a.active_flag, a.email) for a in done.accounts
+            (a.name, a.kind, a.role, a.active_flag, a.email, a.first_name, a.last_name)
+            for a in done.accounts
         ),
     )
     return 0

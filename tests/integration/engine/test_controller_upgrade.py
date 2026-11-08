@@ -81,7 +81,7 @@ def test_controller_upgrade_preserves_closed_and_unclosed_history(
             .all()
         )
     assert after == before
-    current = controllers.start(db.engine)
+    current = controllers.start(db.engine, "SCHEDULE|ALWAYS")
     assert current > max(row["controller_id"] for row in before)
     controllers.heartbeat(db.engine, current, stopped=True)
     assert migrations.apply_pending_migrations(db.engine) == []

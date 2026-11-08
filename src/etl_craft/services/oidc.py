@@ -49,7 +49,9 @@ def _endpoint(value: object) -> str:
     )
 
 
-def _request(url: str, data: dict[str, str] | None = None) -> dict[str, object]:
+def _request(
+    url: str, data: dict[str, str] | None = None, *, error_statuses: tuple[int, ...] = (400,)
+) -> dict[str, object]:
     url = _endpoint(url)
     location = url.partition("?")[0]
     request = Request(
@@ -61,7 +63,9 @@ def _request(url: str, data: dict[str, str] | None = None) -> dict[str, object]:
         try:
             response = build_opener(_NoRedirects()).open(request, timeout=15)
         except HTTPError as error:
-            if data is None or error.code != 400:
+            # RFC 8628 answers a pending or slowed poll with 400; Dex uses 401. The caller names
+            # which statuses carry an OAuth error in the body.
+            if data is None or error.code not in error_statuses:
                 raise ConfigurationError(
                     f"OIDC endpoint {location}: HTTP {error.code}; check provider configuration"
                 ) from error
@@ -144,7 +148,7 @@ def start_device(auth: AuthConfig) -> DeviceGrant:
     nonce = secrets.token_urlsafe(32)
     device = _request(
         _text(metadata, "device_authorization_endpoint"),
-        {"client_id": client, "scope": "openid", "nonce": nonce},
+        {"client_id": client, "scope": "openid email profile", "nonce": nonce},
     )
     return DeviceGrant(
         user_code=_text(device, "user_code"),
@@ -158,10 +162,14 @@ def start_device(auth: AuthConfig) -> DeviceGrant:
 
 @dataclass(frozen=True)
 class IdentityClaims:
-    """The subject and group names from the validated issuer response."""
+    """The subject, profile and group names from the validated issuer response."""
 
     subject: str
     groups: tuple[str, ...] = ()
+    email: str | None = None
+    email_verified: bool = False
+    first_name: str | None = None
+    last_name: str | None = None
 
 
 def poll_device(auth: AuthConfig, device_code: str, nonce: str) -> IdentityClaims | int:
@@ -174,6 +182,8 @@ def poll_device(auth: AuthConfig, device_code: str, nonce: str) -> IdentityClaim
             "device_code": device_code,
             "grant_type": "urn:ietf:params:oauth:grant-type:device_code",
         },
+        # Only a poll can be pending; any other 401 stays the plain HTTP failure.
+        error_statuses=(400, 401),
     )
     error = response.get("error")
     if error == "authorization_pending":
@@ -189,7 +199,31 @@ def poll_device(auth: AuthConfig, device_code: str, nonce: str) -> IdentityClaim
             f"OIDC claim {auth.oidc_groups_claim!r}={groups!r}; expected a list of group names; "
             "correct the provider claim mapping"
         )
-    return IdentityClaims(_text(claims, "sub"), tuple(groups))
+    first, last = _person(claims)
+    email = claims.get("email")
+    return IdentityClaims(
+        _text(claims, "sub"),
+        tuple(groups),
+        email.strip() if isinstance(email, str) and email.strip() else None,
+        claims.get("email_verified") is True,
+        first,
+        last,
+    )
+
+
+def _person(claims: dict[str, object]) -> tuple[str | None, str | None]:
+    """Return the given and family names, or the full name split at its last space."""
+
+    def clean(key: str) -> str | None:
+        value = claims.get(key)
+        return value.strip()[:128] if isinstance(value, str) and value.strip() else None
+
+    first, last = clean("given_name"), clean("family_name")
+    full = clean("name")
+    if first is None and last is None and full is not None:
+        head, _, tail = full.rpartition(" ")
+        return (head, tail) if head else (full, None)
+    return first, last
 
 
 def _claims(token: str, issuer: str, client: str, nonce: str) -> dict[str, object]:
@@ -209,9 +243,14 @@ def _claims(token: str, issuer: str, client: str, nonce: str) -> dict[str, objec
         raise ConfigurationError(
             "OIDC ID token: expected a signed RS256 token; check client registration"
         )
-    for key, expected in (("iss", issuer), ("nonce", nonce), ("azp", client)):
+    for key, expected in (("iss", issuer), ("azp", client)):
         found = claims.get(key, client if key == "azp" else None)
         _check_claim(key, found, expected)
+    # The device flow (RFC 8628) has no nonce parameter, so an issuer such as Dex may leave the
+    # claim out; the token still came straight from the token endpoint for this device code. A
+    # nonce that is present must be ours.
+    if "nonce" in claims:
+        _check_claim("nonce", claims["nonce"], nonce)
     if claims.get("aud") not in (client, [client]):
         _check_claim("aud", claims.get("aud"), client)
     now = time.time()

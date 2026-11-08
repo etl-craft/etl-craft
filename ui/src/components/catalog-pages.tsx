@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { Copy, Table2, Workflow, ListChecks, TriangleAlert } from "lucide-react";
+import { ChevronDown, Copy, Table2, Workflow, ListChecks, TriangleAlert } from "lucide-react";
 import * as React from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Fact, FactList, Loading, Notice, SelectField } from "@/components/common";
@@ -19,6 +19,7 @@ import { describeCron, formatDuration, formatTime } from "@/lib/format";
 import { catalogPath, pipelinePath, taskPath } from "@/lib/routes";
 import type { RunView, TablePreview } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { DropdownContent, DropdownItem, DropdownMenu, DropdownTrigger } from "@/components/dropdown";
 
 const link = "text-accent hover:underline";
 
@@ -84,6 +85,26 @@ function ObjectPage({ header, fit, children }: { header: React.ReactNode; fit?: 
   );
 }
 
+/** One task is a link to it; several are a menu of links, so every count in a header leads somewhere. */
+function LinkMenu({ code, labels, kind }: { code: string; labels: string[]; kind: "tasks" | "tables" }) {
+  if (labels.length === 0) return <>none</>;
+  if (labels.length === 1) return <Link className={link} to={catalogPath(code, kind, labels[0]!)}>{labels[0]}</Link>;
+  return (
+    <DropdownMenu>
+      <DropdownTrigger className={cn("inline-flex cursor-pointer items-center gap-0.5", link)}>
+        {labels.length} {kind} <ChevronDown className="size-3" aria-hidden />
+      </DropdownTrigger>
+      <DropdownContent align="start" className="max-h-80 min-w-64 overflow-auto">
+        {labels.map((label) => (
+          <DropdownItem key={label} asChild>
+            <Link to={catalogPath(code, kind, label)}>{label}</Link>
+          </DropdownItem>
+        ))}
+      </DropdownContent>
+    </DropdownMenu>
+  );
+}
+
 const Links = ({ code, labels, kind }: { code: string; labels: string[]; kind: "tasks" | "tables" }) =>
   labels.length ? (
     <span className="flex min-w-0 flex-wrap gap-x-3 gap-y-0.5 break-all">
@@ -126,7 +147,7 @@ export function CatalogHome({ code, doc }: { code: string; doc: CatalogDoc }) {
   const unwritten = tables.filter((t) => t.writers.length === 0);
   const open = doc.gaps.filter(isOpenGap);
   const tile = (label: string, value: number | string) => (
-    <div className="grid gap-1 rounded-lg border border-border bg-surface p-3">
+    <div data-card className="grid gap-1 rounded-sm border border-border bg-surface p-3">
       <span className="text-xs text-muted">{label}</span>
       <span className="text-2xl font-semibold">{value}</span>
     </div>
@@ -222,7 +243,7 @@ export function PipelineObject({ code, doc, name, tab, onTab }: { code: string; 
                 <Fact label="Tags">
                   <span className="flex flex-wrap gap-1">
                     {pipeline.tags.map((tag) => (
-                      <span key={tag} className="rounded bg-idle-bg px-1.5 py-0.5 text-xs text-idle">
+                      <span key={tag} className="rounded-sm bg-idle-bg px-1.5 py-0.5 text-xs text-idle">
                         {tag}
                       </span>
                     ))}
@@ -236,7 +257,7 @@ export function PipelineObject({ code, doc, name, tab, onTab }: { code: string; 
           </aside>
         </div>
       ) : on === "lineage" ? (
-        <div className="h-[28rem] overflow-hidden rounded-lg border border-border">
+        <div data-card className="h-[28rem] overflow-hidden rounded-sm border border-border">
           <RunGraph fill plain graph={graph} statuses={{}} focused={focused} onFocus={setFocused} onOpen={(task) => navigate(catalogPath(code, "tasks", `${pipeline.code}.${task}`))} />
         </div>
       ) : (
@@ -360,7 +381,7 @@ function TableData({ code, table }: { code: string; table: string }) {
         {data.length ? `${more ? `The first ${limit} rows` : `${data.length} row${data.length === 1 ? "" : "s"}`}, read from the warehouse now. Long values are cut.` : "The table has no rows."}
       </p>
       {data.length ? (
-        <div className="max-h-[calc(100dvh-22rem)] overflow-auto rounded-lg border border-border">
+        <div data-card className="max-h-[calc(100dvh-22rem)] overflow-auto rounded-sm border border-border">
           <DataTable
             label="Rows"
             data={data}
@@ -393,7 +414,7 @@ export function TableObject({ code, doc, name, tab, onTab }: { code: string; doc
   const tabs = [
     { id: "overview", label: "Overview" },
     ...(developer ? [{ id: "data", label: "Data" }] : []),
-    { id: "lineage", label: "Lineage" },
+    { id: "lineage", label: "Object lineage" },
     { id: "columns", label: "Column lineage" },
     { id: "history", label: "History" },
     { id: "quality", label: "Quality" },
@@ -401,8 +422,15 @@ export function TableObject({ code, doc, name, tab, onTab }: { code: string; doc
   const on = tabs.some((t) => t.id === tab) ? tab : "overview";
   const shown = table.columns.filter((c) => !filter || `${c.name} ${c.comment ?? ""} ${typeOf(c)}`.toLowerCase().includes(filter.toLowerCase()));
   const edges = doc.column_edges.filter((e) => e.target_object === table.name && (!column || e.target_column === column));
-  const lastWrite = writers.flatMap((w) => w.runs).filter((r) => r.end).sort((a, b) => (b.end ?? "").localeCompare(a.end ?? ""))[0];
-  const lastRun = writers.flatMap((w) => w.runs).sort((a, b) => (b.start ?? "").localeCompare(a.start ?? ""))[0];
+  const everyRun = writers.flatMap((w) => w.runs.map((r) => ({ ...r, pipeline: w.pipeline })));
+  const lastWrite = everyRun.filter((r) => r.end).sort((a, b) => (b.end ?? "").localeCompare(a.end ?? ""))[0];
+  const lastRun = everyRun.sort((a, b) => (b.start ?? "").localeCompare(a.start ?? ""))[0];
+  const runLink = (r: { pipeline: string; pipeline_run_id: number }) => `${pipelinePath(code, r.pipeline)}?run=${r.pipeline_run_id}`;
+  const toTab = (id: string, label: string, children: React.ReactNode) => (
+    <button type="button" className="cursor-pointer text-accent hover:underline" title={`Open ${label}`} onClick={() => onTab(id)}>
+      {children}
+    </button>
+  );
   const failingRules = rules.filter((r) => r.observations[0]?.passed === "N").length;
   const openGaps = doc.gaps.filter((g) => g.table === table.name && isOpenGap(g)).length;
   const history = writers.flatMap((w) => w.runs.map((r) => ({ ...r, task: w.label, pipeline: w.pipeline }))).sort((a, b) => (b.start ?? "").localeCompare(a.start ?? "")).slice(0, 30);
@@ -413,21 +441,29 @@ export function TableObject({ code, doc, name, tab, onTab }: { code: string; doc
       <Title icon={Table2} name={table.table} copy={table.name} />
       <FactList inline>
         <Fact inline label="Last written">
-          {lastWrite?.end ? <When iso={lastWrite.end} now={now} /> : "no run recorded"}
+          {lastWrite?.end ? (
+            <Link className="text-accent hover:underline" to={runLink(lastWrite)} title={`Open run ${lastWrite.pipeline_run_id} of ${lastWrite.pipeline}`}>
+              <When iso={lastWrite.end} now={now} />
+            </Link>
+          ) : (
+            "no run recorded"
+          )}
         </Fact>
         {lastRun ? (
           <Fact inline label="Last write">
-            <StatusBadge status={lastRun.status} />
+            <Link to={runLink(lastRun)} title={`Open run ${lastRun.pipeline_run_id} of ${lastRun.pipeline}`}>
+              <StatusBadge status={lastRun.status} />
+            </Link>
           </Fact>
         ) : null}
         <Fact inline label="Rules">
-          {rules.length ? <span className={failingRules ? "text-bad" : undefined}>{failingRules ? `${failingRules} failing of ${rules.length}` : `${rules.length} passing`}</span> : "no checks"}
+          {rules.length ? toTab("quality", "the rule results", failingRules ? `${failingRules} failing of ${rules.length}` : `${rules.length} passing`) : "no checks"}
         </Fact>
         <Fact inline label="Open gaps">
-          {openGaps ? <span className="text-warn">{openGaps}</span> : "none"}
+          {openGaps ? toTab("quality", "the gaps", openGaps) : "none"}
         </Fact>
-        <Fact inline label="Written by">{table.writers.length} task{table.writers.length === 1 ? "" : "s"}</Fact>
-        <Fact inline label="Read by">{table.readers.length} task{table.readers.length === 1 ? "" : "s"}</Fact>
+        <Fact inline label="Written by"><LinkMenu code={code} labels={table.writers} kind="tasks" /></Fact>
+        <Fact inline label="Read by"><LinkMenu code={code} labels={table.readers} kind="tasks" /></Fact>
       </FactList>
       <Tabs tabs={tabs} value={on} onChange={onTab} />
       </>
@@ -451,7 +487,7 @@ export function TableObject({ code, doc, name, tab, onTab }: { code: string; doc
                   label="Columns"
                   data={shown}
                   columns={columnsOf<CatalogColumn>([
-                    { id: "column", header: "Column", value: (c) => c.name, size: 260, cell: (c) => <span className="font-mono text-xs font-medium">{c.name}{c.engine_managed ? <span className="ml-1.5 rounded bg-idle-bg px-1 text-[10px] text-idle">engine</span> : null}</span> },
+                    { id: "column", header: "Column", value: (c) => c.name, size: 260, cell: (c) => <span className="font-mono text-xs font-medium">{c.name}{c.engine_managed ? <span className="ml-1.5 rounded-sm bg-idle-bg px-1 text-[10px] text-idle">engine</span> : null}</span> },
                     { id: "type", header: "Type", value: (c) => typeOf(c), size: 200, cell: (c) => <span className="font-mono text-xs">{typeOf(c)}</span> },
                     { id: "declared", header: "Declared", value: (c) => c.declared_type ?? "", size: 200, cell: (c) => <span className={c.declared_type && c.warehouse_type && c.declared_type.toLowerCase() !== c.warehouse_type.toLowerCase() ? "font-mono text-xs text-warn" : "font-mono text-xs text-muted"}>{c.declared_type ?? "—"}</span> },
                     { id: "nullable", header: "Nullable", value: (c) => c.warehouse_nullable ?? c.declared_nullable ?? "", size: 100, cell: (c) => <span className="text-muted">{c.warehouse_nullable ?? c.declared_nullable ?? "—"}</span> },
@@ -499,7 +535,7 @@ export function TableObject({ code, doc, name, tab, onTab }: { code: string; doc
             </SelectField>
             <div role="group" aria-label="Lineage view" className="inline-flex rounded-md border border-border p-0.5 text-sm">
               {([false, true] as const).map((list) => (
-                <button key={String(list)} type="button" aria-pressed={asList === list} onClick={() => setAsList(list)} className={cn("cursor-pointer rounded px-2.5 py-1", asList === list ? "bg-accent/15 font-medium text-fg" : "text-muted hover:text-fg")}>
+                <button key={String(list)} type="button" aria-pressed={asList === list} onClick={() => setAsList(list)} className={cn("cursor-pointer rounded-sm px-2.5 py-1", asList === list ? "bg-accent/15 font-medium text-fg" : "text-muted hover:text-fg")}>
                   {list ? "List" : "Graph"}
                 </button>
               ))}
@@ -519,7 +555,7 @@ export function TableObject({ code, doc, name, tab, onTab }: { code: string; doc
               ])}
             />
           ) : (
-            <div className="min-h-72 flex-1 overflow-hidden rounded-lg border border-border">
+            <div data-card className="min-h-72 flex-1 overflow-hidden rounded-sm border border-border">
               <RunGraph fill plain graph={tableLineage(doc, table.name, Number(depth), direction)} statuses={{}} focused={focused ?? table.name} onFocus={setFocused} onOpen={(next) => navigate(catalogPath(code, "tables", next))} />
             </div>
           )}
@@ -549,7 +585,7 @@ export function TableObject({ code, doc, name, tab, onTab }: { code: string; doc
               data={history}
               columns={columnsOf<(typeof history)[number]>([
                 { id: "task", header: "Task", value: (r) => r.task, size: 280, cell: (r) => <Link className={link} to={catalogPath(code, "tasks", r.task)}>{r.task}</Link> },
-                { id: "run", header: "Run", value: (r) => r.pipeline_run_id, size: 90, cell: (r) => <span className="num">#{r.pipeline_run_id}</span> },
+                { id: "run", header: "Run", value: (r) => r.pipeline_run_id, size: 90, cell: (r) => <Link className={`num ${link}`} to={`${pipelinePath(code, r.pipeline)}?run=${r.pipeline_run_id}`}>#{r.pipeline_run_id}</Link> },
                 { id: "status", header: "Status", value: (r) => r.status, size: 130, cell: (r) => <StatusBadge status={r.status} /> },
                 { id: "started", header: "Started", value: (r) => r.start, size: 190, cell: (r) => formatTime(r.start, tz) },
                 { id: "duration", header: "Duration", value: (r) => (r.start && r.end ? new Date(r.end).getTime() - new Date(r.start).getTime() : null), size: 110, cell: (r) => formatDuration(r.start, r.end) },
@@ -599,7 +635,7 @@ export function TableObject({ code, doc, name, tab, onTab }: { code: string; doc
 
 function GapRows({ code, gaps }: { code: string; gaps: CatalogDoc["gaps"] }) {
   return (
-    <DataTable
+    <DataTable find
       label="Gaps"
       data={gaps}
       columns={columnsOf<CatalogDoc["gaps"][number]>([

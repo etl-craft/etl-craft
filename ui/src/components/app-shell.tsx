@@ -61,6 +61,7 @@ export function AppShell() {
   const [collapsed, setCollapsed] = React.useState(() => readCollapsed());
   React.useEffect(() => applyTheme(theme), [theme]);
   const mustChange = identity.data?.must_change_password;
+  const person = [identity.data?.first_name, identity.data?.last_name].filter(Boolean).join(" ") || undefined;
   React.useEffect(() => {
     if (mustChange && location.pathname !== passwordPath) navigate(passwordPath, { replace: true });
   }, [mustChange, location.pathname, navigate]);
@@ -122,13 +123,13 @@ export function AppShell() {
           <DropdownMenu>
             <DropdownTrigger asChild>
               <Button variant="ghost" size="sm" aria-label="Account menu">
-                {identity.data?.name ?? "Account"}
+                {person ?? identity.data?.name ?? "Account"}
                 <ChevronDown className="size-3.5" aria-hidden />
               </Button>
             </DropdownTrigger>
             <DropdownContent>
               <DropdownLabel>
-                {identity.data ? `${identity.data.name} · ${identity.data.role}` : "Signed in"}
+                {identity.data ? `${person ? `${person} (${identity.data.name})` : identity.data.name} · ${identity.data.role}` : "Signed in"}
                 {identity.data?.project_permission ? ` · ${identity.data.project_permission}` : ""}
               </DropdownLabel>
               <DropdownItem asChild>
@@ -172,7 +173,7 @@ export function AppShell() {
           />
         </aside>
         <main id="main" data-scroll-area className={cn("min-w-0 flex-1 overflow-y-auto", fill && "lg:overflow-hidden")}>
-          <div className={cn("w-full px-3 py-3 sm:px-4", fill ? "flex min-h-full flex-col gap-2 lg:h-full lg:min-h-0" : "mx-auto max-w-[1920px] py-4")}>
+          <div data-edge="" data-fill={fill ? "" : undefined} className={cn("w-full", fill ? "flex min-h-full flex-col lg:h-full lg:min-h-0" : "min-h-full")}>
             {unavailable && ready ? (
               <Notice>
                 Project {addressed} is not available: it is disabled, or this account cannot see it. Choose another project from the menu above.

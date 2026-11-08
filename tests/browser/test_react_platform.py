@@ -80,13 +80,14 @@ def test_settings_save_and_the_password_change_ends_the_session(scene):
     with sync_playwright() as pw:
         browser, page, problems = open_page(pw)
         sign_in(page, url, "/ui/settings")
+        expect(page.get_by_label("First name")).to_have_count(0)  # names are not editable here
         save = page.get_by_role("button", name="Save settings")
         expect(save).to_be_disabled()
-        page.get_by_label("Page size (1 to 100)").fill("30")
+        page.get_by_label("Page size").fill("30")
         save.click()
         expect(page.get_by_role("status").filter(has_text="Settings saved.")).to_be_visible()
         page.reload()
-        expect(page.get_by_label("Page size (1 to 100)")).to_have_value("30")
+        expect(page.get_by_label("Page size")).to_have_value("30")
         page.goto(url + "/ui/password")
         page.get_by_label("Current password").fill("wrong wrong wrong")
         page.get_by_label("New password", exact=True).fill("another correct horse")
@@ -199,6 +200,15 @@ def test_the_pages_render_cleanly_in_both_themes_and_on_a_phone(scene, scheme, w
         "accounts": "/ui/admin?tab=accounts",
         "projects-admin": "/ui/admin?tab=projects",
         "maintenance": "/ui/projects/default/maintenance",
+        "pipelines": "/ui/projects/default/pipelines",
+        "runs": "/ui/projects/default/runs",
+        "scheduled": "/ui/projects/default/scheduled",
+        "held": "/ui/projects/default/held",
+        "uploads": "/ui/projects/default/uploads",
+        "console": "/ui/projects/default/console",
+        "catalog": "/ui/projects/default/catalog",
+        "password": "/ui/password",
+        "projects": "/ui/projects",
     }
     with sync_playwright() as pw:
         browser, page, problems = open_page(
@@ -209,6 +219,10 @@ def test_the_pages_render_cleanly_in_both_themes_and_on_a_phone(scene, scheme, w
             page.goto(url + path)
             page.wait_for_load_state("networkidle")
             expect(page.locator("main")).to_be_visible()
+            if name != "projects":  # the project chooser is a root page
+                expect(
+                    page.locator("main").get_by_role("button", name="Back").first
+                ).to_be_visible()
             overflow = page.evaluate("document.documentElement.scrollWidth - window.innerWidth")
             assert overflow <= 0, f"{name} scrolls sideways by {overflow}px at {width}px"
             shoot(page, f"{name}-{scheme}-{width}")

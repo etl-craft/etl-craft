@@ -39,7 +39,7 @@ export function TagFilter({ known, selected, onToggle, onClear }: { known: strin
           <ul className="m-0 grid max-h-64 list-none gap-0.5 overflow-auto p-0">
             {matches.slice(0, LISTED).map((tag) => (
               <li key={tag}>
-                <label className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-sm hover:bg-surface-2">
+                <label className="flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1 text-sm hover:bg-surface-2">
                   <input type="checkbox" checked={selected.includes(tag)} onChange={() => onToggle(tag)} className="size-4 accent-[var(--accent)]" />
                   <span className="truncate">{tag}</span>
                 </label>

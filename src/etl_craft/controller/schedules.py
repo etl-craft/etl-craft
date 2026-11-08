@@ -2,16 +2,18 @@
 
 from __future__ import annotations
 
+import logging
 import threading
 from collections import deque
 from datetime import datetime
 
-from sqlalchemy.engine import Engine
+from sqlalchemy.engine import Engine, Row
 
 from etl_craft.controller.catalog import CatalogSchedule
 from etl_craft.core.actor import acting_as, current_actor
 from etl_craft.core.calendars import Tick
 from etl_craft.core.enums import InterventionAction, RunStatus, TriggerKind, YesNo
+from etl_craft.core.errors import MetadataFileError
 from etl_craft.core.restart import schedule_allowed
 from etl_craft.engine.queries import statement
 from etl_craft.engine.repository.intervention_rows import record_intervention
@@ -19,6 +21,8 @@ from etl_craft.engine.run_creation import RunCreation, create
 from etl_craft.engine.schedule_ticks import cursor as schedule_cursor
 from etl_craft.engine.schedule_ticks import schedule as pipeline_schedule
 from etl_craft.services.operations import OperationContext
+
+logger = logging.getLogger("etl_craft.controller.schedules")
 
 
 class Schedules:
@@ -28,6 +32,19 @@ class Schedules:
         """Start with no deadlines until the Engine DB has been read."""
         self.catalog = CatalogSchedule()
         self.deadlines: dict[int, tuple[tuple[object, ...], datetime]] = {}
+        self.reported: set[int] = set()
+
+    def _project_allows(self, row: Row[tuple[object, ...]]) -> bool:
+        """Whether the project's setting lets ticks start runs; a value that is not one stops it."""
+        try:
+            return schedule_allowed(str(row.project_allowed))
+        except MetadataFileError as error:
+            if row.pipeline_id not in self.reported:
+                self.reported.add(row.pipeline_id)
+                logger.error(
+                    "pipeline %s: no scheduled runs; project setting: %s", row.pipeline_code, error
+                )
+            return False
 
     def refresh(
         self, ctx: OperationContext, now: datetime, stop: threading.Event | None = None
@@ -53,7 +70,11 @@ class Schedules:
         for row in rows:
             if stop is not None and stop.is_set():
                 return
-            if row.run_schedule is None or row.pipeline_id in paused:
+            if (
+                row.run_schedule is None
+                or row.pipeline_id in paused
+                or not self._project_allows(row)
+            ):
                 continue
             zone, cursor = schedule_cursor(row._mapping, row.project_timezone, now)
             with ctx.engine.connect() as conn:

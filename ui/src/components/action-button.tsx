@@ -24,6 +24,7 @@ export function ActionButton<TResult>({
   icon,
   variant = "outline",
   size,
+  menu,
 }: {
   /** The project the action changes; absent for platform actions such as agents and accounts. */
   code?: string;
@@ -43,9 +44,13 @@ export function ActionButton<TResult>({
   icon?: React.ReactNode;
   variant?: ButtonProps["variant"];
   size?: ButtonProps["size"];
+  /** Set when a menu opens the confirmation: no button is drawn and the menu owns whether the dialog is open. */
+  menu?: { open: boolean; setOpen: (open: boolean) => void };
 }) {
   const info = useProjectInfo(code).project;
-  const [open, setOpen] = React.useState(false);
+  const [own, setOwn] = React.useState(false);
+  const open = menu ? menu.open : own;
+  const setOpen = menu ? menu.setOpen : setOwn;
   const toast = useToast();
   const write = useWrite<TResult>((code ? project(code) : "/api/v1") + endpoint, (result) => {
     toast(describe(result));
@@ -55,6 +60,7 @@ export function ActionButton<TResult>({
   if (code && !info) return null;
   return (
     <div className="grid justify-items-end gap-2">
+      {menu ? null : (
       <Button
         variant={variant}
         size={size}
@@ -66,6 +72,7 @@ export function ActionButton<TResult>({
         {icon}
         {label}
       </Button>
+      )}
       <ConfirmDialog
         open={open}
         title={title}

@@ -1,3 +1,3 @@
 SELECT ACCOUNT_ID AS account_id, ACCOUNT_NAME AS name, ACCOUNT_KIND AS kind,
-ROLE AS role, EMAIL AS email, OIDC_SUBJECT AS oidc_subject, ACTIVE_FLAG AS active_flag
+ROLE AS role, EMAIL AS email, FIRST_NAME AS first_name, LAST_NAME AS last_name, OIDC_SUBJECT AS oidc_subject, ACTIVE_FLAG AS active_flag
 FROM CFG_ACCOUNTS ORDER BY ACCOUNT_NAME

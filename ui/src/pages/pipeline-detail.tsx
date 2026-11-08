@@ -17,8 +17,9 @@ import { useRuns } from "@/components/runs-table";
 import { Tabs } from "@/components/tabs";
 import { SplitPane } from "@/components/split-pane";
 import { Card } from "@/components/ui/card";
-import { useCanRun, useProjectInfo, useTimezone } from "@/hooks";
-import { describeCron, formatTime } from "@/lib/format";
+import { autoStarts } from "@/lib/auto-starts";
+import { useAutoStarts, useCanRun, useProjectInfo, useTimezone } from "@/hooks";
+import { describeCron, formatDuration, formatTime, runIdOf } from "@/lib/format";
 import { getJson, project } from "@/lib/api";
 import { pipelinesPath, taskPath } from "@/lib/routes";
 import { cn } from "@/lib/utils";
@@ -35,7 +36,8 @@ export function PipelineDetail() {
   const hideBars = params.get("bars") === "off";
   const byTime = params.get("columns") === "time";
   const flow = params.get("flow") === "lr" ? "LR" : params.get("flow") === "tb" ? "TB" : undefined;
-  const chosen = /^\d+$/.test(params.get("run") ?? "") ? Number(params.get("run")) : undefined;
+  const asLabel = params.get("run") ?? "";
+  const chosen = runIdOf(asLabel);
   const task = params.get("task");
   const filters = { pool: params.get("pool") ?? "", agent: params.get("agent") ?? "", failure_class: params.get("failure_class") ?? "" };
   const setFilter = (key: string, value: string) => {
@@ -78,6 +80,8 @@ export function PipelineDetail() {
   const outside = selected !== undefined && !gridRuns.some((r) => r.pipeline_run_id === selected);
   const extraRun = useQuery({ queryKey: ["run", code, selected], queryFn: () => getJson<RunView>(`${project(code)}/runs/${selected}`), enabled: outside });
   useDocumentTitle(selected === undefined ? pipeline : `${pipeline} #${selected}`, code, info.project && { type: info.project.environment_type, name: info.project.environment_name });
+  const starts = autoStarts(useAutoStarts(), info.project?.allowed_auto_restarts);
+  const selectedRun = [...runs, ...(extraRun.data ? [extraRun.data] : [])].find((r) => r.pipeline_run_id === selected);
   const steps = useQuery({
     queryKey: ["steps", code, pipeline, selected],
     queryFn: () => getJson<Steps>(`${project(code)}/steps`, { pipeline_code: pipeline, run_id: selected }),
@@ -198,7 +202,7 @@ export function PipelineDetail() {
                 "None yet"
               )}
             </Fact>
-            <Fact inline label="Next run">{p.next_run ? formatTime(p.next_run, tz) : (p.restart_note ?? "—")}</Fact>
+            <Fact inline label="Next run">{starts && !starts.schedule ? <span className="text-muted" title="Schedules are switched off here by the controller or the project">Not started here</span> : p.next_run ? formatTime(p.next_run, tz) : (p.restart_note ?? "—")}</Fact>
             <Fact inline label="Refresh">{p.refresh_type.toLowerCase()}</Fact>
             {p.sla_in_hours ? <Fact inline label="SLA">{p.sla_in_hours} h</Fact> : null}
             {p.tags.length ? <Fact inline label="Tags">{p.tags.join(", ")}</Fact> : null}
@@ -207,6 +211,11 @@ export function PipelineDetail() {
           <Loading what="pipeline" />
         )}
       </PageHeader>
+      {!/^\d*$/.test(asLabel) && selectedRun?.run_label && selectedRun.run_label !== asLabel ? (
+        <Notice className="mx-3 my-2">
+          The address names run {asLabel}, but run {selectedRun.pipeline_run_id} is {selectedRun.run_label}; the label in the address is stale or mistyped.
+        </Notice>
+      ) : null}
       <SplitPane
         id="pipeline"
         className="lg:min-h-0 lg:flex-1"
@@ -215,7 +224,7 @@ export function PipelineDetail() {
           <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5 border-b border-border px-3 py-2">
             <div role="group" aria-label="Run view" className="inline-flex rounded-md border border-border p-0.5 text-sm">
               {(["grid", "graph"] as const).map((id) => (
-                <button key={id} type="button" aria-pressed={view === id} onClick={() => choose("view", id === "grid" ? null : id)} className={cn("cursor-pointer rounded px-2.5 py-0.5", view === id ? "bg-accent/15 font-medium text-fg" : "text-muted hover:text-fg")}>
+                <button key={id} type="button" aria-pressed={view === id} onClick={() => choose("view", id === "grid" ? null : id)} className={cn("cursor-pointer rounded-sm px-2.5 py-0.5", view === id ? "bg-accent/15 font-medium text-fg" : "text-muted hover:text-fg")}>
                   {id === "grid" ? "Grid" : "Graph"}
                 </button>
               ))}
@@ -223,7 +232,7 @@ export function PipelineDetail() {
             {view === "graph" ? (
               <div role="group" aria-label="Graph direction" className="inline-flex rounded-md border border-border p-0.5 text-xs">
                 {([["LR", "Horizontal"], ["TB", "Vertical"]] as const).map(([id, label]) => (
-                  <button key={id} type="button" aria-pressed={flow === id} title={flow === id ? `${label}; select again for automatic` : label} onClick={() => choose("flow", flow === id ? null : id.toLowerCase())} className={cn("cursor-pointer rounded px-2 py-0.5", flow === id ? "bg-accent/15 font-medium text-fg" : "text-muted hover:text-fg")}>
+                  <button key={id} type="button" aria-pressed={flow === id} title={flow === id ? `${label}; select again for automatic` : label} onClick={() => choose("flow", flow === id ? null : id.toLowerCase())} className={cn("cursor-pointer rounded-sm px-2 py-0.5", flow === id ? "bg-accent/15 font-medium text-fg" : "text-muted hover:text-fg")}>
                     {label}
                   </button>
                 ))}
@@ -270,7 +279,16 @@ export function PipelineDetail() {
             ) : view === "grid" ? (
               <RunGrid code={code} pipeline={pipeline} graph={graph.data} runs={gridRuns} extra={outside && extraRun.data?.pipeline_code === pipeline ? extraRun.data : undefined} selected={selected} onSelect={select} bars={!hideBars} labels={byTime ? "time" : "id"} />
             ) : (
-              <div className="absolute inset-0">
+              <div className="absolute inset-0 flex flex-col">
+              {selectedRun ? (
+                <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-b border-border bg-surface-2 px-3 py-1.5 text-xs">
+                  <span className="font-medium">Run {selectedRun.pipeline_run_id}</span>
+                  <StatusBadge status={selectedRun.status} />
+                  <span className="text-muted">{formatTime(selectedRun.start_date, tz)}</span>
+                  <span className="num text-muted">{formatDuration(selectedRun.start_date, selectedRun.end_date)}</span>
+                </div>
+              ) : null}
+              <div className="relative min-h-0 flex-1">
               <RunGraph
                 fill
                 direction={flow}
@@ -281,6 +299,7 @@ export function PipelineDetail() {
                 onFocus={setFocused}
                 onOpen={(taskCode) => (selected === undefined ? navigate(taskPath(code, pipeline, taskCode)) : select(selected, taskCode))}
               />
+              </div>
               </div>
             )}
           </div>

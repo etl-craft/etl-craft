@@ -23,6 +23,7 @@ const projectFields = (code: boolean): FieldSpec[] => [
   { name: "governance", label: "Governance", kind: "select", options: ["STRICT", "RELAXED"], blank: code ? "Default" : "Keep" },
   { name: "schema_check_schedule", label: "Schema check schedule (cron, or none)" },
   { name: "schema_check_on_demand", label: "On-demand schema checks", kind: "select", options: ["Y", "N"], blank: code ? "Default" : "Keep" },
+  { name: "allowed_auto_restarts", label: "Automatic starts", hint: "NONE, or SCHEDULE and endings joined by |, such as SCHEDULE|FAILURE. The controller's setting also applies." },
 ];
 
 export function ProjectsTab() {
@@ -49,6 +50,7 @@ export function ProjectsTab() {
             columns.accessor("governance", { header: "Governance" }),
             columns.accessor("default_pool", { header: "Default pool" }),
             columns.accessor("max_running_tasks", { header: "Max tasks" }),
+            columns.accessor("allowed_auto_restarts", { header: "Automatic starts" }),
             columns.display({ id: "schema", header: "Schema checks", cell: (c) => (c.row.original.schema_check_schedule ? <code className="font-mono text-xs">{c.row.original.schema_check_schedule}</code> : "Not scheduled") }),
             columns.display({ id: "state", header: "State", cell: (c) => <StatusBadge status={c.row.original.active_flag === "Y" ? "ACTIVE" : "DISABLED"} /> }),
             columns.display({

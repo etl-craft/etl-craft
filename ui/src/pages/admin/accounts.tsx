@@ -36,7 +36,9 @@ export function AccountsTab() {
                 { name: "name", label: "Account name", required: true },
                 { name: "role", label: "Role", kind: "select", options: ROLES },
                 { name: "kind", label: "Kind", kind: "select", options: ["USER", "SERVICE"] },
-                { name: "email", label: "Email" },
+                { name: "first_name", label: "First name" },
+                { name: "last_name", label: "Last name" },
+                { name: "email", label: "Email", hint: "With Auth.Oidc_bind_by_email, an account with only an email takes its SSO subject at first sign-in." },
                 { name: "password", label: "Temporary password (users)", kind: "password" },
               ]}
             />
@@ -67,11 +69,14 @@ export function AccountsTab() {
           </div>
         </CardHeader>
         <DataTable
+          find
           label="Accounts"
           data={accounts}
           empty={list.isSuccess ? "No accounts." : undefined}
           columns={[
             columns.accessor("name", { header: "Account", cell: (c) => <span className="font-medium">{c.getValue()}</span> }),
+            columns.display({ id: "person", header: "Name", cell: (c) => [c.row.original.first_name, c.row.original.last_name].filter(Boolean).join(" ") || <span className="text-muted">—</span> }),
+            columns.accessor("email", { header: "Email", cell: (c) => c.getValue() ?? <span className="text-muted">—</span> }),
             columns.accessor("kind", { header: "Kind" }),
             columns.accessor("role", { header: "Role" }),
             columns.display({

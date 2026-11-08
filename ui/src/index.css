@@ -3,54 +3,62 @@
 
 :root {
   color-scheme: light;
-  --bg: #f4f5f7;
+  --bg: #f6f7f9;
   --surface: #ffffff;
-  --surface-2: #f8f9fb;
-  --border: #dfe3e8;
-  --border-strong: #c5ccd5;
-  --fg: #14181f;
-  --muted: #566170;
-  --accent: #1f4fd8;
+  --surface-2: #f3f4f7;
+  --border: #e3e5ea;
+  --border-strong: #cdd1d9;
+  --fg: #1b1d24;
+  --muted: #5d6270;
+  --accent: #4f5bd5;
   --accent-fg: #ffffff;
-  --ring: #1f4fd8;
-  --sidebar: #ffffff;
-  --sidebar-fg: #3b4654;
-  --sidebar-active: #e8eefd;
+  --ring: #4f5bd5;
+  --sidebar: #fbfbfd;
+  --sidebar-fg: #383c47;
+  --sidebar-active: #eceefc;
   --ok-fg: #166534; --ok-bg: #dcfce7;
   --bad-fg: #b42318; --bad-bg: #fee4e2;
   --run-fg: #1d4ed8; --run-bg: #dbeafe;
   --warn-fg: #8a3b0a; --warn-bg: #fef0c7;
   --idle-fg: #475467; --idle-bg: #eef0f3;
+  --ok-solid: #22b45a; --bad-solid: #ef4437; --run-solid: #2f7bf6; --warn-solid: #f09a0c; --idle-solid: #8b95a5;
   --env-prod: #b42318; --env-prod-fg: #ffffff;
   --env-other: #3f4a5a; --env-other-fg: #ffffff;
-  --mark-a: #3a6cf7; --mark-b: #1b44c4; --mark-glyph: #ffffff;
+  --mark-a: #6a74e6; --mark-b: #4651c4; --mark-glyph: #ffffff;
 }
 [data-theme="dark"] {
   color-scheme: dark;
-  --bg: #0c0f13;
-  --surface: #151a21;
-  --surface-2: #1a2029;
-  --border: #272f3a;
-  --border-strong: #3a4553;
-  --fg: #e8ecf1;
-  --muted: #9aa5b4;
-  --accent: #7ea2ff;
-  --accent-fg: #0c0f13;
-  --ring: #7ea2ff;
-  --sidebar: #0a0d11;
-  --sidebar-fg: #aeb8c5;
-  --sidebar-active: #171e28;
+  --bg: #0d0e11;
+  --surface: #14161a;
+  --surface-2: #1a1c21;
+  --border: #24272e;
+  --border-strong: #343842;
+  --fg: #e9eaee;
+  --muted: #9a9ea9;
+  --accent: #8a93f2;
+  --accent-fg: #0d0e11;
+  --ring: #8a93f2;
+  --sidebar: #0b0c0f;
+  --sidebar-fg: #b3b7c2;
+  --sidebar-active: #1b1d2a;
   --ok-fg: #6ee7a1; --ok-bg: #0f2a1c;
   --bad-fg: #ffa39b; --bad-bg: #3a1512;
   --run-fg: #9bbbff; --run-bg: #14284d;
   --warn-fg: #fcd34d; --warn-bg: #3a2a08;
   --idle-fg: #b0b8c4; --idle-bg: #232a34;
+  --ok-solid: #34d27b; --bad-solid: #ff5a5f; --run-solid: #4c8dff; --warn-solid: #f5a524; --idle-solid: #5b6573;
   --env-prod: #c9372c; --env-prod-fg: #ffffff;
   --env-other: #3a4553; --env-other-fg: #f1f4f8;
-  --mark-a: #9dbaff; --mark-b: #6d93f2; --mark-glyph: #0c1426;
+  --mark-a: #a7aef7; --mark-b: #7c85e8; --mark-glyph: #0d0e22;
 }
 
 @theme inline {
+  --radius-xs: 2px;
+  --radius-sm: 3px;
+  --radius-md: 4px;
+  --radius-lg: 5px;
+  --radius-xl: 6px;
+  --radius-2xl: 8px;
   --color-bg: var(--bg);
   --color-surface: var(--surface);
   --color-surface-2: var(--surface-2);
@@ -73,11 +81,18 @@
   --color-warn-bg: var(--warn-bg);
   --color-idle: var(--idle-fg);
   --color-idle-bg: var(--idle-bg);
+  --color-ok-solid: var(--ok-solid);
+  --color-bad-solid: var(--bad-solid);
+  --color-run-solid: var(--run-solid);
+  --color-warn-solid: var(--warn-solid);
+  --color-idle-solid: var(--idle-solid);
   --font-sans: "Inter Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: "JetBrains Mono Variable", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 }
 
-html { background: var(--bg); }
+html { background: var(--bg); --row: 32px; --row-wrap: 44px; }
+html[data-density="compact"] { --row: 26px; --row-wrap: 36px; }
+html[data-density="comfortable"] { --row: 40px; --row-wrap: 56px; }
 body {
   margin: 0;
   background: var(--bg);
@@ -112,9 +127,22 @@ code, pre, .font-mono { font-feature-settings: "calt"; letter-spacing: 0; }
   --xy-edge-label-color: var(--fg);
 }
 .react-flow__attribution { display: none; }
-.react-flow__controls { box-shadow: none; border: 1px solid var(--border-strong); border-radius: 6px; overflow: hidden; }
+.react-flow__controls { box-shadow: none; border: 1px solid var(--border-strong); border-radius: 4px; overflow: hidden; }
 .react-flow__controls-button { background: var(--surface); color: var(--fg); border-bottom: 1px solid var(--border); }
 .react-flow__controls-button:hover { background: var(--surface-2); }
 .react-flow__controls-button svg { fill: currentColor; }
 .react-flow__edge-textbg { fill: var(--surface); }
 .react-flow__edge-text { fill: var(--fg); font-size: 11px; }
+
+/* Pages that fill the window are edge-to-edge: panes meet at 1px dividers instead of floating as separate cards. */
+[data-edge] > div { gap: 0 !important; }
+[data-edge] > header, [data-edge] > div > header { padding: 6px 12px; border-bottom: 1px solid var(--border); background: var(--surface); }
+[data-edge] [data-card] { border-width: 0 0 1px; border-radius: 0; }
+[data-edge] :has(> [data-card]) { gap: 0 !important; }
+[data-edge] :has(> [data-card]) > [data-card]:not(:last-child) { border-right-width: 1px; }
+/* Pages that scroll keep their content off the window edge; cards and tables run edge to edge. */
+[data-edge]:not([data-fill]) > div > :not(header):not([data-card]):not([role=tablist]) { margin-inline: 12px; }
+[data-edge]:not([data-fill]) > div > :first-child:not(header) { margin-top: 8px; }
+[data-edge]:not([data-fill]) > div { gap: 0 !important; padding-bottom: 12px; }
+[data-edge]:not([data-fill]) > div > :not(header):not([data-card]) { margin-block: 8px; }
+[data-edge] > div > * { min-width: 0; }

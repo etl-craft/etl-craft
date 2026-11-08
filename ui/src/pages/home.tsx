@@ -118,7 +118,7 @@ export function ProjectList({ choose = false }: { choose?: boolean }) {
   const totalFailed = projects.reduce((sum, p) => sum + p.failed, 0);
   return (
     <div className="grid grid-cols-1 gap-6">
-      <PageHeader
+      <PageHeader back={null}
         title="Projects"
         subtitle={
           health.isError

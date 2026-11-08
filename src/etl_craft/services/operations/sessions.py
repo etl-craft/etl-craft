@@ -5,6 +5,7 @@ from datetime import UTC, datetime, timedelta
 from typing import ClassVar
 
 from sqlalchemy.engine import Row
+from sqlalchemy.exc import IntegrityError
 
 from etl_craft.core.actor import Actor, ActorKind, acting_as
 from etl_craft.core.enums import (
@@ -118,6 +119,10 @@ class Identity:
     last_signin: datetime | None = None
     session_expires_at: datetime | None = None
     environment: Environment | None = None
+    first_name: str | None = None
+    last_name: str | None = None
+    email: str | None = None
+    names_editable: bool = False
 
 
 @dataclass(frozen=True)
@@ -326,11 +331,95 @@ def sign_in_subject(ctx: OperationContext, claims: oidc.IdentityClaims) -> Sessi
             statement(conn, "account_subject"), {"subject": claims.subject}
         ).scalar_one_or_none()
     if name is None:
+        name = _bind_by_email(ctx, claims)
+    if name is None:
         with recorded(ctx, ActionName.LOGIN, {"oidc_subject": claims.subject}):
             raise UsageError(
                 "SSO subject has no active registered USER account; ask an administrator"
+                + (
+                    f" to register {claims.email!r}; Auth.Oidc_bind_by_email then links it"
+                    if claims.email and ctx.config.auth.oidc_bind_by_email
+                    else ""
+                )
             )
+    _refresh_profile(ctx, name, claims)
     return _sign_in(ctx, name, claims=claims)
+
+
+def _bind_by_email(ctx: OperationContext, claims: oidc.IdentityClaims) -> str | None:
+    """Link a first sign-in to the one passwordless account registered with its verified email.
+
+    Only with ``Auth.Oidc_bind_by_email``, only for an email the issuer verified, and only when
+    exactly one active USER account without a subject or password carries it: anything else is
+    left to an administrator. The link is recorded as a sign-in by the account it binds.
+    """
+    if not (ctx.config.auth.oidc_bind_by_email and claims.email and claims.email_verified):
+        return None
+    with ctx.engine.connect() as conn:
+        names = (
+            conn.execute(statement(conn, "account_by_email"), {"email": claims.email})
+            .scalars()
+            .all()
+        )
+    if len(names) != 1:
+        return None
+    name = names[0]
+    try:
+        done = _bind(ctx, name, claims)
+    except IntegrityError:
+        # A disabled account still holds this subject: the attempt is recorded as refused and
+        # left to an administrator.
+        return None
+    return name if done else None
+
+
+def _bind(ctx: OperationContext, name: str, claims: oidc.IdentityClaims) -> bool:
+    """Write the subject onto the account, recorded as a sign-in by that account."""
+    with locks.ACCOUNTS.hold(ctx.engine, wait_seconds=30):
+        caller = replace(ctx, actor=Actor(name, ActorKind.USER))
+        with (
+            recorded(
+                caller,
+                ActionName.LOGIN,
+                {"name": name, "bound_oidc_subject": claims.subject, "bound_by": "verified email"},
+                on_completion=True,
+            ),
+            acting_as(caller.actor),
+            ctx.engine.begin() as conn,
+        ):
+            found = conn.execute(
+                statement(conn, "account_bind_subject"),
+                {"name": name, "subject": claims.subject},
+            ).first()
+    return found is not None
+
+
+def _refresh_profile(ctx: OperationContext, name: str, claims: oidc.IdentityClaims) -> None:
+    """Keep the account's names, and its email when verified, as the issuer states them.
+
+    Where accounts may edit their own names (``Auth.Names_editable``) the issuer only fills a name
+    that is empty, so a person's own edit is not undone at the next sign-in.
+    """
+    with ctx.engine.connect() as conn:
+        row = find_account(conn, name)
+    if row is None:
+        return
+    email = claims.email if claims.email and claims.email_verified else None
+    new = {"email": email, "first_name": claims.first_name, "last_name": claims.last_name}
+    old = {"email": row.email, "first_name": row.first_name, "last_name": row.last_name}
+    keep_own = ctx.config.auth.names_editable
+    changed = {
+        k: v
+        for k, v in new.items()
+        if v is not None and v != old[k] and not (keep_own and k != "email" and old[k])
+    }
+    if not changed:
+        return
+    with acting_as(Actor(name, ActorKind.USER)), ctx.engine.begin() as conn:
+        conn.execute(
+            statement(conn, "account_profile"),
+            {"name": name, "email": None, "first_name": None, "last_name": None} | changed,
+        )
 
 
 def start_sso(ctx: OperationContext, request: NoInput) -> SsoStart:
@@ -501,4 +590,8 @@ def whoami(ctx: OperationContext, request: IdentityInput) -> Identity:
         None if signin is None else as_utc(signin),
         expiry,
         environment,
+        row.first_name,
+        row.last_name,
+        row.email,
+        ctx.config.auth.names_editable,
     )

@@ -2,6 +2,7 @@
 -- ended SUCCESS, SKIPPED or FAILED, with nothing active, no pause, and no restart made for it yet.
 SELECT p.PIPELINE_ID AS pipeline_id, p.PIPELINE_CODE AS pipeline_code,
        p.AUTO_RESTART_CONDITION AS auto_restart_condition,
+       project.ALLOWED_AUTO_RESTARTS AS project_allowed,
        r.PIPELINE_RUN_ID AS last_run_id, r.STATUS AS last_status, r.END_DATE AS ended_at
 FROM CFG_PIPELINES p
 JOIN CFG_PROJECTS project ON project.PROJECT_ID=p.PROJECT_ID

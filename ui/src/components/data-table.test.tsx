@@ -56,17 +56,32 @@ describe("the shared table", () => {
     const { unmount } = render(<DataTable label="Things" data={rows} columns={columnsOf<Row>([{ id: "name", header: "Name", value: (r) => r.name }])} />);
     const body = within(screen.getByRole("table", { name: "Things" })).getAllByRole("row").slice(1);
     expect(new Set(body.map((r) => r.className.match(/h-\d+/)?.[0])).size).toBe(1);
-    expect(body[0]!.className).toContain("h-14");
+    expect(body[0]!.className).toContain("h-(--row-wrap)");
     expect(body[0]!.querySelector(".line-clamp-2")).toBeTruthy();
     unmount();
     saveWrap(false);
     render(<DataTable label="Things" data={rows} columns={columnsOf<Row>([{ id: "name", header: "Name", value: (r) => r.name }])} />);
-    expect(within(screen.getByRole("table", { name: "Things" })).getAllByRole("row")[1]!.className).toContain("h-10");
+    expect(within(screen.getByRole("table", { name: "Things" })).getAllByRole("row")[1]!.className).toContain("h-(--row)");
   });
 
   it("shows a divider between columns without having to find it with the pointer", () => {
     render(<DataTable label="Things" data={rows} columns={columnsOf<Row>([{ id: "name", header: "Name", value: (r) => r.name }])} />);
     const handle = screen.getByRole("separator", { name: "Resize the Name column" });
     expect(handle.querySelector("span")).toBeTruthy(); // the line is always drawn
+  });
+
+  it("filters on a column whose first value is empty", () => {
+    interface Person {
+      name: string;
+      email: string | null;
+    }
+    const people: Person[] = [
+      { name: "owner", email: null },
+      { name: "ada", email: "ada@example.com" },
+    ];
+    const col = createColumnHelper<Person>();
+    render(<DataTable find label="Things" data={people} columns={[col.accessor("name", { header: "Name" }), col.accessor("email", { header: "Email" })]} />);
+    fireEvent.change(screen.getByRole("searchbox", { name: "Filter Things" }), { target: { value: "example.com" } });
+    expect(names()).toEqual(["adaada@example.com"]);
   });
 });

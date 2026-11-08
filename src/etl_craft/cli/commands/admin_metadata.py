@@ -50,6 +50,10 @@ def configure_project(parser: argparse.ArgumentParser) -> None:
                 choices=tuple(YesNo),
                 help="Whether Check now and generate-docs --with-warehouse may run (default Y).",
             )
+            sub.add_argument(
+                "--allowed-auto-restarts",
+                help="What may start runs by itself: NONE, or SCHEDULE and endings joined by |.",
+            )
         configure_output(sub)
 
 
@@ -93,6 +97,7 @@ def run_project(args: argparse.Namespace, out: Output) -> int:
                 "shared warehouse" if p.shared_warehouse else "",
                 f"schema checks: {p.schema_check_schedule or 'not scheduled'}, "
                 f"on demand {p.schema_check_on_demand}",
+                f"auto starts {p.allowed_auto_restarts}",
             )
             for p in done.projects
         ),

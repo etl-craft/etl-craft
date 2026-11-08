@@ -63,6 +63,9 @@ def test_insights_summarises_runs_and_filters_through_the_address(scene):
         expect(page.get_by_role("list", name="Runs per day")).to_be_visible()
         expect(page.get_by_role("list", name="Latest runs")).to_be_visible()
         shoot(page, "insights")
+        tabs = [t.strip() for t in page.get_by_role("tab").all_inner_texts()]
+        assert tabs[:4] == ["Overview", "Capacity", "Catalog", "Pipelines"], tabs
+        assert "Latest runs" not in tabs
         page.get_by_role("tab", name="Pipelines").click()
         pipelines = page.get_by_role("table", name="Pipelines")
         expect(pipelines.get_by_role("link", name="ORDERS")).to_be_visible()

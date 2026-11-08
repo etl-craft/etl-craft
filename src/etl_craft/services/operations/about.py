@@ -16,11 +16,12 @@ from etl_craft.services.operations.requests import NoInput
 
 @dataclass(frozen=True)
 class ControllerVersion:
-    """A recent heartbeat identity, without its host or PID."""
+    """A recent heartbeat identity and the automatic starts it allows, without its host or PID."""
 
     controller_id: int
     version: str
     heartbeat_at: datetime
+    allowed_auto_restarts: str
 
 
 @dataclass(frozen=True)
@@ -41,7 +42,9 @@ def read_about(ctx: OperationContext, request: NoInput) -> About:
     with read_snapshot(ctx.engine) as conn:
         schema = conn.execute(statement(conn, "about_schema")).scalar_one_or_none()
         controllers = tuple(
-            ControllerVersion(row.controller_id, row.version, as_utc(row.heartbeat_at))
+            ControllerVersion(
+                row.controller_id, row.version, as_utc(row.heartbeat_at), row.allowed_auto_restarts
+            )
             for row in conn.execute(
                 statement(conn, "about_controllers"),
                 {"since": datetime.now(UTC) - timedelta(seconds=60)},

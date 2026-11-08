@@ -5,6 +5,7 @@ import { Link, Navigate, useLocation, useParams, useSearchParams } from "react-r
 import { ActionButton } from "@/components/action-button";
 import { CsvButton } from "@/components/csv-button";
 import { Field, inputClass, Loading, Notice, PageHeader } from "@/components/common";
+import { CatalogInsights } from "@/components/catalog-insights";
 import { DataTable } from "@/components/data-table";
 import { HBars, KpiTile, Panel, StackedBars, Trend, type BarRow } from "@/components/charts";
 import { Tabs } from "@/components/tabs";
@@ -13,9 +14,10 @@ import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { useProjectInfo, useRoleAtLeast, useTimezone } from "@/hooks";
 import { getJson, project } from "@/lib/api";
+import { useCatalog } from "@/lib/catalog";
 import { formatTime, measured, percent, seconds } from "@/lib/format";
 import { catalogPath, pipelinePath, runPath } from "@/lib/routes";
-import type { FailureInsight, Insights as InsightsView, Pipeline, PipelineInsight, RuleInsight, RunView, TaskInsight } from "@/lib/types";
+import type { AgentsView, FailureInsight, Insights as InsightsView, Pipeline, PipelineInsight, RuleInsight, TaskInsight } from "@/lib/types";
 import { projectHomePath } from "@/lib/routes";
 import { useDocumentTitle } from "@/title";
 
@@ -23,7 +25,6 @@ const pipelineCol = createColumnHelper<PipelineInsight>();
 const taskCol = createColumnHelper<TaskInsight>();
 const failureCol = createColumnHelper<FailureInsight>();
 const ruleCol = createColumnHelper<RuleInsight>();
-const runCol = createColumnHelper<RunView>();
 const num = (v: number | null) => <span className="num">{measured(v)}</span>;
 
 /** The old address of this page: Home is the project's insights, so it opens Home with its filters. */
@@ -33,13 +34,49 @@ export function InsightsRedirect() {
   return <Navigate to={projectHomePath(project) + search} replace />;
 }
 
+/** The catalog's coverage and open gaps, read from the last build. */
+function CatalogTab({ code }: { code: string }) {
+  const built = useCatalog(code);
+  if (built.isPending) return <Loading what="the catalog" className="p-3" />;
+  if (built.isError) return <Notice className="m-3">{(built.error as Error).message} Rebuild the catalog from the Catalog page.</Notice>;
+  return <CatalogInsights code={code} doc={built.data} />;
+}
+
+/** Worker capacity: how much of each pool's advertised CPU and memory is in use, and how many attempts are running. */
+function Capacity() {
+  const list = useQuery({ queryKey: ["agents"], queryFn: () => getJson<AgentsView>("/api/v1/agents"), refetchInterval: 10_000 });
+  if (list.isPending) return <Loading what="capacity" className="p-3" />;
+  if (list.isError) return <Notice className="m-3">{(list.error as Error).message}</Notice>;
+  const { agents, pools } = list.data;
+  const live = agents.filter((a) => a.status === "ACTIVE");
+  const running = agents.reduce((n, a) => n + a.attempts.length, 0);
+  const used = (advertised: number, free: number) => (advertised > 0 ? Math.round(((advertised - free) / advertised) * 100) : 0);
+  const cpu = pools.map((p) => ({ label: p.pool, value: used(p.advertised_cpu, p.free_cpu), text: `${used(p.advertised_cpu, p.free_cpu)}%`, tone: used(p.advertised_cpu, p.free_cpu) > 85 ? ("warn" as const) : ("accent" as const) }));
+  const memory = pools.map((p) => ({ label: p.pool, value: used(p.advertised_memory_mb, p.free_memory_mb), text: `${used(p.advertised_memory_mb, p.free_memory_mb)}%`, tone: used(p.advertised_memory_mb, p.free_memory_mb) > 85 ? ("warn" as const) : ("accent" as const) }));
+  return (
+    <div className="flex min-h-0 flex-col">
+      <div className="grid grid-cols-2 md:grid-cols-4">
+        <KpiTile label="Active agents" value={live.length} hint={`${agents.length} registered`} />
+        <KpiTile label="Draining" value={agents.filter((a) => a.status === "DRAINING").length} tone={agents.some((a) => a.status === "DRAINING") ? "warn" : undefined} />
+        <KpiTile label="Running attempts" value={running} />
+        <KpiTile label="Pools" value={pools.length} />
+      </div>
+      <div className="grid md:grid-cols-2">
+        <Panel title="CPU in use by pool"><HBars label="CPU in use by pool" rows={cpu} empty="No pools yet." /></Panel>
+        <Panel title="Memory in use by pool"><HBars label="Memory in use by pool" rows={memory} empty="No pools yet." /></Panel>
+      </div>
+    </div>
+  );
+}
+
 const TABS = [
   { id: "overview", label: "Overview" },
+  { id: "capacity", label: "Capacity" },
+  { id: "catalog", label: "Catalog" },
   { id: "pipelines", label: "Pipelines" },
   { id: "data", label: "Data" },
   { id: "quality", label: "Quality" },
   { id: "failures", label: "Failures" },
-  { id: "runs", label: "Latest runs" },
 ];
 
 const RANGES: { id: string; label: string; days: number }[] = [
@@ -115,7 +152,7 @@ export function Insights() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-2">
-      <PageHeader
+      <PageHeader back={null}
         compact
         title="Home"
         subtitle={d ? `Runs started ${formatTime(d.window_start, tz)} to ${formatTime(d.window_end, tz)}; rates use finished runs.` : code}
@@ -123,7 +160,7 @@ export function Insights() {
           <div className="flex flex-wrap items-end justify-end gap-2">
             <div role="group" aria-label="Time range" className="inline-flex rounded-md border border-border p-0.5 text-sm">
               {RANGES.map((r) => (
-                <button key={r.id} type="button" aria-pressed={activePreset === r.id} onClick={() => preset(r.days)} className={cn("cursor-pointer rounded px-2.5 py-1", activePreset === r.id ? "bg-accent/15 font-medium text-fg" : "text-muted hover:text-fg")}>
+                <button key={r.id} type="button" aria-pressed={activePreset === r.id} onClick={() => preset(r.days)} className={cn("cursor-pointer rounded-sm px-2.5 py-1", activePreset === r.id ? "bg-accent/15 font-medium text-fg" : "text-muted hover:text-fg")}>
                   {r.label}
                 </button>
               ))}
@@ -156,6 +193,8 @@ export function Insights() {
         <>
           <Tabs tabs={TABS} value={tab} onChange={(id) => set("tab", id === "overview" ? null : id)} />
           <div role="tabpanel" id="tabpanel" aria-labelledby={`tab-${tab}`} className="flex min-h-0 flex-1 flex-col gap-3 overflow-auto lg:overflow-hidden">
+            {tab === "capacity" ? <Capacity /> : null}
+            {tab === "catalog" ? <CatalogTab code={code} /> : null}
             {tab === "overview" ? <Overview code={code} d={d} when={when} /> : null}
             {tab === "pipelines" ? (
               <TablePanel
@@ -169,7 +208,7 @@ export function Insights() {
                   />
                 }
               >
-                <DataTable
+                <DataTable find
                   label="Pipelines"
                   data={d.per_pipeline}
                   empty="No pipeline ran in this window."
@@ -214,7 +253,7 @@ export function Insights() {
                     />
                   }
                 >
-                  <DataTable
+                  <DataTable find
                     label="Rows by task"
                     data={d.tasks}
                     empty="No successful task runs in this window."
@@ -236,7 +275,7 @@ export function Insights() {
             {tab === "quality" ? <Quality code={code} d={d} developer={developer} tz={tz} /> : null}
             {tab === "failures" ? (
               <TablePanel title="Failures">
-                <DataTable
+                <DataTable find
                   label="Failures"
                   data={d.failures}
                   empty="No failed or lost attempts in this window."
@@ -246,23 +285,6 @@ export function Insights() {
                     failureCol.accessor("status", { header: "Status", cell: (c) => <StatusBadge status={c.getValue()} /> }),
                     failureCol.accessor("failure_class", { header: "Failure class", cell: (c) => c.getValue() ?? "Unknown" }),
                     failureCol.accessor("attempts", { header: "Attempts", cell: (c) => <span className="num">{c.getValue()}</span> }),
-                  ]}
-                />
-              </TablePanel>
-            ) : null}
-            {tab === "runs" ? (
-              <TablePanel title="Latest runs">
-                <DataTable
-                  label="Latest runs"
-                  data={d.latest}
-                  empty="No runs in this window."
-                  columns={[
-                    runCol.accessor("pipeline_run_id", { header: "Run", cell: (c) => <Link className="num font-medium text-accent hover:underline" to={runPath(code, c.row.original.pipeline_code, c.getValue())}>#{c.getValue()}</Link> }),
-                    runCol.accessor("pipeline_code", { header: "Pipeline" }),
-                    runCol.accessor("status", { header: "Status", cell: (c) => <StatusBadge status={c.getValue()} /> }),
-                    runCol.accessor("sla_status", { header: "SLA", cell: (c) => (c.getValue() ? <StatusBadge status={c.getValue() as string} /> : "") }),
-                    runCol.accessor("start_date", { header: "Started", cell: (c) => when(c.getValue()) }),
-                    runCol.accessor("trigger_kind", { header: "Trigger", cell: (c) => <span className="text-muted">{c.getValue().toLowerCase()}</span> }),
                   ]}
                 />
               </TablePanel>
@@ -334,7 +356,7 @@ function Quality({ code, d, developer, tz }: { code: string; d: InsightsView; de
   return (
     <div className="grid min-h-0 flex-1 gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,26rem)]">
       <TablePanel title="Data quality rules" note="Valid and eligible row counts are not recorded, so no quality percentage is shown.">
-        <DataTable
+        <DataTable find
           label="Data quality rules"
           data={d.rules}
           empty="No business rules ran in this window."

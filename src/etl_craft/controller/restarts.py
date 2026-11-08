@@ -60,7 +60,22 @@ class Restarts:
                 logger.error("pipeline %s: no restart; %s", row.pipeline_code, error)
             return False
         status = RunStatus(row.last_status)
-        return status in wanted and status in allowed and now >= as_utc(row.ended_at) + COOLDOWN
+        try:
+            project = restart_statuses(str(row.project_allowed))
+        except MetadataFileError as error:
+            key = (-int(row.pipeline_id), str(row.project_allowed))
+            if key not in self.reported:
+                self.reported.add(key)
+                logger.error(
+                    "pipeline %s: no restart; project setting: %s", row.pipeline_code, error
+                )
+            return False
+        return (
+            status in wanted
+            and status in allowed
+            and status in project
+            and now >= as_utc(row.ended_at) + COOLDOWN
+        )
 
 
 def _restart(engine: Engine, row: Row[tuple[object, ...]]) -> None:

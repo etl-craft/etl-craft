@@ -1406,6 +1406,20 @@ empty-history-page handling defect, which was corrected and verified. No cloud w
   `TABLE_PREVIEW` is the first API read of business rows; it is a developer-role read recorded in the
   audit log, which is why `test_reads_record_only_explicit_admin_access_audits` lists it.
 
+- **S7.AO polish with S7.AS, accounts and projects (owner, 2026-11-08).** Choices that differ from the
+  item text, all in pull request #364 at the owner's request to keep it one pull request: the interface uses
+  small radii, flat edge-to-edge panes and an indigo palette; the Home Catalog tab replaces the catalog's own
+  Insights page; every page header has a back arrow. A project has `ALLOWED_AUTO_RESTARTS` (migration 0091)
+  beside the controller's `Orchestration.Allowed_auto_restarts`, which stays as the deployment ceiling: the
+  narrower applies, and `AUD_CONTROLLERS.ALLOWED_AUTO_RESTARTS` (migration 0090) records the controller's value
+  so the interface can say schedules are off. Accounts have `FIRST_NAME` and `LAST_NAME` (migration 0092).
+  `Auth.Oidc_bind_by_email` binds a first SSO sign-in to the one passwordless, subject-less account with the
+  same verified email, and `Auth.Names_editable` lets accounts edit their own names. The device flow accepts an
+  ID token without a `nonce` and reads a 401 poll answer from its body, because Dex, Google and Keycloak do
+  not echo a nonce and Dex answers a pending poll with 401; the security guide warns about the first. Not
+  done: `--run-id` and the HTTP API accepting a run label (S7.AQ slice 2), which needs one resolver in the
+  operations layer.
+
 - **S7.AL.4 event-file validation (owner, 2026-11-06).** Choices that differ from the item text:
   the opt-in is the FILE_VALIDATION parameter `SOURCE_EVENT=<EVENT_WAIT task code>`, for waits
   with `EVENT_FILE` (the filesystem glob that records admitted paths in `AUD_EVENT_FILES`). One

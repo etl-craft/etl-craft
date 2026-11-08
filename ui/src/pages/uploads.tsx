@@ -15,6 +15,7 @@ import { formatTime } from "@/lib/format";
 import { runPath } from "@/lib/routes";
 import type { UploadReceipt, UploadRow } from "@/lib/types";
 import { useDocumentTitle } from "@/title";
+import { cn } from "@/lib/utils";
 
 const columns = createColumnHelper<UploadRow>();
 
@@ -46,6 +47,7 @@ export function Uploads() {
     refetchInterval: 10_000,
   });
   const [file, setFile] = React.useState<File | null>(null);
+  const [over, setOver] = React.useState(false);
   const input = React.useRef<HTMLInputElement>(null);
   const send = useMutation({
     mutationFn: (selected: File) => {
@@ -96,7 +98,28 @@ export function Uploads() {
                 ))}
               </SelectField>
               <Field label="File">
-                <input ref={input} type="file" required accept=".csv,.txt,.xlsx" onChange={(event) => setFile(event.target.files?.[0] ?? null)} className="text-sm file:mr-3 file:cursor-pointer file:rounded-md file:border file:border-border-strong file:bg-surface file:px-3 file:py-1.5 file:text-sm file:text-fg hover:file:bg-surface-2" />
+                <label
+                  onDragOver={(event) => {
+                    event.preventDefault();
+                    setOver(true);
+                  }}
+                  onDragLeave={() => setOver(false)}
+                  onDrop={(event) => {
+                    event.preventDefault();
+                    setOver(false);
+                    const dropped = event.dataTransfer.files[0];
+                    if (dropped && input.current) {
+                      input.current.files = event.dataTransfer.files;
+                      setFile(dropped);
+                    }
+                  }}
+                  className={cn("flex cursor-pointer flex-col items-center gap-1 rounded-sm border border-dashed px-4 py-6 text-center text-sm", over ? "border-accent bg-accent/10" : "border-border-strong hover:bg-surface-2")}
+                >
+                  <Upload className="size-5 text-muted" aria-hidden />
+                  {file ? <span className="font-medium">{file.name}</span> : <span>Drop a file here, or choose one</span>}
+                  <span className="text-xs text-muted">CSV, TXT or XLSX</span>
+                  <input ref={input} type="file" aria-label="File" required accept=".csv,.txt,.xlsx" onChange={(event) => setFile(event.target.files?.[0] ?? null)} className="sr-only" />
+                </label>
               </Field>
               {send.isError ? <Notice>{failureText(send.error)}</Notice> : null}
               <Button type="submit" variant="primary" className="w-fit" disabled={!file || send.isPending}>
@@ -108,7 +131,7 @@ export function Uploads() {
             <CardHeader>
               <CardTitle>Recent files for {chosen}</CardTitle>
             </CardHeader>
-            <DataTable
+            <DataTable find
               label="Recent files"
               data={files.data?.uploads ?? []}
               empty={files.isSuccess ? `No files uploaded to ${chosen} yet.` : undefined}

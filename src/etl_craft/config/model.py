@@ -226,6 +226,8 @@ class AuthConfig:
     oidc_client_id: str | None = None
     refresh_days: int = 30
     oidc_groups_claim: str | None = None
+    oidc_bind_by_email: bool = False
+    names_editable: bool = False
     lockout_after: int = 5
     admin_contact: str = "your administrator"
     signin_notice: str | None = None
