@@ -162,3 +162,13 @@ def test_profile_claims_are_read_with_the_verified_flag(issuer):
     assert poll_device(auth, grant.device_code, grant.nonce) == IdentityClaims(
         "known-subject", (), "ada@example.com", True, "Ada", "Lovelace"
     )
+
+
+@pytest.mark.parametrize("status", [400, 401])
+def test_a_pending_poll_is_read_from_the_body_whether_the_issuer_answers_400_or_401(issuer, status):
+    auth, state = issuer  # RFC 8628 says 400; Dex answers 401
+    grant = start_device(auth)
+    state["error_status"] = status
+    state["errors"] = ["authorization_pending", "slow_down"]
+    assert poll_device(auth, grant.device_code, grant.nonce) == 0
+    assert poll_device(auth, grant.device_code, grant.nonce) == 5

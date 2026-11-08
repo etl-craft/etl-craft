@@ -61,7 +61,9 @@ def _request(url: str, data: dict[str, str] | None = None) -> dict[str, object]:
         try:
             response = build_opener(_NoRedirects()).open(request, timeout=15)
         except HTTPError as error:
-            if data is None or error.code != 400:
+            # RFC 8628 answers a pending or slowed poll with 400; Dex uses 401. Either way the body
+            # carries the OAuth error, which the caller reads.
+            if data is None or error.code not in (400, 401):
                 raise ConfigurationError(
                     f"OIDC endpoint {location}: HTTP {error.code}; check provider configuration"
                 ) from error

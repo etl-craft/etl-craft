@@ -50,7 +50,7 @@ def issuer(tmp_path, monkeypatch):
                     }
                 )
             elif state["errors"]:
-                self.reply({"error": state["errors"].pop(0)})
+                self.reply({"error": state["errors"].pop(0)}, state.get("error_status", 200))
             else:
 
                 def encode(obj):
@@ -71,8 +71,8 @@ def issuer(tmp_path, monkeypatch):
                     {"id_token": encode({"alg": "RS256"}) + "." + encode(claims) + ".signature"}
                 )
 
-        def reply(self, value):
-            self.send_response(200)
+        def reply(self, value, status=200):
+            self.send_response(status)
             self.send_header("Content-Type", "application/json")
             self.end_headers()
             self.wfile.write(json.dumps(value).encode())
