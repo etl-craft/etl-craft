@@ -1,6 +1,6 @@
 -- Active schedule definitions and their latest durable tick, never entire run history.
 SELECT p.PIPELINE_ID AS pipeline_id, p.PIPELINE_CODE AS pipeline_code,
-       project.TIMEZONE AS project_timezone, p.RUN_SCHEDULE AS run_schedule, p.SCHEDULE_TIMEZONE AS schedule_timezone,
+       project.TIMEZONE AS project_timezone, project.ALLOWED_AUTO_RESTARTS AS project_allowed, p.RUN_SCHEDULE AS run_schedule, p.SCHEDULE_TIMEZONE AS schedule_timezone,
        p.CATCHUP AS catchup, p.MAX_CATCHUP_RUNS AS max_catchup_runs,
        p.OVERLAP_POLICY AS overlap_policy, p.SCHEDULE_START_DATE AS schedule_start_date,
        p.CREATE_DATE AS create_date,

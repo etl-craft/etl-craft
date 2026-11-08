@@ -21,6 +21,7 @@ export interface ProjectCounts {
   failed: number;
   sla_misses: number;
   queued_tasks: number;
+  allowed_auto_restarts: string;
 }
 
 export interface ProjectHealth {
@@ -530,6 +531,7 @@ export interface ProjectRow {
   governance: string;
   schema_check_schedule: string | null;
   schema_check_on_demand: string;
+  allowed_auto_restarts: string;
 }
 
 export interface PoolRow {

@@ -19,7 +19,7 @@ WITH visibility AS ({{permission_effective}}), visible AS (
 )
 SELECT p.project_id AS project_id,p.project_code AS project,
  metadata.PROJECT_NAME AS project_name,metadata.ENVIRONMENT_TYPE AS environment_type,
- metadata.ENVIRONMENT_NAME AS environment_name,metadata.GOVERNANCE AS governance,
+ metadata.ENVIRONMENT_NAME AS environment_name,metadata.GOVERNANCE AS governance,metadata.ALLOWED_AUTO_RESTARTS AS allowed_auto_restarts,
  COALESCE(r.running,0) AS running,COALESCE(h.failed,0) AS failed,
  COALESCE(h.sla_misses,0) AS sla_misses,COALESCE(q.queued_tasks,0) AS queued_tasks
 FROM visibility p JOIN CFG_PROJECTS metadata ON metadata.PROJECT_ID=p.project_id AND metadata.ACTIVE_FLAG='Y' LEFT JOIN current_runs r ON r.project_id=p.project_id

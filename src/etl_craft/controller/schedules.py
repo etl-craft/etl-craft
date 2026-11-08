@@ -53,7 +53,11 @@ class Schedules:
         for row in rows:
             if stop is not None and stop.is_set():
                 return
-            if row.run_schedule is None or row.pipeline_id in paused:
+            if (
+                row.run_schedule is None
+                or row.pipeline_id in paused
+                or not schedule_allowed(row.project_allowed)
+            ):
                 continue
             zone, cursor = schedule_cursor(row._mapping, row.project_timezone, now)
             with ctx.engine.connect() as conn:

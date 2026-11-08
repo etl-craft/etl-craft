@@ -37,7 +37,7 @@ export function Scheduled() {
   return (
     <div className="grid grid-cols-1 gap-5">
       <PageHeader title="Scheduled runs" subtitle={`${code} · what runs next`} />
-      <AutoStartNotice />
+      <AutoStartNotice code={code} />
       {list.isError ? <Notice>{(list.error as Error).message}</Notice> : null}
       {list.isPending ? <Loading what="schedules" /> : null}
       <Card>

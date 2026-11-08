@@ -1,7 +1,7 @@
 -- Active schedule definitions and their latest durable tick, never entire run history.
 SELECT p.PIPELINE_ID AS pipeline_id, p.PIPELINE_CODE AS pipeline_code,
        (SELECT pause.RESUMED_AT FROM AUD_PIPELINE_PAUSES pause WHERE pause.PIPELINE_ID=p.PIPELINE_ID AND pause.TASK_ID IS NULL AND pause.RESUMED_AT IS NOT NULL ORDER BY pause.RESUMED_AT DESC LIMIT 1) AS resumed_at,
-       project.TIMEZONE AS project_timezone, CASE WHEN :refresh_required THEN json_extract(old.value,'$.run_schedule') ELSE p.RUN_SCHEDULE END AS run_schedule, CASE WHEN :refresh_required THEN json_extract(old.value,'$.schedule_timezone') ELSE p.SCHEDULE_TIMEZONE END AS schedule_timezone,
+       project.TIMEZONE AS project_timezone, project.ALLOWED_AUTO_RESTARTS AS project_allowed, CASE WHEN :refresh_required THEN json_extract(old.value,'$.run_schedule') ELSE p.RUN_SCHEDULE END AS run_schedule, CASE WHEN :refresh_required THEN json_extract(old.value,'$.schedule_timezone') ELSE p.SCHEDULE_TIMEZONE END AS schedule_timezone,
        CASE WHEN :refresh_required THEN json_extract(old.value,'$.catchup') ELSE p.CATCHUP END AS catchup, CASE WHEN :refresh_required THEN json_extract(old.value,'$.max_catchup_runs') ELSE p.MAX_CATCHUP_RUNS END AS max_catchup_runs,
        CASE WHEN :refresh_required THEN json_extract(old.value,'$.overlap_policy') ELSE p.OVERLAP_POLICY END AS overlap_policy, CASE WHEN :refresh_required THEN json_extract(old.value,'$.schedule_start_date') ELSE p.SCHEDULE_START_DATE END AS schedule_start_date,
        CASE WHEN :refresh_required THEN json_extract(old.value,'$.create_date') ELSE p.CREATE_DATE END AS create_date,

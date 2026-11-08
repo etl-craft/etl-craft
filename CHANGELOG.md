@@ -144,6 +144,10 @@ Warehouses are optional extras. Core bundles none. `all` is core plus the UI, fo
   (migration 0090), `etl-craft about` and `GET /api/v1/about` report it for each live controller, and the web
   interface says so on Scheduled runs and Pipelines when schedules or automatic restarts are off, instead of
   showing next-run times that never start.
+- A project has its own `ALLOWED_AUTO_RESTARTS` (migration 0091, `project add|set --allowed-auto-restarts`, the
+  Projects admin page): what may start its runs by itself, in the values `Orchestration.Allowed_auto_restarts`
+  takes. The narrower of the controller's setting and the project's applies, so one Engine DB can run a DEV
+  project on schedule and keep a PROD project to person-started runs.
 - The Accounts page shows each account's email.
 - The web interface gains: a divider between a pipeline's task list and run matrix that resizes both together
   (the newest run always stays in view), row menus for agent actions, a "Go to" list in the top search,

@@ -17,6 +17,7 @@ import { useRuns } from "@/components/runs-table";
 import { Tabs } from "@/components/tabs";
 import { SplitPane } from "@/components/split-pane";
 import { Card } from "@/components/ui/card";
+import { autoStarts } from "@/lib/auto-starts";
 import { useAutoStarts, useCanRun, useProjectInfo, useTimezone } from "@/hooks";
 import { describeCron, formatDuration, formatTime } from "@/lib/format";
 import { getJson, project } from "@/lib/api";
@@ -78,7 +79,7 @@ export function PipelineDetail() {
   const outside = selected !== undefined && !gridRuns.some((r) => r.pipeline_run_id === selected);
   const extraRun = useQuery({ queryKey: ["run", code, selected], queryFn: () => getJson<RunView>(`${project(code)}/runs/${selected}`), enabled: outside });
   useDocumentTitle(selected === undefined ? pipeline : `${pipeline} #${selected}`, code, info.project && { type: info.project.environment_type, name: info.project.environment_name });
-  const autoStarts = useAutoStarts();
+  const starts = autoStarts(useAutoStarts(), info.project?.allowed_auto_restarts);
   const selectedRun = [...runs, ...(extraRun.data ? [extraRun.data] : [])].find((r) => r.pipeline_run_id === selected);
   const steps = useQuery({
     queryKey: ["steps", code, pipeline, selected],
@@ -200,7 +201,7 @@ export function PipelineDetail() {
                 "None yet"
               )}
             </Fact>
-            <Fact inline label="Next run">{autoStarts === "NONE" ? <span className="text-muted" title="Orchestration.Allowed_auto_restarts = NONE">Not started here</span> : p.next_run ? formatTime(p.next_run, tz) : (p.restart_note ?? "—")}</Fact>
+            <Fact inline label="Next run">{starts && !starts.schedule ? <span className="text-muted" title="Schedules are switched off here by the controller or the project">Not started here</span> : p.next_run ? formatTime(p.next_run, tz) : (p.restart_note ?? "—")}</Fact>
             <Fact inline label="Refresh">{p.refresh_type.toLowerCase()}</Fact>
             {p.sla_in_hours ? <Fact inline label="SLA">{p.sla_in_hours} h</Fact> : null}
             {p.tags.length ? <Fact inline label="Tags">{p.tags.join(", ")}</Fact> : null}

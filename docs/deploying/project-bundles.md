@@ -108,6 +108,9 @@ admin to establish their connection approvals before admitting new bundled runs.
 Select `--project CODE` or set `Orchestration.Project` explicitly. There is no implicit default;
 a conflicting flag and file value are refused, naming both.
 `--project-dir` selects a filesystem directory for config plan/apply, publication or agent bootstrap.
+`--allowed-auto-restarts` takes `NONE` or `SCHEDULE` and run endings joined by `|`, as
+`Orchestration.Allowed_auto_restarts` does; a run starts by itself only where both the controller's setting and
+the project's allow it.
 Each project has its own warehouse. Deployment roles remain shared, with pipeline grants
 scoped to their project. Pools remain deployment-wide.
 
@@ -117,6 +120,7 @@ Administrators create projects before applying pipeline metadata:
 etl-craft project add --project sales --name Sales --timezone UTC --default-pool default --max-running-tasks 8 --reason "Sales onboarding"
 etl-craft --project sales config apply
 etl-craft project set --project sales --max-running-tasks 12 --reason "Capacity review"
+etl-craft project set --project sales --allowed-auto-restarts NONE --reason "Person-started runs only"
 etl-craft project list --reason "Review projects"
 ```
 
