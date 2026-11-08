@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { Copy, Table2, Workflow, ListChecks, TriangleAlert } from "lucide-react";
+import { ChevronDown, Copy, Table2, Workflow, ListChecks, TriangleAlert } from "lucide-react";
 import * as React from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Fact, FactList, Loading, Notice, SelectField } from "@/components/common";
@@ -19,6 +19,7 @@ import { describeCron, formatDuration, formatTime } from "@/lib/format";
 import { catalogPath, pipelinePath, taskPath } from "@/lib/routes";
 import type { RunView, TablePreview } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { DropdownContent, DropdownItem, DropdownMenu, DropdownTrigger } from "@/components/dropdown";
 
 const link = "text-accent hover:underline";
 
@@ -81,6 +82,26 @@ function ObjectPage({ header, fit, children }: { header: React.ReactNode; fit?: 
       <div className="grid shrink-0 gap-3 px-4 pt-4">{header}</div>
       <div data-scroll-area className={cn("min-h-0 min-w-0 flex-1 p-4", fit ? "flex flex-col overflow-auto @3xl:overflow-hidden" : "overflow-auto")}>{children}</div>
     </div>
+  );
+}
+
+/** One task is a link to it; several are a menu of links, so every count in a header leads somewhere. */
+function LinkMenu({ code, labels, kind }: { code: string; labels: string[]; kind: "tasks" | "tables" }) {
+  if (labels.length === 0) return <>none</>;
+  if (labels.length === 1) return <Link className={link} to={catalogPath(code, kind, labels[0]!)}>{labels[0]}</Link>;
+  return (
+    <DropdownMenu>
+      <DropdownTrigger className={cn("inline-flex cursor-pointer items-center gap-0.5", link)}>
+        {labels.length} {kind} <ChevronDown className="size-3" aria-hidden />
+      </DropdownTrigger>
+      <DropdownContent align="start" className="max-h-80 min-w-64 overflow-auto">
+        {labels.map((label) => (
+          <DropdownItem key={label} asChild>
+            <Link to={catalogPath(code, kind, label)}>{label}</Link>
+          </DropdownItem>
+        ))}
+      </DropdownContent>
+    </DropdownMenu>
   );
 }
 
@@ -441,8 +462,8 @@ export function TableObject({ code, doc, name, tab, onTab }: { code: string; doc
         <Fact inline label="Open gaps">
           {openGaps ? toTab("quality", "the gaps", openGaps) : "none"}
         </Fact>
-        <Fact inline label="Written by">{table.writers.length ? toTab("overview", "the writing tasks", `${table.writers.length} task${table.writers.length === 1 ? "" : "s"}`) : "no task"}</Fact>
-        <Fact inline label="Read by">{table.readers.length ? toTab("overview", "the reading tasks", `${table.readers.length} task${table.readers.length === 1 ? "" : "s"}`) : "no task"}</Fact>
+        <Fact inline label="Written by"><LinkMenu code={code} labels={table.writers} kind="tasks" /></Fact>
+        <Fact inline label="Read by"><LinkMenu code={code} labels={table.readers} kind="tasks" /></Fact>
       </FactList>
       <Tabs tabs={tabs} value={on} onChange={onTab} />
       </>
@@ -614,7 +635,7 @@ export function TableObject({ code, doc, name, tab, onTab }: { code: string; doc
 
 function GapRows({ code, gaps }: { code: string; gaps: CatalogDoc["gaps"] }) {
   return (
-    <DataTable
+    <DataTable find
       label="Gaps"
       data={gaps}
       columns={columnsOf<CatalogDoc["gaps"][number]>([

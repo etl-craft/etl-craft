@@ -39,6 +39,7 @@ export function AccessTab({ project, projects }: { project: string; projects: st
           />
         </CardHeader>
         <DataTable
+          find
           label="Access grants"
           data={grants}
           empty={list.isSuccess ? "No grants yet." : projects.length ? undefined : "No projects."}

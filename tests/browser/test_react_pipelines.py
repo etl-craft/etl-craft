@@ -315,6 +315,7 @@ def test_a_narrow_grid_hides_the_oldest_runs_never_the_newest(scene):
             page.keyboard.press("ArrowLeft")  # the grid pane at its narrowest
         grid = page.get_by_role("table", name="Run grid")
         headers = grid.locator("thead th a")
+        headers.first.wait_for()  # the runs are drawn once their history has loaded
         assert headers.count() >= 2
         area = grid.locator("xpath=ancestor::div[@dir='rtl']").bounding_box()
         newest = headers.last.bounding_box()
@@ -322,10 +323,32 @@ def test_a_narrow_grid_hides_the_oldest_runs_never_the_newest(scene):
             "the newest run is cut off"
         )
         assert newest["x"] >= area["x"], "the newest run is outside the grid"
-        task = grid.locator("tbody th").first.bounding_box()
-        assert (
-            task["x"] >= area["x"] - 1 and task["width"] >= 120
-        )  # the task list keeps a readable width
+        task = page.get_by_role("table", name="Tasks").locator("tbody th").first.bounding_box()
+        assert task["x"] >= 0 and task["width"] >= 120  # the task list keeps a readable width
+        assert problems == []
+        browser.close()
+
+
+def test_the_task_list_and_the_matrix_resize_together_and_the_newest_run_stays(scene):
+    _, url, _ = scene
+    with sync_playwright() as pw:
+        browser, page, problems = open_page(pw, viewport={"width": 1280, "height": 800})
+        page.context.set_default_timeout(8000)
+        sign_in(page, url, "/ui/projects/default/pipelines/SALES")
+        divider = page.get_by_role("separator", name="Resize the task list and the runs")
+        grid = page.get_by_role("table", name="Run grid")
+        area = grid.locator("xpath=ancestor::div[@dir='rtl']")
+        before = area.bounding_box()["width"]
+        divider.focus()
+        for _ in range(8):
+            page.keyboard.press("ArrowLeft")  # the task list gives room to the matrix
+        after = area.bounding_box()["width"]
+        assert after > before, "narrowing the task list did not widen the matrix"
+        newest = grid.locator("thead th a").last.bounding_box()
+        box = area.bounding_box()
+        right = box["x"] + box["width"] + 1
+        assert newest["x"] + newest["width"] <= right, "the newest run is cut off"
+        assert newest["x"] >= box["x"], "the newest run is outside the matrix"
         assert problems == []
         browser.close()
 

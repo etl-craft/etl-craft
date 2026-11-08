@@ -7,7 +7,7 @@ import { Card } from "@/components/ui/card";
 import { failureText, useHealth, useIdentity, useTimezone } from "@/hooks";
 import { postJson } from "@/lib/api";
 import { formatTime } from "@/lib/format";
-import { applyTheme } from "@/lib/theme";
+import { applyDensity, applyTheme, storedDensity, type Density } from "@/lib/theme";
 import { readWrap, saveWrap } from "@/components/data-table";
 import type { PersonalSettings } from "@/lib/types";
 import { useDocumentTitle } from "@/title";
@@ -20,6 +20,7 @@ export function Settings() {
   const toast = useToast();
   const client = useQueryClient();
   const [edit, setEdit] = React.useState<PersonalSettings | null>(null);
+  const [density, setDensity] = React.useState<Density>(storedDensity);
   const saved = identity.data?.settings;
   const form = edit ?? saved;
   const save = useMutation({
@@ -51,6 +52,17 @@ export function Settings() {
                 <label key={value} className="flex cursor-pointer items-center gap-2 text-sm">
                   <input type="radio" name="theme" value={value} checked={form.theme === value} onChange={() => set({ theme: value })} />
                   {label}
+                </label>
+              ))}
+            </div>
+          </fieldset>
+          <fieldset className="m-0 grid gap-1.5 border-0 p-0">
+            <legend className="mb-1 text-sm font-medium">Table density (this browser)</legend>
+            <div className="flex flex-wrap gap-4">
+              {(["compact", "default", "comfortable"] as Density[]).map((value) => (
+                <label key={value} className="flex cursor-pointer items-center gap-2 text-sm">
+                  <input type="radio" name="density" value={value} checked={density === value} onChange={() => { setDensity(value); applyDensity(value, true); }} />
+                  {value.charAt(0).toUpperCase() + value.slice(1)}
                 </label>
               ))}
             </div>

@@ -90,7 +90,9 @@
   --font-mono: "JetBrains Mono Variable", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 }
 
-html { background: var(--bg); }
+html { background: var(--bg); --row: 32px; --row-wrap: 44px; }
+html[data-density="compact"] { --row: 26px; --row-wrap: 36px; }
+html[data-density="comfortable"] { --row: 40px; --row-wrap: 56px; }
 body {
   margin: 0;
   background: var(--bg);
@@ -141,5 +143,6 @@ code, pre, .font-mono { font-feature-settings: "calt"; letter-spacing: 0; }
 /* Pages that scroll keep their content off the window edge; cards and tables run edge to edge. */
 [data-edge]:not([data-fill]) > div > :not(header):not([data-card]):not([role=tablist]) { margin-inline: 12px; }
 [data-edge]:not([data-fill]) > div > :first-child:not(header) { margin-top: 8px; }
-[data-edge]:not([data-fill]) > div { gap: 8px !important; padding-bottom: 12px; }
+[data-edge]:not([data-fill]) > div { gap: 0 !important; padding-bottom: 12px; }
+[data-edge]:not([data-fill]) > div > :not(header):not([data-card]) { margin-block: 8px; }
 [data-edge] > div > * { min-width: 0; }

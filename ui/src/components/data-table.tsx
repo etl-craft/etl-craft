@@ -1,4 +1,4 @@
-import { flexRender, getCoreRowModel, getSortedRowModel, useReactTable, type ColumnDef, type ColumnSizingState, type SortingState } from "@tanstack/react-table";
+import { flexRender, getCoreRowModel, getFilteredRowModel, getSortedRowModel, useReactTable, type ColumnDef, type ColumnSizingState, type SortingState } from "@tanstack/react-table";
 import { ArrowDown, ArrowUp } from "lucide-react";
 import * as React from "react";
 import { Table, Td, Th, type More } from "@/components/ui/table";
@@ -141,6 +141,7 @@ export function DataTable<T>({
   empty,
   more,
   highlight,
+  find,
 }: {
   data: T[];
   columns: Column<T>[];
@@ -155,20 +156,25 @@ export function DataTable<T>({
   more?: More;
   /** The one row the person came for: marked, and scrolled into view. */
   highlight?: (row: T) => boolean;
+  /** A filter box above the rows: keeps the rows with any shown value containing the text. */
+  find?: boolean;
 }) {
   const [sorting, setSorting] = React.useState<SortingState>(initialSort ?? []);
+  const [query, setQuery] = React.useState("");
   const [sizing, setSizing] = React.useState<ColumnSizingState>(() => readWidths(label));
   const prepared = React.useMemo(() => sortable(columns, data), [columns, data]);
   const table = useReactTable({
     data,
     columns: prepared,
-    state: { sorting, columnSizing: sizing },
+    state: { sorting, columnSizing: sizing, globalFilter: find ? query : "" },
+    globalFilterFn: "includesString",
     onSortingChange: setSorting,
     onColumnSizingChange: setSizing,
     columnResizeMode: "onChange",
     defaultColumn: { minSize: 64, maxSize: 900, sortDescFirst: false },
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
   });
   React.useEffect(() => saveWidths(label, sizing), [label, sizing]);
   const wrap = React.useMemo(readWrap, []);
@@ -176,7 +182,12 @@ export function DataTable<T>({
   if (empty !== undefined && data.length === 0) return <p className="m-0 p-4 text-muted">{empty}</p>;
   return (
     <>
-
+    {find ? (
+      <div className="flex items-center gap-3 border-b border-border px-3 py-1.5">
+        <input type="search" aria-label={`Filter ${label}`} placeholder="Filter" value={query} onChange={(event) => setQuery(event.target.value)} className="h-7 w-56 rounded-sm border border-border-strong bg-surface px-2 text-xs" />
+        {query ? <span className="text-xs text-muted">{table.getRowModel().rows.length} of {data.length}</span> : null}
+      </div>
+    ) : null}
     <Table aria-label={label} more={more} className="table-fixed" style={{ minWidth: table.getTotalSize() }}>
       <thead>
         {table.getHeaderGroups().map((group) => (
@@ -191,7 +202,7 @@ export function DataTable<T>({
               return (
                 <Th key={header.id} style={{ width: header.getSize() }} className="truncate" aria-sort={sorted === "asc" ? "ascending" : sorted === "desc" ? "descending" : "none"}>
                   {header.column.getCanSort() ? (
-                    <button type="button" className="inline-flex cursor-pointer items-center gap-1 uppercase" onClick={header.column.getToggleSortingHandler()}>
+                    <button type="button" className="inline-flex cursor-pointer items-center gap-1" onClick={header.column.getToggleSortingHandler()}>
                       {flexRender(header.column.columnDef.header, header.getContext())}
                       {sorted === "asc" ? <ArrowUp className="size-3" aria-hidden /> : sorted === "desc" ? <ArrowDown className="size-3" aria-hidden /> : null}
                     </button>
@@ -231,7 +242,7 @@ export function DataTable<T>({
             key={row.id}
             ref={highlight?.(row.original) ? scrollTo : undefined}
             aria-current={highlight?.(row.original) ? "true" : undefined}
-            className={cn("hover:bg-surface-2", wrap ? "h-11" : "h-8", highlight?.(row.original) && "bg-sidebar-active")}
+            className={cn("hover:bg-surface-2", wrap ? "h-(--row-wrap)" : "h-(--row)", highlight?.(row.original) && "bg-sidebar-active")}
           >
             {selection && rowId ? (
               <Td>

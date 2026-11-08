@@ -65,6 +65,7 @@ export function TokensTab() {
           />
         </CardHeader>
         <DataTable
+          find
           label="API tokens"
           data={list.data?.tokens ?? []}
           empty={list.isSuccess ? "No tokens." : undefined}

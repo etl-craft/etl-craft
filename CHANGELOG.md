@@ -140,6 +140,12 @@ Warehouses are optional extras. Core bundles none. `all` is core plus the UI, fo
 
 ### Added
 
+- The web interface gains: a divider between a pipeline's task list and run matrix that resizes both together
+  (the newest run always stays in view), row menus for agent actions, a "Go to" list in the top search,
+  breadcrumbs and back buttons on task and attempt pages, a searchable log with a first-error jump, links from
+  a table's header facts to the writing run, rule results, gaps and the writing and reading tasks, filters on
+  the Accounts, Tokens, Groups, Access and Gaps tables, a table density setting (this browser), a file drop
+  zone for uploads and a Capacity tab on Home.
 - The web interface uses small corner radii (2 to 6 px), square solid status marks, narrower duration bars and edge-to-edge panes that meet at 1 px dividers instead of floating cards.
 
 - The controller restarts a pipeline when its last run ended in a status `AUTO_RESTART_CONDITION` names,

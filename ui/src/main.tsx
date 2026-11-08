@@ -27,12 +27,13 @@ import { Scheduled } from "@/pages/scheduled";
 import { Task } from "@/pages/task";
 import { Uploads } from "@/pages/uploads";
 import { Runs } from "@/pages/runs";
-import { applyTheme, initialTheme } from "@/lib/theme";
+import { applyDensity, applyTheme, initialTheme, storedDensity } from "@/lib/theme";
 import "@fontsource-variable/inter";
 import "@fontsource-variable/jetbrains-mono";
 import "./index.css";
 
 applyTheme(initialTheme());
+applyDensity(storedDensity());
 const client = new QueryClient({ defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: true, staleTime: 5_000 } } });
 
 createRoot(document.getElementById("root")!).render(

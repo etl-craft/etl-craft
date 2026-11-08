@@ -15,7 +15,7 @@ import { useProjectInfo, useRoleAtLeast, useTimezone } from "@/hooks";
 import { getJson, project } from "@/lib/api";
 import { formatTime, measured, percent, seconds } from "@/lib/format";
 import { catalogPath, pipelinePath, runPath } from "@/lib/routes";
-import type { FailureInsight, Insights as InsightsView, Pipeline, PipelineInsight, RuleInsight, RunView, TaskInsight } from "@/lib/types";
+import type { AgentsView, FailureInsight, Insights as InsightsView, Pipeline, PipelineInsight, RuleInsight, RunView, TaskInsight } from "@/lib/types";
 import { projectHomePath } from "@/lib/routes";
 import { useDocumentTitle } from "@/title";
 
@@ -33,6 +33,33 @@ export function InsightsRedirect() {
   return <Navigate to={projectHomePath(project) + search} replace />;
 }
 
+/** Worker capacity: how much of each pool's advertised CPU and memory is in use, and how many attempts are running. */
+function Capacity() {
+  const list = useQuery({ queryKey: ["agents"], queryFn: () => getJson<AgentsView>("/api/v1/agents"), refetchInterval: 10_000 });
+  if (list.isPending) return <Loading what="capacity" className="p-3" />;
+  if (list.isError) return <Notice className="m-3">{(list.error as Error).message}</Notice>;
+  const { agents, pools } = list.data;
+  const live = agents.filter((a) => a.status === "ACTIVE");
+  const running = agents.reduce((n, a) => n + a.attempts.length, 0);
+  const used = (advertised: number, free: number) => (advertised > 0 ? Math.round(((advertised - free) / advertised) * 100) : 0);
+  const cpu = pools.map((p) => ({ label: p.pool, value: used(p.advertised_cpu, p.free_cpu), text: `${used(p.advertised_cpu, p.free_cpu)}%`, tone: used(p.advertised_cpu, p.free_cpu) > 85 ? ("warn" as const) : ("accent" as const) }));
+  const memory = pools.map((p) => ({ label: p.pool, value: used(p.advertised_memory_mb, p.free_memory_mb), text: `${used(p.advertised_memory_mb, p.free_memory_mb)}%`, tone: used(p.advertised_memory_mb, p.free_memory_mb) > 85 ? ("warn" as const) : ("accent" as const) }));
+  return (
+    <div className="flex min-h-0 flex-col">
+      <div className="grid grid-cols-2 md:grid-cols-4">
+        <KpiTile label="Active agents" value={live.length} hint={`${agents.length} registered`} />
+        <KpiTile label="Draining" value={agents.filter((a) => a.status === "DRAINING").length} tone={agents.some((a) => a.status === "DRAINING") ? "warn" : undefined} />
+        <KpiTile label="Running attempts" value={running} />
+        <KpiTile label="Pools" value={pools.length} />
+      </div>
+      <div className="grid md:grid-cols-2">
+        <Panel title="CPU in use by pool"><HBars label="CPU in use by pool" rows={cpu} empty="No pools yet." /></Panel>
+        <Panel title="Memory in use by pool"><HBars label="Memory in use by pool" rows={memory} empty="No pools yet." /></Panel>
+      </div>
+    </div>
+  );
+}
+
 const TABS = [
   { id: "overview", label: "Overview" },
   { id: "pipelines", label: "Pipelines" },
@@ -40,6 +67,7 @@ const TABS = [
   { id: "quality", label: "Quality" },
   { id: "failures", label: "Failures" },
   { id: "runs", label: "Latest runs" },
+  { id: "capacity", label: "Capacity" },
 ];
 
 const RANGES: { id: string; label: string; days: number }[] = [
@@ -156,6 +184,7 @@ export function Insights() {
         <>
           <Tabs tabs={TABS} value={tab} onChange={(id) => set("tab", id === "overview" ? null : id)} />
           <div role="tabpanel" id="tabpanel" aria-labelledby={`tab-${tab}`} className="flex min-h-0 flex-1 flex-col gap-3 overflow-auto lg:overflow-hidden">
+            {tab === "capacity" ? <Capacity /> : null}
             {tab === "overview" ? <Overview code={code} d={d} when={when} /> : null}
             {tab === "pipelines" ? (
               <TablePanel

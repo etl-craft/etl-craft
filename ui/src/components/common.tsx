@@ -84,7 +84,7 @@ export function PageHeader({
         {subtitle ? <p className="m-0 text-sm text-muted">{subtitle}</p> : null}
         {children}
       </div>
-      {actions ? <div className="shrink-0">{actions}</div> : null}
+      {actions ? <div className="shrink-0 max-sm:w-full">{actions}</div> : null}
     </header>
   );
 }
@@ -109,7 +109,7 @@ export function Fact({
         {Icon ? <Icon aria-hidden className="size-3.5" /> : null}
         {label}
       </dt>
-      <dd className={cn("num m-0", valueClassName)}>{children}</dd>
+      <dd className={cn("num m-0", inline && "min-w-0 truncate", valueClassName)}>{children}</dd>
     </div>
   );
 }

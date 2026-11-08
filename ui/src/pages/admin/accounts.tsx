@@ -67,6 +67,7 @@ export function AccountsTab() {
           </div>
         </CardHeader>
         <DataTable
+          find
           label="Accounts"
           data={accounts}
           empty={list.isSuccess ? "No accounts." : undefined}
