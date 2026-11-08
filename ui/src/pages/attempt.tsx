@@ -1,12 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 import { AttemptDetails } from "@/components/attempt-details";
-import { Loading, Notice, PageHeader } from "@/components/common";
+import { Breadcrumbs, Loading, Notice, PageHeader } from "@/components/common";
 import { Card } from "@/components/ui/card";
 import { useProjectInfo } from "@/hooks";
 import { getJson, project } from "@/lib/api";
-import { runPath, taskPath } from "@/lib/routes";
+import { pipelinePath, pipelinesPath, runPath, taskPath } from "@/lib/routes";
 import type { AttemptView } from "@/lib/types";
 import { useDocumentTitle } from "@/title";
 
@@ -25,9 +24,15 @@ export function Attempt() {
   const mismatch = a && String(a.pipeline_run_id) !== runId;
   return (
     <div className="grid grid-cols-1 gap-5">
-      <Link to={runPath(code, pipeline, runId)} className="inline-flex w-fit items-center gap-1 text-sm text-muted hover:text-fg">
-        <ArrowLeft className="size-4" aria-hidden /> {pipeline} run #{runId}
-      </Link>
+      <Breadcrumbs
+        trail={[
+          { label: "Pipelines", to: pipelinesPath(code) },
+          { label: pipeline, to: pipelinePath(code, pipeline) },
+          { label: `Run ${runId}`, to: runPath(code, pipeline, runId) },
+          { label: task, to: taskPath(code, pipeline, task) },
+          { label: `Attempt ${attemptId}` },
+        ]}
+      />
       <PageHeader
         title={`Attempt ${a?.attempt_number ?? ""} of ${task}`}
         subtitle={

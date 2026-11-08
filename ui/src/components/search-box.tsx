@@ -3,8 +3,8 @@ import * as React from "react";
 import { useNavigate } from "react-router-dom";
 import { hitLink } from "@/pages/search";
 import { getJson, project } from "@/lib/api";
-import { searchPath } from "@/lib/routes";
-import type { SearchHit, SearchView } from "@/lib/types";
+import { agentsPath, catalogPath, consolePath, heldPath, maintenancePath, pipelinesPath, projectHomePath, runsPath, scheduledPath, searchPath, settingsPath, systemPath, uploadsPath } from "@/lib/routes";
+import type { SearchView } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const GROUPS: [string, string][] = [
@@ -14,6 +14,22 @@ const GROUPS: [string, string][] = [
   ["RUN", "Runs"],
 ];
 const PER_GROUP = 4;
+
+/** Pages reachable by name from the search box, like a command palette's navigation entries. */
+const pagesOf = (code: string): { label: string; to: string }[] => [
+  { label: "Home", to: projectHomePath(code) },
+  { label: "Pipelines", to: pipelinesPath(code) },
+  { label: "Catalog", to: catalogPath(code) },
+  { label: "Runs", to: runsPath(code) },
+  { label: "Scheduled runs", to: scheduledPath(code) },
+  { label: "Held and paused", to: heldPath(code) },
+  { label: "Uploads", to: uploadsPath(code) },
+  { label: "Console", to: consolePath(code) },
+  { label: "Maintenance", to: maintenancePath(code) },
+  { label: "System health", to: systemPath },
+  { label: "Agents", to: agentsPath },
+  { label: "Settings", to: settingsPath },
+];
 
 /** The top-bar search: matches appear grouped as you type, arrow keys pick one, Enter opens it, and Enter with none picked lists every result. */
 export const SearchBox = React.forwardRef<HTMLInputElement, { code: string }>(function SearchBox({ code }, ref) {
@@ -29,8 +45,12 @@ export const SearchBox = React.forwardRef<HTMLInputElement, { code: string }>(fu
     return () => window.clearTimeout(wait);
   }, [text]);
   const found = useQuery({ queryKey: ["suggest", code, typed], queryFn: () => getJson<SearchView>(`${project(code)}/search`, { q: typed }), enabled: typed.length >= 2, staleTime: 15_000 });
-  const groups = GROUPS.map(([kind, label]) => ({ label, hits: (found.data?.hits ?? []).filter((h) => h.kind === kind).slice(0, PER_GROUP) })).filter((g) => g.hits.length);
-  const flat: SearchHit[] = groups.flatMap((g) => g.hits);
+  const groups = (typed.length < 2 ? [] : GROUPS).map(([kind, label]) => ({ label, hits: (found.data?.hits ?? []).filter((h) => h.kind === kind).slice(0, PER_GROUP) })).filter((g) => g.hits.length);
+  const pages = pagesOf(code).filter((p) => text.trim() === "" || p.label.toLowerCase().includes(text.trim().toLowerCase())).slice(0, text.trim() === "" ? 12 : 4);
+  const flat: { key: string; label: string; detail: string; to: string }[] = [
+    ...pages.map((p) => ({ key: `page:${p.label}`, label: p.label, detail: "Go to", to: p.to })),
+    ...groups.flatMap((g) => g.hits).map((h) => ({ key: `${h.kind}:${h.label}:${h.run_id ?? ""}:${h.pipeline_code ?? ""}`, label: h.label, detail: h.detail, to: hitLink(code, h).to })),
+  ];
   React.useEffect(() => {
     if (!open) return;
     const away = (event: MouseEvent) => (root.current?.contains(event.target as Node) ? undefined : setOpen(false));
@@ -61,7 +81,7 @@ export const SearchBox = React.forwardRef<HTMLInputElement, { code: string }>(fu
         onSubmit={(event) => {
           event.preventDefault();
           const hit = flat[at];
-          if (hit) go(hitLink(code, hit).to);
+          if (hit) go(hit.to);
           else if (text.trim()) go(searchPath(code, text.trim()));
         }}
       >
@@ -70,11 +90,11 @@ export const SearchBox = React.forwardRef<HTMLInputElement, { code: string }>(fu
           name="q"
           type="search"
           role="combobox"
-          aria-expanded={open && typed.length >= 2}
+          aria-expanded={open}
           aria-controls="search-suggestions"
           aria-autocomplete="list"
           aria-label="Search pipelines, tasks, tables and runs"
-          placeholder="Search (press /)"
+          placeholder="Search or jump to (Ctrl+K)"
           autoComplete="off"
           value={text}
           onChange={(event) => {
@@ -87,10 +107,24 @@ export const SearchBox = React.forwardRef<HTMLInputElement, { code: string }>(fu
           className="h-9 w-full rounded-md border border-border-strong bg-surface px-3 text-sm"
         />
       </form>
-      {open && typed.length >= 2 ? (
+      {open ? (
         <div id="search-suggestions" role="listbox" aria-label="Matches" className="absolute left-0 top-full z-40 mt-1 max-h-[70vh] w-[min(34rem,90vw)] overflow-auto rounded-md border border-border bg-surface p-1 shadow-lg">
-          {found.isPending ? <p className="m-0 px-3 py-2 text-xs text-muted">Searching…</p> : null}
-          {found.isSuccess && flat.length === 0 ? <p className="m-0 px-3 py-2 text-sm text-muted">Nothing matches &ldquo;{typed}&rdquo;.</p> : null}
+          {typed.length >= 2 && found.isPending ? <p className="m-0 px-3 py-2 text-xs text-muted">Searching…</p> : null}
+          {typed.length >= 2 && found.isSuccess && flat.length === 0 ? <p className="m-0 px-3 py-2 text-sm text-muted">Nothing matches &ldquo;{typed}&rdquo;.</p> : null}
+          {pages.length ? (
+            <div role="group" aria-label="Go to">
+              <p className="m-0 px-3 pb-0.5 pt-2 text-xs font-semibold text-muted">Go to</p>
+              {pages.map((p) => {
+                index += 1;
+                const mine = index;
+                return (
+                  <button key={p.label} type="button" role="option" aria-selected={at === mine} onMouseEnter={() => setAt(mine)} onClick={() => go(p.to)} className={cn("flex w-full cursor-pointer items-baseline gap-2 rounded-sm px-3 py-1 text-left text-sm", at === mine && "bg-accent/15")}>
+                    <span className="truncate font-medium">{p.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          ) : null}
           {groups.map((g) => (
             <div key={g.label} role="group" aria-label={g.label}>
               <p className="m-0 px-3 pb-0.5 pt-2 text-xs font-semibold text-muted">{g.label}</p>

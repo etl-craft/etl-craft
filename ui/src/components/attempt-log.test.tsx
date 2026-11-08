@@ -43,4 +43,11 @@ describe("AttemptLog", () => {
     expect(await blob!.text()).toBe(LOG);
     expect(screen.getByText(/Showing the last 400 of 500 lines/)).toBeInTheDocument();
   });
+
+  it("searches every line of the log", async () => {
+    show();
+    await screen.findByLabelText("Attempt log");
+    fireEvent.change(screen.getByLabelText("Find in log"), { target: { value: "line 12 " } });
+    await waitFor(() => expect(screen.getByText(/of 500 lines/)).toBeTruthy());
+  });
 });

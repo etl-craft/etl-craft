@@ -3,6 +3,28 @@ import * as React from "react";
 import { Link } from "react-router-dom";
 import { cn } from "@/lib/utils";
 
+/** The path to the page from the project's lists, each part a link except the last. */
+export function Breadcrumbs({ trail }: { trail: { label: string; to?: string }[] }) {
+  return (
+    <nav aria-label="Breadcrumb" className="flex flex-wrap items-center gap-1 text-xs text-muted">
+      {trail.map((part, i) => (
+        <React.Fragment key={`${i}:${part.label}`}>
+          {i > 0 ? <span aria-hidden>/</span> : null}
+          {part.to ? (
+            <Link to={part.to} className="hover:text-fg hover:underline">
+              {part.label}
+            </Link>
+          ) : (
+            <span aria-current="page" className="text-fg">
+              {part.label}
+            </span>
+          )}
+        </React.Fragment>
+      ))}
+    </nav>
+  );
+}
+
 /** A failure or refusal, always announced to assistive technology. */
 export function Notice({ children, mono, info, className }: { children: React.ReactNode; mono?: boolean; info?: boolean; className?: string }) {
   return (

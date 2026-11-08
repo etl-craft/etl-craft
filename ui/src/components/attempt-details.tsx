@@ -14,6 +14,8 @@ import type { AttemptView } from "@/lib/types";
 const count = (value: number | null) => (value === null ? "Not measured" : value.toLocaleString("en-GB"));
 const evidence = (kind: string | null, actor: string | null, reason: string | null) =>
   kind ? [kind, actor, reason].filter(Boolean).join(" · ") : "Not classified";
+const ERROR = /\b(ERROR|FATAL|CRITICAL|Traceback)\b/;
+const WARNING = /\bWARN(ING)?\b/;
 const LIVE = new Set(["QUEUED", "CLAIMED", "RUNNING"]);
 
 /** An attempt's log, fetched on demand and kept fresh while the attempt is still running. */
@@ -27,6 +29,15 @@ export function AttemptLog({ code, attempt, open = false }: { code: string; atte
     refetchInterval: LIVE.has(attempt.status) ? 3_000 : false,
   });
   const lines = log.data?.split("\n") ?? [];
+  const [find, setFind] = React.useState("");
+  const [follow, setFollow] = React.useState(LIVE.has(attempt.status));
+  const box = React.useRef<HTMLPreElement>(null);
+  const needle = find.trim().toLowerCase();
+  const matching = needle ? lines.filter((line) => line.toLowerCase().includes(needle)) : lines.slice(-400);
+  const firstError = matching.findIndex((line) => ERROR.test(line));
+  React.useEffect(() => {
+    if (follow && box.current) box.current.scrollTop = box.current.scrollHeight;
+  }, [follow, log.data]);
   return (
     <div className="grid gap-2">
       <div className="flex flex-wrap items-center gap-3">
@@ -35,11 +46,19 @@ export function AttemptLog({ code, attempt, open = false }: { code: string; atte
         </Button>
         {shown && log.isSuccess ? (
           <>
+            <input type="search" aria-label="Find in log" placeholder="Find in log" value={find} onChange={(event) => setFind(event.target.value)} className="h-7 w-44 rounded-sm border border-border-strong bg-surface px-2 text-xs" />
+            {needle ? <span className="text-xs text-muted">{matching.length} of {lines.length} lines</span> : null}
+            <Button size="sm" disabled={firstError < 0} onClick={() => box.current?.querySelector(`[data-line="${firstError}"]`)?.scrollIntoView({ block: "center" })}>
+              First error
+            </Button>
             <Button size="sm" onClick={() => downloadFile(`attempt-${attempt.attempt_id}.log`, log.data, "text/plain;charset=utf-8")}>
               <Download className="size-4" aria-hidden /> Download log
             </Button>
             <label className="flex items-center gap-1.5 text-xs text-muted">
               <input type="checkbox" checked={wrap} onChange={(event) => setWrap(event.target.checked)} /> Wrap lines
+            </label>
+            <label className="flex items-center gap-1.5 text-xs text-muted">
+              <input type="checkbox" checked={follow} onChange={(event) => setFollow(event.target.checked)} /> Follow
             </label>
           </>
         ) : null}
@@ -48,9 +67,13 @@ export function AttemptLog({ code, attempt, open = false }: { code: string; atte
       {shown && log.isError ? <Notice>{(log.error as Error).message}</Notice> : null}
       {shown && log.isSuccess ? (
         <>
-          {lines.length > 400 ? <p className="m-0 text-xs text-muted">Showing the last 400 of {lines.length} lines; download the log for all of it.</p> : null}
-          <pre tabIndex={0} aria-label="Attempt log" className={cn("m-0 max-h-96 overflow-auto rounded-md border border-border bg-surface-2 p-3 font-mono text-xs leading-5", wrap && "whitespace-pre-wrap break-words")}>
-            {lines.slice(-400).join("\n")}
+          {!needle && lines.length > 400 ? <p className="m-0 text-xs text-muted">Showing the last 400 of {lines.length} lines; search or download the log for all of it.</p> : null}
+          <pre ref={box} tabIndex={0} aria-label="Attempt log" className={cn("m-0 max-h-96 overflow-auto rounded-sm border border-border bg-surface-2 p-3 font-mono text-xs leading-5", wrap && "whitespace-pre-wrap break-words")}>
+            {matching.map((line, i) => (
+              <span key={i} data-line={i} className={cn("block", ERROR.test(line) ? "text-bad" : WARNING.test(line) && "text-warn")}>
+                {line || " "}
+              </span>
+            ))}
           </pre>
         </>
       ) : null}

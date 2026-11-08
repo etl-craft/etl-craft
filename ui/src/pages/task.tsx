@@ -1,8 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { createColumnHelper } from "@tanstack/react-table";
-import { ArrowLeft } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
-import { Fact, FactList, Loading, Notice, PageHeader, ParamList } from "@/components/common";
+import { Breadcrumbs, Fact, FactList, Loading, Notice, PageHeader, ParamList } from "@/components/common";
 import { CsvButton } from "@/components/csv-button";
 import { DataTable } from "@/components/data-table";
 import { OffsetCard } from "@/components/offset-card";
@@ -12,7 +11,7 @@ import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { useProjectInfo, useTimezone } from "@/hooks";
 import { getJson, project } from "@/lib/api";
 import { formatDuration, formatTime } from "@/lib/format";
-import { pipelinePath, runPath } from "@/lib/routes";
+import { pipelinePath, pipelinesPath, runPath } from "@/lib/routes";
 import type { Pipeline, TaskDefinition, TaskHistory, TaskOffset, TaskRunView } from "@/lib/types";
 import { useDocumentTitle } from "@/title";
 
@@ -37,9 +36,14 @@ export function Task() {
   const paused = pipe.data?.task_pauses.find((p) => p.task_code === task);
   return (
     <div className="grid grid-cols-1 gap-5">
-      <Link to={pipelinePath(code, pipeline, "tasks")} className="inline-flex w-fit items-center gap-1 text-sm text-muted hover:text-fg">
-        <ArrowLeft className="size-4" aria-hidden /> {pipeline} tasks
-      </Link>
+      <Breadcrumbs
+        trail={[
+          { label: "Pipelines", to: pipelinesPath(code) },
+          { label: pipeline, to: pipelinePath(code, pipeline) },
+          { label: "Tasks", to: pipelinePath(code, pipeline, "tasks") },
+          { label: task },
+        ]}
+      />
       <PageHeader
         title={task}
         subtitle={`${pipeline} · ${code}`}
