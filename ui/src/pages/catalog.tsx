@@ -14,7 +14,6 @@ import { useDocumentTitle } from "@/title";
 import { ArrowLeft } from "lucide-react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { CatalogHome, GapsObject, PipelineObject, TableObject, TablesList, TaskObject } from "@/components/catalog-pages";
-import { CatalogInsights } from "@/components/catalog-insights";
 import { CatalogTree } from "@/components/catalog-tree";
 import { SplitPane } from "@/components/split-pane";
 
@@ -56,7 +55,7 @@ function LineageResult({ result }: { result: LineageRefresh }) {
   );
 }
 
-const KINDS: CatalogKind[] = ["pipelines", "tasks", "tables", "gaps", "insights"];
+const KINDS: CatalogKind[] = ["pipelines", "tasks", "tables", "gaps"];
 
 export function Catalog() {
   const { project: code = "", "*": rest = "" } = useParams();
@@ -73,7 +72,7 @@ export function Catalog() {
   const [first = "", ...others] = rest.split("/").filter(Boolean);
   const kind = (KINDS as string[]).includes(first) ? (first as CatalogKind) : undefined;
   const name = others.join("/") || undefined;
-  useDocumentTitle(kind === "gaps" ? "Catalog gaps" : kind === "insights" ? "Catalog insights" : name ? `${name} · Catalog` : "Catalog", code, info.project && { type: info.project.environment_type, name: info.project.environment_name });
+  useDocumentTitle(kind === "gaps" ? "Catalog gaps" : name ? `${name} · Catalog` : "Catalog", code, info.project && { type: info.project.environment_type, name: info.project.environment_name });
   const tab = params.get("tab") ?? "overview";
   const onTab = (next: string) => {
     const copy = new URLSearchParams(params);
@@ -92,8 +91,7 @@ export function Catalog() {
     <TableObject key={name} code={code} doc={doc} name={name} tab={tab} onTab={onTab} />
   ) : kind === "gaps" ? (
     <GapsObject code={code} doc={doc} />
-  ) : kind === "insights" ? (
-    <CatalogInsights code={code} doc={doc} />
+
   ) : (
     <CatalogHome code={code} doc={doc} />
   );

@@ -7,6 +7,9 @@ export interface Identity {
   local_password: boolean;
   last_signin: string | null;
   session_expires_at: string | null;
+  first_name?: string | null;
+  last_name?: string | null;
+  email?: string | null;
   project_permission: string | null;
   settings: { theme: string; timezone: string; default_project: string | null; page_size: number; time_display: string };
 }

@@ -15,6 +15,15 @@ export interface AutoStarts {
 const parts = (value: string): string[] => (value === "NONE" ? [] : value.split("|"));
 const endingsOf = (value: string): string[] => (parts(value).includes("ALWAYS") ? ENDINGS : ENDINGS.filter((e) => parts(value).includes(e)));
 
+/** The setting's value in plain words: "everything", "nothing", or what it names. */
+export function describeAutoStarts(value: string | undefined): string {
+  if (value === undefined) return "unknown";
+  if (value === EVERYTHING) return "everything";
+  if (value === "NONE") return "nothing";
+  const named = parts(value).map((p) => (p === "SCHEDULE" ? "schedules" : p === "ALWAYS" ? "every ending" : `after ${p.toLowerCase()}`));
+  return named.join(", ");
+}
+
 /** What starts runs by itself in a project: the narrower of the controller's setting and the project's own. */
 export function autoStarts(controller: string | undefined, project: string | undefined): AutoStarts | undefined {
   if (controller === undefined && project === undefined) return undefined;

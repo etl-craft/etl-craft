@@ -61,6 +61,7 @@ export function AppShell() {
   const [collapsed, setCollapsed] = React.useState(() => readCollapsed());
   React.useEffect(() => applyTheme(theme), [theme]);
   const mustChange = identity.data?.must_change_password;
+  const person = [identity.data?.first_name, identity.data?.last_name].filter(Boolean).join(" ") || undefined;
   React.useEffect(() => {
     if (mustChange && location.pathname !== passwordPath) navigate(passwordPath, { replace: true });
   }, [mustChange, location.pathname, navigate]);
@@ -122,13 +123,13 @@ export function AppShell() {
           <DropdownMenu>
             <DropdownTrigger asChild>
               <Button variant="ghost" size="sm" aria-label="Account menu">
-                {identity.data?.name ?? "Account"}
+                {person ?? identity.data?.name ?? "Account"}
                 <ChevronDown className="size-3.5" aria-hidden />
               </Button>
             </DropdownTrigger>
             <DropdownContent>
               <DropdownLabel>
-                {identity.data ? `${identity.data.name} · ${identity.data.role}` : "Signed in"}
+                {identity.data ? `${person ? `${person} (${identity.data.name})` : identity.data.name} · ${identity.data.role}` : "Signed in"}
                 {identity.data?.project_permission ? ` · ${identity.data.project_permission}` : ""}
               </DropdownLabel>
               <DropdownItem asChild>

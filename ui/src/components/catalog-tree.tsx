@@ -1,4 +1,4 @@
-import { ChartColumn, ChevronDown, ChevronRight, Database, ListChecks, Search, Table2, TriangleAlert, Workflow } from "lucide-react";
+import { ChevronDown, ChevronRight, Database, ListChecks, Search, Table2, TriangleAlert, Workflow } from "lucide-react";
 import * as React from "react";
 import { Link } from "react-router-dom";
 import { schemasOf, type CatalogDoc } from "@/lib/catalog";
@@ -129,7 +129,6 @@ export function CatalogTree({ code, doc, selected }: { code: string; doc: Catalo
         }}
       >
         <Leaf to={catalogPath(code, "tables")} label="All tables" icon={Table2} current={selected.kind === "tables" && !selected.name} />
-        <Leaf to={catalogPath(code, "insights")} label="Insights" icon={ChartColumn} current={selected.kind === "insights"} />
         <Leaf to={catalogPath(code, "gaps")} label="Schema and lineage gaps" icon={TriangleAlert} current={selected.kind === "gaps"} />
         <Group id="pipelines" label={`Pipelines (${pipelines.length})`} icon={Workflow} open={expanded("pipelines")} toggle={toggle}>
           {pipelines.map((p) => (

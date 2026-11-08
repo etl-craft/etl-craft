@@ -118,6 +118,9 @@ class Identity:
     last_signin: datetime | None = None
     session_expires_at: datetime | None = None
     environment: Environment | None = None
+    first_name: str | None = None
+    last_name: str | None = None
+    email: str | None = None
 
 
 @dataclass(frozen=True)
@@ -569,4 +572,7 @@ def whoami(ctx: OperationContext, request: IdentityInput) -> Identity:
         None if signin is None else as_utc(signin),
         expiry,
         environment,
+        row.first_name,
+        row.last_name,
+        row.email,
     )

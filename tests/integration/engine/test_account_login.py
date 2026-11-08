@@ -167,6 +167,9 @@ def test_an_sso_sign_in_refreshes_names_and_only_a_verified_email(project):
     assert (found.email, found.first_name, found.last_name) == (None, "Al", "Ice")
     sessions.sign_in_subject(ctx, IdentityClaims("sub-1", (), "x@example.com", True))
     assert row(ctx).email == "x@example.com"
+    alice = replace(ctx, actor=Actor("alice", ActorKind.USER), role=ApiRole.VIEWER)
+    who = act(alice, ActionName.WHOAMI, project=None)
+    assert (who.first_name, who.last_name, who.email) == ("Al", "Ice", "x@example.com")
 
 
 def test_account_controls_require_a_proven_admin(project):

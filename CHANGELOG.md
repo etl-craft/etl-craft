@@ -153,6 +153,9 @@ Warehouses are optional extras. Core bundles none. `all` is core plus the UI, fo
   it, at each sign-in. `Auth.Oidc_bind_by_email` lets an account created with only an email take its provider
   subject at the first sign-in whose verified email matches it alone; the bind is audited.
 - The Accounts page shows each account's email and name.
+- `etl-craft whoami` and `GET /api/v1/whoami` report the account's first name, last name and email, and the
+  account menu shows the name. Catalog coverage (documented, written, read, with rules, open gaps) is the Catalog
+  tab of Home, and the automatic-start banner says "everything" or "nothing" instead of the raw setting.
 - The web interface also gains a back arrow on every page, highlighted search matches with kind filters and
   paging, keyboard navigation in the catalog tree, a catalog Insights page (coverage, open gaps, most read tables),
   a status strip with its success count for each pipeline's recent runs, and filter boxes whose text is kept in the

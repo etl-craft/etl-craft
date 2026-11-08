@@ -1,6 +1,6 @@
 import { Notice } from "@/components/common";
 import { useAutoStarts, useProjectInfo } from "@/hooks";
-import { autoStarts } from "@/lib/auto-starts";
+import { autoStarts, describeAutoStarts } from "@/lib/auto-starts";
 
 /** Says so when the controller's or the project's setting stops schedules or automatic restarts from starting runs. */
 export function AutoStartNotice({ code, className }: { code: string; className?: string }) {
@@ -8,7 +8,7 @@ export function AutoStartNotice({ code, className }: { code: string; className?:
   const project = useProjectInfo(code).project?.allowed_auto_restarts;
   const state = autoStarts(controller, project);
   if (!state?.limited) return null;
-  const where = `Controller: ${controller ?? "unknown"}; project ${code}: ${project ?? "unknown"}`;
+  const where = `controller allows ${describeAutoStarts(controller)}; project ${code} allows ${describeAutoStarts(project)}`;
   return (
     <Notice info className={className}>
       {state.off

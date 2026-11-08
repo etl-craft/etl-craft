@@ -5,6 +5,7 @@ import { Link, Navigate, useLocation, useParams, useSearchParams } from "react-r
 import { ActionButton } from "@/components/action-button";
 import { CsvButton } from "@/components/csv-button";
 import { Field, inputClass, Loading, Notice, PageHeader } from "@/components/common";
+import { CatalogInsights } from "@/components/catalog-insights";
 import { DataTable } from "@/components/data-table";
 import { HBars, KpiTile, Panel, StackedBars, Trend, type BarRow } from "@/components/charts";
 import { Tabs } from "@/components/tabs";
@@ -13,6 +14,7 @@ import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { useProjectInfo, useRoleAtLeast, useTimezone } from "@/hooks";
 import { getJson, project } from "@/lib/api";
+import { useCatalog } from "@/lib/catalog";
 import { formatTime, measured, percent, seconds } from "@/lib/format";
 import { catalogPath, pipelinePath, runPath } from "@/lib/routes";
 import type { AgentsView, FailureInsight, Insights as InsightsView, Pipeline, PipelineInsight, RuleInsight, RunView, TaskInsight } from "@/lib/types";
@@ -31,6 +33,14 @@ export function InsightsRedirect() {
   const { project = "" } = useParams();
   const { search } = useLocation();
   return <Navigate to={projectHomePath(project) + search} replace />;
+}
+
+/** The catalog's coverage and open gaps, read from the last build. */
+function CatalogTab({ code }: { code: string }) {
+  const built = useCatalog(code);
+  if (built.isPending) return <Loading what="the catalog" className="p-3" />;
+  if (built.isError) return <Notice className="m-3">{(built.error as Error).message} Rebuild the catalog from the Catalog page.</Notice>;
+  return <CatalogInsights code={code} doc={built.data} />;
 }
 
 /** Worker capacity: how much of each pool's advertised CPU and memory is in use, and how many attempts are running. */
@@ -67,6 +77,7 @@ const TABS = [
   { id: "quality", label: "Quality" },
   { id: "failures", label: "Failures" },
   { id: "runs", label: "Latest runs" },
+  { id: "catalog", label: "Catalog" },
   { id: "capacity", label: "Capacity" },
 ];
 
@@ -185,6 +196,7 @@ export function Insights() {
           <Tabs tabs={TABS} value={tab} onChange={(id) => set("tab", id === "overview" ? null : id)} />
           <div role="tabpanel" id="tabpanel" aria-labelledby={`tab-${tab}`} className="flex min-h-0 flex-1 flex-col gap-3 overflow-auto lg:overflow-hidden">
             {tab === "capacity" ? <Capacity /> : null}
+            {tab === "catalog" ? <CatalogTab code={code} /> : null}
             {tab === "overview" ? <Overview code={code} d={d} when={when} /> : null}
             {tab === "pipelines" ? (
               <TablePanel

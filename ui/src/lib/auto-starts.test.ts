@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { autoStarts } from "@/lib/auto-starts";
+import { autoStarts, describeAutoStarts } from "@/lib/auto-starts";
 
 describe("autoStarts", () => {
   it("is unrestricted when both allow everything", () => {
@@ -12,5 +12,13 @@ describe("autoStarts", () => {
   it("keeps only what both sides allow", () => {
     expect(autoStarts("SCHEDULE|SUCCESS|FAILURE", "SCHEDULE|FAILURE")).toMatchObject({ schedule: true, endings: ["FAILURE"], limited: true });
     expect(autoStarts("SUCCESS", "SCHEDULE|ALWAYS")).toMatchObject({ schedule: false, endings: ["SUCCESS"], off: false });
+  });
+});
+
+describe("describeAutoStarts", () => {
+  it("says the default and NONE in words and names the rest", () => {
+    expect(describeAutoStarts("SCHEDULE|ALWAYS")).toBe("everything");
+    expect(describeAutoStarts("NONE")).toBe("nothing");
+    expect(describeAutoStarts("SCHEDULE|FAILURE")).toBe("schedules, after failure");
   });
 });
