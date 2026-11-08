@@ -25,6 +25,19 @@ export function Breadcrumbs({ trail }: { trail: { label: string; to?: string }[]
   );
 }
 
+/** One setting as a row: what it is and why on the left, its control on the right, a divider below. */
+export function SettingRow({ title, hint, children }: { title: string; hint?: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <div className="grid gap-2 border-b border-border px-4 py-3 md:grid-cols-[minmax(0,18rem)_minmax(0,1fr)] md:gap-8">
+      <div className="grid content-start gap-0.5">
+        <span className="text-sm font-medium">{title}</span>
+        {hint ? <span className="text-xs text-muted">{hint}</span> : null}
+      </div>
+      <div className="min-w-0 max-w-md">{children}</div>
+    </div>
+  );
+}
+
 /** A failure or refusal, always announced to assistive technology. */
 export function Notice({ children, mono, info, className }: { children: React.ReactNode; mono?: boolean; info?: boolean; className?: string }) {
   return (
@@ -128,16 +141,19 @@ export function SelectField({
   value,
   onChange,
   compact,
+  hideLabel,
   children,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   compact?: boolean;
+  /** The label stays for assistive technology; a row around the control already names it. */
+  hideLabel?: boolean;
   children: React.ReactNode;
 }) {
   return (
-    <Field label={label} compact={compact}>
+    <Field label={label} compact={compact} hideLabel={hideLabel}>
       <select value={value} onChange={(event) => onChange(event.target.value)} className={cn(inputClass, "min-w-40")}>
         {children}
       </select>
@@ -148,10 +164,10 @@ export function SelectField({
 export const inputClass = "h-9 w-full rounded-md border border-border-strong bg-surface px-2 text-sm text-fg max-sm:h-11";
 
 /** A labelled control: one style for every form; `compact` is the small muted label used above toolbar filters. */
-export function Field({ label, compact, children }: { label: string; compact?: boolean; children: React.ReactNode }) {
+export function Field({ label, compact, hideLabel, children }: { label: string; compact?: boolean; hideLabel?: boolean; children: React.ReactNode }) {
   return (
     <label className={cn("grid gap-1", compact ? "text-xs text-muted" : "text-sm")}>
-      <span className={compact ? undefined : "font-medium"}>{label}</span>
+      <span className={hideLabel ? "sr-only" : compact ? undefined : "font-medium"}>{label}</span>
       {children}
     </label>
   );

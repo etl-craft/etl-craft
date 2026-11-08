@@ -2,7 +2,6 @@ import { useMutation } from "@tanstack/react-query";
 import * as React from "react";
 import { Field, inputClass, Notice, PageHeader } from "@/components/common";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { failureText, useIdentity } from "@/hooks";
 import { postJson } from "@/lib/api";
 import { useDocumentTitle } from "@/title";
@@ -31,9 +30,9 @@ export function Password() {
     <div className="grid grid-cols-1 gap-5">
       <PageHeader title="Change password" />
       {identity.data?.must_change_password ? <Notice info>Your temporary password must be changed before continuing.</Notice> : null}
-      <Card className="max-w-xl p-5">
+      <div>
         <form
-          className="grid gap-4"
+          className="grid max-w-md gap-4 p-4"
           onSubmit={(event) => {
             event.preventDefault();
             if (!mismatch) change.mutate();
@@ -56,7 +55,8 @@ export function Password() {
             </Button>
           </div>
         </form>
-      </Card>
+      </div>
+      <p className="m-0 px-4 text-sm text-muted">Forgot your password? Ask an administrator to reset it.</p>
     </div>
   );
 }
