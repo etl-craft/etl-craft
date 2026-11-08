@@ -98,7 +98,7 @@ export const SearchBox = React.forwardRef<HTMLInputElement, { code: string }>(fu
                 index += 1;
                 const mine = index;
                 return (
-                  <button key={`${h.kind}:${h.label}:${h.run_id ?? ""}:${h.pipeline_code ?? ""}`} type="button" role="option" aria-selected={at === mine} onMouseEnter={() => setAt(mine)} onClick={() => go(hitLink(code, h).to)} className={cn("flex w-full cursor-pointer items-baseline gap-2 rounded px-3 py-1.5 text-left text-sm", at === mine && "bg-accent/15")}>
+                  <button key={`${h.kind}:${h.label}:${h.run_id ?? ""}:${h.pipeline_code ?? ""}`} type="button" role="option" aria-selected={at === mine} onMouseEnter={() => setAt(mine)} onClick={() => go(hitLink(code, h).to)} className={cn("flex w-full cursor-pointer items-baseline gap-2 rounded-sm px-3 py-1.5 text-left text-sm", at === mine && "bg-accent/15")}>
                     <span className="truncate font-medium">{h.label}</span>
                     <span className="truncate text-xs text-muted">{h.detail}</span>
                   </button>

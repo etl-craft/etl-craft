@@ -123,7 +123,7 @@ export function Insights() {
           <div className="flex flex-wrap items-end justify-end gap-2">
             <div role="group" aria-label="Time range" className="inline-flex rounded-md border border-border p-0.5 text-sm">
               {RANGES.map((r) => (
-                <button key={r.id} type="button" aria-pressed={activePreset === r.id} onClick={() => preset(r.days)} className={cn("cursor-pointer rounded px-2.5 py-1", activePreset === r.id ? "bg-accent/15 font-medium text-fg" : "text-muted hover:text-fg")}>
+                <button key={r.id} type="button" aria-pressed={activePreset === r.id} onClick={() => preset(r.days)} className={cn("cursor-pointer rounded-sm px-2.5 py-1", activePreset === r.id ? "bg-accent/15 font-medium text-fg" : "text-muted hover:text-fg")}>
                   {r.label}
                 </button>
               ))}

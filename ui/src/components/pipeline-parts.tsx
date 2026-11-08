@@ -58,7 +58,7 @@ export function TagList({ tags }: { tags: string[] }) {
   return (
     <span className="flex flex-wrap gap-1">
       {tags.map((tag) => (
-        <span key={tag} className="rounded bg-idle-bg px-1.5 py-0.5 text-xs text-idle">
+        <span key={tag} className="rounded-sm bg-idle-bg px-1.5 py-0.5 text-xs text-idle">
           {tag}
         </span>
       ))}

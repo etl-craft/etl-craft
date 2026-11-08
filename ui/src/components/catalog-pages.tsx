@@ -222,7 +222,7 @@ export function PipelineObject({ code, doc, name, tab, onTab }: { code: string; 
                 <Fact label="Tags">
                   <span className="flex flex-wrap gap-1">
                     {pipeline.tags.map((tag) => (
-                      <span key={tag} className="rounded bg-idle-bg px-1.5 py-0.5 text-xs text-idle">
+                      <span key={tag} className="rounded-sm bg-idle-bg px-1.5 py-0.5 text-xs text-idle">
                         {tag}
                       </span>
                     ))}
@@ -451,7 +451,7 @@ export function TableObject({ code, doc, name, tab, onTab }: { code: string; doc
                   label="Columns"
                   data={shown}
                   columns={columnsOf<CatalogColumn>([
-                    { id: "column", header: "Column", value: (c) => c.name, size: 260, cell: (c) => <span className="font-mono text-xs font-medium">{c.name}{c.engine_managed ? <span className="ml-1.5 rounded bg-idle-bg px-1 text-[10px] text-idle">engine</span> : null}</span> },
+                    { id: "column", header: "Column", value: (c) => c.name, size: 260, cell: (c) => <span className="font-mono text-xs font-medium">{c.name}{c.engine_managed ? <span className="ml-1.5 rounded-sm bg-idle-bg px-1 text-[10px] text-idle">engine</span> : null}</span> },
                     { id: "type", header: "Type", value: (c) => typeOf(c), size: 200, cell: (c) => <span className="font-mono text-xs">{typeOf(c)}</span> },
                     { id: "declared", header: "Declared", value: (c) => c.declared_type ?? "", size: 200, cell: (c) => <span className={c.declared_type && c.warehouse_type && c.declared_type.toLowerCase() !== c.warehouse_type.toLowerCase() ? "font-mono text-xs text-warn" : "font-mono text-xs text-muted"}>{c.declared_type ?? "—"}</span> },
                     { id: "nullable", header: "Nullable", value: (c) => c.warehouse_nullable ?? c.declared_nullable ?? "", size: 100, cell: (c) => <span className="text-muted">{c.warehouse_nullable ?? c.declared_nullable ?? "—"}</span> },
@@ -499,7 +499,7 @@ export function TableObject({ code, doc, name, tab, onTab }: { code: string; doc
             </SelectField>
             <div role="group" aria-label="Lineage view" className="inline-flex rounded-md border border-border p-0.5 text-sm">
               {([false, true] as const).map((list) => (
-                <button key={String(list)} type="button" aria-pressed={asList === list} onClick={() => setAsList(list)} className={cn("cursor-pointer rounded px-2.5 py-1", asList === list ? "bg-accent/15 font-medium text-fg" : "text-muted hover:text-fg")}>
+                <button key={String(list)} type="button" aria-pressed={asList === list} onClick={() => setAsList(list)} className={cn("cursor-pointer rounded-sm px-2.5 py-1", asList === list ? "bg-accent/15 font-medium text-fg" : "text-muted hover:text-fg")}>
                   {list ? "List" : "Graph"}
                 </button>
               ))}

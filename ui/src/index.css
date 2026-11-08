@@ -21,6 +21,7 @@
   --run-fg: #1d4ed8; --run-bg: #dbeafe;
   --warn-fg: #8a3b0a; --warn-bg: #fef0c7;
   --idle-fg: #475467; --idle-bg: #eef0f3;
+  --ok-solid: #1f8a4c; --bad-solid: #d92d20; --run-solid: #2563eb; --warn-solid: #d9820b; --idle-solid: #8b95a5;
   --env-prod: #b42318; --env-prod-fg: #ffffff;
   --env-other: #3f4a5a; --env-other-fg: #ffffff;
   --mark-a: #3a6cf7; --mark-b: #1b44c4; --mark-glyph: #ffffff;
@@ -45,12 +46,19 @@
   --run-fg: #9bbbff; --run-bg: #14284d;
   --warn-fg: #fcd34d; --warn-bg: #3a2a08;
   --idle-fg: #b0b8c4; --idle-bg: #232a34;
+  --ok-solid: #2fa862; --bad-solid: #e5484d; --run-solid: #3b82f6; --warn-solid: #e59a1f; --idle-solid: #5b6573;
   --env-prod: #c9372c; --env-prod-fg: #ffffff;
   --env-other: #3a4553; --env-other-fg: #f1f4f8;
   --mark-a: #9dbaff; --mark-b: #6d93f2; --mark-glyph: #0c1426;
 }
 
 @theme inline {
+  --radius-xs: 2px;
+  --radius-sm: 3px;
+  --radius-md: 4px;
+  --radius-lg: 5px;
+  --radius-xl: 6px;
+  --radius-2xl: 8px;
   --color-bg: var(--bg);
   --color-surface: var(--surface);
   --color-surface-2: var(--surface-2);
@@ -73,6 +81,11 @@
   --color-warn-bg: var(--warn-bg);
   --color-idle: var(--idle-fg);
   --color-idle-bg: var(--idle-bg);
+  --color-ok-solid: var(--ok-solid);
+  --color-bad-solid: var(--bad-solid);
+  --color-run-solid: var(--run-solid);
+  --color-warn-solid: var(--warn-solid);
+  --color-idle-solid: var(--idle-solid);
   --font-sans: "Inter Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: "JetBrains Mono Variable", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 }
@@ -112,9 +125,17 @@ code, pre, .font-mono { font-feature-settings: "calt"; letter-spacing: 0; }
   --xy-edge-label-color: var(--fg);
 }
 .react-flow__attribution { display: none; }
-.react-flow__controls { box-shadow: none; border: 1px solid var(--border-strong); border-radius: 6px; overflow: hidden; }
+.react-flow__controls { box-shadow: none; border: 1px solid var(--border-strong); border-radius: 4px; overflow: hidden; }
 .react-flow__controls-button { background: var(--surface); color: var(--fg); border-bottom: 1px solid var(--border); }
 .react-flow__controls-button:hover { background: var(--surface-2); }
 .react-flow__controls-button svg { fill: currentColor; }
 .react-flow__edge-textbg { fill: var(--surface); }
 .react-flow__edge-text { fill: var(--fg); font-size: 11px; }
+
+/* Pages that fill the window are edge-to-edge: panes meet at 1px dividers instead of floating as separate cards. */
+[data-edge] > div { gap: 0 !important; }
+[data-edge] > header, [data-edge] > div > header { padding: 6px 12px; border-bottom: 1px solid var(--border); background: var(--surface); }
+[data-edge] > [data-card], [data-pane] > [data-card] { border-width: 0; border-radius: 0; }
+[data-edge] > [data-card] { border-bottom-width: 1px; }
+[data-edge] :has(> [data-card]) { gap: 0 !important; }
+[data-edge] :has(> [data-card]) > [data-card] { border-width: 0 1px 1px 0; border-radius: 0; }

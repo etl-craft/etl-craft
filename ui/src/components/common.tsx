@@ -56,7 +56,7 @@ export function PageHeader({
               <ArrowLeft className="size-4" aria-hidden />
             </Link>
           ) : null}
-          <h1 className={cn("m-0 font-semibold", compact ? "text-xl" : "text-2xl")}>{title}</h1>
+          <h1 className={cn("m-0 font-semibold", compact ? "text-lg" : "text-xl")}>{title}</h1>
           {status}
         </div>
         {subtitle ? <p className="m-0 text-sm text-muted">{subtitle}</p> : null}

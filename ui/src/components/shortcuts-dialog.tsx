@@ -18,7 +18,7 @@ export function ShortcutsDialog({ open, onClose }: { open: boolean; onClose: () 
         <ul className="m-0 grid list-none gap-2 p-0 text-sm">
           {KEYS.map(([key, what]) => (
             <li key={key} className="flex items-baseline gap-3">
-              <kbd className="whitespace-nowrap rounded border border-border-strong bg-surface-2 px-1.5 py-0.5 font-mono text-xs">{key}</kbd>
+              <kbd className="whitespace-nowrap rounded-sm border border-border-strong bg-surface-2 px-1.5 py-0.5 font-mono text-xs">{key}</kbd>
               <span>{what}</span>
             </li>
           ))}

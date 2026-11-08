@@ -172,7 +172,7 @@ export function AppShell() {
           />
         </aside>
         <main id="main" data-scroll-area className={cn("min-w-0 flex-1 overflow-y-auto", fill && "lg:overflow-hidden")}>
-          <div className={cn("w-full px-3 py-3 sm:px-4", fill ? "flex min-h-full flex-col gap-2 lg:h-full lg:min-h-0" : "mx-auto max-w-[1920px] py-4")}>
+          <div data-edge={fill ? "" : undefined} className={cn("w-full", fill ? "flex min-h-full flex-col lg:h-full lg:min-h-0" : "px-3 py-3 sm:px-4",  !fill && "mx-auto max-w-[1920px] py-4")}>
             {unavailable && ready ? (
               <Notice>
                 Project {addressed} is not available: it is disabled, or this account cannot see it. Choose another project from the menu above.

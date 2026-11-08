@@ -44,8 +44,8 @@ export function SplitPane({ id, left, right, initial = 0.42, className }: { id: 
     event.preventDefault();
   };
   return (
-    <div ref={frame} style={{ "--split": `${ratio * 100}%` } as React.CSSProperties} className={cn("grid min-h-0 gap-3 lg:grid-cols-[var(--split)_0.75rem_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)] lg:gap-0", className)}>
-      <div className="flex min-h-0 min-w-0 flex-col">{left}</div>
+    <div ref={frame} style={{ "--split": `${ratio * 100}%` } as React.CSSProperties} className={cn("grid min-h-0 gap-3 lg:grid-cols-[var(--split)_7px_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)] lg:gap-0", className)}>
+      <div data-pane className="flex min-h-0 min-w-0 flex-col">{left}</div>
       <div
         role="separator"
         aria-orientation="vertical"
@@ -60,9 +60,9 @@ export function SplitPane({ id, left, right, initial = 0.42, className }: { id: 
         onKeyDown={key}
         className="group hidden cursor-col-resize touch-none items-center justify-center outline-none lg:flex"
       >
-        <span className="h-16 w-1 rounded-full bg-border-strong group-hover:bg-accent group-focus-visible:bg-accent group-active:bg-accent" />
+        <span className="h-full w-px bg-border-strong group-hover:w-0.5 group-hover:bg-accent group-focus-visible:bg-accent group-active:bg-accent" />
       </div>
-      <div className="flex min-h-0 min-w-0 flex-col">{right}</div>
+      <div data-pane className="flex min-h-0 min-w-0 flex-col">{right}</div>
     </div>
   );
 }

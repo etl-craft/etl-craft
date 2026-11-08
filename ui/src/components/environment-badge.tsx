@@ -6,7 +6,7 @@ const tone = (env: EnvironmentInfo): string =>
   isProduction(env) ? "bg-[var(--env-prod)] text-[var(--env-prod-fg)]" : "bg-[var(--env-other)] text-[var(--env-other-fg)]";
 
 export function EnvironmentBadge({ env, className }: { env: EnvironmentInfo; className?: string }) {
-  return <span className={cn("inline-flex items-center rounded px-2 py-0.5 text-xs font-bold tracking-wide", tone(env), className)}>{environmentLabel(env)}</span>;
+  return <span className={cn("inline-flex items-center rounded-sm px-2 py-0.5 text-xs font-bold tracking-wide", tone(env), className)}>{environmentLabel(env)}</span>;
 }
 
 /** The full-width bar above the header says which environment this is, once; the project is in the switcher. */

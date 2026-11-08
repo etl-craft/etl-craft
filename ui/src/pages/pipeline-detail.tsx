@@ -215,7 +215,7 @@ export function PipelineDetail() {
           <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5 border-b border-border px-3 py-2">
             <div role="group" aria-label="Run view" className="inline-flex rounded-md border border-border p-0.5 text-sm">
               {(["grid", "graph"] as const).map((id) => (
-                <button key={id} type="button" aria-pressed={view === id} onClick={() => choose("view", id === "grid" ? null : id)} className={cn("cursor-pointer rounded px-2.5 py-0.5", view === id ? "bg-accent/15 font-medium text-fg" : "text-muted hover:text-fg")}>
+                <button key={id} type="button" aria-pressed={view === id} onClick={() => choose("view", id === "grid" ? null : id)} className={cn("cursor-pointer rounded-sm px-2.5 py-0.5", view === id ? "bg-accent/15 font-medium text-fg" : "text-muted hover:text-fg")}>
                   {id === "grid" ? "Grid" : "Graph"}
                 </button>
               ))}
@@ -223,7 +223,7 @@ export function PipelineDetail() {
             {view === "graph" ? (
               <div role="group" aria-label="Graph direction" className="inline-flex rounded-md border border-border p-0.5 text-xs">
                 {([["LR", "Horizontal"], ["TB", "Vertical"]] as const).map(([id, label]) => (
-                  <button key={id} type="button" aria-pressed={flow === id} title={flow === id ? `${label}; select again for automatic` : label} onClick={() => choose("flow", flow === id ? null : id.toLowerCase())} className={cn("cursor-pointer rounded px-2 py-0.5", flow === id ? "bg-accent/15 font-medium text-fg" : "text-muted hover:text-fg")}>
+                  <button key={id} type="button" aria-pressed={flow === id} title={flow === id ? `${label}; select again for automatic` : label} onClick={() => choose("flow", flow === id ? null : id.toLowerCase())} className={cn("cursor-pointer rounded-sm px-2 py-0.5", flow === id ? "bg-accent/15 font-medium text-fg" : "text-muted hover:text-fg")}>
                     {label}
                   </button>
                 ))}

@@ -10,7 +10,7 @@ export interface Selection {
   name?: string;
 }
 
-const row = "flex min-w-0 items-center gap-1.5 rounded px-1.5 py-1 text-[13px] hover:bg-surface-2";
+const row = "flex min-w-0 items-center gap-1.5 rounded-sm px-1.5 py-1 text-[13px] hover:bg-surface-2";
 
 function Group({ id, label, icon: Icon, open, toggle, children }: { id: string; label: string; icon: typeof Database; open: boolean; toggle: (id: string) => void; children: React.ReactNode }) {
   return (

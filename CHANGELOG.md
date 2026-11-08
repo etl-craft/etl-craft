@@ -140,6 +140,8 @@ Warehouses are optional extras. Core bundles none. `all` is core plus the UI, fo
 
 ### Added
 
+- The web interface uses small corner radii (2 to 6 px), square solid status marks, narrower duration bars and edge-to-edge panes that meet at 1 px dividers instead of floating cards.
+
 - The controller restarts a pipeline when its last run ended in a status `AUTO_RESTART_CONDITION` names,
   as a run with the new trigger kind `RESTART` and the key `restart:<previous run id>` (migration 0089
   widens the trigger-kind check on both Engine DBs; on SQLite it rebuilds the run log). A restart is made
