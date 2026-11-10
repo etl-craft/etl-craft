@@ -111,12 +111,9 @@ def test_server_picks_up_cli_run_and_second_server_is_refused(cli_project):
     with p.engine.connect() as conn:
         assert (
             conn.execute(
-                text(
-                    "SELECT COUNT(*) FROM AUD_ACTIONS WHERE COMMAND='controller' "
-                    "AND OUTCOME='REQUESTED'"
-                )
+                text("SELECT COUNT(*) AS count FROM AUD_ACTIONS WHERE COMMAND='controller'")
             ).scalar_one()
-            == 2
+            == 4
         )
         assert (
             conn.execute(

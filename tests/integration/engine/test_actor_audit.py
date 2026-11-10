@@ -621,12 +621,15 @@ def test_cli_actor_requests_and_read_only_audit(
                 "ARGUMENTS AS arguments FROM AUD_ACTIONS ORDER BY ACTION_ID"
             )
         ).all()
-        assert [
-            (row.command, row.actor, row.kind)
+        assert all(row.actor == actor_name and row.kind == "SERVICE" for row in actions)
+        requests = [
+            row
             for row in actions
             if "_request_action_id"
             not in (json.loads(row.arguments) if isinstance(row.arguments, str) else row.arguments)
-        ] == [
+        ]
+        assert len(actions) == 2 * len(requests)
+        assert [(row.command, row.actor, row.kind) for row in requests] == [
             (name, actor_name, "SERVICE")
             for name in (
                 "project list",

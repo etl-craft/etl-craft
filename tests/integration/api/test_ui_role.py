@@ -363,12 +363,9 @@ def test_ui_trusts_only_configured_proxy_hops_and_records_client_origin(cli_proj
         with p.engine.connect() as conn:
             assert (
                 conn.execute(
-                    text(
-                        "SELECT COUNT(*) AS n FROM AUD_ACTIONS WHERE COMMAND='control' "
-                        "AND OUTCOME='REQUESTED'"
-                    )
+                    text("SELECT COUNT(*) AS n FROM AUD_ACTIONS WHERE COMMAND='control'")
                 ).scalar_one()
-                == 1
+                == 2
             )
 
 
