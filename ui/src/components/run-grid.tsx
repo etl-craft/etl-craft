@@ -1,3 +1,4 @@
+import { When } from "@/components/when";
 import { useQueries } from "@tanstack/react-query";
 import * as React from "react";
 import { Link } from "react-router-dom";
@@ -11,15 +12,16 @@ import { cn } from "@/lib/utils";
 
 /** How many of the newest runs the grid shows unless asked for more. */
 export const DEFAULT_RUNS = 25;
-const CELL = 24;
-const MIN_TASKS = 96;
-const MIN_MATRIX = 60;
+export const MIN_TASKS = 96;
+export const GRID_COLUMNS = { id: { width: 24, minimum: 26 }, time: { width: 176, minimum: 178 } };
 
 /**
  * Every task against the pipeline's recent runs, newest on the right, like the duration bars above it: one glance shows where and when a task
  * started failing. A column header selects a run; a cell selects the run and opens that task in it.
  */
 export function RunGrid({ code, pipeline, graph, runs, extra, selected, onSelect, bars = true, labels = "id" }: { code: string; pipeline: string; graph: Graph; runs: RunView[]; extra?: RunView; selected?: number; onSelect: (runId: number, task?: string) => void; bars?: boolean; labels?: "id" | "time" }) {
+  const cell = GRID_COLUMNS[labels].width;
+  const reserve = GRID_COLUMNS[labels].minimum;
   const tasks = graph.waves.flat();
   const latest = runs;
   const newest = latest[0]?.pipeline_run_id;
@@ -30,28 +32,27 @@ export function RunGrid({ code, pipeline, graph, runs, extra, selected, onSelect
   const outer = React.useRef<HTMLDivElement>(null);
   const hasRuns = shown.length > 0;
   // The task column is as wide as the longest task code, up to this much of the pane: it gives way only so far.
-  const [pane, setPane] = React.useState(0);
+  const [room, setRoom] = React.useState(0);
   React.useLayoutEffect(() => {
     const element = outer.current;
     if (!element) return;
-    const measure = () => setPane(Math.max(0, element.clientWidth - 6));
+    const measure = () => setRoom(Math.max(0, element.clientWidth - 6));
     measure();
     const watch = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(measure);
     watch?.observe(element);
     return () => watch?.disconnect();
   }, [hasRuns]);
-  // The task list and the matrix are one object: the divider between them moves both, and narrowing the pane narrows both, so each shows part of itself.
-  const widest = Math.max(...tasks.map((t) => t.length), 4);
-  const [share, setShare] = React.useState<number | null>(null);
-  const natural = Math.round(widest * 7.4 + 28);
-  const matrixWanted = shown.length * CELL;
-  const autoTasks = Math.round(Math.min(Math.max(natural, 128), Math.max(128, pane * 0.45)));
-  // With room to spare the task list takes it, so the last run sits against the pane's edge.
-  // The task list is as wide as its names need and the runs start right after it, newest at its end: a status sits
-  // next to its task's name instead of across the pane, and the spare room is left at the far edge.
-  const taskWidth = share === null ? autoTasks : Math.round(Math.min(Math.max(share * pane, MIN_TASKS), Math.max(MIN_TASKS, pane - MIN_MATRIX)));
-  const matrixWidth = Math.max(0, Math.min(pane - taskWidth, matrixWanted + 2));
   const head = React.useRef<HTMLDivElement>(null);
+  const [natural, setNatural] = React.useState(128);
+  React.useLayoutEffect(() => {
+    const measure = () => setNatural(Math.max(128, ...Array.from(head.current?.querySelectorAll("tbody th span") ?? [], (name) => Math.ceil(name.getBoundingClientRect().width) + 24)));
+    measure();
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(measure);
+    head.current?.querySelectorAll("tbody th span").forEach((name) => observer?.observe(name));
+    return () => observer?.disconnect();
+  }, [graph, hasRuns]);
+  const taskWidth = Math.max(MIN_TASKS, Math.min(natural, room - reserve));
+  const matrixWidth = Math.max(0, Math.min(room - taskWidth, shown.length * cell + 2));
   const [bar, setBar] = React.useState(0);
   // A run chosen from elsewhere is brought into view.
   React.useEffect(() => {
@@ -82,18 +83,6 @@ export function RunGrid({ code, pipeline, graph, runs, extra, selected, onSelect
       setBar(box.current.offsetHeight - box.current.clientHeight);
     }
   };
-  const drag = (event: React.PointerEvent) => {
-    event.preventDefault();
-    const from = event.clientX;
-    const start = taskWidth;
-    const move = (e: PointerEvent) => setShare((start + e.clientX - from) / Math.max(1, pane));
-    const stop = () => {
-      window.removeEventListener("pointermove", move);
-      window.removeEventListener("pointerup", stop);
-    };
-    window.addEventListener("pointermove", move);
-    window.addEventListener("pointerup", stop);
-  };
   const tall = bars ? "h-20" : "h-0";
   const open = (run: RunView) => (event: React.MouseEvent) => {
     event.preventDefault();
@@ -122,7 +111,7 @@ export function RunGrid({ code, pipeline, graph, runs, extra, selected, onSelect
                 {tasks.map((task) => (
                   <tr key={task}>
                     <th scope="row" className="h-7 truncate border-t border-border bg-surface px-3 py-0 text-left font-medium" title={task}>
-                      {task}
+                      <span className="inline-block">{task}</span>
                     </th>
                   </tr>
                 ))}
@@ -130,28 +119,11 @@ export function RunGrid({ code, pipeline, graph, runs, extra, selected, onSelect
             </table>
           </div>
         </div>
-        <div
-          role="separator"
-          tabIndex={0}
-          aria-orientation="vertical"
-          aria-label="Resize the task list and the runs"
-          aria-valuenow={Math.round(taskWidth)}
-          className="group relative w-1.5 shrink-0 cursor-col-resize touch-none outline-none"
-          onPointerDown={drag}
-          onDoubleClick={() => setShare(null)}
-          onKeyDown={(event) => {
-            if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
-              event.preventDefault();
-              setShare((taskWidth + (event.key === "ArrowRight" ? 16 : -16)) / Math.max(1, pane));
-            }
-          }}
-        >
-          <span aria-hidden className="absolute inset-y-0 left-0.5 w-px bg-border-strong group-hover:w-0.5 group-hover:bg-accent group-focus-visible:bg-accent" />
-        </div>
+        <div aria-hidden className="w-1.5 shrink-0 border-l border-border-strong" />
         {/* Right to left, so the scroll origin is the right edge: the newest run stays in view as the matrix narrows, and the oldest runs are the ones that scroll away. */}
         <div ref={box} dir="rtl" onScroll={sync} style={{ width: matrixWidth, minWidth: 0 }} className="min-h-0 shrink-0 overflow-auto">
           <div dir="ltr" className="w-max">
-            <table aria-label="Run grid" style={{ width: shown.length * CELL }} className="table-fixed border-separate border-spacing-0 text-[13px]">
+            <table aria-label="Run grid" style={{ width: shown.length * cell }} className="table-fixed border-separate border-spacing-0 text-[13px]">
               <thead>
                 {bars ? (
                   <tr>
@@ -175,7 +147,7 @@ export function RunGrid({ code, pipeline, graph, runs, extra, selected, onSelect
                   {shown.map((run) => (
                     <th key={run.pipeline_run_id} scope="col" className={cn("sticky z-10 h-7 px-0 text-center text-xs font-medium", bars ? "top-20" : "top-0", apart(run) && "border-l-2 border-dashed border-border-strong", run.pipeline_run_id === selected ? "bg-accent/15 text-fg" : "bg-surface-2 text-muted")}>
                       <Link className="num hover:text-accent hover:underline" to={runPath(code, pipeline, run.pipeline_run_id)} onClick={open(run)} aria-current={run.pipeline_run_id === selected ? "true" : undefined}>
-                        {labels === "time" && run.start_date ? new Date(run.start_date).toISOString().slice(5, 16).replace("T", " ") : run.pipeline_run_id}
+                        {labels === "time" && run.start_date ? <span className="block truncate"><When iso={run.start_date} /></span> : run.pipeline_run_id}
                       </Link>
                     </th>
                   ))}

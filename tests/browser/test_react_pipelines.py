@@ -329,26 +329,63 @@ def test_a_narrow_grid_hides_the_oldest_runs_never_the_newest(scene):
         browser.close()
 
 
-def test_the_task_list_and_the_matrix_resize_together_and_the_newest_run_stays(scene):
-    _, url, _ = scene
+@pytest.mark.parametrize("method", ["keyboard", "pointer"])
+@pytest.mark.parametrize("labels", ["id", "time"])
+def test_one_grid_divider_fits_names_and_keeps_the_latest_run_visible(site, method, labels):
+    ctx, url = site
+    name = "load_customer_and_product_relationship_history"
+    with acting_as(Actor("owner", ActorKind.USER)), ctx.engine.begin() as conn:
+        pipeline = add_pipeline(conn, "RESIZE")
+        task = add_task(conn, pipeline, name)
+        for _ in range(12):
+            run = start_run(conn, pipeline)
+            task_run(conn, task, run)
+            finish_run(conn, run)
     with sync_playwright() as pw:
         browser, page, problems = open_page(pw, viewport={"width": 1280, "height": 800})
-        page.context.set_default_timeout(8000)
-        sign_in(page, url, "/ui/projects/default/pipelines/SALES")
-        divider = page.get_by_role("separator", name="Resize the task list and the runs")
+        sign_in(page, url, f"/ui/projects/default/pipelines/RESIZE?columns={labels}")
+        outer = page.get_by_role("separator", name="Resize the panes")
+        task_cell = page.get_by_role("table", name="Tasks").get_by_role("rowheader", name=name)
         grid = page.get_by_role("table", name="Run grid")
         area = grid.locator("xpath=ancestor::div[@dir='rtl']")
-        before = area.bounding_box()["x"]
-        divider.focus()
-        for _ in range(8):
-            page.keyboard.press("ArrowLeft")  # the task list narrows and the runs follow it
-        after = area.bounding_box()["x"]
-        assert after < before, "narrowing the task list did not move the runs beside it"
-        newest = grid.locator("thead th a").last.bounding_box()
-        box = area.bounding_box()
-        right = box["x"] + box["width"] + 1
-        assert newest["x"] + newest["width"] <= right, "the newest run is cut off"
-        assert newest["x"] >= box["x"], "the newest run is outside the matrix"
+        expect(grid.locator("thead th a").last).to_be_visible()
+        expect(page.get_by_role("separator")).to_have_count(1)
+        full = task_cell.evaluate("""el => {
+            const range = document.createRange();
+            range.selectNodeContents(el);
+            const style = getComputedStyle(el);
+            return Math.ceil(range.getBoundingClientRect().width
+                + parseFloat(style.paddingLeft) + parseFloat(style.paddingRight));
+        }""")
+
+        def resize_grid(wide):
+            if method == "keyboard":
+                for _ in range(30):
+                    outer.press("ArrowRight" if wide else "ArrowLeft")
+            else:
+                box = outer.bounding_box()
+                page.mouse.move(box["x"] + box["width"] / 2, box["y"] + 30)
+                page.mouse.down()
+                page.mouse.move(1100 if wide else 250, box["y"] + 30, steps=8)
+                page.mouse.up()
+
+        def latest_visible():
+            box = area.bounding_box()
+            latest = grid.locator("thead th a").last.bounding_box()
+            assert latest["x"] >= box["x"] - 1
+            assert latest["x"] + latest["width"] <= box["x"] + box["width"] + 1
+
+        resize_grid(False)
+        assert task_cell.bounding_box()["width"] < full
+        latest_visible()
+        resize_grid(True)
+        expect(task_cell).to_have_js_property("clientWidth", full)
+        latest_visible()
+        shoot(page, f"grid-expanded-{method}-{labels}")
+        resize_grid(False)
+        assert task_cell.bounding_box()["width"] < full
+        latest_visible()
+        shoot(page, f"grid-narrowed-{method}-{labels}")
         assert problems == []
         browser.close()
 

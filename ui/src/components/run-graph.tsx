@@ -44,7 +44,7 @@ function Task({ data }: NodeProps<TaskNode>) {
   return (
     <div
       data-focus={data.focus}
-      className={cn("flex h-[52px] w-[230px] items-center gap-2 rounded-sm border border-l-[4px] bg-surface pl-2.5 pr-2 text-[13px] transition-opacity", plain ? "border-l-border-strong" : edgeClass(data.status), NODE_TONE[data.focus])}
+      className={cn("flex h-[52px] w-[230px] items-center gap-2 rounded-sm border border-l-[4px] bg-surface pl-2.5 pr-2 text-[13px] transition-opacity", NODE_TONE[data.focus], plain ? "border-l-border-strong" : edgeClass(data.status))}
     >
       <Handle type="target" position={data.vertical ? Position.Top : Position.Left} className="!size-1.5 !border-0 !bg-border-strong" />
       <span className={cn("grid size-7 shrink-0 place-items-center rounded-sm", plain ? "bg-idle-bg text-idle" : solidClass(data.status))} title={statusLabel}>

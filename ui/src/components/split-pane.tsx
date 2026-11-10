@@ -19,11 +19,23 @@ function stored(id: string, fallback: number): number {
  * Two panes side by side with a divider to drag (or focus and use the arrow keys; double-click or Home resets).
  * The width is remembered in this browser. Below the `lg` breakpoint the panes stack and the divider is gone.
  */
-export function SplitPane({ id, left, right, initial = 0.42, className, narrowFirst = "left" }: { id: string; left: React.ReactNode; right: React.ReactNode; initial?: number; className?: string; /** Which pane comes first once they stack below `lg`. */ narrowFirst?: "left" | "right" }) {
+export function SplitPane({ id, left, right, initial = 0.42, className, narrowFirst = "left", minimumLeft = 0 }: { id: string; left: React.ReactNode; right: React.ReactNode; initial?: number; className?: string; /** Which pane comes first once they stack below `lg`. */ narrowFirst?: "left" | "right"; minimumLeft?: number }) {
   const [ratio, setRatio] = React.useState(() => stored(id, initial));
   const frame = React.useRef<HTMLDivElement>(null);
+  const [width, setWidth] = React.useState(0);
+  React.useLayoutEffect(() => {
+    const element = frame.current;
+    if (!element) return;
+    const measure = () => setWidth(element.clientWidth);
+    measure();
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(measure);
+    observer?.observe(element);
+    return () => observer?.disconnect();
+  }, []);
+  const minimum = width ? Math.min(MAX, Math.max(MIN, minimumLeft / width)) : MIN;
+  const shown = Math.max(minimum, ratio);
   const set = (next: number) => {
-    const value = clamp(next);
+    const value = Math.max(minimum, clamp(next));
     setRatio(value);
     try {
       window.localStorage.setItem(KEY + id, String(value));
@@ -37,22 +49,22 @@ export function SplitPane({ id, left, right, initial = 0.42, className, narrowFi
     set((event.clientX - box.left) / box.width);
   };
   const key = (event: React.KeyboardEvent) => {
-    if (event.key === "ArrowLeft") set(ratio - 0.02);
-    else if (event.key === "ArrowRight") set(ratio + 0.02);
+    if (event.key === "ArrowLeft") set(shown - 0.02);
+    else if (event.key === "ArrowRight") set(shown + 0.02);
     else if (event.key === "Home") set(initial);
     else return;
     event.preventDefault();
   };
   return (
-    <div ref={frame} style={{ "--split": `${ratio * 100}%` } as React.CSSProperties} className={cn("grid min-h-0 gap-3 lg:grid-cols-[var(--split)_7px_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)] lg:gap-0", className)}>
+    <div ref={frame} style={{ "--split": `${shown * 100}%` } as React.CSSProperties} className={cn("grid min-h-0 gap-3 lg:grid-cols-[var(--split)_7px_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)] lg:gap-0", className)}>
       <div data-pane className="flex min-h-0 min-w-0 flex-col">{left}</div>
       <div
         role="separator"
         aria-orientation="vertical"
         aria-label="Resize the panes"
-        aria-valuemin={Math.round(MIN * 100)}
+        aria-valuemin={Math.round(minimum * 100)}
         aria-valuemax={Math.round(MAX * 100)}
-        aria-valuenow={Math.round(ratio * 100)}
+        aria-valuenow={Math.round(shown * 100)}
         tabIndex={0}
         onPointerDown={(event) => event.currentTarget.setPointerCapture(event.pointerId)}
         onPointerMove={drag}

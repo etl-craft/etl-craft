@@ -11,7 +11,7 @@ import { AuditTab, CalendarTab, DetailsTab, OverviewTab, TasksTab } from "@/comp
 import { StatusBadge, taskStatus } from "@/components/status";
 import { PauseState } from "@/components/pipeline-parts";
 import { RunGraph } from "@/components/run-graph";
-import { DEFAULT_RUNS, RunGrid } from "@/components/run-grid";
+import { DEFAULT_RUNS, GRID_COLUMNS, MIN_TASKS, RunGrid } from "@/components/run-grid";
 import { RunOverview } from "@/components/run-overview";
 import { RunsPanel } from "@/components/runs-panel";
 import { useRuns } from "@/components/runs-table";
@@ -86,6 +86,7 @@ export function PipelineDetail() {
     queryKey: ["steps", code, pipeline, selected],
     queryFn: () => getJson<Steps>(`${project(code)}/steps`, { pipeline_code: pipeline, run_id: selected }),
     enabled: view === "graph" && selected !== undefined,
+    refetchInterval: selectedRun?.status === "IN-PROGRESS" ? 5_000 : false,
   });
   const tab = TAB_IDS.includes(asked) && (asked !== "run" || selected !== undefined) ? asked : chosen !== undefined ? "run" : "overview";
   const tabs = [
@@ -218,6 +219,7 @@ export function PipelineDetail() {
       ) : null}
       <SplitPane
         id="pipeline"
+        minimumLeft={view === "grid" ? MIN_TASKS + 6 + GRID_COLUMNS[byTime ? "time" : "id"].minimum : 0}
         // On a narrow screen the selected run's details come before the grid of every run.
         narrowFirst={tab === "run" ? "right" : "left"}
         className="lg:min-h-0 lg:flex-1"
@@ -280,6 +282,8 @@ export function PipelineDetail() {
               graph.isError ? <Notice className="m-3">{(graph.error as Error).message}</Notice> : <Loading what="tasks" className="p-3" />
             ) : view === "grid" ? (
               <RunGrid code={code} pipeline={pipeline} graph={graph.data} runs={gridRuns} extra={outside && extraRun.data?.pipeline_code === pipeline ? extraRun.data : undefined} selected={selected} onSelect={select} bars={!hideBars} labels={byTime ? "time" : "id"} />
+            ) : selected !== undefined && !steps.isSuccess ? (
+              steps.isError ? <Notice className="m-3">{(steps.error as Error).message}</Notice> : <Loading what="task statuses" className="p-3" />
             ) : (
               <div className="absolute inset-0 flex flex-col">
               {selectedRun ? (

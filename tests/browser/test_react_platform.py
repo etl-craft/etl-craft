@@ -248,3 +248,28 @@ def test_a_session_that_ended_says_so_and_signing_in_returns_to_the_page(scene):
         dialog.get_by_role("button", name="Sign in again").click()
         page.wait_for_url("**/ui/signin?return_to=*")
         browser.close()
+
+
+def test_search_names_handlers_and_system_shows_the_schema_number(scene):
+    ctx, url, _ = scene
+    with acting_as(Actor("owner", ActorKind.USER)), ctx.engine.begin() as conn:
+        pipeline = add_pipeline(conn, "ALERTS")
+        add_task(conn, pipeline, "NOTIFY", handler="EMAIL_ALERT")
+    with sync_playwright() as pw:
+        browser, page, problems = open_page(pw)
+        sign_in(page, url, "/ui/projects/default/search?q=NOTIFY")
+        results = page.get_by_role("table", name="Search results")
+        expect(results).to_contain_text("Email alert in ALERTS")
+        expect(results).not_to_contain_text("EMAIL_ALERT")
+        page.get_by_label("Search pipelines, tasks, tables and runs").fill("NOTIFY")
+        suggestion = page.get_by_role("option").filter(has_text="NOTIFY")
+        expect(suggestion).to_contain_text("Email alert in ALERTS")
+        page.goto(url + "/ui/system")
+        schema = page.request.get(url + "/api/v1/about").json()["schema_version"]
+        version = page.locator("dl > div").filter(
+            has=page.get_by_text("Schema version", exact=True)
+        )
+        expect(version.locator("dd")).to_have_text(schema.split("_")[0])
+        expect(version.locator("dd span")).to_have_attribute("title", schema)
+        assert problems == []
+        browser.close()

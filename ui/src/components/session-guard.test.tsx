@@ -4,10 +4,10 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { SessionGuard } from "@/components/session-guard";
 import { SESSION_ENDED } from "@/lib/api";
 
-function guard(minutesLeft: number | null) {
+function guard(minutesLeft: number | null, timeDisplay = "relative") {
   const client = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
   const ends = minutesLeft === null ? null : new Date(Date.now() + minutesLeft * 60_000).toISOString();
-  client.setQueryData(["whoami", null], { name: "owner", role: "admin", session_expires_at: ends, settings: {} });
+  client.setQueryData(["whoami", null], { name: "owner", role: "admin", session_expires_at: ends, settings: { time_display: timeDisplay, timezone: "Asia/Kolkata" } });
   return render(
     <QueryClientProvider client={client}>
       <SessionGuard />
@@ -24,12 +24,16 @@ describe("the session guard", () => {
 
   it("is silent while the session has time left", () => {
     guard(45);
-    expect(screen.queryByText(/Your session ends at/)).toBeNull();
+    expect(screen.queryByText(/Your session ends/)).toBeNull();
   });
 
-  it("warns ten minutes before the end and offers to stay signed in", () => {
-    guard(8);
-    expect(screen.getByText(/Your session ends at/)).toBeTruthy();
+  it.each(["relative", "absolute"])("warns using the account’s %s time display", (display) => {
+    guard(8, display);
+    const warning = screen.getByText(/Your session ends/);
+    const time = warning.querySelector("time")!;
+    expect(time).not.toBeNull();
+    expect(display === "relative" ? time.textContent : time.title).toMatch(/^in \d+ min$/);
+    expect(display === "absolute" ? time.textContent : time.title).toMatch(/GMT\+5:30/);
     expect(screen.getByRole("button", { name: "Stay signed in" })).toBeTruthy();
   });
 
