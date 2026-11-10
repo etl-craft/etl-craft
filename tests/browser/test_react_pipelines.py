@@ -338,12 +338,12 @@ def test_the_task_list_and_the_matrix_resize_together_and_the_newest_run_stays(s
         divider = page.get_by_role("separator", name="Resize the task list and the runs")
         grid = page.get_by_role("table", name="Run grid")
         area = grid.locator("xpath=ancestor::div[@dir='rtl']")
-        before = area.bounding_box()["width"]
+        before = area.bounding_box()["x"]
         divider.focus()
         for _ in range(8):
-            page.keyboard.press("ArrowLeft")  # the task list gives room to the matrix
-        after = area.bounding_box()["width"]
-        assert after > before, "narrowing the task list did not widen the matrix"
+            page.keyboard.press("ArrowLeft")  # the task list narrows and the runs follow it
+        after = area.bounding_box()["x"]
+        assert after < before, "narrowing the task list did not move the runs beside it"
         newest = grid.locator("thead th a").last.bounding_box()
         box = area.bounding_box()
         right = box["x"] + box["width"] + 1

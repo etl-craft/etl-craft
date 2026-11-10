@@ -74,7 +74,8 @@ def test_refreshing_and_rebuilding_shows_the_traced_chain_and_the_api_agrees(cha
     with sync_playwright() as pw:
         browser, page, problems = open_page(pw, viewport={"width": 1280, "height": 1000})
         sign_in(page, url, "/ui/projects/default/catalog")
-        page.get_by_role("button", name="Refresh lineage").click()
+        page.get_by_role("button", name="More catalog actions").click()
+        page.get_by_role("menuitem").filter(has_text="Refresh lineage").click()
         page.get_by_role("dialog").get_by_role("button", name="Refresh lineage").click()
         done = page.get_by_role("status").filter(has_text="Lineage refreshed: 3 task(s) traced.")
         expect(done).to_be_visible()
@@ -153,7 +154,8 @@ def test_a_task_that_cannot_be_traced_is_named_with_its_reason_and_counted(chain
     with sync_playwright() as pw:
         browser, page, _ = open_page(pw, viewport={"width": 1280, "height": 1000})
         sign_in(page, url, "/ui/projects/default/catalog")
-        page.get_by_role("button", name="Refresh lineage").click()
+        page.get_by_role("button", name="More catalog actions").click()
+        page.get_by_role("menuitem").filter(has_text="Refresh lineage").click()
         page.get_by_role("dialog").get_by_role("button", name="Refresh lineage").click()
         said = page.get_by_role("status").filter(has_text="Lineage refreshed with errors")
         expect(said).to_contain_text("3 of 4 task(s) traced; 1 could not be traced")
@@ -171,7 +173,8 @@ def test_all_tables_lists_every_table_and_filters_by_name(chain):
     with sync_playwright() as pw:
         browser, page, problems = open_page(pw, viewport={"width": 1280, "height": 1000})
         sign_in(page, url, "/ui/projects/default/catalog")
-        page.get_by_role("button", name="Refresh lineage").click()
+        page.get_by_role("button", name="More catalog actions").click()
+        page.get_by_role("menuitem").filter(has_text="Refresh lineage").click()
         page.get_by_role("dialog").get_by_role("button", name="Refresh lineage").click()
         expect(page.get_by_role("status").filter(has_text="Lineage refreshed")).to_be_visible()
         rebuild(page)

@@ -1,6 +1,7 @@
 """Insights, the command console and the catalog in a real browser."""
 
 import os
+import re
 from pathlib import Path
 
 import pytest
@@ -59,9 +60,9 @@ def test_insights_summarises_runs_and_filters_through_the_address(scene):
         browser, page, problems = open_page(pw, viewport={"width": 1280, "height": 1000})
         sign_in(page, url, "/ui/projects/default")
         expect(page.get_by_role("heading", name="Home", exact=True)).to_be_visible()
-        expect(page.get_by_text("Success rate", exact=True).first).to_be_visible()
-        expect(page.get_by_role("list", name="Runs per day")).to_be_visible()
-        expect(page.get_by_role("list", name="Latest runs")).to_be_visible()
+        expect(page.get_by_text(re.compile(r"\d+% success rate"))).to_be_visible()
+        expect(page.get_by_role("region", name="Runs per day")).to_be_visible()
+        expect(page.get_by_role("region", name="Latest runs")).to_be_visible()
         shoot(page, "insights")
         tabs = [t.strip() for t in page.get_by_role("tab").all_inner_texts()]
         assert tabs[:4] == ["Overview", "Capacity", "Catalog", "Pipelines"], tabs
@@ -72,9 +73,10 @@ def test_insights_summarises_runs_and_filters_through_the_address(scene):
         page.get_by_role("tab", name="Failures").click()
         expect(page.get_by_role("table", name="Failures").get_by_text("LOAD")).to_be_visible()
         page.get_by_role("tab", name="Overview").click()
+        page.get_by_text("Custom range").click()  # the day fields sit behind the range button
         page.get_by_label("To (UTC day)").fill("2020-01-05")
         page.get_by_label("From (UTC day)").fill("2020-01-01")
-        expect(page.get_by_text("No runs started in this window.")).to_be_visible()
+        expect(page.get_by_text("No runs yet in this window")).to_be_visible()
         assert "from=2020-01-01" in page.url and "to=2020-01-05" in page.url
         page.get_by_text("Pipelines (all you can view)").click()
         page.get_by_label("ORDERS").click()
@@ -155,7 +157,7 @@ def test_the_catalog_says_when_nothing_is_built_and_offers_the_rebuild(scene):
         browser, page, _ = open_page(pw, viewport={"width": 1280, "height": 1000})
         sign_in(page, url, "/ui/projects/default/catalog")
         expect(page.get_by_role("heading", name="Catalog", exact=True)).to_be_visible()
-        expect(page.get_by_role("button", name="Validate metadata")).to_be_visible()
+        expect(page.get_by_role("button", name="More catalog actions")).to_be_visible()
         expect(page.get_by_role("button", name="Rebuild catalog")).to_be_visible()
         expect(page.get_by_text("catalog is not generated")).to_be_visible()
         expect(page.get_by_text("Use Rebuild catalog above.")).to_be_visible()
@@ -172,7 +174,8 @@ def test_the_catalog_says_when_nothing_is_built_and_offers_the_rebuild(scene):
         expect(page.get_by_role("heading", name="default catalog")).to_be_visible()
         expect(page.get_by_text("Pipelines", exact=True).first).to_be_visible()
         expect(page.get_by_text("catalog is not generated")).to_have_count(0)
-        page.get_by_role("button", name="Validate metadata").click()
+        page.get_by_role("button", name="More catalog actions").click()
+        page.get_by_role("menuitem").filter(has_text="Validate metadata").click()
         expect(
             page.get_by_text("Checked 2 pipeline(s)").or_(page.get_by_text("Checked 1 pipeline(s)"))
         ).to_be_visible()

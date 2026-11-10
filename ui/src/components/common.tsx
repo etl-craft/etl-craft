@@ -1,6 +1,6 @@
-import { ArrowLeft, type LucideIcon } from "lucide-react";
+import { ArrowLeft, Inbox, type LucideIcon } from "lucide-react";
 import * as React from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { cn } from "@/lib/utils";
 
 /** The path to the page from the project's lists, each part a link except the last. */
@@ -22,23 +22,6 @@ export function Breadcrumbs({ trail }: { trail: { label: string; to?: string }[]
         </React.Fragment>
       ))}
     </nav>
-  );
-}
-
-/** The arrow before a title when the page names no parent: one step back in this tab's history, or Home when it is the first page opened. */
-function HistoryBack() {
-  const navigate = useNavigate();
-  const location = useLocation();
-  return (
-    <button
-      type="button"
-      aria-label="Back"
-      title="Back"
-      onClick={() => (location.key === "default" ? navigate("/") : navigate(-1))}
-      className="-ml-1 grid size-8 cursor-pointer place-items-center rounded-md text-muted hover:bg-surface-2 hover:text-fg"
-    >
-      <ArrowLeft className="size-4" aria-hidden />
-    </button>
   );
 }
 
@@ -108,6 +91,17 @@ export function Notice({ children, mono, info, className }: { children: React.Re
   );
 }
 
+/** A list with nothing in it: a symbol, what is missing, and the step that fills it. */
+export function EmptyState({ title, children, className }: { title: React.ReactNode; children?: React.ReactNode; className?: string }) {
+  return (
+    <div role="status" className={cn("grid justify-items-center gap-1.5 px-4 py-10 text-center", className)}>
+      <Inbox aria-hidden className="mb-1 size-6 text-muted" strokeWidth={1.5} />
+      <p className="m-0 text-sm font-medium text-fg">{title}</p>
+      {children ? <p className="m-0 max-w-md text-[13px] text-muted">{children}</p> : null}
+    </div>
+  );
+}
+
 export function Loading({ what, className }: { what: string; className?: string }) {
   return (
     <p role="status" className={cn("m-0 text-muted", className)}>
@@ -136,7 +130,7 @@ export function PageHeader({
   actions?: React.ReactNode;
   /** A smaller title and tighter spacing, for a page whose body is the point (a run). */
   compact?: boolean;
-  /** Where the arrow before the title leads back to, such as the list this page is one row of. Without one the arrow goes back in history; `null` shows none, as on Home. */
+  /** The page this one is nested under, such as the list it is one row of; a page reached from the navigation has none, so no arrow. */
   back?: { to: string; label: string } | null;
   children?: React.ReactNode;
 }) {
@@ -144,7 +138,6 @@ export function PageHeader({
     <header className={cn("flex flex-wrap items-start justify-between gap-y-2", compact ? "gap-x-3" : "gap-x-4")}>
       <div className={cn("grid min-w-0 flex-1", compact ? "gap-1" : "gap-2")}>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-          {back === undefined ? <HistoryBack /> : null}
           {back ? (
             <Link to={back.to} aria-label={`Back to ${back.label}`} title={`Back to ${back.label}`} className="-ml-1 grid size-8 place-items-center rounded-md text-muted hover:bg-surface-2 hover:text-fg">
               <ArrowLeft className="size-4" aria-hidden />
@@ -225,7 +218,8 @@ export const inputClass = "h-8 w-full rounded-md border border-border-strong bg-
 /** A labelled control: one style for every form; `compact` is the small muted label used above toolbar filters. */
 export function Field({ label, compact, hideLabel, children }: { label: string; compact?: boolean; hideLabel?: boolean; children: React.ReactNode }) {
   return (
-    <label className={cn("grid gap-1", compact ? "text-xs text-muted" : "text-sm")}>
+    // A toolbar filter keeps the width of its control; a form field fills its column.
+    <label className={cn("grid gap-1", compact ? "w-fit justify-self-start text-xs text-muted" : "text-sm")}>
       <span className={hideLabel ? "sr-only" : compact ? undefined : "font-medium"}>{label}</span>
       {children}
     </label>

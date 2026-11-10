@@ -6,6 +6,23 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+- The UI names every status the server records in words, with its own symbol: Timed out is red, Lost and
+  an SLA breach are amber, Cancelled, Held and Stopped are slate; a failed run no longer shows its SLA as met,
+  and a finished run's untouched tasks show as not started (or skipped) instead of queued. In dense lists
+  only failures and warnings keep a coloured pill.
+- A failed run opens with its failed tasks and the first one's error. Recover run is the one primary action;
+  the run's other controls, its key and its logs are in one Actions menu, each control with what it does and,
+  when it is not possible, why. The Catalog has one primary action, Rebuild catalog, and a More menu.
+- Tables fit their pane from 640 px wide instead of scrolling sideways; account actions are in each row's
+  menu. Every time on screen follows the account's Time display setting, and durations have one format
+  (6.4s, 2m 06s). Engine codes are shown as words (Email alert, any upstream succeeds, Unknown), attempt
+  internals sit under Process details, and unmeasured counts are left out.
+- The run grid's runs sit beside the task names; a large graph opens at a readable zoom and pans; duration
+  charts with fewer than five runs are replaced by the numbers. Pages reached from the navigation have no
+  back arrow, empty lists say what fills them, catalog tasks are listed in run order, and production is
+  marked with a shield in the strip, its badge and every confirmation. On a phone the top bar has search
+  and a selected run's details come before the grid.
+- The session warning reads the account again before saying a session has ended.
 - Home is a dashboard that fits the window instead of one long page of tables: tabs for Overview (headline
   tiles, runs per day, average duration per day, success rate by pipeline and the latest runs), Pipelines,
   Data, Quality, Failures and Latest runs, with 24 h, 7 day and 30 day presets. Charts are drawn in the app

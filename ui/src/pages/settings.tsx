@@ -1,12 +1,12 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { When } from "@/components/when";
 import * as React from "react";
 import { Link } from "react-router-dom";
 import { inputClass, Loading, Notice, PageHeader, SelectField, SettingRow } from "@/components/common";
 import { useToast } from "@/components/toast";
 import { Button } from "@/components/ui/button";
-import { failureText, useHealth, useIdentity, useTimezone } from "@/hooks";
+import { failureText, useHealth, useIdentity } from "@/hooks";
 import { postJson } from "@/lib/api";
-import { formatTime } from "@/lib/format";
 import { passwordPath } from "@/lib/routes";
 import { applyDensity, applyTheme, storedDensity, type Density } from "@/lib/theme";
 import { readWrap, saveWrap } from "@/components/data-table";
@@ -17,7 +17,6 @@ export function Settings() {
   useDocumentTitle("Personal settings");
   const identity = useIdentity();
   const health = useHealth();
-  const tz = useTimezone();
   const toast = useToast();
   const client = useQueryClient();
   const [edit, setEdit] = React.useState<PersonalSettings | null>(null);
@@ -126,7 +125,7 @@ export function Settings() {
           {save.isPending ? "Saving…" : "Save settings"}
         </Button>
         {save.isError ? <Notice className="py-1.5">{failureText(save.error)}</Notice> : null}
-        <span className="ml-auto text-xs text-muted">Last sign-in: {formatTime(identity.data?.last_signin ?? null, tz)}</span>
+        <span className="ml-auto text-xs text-muted">Last sign-in: <When iso={identity.data?.last_signin} empty="never" /></span>
       </div>
     </form>
     </div>

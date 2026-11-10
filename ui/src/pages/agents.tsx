@@ -1,13 +1,13 @@
 import { useQuery } from "@tanstack/react-query";
+import { When } from "@/components/when";
 import { createColumnHelper } from "@tanstack/react-table";
-import { Loading, Notice, PageHeader } from "@/components/common";
+import { Loading, Notice, PageHeader, EmptyState } from "@/components/common";
 import { RowActions, type RowAction } from "@/components/row-actions";
 import { DataTable } from "@/components/data-table";
 import { StatusBadge } from "@/components/status";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
-import { useRoleAtLeast, useTimezone } from "@/hooks";
+import { useRoleAtLeast } from "@/hooks";
 import { getJson } from "@/lib/api";
-import { formatTime } from "@/lib/format";
 import type { AgentRow, AgentsView } from "@/lib/types";
 import { useDocumentTitle } from "@/title";
 
@@ -27,7 +27,6 @@ const command = (agent: AgentRow, name: string, label: string, effect: string, d
 
 export function Agents() {
   useDocumentTitle("Agents");
-  const tz = useTimezone();
   const may = useRoleAtLeast("operator");
   const list = useQuery({ queryKey: ["agents"], queryFn: () => getJson<AgentsView>("/api/v1/agents"), refetchInterval: 10_000 });
   const rows = list.data?.agents ?? [];
@@ -43,14 +42,14 @@ export function Agents() {
         <DataTable find
           label="Agents"
           data={rows}
-          empty={list.isSuccess ? "No agents have registered. Start one with etl-craft agent and an agent token. Deployments that run tasks on the controller's host do not use agents." : undefined}
+          empty={list.isSuccess ? <EmptyState title="No agents have registered">Start one with <code className="font-mono">etl-craft agent</code> and an agent token. Deployments that run tasks on the controller&apos;s host do not use agents.</EmptyState> : undefined}
           columns={[
             columns.accessor("agent_id", { header: "Agent" }),
             columns.accessor("pool", { header: "Pool" }),
             columns.accessor("host", { header: "Host" }),
             columns.accessor("version", { header: "Version" }),
             columns.accessor("status", { header: "State", cell: (c) => <StatusBadge status={c.getValue()} /> }),
-            columns.accessor("heartbeat_at", { header: "Last heartbeat", cell: (c) => <span className="num whitespace-nowrap">{formatTime(c.getValue(), tz)}</span> }),
+            columns.accessor("heartbeat_at", { header: "Last heartbeat", cell: (c) => <When iso={c.getValue()} /> }),
             columns.display({ id: "attempts", header: "Running attempts", cell: (c) => c.row.original.attempts.length }),
             columns.display({ id: "free", header: "Free CPU / memory", cell: (c) => `${c.row.original.free_cpu.toFixed(1)} / ${c.row.original.free_memory_mb} MB` }),
             columns.display({ id: "pending", header: "Pending commands", cell: (c) => c.row.original.pending_commands.map((p) => p.command).join(", ") || "None" }),

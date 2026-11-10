@@ -10,9 +10,9 @@ import { Loading, Notice, PageHeader } from "@/components/common";
 import { CsvButton } from "@/components/csv-button";
 import { DataTable } from "@/components/data-table";
 import { NextRun, PauseState, RecentRuns, TagList } from "@/components/pipeline-parts";
-import { StatusBadge } from "@/components/status";
+import { slaVerdict, StatusBadge } from "@/components/status";
 import { Card } from "@/components/ui/card";
-import { useCanRun, useProjectInfo, useRoleAtLeast, useTimezone } from "@/hooks";
+import { useCanRun, useProjectInfo, useRoleAtLeast } from "@/hooks";
 import { getJson, project } from "@/lib/api";
 import { pipelinePath } from "@/lib/routes";
 import type { BulkOutcome, Pipeline } from "@/lib/types";
@@ -31,7 +31,6 @@ export function Pipelines() {
   const [params, setParams] = useSearchParams();
   const tags = params.getAll("tag");
   const text = params.get("q") ?? "";
-  const tz = useTimezone();
   const canRun = useCanRun(code);
   const developer = useRoleAtLeast("developer");
   const info = useProjectInfo(code);
@@ -74,7 +73,7 @@ export function Pipelines() {
     <div className="grid grid-cols-1 gap-4">
       <PageHeader
         title="Pipelines"
-        subtitle={`${code} · ${tags.length ? `tagged ${tags.join(" and ")}` : "all pipelines"} · ${shown.length}`}
+        subtitle={tags.length ? `Tagged ${tags.join(" and ")}` : undefined}
         actions={
           <div className="flex flex-wrap items-start gap-2">
           {developer ? (
@@ -87,7 +86,7 @@ export function Pipelines() {
               askReason={false}
               body={() => ({})}
               describe={() => "Every pipeline was refreshed."}
-              size="sm"
+              
             />
           ) : null}
           <CsvButton
@@ -143,19 +142,21 @@ export function Pipelines() {
                 </span>
               ),
             }),
-            columns.display({ id: "recent", header: "Recent runs", cell: (c) => <RecentRuns project={code} pipeline={c.row.original} /> }),
+            columns.display({ id: "recent", header: "Recent runs", minSize: 176, cell: (c) => <RecentRuns project={code} pipeline={c.row.original} /> }),
             columns.display({ id: "description", header: "Description", cell: (c) => <span className="line-clamp-2 max-w-md text-[13px] text-muted" title={c.row.original.description ?? undefined}>{c.row.original.description ?? "—"}</span> }),
             columns.display({ id: "tags", header: "Tags", cell: (c) => <TagList tags={c.row.original.tags} /> }),
             columns.accessor("run_schedule", { header: "Schedule", enableSorting: false, cell: (c) => (c.getValue() ? <code className="whitespace-nowrap font-mono text-xs">{c.getValue()}</code> : <span className="whitespace-nowrap text-muted">Not scheduled</span>) }),
-            columns.display({ id: "next", header: "Next run", cell: (c) => <NextRun pipeline={c.row.original} timeZone={tz} /> }),
+            columns.display({ id: "next", header: "Next run", cell: (c) => <NextRun pipeline={c.row.original} /> }),
             ...(all.some((p) => p.sla_in_hours) ? [
             columns.display({
               id: "sla",
               header: "SLA",
+              minSize: 112,
               cell: (c) => {
                 const p = c.row.original;
-                const latest = p.recent_runs[0]?.sla_status;
-                return latest ? <StatusBadge status={latest} /> : <span className="text-muted">{p.sla_in_hours ? "No run yet" : "—"}</span>;
+                const newest = p.recent_runs[0];
+                const latest = newest ? slaVerdict(newest) : null;
+                return latest ? <StatusBadge status={latest} /> : <span className="text-muted">{!p.sla_in_hours ? "—" : newest ? "No verdict" : "No run yet"}</span>;
               },
             })
             ] : []),

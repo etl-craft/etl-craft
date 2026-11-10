@@ -1,17 +1,17 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { When } from "@/components/when";
 import { createColumnHelper } from "@tanstack/react-table";
 import { Upload } from "lucide-react";
 import * as React from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
-import { Field, Loading, Notice, PageHeader, SelectField } from "@/components/common";
+import { Field, Loading, Notice, PageHeader, SelectField, EmptyState } from "@/components/common";
 import { DataTable } from "@/components/data-table";
 import { StatusBadge } from "@/components/status";
 import { useToast } from "@/components/toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
-import { failureText, useProjectInfo, useTimezone } from "@/hooks";
+import { failureText, useProjectInfo } from "@/hooks";
 import { getJson, postForm, project } from "@/lib/api";
-import { formatTime } from "@/lib/format";
 import { runPath } from "@/lib/routes";
 import type { UploadReceipt, UploadRow } from "@/lib/types";
 import { useDocumentTitle } from "@/title";
@@ -32,7 +32,6 @@ const stateOf = (f: UploadRow): { status: string; label: string } =>
 export function Uploads() {
   const { project: code = "" } = useParams();
   const [params, setParams] = useSearchParams();
-  const tz = useTimezone();
   const toast = useToast();
   const client = useQueryClient();
   const info = useProjectInfo(code);
@@ -69,7 +68,7 @@ export function Uploads() {
 
   return (
     <div className="grid grid-cols-1 gap-5">
-      <PageHeader title="Uploads" subtitle={code} />
+      <PageHeader title="Uploads" />
       {eligible.isError ? <Notice>{(eligible.error as Error).message}</Notice> : null}
       {eligible.isPending ? <Loading what="your pipelines" /> : null}
       {eligible.isSuccess && pipelines.length === 0 ? (
@@ -134,14 +133,14 @@ export function Uploads() {
             <DataTable find
               label="Recent files"
               data={files.data?.uploads ?? []}
-              empty={files.isSuccess ? `No files uploaded to ${chosen} yet.` : undefined}
+              empty={files.isSuccess ? <EmptyState title={`No files uploaded to ${chosen} yet`}>Choose a file above; each upload is listed here with what happened to it.</EmptyState> : undefined}
               columns={[
                 columns.accessor("upload_id", { header: "Upload", cell: (c) => <span className="num">{c.getValue()}</span> }),
                 columns.accessor("file_name", { header: "File", cell: (c) => <span className="break-all font-medium">{c.getValue()}</span> }),
                 columns.accessor("size_bytes", { header: "Size", cell: (c) => <span className="num whitespace-nowrap">{c.getValue().toLocaleString("en-GB")} bytes</span> }),
                 columns.accessor("stored_name", { header: "Stored name", cell: (c) => <span className="break-all text-muted">{c.getValue() ?? "—"}</span> }),
                 columns.accessor("account", { header: "Uploaded by" }),
-                columns.accessor("uploaded_at", { header: "Uploaded", cell: (c) => <span className="num whitespace-nowrap">{formatTime(c.getValue(), tz)}</span> }),
+                columns.accessor("uploaded_at", { header: "Uploaded", cell: (c) => <When iso={c.getValue()} /> }),
                 columns.display({ id: "state", header: "State", cell: (c) => <StatusBadge {...stateOf(c.row.original)} /> }),
                 columns.display({
                   id: "run",

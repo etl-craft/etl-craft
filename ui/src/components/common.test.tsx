@@ -30,19 +30,19 @@ describe("Notice", () => {
 });
 
 describe("PageHeader", () => {
-  it("has a back arrow unless the page is a root", () => {
+  it("has a back arrow only on a page nested under another", () => {
     const { rerender } = render(
       <MemoryRouter>
         <PageHeader title="Runs" />
       </MemoryRouter>,
     );
-    expect(screen.getByRole("button", { name: "Back" })).toBeTruthy();
+    expect(screen.queryByRole("link", { name: /Back/ })).toBeNull();
     rerender(
       <MemoryRouter>
-        <PageHeader title="Home" back={null} />
+        <PageHeader title="OPS" back={{ to: "/projects/demo/pipelines", label: "Pipelines" }} />
       </MemoryRouter>,
     );
-    expect(screen.queryByRole("button", { name: "Back" })).toBeNull();
+    expect(screen.getByRole("link", { name: "Back to Pipelines" })).toBeTruthy();
   });
 });
 

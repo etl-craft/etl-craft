@@ -4,7 +4,7 @@ import { Link } from "react-router-dom";
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { StatusMark } from "@/components/status";
 import { useTimezone } from "@/hooks";
-import { formatDuration, formatTime, percent, relative, seconds } from "@/lib/format";
+import { formatDuration, formatSeconds, formatTime, percent, relative, seconds } from "@/lib/format";
 import { pipelinePath, runPath, runsPath } from "@/lib/routes";
 import type { DayInsight, Insights, PipelineInsight, RunView } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -150,13 +150,13 @@ function Spark({ data, color }: { data: { v: number | null }[]; color: string })
   );
 }
 
-function Figure({ label, value, format, suffix, text, hint, spark }: { label: string; value: number | null; format?: Intl.NumberFormatOptions; suffix?: string; text?: string; hint?: string; spark?: React.ReactNode }) {
+function Figure({ label, value, format, suffix, show, text, hint, spark }: { label: string; value: number | null; format?: Intl.NumberFormatOptions; suffix?: string; show?: (value: number) => string; text?: string; hint?: string; spark?: React.ReactNode }) {
   return (
     <Tile aria-label={label} className="grid content-between gap-2">
       <div className="grid gap-1 px-5 pb-3 pt-4">
         <span className="text-[13px] font-medium text-muted">{label}</span>
         <span className="num text-[28px] font-semibold leading-9 tracking-tight">
-          {value === null ? <span className="text-base font-normal text-muted">{text ?? "Not measured"}</span> : <>{value.toLocaleString("en-GB", format)}{suffix}</>}
+          {value === null ? <span className="text-base font-normal text-muted">{text ?? "Not measured"}</span> : show ? show(value) : <>{value.toLocaleString("en-GB", format)}{suffix}</>}
         </span>
         <span className="text-xs text-muted">{hint ?? " "}</span>
       </div>
@@ -212,7 +212,7 @@ export function Overview({ code, d }: { code: string; d: Insights }) {
       </div>
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <Figure label="Runs" value={t.runs} hint={t.in_progress ? `${t.in_progress} running now` : `${t.finished} finished`} spark={<Spark color="var(--accent)" data={days.map((x) => ({ v: x.runs }))} />} />
-        <Figure label="Average duration" value={t.average_seconds} format={{ maximumFractionDigits: 1 }} suffix=" s" text="No finished runs" hint={t.longest_seconds === null ? undefined : `longest ${seconds(t.longest_seconds)}`} spark={<Spark color="var(--run-solid)" data={days.map((x) => ({ v: x.average_seconds }))} />} />
+        <Figure label="Average duration" value={t.average_seconds} show={formatSeconds} text="No finished runs" hint={t.longest_seconds === null ? undefined : `longest ${seconds(t.longest_seconds)}`} spark={<Spark color="var(--run-solid)" data={days.map((x) => ({ v: x.average_seconds }))} />} />
         <Figure label="Retries" value={t.retries} hint={t.lost_attempts ? `${t.lost_attempts} attempts lost` : `${t.attempts} attempts`} />
         <Figure label="Rows written" value={t.rows_written} format={{ notation: "compact", maximumFractionDigits: 1 }} hint={t.rows_per_second === null ? "rate not measured" : `${t.rows_per_second.toFixed(1)} rows/s`} />
       </div>

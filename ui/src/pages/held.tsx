@@ -1,13 +1,13 @@
 import { useQuery } from "@tanstack/react-query";
+import { When } from "@/components/when";
 import { createColumnHelper } from "@tanstack/react-table";
 import { Link, useParams } from "react-router-dom";
 import { ActionButton } from "@/components/action-button";
 import { Loading, Notice, PageHeader } from "@/components/common";
 import { DataTable } from "@/components/data-table";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
-import { useCanRun, useProjectInfo, useTimezone } from "@/hooks";
+import { useCanRun, useProjectInfo } from "@/hooks";
 import { getJson, project } from "@/lib/api";
-import { formatTime } from "@/lib/format";
 import { pipelinePath, runPath } from "@/lib/routes";
 import type { Hold, Pipeline, TaskPause } from "@/lib/types";
 import { useDocumentTitle } from "@/title";
@@ -20,7 +20,6 @@ const result = (r: { message?: string }) => r.message ?? "Request recorded.";
 
 export function Held() {
   const { project: code = "" } = useParams();
-  const tz = useTimezone();
   const canRun = useCanRun(code);
   const info = useProjectInfo(code);
   useDocumentTitle("Held and paused", code, info.project && { type: info.project.environment_type, name: info.project.environment_name });
@@ -48,7 +47,7 @@ export function Held() {
             holds.accessor("pipeline_run_id", { header: "Run", cell: (c) => <Link className="num text-accent hover:underline" to={runPath(code, c.row.original.pipeline_code, c.getValue())}>#{c.getValue()}</Link> }),
             holds.accessor("task_code", { header: "Held", cell: (c) => c.getValue() ?? "Whole run" }),
             holds.accessor("requested_by", { header: "By" }),
-            holds.accessor("requested_at", { header: "Since", cell: (c) => <span className="num whitespace-nowrap">{formatTime(c.getValue(), tz)}</span> }),
+            holds.accessor("requested_at", { header: "Since", cell: (c) => <When iso={c.getValue()} /> }),
             holds.accessor("reason", { header: "Reason", cell: (c) => c.getValue() ?? "" }),
             ...(canRun
               ? [
@@ -85,7 +84,7 @@ export function Held() {
           columns={[
             pauses.accessor("pipeline_code", { header: "Pipeline", cell: (c) => <Link className="font-medium text-accent hover:underline" to={pipelinePath(code, c.getValue())}>{c.getValue()}</Link> }),
             pauses.display({ id: "by", header: "By", cell: (c) => c.row.original.paused?.paused_by }),
-            pauses.display({ id: "since", header: "Since", cell: (c) => <span className="num whitespace-nowrap">{formatTime(c.row.original.paused?.paused_at ?? null, tz)}</span> }),
+            pauses.display({ id: "since", header: "Since", cell: (c) => <When iso={c.row.original.paused?.paused_at} /> }),
             pauses.display({ id: "reason", header: "Reason", cell: (c) => c.row.original.paused?.reason }),
             ...(canRun
               ? [
@@ -123,7 +122,7 @@ export function Held() {
             standing.accessor("pipeline_code", { header: "Pipeline", cell: (c) => <Link className="font-medium text-accent hover:underline" to={pipelinePath(code, c.getValue())}>{c.getValue()}</Link> }),
             standing.accessor("task_code", { header: "Task" }),
             standing.accessor("outcome", { header: "Downstream sees", cell: (c) => c.getValue() ?? "Waiting" }),
-            standing.accessor("expires_at", { header: "Ends", cell: (c) => <span className="num whitespace-nowrap">{c.getValue() ? formatTime(c.getValue(), tz) : "Until resumed"}</span> }),
+            standing.accessor("expires_at", { header: "Ends", cell: (c) => <When iso={c.getValue()} empty="Until resumed" /> }),
             standing.accessor("actor", { header: "By" }),
             standing.accessor("reason", { header: "Reason" }),
             ...(canRun

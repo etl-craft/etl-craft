@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { When } from "@/components/when";
 import { Check, ChevronDown, Pause, Play, PlayCircle } from "lucide-react";
 import * as React from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
@@ -7,7 +8,7 @@ import { DropdownContent, DropdownItem, DropdownLabel, DropdownMenu, DropdownTri
 import { Button } from "@/components/ui/button";
 import { Fact, FactList, Field, inputClass, Loading, Notice, PageHeader, SelectField } from "@/components/common";
 import { AuditTab, CalendarTab, DetailsTab, OverviewTab, TasksTab } from "@/components/pipeline-tabs";
-import { StatusBadge } from "@/components/status";
+import { StatusBadge, taskStatus } from "@/components/status";
 import { PauseState } from "@/components/pipeline-parts";
 import { RunGraph } from "@/components/run-graph";
 import { DEFAULT_RUNS, RunGrid } from "@/components/run-grid";
@@ -18,8 +19,8 @@ import { Tabs } from "@/components/tabs";
 import { SplitPane } from "@/components/split-pane";
 import { Card } from "@/components/ui/card";
 import { autoStarts } from "@/lib/auto-starts";
-import { useAutoStarts, useCanRun, useProjectInfo, useTimezone } from "@/hooks";
-import { describeCron, formatDuration, formatTime, runIdOf } from "@/lib/format";
+import { useAutoStarts, useCanRun, useProjectInfo } from "@/hooks";
+import { describeCron, formatDuration, runIdOf } from "@/lib/format";
 import { getJson, project } from "@/lib/api";
 import { pipelinesPath, taskPath } from "@/lib/routes";
 import { cn } from "@/lib/utils";
@@ -47,7 +48,6 @@ export function PipelineDetail() {
     setParams(next, { replace: true });
   };
   const navigate = useNavigate();
-  const tz = useTimezone();
   const canRun = useCanRun(code);
   const info = useProjectInfo(code);
   const found = useQuery({
@@ -196,13 +196,13 @@ export function PipelineDetail() {
             <Fact inline label="Latest run">
               {runs[0] ? (
                 <span className="inline-flex items-center gap-1.5">
-                  <StatusBadge status={runs[0].status} /> {formatTime(runs[0].start_date, tz)}
+                  <StatusBadge status={runs[0].status} /> <When iso={runs[0].start_date} />
                 </span>
               ) : (
                 "None yet"
               )}
             </Fact>
-            <Fact inline label="Next run">{starts && !starts.schedule ? <span className="text-muted" title="Schedules are switched off here by the controller or the project">Not started here</span> : p.next_run ? formatTime(p.next_run, tz) : (p.restart_note ?? "—")}</Fact>
+            <Fact inline label="Next run">{starts && !starts.schedule ? <span className="text-muted" title="Schedules are switched off here by the controller or the project">Not started here</span> : <When iso={p.next_run} empty={p.restart_note ?? "—"} />}</Fact>
             <Fact inline label="Refresh">{p.refresh_type.toLowerCase()}</Fact>
             {p.sla_in_hours ? <Fact inline label="SLA">{p.sla_in_hours} h</Fact> : null}
             {p.tags.length ? <Fact inline label="Tags">{p.tags.join(", ")}</Fact> : null}
@@ -218,6 +218,8 @@ export function PipelineDetail() {
       ) : null}
       <SplitPane
         id="pipeline"
+        // On a narrow screen the selected run's details come before the grid of every run.
+        narrowFirst={tab === "run" ? "right" : "left"}
         className="lg:min-h-0 lg:flex-1"
         left={
         <Card className="flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -284,7 +286,7 @@ export function PipelineDetail() {
                 <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-b border-border bg-surface-2 px-3 py-1.5 text-xs">
                   <span className="font-medium">Run {selectedRun.pipeline_run_id}</span>
                   <StatusBadge status={selectedRun.status} />
-                  <span className="text-muted">{formatTime(selectedRun.start_date, tz)}</span>
+                  <span className="text-muted"><When iso={selectedRun.start_date} /></span>
                   <span className="num text-muted">{formatDuration(selectedRun.start_date, selectedRun.end_date)}</span>
                 </div>
               ) : null}
@@ -293,7 +295,7 @@ export function PipelineDetail() {
                 fill
                 direction={flow}
                 graph={graph.data}
-                statuses={Object.fromEntries((steps.data?.steps ?? []).map((step) => [step.task_code, step.status ?? "QUEUED"]))}
+                statuses={Object.fromEntries((steps.data?.steps ?? []).map((step) => [step.task_code, taskStatus(step.status, selectedRun)]))}
                 plain={selected === undefined}
                 focused={focused}
                 onFocus={setFocused}
@@ -351,7 +353,7 @@ export function PipelineDetail() {
             ) : !p || !graph.isSuccess ? (
               <Loading what="pipeline" />
             ) : tab === "tasks" ? (
-              <TasksTab code={code} pipeline={pipeline} graph={graph.data} runId={selected} />
+              <TasksTab code={code} pipeline={pipeline} graph={graph.data} runId={selected} run={selectedRun} />
             ) : tab === "calendar" ? (
               <CalendarTab runs={runs} />
             ) : tab === "audit" ? (

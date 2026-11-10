@@ -1,4 +1,5 @@
-import { ChevronDown, LogOut, Menu, Moon, Sun, X } from "lucide-react";
+import { ChevronDown, LogOut, Menu, Moon, Search, Sun, X } from "lucide-react";
+import { words } from "@/lib/labels";
 import * as React from "react";
 import { Link, Outlet, useLocation, useNavigate, useParams } from "react-router-dom";
 import { Notice } from "@/components/common";
@@ -15,7 +16,7 @@ import { useActiveProject, useHealth, useIdentity } from "@/hooks";
 import { signOut } from "@/lib/api";
 import { rememberProject } from "@/lib/project-memory";
 import { rememberVisit } from "@/lib/recent";
-import { aboutPath, homePath, passwordPath, projectHomePath, settingsPath } from "@/lib/routes";
+import { aboutPath, homePath, passwordPath, projectHomePath, settingsPath, searchPath } from "@/lib/routes";
 import { applyTheme, initialTheme, type Theme } from "@/lib/theme";
 import { isProduction } from "@/lib/environment";
 import { cn } from "@/lib/utils";
@@ -113,6 +114,14 @@ export function AppShell() {
         </DropdownMenu>
         {env && !isProduction(env) ? <EnvironmentBadge env={env} className="max-sm:hidden" /> : null}
         {code ? <SearchBox ref={searchBox} code={code} /> : null}
+        {code ? (
+          // The search box is hidden on a phone; the search page is one tap away instead.
+          <Button asChild variant="ghost" size="icon" className="sm:hidden">
+            <Link to={searchPath(code)} aria-label="Search">
+              <Search className="size-5" aria-hidden />
+            </Link>
+          </Button>
+        ) : null}
         <div className="ml-auto flex items-center gap-1">
           <LiveStatus className="mr-2 hidden sm:flex" />
           <Button variant="ghost" size="icon" aria-label={theme === "dark" ? "Use the light theme" : "Use the dark theme"} onClick={() => {
@@ -132,7 +141,7 @@ export function AppShell() {
             <DropdownContent>
               <DropdownLabel>
                 {identity.data ? `${person ? `${person} (${identity.data.name})` : identity.data.name} · ${identity.data.role}` : "Signed in"}
-                {identity.data?.project_permission ? ` · ${identity.data.project_permission}` : ""}
+                {identity.data?.project_permission ? ` · ${words(identity.data.project_permission).toLowerCase()}` : ""}
               </DropdownLabel>
               <DropdownItem asChild>
                 <Link to={settingsPath}>Personal settings</Link>

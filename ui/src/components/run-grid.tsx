@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils";
 
 /** How many of the newest runs the grid shows unless asked for more. */
 export const DEFAULT_RUNS = 25;
-const CELL = 20;
+const CELL = 24;
 const MIN_TASKS = 96;
 const MIN_MATRIX = 60;
 
@@ -47,8 +47,10 @@ export function RunGrid({ code, pipeline, graph, runs, extra, selected, onSelect
   const matrixWanted = shown.length * CELL;
   const autoTasks = Math.round(Math.min(Math.max(natural, 128), Math.max(128, pane * 0.45)));
   // With room to spare the task list takes it, so the last run sits against the pane's edge.
-  const taskWidth = share === null ? Math.max(autoTasks, Math.min(pane - matrixWanted, natural + 400)) : Math.round(Math.min(Math.max(share * pane, MIN_TASKS), Math.max(MIN_TASKS, pane - MIN_MATRIX)));
-  const matrixWidth = Math.max(0, pane - taskWidth);
+  // The task list is as wide as its names need and the runs start right after it, newest at its end: a status sits
+  // next to its task's name instead of across the pane, and the spare room is left at the far edge.
+  const taskWidth = share === null ? autoTasks : Math.round(Math.min(Math.max(share * pane, MIN_TASKS), Math.max(MIN_TASKS, pane - MIN_MATRIX)));
+  const matrixWidth = Math.max(0, Math.min(pane - taskWidth, matrixWanted + 2));
   const head = React.useRef<HTMLDivElement>(null);
   const [bar, setBar] = React.useState(0);
   // A run chosen from elsewhere is brought into view.
@@ -147,7 +149,7 @@ export function RunGrid({ code, pipeline, graph, runs, extra, selected, onSelect
           <span aria-hidden className="absolute inset-y-0 left-0.5 w-px bg-border-strong group-hover:w-0.5 group-hover:bg-accent group-focus-visible:bg-accent" />
         </div>
         {/* Right to left, so the scroll origin is the right edge: the newest run stays in view as the matrix narrows, and the oldest runs are the ones that scroll away. */}
-        <div ref={box} dir="rtl" onScroll={sync} style={{ width: matrixWidth, minWidth: 0 }} className="min-h-0 flex-1 overflow-auto">
+        <div ref={box} dir="rtl" onScroll={sync} style={{ width: matrixWidth, minWidth: 0 }} className="min-h-0 shrink-0 overflow-auto">
           <div dir="ltr" className="w-max">
             <table aria-label="Run grid" style={{ width: shown.length * CELL }} className="table-fixed border-separate border-spacing-0 text-[13px]">
               <thead>
@@ -189,7 +191,7 @@ export function RunGrid({ code, pipeline, graph, runs, extra, selected, onSelect
                         <td key={run.pipeline_run_id} className={cn("h-7 border-l border-t border-border px-0 py-0 text-center align-middle", apart(run) && "border-l-2 border-dashed border-l-border-strong", chosen && "bg-accent/10")}>
                           {entry ? (
                             <button type="button" className="inline-grid cursor-pointer rounded-sm hover:ring-2 hover:ring-accent" onClick={() => onSelect(run.pipeline_run_id, task)}>
-                              <StatusMark solid className="size-4" status={entry.status} label={`${task} in run ${run.pipeline_run_id}: ${entry.status.toLowerCase()}`} />
+                              <StatusMark solid className="size-5" status={entry.status} label={`${task} in run ${run.pipeline_run_id}: ${entry.status.toLowerCase()}`} />
                             </button>
                           ) : (
                             <span className="text-muted" aria-label={`${task} did not start in run ${run.pipeline_run_id}`}>

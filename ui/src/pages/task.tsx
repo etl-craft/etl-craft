@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { When } from "@/components/when";
 import { createColumnHelper } from "@tanstack/react-table";
 import { Link, useParams } from "react-router-dom";
 import { Breadcrumbs, Fact, FactList, Loading, Notice, PageHeader, ParamList } from "@/components/common";
@@ -8,9 +9,10 @@ import { OffsetCard } from "@/components/offset-card";
 import { ProvenanceCard } from "@/components/provenance-card";
 import { StatusBadge } from "@/components/status";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
-import { useProjectInfo, useTimezone } from "@/hooks";
+import { useProjectInfo } from "@/hooks";
 import { getJson, project } from "@/lib/api";
-import { formatDuration, formatSeconds, formatTime } from "@/lib/format";
+import { formatDuration, formatSeconds } from "@/lib/format";
+import { handlerLabel } from "@/lib/labels";
 import { pipelinePath, pipelinesPath, runPath } from "@/lib/routes";
 import type { Pipeline, TaskDefinition, TaskHistory, TaskOffset, TaskRunView } from "@/lib/types";
 import { useDocumentTitle } from "@/title";
@@ -22,7 +24,6 @@ const seconds = (run: TaskRunView) => (run.start_date && run.end_date ? (new Dat
 
 export function Task() {
   const { project: code = "", pipeline = "", task = "" } = useParams();
-  const tz = useTimezone();
   const info = useProjectInfo(code);
   useDocumentTitle(`${task} · ${pipeline}`, code, info.project && { type: info.project.environment_type, name: info.project.environment_name });
   const params = { pipeline_code: pipeline, task_code: task };
@@ -48,7 +49,7 @@ export function Task() {
         back={{ to: pipelinePath(code, pipeline, "tasks"), label: `${pipeline} tasks` }}
         title={task}
         subtitle={`${pipeline} · ${code}`}
-        status={paused ? <span className="text-warn">Paused by {paused.actor}: {paused.reason}</span> : null}
+        status={paused ? <span className="text-idle">Paused by {paused.actor}: {paused.reason}</span> : null}
         actions={
           <CsvButton
             name={`${pipeline}-${task}-runs.csv`}
@@ -76,8 +77,8 @@ export function Task() {
           initialSort={[{ id: "run", desc: true }]}
           columns={[
             columns.accessor("pipeline_run_id", { id: "run", header: "Run", cell: (c) => <Link className="num font-medium text-accent hover:underline" to={runPath(code, pipeline, c.getValue())}>#{c.getValue()}</Link> }),
-            columns.accessor("status", { header: "Status", cell: (c) => <StatusBadge status={c.getValue()} /> }),
-            columns.accessor("start_date", { header: "Started", cell: (c) => <span className="num whitespace-nowrap">{c.getValue() ? formatTime(c.getValue(), tz) : "Not started"}</span> }),
+            columns.accessor("status", { header: "Status", cell: (c) => <StatusBadge quiet status={c.getValue()} /> }),
+            columns.accessor("start_date", { header: "Started", cell: (c) => <When iso={c.getValue()} empty="Not started" /> }),
             columns.display({ id: "duration", header: "Duration", cell: (c) => <span className="num">{c.row.original.start_date ? formatDuration(c.row.original.start_date, c.row.original.end_date) : "—"}</span> }),
             columns.accessor("source_count", { header: "Rows in", cell: (c) => <span className="num">{n(c.getValue())}</span> }),
             columns.accessor("insert_count", { header: "Inserted", cell: (c) => <span className="num">{n(c.getValue())}</span> }),
@@ -98,7 +99,7 @@ export function Task() {
           {def.data ? (
             <>
               <FactList className="lg:grid-cols-4">
-                <Fact label="Handler">{def.data.handler}</Fact>
+                <Fact label="Handler">{handlerLabel(def.data.handler)}</Fact>
                 {def.data.merge_key.length ? <Fact label="Merge key">{def.data.merge_key.join(", ")}</Fact> : null}
                 {def.data.merge_columns.length ? <Fact label="Compared columns"><span className="break-words">{def.data.merge_columns.join(", ")}</span></Fact> : null}
               </FactList>

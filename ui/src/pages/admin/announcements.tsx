@@ -1,18 +1,16 @@
 import { createColumnHelper } from "@tanstack/react-table";
+import { When } from "@/components/when";
 import { ActionButton } from "@/components/action-button";
 import { DataTable } from "@/components/data-table";
 import { FormAction } from "@/components/form-action";
 import { StatusBadge } from "@/components/status";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
-import { useTimezone } from "@/hooks";
-import { formatTime } from "@/lib/format";
 import type { Announcement } from "@/lib/types";
 import { done, ListState, useAdminList } from "./shared";
 
 const columns = createColumnHelper<Announcement>();
 
 export function AnnouncementsTab() {
-  const tz = useTimezone();
   const list = useAdminList<{ announcements: Announcement[] }>("/api/v1/announcements", { all: true });
   const rows = list.data?.announcements ?? [];
   return (
@@ -43,7 +41,7 @@ export function AnnouncementsTab() {
           columns={[
             columns.accessor("level", { header: "Level", cell: (c) => c.getValue().charAt(0) + c.getValue().slice(1).toLowerCase() }),
             columns.accessor("message", { header: "Message" }),
-            columns.display({ id: "shows", header: "Shows", cell: (c) => <span className="num whitespace-nowrap">{formatTime(c.row.original.starts_at, tz)} → {c.row.original.ends_at ? formatTime(c.row.original.ends_at, tz) : "until ended"}</span> }),
+            columns.display({ id: "shows", header: "Shows", cell: (c) => <span className="whitespace-nowrap"><When iso={c.row.original.starts_at} /> → <When iso={c.row.original.ends_at} empty="until ended" /></span> }),
             columns.accessor("created_by", { header: "Posted by" }),
             columns.display({ id: "state", header: "State", cell: (c) => (c.row.original.ended_at ? <StatusBadge status="ENDED" label={`Ended by ${c.row.original.ended_by}`} /> : <StatusBadge status="ACTIVE" label="Posted" />) }),
             columns.display({

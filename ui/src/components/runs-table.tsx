@@ -1,4 +1,6 @@
 import { useInfiniteQuery } from "@tanstack/react-query";
+import { words } from "@/lib/labels";
+import { When } from "@/components/when";
 import * as React from "react";
 import { Link } from "react-router-dom";
 import { Loading, Notice } from "@/components/common";
@@ -6,9 +8,8 @@ import { createColumnHelper } from "@tanstack/react-table";
 import { DataTable } from "@/components/data-table";
 import { StatusBadge } from "@/components/status";
 import { Card } from "@/components/ui/card";
-import { useTimezone } from "@/hooks";
 import { getJson, project } from "@/lib/api";
-import { formatDuration, formatTime } from "@/lib/format";
+import { formatDuration } from "@/lib/format";
 import { pipelineRunPath, runPath } from "@/lib/routes";
 import type { History, RunView } from "@/lib/types";
 
@@ -38,7 +39,6 @@ export function useRuns(code: string, pipeline?: string, filters: RunFilters = {
 /** The runs of the project, or of one pipeline, as a table. A run opens its own page from a pipeline's list, and
  * its pipeline's list with the run highlighted from the project's. */
 export function RunsTable({ code, pipeline, status, codes, filters = {}, highlight }: { code: string; pipeline?: string; status?: string; codes?: ReadonlySet<string>; filters?: RunFilters; highlight?: number }) {
-  const tz = useTimezone();
   const { runs, all } = useRuns(code, pipeline, filters);
   const rows = React.useMemo(() => all.filter((run) => (!status || run.status === status) && (!codes || codes.has(run.pipeline_code))), [all, status, codes]);
   return (
@@ -58,6 +58,8 @@ export function RunsTable({ code, pipeline, status, codes, filters = {}, highlig
               header: "Run",
               cell: (c) => (
                 <Link
+                  // The run's readable identifier repeats its pipeline, start and number, so it is the link's tooltip, not a column.
+                  title={c.row.original.run_label || undefined}
                   className="font-medium text-accent hover:underline"
                   to={pipeline ? runPath(code, c.row.original.pipeline_code, c.getValue()) : pipelineRunPath(code, c.row.original.pipeline_code, c.getValue())}
                 >
@@ -65,16 +67,12 @@ export function RunsTable({ code, pipeline, status, codes, filters = {}, highlig
                 </Link>
               ),
             }),
-            columns.accessor("run_label", {
-              id: "label",
-              header: "Identifier",
-              cell: (c) => <span className="whitespace-nowrap font-mono text-xs text-muted">{c.getValue() || "—"}</span>,
-            }),
+            // Status sits beside the run number, so it is in view at phone width and read first when scanning.
+            columns.accessor("status", { header: "Status", cell: (c) => <StatusBadge quiet status={c.getValue()} /> }),
             ...(pipeline ? [] : [columns.accessor("pipeline_code", { id: "pipeline", header: "Pipeline", cell: (c) => <span className="font-medium">{c.getValue()}</span> })]),
-            columns.accessor("status", { header: "Status", cell: (c) => <StatusBadge status={c.getValue()} /> }),
-            columns.accessor("trigger_kind", { header: "Trigger", cell: (c) => <span className="text-muted">{c.getValue().toLowerCase()}{c.row.original.backfill ? " · backfill" : ""}</span> }),
+            columns.accessor("trigger_kind", { header: "Trigger", cell: (c) => <span className="text-muted">{words(c.getValue()).toLowerCase()}{c.row.original.backfill ? " · backfill" : ""}</span> }),
             columns.accessor("run_date", { header: "Logical date", cell: (c) => <span className="num">{c.getValue() ?? "—"}</span> }),
-            columns.accessor("start_date", { header: "Started", cell: (c) => <span className="num whitespace-nowrap">{formatTime(c.getValue(), tz)}</span> }),
+            columns.accessor("start_date", { header: "Started", cell: (c) => <When iso={c.getValue()} /> }),
             columns.display({ id: "duration", header: "Duration", cell: (c) => <span className="num">{formatDuration(c.row.original.start_date, c.row.original.end_date)}</span> }),
             columns.accessor("started_by", { header: "Started by", cell: (c) => <span className="text-muted">{c.getValue() ?? "—"}</span> }),
           ]}

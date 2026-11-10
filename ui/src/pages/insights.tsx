@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { When } from "@/components/when";
 import * as React from "react";
 import { createColumnHelper } from "@tanstack/react-table";
 import { Link, Navigate, useLocation, useParams, useSearchParams } from "react-router-dom";
@@ -279,7 +280,7 @@ export function Insights() {
                 </TablePanel>
               </div>
             ) : null}
-            {tab === "quality" ? <Quality code={code} d={d} developer={developer} tz={tz} /> : null}
+            {tab === "quality" ? <Quality code={code} d={d} developer={developer} /> : null}
             {tab === "failures" ? (
               <TablePanel title="Failures">
                 <DataTable find
@@ -304,7 +305,7 @@ export function Insights() {
 }
 
 /** Rules and schema checks: what ran, what did not pass, and how far the declared tables are checked. */
-function Quality({ code, d, developer, tz }: { code: string; d: InsightsView; developer: boolean; tz: string }) {
+function Quality({ code, d, developer }: { code: string; d: InsightsView; developer: boolean }) {
   const open = d.gaps.filter((g) => !["Matched", "Unchecked", "Not declared", "Expected before first deployment"].includes(g.state));
   const byState = new Map<string, number>();
   for (const g of d.gaps) byState.set(g.state, (byState.get(g.state) ?? 0) + g.checks);
@@ -340,7 +341,7 @@ function Quality({ code, d, developer, tz }: { code: string; d: InsightsView; de
         }
       >
         <p className="mb-2 mt-0 text-[13px]">
-          {d.gaps_compared_at ? `Last warehouse check ${formatTime(d.gaps_compared_at, tz)}.` : <strong>Not checked against the warehouse yet: most states read Unchecked.</strong>}{" "}
+          {d.gaps_compared_at ? <>Last warehouse check <When iso={d.gaps_compared_at} />.</> : <strong>Not checked against the warehouse yet: most states read Unchecked.</strong>}{" "}
           {open.length ? (
             <Link className="text-accent hover:underline" to={catalogPath(code, "gaps")}>
               {open.length} open gap{open.length === 1 ? "" : "s"}
