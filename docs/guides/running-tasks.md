@@ -212,7 +212,7 @@ readable label, status and exact `--run-id` selector, newest first. `history --p
 
 Terminal status tables show tasks in dependency order, compact durations and SLA budgets;
 `pipelines` adds last and next run times. Labels containing spaces are shell-quoted in terminal
-status output; numeric `--run-id` and exact `--run-key` remain the selectors. Piped tables retain
+status output; numeric or stored-label `--run-id` and exact `--run-key` remain the selectors. Piped tables retain
 their tab-separated columns and numeric duration fields, and `--format json` retains its shape.
 Terminal `whoami` labels the account and role explicitly. Root help groups commands by purpose;
 subcommand help points to root help for global options, which still work before or after the command.
@@ -222,3 +222,19 @@ window and `--format json` returns the complete result. Completed requests show 
 outcome by pairing a linked completion event with the original immutable request. A successful
 request means the operation completed, not that a submitted pipeline has finished successfully;
 inspect its exact run for execution status.
+
+### Selecting by the stored label
+
+Every `--run-id` selection also accepts the complete stored pipeline-run label. Quote it in a
+shell because it contains spaces. For example:
+
+```bash
+etl-craft status --run-id 'SALES-2026-11-10 06:28:20-3'
+etl-craft history --run-id 3
+```
+
+Copy the label from the run's status or browser details. The resolver first identifies the exact
+run in the selected project, checks visibility, then compares the full stored label, including
+case. A typo, wrong pipeline prefix or wrong-case label is refused with the expected label;
+a hidden or foreign-project run gives no expected label. It never selects by recency. Integer
+IDs remain valid, and JSON results retain integer IDs. Batch controls accept the same two forms.

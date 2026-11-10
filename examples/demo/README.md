@@ -24,3 +24,7 @@ The full domain walkthrough lives in [Support Insights](https://github.com/etl-c
 
 For the browser walkthrough, see [See it in the browser](../../docs/quick-start.md#see-it-in-the-browser).
 The SQLite demo uses the all-in-one controller with the UI extra and an HTTPS reverse proxy.
+
+Run selections accept an exact stored label as well as the integer: copy the label from
+`etl-craft status --pipeline-code DEMO`, then use `etl-craft history --run-id 'COPIED LABEL'`.
+The label is case-sensitive; a mismatched label is refused instead of selecting by suffix.

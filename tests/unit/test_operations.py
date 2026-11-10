@@ -721,3 +721,33 @@ def test_text_audit_is_newest_first_and_capped_while_json_stays_complete(ctx, ca
     assert main([*command, "--format", "json"]) == 0
     document = json.loads(capsys.readouterr().out)
     assert any(row["command"] == "audit-event-000" for row in document["actions"])
+
+
+@pytest.mark.parametrize("form", ["integer", "digits", "label"])
+def test_exact_run_labels_and_integers_share_operation_selection(ctx, capsys, form):
+    seed(ctx)
+    created = run(ctx, init_only=True, run_key="label-selector")
+    label = created.run.run_label
+    chosen = created.run.pipeline_run_id
+    value = chosen if form == "integer" else str(chosen) if form == "digits" else label
+    selected = invoke(ctx, ActionName.STATUS, RunFilter(run_id=value))
+    assert selected.run.pipeline_run_id == chosen
+    assert invoke(ctx, ActionName.STATUS, RunFilter(run_id=label)).run.run_label == label
+    assert main(["--config", str(ctx.config.config_path), "status", "--run-id", str(value)]) == 0
+    assert label in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("alter", ["prefix", "case", "space"])
+def test_mismatched_run_labels_name_the_exact_expected_label(ctx, alter):
+    seed(ctx)
+    created = run(ctx, init_only=True, run_key="label-refusal")
+    label = created.run.run_label
+    wrong = (
+        "WRONG-" + label if alter == "prefix" else label.lower() if alter == "case" else label + " "
+    )
+    with pytest.raises(RunStateError, match="expected") as error:
+        invoke(ctx, ActionName.STATUS, RunFilter(run_id=wrong))
+    assert repr(label) in str(error.value)
+    actions = invoke(ctx, ActionName.AUDIT, AuditInput()).actions
+    assert actions[-1].outcome == "REFUSED"
+    assert actions[-1].arguments["run_id"] == wrong

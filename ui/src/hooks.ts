@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useParams } from "react-router-dom";
 import { ApiError, getJson, postJson, project } from "@/lib/api";
 import { readProject } from "@/lib/project-memory";
-import type { About, Identity, ProjectHealth } from "@/lib/types";
+import type { About, Identity, ProjectHealth, RunView } from "@/lib/types";
 
 export function useIdentity(code?: string) {
   return useQuery({
@@ -84,4 +84,14 @@ export const failureText = (error: unknown): string | null =>
 export function useAutoStarts(): string | undefined {
   const about = useQuery({ queryKey: ["about"], queryFn: () => getJson<About>("/api/v1/about"), refetchInterval: 15_000 });
   return about.data?.controllers[0]?.allowed_auto_restarts;
+}
+
+/** Keep the full address value until the operation validates its stored label. */
+export function useRunReference(code: string, value: string) {
+  return useQuery({
+    queryKey: ["run-reference", code, value],
+    queryFn: () => getJson<RunView>(`${project(code)}/runs/${encodeURIComponent(value)}`),
+    enabled: value !== "",
+    retry: false,
+  });
 }

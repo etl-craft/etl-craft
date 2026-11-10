@@ -17,7 +17,7 @@ def configure(parser: argparse.ArgumentParser) -> None:
         configure_output(sub)
         sub.add_argument("--pipeline-code", required=True)
         sub.add_argument("--task-code", required=True)
-        sub.add_argument("--run-id", type=int, required=True)
+        sub.add_argument("--run-id", required=True)
         if name == "list":
             continue
         selector = sub.add_mutually_exclusive_group(required=True)

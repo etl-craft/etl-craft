@@ -264,7 +264,7 @@ def test_item_reruns_use_the_run_verb_and_the_item_operation(monkeypatch, select
     assert run_command.COMMAND.run(args, Output(stdout=io.StringIO())) == 0
     name, request = calls.pop()
     assert name == ActionName.ITEM_CONTROL and request.action == ItemAction.RERUN
-    assert request.run_id == 1 and request.task_code == "T"
+    assert request.run_id == "1" and request.task_code == "T"
     assert request.item_key == (None if selection == ["--all-failed"] else "one")
 
 

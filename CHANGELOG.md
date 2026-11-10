@@ -6,6 +6,12 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+- `--run-id`, API `run_id` fields and run addresses accept either a positive integer or the
+  complete stored run label. Labels match exactly, including case; mismatches name the expected
+  label only when the run is visible in the selected project. Bare integers remain valid.
+  The browser validates the full address through the same operation resolver instead of using
+  its numeric suffix alone. Stored labels, numeric result IDs and run-key selection are unchanged.
+
 - The run grid puts the newest run beside task names with larger status squares. Sparse rankings show numbers, shared
   form controls and disclosures keep page controls consistent, nested pages have breadcrumbs,
   skipped task rows name their failed upstream, and catalog gaps include a next step.

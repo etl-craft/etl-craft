@@ -87,3 +87,7 @@ etl-craft catalog page --path index.html --output catalog-page.html
 ```
 
 See the [browser UI guide](../../guides/browser-ui.md).
+
+For a run selection, copy its stored label from status and quote it, for example
+`etl-craft status --run-id 'SALES-2026-11-10 06:28:20-3'`. The same pipeline grant and project
+checks apply to the label and the bare integer; a hidden run's stored label is not disclosed.

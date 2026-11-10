@@ -182,6 +182,7 @@ def pipeline_steps(ctx: OperationContext, request: RunSelection) -> StepsView:
 
 def run_history(ctx: OperationContext, request: HistoryInput) -> HistoryView:
     """Read one pipeline's history, or a bounded page across matching active pipelines."""
+    assert not isinstance(request.run_id, str), "run reference must be resolved"
     if request.run_id is not None and request.pipeline_code is None:
         from etl_craft.services.operations.permissions import run_pipeline_code
 
@@ -335,6 +336,7 @@ def _pinned(ctx: OperationContext) -> bool:
 
 def get_run(ctx: OperationContext, request: RunId) -> RunView:
     """Read one run by id, never an active or recent replacement."""
+    assert isinstance(request.run_id, int), "run reference must be resolved"
     with read_snapshot(ctx.engine) as conn:
         code = conn.execute(
             statement(conn, "api_run_code"), {"run_id": request.run_id}

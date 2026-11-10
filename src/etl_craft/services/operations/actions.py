@@ -25,8 +25,10 @@ from etl_craft.core.errors import (
     ConfigurationError,
     PermissionDeniedError,
     ResourceNotFoundError,
+    RunStateError,
     UsageError,
 )
+from etl_craft.core.governance import using_policy
 from etl_craft.engine.controls import ControlView
 from etl_craft.engine.migrations import pending_migrations
 from etl_craft.engine.queries import statement
@@ -57,6 +59,7 @@ from etl_craft.services.operations import (
     controls,
     diagnostics,
     documents,
+    governance,
     groups,
     holds,
     insights,
@@ -119,6 +122,7 @@ from etl_craft.services.operations.requests import (
     ValidateInput,
     arguments,
 )
+from etl_craft.services.operations.run_identity import resolve_run_reference
 from etl_craft.services.operations.seed_actions import SEED_ACTIONS
 from etl_craft.services.operations.upload_actions import UPLOAD_ACTIONS
 from etl_craft.services.operations.visibility import visible_result
@@ -528,10 +532,9 @@ def _authorize_pipeline(
                     return True
                 policy.require(ctx, request.requests[0].pipeline_code, required)
             codes = _request_codes(conn, action, request)
-            existing = codes
-            for selected in existing:
+            for selected in codes:
                 policy.require(ctx, selected, required)
-            if existing:
+            if codes:
                 return True
             if action.name in (ActionName.RECONCILE, ActionName.LINEAGE_REFRESH):
                 if any(not policy.permits(code, required) for code in policy.roles):
@@ -601,20 +604,18 @@ def invoke(ctx: OperationContext, name: ActionName, request: object) -> object:
     try:
         ctx = _request_context(ctx, name, request)
         ctx = _project_context(ctx, ACTIONS[name], request)
-    except (PermissionDeniedError, ResourceNotFoundError) as error:
+        request = resolve_run_reference(ctx, request)
+    except (PermissionDeniedError, ResourceNotFoundError, RunStateError) as error:
         assert isinstance(request, ACTIONS[name].request)
         record_refusal(ctx, name, arguments(request), error)
         raise
     claims = sso_groups.set(ctx.sso_group_ids)
     try:
         with using(None), selected_project(ctx.project_id), admitted(ctx, name, request):
-            from etl_craft.core.governance import using_policy
-            from etl_craft.services.operations.governance import project_policy
-
             if name == ActionName.MIGRATE:
                 result = call(project_settings(ctx, name, request), request)
             else:
-                with using_policy(project_policy(ctx, request)):
+                with using_policy(governance.project_policy(ctx, request)):
                     result = call(project_settings(ctx, name, request), request)
             return (
                 visible_result(ctx, result)

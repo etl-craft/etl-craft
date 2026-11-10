@@ -354,3 +354,15 @@ def test_lineage_paths_hide_restricted_task_labels_and_transformations(scene, mo
     document = json.dumps(to_json(result))
     assert "PRIVATE.secret" not in document and "private transformation" not in document
     assert "PRIVATE" in document and "OPEN.down" in document
+
+
+def test_run_label_refusal_does_not_disclose_hidden_pipeline_labels(scene):
+    ctx, reader, _, _, _, _, run_id, _ = scene
+    grant(ctx)
+    label = act(ctx, ActionName.RUN_DETAIL, run_id=run_id).run_label
+    for value in (label, "WRONG-" + label, label.lower()):
+        with pytest.raises(ResourceNotFoundError) as error:
+            act(reader, ActionName.RUN_DETAIL, run_id=value)
+        assert "expected 'PRIVATE-" not in str(error.value)
+    act(ctx, ActionName.GROUP_ADD_MEMBER, name="sales", account="reader")
+    assert act(reader, ActionName.RUN_DETAIL, run_id=label).pipeline_run_id == run_id

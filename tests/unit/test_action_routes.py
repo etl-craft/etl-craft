@@ -138,6 +138,8 @@ def test_the_client_and_the_route_hand_the_operation_the_same_request(server, mo
     with pytest.raises(CapturedError):
         result = ApiClient("http://127.0.0.1:8000", "default").invoke(name, request)
         list(result)  # a streamed action sends its request when read
+    if "{run_id}" in action_path(ACTIONS[name]):
+        request = replace(request, run_id=str(request.run_id))
     assert calls == [(name, request)]
 
 
