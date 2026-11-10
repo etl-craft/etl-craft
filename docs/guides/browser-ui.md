@@ -37,7 +37,10 @@ last sign-in in settings, help, About and sign-out. Local users have Change pass
 
 Personal settings belong to the account: theme (`system`, `light`, `dark`), IANA timezone,
 default project, page size (1–100) and relative or absolute times. The top-bar theme switch
-saves to the same account setting. Both themes use the catalog's shared assets and the product mark. Every list shows values
+saves to the same account setting. Home summaries, dashboard window boundaries, time-labelled
+run grids and session warnings use the same time preference: relative times show the exact time
+and timezone on hover; exact times show the relative time on hover. Calendar dates and chart
+day labels stay dates. Both themes use the catalog's shared assets and the product mark. Every list shows values
 unwrapped (hover shows the full value); **Wrap text** wraps them, and the choice is kept.
 
 Use Tab and Shift+Tab to move, the skip link to reach content, `/` or Ctrl+K for search, and
@@ -213,7 +216,8 @@ their code or name, a run by its exact run id or run key, and tables when you ca
 whole project. Results open the object's page; a table opens its catalog page. The search page
 also lists the pipelines and runs you opened recently in this browser; they are kept in the
 browser only. `etl-craft search TEXT` and `GET /api/v1/projects/{project}/search?q=TEXT` return
-the same hits.
+the same hits. The interface names task handlers in words (for example, Email alert); API and
+CLI results retain the handler codes.
 
 ## Administration
 
@@ -287,6 +291,7 @@ controllers run another version than the server, gives the Engine DB schema vers
 `Deployment.Profile` is `CONTROLLER_AGENTS`, the active agents and each pool's free capacity.
 It also lists each project's running, queued, failed and SLA-missed work for the last 24
 hours. Warehouse connections are checked by each task and by `etl-craft doctor` on the host.
+The schema version shows its number; hover over it for the complete migration filename.
 
 **Agents** lists registered agents with their pool, version, heartbeat, running attempts and
 free capacity. Operators can **Drain** an agent (it finishes its tasks and claims no more),

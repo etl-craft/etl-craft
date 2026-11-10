@@ -1,3 +1,4 @@
+import { searchDetail } from "@/lib/labels";
 import { useQuery } from "@tanstack/react-query";
 import * as React from "react";
 import { useNavigate } from "react-router-dom";
@@ -50,7 +51,7 @@ export const SearchBox = React.forwardRef<HTMLInputElement, { code: string }>(fu
   const pages = pagesOf(code).filter((p) => text.trim() === "" || p.label.toLowerCase().includes(text.trim().toLowerCase())).slice(0, text.trim() === "" ? 12 : 4);
   const flat: { key: string; label: string; detail: string; to: string }[] = [
     ...pages.map((p) => ({ key: `page:${p.label}`, label: p.label, detail: "Go to", to: p.to })),
-    ...groups.flatMap((g) => g.hits).map((h) => ({ key: `${h.kind}:${h.label}:${h.run_id ?? ""}:${h.pipeline_code ?? ""}`, label: h.label, detail: h.detail, to: hitLink(code, h).to })),
+    ...groups.flatMap((g) => g.hits).map((h) => ({ key: `${h.kind}:${h.label}:${h.run_id ?? ""}:${h.pipeline_code ?? ""}`, label: h.label, detail: searchDetail(h), to: hitLink(code, h).to })),
   ];
   React.useEffect(() => {
     if (!open) return;
@@ -135,7 +136,7 @@ export const SearchBox = React.forwardRef<HTMLInputElement, { code: string }>(fu
                 return (
                   <button key={`${h.kind}:${h.label}:${h.run_id ?? ""}:${h.pipeline_code ?? ""}`} type="button" role="option" aria-selected={at === mine} onMouseEnter={() => setAt(mine)} onClick={() => go(hitLink(code, h).to)} className={cn("flex w-full cursor-pointer items-baseline gap-2 rounded-sm px-3 py-1.5 text-left text-sm", at === mine && "bg-accent/15")}>
                     <span className="truncate font-medium"><Highlight text={h.label} words={typed} /></span>
-                    <span className="truncate text-xs text-muted">{h.detail}</span>
+                    <span className="truncate text-xs text-muted">{searchDetail(h)}</span>
                   </button>
                 );
               })}

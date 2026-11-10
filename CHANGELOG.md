@@ -6,6 +6,9 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+- Home summaries, dashboard windows, time-labelled run grids and session warnings follow the
+  account's Time display and timezone settings. Search names task handlers in words, and System
+  health shows the schema number with the migration filename available on hover.
 - The UI names every status the server records in words, with its own symbol: Timed out is red, Lost and
   an SLA breach are amber, Cancelled, Held and Stopped are slate; a failed run no longer shows its SLA as met,
   and a finished run's untouched tasks show as not started (or skipped) instead of queued. In dense lists

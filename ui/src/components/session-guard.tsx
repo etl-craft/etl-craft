@@ -3,8 +3,8 @@ import * as React from "react";
 import { Notice } from "@/components/common";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
-import { useIdentity, useTimezone } from "@/hooks";
-import { formatTime } from "@/lib/format";
+import { useIdentity } from "@/hooks";
+import { When } from "@/components/when";
 import { noteInput, SESSION_ENDED, signInAddress } from "@/lib/api";
 
 const WARN_MS = 10 * 60_000;
@@ -17,7 +17,6 @@ const WARN_MS = 10 * 60_000;
 export function SessionGuard() {
   const client = useQueryClient();
   const identity = useIdentity();
-  const zone = useTimezone();
   const [now, setNow] = React.useState(() => Date.now());
   const [ended, setEnded] = React.useState(false);
   const ends = identity.data?.session_expires_at ? Date.parse(identity.data.session_expires_at) : null;
@@ -62,7 +61,7 @@ export function SessionGuard() {
       {warning && !over ? (
         <Notice info className="mx-4 mt-3 flex flex-wrap items-center justify-between gap-3 sm:mx-6">
           <span>
-            Your session ends at {formatTime(new Date(ends ?? 0).toISOString(), zone)} unless you keep working.
+            Your session ends <When iso={identity.data?.session_expires_at} /> unless you keep working.
           </span>
           <Button size="sm" onClick={renew}>
             Stay signed in

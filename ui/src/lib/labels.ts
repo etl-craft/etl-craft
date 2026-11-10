@@ -29,3 +29,7 @@ export function runConditionLabel(condition: string | null | undefined, required
   if (condition === "N") return required ? `at least ${required} upstream succeed` : "the required number of upstream succeed";
   return words(condition).toLowerCase();
 }
+
+/** Search task details name the handler in words; the API and exports keep the engine code. */
+export const searchDetail = (hit: { kind: string; detail: string }): string =>
+  hit.kind === "TASK" ? hit.detail.replace(/^\S+(?= in )/, handlerLabel) : hit.detail;

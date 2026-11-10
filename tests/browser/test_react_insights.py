@@ -222,3 +222,52 @@ def test_platform_lists_the_projects_and_the_old_insights_address_opens_home(sce
         assert page.url.endswith("/ui/projects/default?pipeline=ORDERS")
         assert problems == []
         browser.close()
+
+
+@pytest.mark.parametrize("display", ["Relative", "Exact"])
+def test_home_times_follow_the_account_display_and_timezone(scene, display):
+    _, url = scene
+    with sync_playwright() as pw:
+        browser, page, problems = open_page(pw)
+        sign_in(page, url, "/ui/settings")
+        page.get_by_placeholder("UTC, Europe/London, Asia/Kolkata").fill("Asia/Kolkata")
+        page.get_by_role("radio", name=display, exact=True).check()
+        page.get_by_role("button", name="Save settings").click()
+        expect(page.get_by_role("status").filter(has_text="Settings saved.")).to_be_visible()
+        page.goto(url + "/ui/projects/default")
+        latest = page.get_by_role("region", name="Latest runs").locator("time").first
+        expect(latest).to_be_visible()
+        attention = page.get_by_role("region", name="Needs attention").locator("time").first
+        expect(attention).to_be_visible()
+        window = page.locator("main header").filter(has_text="Runs started").locator("time")
+        expect(window).to_have_count(2)
+
+        def check_time(time):
+            expect(time).to_be_visible()
+            exact = time.inner_text() if display == "Exact" else time.get_attribute("title")
+            relative = time.inner_text() if display == "Relative" else time.get_attribute("title")
+            assert "GMT+5:30" in exact
+            assert "ago" in relative or relative.startswith("in ")
+
+        for time in [latest, attention, window.nth(0), window.nth(1)]:
+            check_time(time)
+        pages = {
+            "home": "/ui/projects/default",
+            "projects": "/ui/projects",
+            "grid": "/ui/projects/default/pipelines/ORDERS?columns=time",
+        }
+        for name, path in pages.items():
+            page.goto(url + path)
+            if name == "projects":
+                check_time(page.get_by_role("list").filter(has_text="ORDERS").locator("time").first)
+            if name == "grid":
+                check_time(page.get_by_role("table", name="Run grid").locator("thead time").last)
+            if os.environ.get("ETL_CRAFT_UI_SCREENSHOTS"):
+                page.wait_for_load_state("networkidle")
+                for scheme in ["light", "dark"]:
+                    page.evaluate("theme => document.documentElement.dataset.theme = theme", scheme)
+                    for width in [1280, 390]:
+                        page.set_viewport_size({"width": width, "height": 900})
+                        shoot(page, f"{name}-times-{display}-{scheme}-{width}")
+        assert problems == []
+        browser.close()

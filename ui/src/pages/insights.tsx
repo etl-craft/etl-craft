@@ -14,10 +14,10 @@ import { Tabs } from "@/components/tabs";
 import { StatusBadge } from "@/components/status";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import { useProjectInfo, useRoleAtLeast, useTimezone } from "@/hooks";
+import { useProjectInfo, useRoleAtLeast } from "@/hooks";
 import { getJson, project } from "@/lib/api";
 import { useCatalog } from "@/lib/catalog";
-import { formatTime, measured, percent, seconds } from "@/lib/format";
+import { measured, percent, seconds } from "@/lib/format";
 import { catalogPath, pipelinePath } from "@/lib/routes";
 import type { AgentsView, FailureInsight, Insights as InsightsView, Pipeline, PipelineInsight, RuleInsight, TaskInsight } from "@/lib/types";
 import { projectHomePath } from "@/lib/routes";
@@ -110,7 +110,6 @@ function TablePanel({ title, note, action, children }: { title: string; note?: s
 export function Insights() {
   const { project: code = "" } = useParams();
   const [params, setParams] = useSearchParams();
-  const tz = useTimezone();
   const developer = useRoleAtLeast("developer");
   const info = useProjectInfo(code);
   useDocumentTitle("Home", code, info.project && { type: info.project.environment_type, name: info.project.environment_name });
@@ -156,7 +155,7 @@ export function Insights() {
       <PageHeader back={null}
         compact
         title="Home"
-        subtitle={d ? `${code} · runs started ${formatTime(d.window_start, tz)} to ${formatTime(d.window_end, tz)}` : code}
+        subtitle={d ? <>Runs started <When iso={d.window_start} /> to <When iso={d.window_end} /></> : undefined}
         actions={
           <div className="flex flex-wrap items-end justify-end gap-2">
             <div role="group" aria-label="Time range" className="inline-flex h-8 items-center rounded-md bg-surface-2 p-0.5 text-[13px]">

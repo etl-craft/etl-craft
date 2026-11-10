@@ -3,8 +3,8 @@ import * as React from "react";
 import { Link } from "react-router-dom";
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { StatusMark } from "@/components/status";
-import { useTimezone } from "@/hooks";
-import { formatDuration, formatSeconds, formatTime, percent, relative, seconds } from "@/lib/format";
+import { When } from "@/components/when";
+import { formatDuration, formatSeconds, percent, seconds } from "@/lib/format";
 import { pipelinePath, runPath, runsPath } from "@/lib/routes";
 import type { DayInsight, Insights, PipelineInsight, RunView } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -91,7 +91,7 @@ function Headline({ d, days }: { d: Insights; days: DayInsight[] }) {
 }
 
 /** The runs someone should look at first: failures, then a count of SLA misses. */
-function Attention({ code, d, now }: { code: string; d: Insights; now: number }) {
+function Attention({ code, d }: { code: string; d: Insights }) {
   const failed = d.latest.filter((r) => r.status === "FAILED").slice(0, 5);
   const quiet = !failed.length && !d.total.sla_breached;
   return (
@@ -112,7 +112,7 @@ function Attention({ code, d, now }: { code: string; d: Insights; now: number })
                 <StatusMark status={r.status} solid className="rounded-full" />
                 <span className="grid min-w-0 flex-1">
                   <span className="truncate text-[13px] font-medium">{r.pipeline_code} <span className="num font-normal text-muted">#{r.pipeline_run_id}</span></span>
-                  <span className="text-xs text-muted">Failed {relative(r.end_date ?? r.start_date, now)}</span>
+                  <span className="text-xs text-muted">Failed <When iso={r.end_date ?? r.start_date} /></span>
                 </span>
                 <ArrowUpRight aria-hidden className="size-4 text-muted opacity-0 group-hover:opacity-100" />
               </Link>
@@ -184,14 +184,14 @@ function PipelineRow({ code, p }: { code: string; p: PipelineInsight }) {
   );
 }
 
-function RunRow({ code, r, now, zone }: { code: string; r: RunView; now: number; zone: string }) {
+function RunRow({ code, r }: { code: string; r: RunView }) {
   return (
     <li>
       <Link to={runPath(code, r.pipeline_code, r.pipeline_run_id)} className="flex items-center gap-3 rounded-lg px-3 py-2 hover:bg-surface-2">
         <StatusMark status={r.status} solid className="rounded-full" />
         <span className="min-w-0 flex-1 truncate text-[13px] font-medium">{r.pipeline_code} <span className="num font-normal text-muted">#{r.pipeline_run_id}</span></span>
         <span className="num text-xs text-muted">{r.end_date ? formatDuration(r.start_date, r.end_date) : ""}</span>
-        <time dateTime={r.start_date ?? undefined} title={formatTime(r.start_date, zone)} className="num w-20 text-right text-xs text-muted">{relative(r.start_date, now)}</time>
+        <span className="text-right text-xs text-muted"><When iso={r.start_date} /></span>
       </Link>
     </li>
   );
@@ -199,8 +199,6 @@ function RunRow({ code, r, now, zone }: { code: string; r: RunView; now: number;
 
 /** The project at a glance: what happened, what needs a look, the headline numbers, then pipelines and the newest runs. */
 export function Overview({ code, d }: { code: string; d: Insights }) {
-  const zone = useTimezone();
-  const [now] = React.useState(() => Date.now());
   const t = d.total;
   const days = everyDay(d.days, d.window_start, d.window_end);
   const worst = [...d.per_pipeline].sort((a, b) => (a.success_rate ?? 2) - (b.success_rate ?? 2));
@@ -208,7 +206,7 @@ export function Overview({ code, d }: { code: string; d: Insights }) {
     <div className="grid content-start gap-4 bg-bg p-4 lg:p-5">
       <div className="grid gap-4 lg:grid-cols-3">
         <Headline d={d} days={days} />
-        <Attention code={code} d={d} now={now} />
+        <Attention code={code} d={d} />
       </div>
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <Figure label="Runs" value={t.runs} hint={t.in_progress ? `${t.in_progress} running now` : `${t.finished} finished`} spark={<Spark color="var(--accent)" data={days.map((x) => ({ v: x.runs }))} />} />
@@ -223,7 +221,7 @@ export function Overview({ code, d }: { code: string; d: Insights }) {
         </Tile>
         <Tile aria-label="Latest runs">
           <TileTitle aside={<Link className="text-xs font-medium text-accent hover:underline" to={runsPath(code)}>All runs</Link>}>Latest runs</TileTitle>
-          {d.latest.length ? <ul className="m-0 grid list-none gap-0.5 p-2">{d.latest.slice(0, 8).map((r) => <RunRow key={r.pipeline_run_id} code={code} r={r} now={now} zone={zone} />)}</ul> : <p className="m-0 px-5 py-6 text-sm text-muted">No runs in this window.</p>}
+          {d.latest.length ? <ul className="m-0 grid list-none gap-0.5 p-2">{d.latest.slice(0, 8).map((r) => <RunRow key={r.pipeline_run_id} code={code} r={r} />)}</ul> : <p className="m-0 px-5 py-6 text-sm text-muted">No runs in this window.</p>}
         </Tile>
       </div>
     </div>

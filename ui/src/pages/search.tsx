@@ -1,3 +1,4 @@
+import { searchDetail } from "@/lib/labels";
 import { useQuery } from "@tanstack/react-query";
 import { createColumnHelper } from "@tanstack/react-table";
 import { Link, useParams, useSearchParams } from "react-router-dom";
@@ -90,7 +91,7 @@ export function Search() {
                 },
               }),
               columns.accessor("pipeline_code", { header: "Pipeline", cell: (c) => c.getValue() ?? "" }),
-              columns.accessor("detail", { header: "Detail", cell: (c) => <Highlight text={c.getValue() ?? ""} words={q} /> }),
+              columns.accessor("detail", { header: "Detail", cell: (c) => <Highlight text={searchDetail(c.row.original)} words={q} /> }),
             ]}
           />
           <Pager page={page} size={size} total={shown.length} onPage={(p) => change({ page: p === 1 ? null : String(p) })} />

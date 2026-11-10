@@ -1,3 +1,4 @@
+import { When } from "@/components/when";
 import { useQueries } from "@tanstack/react-query";
 import * as React from "react";
 import { Link } from "react-router-dom";
@@ -11,7 +12,6 @@ import { cn } from "@/lib/utils";
 
 /** How many of the newest runs the grid shows unless asked for more. */
 export const DEFAULT_RUNS = 25;
-const CELL = 24;
 const MIN_TASKS = 96;
 const MIN_MATRIX = 60;
 
@@ -20,6 +20,7 @@ const MIN_MATRIX = 60;
  * started failing. A column header selects a run; a cell selects the run and opens that task in it.
  */
 export function RunGrid({ code, pipeline, graph, runs, extra, selected, onSelect, bars = true, labels = "id" }: { code: string; pipeline: string; graph: Graph; runs: RunView[]; extra?: RunView; selected?: number; onSelect: (runId: number, task?: string) => void; bars?: boolean; labels?: "id" | "time" }) {
+  const cell = labels === "time" ? 176 : 24;
   const tasks = graph.waves.flat();
   const latest = runs;
   const newest = latest[0]?.pipeline_run_id;
@@ -44,7 +45,7 @@ export function RunGrid({ code, pipeline, graph, runs, extra, selected, onSelect
   const widest = Math.max(...tasks.map((t) => t.length), 4);
   const [share, setShare] = React.useState<number | null>(null);
   const natural = Math.round(widest * 7.4 + 28);
-  const matrixWanted = shown.length * CELL;
+  const matrixWanted = shown.length * cell;
   const autoTasks = Math.round(Math.min(Math.max(natural, 128), Math.max(128, pane * 0.45)));
   // With room to spare the task list takes it, so the last run sits against the pane's edge.
   // The task list is as wide as its names need and the runs start right after it, newest at its end: a status sits
@@ -151,7 +152,7 @@ export function RunGrid({ code, pipeline, graph, runs, extra, selected, onSelect
         {/* Right to left, so the scroll origin is the right edge: the newest run stays in view as the matrix narrows, and the oldest runs are the ones that scroll away. */}
         <div ref={box} dir="rtl" onScroll={sync} style={{ width: matrixWidth, minWidth: 0 }} className="min-h-0 shrink-0 overflow-auto">
           <div dir="ltr" className="w-max">
-            <table aria-label="Run grid" style={{ width: shown.length * CELL }} className="table-fixed border-separate border-spacing-0 text-[13px]">
+            <table aria-label="Run grid" style={{ width: shown.length * cell }} className="table-fixed border-separate border-spacing-0 text-[13px]">
               <thead>
                 {bars ? (
                   <tr>
@@ -175,7 +176,7 @@ export function RunGrid({ code, pipeline, graph, runs, extra, selected, onSelect
                   {shown.map((run) => (
                     <th key={run.pipeline_run_id} scope="col" className={cn("sticky z-10 h-7 px-0 text-center text-xs font-medium", bars ? "top-20" : "top-0", apart(run) && "border-l-2 border-dashed border-border-strong", run.pipeline_run_id === selected ? "bg-accent/15 text-fg" : "bg-surface-2 text-muted")}>
                       <Link className="num hover:text-accent hover:underline" to={runPath(code, pipeline, run.pipeline_run_id)} onClick={open(run)} aria-current={run.pipeline_run_id === selected ? "true" : undefined}>
-                        {labels === "time" && run.start_date ? new Date(run.start_date).toISOString().slice(5, 16).replace("T", " ") : run.pipeline_run_id}
+                        {labels === "time" && run.start_date ? <span className="block truncate"><When iso={run.start_date} /></span> : run.pipeline_run_id}
                       </Link>
                     </th>
                   ))}

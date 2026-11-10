@@ -7,9 +7,8 @@ import { Eyebrow, Fact, FactList, Loading, Notice, PageHeader } from "@/componen
 import { EnvironmentBadge } from "@/components/environment-badge";
 import { StatusBadge } from "@/components/status";
 import { Card, CardHeader } from "@/components/ui/card";
-import { useActiveProject, useHealth, useTimezone } from "@/hooks";
+import { useActiveProject, useHealth } from "@/hooks";
 import { getJson, project } from "@/lib/api";
-import { formatAgo, formatTime } from "@/lib/format";
 import { projectHomePath, runPath, runsPath, settingsPath } from "@/lib/routes";
 import type { History, ProjectCounts } from "@/lib/types";
 import { useDocumentTitle } from "@/title";
@@ -41,7 +40,6 @@ function Metric({ label, value, icon, tone }: { label: string; value: number; ic
 }
 
 function ProjectCard({ p, failures, since }: { p: ProjectCounts; failures: History["entries"]; since: string }) {
-  const tz = useTimezone();
   const loud = p.failed > 0;
   return (
     <Card className={cn(loud && "border-bad/60")}>
@@ -73,8 +71,8 @@ function ProjectCard({ p, failures, since }: { p: ProjectCounts; failures: Histo
                   <StatusBadge status={run.status} />
                   <span className="font-medium">{run.pipeline_code}</span>
                   <span className="num text-muted">#{run.pipeline_run_id}</span>
-                  <span className="ml-auto text-xs text-muted" title={formatTime(run.end_date ?? run.start_date, tz)}>
-                    {formatAgo(run.end_date ?? run.start_date)}
+                  <span className="ml-auto text-xs text-muted">
+                    <When iso={run.end_date ?? run.start_date} />
                   </span>
                 </Link>
               </li>

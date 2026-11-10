@@ -69,7 +69,7 @@ export function System() {
                 <StatusBadge status="ACTIVE" label="Answering" />
               </CardHeader>
               <FactList className="p-4 sm:grid-cols-2 lg:grid-cols-2">
-                <Fact label="Schema version">{about.data.schema_version ?? "Not recorded"}</Fact>
+                <Fact label="Schema version"><span title={about.data.schema_version ?? undefined}>{about.data.schema_version?.split("_")[0] ?? "Not recorded"}</span></Fact>
                 <Fact label="Package version">{about.data.package_version}</Fact>
               </FactList>
             </Card>
