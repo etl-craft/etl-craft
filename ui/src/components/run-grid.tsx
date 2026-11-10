@@ -13,7 +13,7 @@ import { cn } from "@/lib/utils";
 /** How many of the newest runs the grid shows unless asked for more. */
 export const DEFAULT_RUNS = 25;
 export const MIN_TASKS = 96;
-export const GRID_COLUMNS = { id: { width: 24, minimum: 60 }, time: { width: 176, minimum: 178 } };
+export const GRID_COLUMNS = { id: { width: 24, minimum: 26 }, time: { width: 176, minimum: 178 } };
 
 /**
  * Every task against the pipeline's recent runs, newest on the right, like the duration bars above it: one glance shows where and when a task

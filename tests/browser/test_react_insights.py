@@ -244,10 +244,12 @@ def test_home_times_follow_the_account_display_and_timezone(scene, display):
 
         def check_time(time):
             expect(time).to_be_visible()
-            exact = time.inner_text() if display == "Exact" else time.get_attribute("title")
-            relative = time.inner_text() if display == "Relative" else time.get_attribute("title")
-            assert "GMT+5:30" in exact
-            assert "ago" in relative or relative.startswith("in ")
+            if display == "Exact":
+                expect(time).to_contain_text("GMT+5:30")
+                expect(time).to_have_attribute("title", re.compile(r"ago|^in "))
+            else:
+                expect(time).to_have_attribute("title", re.compile(r"GMT\+5:30"))
+                expect(time).to_contain_text(re.compile(r"ago|^in "))
 
         for time in [latest, attention, window.nth(0), window.nth(1)]:
             check_time(time)
