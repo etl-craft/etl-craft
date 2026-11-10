@@ -200,3 +200,19 @@ def has_role(role: ApiRole | None, required: ApiRole | None) -> bool:
     return required is None or (
         role is not None and tuple(ApiRole).index(role) >= tuple(ApiRole).index(required)
     )
+
+
+def run_pipeline_code(ctx: OperationContext, run_id: int) -> str:
+    """Resolve one exact run id within the caller's project and visible pipelines."""
+    from etl_craft.core.errors import ResourceNotFoundError
+
+    with ctx.engine.connect() as conn:
+        code = conn.execute(
+            statement(conn, "api_run_code"), {"run_id": run_id}
+        ).scalar_one_or_none()
+        if code is None or not pipeline_access(conn, ctx).permits(str(code)):
+            raise ResourceNotFoundError(
+                f"run_id={run_id}: expected a visible run in the selected project; "
+                "select its project and an authorized run id"
+            )
+        return str(code)

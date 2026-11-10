@@ -132,7 +132,7 @@ function Attention({ code, d }: { code: string; d: Insights }) {
 
 function Spark({ data, color }: { data: { v: number | null }[]; color: string }) {
   const id = React.useId();
-  if (data.filter((p) => p.v).length < 3) return null;
+  if (data.filter((p) => p.v !== null).length < 5) return null;
   return (
     <div aria-hidden className="h-10 overflow-hidden rounded-b-xl">
       <ResponsiveContainer width="100%" height="100%">
@@ -203,7 +203,7 @@ export function Overview({ code, d }: { code: string; d: Insights }) {
   const days = everyDay(d.days, d.window_start, d.window_end);
   const worst = [...d.per_pipeline].sort((a, b) => (a.success_rate ?? 2) - (b.success_rate ?? 2));
   return (
-    <div className="grid content-start gap-4 bg-bg p-4 lg:p-5">
+    <div className="grid content-start gap-4 bg-bg p-4">
       <div className="grid gap-4 lg:grid-cols-3">
         <Headline d={d} days={days} />
         <Attention code={code} d={d} />
@@ -212,7 +212,7 @@ export function Overview({ code, d }: { code: string; d: Insights }) {
         <Figure label="Runs" value={t.runs} hint={t.in_progress ? `${t.in_progress} running now` : `${t.finished} finished`} spark={<Spark color="var(--accent)" data={days.map((x) => ({ v: x.runs }))} />} />
         <Figure label="Average duration" value={t.average_seconds} show={formatSeconds} text="No finished runs" hint={t.longest_seconds === null ? undefined : `longest ${seconds(t.longest_seconds)}`} spark={<Spark color="var(--run-solid)" data={days.map((x) => ({ v: x.average_seconds }))} />} />
         <Figure label="Retries" value={t.retries} hint={t.lost_attempts ? `${t.lost_attempts} attempts lost` : `${t.attempts} attempts`} />
-        <Figure label="Rows written" value={t.rows_written} format={{ notation: "compact", maximumFractionDigits: 1 }} hint={t.rows_per_second === null ? "rate not measured" : `${t.rows_per_second.toFixed(1)} rows/s`} />
+        {t.rows_written !== null ? <Figure label="Rows written" value={t.rows_written} format={{ notation: "compact", maximumFractionDigits: 1 }} hint={t.rows_per_second === null ? undefined : `${t.rows_per_second.toFixed(1)} rows/s`} /> : null}
       </div>
       <div className="grid gap-4 lg:grid-cols-2">
         <Tile aria-label="Success rate by pipeline">

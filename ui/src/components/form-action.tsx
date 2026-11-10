@@ -1,3 +1,4 @@
+import { DropdownSelect } from "@/components/dropdown";
 import * as React from "react";
 import { ActionButton } from "@/components/action-button";
 import { Field, inputClass } from "@/components/common";
@@ -56,14 +57,14 @@ export function FormAction<TResult>({
             // A select without an empty choice always has a value, so it is never called optional.
             <Field key={f.name} label={f.label + (f.required || (f.kind === "select" && !f.blank) ? "" : " (optional)")}>
               {f.kind === "select" ? (
-                <select value={values[f.name]} onChange={(e) => setValues({ ...values, [f.name]: e.target.value })} className={inputClass}>
+                <DropdownSelect value={values[f.name]} onChange={(e) => setValues({ ...values, [f.name]: e.target.value })} className={inputClass}>
                   {f.blank ? <option value="">{f.blank}</option> : null}
                   {f.options?.map((o) => (
                     <option key={o} value={o}>
                       {o}
                     </option>
                   ))}
-                </select>
+                </DropdownSelect>
               ) : f.kind === "textarea" ? (
                 <textarea value={values[f.name]} rows={3} maxLength={500} onChange={(e) => setValues({ ...values, [f.name]: e.target.value })} className="rounded-md border border-border-strong bg-surface p-2 text-sm" />
               ) : (

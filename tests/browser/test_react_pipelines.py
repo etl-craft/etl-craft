@@ -143,7 +143,7 @@ def test_a_pipeline_pauses_resumes_and_links_to_its_runs_and_tasks(scene):
         browser.close()
 
 
-def test_run_now_asks_for_a_reason_and_names_the_project(scene):
+def test_run_now_allows_an_optional_reason_and_names_the_project(scene):
     _, url, _ = scene
     with sync_playwright() as pw:
         browser, page, _ = open_page(pw)
@@ -152,8 +152,8 @@ def test_run_now_asks_for_a_reason_and_names_the_project(scene):
         page.get_by_role("button", name="Run now").click()
         dialog = page.get_by_role("dialog")
         expect(dialog.get_by_text("default")).to_be_visible()
-        expect(dialog.get_by_role("button", name="Run now")).to_be_disabled()
-        dialog.get_by_label("Reason (kept in the audit trail)").fill("rerun")
+        expect(dialog.get_by_role("button", name="Run now")).to_be_enabled()
+        dialog.get_by_label("Reason (kept in the audit trail) (optional)").fill("rerun")
         expect(dialog.get_by_role("button", name="Run now")).to_be_enabled()
         browser.close()
 
@@ -317,8 +317,8 @@ def test_a_narrow_grid_hides_the_oldest_runs_never_the_newest(scene):
         headers = grid.locator("thead th a")
         headers.first.wait_for()  # the runs are drawn once their history has loaded
         assert headers.count() >= 2
-        area = grid.locator("xpath=ancestor::div[@dir='rtl']").bounding_box()
-        newest = headers.last.bounding_box()
+        area = grid.locator("xpath=parent::div/parent::div").bounding_box()
+        newest = headers.first.bounding_box()
         assert newest["x"] + newest["width"] <= area["x"] + area["width"] + 1, (
             "the newest run is cut off"
         )
@@ -347,8 +347,8 @@ def test_one_grid_divider_fits_names_and_keeps_the_latest_run_visible(site, meth
         outer = page.get_by_role("separator", name="Resize the panes")
         task_cell = page.get_by_role("table", name="Tasks").get_by_role("rowheader", name=name)
         grid = page.get_by_role("table", name="Run grid")
-        area = grid.locator("xpath=ancestor::div[@dir='rtl']")
-        expect(grid.locator("thead th a").last).to_be_visible()
+        area = grid.locator("xpath=parent::div/parent::div")
+        expect(grid.locator("thead th a").first).to_be_visible()
         expect(page.get_by_role("separator")).to_have_count(1)
         full = task_cell.evaluate("""el => {
             const range = document.createRange();
@@ -379,7 +379,7 @@ def test_one_grid_divider_fits_names_and_keeps_the_latest_run_visible(site, meth
                         && box.width > 0 && item.width > 0
                         && item.left >= box.left - 1 && item.right <= box.right + 1;
                 }""",
-                arg=[area.element_handle(), grid.locator("thead th a").last.element_handle()],
+                arg=[area.element_handle(), grid.locator("thead th a").first.element_handle()],
                 timeout=5000,
             )
 
@@ -415,5 +415,16 @@ def test_the_top_search_groups_matches_as_you_type_and_opens_one(scene):
         box.fill("SALES")
         box.press("Enter")
         expect(page).to_have_url(re.compile(r"/search\?q=SALES"))
+        assert problems == []
+        browser.close()
+
+
+def test_the_newest_grid_run_is_next_to_task_names(scene):
+    _, url, active = scene
+    with sync_playwright() as pw:
+        browser, page, problems = open_page(pw)
+        sign_in(page, url, "/ui/projects/default/pipelines/SALES")
+        first = page.get_by_role("table", name="Run grid").locator("thead th a").first
+        expect(first).to_have_attribute("href", re.compile(rf"/pipelines/SALES\?run={active}$"))
         assert problems == []
         browser.close()

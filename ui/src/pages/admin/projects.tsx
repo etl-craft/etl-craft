@@ -1,3 +1,4 @@
+import { words } from "@/lib/labels";
 import { createColumnHelper } from "@tanstack/react-table";
 import { ActionButton } from "@/components/action-button";
 import { DataTable } from "@/components/data-table";
@@ -47,10 +48,10 @@ export function ProjectsTab() {
             columns.accessor("project", { header: "Project", cell: (c) => <span className="font-medium">{c.getValue()}</span> }),
             columns.accessor("name", { header: "Name" }),
             columns.display({ id: "env", header: "Environment", cell: (c) => <EnvironmentBadge env={{ type: c.row.original.environment_type, name: c.row.original.environment_name }} /> }),
-            columns.accessor("governance", { header: "Governance" }),
+            columns.accessor("governance", { header: "Governance", cell: (c) => words(c.getValue()) }),
             columns.accessor("default_pool", { header: "Default pool" }),
             columns.accessor("max_running_tasks", { header: "Max tasks" }),
-            columns.accessor("allowed_auto_restarts", { header: "Automatic starts" }),
+            columns.accessor("allowed_auto_restarts", { header: "Automatic starts", cell: (c) => words(c.getValue()) }),
             columns.display({ id: "schema", header: "Schema checks", cell: (c) => (c.row.original.schema_check_schedule ? <code className="font-mono text-xs">{c.row.original.schema_check_schedule}</code> : "Not scheduled") }),
             columns.display({ id: "state", header: "State", cell: (c) => <StatusBadge status={c.row.original.active_flag === "Y" ? "ACTIVE" : "DISABLED"} /> }),
             columns.display({

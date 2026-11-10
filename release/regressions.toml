@@ -306,3 +306,22 @@ agent-start-report-outage = [
     "tests/integration/api/test_agent_api.py::test_start_response_loss_ends_the_claim_and_keeps_observed_identity",
     "tests/unit/test_agent_start_report.py::test_failed_start_report_stops_child_and_preserves_ending_evidence",
 ]
+
+ui-audit-operability = [
+    "tests/unit/test_cli.py::test_a_typo_suggests_a_command_without_printing_the_inventory",
+    "tests/unit/test_operations.py::test_text_audit_is_newest_first_and_capped_while_json_stays_complete",
+    "tests/unit/test_core_log.py::test_text_timestamp_is_utc_with_an_explicit_zone",
+    "tests/unit/test_cli_output.py::test_terminal_rows_align_while_pipes_keep_their_contract",
+    "tests/unit/test_cli.py::test_run_is_quiet_by_default_but_honours_explicit_info",
+    "tests/unit/test_operations.py::test_exact_run_id_reads_do_not_require_a_pipeline_name",
+    "tests/unit/test_operations.py::test_ended_run_candidates_name_labels_status_and_exact_cli_selection",
+    "tests/unit/test_operations.py::test_completed_requests_are_reported_without_mutating_request_events",
+    "tests/unit/test_operations.py::test_failed_requests_report_failure_without_changing_original_events",
+    "tests/unit/test_operations.py::test_terminal_status_and_pipelines_show_readable_durations_and_run_times",
+    "tests/unit/test_operations.py::test_http_startup_names_the_bound_browser_address",
+    "tests/unit/test_operations.py::test_status_tasks_follow_metadata_dependencies_instead_of_the_alphabet",
+    "tests/integration/engine/test_account_login.py::test_account_add_accepts_a_piped_password_without_auditing_it",
+    "tests/integration/engine/test_account_login.py::test_account_add_without_terminal_names_the_password_stdin_remedy",
+    "tests/browser/test_react_pipelines.py::test_the_newest_grid_run_is_next_to_task_names",
+    "tests/browser/test_react_tasks.py::test_a_skipped_task_names_its_failed_upstream",
+]

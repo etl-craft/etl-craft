@@ -109,7 +109,7 @@ def test_role_inheritance_and_refusal_records(project, role, name, required):
     if allowed:
         with admitted(caller, name, REQUESTS[name]):
             pass
-        assert len(actions(p.engine)) == before + int(audited)
+        assert len(actions(p.engine)) == before + 2 * int(audited)
     else:
         with pytest.raises(PermissionDeniedError) as error, admitted(caller, name, REQUESTS[name]):
             pass

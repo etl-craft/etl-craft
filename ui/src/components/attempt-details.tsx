@@ -1,3 +1,4 @@
+import { Disclosure, DisclosureSummary } from "@/components/dropdown";
 import { useQuery } from "@tanstack/react-query";
 import { When } from "@/components/when";
 import { Download } from "lucide-react";
@@ -120,8 +121,8 @@ export function AttemptDetails({ code, attempt, heading, showLog = false }: { co
           </Fact>
         ) : null}
       </FactList>
-      <details className="text-[13px]">
-        <summary className="w-fit cursor-pointer text-xs font-medium text-muted hover:text-fg">Process details</summary>
+      <Disclosure className="text-[13px]">
+        <DisclosureSummary className="w-fit cursor-pointer text-xs font-medium text-muted hover:text-fg">Process details</DisclosureSummary>
         <FactList className="mt-3 gap-3 sm:grid-cols-4 lg:grid-cols-4">
           <Fact label="Queued"><When iso={attempt.queued_at} /></Fact>
           <Fact label="Agent">{attempt.owner_id ?? "Not claimed"}</Fact>
@@ -133,7 +134,7 @@ export function AttemptDetails({ code, attempt, heading, showLog = false }: { co
           <Fact label="How the process ended">{evidence(attempt.process_evidence_kind, attempt.process_evidence_actor, attempt.process_evidence_reason)}</Fact>
           <Fact label="How the query ended">{evidence(attempt.query_evidence_kind, attempt.query_evidence_actor, attempt.query_evidence_reason)}</Fact>
         </FactList>
-      </details>
+      </Disclosure>
       {attempt.log_path ? <AttemptLog code={code} attempt={attempt} open={showLog} /> : <p className="m-0 text-[13px] text-muted">No log was recorded for this attempt.</p>}
     </section>
   );

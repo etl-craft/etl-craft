@@ -21,3 +21,6 @@ Run `etl-craft controller` for server mode after signing in and provisioning a
 service token; see the [deployment guide](../../docs/deploying/index.md).
 
 The full domain walkthrough lives in [Support Insights](https://github.com/etl-craft/support-insights).
+
+For the browser walkthrough, see [See it in the browser](../../docs/quick-start.md#see-it-in-the-browser).
+The SQLite demo uses the all-in-one controller with the UI extra and an HTTPS reverse proxy.

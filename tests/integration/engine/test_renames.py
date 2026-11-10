@@ -566,7 +566,7 @@ def test_generated_api_rename_uses_project_permission_and_reason(rename_project,
             )
         ).all()
         assert (
-            rows[0].outcome == ActionOutcome.REFUSED and rows[-1].outcome == ActionOutcome.REQUESTED
+            rows[0].outcome == ActionOutcome.REFUSED and rows[-1].outcome == ActionOutcome.SUCCESS
         )
 
 

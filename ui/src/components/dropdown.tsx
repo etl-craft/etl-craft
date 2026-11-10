@@ -32,3 +32,17 @@ export const DropdownLabel = ({ className, ...props }: React.ComponentProps<type
   <Menu.Label className={cn("px-2.5 py-1.5 text-xs text-muted", className)} {...props} />
 );
 export const DropdownSeparator = () => <Menu.Separator className="my-1 h-px bg-border" />;
+
+/** The shared native selection control keeps platform keyboard and form behaviour. */
+export function DropdownSelect({ className, ...props }: React.SelectHTMLAttributes<HTMLSelectElement>) {
+  return <select className={cn("h-8 w-full min-w-40 rounded-md border border-border-strong bg-surface px-2.5 text-[13px] text-fg max-sm:h-11", className)} {...props} />;
+}
+
+/** All disclosures share the same semantic control and chevron styling. */
+export function Disclosure(props: React.DetailsHTMLAttributes<HTMLDetailsElement>) {
+  return <details {...props} />;
+}
+
+export function DisclosureSummary(props: React.HTMLAttributes<HTMLElement>) {
+  return <summary {...props} />;
+}

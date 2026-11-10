@@ -6,11 +6,11 @@ import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { ActionButton } from "@/components/action-button";
 import { DropdownContent, DropdownItem, DropdownLabel, DropdownMenu, DropdownTrigger } from "@/components/dropdown";
 import { Button } from "@/components/ui/button";
-import { Fact, FactList, Field, inputClass, Loading, Notice, PageHeader, SelectField } from "@/components/common";
+import { Breadcrumbs, Fact, FactList, Field, inputClass, Loading, Notice, PageHeader, SelectField } from "@/components/common";
 import { AuditTab, CalendarTab, DetailsTab, OverviewTab, TasksTab } from "@/components/pipeline-tabs";
 import { StatusBadge, taskStatus } from "@/components/status";
 import { PauseState } from "@/components/pipeline-parts";
-import { RunGraph } from "@/components/run-graph";
+import { RunGraph } from "@/components/lazy-run-graph";
 import { DEFAULT_RUNS, GRID_COLUMNS, MIN_TASKS, RunGrid } from "@/components/run-grid";
 import { RunOverview } from "@/components/run-overview";
 import { RunsPanel } from "@/components/runs-panel";
@@ -22,7 +22,7 @@ import { autoStarts } from "@/lib/auto-starts";
 import { useAutoStarts, useCanRun, useProjectInfo } from "@/hooks";
 import { describeCron, formatDuration, runIdOf } from "@/lib/format";
 import { getJson, project } from "@/lib/api";
-import { pipelinesPath, taskPath } from "@/lib/routes";
+import { pipelinesPath, projectHomePath, taskPath } from "@/lib/routes";
 import { cn } from "@/lib/utils";
 import type { Graph, Pipeline, RunView, Steps } from "@/lib/types";
 import { useDocumentTitle } from "@/title";
@@ -130,6 +130,7 @@ export function PipelineDetail() {
   if (found.isError) return <Notice>{(found.error as Error).message}</Notice>;
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-2">
+      <Breadcrumbs trail={[{ label: code, to: projectHomePath(code) }, { label: "Pipelines", to: pipelinesPath(code) }, { label: pipeline }]} />
       <PageHeader
         compact
         back={{ to: pipelinesPath(code), label: "Pipelines" }}
@@ -142,6 +143,7 @@ export function PipelineDetail() {
               <ActionButton<{ message?: string }>
                 code={code}
                 label="Run now"
+                reasonOptional
                 title={`Run ${pipeline} now`}
                 effect="Admits one manual run of the whole pipeline for the controller; scheduled runs are unaffected."
                 endpoint="/runs"

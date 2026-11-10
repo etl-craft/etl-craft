@@ -1,3 +1,4 @@
+import { DropdownSelect } from "@/components/dropdown";
 import { ArrowLeft, Inbox, type LucideIcon } from "lucide-react";
 import * as React from "react";
 import { Link } from "react-router-dom";
@@ -143,7 +144,7 @@ export function PageHeader({
               <ArrowLeft className="size-4" aria-hidden />
             </Link>
           ) : null}
-          <h1 className={cn("m-0 font-semibold tracking-tight", compact ? "text-lg" : "text-[22px] leading-7")}>{title}</h1>
+          <h1 className={cn("m-0 font-semibold tracking-tight", compact ? "text-lg" : "text-2xl leading-8")}>{title}</h1>
           {status}
         </div>
         {subtitle ? <p className="m-0 text-sm text-muted">{subtitle}</p> : null}
@@ -206,9 +207,9 @@ export function SelectField({
 }) {
   return (
     <Field label={label} compact={compact} hideLabel={hideLabel}>
-      <select value={value} onChange={(event) => onChange(event.target.value)} className={cn(inputClass, "min-w-40")}>
+      <DropdownSelect value={value} onChange={(event) => onChange(event.target.value)} className={cn(inputClass, "min-w-40")}>
         {children}
-      </select>
+      </DropdownSelect>
     </Field>
   );
 }

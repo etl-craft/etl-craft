@@ -1,3 +1,4 @@
+import { Disclosure, DisclosureSummary } from "@/components/dropdown";
 import { useMutation } from "@tanstack/react-query";
 import * as React from "react";
 import { ActionButton } from "@/components/action-button";
@@ -55,10 +56,10 @@ export function ProvenanceCard({ code, pipeline, task, keys, columns }: { code: 
             <p className="m-0 text-[13px] text-muted">{result.target}</p>
             {result.records.length ? <RecordTable label="Current values" records={result.records} hide={["key_hash"]} /> : <p className="m-0 text-muted">No value of this key is recorded.</p>}
             {result.history.length ? (
-              <details>
-                <summary className="cursor-pointer text-sm font-medium">History ({result.history.length})</summary>
+              <Disclosure>
+                <DisclosureSummary className="cursor-pointer text-sm font-medium">History ({result.history.length})</DisclosureSummary>
                 <RecordTable label="Value history" records={result.history} hide={["key_hash"]} />
-              </details>
+              </Disclosure>
             ) : null}
           </div>
         ) : null}

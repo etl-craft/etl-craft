@@ -14,7 +14,7 @@ const button = cva(
         outline: "bg-surface text-fg shadow-raised hover:bg-surface-2",
         ghost: "text-fg hover:bg-surface-2",
       },
-      size: { md: "h-8 px-3", sm: "h-7 px-2.5", icon: "h-8 w-8" },
+      size: { md: "h-8 px-3", sm: "h-8 px-2.5", icon: "h-8 w-8" },
     },
     defaultVariants: { variant: "outline", size: "md" },
   },

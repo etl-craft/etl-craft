@@ -37,37 +37,75 @@ def _run(args: argparse.Namespace, out: Output) -> int:
     assert isinstance(done, AuditView)
 
     def render_text() -> None:
-        for resume in done.resumes:
+        limit = 100
+        for resume in sorted(done.resumes, key=lambda row: row.resumed_at, reverse=True)[:limit]:
             out.line(
                 f"{resume.pipeline_code}: resumed by {resume.actor} at {resume.resumed_at}: "
                 f"{resume.reason}"
             )
-        out.rows([("AT", "ACTOR", "KIND", "COMMAND", "OUTCOME", "ARGUMENTS")])
+        terminal = out.stdout.isatty()
         out.rows(
-            (row.at, row.actor, row.kind, row.command, row.outcome, json.dumps(row.arguments))
-            for row in done.actions
+            [
+                ("AT", "ACTOR", "KIND", "COMMAND", "OUTCOME", "ARGUMENTS"),
+                *(
+                    (
+                        row.at,
+                        row.actor,
+                        row.kind,
+                        row.command,
+                        row.outcome,
+                        _values(row.arguments, terminal),
+                    )
+                    for row in sorted(done.actions, key=lambda row: row.action_id, reverse=True)[
+                        :limit
+                    ]
+                ),
+            ]
         )
         out.rows(
-            [("AT", "ACTOR", "KIND", "TABLE", "ROW", "OPERATION", "BEFORE", "AFTER", "MIGRATION")]
-        )
-        out.rows(
-            (
-                row.at,
-                row.actor,
-                row.kind,
-                row.table_name,
-                json.dumps(row.row_key),
-                row.operation,
-                None if row.before_json is None else json.dumps(row.before_json),
-                None if row.after_json is None else json.dumps(row.after_json),
-                row.migration,
-            )
-            for row in done.changes
+            [
+                (
+                    "AT",
+                    "ACTOR",
+                    "KIND",
+                    "TABLE",
+                    "ROW",
+                    "OPERATION",
+                    "BEFORE",
+                    "AFTER",
+                    "MIGRATION",
+                ),
+                *(
+                    (
+                        row.at,
+                        row.actor,
+                        row.kind,
+                        row.table_name,
+                        _values(row.row_key, terminal),
+                        row.operation,
+                        _values(row.before_json, terminal),
+                        _values(row.after_json, terminal),
+                        row.migration,
+                    )
+                    for row in sorted(done.changes, key=lambda row: row.change_id, reverse=True)[
+                        :limit
+                    ]
+                ),
+            ]
         )
         return
 
     out.result(done, args.output_format, text=render_text)
     return ExitCode.SUCCESS
+
+
+def _values(value: object, terminal: bool) -> str | None:
+    """Keep machine-readable cells while making terminal fields readable."""
+    if value is None:
+        return None
+    if terminal and isinstance(value, dict):
+        return "; ".join(f"{key}={item}" for key, item in value.items() if item is not None)
+    return json.dumps(value)
 
 
 COMMAND = Command(

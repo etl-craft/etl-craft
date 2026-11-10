@@ -20,6 +20,7 @@ export function ActionButton<TResult>({
   describe,
   onDone,
   askReason = true,
+  reasonOptional = false,
   fields,
   icon,
   variant = "outline",
@@ -41,6 +42,7 @@ export function ActionButton<TResult>({
   fields?: React.ReactNode;
   /** False for requests that take no reason. */
   askReason?: boolean;
+  reasonOptional?: boolean;
   icon?: React.ReactNode;
   variant?: ButtonProps["variant"];
   size?: ButtonProps["size"];
@@ -86,6 +88,7 @@ export function ActionButton<TResult>({
         onConfirm={(reason) => write.mutate(body(reason))}
         onClose={() => setOpen(false)}
         askReason={askReason}
+        reasonOptional={reasonOptional}
       >
         {fields}
       </ConfirmDialog>

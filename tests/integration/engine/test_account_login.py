@@ -1,5 +1,6 @@
 """Registered account lifecycle and credential-proven CLI actions on both Engine DBs."""
 
+import io
 import json
 import sys
 from dataclasses import replace
@@ -459,7 +460,7 @@ def test_cli_sso_against_the_local_tls_issuer(project, issuer, monkeypatch, caps
         after = conn.execute(
             text("SELECT COUNT(*) AS count FROM AUD_ACTIONS WHERE COMMAND='login'")
         ).scalar_one()
-    assert after == before + 1
+    assert after == before + 2
 
 
 def test_user_sessions_and_service_credentials_keep_their_boundaries(project):
@@ -679,3 +680,30 @@ def test_successful_signin_audit_commits_with_session_and_supplies_last_signin(
 
     who = act(authenticated_context(ctx, session.metadata), ActionName.WHOAMI)
     assert who.last_signin is not None
+
+
+def test_account_add_accepts_a_piped_password_without_auditing_it(project, monkeypatch, capsys):
+    ctx = project
+    service = act(ctx, ActionName.TOKEN_CREATE, name="automation", role=ApiRole.ADMIN)
+    monkeypatch.setenv("ETL_CRAFT_TOKEN", service.token)
+    monkeypatch.setattr(sys, "stdin", io.StringIO(PASSWORD + "\n"))
+    assert main(["account", "add", "--name", "piped", "--role", "viewer", "--password-stdin"]) == 0
+    assert (
+        sessions.sign_in(ctx, sessions.SignIn(name="piped", password=PASSWORD)).metadata.name
+        == "piped"
+    )
+    with ctx.engine.connect() as conn:
+        evidence = (
+            conn.execute(text("SELECT ARGUMENTS AS arguments FROM AUD_ACTIONS")).scalars().all()
+        )
+    assert PASSWORD not in str(evidence) + str(capsys.readouterr())
+
+
+def test_account_add_without_terminal_names_the_password_stdin_remedy(project, monkeypatch, capsys):
+    service = act(project, ActionName.TOKEN_CREATE, name="automation", role=ApiRole.ADMIN)
+    monkeypatch.setenv("ETL_CRAFT_TOKEN", service.token)
+    monkeypatch.setattr(sys, "stdin", io.StringIO(""))
+    assert (
+        main(["account", "add", "--name", "unattended", "--role", "viewer"]) == UsageError.exit_code
+    )
+    assert "pipe a temporary password with --password-stdin" in capsys.readouterr().err

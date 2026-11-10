@@ -152,11 +152,13 @@ the task's process wrote: etl-craft's own log records, and anything a script pri
 Every etl-craft record in it names the pipeline, task, run and attempt:
 
 ```
-2026-09-25 10:15:02,114 INFO etl_craft.execution.child [task_run_id=412 pipeline=SALES_DAILY task=load_orders pipeline_run_id=97 attempt=2]: running the SQL handler
+2026-09-25T10:15:02Z INFO etl_craft.execution.child [task_run_id=412 pipeline=SALES_DAILY task=load_orders pipeline_run_id=97 attempt=2]: running the SQL handler
 ```
 
 `--log-format json` writes the same records as one JSON object per line, with those names as
-fields. `--log-level DEBUG` adds the detail: for example, the SQL each action runs.
+fields. Text timestamps are UTC with a `Z` suffix. `run` shows WARNING and above by default;
+use `--log-level INFO` for progress records or `--log-level DEBUG` for the SQL each action runs.
+Other commands retain their INFO default.
 
 Agents write to a temporary local file and send ordered UTF-8 chunks through the existing agent
 API. After committing the task outcome, the API publishes the complete acknowledged chunks to
@@ -197,3 +199,24 @@ bounded chunk tail in both attempt and task summary. Full output remains in the 
 Supervisors renew attempt leases every 15 seconds.
 Expired leases are reconciled before the next run or by `etl-craft reconcile`; see
 [recovery and run controls](run-control.md#mark-a-task).
+
+## Reading a specific run
+
+`status --run-id 97` and `history --run-id 97` resolve that exact run inside the selected project
+and permitted pipelines. Neither selects an ended run by recency. When an implicit selection
+cannot find one non-terminal whole-pipeline run, the refusal lists up to 20 candidates with their
+readable label, status and exact `--run-id` selector, newest first. `history --pipeline-code SALES
+--all` lists the newest 20 runs by default; use its `--limit` for a larger listing.
+
+Terminal status tables show tasks in dependency order, compact durations and SLA budgets;
+`pipelines` adds last and next run times. Labels containing spaces are shell-quoted in terminal
+status output; numeric `--run-id` and exact `--run-key` remain the selectors. Piped tables retain
+their tab-separated columns and numeric duration fields, and `--format json` retains its shape.
+Terminal `whoami` labels the account and role explicitly. Root help groups commands by purpose;
+subcommand help points to root help for global options, which still work before or after the command.
+
+Text `audit` displays the newest 100 entries per section, newest first; `--since` narrows the
+window and `--format json` returns the complete result. Completed requests show their command
+outcome by pairing a linked completion event with the original immutable request. A successful
+request means the operation completed, not that a submitted pipeline has finished successfully;
+inspect its exact run for execution status.

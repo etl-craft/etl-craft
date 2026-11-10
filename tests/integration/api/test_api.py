@@ -151,7 +151,7 @@ def test_read_routes_record_only_named_admin_access_or_explicit_refusals(api):
         expected = dict(before)
         if action.name in audited or action.name == ActionName.CONTROL_REQUEST:
             table = next(name for name in before if name.upper() == "AUD_ACTIONS")
-            expected[table] += 1
+            expected[table] += 1 if action.name == ActionName.CONTROL_REQUEST else 2
             with ctx.engine.connect() as conn:
                 row = conn.execute(
                     text(
@@ -340,7 +340,7 @@ def test_tokens_store_hash_only_expiry_validation_and_audit(api):
         requests = conn.execute(
             text("SELECT COMMAND AS command, ARGUMENTS AS arguments FROM AUD_ACTIONS")
         ).all()
-        assert len(requests) == len(creds) + 1
+        assert len(requests) == 2 * (len(creds) + 1)
         assert all(row.command == "token create" for row in requests)
         audit = str(requests)
         assert value.token not in audit

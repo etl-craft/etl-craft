@@ -17,6 +17,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from etl_craft.core.actor import Actor, current_actor
 from etl_craft.core.enums import ActionOutcome
+from etl_craft.core.errors import EtlCraftError, ExitCode
 from etl_craft.core.text import mask_arguments
 from etl_craft.dialects.engine import for_engine
 from etl_craft.engine.queries import statement
@@ -67,6 +68,17 @@ class ActionRequest:
                 statement(conn, "action_task"),
                 {"pipeline": pipeline, "code": self.arguments["task_code"]},
             ).scalar_one_or_none()
+        original = _request.get()
+        linked = (
+            original is not None
+            and original is not self
+            and original.action_id is not None
+            and original.command == self.command
+            and self.outcome != ActionOutcome.REQUESTED
+        )
+        if linked:
+            assert original is not None
+            self.arguments = {**self.arguments, "_request_action_id": original.action_id}
         actor = self.actor
         payload = json.dumps(self.arguments, default=str)
         result = conn.execute(
@@ -90,6 +102,9 @@ class ActionRequest:
         )
         self.action_id = int(result.scalar_one())
         self.recorded = True
+        if linked:
+            assert original is not None
+            original.outcome, original.exit_code = self.outcome, self.exit_code
 
 
 _request: ContextVar[ActionRequest | None] = ContextVar("etl_craft_action_request", default=None)
@@ -108,17 +123,34 @@ def register_engine(engine: Engine) -> None:
 def command_request(
     command: str, arguments: Mapping[str, Any], *, project_id: int | None = None
 ) -> Iterator[ActionRequest]:
-    """Record one audited request once its Engine DB is bound, whatever its outcome."""
+    """Append a request and its command completion once the Engine DB is bound."""
     payload = {key: value for key, value in arguments.items() if key != "handler"}
     request = ActionRequest(
         command, mask_arguments(payload), datetime.now(UTC), project_id=project_id
     )
     token = _request.set(request)
+    outcome, exit_code = ActionOutcome.SUCCESS, ExitCode.SUCCESS
     try:
         yield request
+    except BaseException as error:
+        outcome = ActionOutcome.FAILURE
+        exit_code = error.exit_code if isinstance(error, EtlCraftError) else ExitCode.UNEXPECTED
+        raise
     finally:
         try:
             request.record()
+            if request.action_id is not None and request.outcome == ActionOutcome.REQUESTED:
+                completion = ActionRequest(
+                    command,
+                    {**request.arguments, "_request_action_id": request.action_id},
+                    datetime.now(UTC),
+                    actor=request.actor,
+                    engine=request.engine,
+                    outcome=outcome,
+                    exit_code=exit_code,
+                    project_id=request.project_id,
+                )
+                completion.record()
         except SQLAlchemyError:
             logger.exception("could not record %s request in the Engine DB", command)
         finally:

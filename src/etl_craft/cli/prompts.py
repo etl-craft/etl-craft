@@ -41,3 +41,13 @@ def password(*, confirm: bool = False) -> str:
     if confirm and value != getpass.getpass("Confirm password: "):
         raise UsageError("password confirmation differs; enter the same password twice")
     return value
+
+
+def piped_password(command: str) -> str:
+    """Read one bounded secret line from a local pipe, never from the web console."""
+    if CONSOLE.get() is not None or sys.stdin.isatty():
+        raise UsageError(
+            f"{command} --password-stdin requires piped stdin in the local CLI; "
+            "pipe one password line from your secret manager"
+        )
+    return sys.stdin.readline(1026).removesuffix("\n").removesuffix("\r")

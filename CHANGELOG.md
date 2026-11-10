@@ -6,6 +6,23 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+- The run grid puts the newest run beside task names. Sparse rankings show numbers, shared
+  form controls and disclosures keep page controls consistent, nested pages have breadcrumbs,
+  skipped task rows name their failed upstream, and catalog gaps include a next step.
+  Graph code and catalog pages load when opened. Run now reasons are optional outside PROD.
+- Text log timestamps use UTC with `Z`. HTTP startup logs the bound web interface address.
+  Completed command requests show SUCCESS or FAILURE through linked append-only audit events;
+  the original request event remains immutable.
+- `status` and `history` accept an exact `--run-id` without a pipeline name, subject to the same
+  project and pipeline permissions. Implicit ended-run selection stays refused; candidates list
+  readable labels, statuses and exact selectors, newest first. Terminal tables align columns,
+  status durations and SLA budgets use readable units, and pipelines includes last/next run times.
+  Piped table columns and JSON shapes are preserved. Text audit lists show the newest 100 entries
+  in each section; JSON retains the complete result. Help groups commands, suggests typos and
+  lists global options once. `run` logs WARNING and above by default; `--log-level INFO` restores detail.
+- `account add --password-stdin` reads one temporary USER password line from a pipe without
+  putting the secret in arguments or audit records. Noninteractive password errors name this remedy.
+
 - Home's time presets match the height of its custom-range and pipeline filters on phones,
   keeping wrapped date controls aligned.
 - The pipeline grid uses one adjustable divider. Task names automatically expand to the longest

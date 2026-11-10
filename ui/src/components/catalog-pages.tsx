@@ -1,10 +1,11 @@
+import { gapRemedy } from "@/lib/catalog";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronDown, Copy, Table2, Workflow, ListChecks, TriangleAlert } from "lucide-react";
 import * as React from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Fact, FactList, Loading, Notice, SelectField } from "@/components/common";
 import { RunBars } from "@/components/pipeline-parts";
-import { RunGraph } from "@/components/run-graph";
+import { RunGraph } from "@/components/lazy-run-graph";
 import { StatusBadge } from "@/components/status";
 import { Tabs } from "@/components/tabs";
 import { useToast } from "@/components/toast";
@@ -515,7 +516,6 @@ export function TableObject({ code, doc, name, tab, onTab }: { code: string; doc
               <Fact label="Type">{(table.warehouse_kind ?? table.declared_kind ?? "table").toLowerCase()}</Fact>
               <Fact label="Data source">{doc.warehouse ?? "Not compared"}</Fact>
               <Fact label="In warehouse">{table.warehouse_checked ? (table.in_warehouse ? "Yes" : "Not found") : "Not checked"}</Fact>
-              <Fact label="Last written"><When iso={lastWrite?.end} empty="No run recorded" /></Fact>
               <Fact label="Written by">
                 <Links code={code} labels={table.writers} kind="tasks" />
               </Fact>
@@ -657,6 +657,7 @@ function GapRows({ code, gaps }: { code: string; gaps: CatalogDoc["gaps"] }) {
         ...(gaps.some((g) => g.declared) ? [{ id: "declared", header: "Declared", value: (g: Gap) => g.declared ?? "", size: 160, cell: (g: Gap) => <span className="font-mono text-xs">{g.declared ?? "—"}</span> }] : []),
         ...(gaps.some((g) => g.deployed) ? [{ id: "deployed", header: "Deployed", value: (g: Gap) => g.deployed ?? "", size: 160, cell: (g: Gap) => <span className="font-mono text-xs">{g.deployed ?? "—"}</span> }] : []),
         { id: "why", header: "Why", value: (g) => g.reason, size: 380, cell: (g) => <span className="text-muted">{g.reason}</span> },
+        { id: "remedy", header: "Next step", value: gapRemedy, size: 320, cell: (g) => <span className="text-muted">{gapRemedy(g)}</span> },
       ])}
     />
   );

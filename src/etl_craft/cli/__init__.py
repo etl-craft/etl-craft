@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import argparse
+import difflib
 import logging
 import os
 import re
 from collections.abc import Sequence
 from pathlib import Path
+from typing import NoReturn
 
 from etl_craft import __version__
 from etl_craft.cli.authentication import access_context
@@ -20,6 +22,88 @@ from etl_craft.core.errors import EtlCraftError, ExitCode
 logger = logging.getLogger(__name__)
 
 DEFAULT_LOG_LEVEL = "INFO"
+
+
+class CommandHelp(argparse.HelpFormatter):
+    """Group the command inventory by the work the person is doing."""
+
+    def _format_action(self, action: argparse.Action) -> str:
+        if not isinstance(action, argparse._SubParsersAction):
+            return super()._format_action(action)
+        groups: dict[str, list[str]] = {}
+        for choice in action._choices_actions:
+            name = choice.dest
+            group = (
+                "Run and inspect"
+                if name
+                in {
+                    "run",
+                    "status",
+                    "history",
+                    "pipelines",
+                    "graph",
+                    "explain",
+                    "logs",
+                    "items",
+                    "audit",
+                    "lineage",
+                    "search",
+                }
+                else "Sign in and administer"
+                if name
+                in {
+                    "login",
+                    "logout",
+                    "whoami",
+                    "sso-login",
+                    "account",
+                    "token",
+                    "group",
+                    "access",
+                    "project",
+                    "pool",
+                }
+                else "Control work"
+                if name
+                in {
+                    "hold",
+                    "release",
+                    "stop",
+                    "abort",
+                    "pause",
+                    "resume",
+                    "mark",
+                    "reconcile",
+                    "agent",
+                }
+                else "Configure and operate"
+            )
+            groups.setdefault(group, []).append(f"  {name:<22} {choice.help}\n")
+        return "".join(f"\n{group}:\n" + "".join(lines) for group, lines in groups.items())
+
+
+class CommandParser(argparse.ArgumentParser):
+    """Keep refusals short and suggest the nearest known command or option."""
+
+    def error(self, message: str) -> NoReturn:
+        """Print a remedy without dumping the complete command inventory."""
+        values = list(self._option_string_actions)
+        for action in self._actions:
+            if isinstance(action, argparse._SubParsersAction):
+                values.extend(action.choices)
+        invalid = re.search(r"invalid choice: '([^']+)'", message)
+        words = [invalid.group(1)] if invalid else re.findall(r"--[\w-]+", message)
+        suggestion = next(
+            (
+                match[0]
+                for word in words
+                if (match := difflib.get_close_matches(word, values, n=1, cutoff=0.75))
+            ),
+            None,
+        )
+        message = message.split(" (choose from", 1)[0]
+        hint = f" Did you mean {suggestion!r}?" if suggestion else ""
+        self.exit(2, f"{self.prog}: error: {message}.{hint} Use {self.prog} --help.\n")
 
 
 def _global_options(*, defaults: bool) -> argparse.ArgumentParser:
@@ -64,8 +148,8 @@ def _global_options(*, defaults: bool) -> argparse.ArgumentParser:
         "--log-level",
         type=str.upper,
         choices=log.LEVELS,
-        help=f"Lowest level of log record written to stderr (default: {DEFAULT_LOG_LEVEL}).",
-        default=default(DEFAULT_LOG_LEVEL),
+        help="Lowest log level on stderr (default: WARNING for run, INFO otherwise).",
+        default=default(None),
     )
     group.add_argument(
         "--log-format",
@@ -74,12 +158,15 @@ def _global_options(*, defaults: bool) -> argparse.ArgumentParser:
         help="Log records as text lines or JSON objects (default: text).",
         default=default(log.LogFormat.TEXT.value),
     )
+    if not defaults:
+        for option in group._group_actions:
+            option.help = argparse.SUPPRESS
     return parser
 
 
 def build_parser(
     commands: Sequence[Command] = COMMANDS,
-    parser_class: type[argparse.ArgumentParser] = argparse.ArgumentParser,
+    parser_class: type[argparse.ArgumentParser] = CommandParser,
 ) -> argparse.ArgumentParser:
     """Build the top-level argument parser with one subcommand per entry in ``commands``.
 
@@ -88,6 +175,7 @@ def build_parser(
     parser = parser_class(
         prog="etl-craft",
         description="Metadata-driven ETL orchestration engine.",
+        formatter_class=CommandHelp,
         parents=[_global_options(defaults=True)],
     )
     parser.add_argument(
@@ -101,7 +189,13 @@ def build_parser(
         shared = _global_options(defaults=False)
         for command in commands:
             subparser = subparsers.add_parser(
-                command.name, help=command.help, description=command.help, parents=[shared]
+                command.name,
+                help=command.help,
+                description=command.help,
+                parents=[shared],
+                epilog=(
+                    "Global options: use etl-craft --help; accepted before or after this command."
+                ),
             )
             if command.configure is not None:
                 command.configure(subparser)
@@ -128,6 +222,7 @@ def main(argv: Sequence[str] | None = None, commands: Sequence[Command] = COMMAN
             out.line("")
         parser.print_usage(out.stdout)
         return ExitCode.USAGE
+    args.log_level = args.log_level or ("WARNING" if args.command == "run" else DEFAULT_LOG_LEVEL)
     log.configure(args.log_level, args.log_format)
     args.api = args.api or os.environ.get("ETL_CRAFT_API")
     try:

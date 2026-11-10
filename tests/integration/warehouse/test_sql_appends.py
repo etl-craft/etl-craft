@@ -182,7 +182,10 @@ def test_upgrade_command_validates_then_adds_and_records_requests(sql_world, cap
     with w.engine_db.connect() as conn:
         assert (
             conn.execute(
-                text("SELECT COUNT(*) FROM AUD_ACTIONS WHERE COMMAND = 'upgrade-targets'")
+                text(
+                    "SELECT COUNT(*) FROM AUD_ACTIONS WHERE COMMAND = 'upgrade-targets' "
+                    "AND OUTCOME='REQUESTED'"
+                )
             ).scalar_one()
             == 3
         )

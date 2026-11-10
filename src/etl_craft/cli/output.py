@@ -162,8 +162,17 @@ class Output:
 
     def rows(self, rows: Iterable[Iterable[object]]) -> None:
         """Write one tab-separated line per row; ``None`` becomes an empty field."""
-        for row in rows:
-            self.line("\t".join("" if value is None else str(value) for value in row))
+        rendered = [["" if value is None else str(value) for value in row] for row in rows]
+        if not self.stdout.isatty():
+            for row in rendered:
+                self.line("\t".join(row))
+            return
+        widths = [
+            max(len(row[i]) if i < len(row) else 0 for row in rendered)
+            for i in range(max((len(row) for row in rendered), default=0))
+        ]
+        for row in rendered:
+            self.line("  ".join(value.ljust(widths[i]) for i, value in enumerate(row)).rstrip())
 
     def agents(self, view: AgentsView | None) -> None:
         """Render the shared registry's advertised, reserved and free resources."""

@@ -15,8 +15,14 @@ from etl_craft.services.operations.tokens import CreatedToken, TokenCreate, Toke
 def _configure(parser: argparse.ArgumentParser) -> None:
     verbs = parser.add_subparsers(dest="token_verb", required=True)
     create = verbs.add_parser("create", help="Create a token and print its value once.")
-    create.add_argument("--name", required=True)
-    create.add_argument("--role", type=ApiRole, choices=tuple(ApiRole), required=True)
+    create.add_argument("--name", required=True, help="Account that owns this token.")
+    create.add_argument(
+        "--role",
+        type=ApiRole,
+        choices=tuple(ApiRole),
+        required=True,
+        help="Role for this token, no broader than the account role.",
+    )
     create.add_argument("--expires", default="365d", help="Lifetime in days (default 365d).")
     create.add_argument("--pool", help="Required pool binding for an agent token.")
     configure_output(create)

@@ -217,7 +217,16 @@ function RecoverRun({ code, run, canRun }: { code: string; run: RunView; canRun:
   );
 }
 
-/** The first line of the message a failed task recorded, read with the request its row makes when opened. */
+/** Explain recorded skips from their failed dependency, rather than inferring from position. */
+function SkipReason({ code, pipeline, runId, task }: { code: string; pipeline: string; runId: number; task: string }) {
+  const why = useQuery({
+    queryKey: ["explain", code, pipeline, runId, task],
+    queryFn: () => getJson<Explanation>(`${project(code)}/explanations`, { pipeline_code: pipeline, run_id: runId, task_code: task }),
+  });
+  const failed = why.data?.dependencies.filter((dependency) => !dependency.met && isFailure(dependency.status));
+  return failed?.length ? <span className="text-xs text-muted">Skipped: {failed.map((dependency) => dependency.upstream).join(", ")} failed</span> : null;
+}
+
 function FirstError({ code, pipeline, runId, task }: { code: string; pipeline: string; runId: number; task: string }) {
   const history = useQuery({
     queryKey: ["task-history", code, pipeline, runId, task],
@@ -359,9 +368,10 @@ export function RunOverview({ code, pipeline, runId, task, onTask }: { code: str
                     </Td>
                     <Td>
                       <StatusBadge quiet status={taskStatus(step.status, r)} />
+                      {step.status === "SKIPPED" ? <SkipReason code={code} pipeline={pipeline} runId={runId} task={step.task_code} /> : null}
                     </Td>
                     <Td>{handlerLabel(step.handler)}</Td>
-                    <Td className="text-muted">{runConditionLabel(step.run_condition)}</Td>
+                    <Td className="text-muted">{runConditionLabel(step.run_condition, step.run_condition_count)}</Td>
                   </tr>
                   {isOpen ? (
                     <tr>

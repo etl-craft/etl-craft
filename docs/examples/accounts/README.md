@@ -15,7 +15,15 @@ etl-craft whoami
 etl-craft logout
 ```
 
-Password entry is interactive and never a command argument. Put the printed service token
+Password entry is interactive unless `account add --password-stdin` reads the temporary
+password from one piped line. For example, an administrator can run:
+
+```bash
+secret-manager read etl/analyst-temporary-password | etl-craft account add --name analyst --kind USER --role viewer --password-stdin
+```
+
+Here `secret-manager read` stands for your own secret manager's read command. Passwords never
+become command arguments or audit values. Put the printed service token
 in `ETL_CRAFT_TOKEN` for the scheduler. Never commit its value. Token creation requires a SERVICE account;
 users sign in for expiring sessions instead. Disabling retains the account and revokes all
 credentials. Password reset revokes all existing sessions.

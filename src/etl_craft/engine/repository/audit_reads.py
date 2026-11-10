@@ -72,6 +72,7 @@ def fetch_audit_records(
     ]
     for action in actions:
         action["arguments"] = document(action["arguments"])
+    actions = completed_actions(actions)
     for change in changes:
         for key in ("row_key", "before_json", "after_json"):
             change[key] = document(change[key])
@@ -127,3 +128,16 @@ def project_changes(
             if doc is not None
         )
     ]
+
+
+def completed_actions(actions: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Pair append-only completion events with the request they describe."""
+    completions = {
+        action["arguments"]["_request_action_id"]: action["outcome"]
+        for action in actions
+        if "_request_action_id" in action["arguments"]
+    }
+    actions = [action for action in actions if "_request_action_id" not in action["arguments"]]
+    for action in actions:
+        action["outcome"] = completions.get(action["action_id"], action["outcome"])
+    return actions

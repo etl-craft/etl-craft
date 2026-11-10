@@ -17,7 +17,7 @@ from etl_craft.cli.commands.common import (
     prepare_context,
 )
 from etl_craft.cli.output import Output
-from etl_craft.cli.prompts import CONSOLE, interactive, password
+from etl_craft.cli.prompts import CONSOLE, interactive, password, piped_password
 from etl_craft.core import interrupts
 from etl_craft.core.enums import ActionName
 from etl_craft.core.errors import ConfigurationError, UsageError
@@ -45,7 +45,7 @@ def _piped_credentials(args: argparse.Namespace) -> sessions.SignIn | None:
             "login --password-stdin requires piped stdin and --name N; pipe a secret "
             "from your secret manager instead of typing it visibly"
         )
-    secret = sys.stdin.readline(1026).removesuffix("\n").removesuffix("\r")
+    secret = piped_password("login")
     return sessions.SignIn(name=args.name, password=secret)
 
 
@@ -158,7 +158,13 @@ def _whoami(args: argparse.Namespace, out: Output) -> int:
     )
     assert isinstance(identity, sessions.Identity)
     out.result(
-        identity, args.output_format, text=lambda: out.line(f"{identity.name} {identity.role}")
+        identity,
+        args.output_format,
+        text=lambda: out.line(
+            f"Account: {identity.name} · role: {identity.role}"
+            if out.stdout.isatty()
+            else f"{identity.name} {identity.role}"
+        ),
     )
     return 0
 

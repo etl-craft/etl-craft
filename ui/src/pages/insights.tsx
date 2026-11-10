@@ -1,3 +1,4 @@
+import { Disclosure, DisclosureSummary } from "@/components/dropdown";
 import { useQuery } from "@tanstack/react-query";
 import { When } from "@/components/when";
 import * as React from "react";
@@ -5,7 +6,7 @@ import { createColumnHelper } from "@tanstack/react-table";
 import { Link, Navigate, useLocation, useParams, useSearchParams } from "react-router-dom";
 import { ActionButton } from "@/components/action-button";
 import { CsvButton } from "@/components/csv-button";
-import { Field, inputClass, Loading, Notice, PageHeader } from "@/components/common";
+import { EmptyState, Field, inputClass, Loading, Notice, PageHeader } from "@/components/common";
 import { CatalogInsights } from "@/components/catalog-insights";
 import { DataTable } from "@/components/data-table";
 import { HBars, KpiTile, Panel, type BarRow } from "@/components/charts";
@@ -165,10 +166,10 @@ export function Insights() {
                 </button>
               ))}
             </div>
-            <details className="relative">
-              <summary className="flex h-8 cursor-pointer list-none items-center rounded-md bg-surface px-3 text-[13px] font-medium shadow-raised hover:bg-surface-2 max-sm:h-11">
+            <Disclosure className="relative">
+              <DisclosureSummary className="flex h-8 cursor-pointer list-none items-center rounded-md bg-surface px-3 text-[13px] font-medium shadow-raised hover:bg-surface-2 max-sm:h-11">
                 {from || to ? `${from || "start"} to ${to || "today"}` : "Custom range"}
-              </summary>
+              </DisclosureSummary>
               <div className="absolute right-0 z-30 mt-1.5 flex gap-3 rounded-xl bg-surface p-3 shadow-pop">
                 <Field compact label="From (UTC day)">
                   <input type="date" value={from} onChange={(event) => set("from", event.target.value)} className={cn(inputClass, "w-36")} />
@@ -177,11 +178,11 @@ export function Insights() {
                   <input type="date" value={to} onChange={(event) => set("to", event.target.value)} className={cn(inputClass, "w-36")} />
                 </Field>
               </div>
-            </details>
-            <details className="relative">
-              <summary className="flex h-8 cursor-pointer list-none items-center rounded-md bg-surface px-3 text-[13px] font-medium shadow-raised hover:bg-surface-2 max-sm:h-11">
+            </Disclosure>
+            <Disclosure className="relative">
+              <DisclosureSummary className="flex h-8 cursor-pointer list-none items-center rounded-md bg-surface px-3 text-[13px] font-medium shadow-raised hover:bg-surface-2 max-sm:h-11">
                 Pipelines {chosen.length ? `(${chosen.length} selected)` : "(all you can view)"}
-              </summary>
+              </DisclosureSummary>
               <fieldset className="absolute right-0 z-30 mt-1 grid max-h-72 min-w-64 gap-1 overflow-auto rounded-xl bg-surface p-3 shadow-pop">
                 <legend className="sr-only">Pipelines</legend>
                 {(choices.data?.pipelines ?? []).map((p) => (
@@ -190,7 +191,7 @@ export function Insights() {
                   </label>
                 ))}
               </fieldset>
-            </details>
+            </Disclosure>
           </div>
         }
       />
@@ -218,7 +219,7 @@ export function Insights() {
                 <DataTable find
                   label="Pipelines"
                   data={d.per_pipeline}
-                  empty="No pipeline ran in this window."
+                  empty={<EmptyState title="No pipeline ran in this window.">Choose a wider time range or run a pipeline.</EmptyState>}
                   columns={[
                     pipelineCol.accessor("pipeline_code", { header: "Pipeline", cell: (c) => <Link className="font-medium text-accent hover:underline" to={pipelinePath(code, c.getValue() ?? "")}>{c.getValue()}</Link> }),
                     pipelineCol.accessor("runs", { header: "Runs", cell: (c) => <span className="num">{c.getValue()}</span> }),
@@ -240,7 +241,7 @@ export function Insights() {
                 <Panel title="Most rows written, by task">
                   <HBars
                     label="Rows written by task"
-                    empty="No task reported rows written in this window."
+                    empty="No task reported rows written. Choose a wider time range; counts appear when a handler reports them."
                     rows={d.tasks
                       .filter((t) => t.target_rows !== null)
                       .sort((a, b) => (b.target_rows ?? 0) - (a.target_rows ?? 0))
@@ -263,7 +264,7 @@ export function Insights() {
                   <DataTable find
                     label="Rows by task"
                     data={d.tasks}
-                    empty="No successful task runs in this window."
+                    empty={<EmptyState title="No successful task runs in this window.">Choose a wider time range or inspect failed runs.</EmptyState>}
                     columns={[
                       taskCol.accessor("pipeline_code", { header: "Pipeline" }),
                       taskCol.accessor("task_code", { header: "Task", cell: (c) => <span className="font-medium">{c.getValue()}</span> }),
@@ -285,7 +286,7 @@ export function Insights() {
                 <DataTable find
                   label="Failures"
                   data={d.failures}
-                  empty="No failed or lost attempts in this window."
+                  empty={<EmptyState title="No failed or lost attempts in this window.">Choose a wider time range to inspect earlier failures.</EmptyState>}
                   columns={[
                     failureCol.accessor("pipeline_code", { header: "Pipeline", cell: (c) => <Link className="font-medium text-accent hover:underline" to={pipelinePath(code, c.getValue())}>{c.getValue()}</Link> }),
                     failureCol.accessor("task_code", { header: "Task" }),
@@ -314,7 +315,7 @@ function Quality({ code, d, developer }: { code: string; d: InsightsView; develo
         <DataTable find
           label="Data quality rules"
           data={d.rules}
-          empty="No business rules ran in this window."
+          empty={<EmptyState title="No business rules ran in this window.">Configure business rules for a data task, then run its pipeline.</EmptyState>}
           columns={[
             ruleCol.accessor("pipeline_code", { header: "Pipeline" }),
             ruleCol.accessor("rule_name", { header: "Rule", cell: (c) => <span className="font-medium">{c.getValue()}</span> }),

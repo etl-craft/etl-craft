@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it } from "vitest";
-import { TableObject } from "@/components/catalog-pages";
+import { GapsObject, TableObject } from "@/components/catalog-pages";
 import { CatalogInsights } from "@/components/catalog-insights";
 import { CatalogTree } from "@/components/catalog-tree";
 import { pipelineGraph, tableLineage, type CatalogDoc } from "@/lib/catalog";
@@ -100,5 +100,18 @@ describe("the catalog insights", () => {
     expect(screen.getByText("Tasks documented")).toBeTruthy();
     expect(screen.getByText("Tables written by a task")).toBeTruthy();
     expect(screen.getByRole("region", { name: "Tables no task writes" })).toBeTruthy();
+  });
+});
+
+
+describe("catalog gap remedies", () => {
+  it("names the corrective step and hides unused comparison columns", () => {
+    const gaps = [{ table: "stg.orders", column: null, attribute: "LINEAGE", state: "LINEAGE_ERROR", declared: null, deployed: null, reason: "SELECT could not be traced", tasks: ["LOAD.a"] }];
+    wrap(<GapsObject code="demo" doc={{ ...doc, gaps }} />);
+    const rows = screen.getByRole("table", { name: "Gaps" });
+    expect(within(rows).getByRole("columnheader", { name: /^Next step\b/ })).toBeTruthy();
+    expect(within(rows).getByText(/Correct the named task's SELECT/)).toBeTruthy();
+    expect(within(rows).queryByRole("columnheader", { name: /^Declared\b/ })).toBeNull();
+    expect(within(rows).queryByRole("columnheader", { name: /^Deployed\b/ })).toBeNull();
   });
 });
