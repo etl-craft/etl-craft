@@ -158,9 +158,9 @@ export function Insights() {
         subtitle={d ? <>Runs started <When iso={d.window_start} /> to <When iso={d.window_end} /></> : undefined}
         actions={
           <div className="flex flex-wrap items-end justify-end gap-2">
-            <div role="group" aria-label="Time range" className="inline-flex h-8 items-center rounded-md bg-surface-2 p-0.5 text-[13px]">
+            <div role="group" aria-label="Time range" className="inline-flex h-8 items-center rounded-md bg-surface-2 p-0.5 text-[13px] max-sm:h-11">
               {RANGES.map((r) => (
-                <button key={r.id} type="button" aria-pressed={activePreset === r.id} onClick={() => preset(r.days)} className={cn("h-7 cursor-pointer rounded-[5px] px-3", activePreset === r.id ? "bg-surface font-medium text-fg shadow-raised" : "text-muted hover:text-fg")}>
+                <button key={r.id} type="button" aria-pressed={activePreset === r.id} onClick={() => preset(r.days)} className={cn("h-7 cursor-pointer rounded-[5px] px-3 max-sm:h-10", activePreset === r.id ? "bg-surface font-medium text-fg shadow-raised" : "text-muted hover:text-fg")}>
                   {r.label}
                 </button>
               ))}

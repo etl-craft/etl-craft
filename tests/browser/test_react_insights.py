@@ -273,3 +273,47 @@ def test_home_times_follow_the_account_display_and_timezone(scene, display):
                         shoot(page, f"{name}-times-{display}-{scheme}-{width}")
         assert problems == []
         browser.close()
+
+
+@pytest.mark.parametrize("scheme", ["light", "dark"])
+def test_phone_date_filters_have_aligned_controls_and_keep_their_actions(scene, scheme):
+    _, url = scene
+    with sync_playwright() as pw:
+        browser, page, problems = open_page(
+            pw, color_scheme=scheme, viewport={"width": 390, "height": 900}
+        )
+        sign_in(page, url, "/ui/projects/default")
+        presets = page.get_by_role("group", name="Time range")
+        custom = (
+            page.locator("details")
+            .filter(has=page.get_by_label("From (UTC day)"))
+            .locator("summary")
+        )
+        pipelines = page.locator("summary").filter(has_text="Pipelines")
+        expect(page.get_by_role("region", name="Runs per day")).to_be_visible()
+        expect(custom).to_be_visible()
+        boxes = presets.evaluate(
+            """(presets, controls) => ({
+                presets: presets.getBoundingClientRect().toJSON(),
+                custom: controls.custom.getBoundingClientRect().toJSON(),
+                pipelines: controls.pipelines.getBoundingClientRect().toJSON(),
+            })""",
+            {"custom": custom.element_handle(), "pipelines": pipelines.element_handle()},
+        )
+        preset_box, custom_box = boxes["presets"], boxes["custom"]
+        assert abs(preset_box["height"] - custom_box["height"]) <= 1
+        assert abs(preset_box["y"] - custom_box["y"]) <= 1
+        assert abs(boxes["pipelines"]["height"] - custom_box["height"]) <= 1
+        presets.get_by_role("button", name="24 h", exact=True).click()
+        expect(presets.get_by_role("button", name="24 h", exact=True)).to_have_attribute(
+            "aria-pressed", "true"
+        )
+        custom.click()
+        expect(page.get_by_label("From (UTC day)")).to_be_visible()
+        expect(page.get_by_label("To (UTC day)")).to_be_visible()
+        custom.click()
+        expect(page.get_by_role("region", name="Runs per day")).to_be_visible()
+        page.wait_for_load_state("networkidle")
+        shoot(page, f"phone-date-filters-{scheme}")
+        assert problems == []
+        browser.close()

@@ -128,6 +128,11 @@ make ui-check    # typecheck, lint, unit tests, audit, rebuild; fails if the bui
 Change `ui/src`, run `make ui-build` and commit the rebuilt files with the change. Pages call
 only `/api/v1`; they add no server logic.
 
+`cd ui && npm run dev` starts Vite, which serves its own `index.html` without the CSRF
+cookie issued by the etl-craft server. Its `/api` proxy alone does not support signing in.
+For authenticated manual testing, run `make ui-build` and open `/ui` on your configured
+etl-craft server; see the [browser interface guide](docs/guides/browser-ui.md) for server setup.
+
 ## Documentation versions
 
 `dev` documents `main`; each release line (such as `0.1`) documents its newest patch tag,
