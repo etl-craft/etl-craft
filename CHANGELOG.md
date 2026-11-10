@@ -6,6 +6,8 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+- Home's time presets match the height of its custom-range and pipeline filters on phones,
+  keeping wrapped date controls aligned.
 - The pipeline grid uses one adjustable divider. Task names automatically expand to the longest
   name as space allows and narrow only when needed to keep the latest run visible; their own
   boundary is not adjustable. Active-run graphs refresh task statuses, including skipped tasks,

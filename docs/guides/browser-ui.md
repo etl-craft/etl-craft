@@ -55,6 +55,9 @@ etl-craft account unlock --name alice
 
 ## Home, About and catalog
 
+On phones, Home's time presets, custom date range and pipeline filter use the same control
+height and wrap within the page. The custom range still opens the two UTC-day fields.
+
 Home shows only authorized projects and pipeline work. Running runs and queued tasks are
 current; failed runs and SLA misses use a rolling **last 24 h**, including the start and
 excluding the end. The JSON supplies both UTC window boundaries. Counts have no links until

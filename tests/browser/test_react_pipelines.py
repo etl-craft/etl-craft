@@ -370,10 +370,18 @@ def test_one_grid_divider_fits_names_and_keeps_the_latest_run_visible(site, meth
                 page.mouse.up()
 
         def latest_visible():
-            box = area.bounding_box()
-            latest = grid.locator("thead th a").last.bounding_box()
-            assert latest["x"] >= box["x"] - 1
-            assert latest["x"] + latest["width"] <= box["x"] + box["width"] + 1
+            # Inner widths follow the outer divider through ResizeObserver.
+            page.wait_for_function(
+                """([viewport, latest]) => {
+                    const box = viewport.getBoundingClientRect();
+                    const item = latest.getBoundingClientRect();
+                    return viewport.isConnected && latest.isConnected
+                        && box.width > 0 && item.width > 0
+                        && item.left >= box.left - 1 && item.right <= box.right + 1;
+                }""",
+                arg=[area.element_handle(), grid.locator("thead th a").last.element_handle()],
+                timeout=5000,
+            )
 
         resize_grid(False)
         assert task_cell.bounding_box()["width"] < full
