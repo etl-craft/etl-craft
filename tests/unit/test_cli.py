@@ -200,12 +200,12 @@ def test_help_lists_the_commands_and_the_global_options(capsys):
         assert option in text
 
 
-def test_a_command_help_includes_the_global_options(capsys):
+def test_command_help_points_to_global_options_without_repeating_them(capsys):
     with pytest.raises(SystemExit):
         main(["demo", "--help"], commands=[_record([])])
     text = capsys.readouterr().out
     assert "--pipeline-code" in text
-    assert "global options" in text
+    assert "Global options" in text
 
 
 def test_controller_is_the_only_supervisor_command(capsys):
@@ -253,3 +253,23 @@ def test_api_address_flag_and_environment_have_no_controller_alias(monkeypatch, 
     monkeypatch.setenv("ETL_CRAFT_CONTROLLER", "https://old.example.com")
     assert main(["probe"], commands=[probe]) == 0
     assert seen[-1] is None
+
+
+def test_a_typo_suggests_a_command_without_printing_the_inventory(capsys):
+    with pytest.raises(SystemExit) as error:
+        main(["histroy"])
+    assert error.value.code == 2
+    message = capsys.readouterr().err
+    assert "Did you mean 'history'?" in message
+    assert "usage:" not in message
+
+
+def test_run_is_quiet_by_default_but_honours_explicit_info(capsys, restore_logger):
+    calls = []
+    command = _record(calls)
+    command = Command(name="run", help=command.help, configure=command.configure, run=command.run)
+    assert main(["run", "--pipeline-code", "P"], commands=[command]) == 0
+    assert calls[-1].log_level == "INFO"  # child attempt logs keep their normal detail
+    assert logging.getLogger("etl_craft").level == logging.WARNING
+    assert main(["run", "--pipeline-code", "P", "--log-level", "INFO"], commands=[command]) == 0
+    assert calls[-1].log_level == "INFO"

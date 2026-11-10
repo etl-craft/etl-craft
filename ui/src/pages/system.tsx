@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { When } from "@/components/when";
 import { createColumnHelper } from "@tanstack/react-table";
 import { Link } from "react-router-dom";
-import { Fact, FactList, Loading, Notice, PageHeader } from "@/components/common";
+import { EmptyState, Fact, FactList, Loading, Notice, PageHeader } from "@/components/common";
 import { DataTable } from "@/components/data-table";
 import { EnvironmentBadge } from "@/components/environment-badge";
 import { StatusBadge } from "@/components/status";
@@ -113,7 +113,7 @@ export function System() {
         <DataTable
           label="Projects"
           data={health.data?.projects ?? []}
-          empty={health.isSuccess ? "No projects you can view." : undefined}
+          empty={health.isSuccess ? <EmptyState title="No projects you can view.">Ask an administrator to register a project or grant you access.</EmptyState> : undefined}
           columns={[
             projects.accessor("project", { header: "Project", cell: (c) => <Link className="font-medium text-accent hover:underline" to={runsPath(c.getValue())}>{c.getValue()}</Link> }),
             projects.display({ id: "env", header: "Environment", cell: (c) => <EnvironmentBadge env={{ type: c.row.original.environment_type, name: c.row.original.environment_name }} /> }),

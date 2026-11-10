@@ -2,7 +2,7 @@ import { searchDetail } from "@/lib/labels";
 import { useQuery } from "@tanstack/react-query";
 import { createColumnHelper } from "@tanstack/react-table";
 import { Link, useParams, useSearchParams } from "react-router-dom";
-import { Highlight, Loading, Notice, PageHeader, Pager } from "@/components/common";
+import { EmptyState, Highlight, Loading, Notice, PageHeader, Pager } from "@/components/common";
 import { useIdentity } from "@/hooks";
 import { DataTable } from "@/components/data-table";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
@@ -76,7 +76,7 @@ export function Search() {
           <DataTable
             label="Search results"
             data={pageRows}
-            empty="Nothing you can see matches. Names match on any part; run ids and run keys match exactly. Tables are listed only with whole-project view."
+            empty={<EmptyState title="Nothing you can see matches.">Try part of a name or an exact run id or key. Tables require whole-project view.</EmptyState>}
             columns={[
               columns.accessor("kind", { header: "Kind", cell: (c) => c.getValue().toLowerCase() }),
               columns.accessor("label", {

@@ -203,11 +203,13 @@ def test_utility_offset_reset_refused_by_cli_and_api(project, monkeypatch, capsy
         refusals = conn.execute(
             text(
                 "SELECT OUTCOME AS outcome,EXIT_CODE AS code,ACTOR AS actor "
-                "FROM AUD_ACTIONS WHERE COMMAND='mark'"
+                "FROM AUD_ACTIONS WHERE COMMAND='mark' ORDER BY ACTION_ID"
             )
         ).all()
-        assert len(refusals) == 2
-        assert all(row.code is None and row.outcome == "REQUESTED" for row in refusals)
+        assert len(refusals) == 4
+        assert [row.outcome for row in refusals] == ["REQUESTED", "FAILURE"] * 2
+        assert all(row.code is None for row in refusals if row.outcome == "REQUESTED")
+        assert all(row.code is not None for row in refusals if row.outcome == "FAILURE")
         assert all(row.actor == "test-admin" for row in refusals)
 
 

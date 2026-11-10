@@ -128,6 +128,20 @@ etl-craft generate-docs
 The data is in `warehouse.duckdb`, in the `lnd`, `prs`, `ds`, `cdc`, `pre_dm` and `dm` schemas,
 and on its own schedule the Engine DB's tables are cloned into its `aud` schema.
 
+### See it in the browser
+
+The same runs are available in the [browser UI](guides/browser-ui.md). Install the UI extra
+(`pip install "etl-craft[duckdb,ui]"`), provision an admin service token using the
+[account example](examples/accounts/README.md), and run `etl-craft controller` from the demo
+project with that token in `ETL_CRAFT_TOKEN`. The controller logs
+`web interface at http://127.0.0.1:8730/ui` by default. Use the all-in-one controller for this
+SQLite demo; standalone `etl-craft ui` requires PostgreSQL.
+
+Put a local HTTPS reverse proxy in front of that address, preserving the Host header as in the
+[browser setup](guides/browser-ui.md), then open its `/ui` URL and sign in with the USER account
+created during setup. Secure browser cookies require HTTPS. CLI sign-in and browser sign-in
+are separate sessions. The UI shows the run grid, live task graph, attempts and logs.
+
 ## Next
 
 - [Guides](guides/index.md): how dependencies, the SQL actions, business rules, ingestion

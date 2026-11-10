@@ -30,19 +30,16 @@ export function Attempt() {
           { label: pipeline, to: pipelinePath(code, pipeline) },
           { label: `Run ${runId}`, to: runPath(code, pipeline, runId) },
           { label: task, to: taskPath(code, pipeline, task) },
-          { label: `Attempt ${attemptId}` },
+          { label: `Attempt ${a?.attempt_number ?? ""}` },
         ]}
       />
       <PageHeader
         back={{ to: taskPath(code, pipeline, task), label: `${task}` }}
         title={`Attempt ${a?.attempt_number ?? ""} of ${task}`}
         subtitle={
-          <>
-            <Link className="text-accent hover:underline" to={taskPath(code, pipeline, task)}>
-              Task history
-            </Link>{" "}
-            · attempt id {attemptId}
-          </>
+          <Link className="text-accent hover:underline" to={taskPath(code, pipeline, task)}>
+            Task history
+          </Link>
         }
       />
       {found.isError ? <Notice>{(found.error as Error).message}</Notice> : null}

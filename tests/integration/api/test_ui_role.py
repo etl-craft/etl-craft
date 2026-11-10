@@ -343,7 +343,10 @@ def test_ui_trusts_only_configured_proxy_hops_and_records_client_origin(cli_proj
     assert response.status_code == 200, response.text
     with p.engine.connect() as conn:
         arguments = conn.execute(
-            text("SELECT ARGUMENTS AS arguments FROM AUD_ACTIONS WHERE COMMAND='control'")
+            text(
+                "SELECT ARGUMENTS AS arguments FROM AUD_ACTIONS WHERE COMMAND='control' "
+                "AND OUTCOME='REQUESTED'"
+            )
         ).scalar_one()
     if isinstance(arguments, str):
         arguments = json.loads(arguments)
@@ -362,7 +365,7 @@ def test_ui_trusts_only_configured_proxy_hops_and_records_client_origin(cli_proj
                 conn.execute(
                     text("SELECT COUNT(*) AS n FROM AUD_ACTIONS WHERE COMMAND='control'")
                 ).scalar_one()
-                == 1
+                == 2
             )
 
 

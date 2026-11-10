@@ -81,15 +81,19 @@ def test_attribution_and_immutable_command_requests(engine_db):
         register_engine(engine)
     with engine.connect() as conn:
         row = conn.execute(
-            text("SELECT ACTOR, ACTOR_KIND, OUTCOME, ARGUMENTS FROM AUD_ACTIONS")
-        ).one()
-        assert tuple(row)[:3] == ("alice", "USER", "REQUESTED")
-        assert "sensitive" not in str(row[3])
+            text(
+                "SELECT ACTOR AS actor, ACTOR_KIND AS kind, OUTCOME AS outcome, "
+                "ARGUMENTS AS arguments FROM AUD_ACTIONS ORDER BY ACTION_ID"
+            )
+        ).all()
+        assert all(item.actor == "alice" and item.kind == "USER" for item in row)
+        assert [item.outcome for item in row] == ["REQUESTED", "SUCCESS"]
+        assert "sensitive" not in str(row)
     for sql in ("UPDATE AUD_ACTIONS SET OUTCOME='SUCCESS'", "DELETE FROM AUD_ACTIONS"):
         with pytest.raises(DBAPIError, match=r"immutable|append-only"), engine.begin() as conn:
             conn.execute(text(sql))
     with engine.connect() as conn:
-        assert conn.execute(text("SELECT COUNT(*) FROM AUD_ACTIONS")).scalar_one() == 1
+        assert conn.execute(text("SELECT COUNT(*) FROM AUD_ACTIONS")).scalar_one() == 2
 
 
 def test_project_changes_record_before_after_actor_and_migration(engine_db, tmp_path):
@@ -603,7 +607,7 @@ def test_cli_actor_requests_and_read_only_audit(
     capsys.readouterr()
     command("audit", "--pipeline-code", "P", "--since", "2026-01-01")
     shown = capsys.readouterr().out
-    assert actor_name in shown and "SERVICE" in shown and "REQUESTED" in shown
+    assert actor_name in shown and "SERVICE" in shown and "SUCCESS" in shown
     assert "deleted_parameter_history" in shown
     assert "unrelated_parameter_history" not in shown
     command("setup", "--print-grants")
@@ -612,9 +616,20 @@ def test_cli_actor_requests_and_read_only_audit(
     assert "STARTED_BY" in capsys.readouterr().out
     with engine_db.engine.connect() as conn:
         actions = conn.execute(
-            text("SELECT COMMAND, ACTOR, ACTOR_KIND FROM AUD_ACTIONS ORDER BY ACTION_ID")
+            text(
+                "SELECT COMMAND AS command, ACTOR AS actor, ACTOR_KIND AS kind, "
+                "ARGUMENTS AS arguments FROM AUD_ACTIONS ORDER BY ACTION_ID"
+            )
         ).all()
-        assert [tuple(row) for row in actions] == [
+        assert all(row.actor == actor_name and row.kind == "SERVICE" for row in actions)
+        requests = [
+            row
+            for row in actions
+            if "_request_action_id"
+            not in (json.loads(row.arguments) if isinstance(row.arguments, str) else row.arguments)
+        ]
+        assert len(actions) == 2 * len(requests)
+        assert [(row.command, row.actor, row.kind) for row in requests] == [
             (name, actor_name, "SERVICE")
             for name in (
                 "project list",
@@ -816,9 +831,11 @@ def test_nested_action_secrets_never_reach_audit_logs_cli_or_api(engine_db, log_
         )
     assert response.status_code == 200, response.text
     with db.engine.connect() as conn:
-        row = conn.execute(
-            text("SELECT ARGUMENTS AS arguments FROM AUD_ACTIONS WHERE COMMAND='run'")
-        ).scalar_one()
+        row = (
+            conn.execute(text("SELECT ARGUMENTS AS arguments FROM AUD_ACTIONS WHERE COMMAND='run'"))
+            .scalars()
+            .all()
+        )
         for table in inspect(conn).get_table_names():
             if table.lower().startswith("aud_"):
                 rows = conn.exec_driver_sql('SELECT * FROM "' + table + '"').all()
@@ -838,6 +855,6 @@ def test_direct_pipeline_requests_record_the_selected_project(engine_db):
     with engine_db.engine.connect() as conn:
         row = conn.execute(
             text("SELECT PROJECT_ID AS project_id,PIPELINE_ID AS pipeline_id FROM AUD_ACTIONS")
-        ).one()
-    assert row.project_id == 1
-    assert row.pipeline_id == pipeline
+        ).all()
+    assert len(row) == 2
+    assert all(item.project_id == 1 and item.pipeline_id == pipeline for item in row)

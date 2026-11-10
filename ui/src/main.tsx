@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { StrictMode } from "react";
+import { lazy, StrictMode, Suspense } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { AppShell } from "@/components/app-shell";
@@ -8,7 +8,8 @@ import { About } from "@/pages/about";
 import { Admin } from "@/pages/admin";
 import { Agents } from "@/pages/agents";
 import { Attempt } from "@/pages/attempt";
-import { Catalog } from "@/pages/catalog";
+import { Loading } from "@/components/common";
+const Catalog = lazy(() => import("@/pages/catalog").then((module) => ({ default: module.Catalog })));
 import { Console } from "@/pages/console";
 import { Maintenance } from "@/pages/maintenance";
 import { Password } from "@/pages/password";
@@ -40,6 +41,7 @@ createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <QueryClientProvider client={client}>
       <ToastProvider>
+      <Suspense fallback={<Loading what="page" />}>
       <BrowserRouter basename="/ui">
         <Routes>
           <Route path="signin" element={<SignIn />} />
@@ -72,6 +74,7 @@ createRoot(document.getElementById("root")!).render(
           </Route>
         </Routes>
       </BrowserRouter>
+      </Suspense>
       </ToastProvider>
     </QueryClientProvider>
   </StrictMode>,

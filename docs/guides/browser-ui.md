@@ -334,3 +334,22 @@ adds partial indexes for recent health counts and successful sign-in/catalog aud
 
 Migration `0078_announcements.sql` adds the `AUD_ANNOUNCEMENTS` audit table; existing data is
 unchanged.
+
+## Audit presentation
+
+The run grid keeps the newest run beside task names. Its single outer divider remains
+adjustable; names size automatically to the longest name and narrow only to preserve the newest
+run. Recorded skipped tasks name their failed upstream in the task list, and active-run graphs
+refresh recorded task statuses and shared colours while the run is still in progress.
+Sparse rankings and duration series show numbers rather than tiny charts. Catalog gaps name the
+next corrective step. Nested pages use breadcrumbs and shared controls; empty lists explain what
+fills them. Graph code loads on opening the graph; catalog code loads on entering the catalog.
+
+Run now still opens a confirmation naming the project and environment. Its reason is optional
+outside PROD. Production still requires both a reason and the exact project code; other writes
+retain their reason requirements. Account Kind and Role are populated required fields, and SSO
+email-binding guidance is help text beside the email field.
+
+The console's recent requests show completed command outcomes. These do not substitute for run
+status: admission of a run can succeed while the run later fails. API documentation remains at
+`/api/v1/docs` and `/api/v1/openapi.json`.

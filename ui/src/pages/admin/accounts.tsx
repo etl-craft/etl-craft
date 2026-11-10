@@ -1,3 +1,5 @@
+import { EmptyState } from "@/components/common";
+import { words } from "@/lib/labels";
 import { createColumnHelper } from "@tanstack/react-table";
 import { When } from "@/components/when";
 import { DataTable } from "@/components/data-table";
@@ -71,13 +73,13 @@ export function AccountsTab() {
           find
           label="Accounts"
           data={accounts}
-          empty={list.isSuccess ? "No accounts." : undefined}
+          empty={list.isSuccess ? <EmptyState title="No accounts.">Add an account to let a person sign in or a service use tokens.</EmptyState> : undefined}
           columns={[
             columns.accessor("name", { header: "Account", cell: (c) => <span className="font-medium">{c.getValue()}</span> }),
             columns.display({ id: "person", header: "Name", cell: (c) => [c.row.original.first_name, c.row.original.last_name].filter(Boolean).join(" ") || <span className="text-muted">—</span> }),
             columns.accessor("email", { header: "Email", cell: (c) => c.getValue() ?? <span className="text-muted">—</span> }),
-            columns.accessor("kind", { header: "Kind" }),
-            columns.accessor("role", { header: "Role" }),
+            columns.accessor("kind", { header: "Kind", cell: (c) => words(c.getValue()) }),
+            columns.accessor("role", { header: "Role", cell: (c) => words(c.getValue()) }),
             columns.display({
               id: "state",
               header: "State",

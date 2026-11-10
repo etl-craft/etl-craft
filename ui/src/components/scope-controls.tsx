@@ -1,3 +1,4 @@
+import { Disclosure, DisclosureSummary } from "@/components/dropdown";
 import { useQuery } from "@tanstack/react-query";
 import * as React from "react";
 import { ActionButton } from "@/components/action-button";
@@ -77,8 +78,8 @@ export function ScopeControls({ code, pipeline, runId, task, elsewhere = [] }: {
         ) : null}
       </div>
       {blocked.length ? (
-        <details className="text-xs text-muted">
-          <summary className="cursor-pointer">Not available now ({blocked.length})</summary>
+        <Disclosure className="text-xs text-muted">
+          <DisclosureSummary className="cursor-pointer">Not available now ({blocked.length})</DisclosureSummary>
           <ul className="m-0 mt-1 grid gap-1 pl-4">
             {blocked.map((a) => (
               <li key={a.action}>
@@ -86,7 +87,7 @@ export function ScopeControls({ code, pipeline, runId, task, elsewhere = [] }: {
               </li>
             ))}
           </ul>
-        </details>
+        </Disclosure>
       ) : null}
     </div>
   );

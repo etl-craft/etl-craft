@@ -1,7 +1,8 @@
+import { words } from "@/lib/labels";
 import { createColumnHelper } from "@tanstack/react-table";
 import { When } from "@/components/when";
 import * as React from "react";
-import { Notice } from "@/components/common";
+import { EmptyState, Notice } from "@/components/common";
 import { ActionButton } from "@/components/action-button";
 import { DataTable } from "@/components/data-table";
 import { FormAction } from "@/components/form-action";
@@ -66,11 +67,11 @@ export function TokensTab() {
           find
           label="API tokens"
           data={list.data?.tokens ?? []}
-          empty={list.isSuccess ? "No tokens." : undefined}
+          empty={list.isSuccess ? <EmptyState title="No tokens.">Create a token for a registered account to authenticate a client.</EmptyState> : undefined}
           columns={[
             columns.accessor("name", { header: "Name", cell: (c) => <span className="font-medium">{c.getValue()}</span> }),
-            columns.accessor("token_kind", { header: "Kind" }),
-            columns.accessor("role", { header: "Role" }),
+            columns.accessor("token_kind", { header: "Kind", cell: (c) => words(c.getValue()) }),
+            columns.accessor("role", { header: "Role", cell: (c) => words(c.getValue()) }),
             columns.display({ id: "created", header: "Created", cell: (c) => <>{when(c.row.original.created_at, "")} <span className="text-muted">by {c.row.original.created_by}</span></> }),
             columns.accessor("expires_at", { header: "Expires", cell: (c) => when(c.getValue(), "Never") }),
             columns.accessor("last_used_at", { header: "Last used", cell: (c) => when(c.getValue(), "Never") }),

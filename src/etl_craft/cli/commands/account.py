@@ -4,9 +4,10 @@ import argparse
 
 from etl_craft.cli.commands.common import Command, call, configure_output, request_from
 from etl_craft.cli.output import Output
-from etl_craft.cli.prompts import password
+from etl_craft.cli.prompts import can_prompt, password, piped_password
 from etl_craft.core.enums import AccountKind, ActionName, ApiRole
 from etl_craft.core.enums_ui import Theme, TimeDisplay
+from etl_craft.core.errors import UsageError
 from etl_craft.services.operations import accounts, personal
 from etl_craft.services.operations.requests import NoInput
 
@@ -14,17 +15,27 @@ from etl_craft.services.operations.requests import NoInput
 def _configure(parser: argparse.ArgumentParser) -> None:
     verbs = parser.add_subparsers(dest="account_verb", required=True)
     add = verbs.add_parser("add", help="Register a user or service account.")
-    add.add_argument("--name", required=True)
+    add.add_argument("--name", required=True, help="Unique account name used to sign in.")
     add.add_argument(
-        "--kind", type=AccountKind, choices=tuple(AccountKind), default=AccountKind.USER
+        "--kind",
+        type=AccountKind,
+        choices=tuple(AccountKind),
+        default=AccountKind.USER,
+        help="USER signs in; SERVICE authenticates with tokens (default USER).",
     )
     add.add_argument(
         "--role",
         type=ApiRole,
         choices=tuple(role for role in ApiRole if role != ApiRole.AGENT),
         required=True,
+        help="Deployment role granted to the account.",
     )
-    add.add_argument("--email")
+    add.add_argument("--email", help="Account email; required for an email-only SSO invite.")
+    add.add_argument(
+        "--password-stdin",
+        action="store_true",
+        help="Read the temporary USER password from one piped line.",
+    )
     add.add_argument(
         "--no-password",
         action="store_true",
@@ -83,9 +94,25 @@ def _run(args: argparse.Namespace, out: Output) -> int:
         return 0
     if args.account_verb == "add":
         user = args.kind == AccountKind.USER and not args.oidc_subject and not args.no_password
-        request: object = request_from(
-            args, accounts.AccountAdd, password=password(confirm=True) if user else None
+        if args.password_stdin and not user:
+            raise UsageError(
+                f"account add {args.name!r}: --password-stdin requires a password USER account; "
+                "omit --no-password and --oidc-subject and use --kind USER"
+            )
+        if user and not args.password_stdin and not can_prompt():
+            raise UsageError(
+                f"account add {args.name!r}: USER password not supplied and no local terminal; "
+                "from your local CLI, pipe a temporary password with --password-stdin, "
+                "or invite with --no-password --email"
+            )
+        secret = (
+            piped_password("account add")
+            if args.password_stdin
+            else password(confirm=True)
+            if user
+            else None
         )
+        request: object = request_from(args, accounts.AccountAdd, password=secret)
         done = call(args, ActionName.ACCOUNT_ADD, request)
     elif args.account_verb == "set-role":
         done = call(args, ActionName.ACCOUNT_SET_ROLE, request_from(args, accounts.AccountRole))
@@ -103,8 +130,17 @@ def _run(args: argparse.Namespace, out: Output) -> int:
         done,
         args.output_format,
         text=lambda: out.rows(
-            (a.name, a.kind, a.role, a.active_flag, a.email, a.first_name, a.last_name)
-            for a in done.accounts
+            [
+                *(
+                    [("ACCOUNT", "KIND", "ROLE", "ACTIVE", "EMAIL", "FIRST_NAME", "LAST_NAME")]
+                    if out.stdout.isatty()
+                    else []
+                ),
+                *(
+                    (a.name, a.kind, a.role, a.active_flag, a.email, a.first_name, a.last_name)
+                    for a in done.accounts
+                ),
+            ]
         ),
     )
     return 0

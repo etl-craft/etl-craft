@@ -60,9 +60,29 @@ def render(out: Output, view: ItemView) -> None:
     """Show the same persisted progress and identities as the JSON response."""
     out.line(str(view.progress))
     out.rows(
-        [("Key", "Status", "Item attempt", "Rows", "Started", "Ended", "Error", "Task attempt")]
-    )
-    out.rows(
-        (r.key, r.status, r.number, r.row_count, r.started, r.ended, r.error, r.attempt_id)
-        for r in view.records
+        [
+            (
+                "Key",
+                "Status",
+                "Item attempt",
+                "Rows",
+                "Started",
+                "Ended",
+                "Error",
+                "Task attempt",
+            ),
+            *(
+                (
+                    r.key,
+                    r.status,
+                    r.number,
+                    r.row_count,
+                    r.started,
+                    r.ended,
+                    r.error,
+                    r.attempt_id,
+                )
+                for r in view.records
+            ),
+        ]
     )

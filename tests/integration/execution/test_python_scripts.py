@@ -589,7 +589,7 @@ def test_partition_offsets_move_forward_and_never_lose_a_partition(project, capl
             return ScriptResult(0, Offset.partitions({"0": 10, "1": 7, "2": 0}))
         """
     )
-    with caplog.at_level(logging.INFO):
+    with caplog.at_level(logging.INFO, logger="etl_craft"):
         run_in_process(project, reader)
     assert "new partition(s) 2 recorded" in caplog.text
     assert stored_offset(engine, task) == ("PARTITIONS", '{"0":10,"1":7,"2":0}')

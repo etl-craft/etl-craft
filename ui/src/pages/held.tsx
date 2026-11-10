@@ -3,7 +3,7 @@ import { When } from "@/components/when";
 import { createColumnHelper } from "@tanstack/react-table";
 import { Link, useParams } from "react-router-dom";
 import { ActionButton } from "@/components/action-button";
-import { Loading, Notice, PageHeader } from "@/components/common";
+import { EmptyState, Loading, Notice, PageHeader } from "@/components/common";
 import { DataTable } from "@/components/data-table";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { useCanRun, useProjectInfo } from "@/hooks";
@@ -41,7 +41,7 @@ export function Held() {
         <DataTable find
           label="Held runs and tasks"
           data={held.data?.holds ?? []}
-          empty={held.isSuccess ? "Nothing is held." : undefined}
+          empty={held.isSuccess ? <EmptyState title="Nothing is held.">Hold a queued or running task from its run page when work must wait.</EmptyState> : undefined}
           columns={[
             holds.accessor("pipeline_code", { header: "Pipeline", cell: (c) => <span className="font-medium">{c.getValue()}</span> }),
             holds.accessor("pipeline_run_id", { header: "Run", cell: (c) => <Link className="num text-accent hover:underline" to={runPath(code, c.row.original.pipeline_code, c.getValue())}>#{c.getValue()}</Link> }),
@@ -80,7 +80,7 @@ export function Held() {
         <DataTable find
           label="Paused pipelines"
           data={paused}
-          empty={list.isSuccess ? "No pipeline is paused." : undefined}
+          empty={list.isSuccess ? <EmptyState title="No pipeline is paused.">Pause a pipeline from Pipelines to prevent new automatic runs.</EmptyState> : undefined}
           columns={[
             pauses.accessor("pipeline_code", { header: "Pipeline", cell: (c) => <Link className="font-medium text-accent hover:underline" to={pipelinePath(code, c.getValue())}>{c.getValue()}</Link> }),
             pauses.display({ id: "by", header: "By", cell: (c) => c.row.original.paused?.paused_by }),
@@ -117,7 +117,7 @@ export function Held() {
         <DataTable find
           label="Paused tasks"
           data={tasks}
-          empty={list.isSuccess ? "No task is paused." : undefined}
+          empty={list.isSuccess ? <EmptyState title="No task is paused.">Pause a task from its history page when future starts must wait.</EmptyState> : undefined}
           columns={[
             standing.accessor("pipeline_code", { header: "Pipeline", cell: (c) => <Link className="font-medium text-accent hover:underline" to={pipelinePath(code, c.getValue())}>{c.getValue()}</Link> }),
             standing.accessor("task_code", { header: "Task" }),

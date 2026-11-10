@@ -1,16 +1,15 @@
 import { useQuery } from "@tanstack/react-query";
 import { createColumnHelper } from "@tanstack/react-table";
-import { ArrowLeft } from "lucide-react";
 import * as React from "react";
-import { Link, useParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import { ActionButton } from "@/components/action-button";
-import { Loading, Notice, PageHeader, SelectField } from "@/components/common";
+import { EmptyState, Breadcrumbs, Loading, Notice, PageHeader, SelectField } from "@/components/common";
 import { DataTable } from "@/components/data-table";
 import { StatusBadge } from "@/components/status";
 import { Card } from "@/components/ui/card";
 import { useCanRun, useProjectInfo } from "@/hooks";
 import { getJson, project } from "@/lib/api";
-import { runPath } from "@/lib/routes";
+import { pipelinesPath, pipelinePath, runPath, taskPath } from "@/lib/routes";
 import type { ItemRecord, Items as ItemsView } from "@/lib/types";
 import { useDocumentTitle } from "@/title";
 
@@ -48,9 +47,7 @@ export function Items() {
   );
   return (
     <div className="grid grid-cols-1 gap-5">
-      <Link to={runPath(code, pipeline, runId)} className="inline-flex w-fit items-center gap-1 text-sm text-muted hover:text-fg">
-        <ArrowLeft className="size-4" aria-hidden /> {pipeline} run #{runId}
-      </Link>
+      <Breadcrumbs trail={[{ label: "Pipelines", to: pipelinesPath(code) }, { label: pipeline, to: pipelinePath(code, pipeline) }, { label: `Run ${runId}`, to: runPath(code, pipeline, runId) }, { label: task, to: taskPath(code, pipeline, task) }, { label: "Items" }]} />
       <PageHeader
         title={`Items of ${task}`}
         subtitle={progress ? `items ${progress.done} / ${progress.total}, ${progress.failed} failed, ${progress.skipped} skipped` : undefined}
@@ -75,7 +72,7 @@ export function Items() {
         <DataTable
           label="Items"
           data={items.data?.records ?? []}
-          empty={items.isSuccess ? "This task run recorded no items." : undefined}
+          empty={items.isSuccess ? <EmptyState title="This task run recorded no items.">An ingestion task publishes items through its scripting helper.</EmptyState> : undefined}
           columns={[
             columns.accessor("key", { header: "Item", cell: (c) => <span className="font-mono text-xs">{c.getValue()}</span> }),
             columns.accessor("status", { header: "Status", cell: (c) => <StatusBadge status={c.getValue()} /> }),

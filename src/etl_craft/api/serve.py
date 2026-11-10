@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import threading
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -33,6 +34,10 @@ def serve_http(
     install(ctx.engine)
     host, port = parse_api_address(ctx.config.api_address)
     listener = bind_api_address(host, port)
+    browser_host = {"0.0.0.0": "127.0.0.1", "::": "::1"}.get(host, host)
+    browser_host = f"[{browser_host}]" if ":" in browser_host else browser_host
+    address = f"http://{browser_host}:{listener.getsockname()[1]}"
+    logging.getLogger(__name__).info("web interface at %s/ui", address.rstrip("/"))
     errors: list[BaseException] = []
 
     gateway = None if controller else Gateway(stop)

@@ -1,10 +1,11 @@
+import { gapRemedy } from "@/lib/catalog";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronDown, Copy, Table2, Workflow, ListChecks, TriangleAlert } from "lucide-react";
 import * as React from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Fact, FactList, Loading, Notice, SelectField } from "@/components/common";
+import { EmptyState, Fact, FactList, Loading, Notice, SelectField } from "@/components/common";
 import { RunBars } from "@/components/pipeline-parts";
-import { RunGraph } from "@/components/run-graph";
+import { RunGraph } from "@/components/lazy-run-graph";
 import { StatusBadge } from "@/components/status";
 import { Tabs } from "@/components/tabs";
 import { useToast } from "@/components/toast";
@@ -18,7 +19,7 @@ import { impact, isOpenGap, pipelineGraph, tableLineage, typeOf, type CatalogCol
 import { describeCron, formatDuration } from "@/lib/format";
 import { handlerLabel } from "@/lib/labels";
 import { catalogPath, pipelinePath, taskPath } from "@/lib/routes";
-import type { RunView, TablePreview } from "@/lib/types";
+import type { TablePreview } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { DropdownContent, DropdownItem, DropdownMenu, DropdownTrigger } from "@/components/dropdown";
 
@@ -121,7 +122,7 @@ const Links = ({ code, labels, kind }: { code: string; labels: string[]; kind: "
 
 /** What a run row says: its state and when it ran. */
 function RunsTable({ code, pipeline, runs, task }: { code: string; pipeline: string; runs: CatalogRun[]; task?: boolean }) {
-  if (!runs.length) return <p className="m-0 text-muted">No runs recorded in the last build.</p>;
+  if (!runs.length) return <EmptyState title="No runs recorded in the last build.">Run the pipeline, then rebuild the catalog.</EmptyState>;
   return (
     <DataTable
       label="Recent runs"
@@ -262,7 +263,7 @@ export function PipelineObject({ code, doc, name, tab, onTab }: { code: string; 
           <RunGraph fill plain graph={graph} statuses={{}} focused={focused} onFocus={setFocused} onOpen={(task) => navigate(catalogPath(code, "tasks", `${pipeline.code}.${task}`))} />
         </div>
       ) : (
-        <Section title="Recent runs" aside={<RunBars project={code} runs={pipeline.runs as unknown as RunView[]} />}>
+        <Section title="Recent runs" aside={<RunBars project={code} runs={pipeline.runs.map((run) => ({ ...run, pipeline_code: pipeline.code, start_date: run.start, end_date: run.end }))} />}>
           <RunsTable code={code} pipeline={pipeline.code} runs={pipeline.runs} />
         </Section>
       )}
@@ -515,7 +516,6 @@ export function TableObject({ code, doc, name, tab, onTab }: { code: string; doc
               <Fact label="Type">{(table.warehouse_kind ?? table.declared_kind ?? "table").toLowerCase()}</Fact>
               <Fact label="Data source">{doc.warehouse ?? "Not compared"}</Fact>
               <Fact label="In warehouse">{table.warehouse_checked ? (table.in_warehouse ? "Yes" : "Not found") : "Not checked"}</Fact>
-              <Fact label="Last written"><When iso={lastWrite?.end} empty="No run recorded" /></Fact>
               <Fact label="Written by">
                 <Links code={code} labels={table.writers} kind="tasks" />
               </Fact>
@@ -657,6 +657,7 @@ function GapRows({ code, gaps }: { code: string; gaps: CatalogDoc["gaps"] }) {
         ...(gaps.some((g) => g.declared) ? [{ id: "declared", header: "Declared", value: (g: Gap) => g.declared ?? "", size: 160, cell: (g: Gap) => <span className="font-mono text-xs">{g.declared ?? "—"}</span> }] : []),
         ...(gaps.some((g) => g.deployed) ? [{ id: "deployed", header: "Deployed", value: (g: Gap) => g.deployed ?? "", size: 160, cell: (g: Gap) => <span className="font-mono text-xs">{g.deployed ?? "—"}</span> }] : []),
         { id: "why", header: "Why", value: (g) => g.reason, size: 380, cell: (g) => <span className="text-muted">{g.reason}</span> },
+        { id: "remedy", header: "Next step", value: gapRemedy, size: 320, cell: (g) => <span className="text-muted">{gapRemedy(g)}</span> },
       ])}
     />
   );

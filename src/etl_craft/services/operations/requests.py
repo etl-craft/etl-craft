@@ -126,10 +126,8 @@ class RunFilter(TagFilter, RunIdentity):
         super().__post_init__()
         RunIdentity.__post_init__(self)
         optional_text("pipeline_code", self.pipeline_code)
-        if self.pipeline_code is None and (self.run_id is not None or self.run_key is not None):
-            raise UsageError(
-                "`run_id` and `run_key` need `pipeline_code`; select its exact pipeline"
-            )
+        if self.pipeline_code is None and self.run_key is not None:
+            raise UsageError("`run_key` needs `pipeline_code`; select its exact pipeline")
 
 
 @dataclass(frozen=True, kw_only=True)

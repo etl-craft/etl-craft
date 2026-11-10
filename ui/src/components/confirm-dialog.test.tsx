@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 
@@ -12,10 +12,11 @@ beforeAll(() => {
   };
 });
 
-function show(type: string, onConfirm = vi.fn()) {
+function show(type: string, onConfirm = vi.fn(), reasonOptional = false) {
   render(
     <ConfirmDialog
       open
+      reasonOptional={reasonOptional}
       title="Recover run #7"
       action="Recover run"
       effect="Reopens OPS run #7."
@@ -55,6 +56,20 @@ describe("ConfirmDialog", () => {
     fireEvent.click(submit);
     expect(confirm).toHaveBeenCalledWith("urgent");
     expect(screen.getByText("PRODUCTION")).toBeInTheDocument();
+  });
+
+  it("allows an empty reason only outside production when requested", () => {
+    const confirm = show("DEV", vi.fn(), true);
+    const submit = screen.getByRole("button", { name: "Recover run" });
+    expect(submit).toBeEnabled();
+    expect(screen.getByLabelText(/Reason/)).not.toBeRequired();
+    fireEvent.click(submit);
+    expect(confirm).toHaveBeenCalledWith("");
+    cleanup();
+    show("PROD", vi.fn(), true);
+    fireEvent.change(screen.getByLabelText(/Type/), { target: { value: "sales" } });
+    expect(screen.getByRole("button", { name: "Recover run" })).toBeDisabled();
+    expect(screen.getByLabelText(/Reason/)).toBeRequired();
   });
 
   it("shows the server's refusal verbatim", () => {

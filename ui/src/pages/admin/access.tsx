@@ -1,3 +1,4 @@
+import { words } from "@/lib/labels";
 import { createColumnHelper } from "@tanstack/react-table";
 import { ActionButton } from "@/components/action-button";
 import { DataTable } from "@/components/data-table";
@@ -46,7 +47,7 @@ export function AccessTab({ project, projects }: { project: string; projects: st
           columns={[
             columns.display({ id: "who", header: "Who", cell: (c) => <span className="font-medium">{who(c.row.original)}</span> }),
             columns.display({ id: "on", header: "On", cell: (c) => on(c.row.original) }),
-            columns.accessor("permission", { header: "Permission" }),
+            columns.accessor("permission", { header: "Permission", cell: (c) => words(c.getValue()) }),
             columns.display({
               id: "act",
               header: "Actions",

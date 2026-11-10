@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import logging
 import sys
+import time
 from collections.abc import Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
@@ -152,6 +153,9 @@ def configure(
     formatter = (
         JsonFormatter() if parse_format(fmt) is LogFormat.JSON else logging.Formatter(TEXT_FORMAT)
     )
+    formatter.converter = time.gmtime
+    formatter.default_time_format = "%Y-%m-%dT%H:%M:%S"
+    formatter.default_msec_format = "%s.%03dZ"
     logger = logging.getLogger(ROOT_LOGGER)
     for existing in [h for h in logger.handlers if isinstance(h, _ConfiguredHandler)]:
         logger.removeHandler(existing)

@@ -180,15 +180,15 @@ def test_new_inactive_key_fails_without_writes(populated, tmp_path):
     assert snapshot(populated) == before
     assert caught.value.exit_code == ExitCode.METADATA_FILE
     with populated.engine.connect() as conn:
-        actors = (
-            conn.execute(
-                text("SELECT ACTOR AS actor FROM AUD_ACTIONS WHERE COMMAND=:command"),
-                {"command": ActionName.CONFIG_APPLY},
-            )
-            .scalars()
-            .all()
-        )
-    assert actors == [DEPLOYER.name]
+        requests = conn.execute(
+            text(
+                "SELECT ACTOR AS actor, OUTCOME AS outcome FROM AUD_ACTIONS "
+                "WHERE COMMAND=:command ORDER BY ACTION_ID"
+            ),
+            {"command": ActionName.CONFIG_APPLY},
+        ).all()
+    assert [row.actor for row in requests] == [DEPLOYER.name, DEPLOYER.name]
+    assert [row.outcome for row in requests] == ["REQUESTED", "FAILURE"]
 
 
 def test_unknown_csv_names_the_suggestion(populated, tmp_path):

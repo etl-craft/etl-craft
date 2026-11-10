@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { When } from "@/components/when";
 import { createColumnHelper } from "@tanstack/react-table";
 import { Link, useParams } from "react-router-dom";
-import { Breadcrumbs, Fact, FactList, Loading, Notice, PageHeader, ParamList } from "@/components/common";
+import { EmptyState, Breadcrumbs, Fact, FactList, Loading, Notice, PageHeader, ParamList } from "@/components/common";
 import { CsvButton } from "@/components/csv-button";
 import { DataTable } from "@/components/data-table";
 import { OffsetCard } from "@/components/offset-card";
@@ -48,7 +48,6 @@ export function Task() {
       <PageHeader
         back={{ to: pipelinePath(code, pipeline, "tasks"), label: `${pipeline} tasks` }}
         title={task}
-        subtitle={`${pipeline} · ${code}`}
         status={paused ? <span className="text-idle">Paused by {paused.actor}: {paused.reason}</span> : null}
         actions={
           <CsvButton
@@ -73,7 +72,7 @@ export function Task() {
         <DataTable
           label="Task runs"
           data={runs}
-          empty={history.isSuccess ? "This task has not run yet." : undefined}
+          empty={history.isSuccess ? <EmptyState title="This task has not run yet.">Run its pipeline; task history appears after the task starts.</EmptyState> : undefined}
           initialSort={[{ id: "run", desc: true }]}
           columns={[
             columns.accessor("pipeline_run_id", { id: "run", header: "Run", cell: (c) => <Link className="num font-medium text-accent hover:underline" to={runPath(code, pipeline, c.getValue())}>#{c.getValue()}</Link> }),

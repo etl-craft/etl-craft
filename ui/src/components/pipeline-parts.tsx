@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils";
 export function RecentRuns({ project, pipeline }: { project: string; pipeline: Pipeline }) {
   const runs = pipeline.recent_runs;
   if (runs.length === 0) return <span className="text-muted">No runs yet</span>;
-  // Oldest first, so the newest run is at the right edge like the grid's.
+  // Oldest first, so the newest run is at the right edge in the recent-run strip.
   const ordered = [...runs].sort((a, b) => a.pipeline_run_id - b.pipeline_run_id);
   const ok = runs.filter((r) => r.status === "SUCCESS").length;
   const failed = runs.filter((r) => isFailure(r.status)).length;
@@ -104,10 +104,11 @@ export function TagList({ tags }: { tags: string[] }) {
 }
 
 /** Run durations, newest on the right; each bar opens its run. */
-export function RunBars({ project, runs }: { project: string; runs: RunView[] }) {
+export function RunBars({ project, runs }: { project: string; runs: Pick<RunView, "pipeline_run_id" | "pipeline_code" | "status" | "start_date" | "end_date">[] }) {
   const [now] = React.useState(() => Date.now());
+  if (runs.length < 5) return null;
   const ordered = [...runs].reverse();
-  const seconds = (run: RunView) => (run.start_date ? Math.max(0, ((run.end_date ? new Date(run.end_date).getTime() : now) - new Date(run.start_date).getTime()) / 1000) : 0);
+  const seconds = (run: (typeof runs)[number]) => (run.start_date ? Math.max(0, ((run.end_date ? new Date(run.end_date).getTime() : now) - new Date(run.start_date).getTime()) / 1000) : 0);
   const longest = Math.max(1, ...ordered.map(seconds));
   return (
     // Bars start at the left and keep their width, so a few runs read as a short strip, not a corner of an empty panel.

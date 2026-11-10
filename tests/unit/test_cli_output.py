@@ -36,3 +36,13 @@ def test_given_streams_are_used_instead_of_the_process_streams(capsys):
     out.error("b")
     assert (stdout.getvalue(), stderr.getvalue()) == ("a\n", "error: b\n")
     assert capsys.readouterr() == ("", "")
+
+
+def test_terminal_rows_align_while_pipes_keep_their_contract():
+    class Terminal(io.StringIO):
+        def isatty(self):
+            return True
+
+    terminal = Terminal()
+    Output(stdout=terminal).rows([("Name", "Role"), ("a", "admin")])
+    assert terminal.getvalue() == "Name  Role\na     admin\n"

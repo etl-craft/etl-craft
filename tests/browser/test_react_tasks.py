@@ -75,8 +75,9 @@ def test_a_failed_task_explains_itself_and_leads_to_its_attempt_and_history(scen
         shoot(page, "run-task-panel")
         panel.get_by_role("link", name="Open attempt 1").click()
         expect(page.get_by_role("heading", name="Attempt 1 of LOAD")).to_be_visible()
-        expect(page.get_by_text(f"attempt id {failed}")).to_be_visible()
+        expect(page.get_by_text(f"attempt id {failed}")).to_have_count(0)
         page.get_by_text("Process details").click()  # internals sit behind one disclosure
+        expect(page.get_by_text("Attempt id", exact=True)).to_be_visible()
         expect(page.get_by_text("How the process ended")).to_be_visible()
         expect(page.get_by_text(ERROR).first).to_be_visible()
         shoot(page, "attempt")
@@ -185,4 +186,27 @@ def test_the_task_pages_render_cleanly_in_both_themes_and_on_a_phone(scene, sche
             assert overflow <= 0, f"{name} scrolls sideways by {overflow}px at {width}px"
             shoot(page, f"{name}-{scheme}-{width}")
         assert [p for p in problems if "status of 4" not in p] == []
+        browser.close()
+
+
+def test_a_skipped_task_names_its_failed_upstream(site):
+    ctx, url = site
+    with acting_as(Actor("owner", ActorKind.USER)), ctx.engine.begin() as conn:
+        pipeline = add_pipeline(conn, "SKIP_REASON")
+        source = add_task(conn, pipeline, "SOURCE")
+        load = add_task(conn, pipeline, "LOAD")
+        add_dependency(conn, pipeline, load, source)
+        run = start_run(conn, pipeline)
+        summary = transitions.find_or_create_task_run(conn, source, run).task_run_id
+        attempt(conn, summary, fail="source unavailable")
+        transitions.finish_task_run(conn, summary, status=RunStatus.FAILED)
+        task_run(conn, load, run, RunStatus.SKIPPED)
+        finish_run(conn, run, RunStatus.FAILED)
+    with sync_playwright() as pw:
+        browser, page, problems = open_page(pw)
+        sign_in(page, url, f"/ui/projects/default/runs/SKIP_REASON/{run}")
+        expect(
+            page.get_by_role("table", name="Task list").get_by_text("Skipped: SOURCE failed")
+        ).to_be_visible()
+        assert problems == []
         browser.close()

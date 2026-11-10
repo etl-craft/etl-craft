@@ -182,6 +182,10 @@ def pipeline_steps(ctx: OperationContext, request: RunSelection) -> StepsView:
 
 def run_history(ctx: OperationContext, request: HistoryInput) -> HistoryView:
     """Read one pipeline's history, or a bounded page across matching active pipelines."""
+    if request.run_id is not None and request.pipeline_code is None:
+        from etl_craft.services.operations.permissions import run_pipeline_code
+
+        request = replace(request, pipeline_code=run_pipeline_code(ctx, request.run_id))
     if request.pipeline_code is not None and not request.tag:
         return _pipeline_history(ctx, request)
     with read_snapshot(ctx.engine) as conn:

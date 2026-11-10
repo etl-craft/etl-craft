@@ -1,3 +1,4 @@
+import { Disclosure, DisclosureSummary } from "@/components/dropdown";
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { When } from "@/components/when";
 import * as React from "react";
@@ -170,10 +171,10 @@ export function DetailsTab({ code, pipeline, graph }: { code: string; pipeline: 
         {tasks.map((task) => {
           const def = definitions.get(task);
           return (
-            <details key={task} className="rounded-md border border-border">
-              <summary className="cursor-pointer px-3 py-2 text-[13px] font-medium">
+            <Disclosure key={task} className="rounded-md border border-border">
+              <DisclosureSummary className="cursor-pointer px-3 py-2 text-[13px] font-medium">
                 {task} <span className="font-normal text-muted">{handlerLabel(def?.handler)}</span>
-              </summary>
+              </DisclosureSummary>
               <dl className="m-0 grid gap-x-4 gap-y-1 border-t border-border p-3 text-xs sm:grid-cols-[max-content_1fr]">
                 {Object.entries(def?.parameters ?? {}).map(([name, value]) => (
                   <React.Fragment key={name}>
@@ -182,7 +183,7 @@ export function DetailsTab({ code, pipeline, graph }: { code: string; pipeline: 
                   </React.Fragment>
                 ))}
               </dl>
-            </details>
+            </Disclosure>
           );
         })}
       </section>

@@ -65,6 +65,7 @@ export interface StepView {
   task_type: string;
   handler: string;
   run_condition: string | null;
+  run_condition_count?: number | null;
   status?: RunStatus;
 }
 

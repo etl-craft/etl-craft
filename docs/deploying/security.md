@@ -56,6 +56,9 @@ never raw credentials. Sessions and service token values never enter warehouse c
 
 Admins manage identities through `account add`, `list`, `set-role`, `disable` and
 `reset-password`; see the [account example](../examples/accounts/README.md).
+For unattended USER provisioning, `account add --password-stdin` reads one line from a local
+pipe. It refuses terminal input, web-console input, SERVICE accounts and passwordless/SSO invites.
+The normal password policy still applies; the temporary password is never a command-line argument.
 Roles are inherited from the account on each command/API request. Disabling revokes all
 credentials immediately; password reset revokes existing sessions. Accounts are never deleted.
 Password hashes use salted `hashlib.scrypt` and never enter metadata histories or mirrors.

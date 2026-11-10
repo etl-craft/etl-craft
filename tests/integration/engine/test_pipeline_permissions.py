@@ -66,6 +66,9 @@ def test_direct_and_tag_grants_filter_lists_and_elevate_only_members(scene, tag)
     assert {p.pipeline_code for p in act(reader, ActionName.PIPELINES).pipelines} == {"OPEN"}
     with pytest.raises(ResourceNotFoundError, match=r"PRIVATE.*missing or not permitted"):
         act(reader, ActionName.RUN_DETAIL, run_id=run_id)
+    for action in (ActionName.STATUS, ActionName.HISTORY):
+        with pytest.raises(ResourceNotFoundError):
+            act(reader, action, run_id=run_id)
     assert act(reader, ActionName.HISTORY, all=True).entries == ()
     assert act(reader, ActionName.STATUS).runs == ()
     api = TestClient(create_app(ctx))
@@ -77,6 +80,8 @@ def test_direct_and_tag_grants_filter_lists_and_elevate_only_members(scene, tag)
     ] == ["OPEN"]
     act(ctx, ActionName.GROUP_ADD_MEMBER, name="sales", account="reader")
     assert act(reader, ActionName.RUN_DETAIL, run_id=run_id).pipeline_run_id == run_id
+    assert act(reader, ActionName.STATUS, run_id=run_id).run.pipeline_run_id == run_id
+    assert act(reader, ActionName.HISTORY, run_id=run_id).entries[0].pipeline_run_id == run_id
     assert api.get(f"/api/v1/projects/default/runs/{run_id}", headers=headers).status_code == 200
     # A viewer can operate their own restricted pipeline, not deployment-wide controls.
     act(reader, ActionName.CONTROL, pipeline_code="PRIVATE", action="PAUSE", reason="test")

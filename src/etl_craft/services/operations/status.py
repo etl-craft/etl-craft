@@ -333,7 +333,10 @@ def _admitted_snapshots(
                 replace(control, outcome=None) if control is not None and held else control,
             )
         )
-    return snapshots
+    order = {
+        task: index for index, task in enumerate(task for wave in graph.waves() for task in wave)
+    }
+    return sorted(snapshots, key=lambda snapshot: order[snapshot.task_id])
 
 
 def _pipeline_dependencies(
@@ -504,6 +507,10 @@ class StatusListView:
 
 def pipeline_status(ctx: OperationContext, request: RunFilter) -> StatusView | StatusListView:
     """Inspect one selected run, or all current runs carrying every given tag."""
+    if request.run_id is not None and request.pipeline_code is None:
+        from etl_craft.services.operations.permissions import run_pipeline_code
+
+        request = replace(request, pipeline_code=run_pipeline_code(ctx, request.run_id))
     if request.pipeline_code is not None and not request.tag:
         return _pipeline_status(
             ctx,

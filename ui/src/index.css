@@ -154,12 +154,12 @@ code, pre, .font-mono { font-feature-settings: "calt"; letter-spacing: 0; }
 
 /* Pages that fill the window are edge-to-edge: panes meet at 1px dividers instead of floating as separate cards. */
 [data-edge] > div { gap: 0 !important; }
-[data-edge] > header, [data-edge] > div > header { padding: 14px 20px 12px; border-bottom: 1px solid var(--border); background: var(--surface); }
+[data-edge] > header, [data-edge] > div > header { padding: 14px 16px 12px; border-bottom: 1px solid var(--border); background: var(--surface); }
 [data-edge] [data-card] { border-width: 0 0 1px; border-radius: 0; }
 [data-edge] :has(> [data-card]) { gap: 0 !important; }
 [data-edge] :has(> [data-card]) > [data-card]:not(:last-child) { border-right-width: 1px; }
 /* Pages that scroll keep their content off the window edge; cards and tables run edge to edge. */
-[data-edge]:not([data-fill]) > div > :not(header):not([data-card]):not([role=tablist]) { margin-inline: 20px; }
+[data-edge]:not([data-fill]) > div > :not(header):not([data-card]):not([role=tablist]) { margin-inline: 16px; }
 [data-edge]:not([data-fill]) > div > :first-child:not(header) { margin-top: 8px; }
 [data-edge]:not([data-fill]) > div { gap: 0 !important; padding-bottom: 12px; }
 [data-edge]:not([data-fill]) > div > :not(header):not([data-card]) { margin-block: 8px; }
