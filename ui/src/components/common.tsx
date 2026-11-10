@@ -150,7 +150,7 @@ export function PageHeader({
               <ArrowLeft className="size-4" aria-hidden />
             </Link>
           ) : null}
-          <h1 className={cn("m-0 font-semibold", compact ? "text-lg" : "text-xl")}>{title}</h1>
+          <h1 className={cn("m-0 font-semibold tracking-tight", compact ? "text-lg" : "text-[22px] leading-7")}>{title}</h1>
           {status}
         </div>
         {subtitle ? <p className="m-0 text-sm text-muted">{subtitle}</p> : null}
@@ -220,7 +220,7 @@ export function SelectField({
   );
 }
 
-export const inputClass = "h-9 w-full rounded-md border border-border-strong bg-surface px-2 text-sm text-fg max-sm:h-11";
+export const inputClass = "h-8 w-full rounded-md border border-border-strong bg-surface px-2.5 text-[13px] text-fg max-sm:h-11";
 
 /** A labelled control: one style for every form; `compact` is the small muted label used above toolbar filters. */
 export function Field({ label, compact, hideLabel, children }: { label: string; compact?: boolean; hideLabel?: boolean; children: React.ReactNode }) {

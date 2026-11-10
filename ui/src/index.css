@@ -3,62 +3,69 @@
 
 :root {
   color-scheme: light;
-  --bg: #f6f7f9;
+  --bg: #f0f1f5;
   --surface: #ffffff;
-  --surface-2: #f3f4f7;
-  --border: #e3e5ea;
-  --border-strong: #cdd1d9;
-  --fg: #1b1d24;
-  --muted: #5d6270;
-  --accent: #4f5bd5;
+  --surface-2: #f6f7fa;
+  --border: #e7e8ee;
+  --border-strong: #d5d7e0;
+  --fg: #14161d;
+  --muted: #646a7a;
+  --accent: #4a4de0;
   --accent-fg: #ffffff;
-  --ring: #4f5bd5;
-  --sidebar: #fbfbfd;
-  --sidebar-fg: #383c47;
-  --sidebar-active: #eceefc;
-  --ok-fg: #166534; --ok-bg: #dcfce7;
-  --bad-fg: #b42318; --bad-bg: #fee4e2;
-  --run-fg: #1d4ed8; --run-bg: #dbeafe;
-  --warn-fg: #8a3b0a; --warn-bg: #fef0c7;
-  --idle-fg: #475467; --idle-bg: #eef0f3;
-  --ok-solid: #22b45a; --bad-solid: #ef4437; --run-solid: #2f7bf6; --warn-solid: #f09a0c; --idle-solid: #8b95a5;
-  --env-prod: #b42318; --env-prod-fg: #ffffff;
+  --ring: #4a4de0;
+  --sidebar: #f0f1f5;
+  --sidebar-fg: #3d4250;
+  --sidebar-active: #ffffff;
+  --ok-fg: #0f7a4a; --ok-bg: #e3f6ec;
+  --bad-fg: #c4252b; --bad-bg: #fdecec;
+  --run-fg: #1c5fd6; --run-bg: #e6effe;
+  --warn-fg: #8f5200; --warn-bg: #fff1d1;
+  --idle-fg: #555b6b; --idle-bg: #eef0f4;
+  --ok-solid: #1fb26b; --bad-solid: #ec4a50; --run-solid: #3b82f6; --warn-solid: #f0a020; --idle-solid: #9aa1b1;
+  --env-prod: #c4252b; --env-prod-fg: #ffffff;
   --env-other: #3f4a5a; --env-other-fg: #ffffff;
   --mark-a: #6a74e6; --mark-b: #4651c4; --mark-glyph: #ffffff;
+  --shadow-sheet: 0 0 0 1px rgb(20 22 29 / 0.05), 0 1px 2px rgb(20 22 29 / 0.04), 0 12px 32px -16px rgb(20 22 29 / 0.12);
+  --shadow-raised: 0 0 0 1px rgb(20 22 29 / 0.06), 0 1px 2px rgb(20 22 29 / 0.06);
+  --shadow-pop: 0 0 0 1px rgb(20 22 29 / 0.06), 0 4px 8px -2px rgb(20 22 29 / 0.08), 0 16px 40px -8px rgb(20 22 29 / 0.18);
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 [data-theme="dark"] {
   color-scheme: dark;
-  --bg: #0d0e11;
-  --surface: #14161a;
-  --surface-2: #1a1c21;
-  --border: #24272e;
-  --border-strong: #343842;
-  --fg: #e9eaee;
-  --muted: #9a9ea9;
-  --accent: #8a93f2;
-  --accent-fg: #0d0e11;
-  --ring: #8a93f2;
-  --sidebar: #0b0c0f;
-  --sidebar-fg: #b3b7c2;
-  --sidebar-active: #1b1d2a;
-  --ok-fg: #6ee7a1; --ok-bg: #0f2a1c;
-  --bad-fg: #ffa39b; --bad-bg: #3a1512;
-  --run-fg: #9bbbff; --run-bg: #14284d;
-  --warn-fg: #fcd34d; --warn-bg: #3a2a08;
-  --idle-fg: #b0b8c4; --idle-bg: #232a34;
-  --ok-solid: #34d27b; --bad-solid: #ff5a5f; --run-solid: #4c8dff; --warn-solid: #f5a524; --idle-solid: #5b6573;
+  --bg: #0b0c10;
+  --surface: #13141a;
+  --surface-2: #191b22;
+  --border: #23252e;
+  --border-strong: #32353f;
+  --fg: #ecedf2;
+  --muted: #9a9fae;
+  --accent: #9296ff;
+  --accent-fg: #0b0c10;
+  --ring: #9296ff;
+  --sidebar: #0b0c10;
+  --sidebar-fg: #b4b8c5;
+  --sidebar-active: #1c1e27;
+  --ok-fg: #5fdd9d; --ok-bg: #0f2a1d;
+  --bad-fg: #ff9a96; --bad-bg: #3a1517;
+  --run-fg: #9dc0ff; --run-bg: #13264a;
+  --warn-fg: #f7c948; --warn-bg: #3a2a08;
+  --idle-fg: #aab1bf; --idle-bg: #22252e;
+  --ok-solid: #2fc97a; --bad-solid: #ff5d62; --run-solid: #5593ff; --warn-solid: #f5a524; --idle-solid: #5d6473;
   --env-prod: #c9372c; --env-prod-fg: #ffffff;
   --env-other: #3a4553; --env-other-fg: #f1f4f8;
   --mark-a: #a7aef7; --mark-b: #7c85e8; --mark-glyph: #0d0e22;
+  --shadow-sheet: 0 0 0 1px rgb(255 255 255 / 0.06), 0 12px 32px -16px rgb(0 0 0 / 0.6);
+  --shadow-raised: 0 0 0 1px rgb(255 255 255 / 0.08), 0 1px 2px rgb(0 0 0 / 0.4);
+  --shadow-pop: 0 0 0 1px rgb(255 255 255 / 0.08), 0 16px 40px -8px rgb(0 0 0 / 0.7);
 }
 
 @theme inline {
-  --radius-xs: 2px;
-  --radius-sm: 3px;
-  --radius-md: 4px;
-  --radius-lg: 5px;
-  --radius-xl: 6px;
-  --radius-2xl: 8px;
+  --radius-xs: 3px;
+  --radius-sm: 5px;
+  --radius-md: 7px;
+  --radius-lg: 10px;
+  --radius-xl: 12px;
+  --radius-2xl: 16px;
   --color-bg: var(--bg);
   --color-surface: var(--surface);
   --color-surface-2: var(--surface-2);
@@ -86,11 +93,14 @@
   --color-run-solid: var(--run-solid);
   --color-warn-solid: var(--warn-solid);
   --color-idle-solid: var(--idle-solid);
+  --shadow-sheet: var(--shadow-sheet);
+  --shadow-raised: var(--shadow-raised);
+  --shadow-pop: var(--shadow-pop);
   --font-sans: "Inter Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: "JetBrains Mono Variable", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 }
 
-html { background: var(--bg); --row: 32px; --row-wrap: 44px; }
+html { background: var(--bg); --row: 36px; --row-wrap: 48px; }
 html[data-density="compact"] { --row: 26px; --row-wrap: 36px; }
 html[data-density="comfortable"] { --row: 40px; --row-wrap: 56px; }
 body {
@@ -136,13 +146,36 @@ code, pre, .font-mono { font-feature-settings: "calt"; letter-spacing: 0; }
 
 /* Pages that fill the window are edge-to-edge: panes meet at 1px dividers instead of floating as separate cards. */
 [data-edge] > div { gap: 0 !important; }
-[data-edge] > header, [data-edge] > div > header { padding: 6px 12px; border-bottom: 1px solid var(--border); background: var(--surface); }
+[data-edge] > header, [data-edge] > div > header { padding: 14px 20px 12px; border-bottom: 1px solid var(--border); background: var(--surface); }
 [data-edge] [data-card] { border-width: 0 0 1px; border-radius: 0; }
 [data-edge] :has(> [data-card]) { gap: 0 !important; }
 [data-edge] :has(> [data-card]) > [data-card]:not(:last-child) { border-right-width: 1px; }
 /* Pages that scroll keep their content off the window edge; cards and tables run edge to edge. */
-[data-edge]:not([data-fill]) > div > :not(header):not([data-card]):not([role=tablist]) { margin-inline: 12px; }
+[data-edge]:not([data-fill]) > div > :not(header):not([data-card]):not([role=tablist]) { margin-inline: 20px; }
 [data-edge]:not([data-fill]) > div > :first-child:not(header) { margin-top: 8px; }
 [data-edge]:not([data-fill]) > div { gap: 0 !important; padding-bottom: 12px; }
 [data-edge]:not([data-fill]) > div > :not(header):not([data-card]) { margin-block: 8px; }
 [data-edge] > div > * { min-width: 0; }
+
+/* The page is one raised sheet on the canvas; the bar above and the navigation beside it sit on the canvas itself. */
+.sheet { background: var(--surface); box-shadow: var(--shadow-sheet); }
+@media (min-width: 1024px) { .sheet { border-radius: 12px; margin: 0 8px 8px 0; } }
+
+/* Controls answer the pointer: colour, border and shadow ease; a press settles half a pixel. */
+:where(a, button, summary, input, select, textarea, [role="tab"], [role="option"], [role="menuitem"]) {
+  transition: background-color 140ms var(--ease), border-color 140ms var(--ease), color 140ms var(--ease), box-shadow 140ms var(--ease), opacity 140ms var(--ease);
+}
+:where(button):active:not(:disabled) { transform: translateY(0.5px); }
+:where(input, select, textarea):focus-visible { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent); }
+::placeholder { color: color-mix(in srgb, var(--muted) 80%, transparent); }
+main table tbody tr:hover > td { background: color-mix(in srgb, var(--surface-2) 75%, transparent); }
+
+/* What opens, opens from where it came: dialogs rise, menus grow from their trigger, a new page fades in. */
+dialog { opacity: 0; transform: translateY(10px) scale(0.98); transition: opacity 180ms var(--ease), transform 180ms var(--ease), overlay 180ms allow-discrete, display 180ms allow-discrete; }
+dialog[open] { opacity: 1; transform: none; }
+@starting-style { dialog[open] { opacity: 0; transform: translateY(10px) scale(0.98); } }
+dialog::backdrop { background: rgb(10 11 16 / 0.42); backdrop-filter: blur(3px); }
+@keyframes pop-in { from { opacity: 0; transform: scale(0.97) translateY(-3px); } }
+[data-radix-popper-content-wrapper] > * { animation: pop-in 140ms var(--ease); transform-origin: var(--radix-dropdown-menu-content-transform-origin); }
+@keyframes page-in { from { opacity: 0; } }
+.page-in { animation: page-in 200ms var(--ease); }

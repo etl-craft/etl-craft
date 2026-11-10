@@ -71,9 +71,9 @@ function sections(code: string | undefined, admin: boolean): { title: string; it
 
 const row = (collapsed: boolean, active: boolean) =>
   cn(
-    "flex h-9 items-center gap-3 rounded-md text-sm",
+    "flex h-8 items-center gap-2.5 rounded-md text-[13px]",
     collapsed ? "justify-center" : "px-2.5",
-    active ? "bg-sidebar-active font-medium text-accent" : "text-sidebar-fg hover:bg-sidebar-active",
+    active ? "bg-sidebar-active font-medium text-fg shadow-raised [&>svg]:text-accent" : "text-sidebar-fg hover:bg-fg/5 hover:text-fg",
   );
 
 /** The one navigation every page shares: icons always show; labels show when expanded. */
@@ -96,12 +96,12 @@ export function Sidebar({
             {collapsed ? (
               <div className="mx-2 mb-1 h-px bg-border" aria-hidden />
             ) : (
-              <p className="px-2.5 pb-1 pt-1 text-[11px] font-semibold uppercase tracking-wider text-muted">{section.title}</p>
+              <p className="px-2.5 pb-1 pt-2 text-xs font-medium text-muted">{section.title}</p>
             )}
             {section.items.map(({ label, icon: Icon, to, href }) => {
               const content = (
                 <>
-                  <Icon aria-hidden className="size-[18px] shrink-0" />
+                  <Icon aria-hidden className="size-4 shrink-0" />
                   <span className={cn("truncate", collapsed && "sr-only")}>{label}</span>
                 </>
               );
@@ -118,7 +118,7 @@ export function Sidebar({
           </div>
         ))}
       </nav>
-      <div className="border-t border-border p-2">
+      <div className="p-2">
         <button
           type="button"
           onClick={onToggle}
