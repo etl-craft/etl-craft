@@ -1,8 +1,8 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it } from "vitest";
-import { GapsObject, TableObject } from "@/components/catalog-pages";
+import { GapsObject, PipelineObject, TableObject } from "@/components/catalog-pages";
 import { CatalogInsights } from "@/components/catalog-insights";
 import { CatalogTree } from "@/components/catalog-tree";
 import { pipelineGraph, tableLineage, type CatalogDoc } from "@/lib/catalog";
@@ -114,4 +114,16 @@ describe("catalog gap remedies", () => {
     expect(within(rows).queryByRole("columnheader", { name: /^Declared\b/ })).toBeNull();
     expect(within(rows).queryByRole("columnheader", { name: /^Deployed\b/ })).toBeNull();
   });
+});
+
+
+it("shows sparse catalog run durations in the table and charts measured durations for larger series", () => {
+  const run = { pipeline_run_id: 7, status: "SUCCESS", start: "2026-11-10T10:00:00Z", end: "2026-11-10T10:00:06Z" };
+  const pipeline = { ...doc.pipelines[0]!, runs: [run] };
+  wrap(<PipelineObject code="demo" doc={{ ...doc, pipelines: [pipeline] }} name="LOAD" tab="runs" onTab={() => undefined} />);
+  expect(within(screen.getByRole("table", { name: "Recent runs" })).getByText("6s")).toBeTruthy();
+  expect(screen.queryByRole("list", { name: "Run durations, newest on the right" })).toBeNull();
+  cleanup();
+  wrap(<PipelineObject code="demo" doc={{ ...doc, pipelines: [{ ...pipeline, runs: Array.from({ length: 5 }, (_, index) => ({ ...run, pipeline_run_id: index + 7 })) }] }} name="LOAD" tab="runs" onTab={() => undefined} />);
+  expect(within(screen.getByRole("list", { name: "Run durations, newest on the right" })).getByRole("link", { name: "Run 7, Success, 6s" })).toBeTruthy();
 });

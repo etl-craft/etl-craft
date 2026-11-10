@@ -13,7 +13,7 @@ import { cn } from "@/lib/utils";
 /** How many of the newest runs the grid shows unless asked for more. */
 export const DEFAULT_RUNS = 25;
 export const MIN_TASKS = 96;
-export const GRID_COLUMNS = { id: { width: 24, minimum: 26 }, time: { width: 176, minimum: 178 } };
+export const GRID_COLUMNS = { id: { width: 28, minimum: 30 }, time: { width: 176, minimum: 178 } };
 
 /**
  * Every task against the pipeline's recent runs, newest beside the task names, like the duration bars above it: one glance shows where and when a task
@@ -27,6 +27,7 @@ export function RunGrid({ code, pipeline, graph, runs, extra, selected, onSelect
   const newest = latest[0]?.pipeline_run_id;
   // A run opened by a link that is older than the newest ones shown still has its column, set apart from them.
   const shown = [...latest, ...(extra && !latest.some((r) => r.pipeline_run_id === extra.pipeline_run_id) ? [extra] : [])].sort((a, b) => b.pipeline_run_id - a.pipeline_run_id);
+  const showBars = bars && shown.length >= 5;
   const apart = (run: RunView) => extra !== undefined && run.pipeline_run_id === extra.pipeline_run_id && !latest.some((r) => r.pipeline_run_id === run.pipeline_run_id);
   const box = React.useRef<HTMLDivElement>(null);
   const outer = React.useRef<HTMLDivElement>(null);
@@ -83,7 +84,7 @@ export function RunGrid({ code, pipeline, graph, runs, extra, selected, onSelect
       setBar(box.current.offsetHeight - box.current.clientHeight);
     }
   };
-  const tall = bars ? "h-20" : "h-0";
+  const tall = showBars ? "h-20" : "h-0";
   const open = (run: RunView) => (event: React.MouseEvent) => {
     event.preventDefault();
     onSelect(run.pipeline_run_id);
@@ -98,19 +99,19 @@ export function RunGrid({ code, pipeline, graph, runs, extra, selected, onSelect
           <div ref={head} onWheel={(e) => box.current && (box.current.scrollTop += e.deltaY)} style={{ paddingBottom: bar }} className="min-h-0 flex-1 overflow-hidden">
             <table aria-label="Tasks" className="w-full table-fixed border-separate border-spacing-0 text-[13px]">
               <thead>
-                {bars ? (
+                {showBars ? (
                   <tr>
                     <th scope="col" className="sticky top-0 z-20 h-20 bg-surface px-3 text-left align-bottom text-xs font-medium text-muted">Duration</th>
                   </tr>
                 ) : null}
                 <tr>
-                  <th scope="col" className={cn("sticky z-20 h-7 bg-surface-2 px-3 text-left text-xs font-medium text-muted", bars ? "top-20" : "top-0")}>Task</th>
+                  <th scope="col" className={cn("sticky z-20 h-7 bg-surface-2 px-3 text-left text-xs font-medium text-muted", showBars ? "top-20" : "top-0")}>Task</th>
                 </tr>
               </thead>
               <tbody>
                 {tasks.map((task) => (
                   <tr key={task}>
-                    <th scope="row" className="h-7 truncate border-t border-border bg-surface px-3 py-0 text-left font-medium" title={task}>
+                    <th scope="row" className="h-8 truncate border-t border-border bg-surface px-3 py-0 text-left font-medium" title={task}>
                       <span className="inline-block">{task}</span>
                     </th>
                   </tr>
@@ -125,7 +126,7 @@ export function RunGrid({ code, pipeline, graph, runs, extra, selected, onSelect
           <div dir="ltr" className="w-max">
             <table aria-label="Run grid" style={{ width: shown.length * cell }} className="table-fixed border-separate border-spacing-0 text-[13px]">
               <thead>
-                {bars ? (
+                {showBars ? (
                   <tr>
                     {shown.map((run) => (
                       <td key={run.pipeline_run_id} className={cn("sticky top-0 z-10 px-0 align-bottom", tall, apart(run) && "border-l-2 border-dashed border-border-strong", run.pipeline_run_id === selected ? "bg-accent/10" : "bg-surface")}>
@@ -145,7 +146,7 @@ export function RunGrid({ code, pipeline, graph, runs, extra, selected, onSelect
                 ) : null}
                 <tr>
                   {shown.map((run) => (
-                    <th key={run.pipeline_run_id} scope="col" className={cn("sticky z-10 h-7 px-0 text-center text-xs font-medium", bars ? "top-20" : "top-0", apart(run) && "border-l-2 border-dashed border-border-strong", run.pipeline_run_id === selected ? "bg-accent/15 text-fg" : "bg-surface-2 text-muted")}>
+                    <th key={run.pipeline_run_id} scope="col" className={cn("sticky z-10 h-7 px-0 text-center text-xs font-medium", showBars ? "top-20" : "top-0", apart(run) && "border-l-2 border-dashed border-border-strong", run.pipeline_run_id === selected ? "bg-accent/15 text-fg" : "bg-surface-2 text-muted")}>
                       <Link className="num hover:text-accent hover:underline" to={runPath(code, pipeline, run.pipeline_run_id)} onClick={open(run)} aria-current={run.pipeline_run_id === selected ? "true" : undefined}>
                         {labels === "time" && run.start_date ? <span className="block truncate"><When iso={run.start_date} /></span> : run.pipeline_run_id}
                       </Link>
@@ -160,10 +161,10 @@ export function RunGrid({ code, pipeline, graph, runs, extra, selected, onSelect
                       const entry = (apart(run) ? aside[row] : cells[row])?.data?.entries.find((e) => e.pipeline_run_id === run.pipeline_run_id);
                       const chosen = run.pipeline_run_id === selected;
                       return (
-                        <td key={run.pipeline_run_id} className={cn("h-7 border-l border-t border-border px-0 py-0 text-center align-middle", apart(run) && "border-l-2 border-dashed border-l-border-strong", chosen && "bg-accent/10")}>
+                        <td key={run.pipeline_run_id} className={cn("h-8 border-l border-t border-border px-0 py-0 text-center align-middle", apart(run) && "border-l-2 border-dashed border-l-border-strong", chosen && "bg-accent/10")}>
                           {entry ? (
                             <button type="button" className="inline-grid cursor-pointer rounded-sm hover:ring-2 hover:ring-accent" onClick={() => onSelect(run.pipeline_run_id, task)}>
-                              <StatusMark solid className="size-5" status={entry.status} label={`${task} in run ${run.pipeline_run_id}: ${entry.status.toLowerCase()}`} />
+                              <StatusMark solid className="size-6" status={entry.status} label={`${task} in run ${run.pipeline_run_id}: ${entry.status.toLowerCase()}`} />
                             </button>
                           ) : (
                             <span className="text-muted" aria-label={`${task} did not start in run ${run.pipeline_run_id}`}>

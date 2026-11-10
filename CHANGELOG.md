@@ -6,9 +6,10 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
-- The run grid puts the newest run beside task names. Sparse rankings show numbers, shared
+- The run grid puts the newest run beside task names with larger status squares. Sparse rankings show numbers, shared
   form controls and disclosures keep page controls consistent, nested pages have breadcrumbs,
   skipped task rows name their failed upstream, and catalog gaps include a next step.
+  Attempt IDs live under Process details. Catalog duration charts use the recorded start/end times.
   Graph code and catalog pages load when opened. Run now reasons are optional outside PROD.
 - Text log timestamps use UTC with `Z`. HTTP startup logs the bound web interface address.
   Completed command requests show SUCCESS or FAILURE through linked append-only audit events;

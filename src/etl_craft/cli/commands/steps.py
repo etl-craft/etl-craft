@@ -33,19 +33,23 @@ def _run(args: argparse.Namespace, out: Output) -> int:
         if not steps:
             out.empty("no active tasks")
             return
-        out.rows([("TASK_CODE", "STATUS", "HANDLER", "TASK_TYPE", "RUN_CONDITION", "PARAMETERS")])
         out.rows(
-            (
-                s.task_code,
-                s.status or "NOT-RUN",
-                s.handler,
-                s.task_type,
-                f"N={s.run_condition_count}"
-                if s.run_condition == RunCondition.N
-                else s.run_condition or "ALL",
-                ", ".join(f"{name}={value}" for name, value in s.parameters.items()),
-            )
-            for s in steps
+            [
+                ("TASK_CODE", "STATUS", "HANDLER", "TASK_TYPE", "RUN_CONDITION", "PARAMETERS"),
+                *(
+                    (
+                        s.task_code,
+                        s.status or "NOT-RUN",
+                        s.handler,
+                        s.task_type,
+                        f"N={s.run_condition_count}"
+                        if s.run_condition == RunCondition.N
+                        else s.run_condition or "ALL",
+                        ", ".join(f"{name}={value}" for name, value in s.parameters.items()),
+                    )
+                    for s in steps
+                ),
+            ]
         )
         return
 

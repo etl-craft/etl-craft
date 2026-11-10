@@ -161,7 +161,7 @@ class Output:
                 print(f"run label: {label}", file=self.stderr)
 
     def rows(self, rows: Iterable[Iterable[object]]) -> None:
-        """Write one tab-separated line per row; ``None`` becomes an empty field."""
+        """Align terminal columns; pipes retain TSV and ``None`` stays an empty field."""
         rendered = [["" if value is None else str(value) for value in row] for row in rows]
         if not self.stdout.isatty():
             for row in rendered:

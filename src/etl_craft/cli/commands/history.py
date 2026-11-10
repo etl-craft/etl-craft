@@ -68,25 +68,25 @@ def _render(args: argparse.Namespace, out: Output, done: HistoryView) -> int:
                         "STARTED_BY_KIND",
                         "ENDED_BY",
                         "ENDED_BY_KIND",
-                    )
+                    ),
+                    *(
+                        (
+                            e.pipeline_code,
+                            e.pipeline_run_id,
+                            e.status,
+                            f"{e.run_date} (backfill)" if e.backfill else e.run_date,
+                            e.start_date,
+                            e.end_date,
+                            e.sla_status,
+                            e.started_by,
+                            e.started_by_kind,
+                            e.ended_by,
+                            e.ended_by_kind,
+                        )
+                        for e in entries
+                        if isinstance(e, RunView)
+                    ),
                 ]
-            )
-            out.rows(
-                (
-                    e.pipeline_code,
-                    e.pipeline_run_id,
-                    e.status,
-                    f"{e.run_date} (backfill)" if e.backfill else e.run_date,
-                    e.start_date,
-                    e.end_date,
-                    e.sla_status,
-                    e.started_by,
-                    e.started_by_kind,
-                    e.ended_by,
-                    e.ended_by_kind,
-                )
-                for e in entries
-                if isinstance(e, RunView)
             )
             _interventions(out, changes)
             return
@@ -103,24 +103,24 @@ def _render(args: argparse.Namespace, out: Output, done: HistoryView) -> int:
                     "START_DATE",
                     "END_DATE",
                     "ERROR_MESSAGE",
-                )
+                ),
+                *(
+                    (
+                        e.pipeline_run_id,
+                        e.status,
+                        e.attempt_count,
+                        e.source_count,
+                        e.target_count,
+                        e.reject_count,
+                        e.duplicate_count,
+                        e.start_date,
+                        e.end_date,
+                        e.error_message,
+                    )
+                    for e in entries
+                    if isinstance(e, TaskRunView)
+                ),
             ]
-        )
-        out.rows(
-            (
-                e.pipeline_run_id,
-                e.status,
-                e.attempt_count,
-                e.source_count,
-                e.target_count,
-                e.reject_count,
-                e.duplicate_count,
-                e.start_date,
-                e.end_date,
-                e.error_message,
-            )
-            for e in entries
-            if isinstance(e, TaskRunView)
         )
         _interventions(out, changes)
         return
@@ -135,19 +135,23 @@ def _interventions(out: Output, changes: Sequence[Intervention]) -> None:
         return
     out.line()
     out.line("Interventions:")
-    out.rows([("PIPELINE_RUN_ID", "TASK", "ACTION", "FROM", "TO", "BY", "AT", "REASON")])
     out.rows(
-        (
-            c.pipeline_run_id,
-            c.task_code or "(the run)",
-            c.action,
-            c.from_status or "-",
-            c.to_status or "(reset)",
-            c.requested_by,
-            c.requested_at,
-            c.reason,
-        )
-        for c in changes
+        [
+            ("PIPELINE_RUN_ID", "TASK", "ACTION", "FROM", "TO", "BY", "AT", "REASON"),
+            *(
+                (
+                    c.pipeline_run_id,
+                    c.task_code or "(the run)",
+                    c.action,
+                    c.from_status or "-",
+                    c.to_status or "(reset)",
+                    c.requested_by,
+                    c.requested_at,
+                    c.reason,
+                )
+                for c in changes
+            ),
+        ]
     )
 
 

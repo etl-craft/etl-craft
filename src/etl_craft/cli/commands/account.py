@@ -96,13 +96,13 @@ def _run(args: argparse.Namespace, out: Output) -> int:
         user = args.kind == AccountKind.USER and not args.oidc_subject and not args.no_password
         if args.password_stdin and not user:
             raise UsageError(
-                "account add --password-stdin requires a password USER account; "
+                f"account add {args.name!r}: --password-stdin requires a password USER account; "
                 "omit --no-password and --oidc-subject and use --kind USER"
             )
         if user and not args.password_stdin and not can_prompt():
             raise UsageError(
-                "account add: USER password not supplied and stdin is not interactive; "
-                "pipe a temporary password with --password-stdin, "
+                f"account add {args.name!r}: USER password not supplied and no local terminal; "
+                "from your local CLI, pipe a temporary password with --password-stdin, "
                 "or invite with --no-password --email"
             )
         secret = (

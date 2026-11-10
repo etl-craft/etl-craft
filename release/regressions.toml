@@ -308,6 +308,7 @@ agent-start-report-outage = [
 ]
 
 ui-audit-operability = [
+    "tests/browser/test_react_tasks.py::test_a_failed_task_explains_itself_and_leads_to_its_attempt_and_history",
     "tests/unit/test_cli.py::test_a_typo_suggests_a_command_without_printing_the_inventory",
     "tests/unit/test_operations.py::test_text_audit_is_newest_first_and_capped_while_json_stays_complete",
     "tests/unit/test_core_log.py::test_text_timestamp_is_utc_with_an_explicit_zone",

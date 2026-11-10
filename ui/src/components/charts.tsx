@@ -1,4 +1,5 @@
 import * as React from "react";
+import { EmptyState } from "@/components/common";
 import { Link } from "react-router-dom";
 import { cn } from "@/lib/utils";
 
@@ -39,7 +40,7 @@ const FILL = { ok: "bg-ok-solid", bad: "bg-bad-solid", accent: "bg-accent", warn
 /** Ranked horizontal bars: names on the left where they can be read, the value at the end of each bar. */
 export function HBars({ rows, empty, label }: { rows: BarRow[]; empty: string; label: string }) {
   const top = Math.max(1e-9, ...rows.map((r) => r.value));
-  if (rows.length === 0) return <p className="m-0 text-sm text-muted">{empty}</p>;
+  if (rows.length === 0) return <EmptyState title={empty} />;
   if (rows.length < 5) return <dl aria-label={label} className="m-0 grid content-start gap-2 text-[13px]">{rows.map((row) => <div key={row.label} className="flex justify-between gap-4"><dt>{row.to ? <Link className="hover:underline" to={row.to}>{row.label}</Link> : row.label}</dt><dd className="num m-0">{row.text ?? row.value}</dd></div>)}</dl>;
   return (
     <ul aria-label={label} className="m-0 grid min-h-0 flex-1 list-none content-start gap-1.5 overflow-auto p-0">

@@ -216,5 +216,6 @@ def test_text_timestamp_is_utc_with_an_explicit_zone():
     handler = log.configure("INFO", "text", stream)
     record = logging.LogRecord("etl_craft.clock", logging.INFO, "", 0, "fixed instant", (), None)
     record.created = 0
+    record.msecs = 0
     handler.handle(record)
-    assert stream.getvalue().startswith("1970-01-01T00:00:00Z INFO")
+    assert stream.getvalue().startswith("1970-01-01T00:00:00.000Z INFO")

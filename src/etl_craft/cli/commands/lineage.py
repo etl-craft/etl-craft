@@ -102,11 +102,12 @@ def _summary(lineages: list[TaskLineage], out: Output) -> None:
     if not lineages:
         out.empty("no active SQL tasks")
         return
-    out.rows([("TASK", "TARGET", "COLUMNS", "SOURCE_TABLES")])
+    rows: list[tuple[object, ...]] = [("TASK", "TARGET", "COLUMNS", "SOURCE_TABLES")]
     for lineage in traced:
         columns = {e.target_column for e in lineage.edges}
         sources = sorted({e.source_object for e in lineage.edges if e.source_object})
-        out.rows([(lineage.task, lineage.target_object, len(columns), ", ".join(sources))])
+        rows.append((lineage.task, lineage.target_object, len(columns), ", ".join(sources)))
+    out.rows(rows)
     for lineage in lineages:
         if lineage.error:
             out.line(f"not traced: {lineage.task}: {lineage.error}")

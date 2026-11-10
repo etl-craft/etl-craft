@@ -662,6 +662,22 @@ def test_terminal_status_and_pipelines_show_readable_durations_and_run_times(ctx
     output.truncate()
     assert main(["--config", str(ctx.config.config_path), "pipelines"]) == 0
     assert "LAST_RUN" in output.getvalue() and "NEXT_RUN" in output.getvalue()
+    output.seek(0)
+    output.truncate()
+    assert (
+        main(
+            [
+                "--config",
+                str(ctx.config.config_path),
+                "history",
+                "--run-id",
+                str(created.run.pipeline_run_id),
+            ]
+        )
+        == 0
+    )
+    header, row = output.getvalue().splitlines()[:2]
+    assert header.index("STATUS") == row.index(created.run.status)
 
 
 def test_http_startup_names_the_bound_browser_address(ctx, monkeypatch, caplog):

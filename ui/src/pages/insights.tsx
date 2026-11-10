@@ -65,8 +65,8 @@ function Capacity() {
         <KpiTile label="Pools" value={pools.length} />
       </div>
       <div className="grid md:grid-cols-2">
-        <Panel title="CPU in use by pool"><HBars label="CPU in use by pool" rows={cpu} empty="No pools yet." /></Panel>
-        <Panel title="Memory in use by pool"><HBars label="Memory in use by pool" rows={memory} empty="No pools yet." /></Panel>
+        <Panel title="CPU in use by pool"><HBars label="CPU in use by pool" rows={cpu} empty="No pools yet. Add a pool in Administration to track resource use." /></Panel>
+        <Panel title="Memory in use by pool"><HBars label="Memory in use by pool" rows={memory} empty="No pools yet. Add a pool in Administration to track resource use." /></Panel>
       </div>
     </div>
   );
@@ -350,7 +350,7 @@ function Quality({ code, d, developer }: { code: string; d: InsightsView; develo
             "No open gaps."
           )}
         </p>
-        <HBars label="Checks by state" empty="No declared tables to check." rows={[...byState.entries()].sort((a, b) => b[1] - a[1]).map(([state, checks]): BarRow => ({ label: state, value: checks, tone: ["Matched", "Unchecked", "Not declared", "Expected before first deployment"].includes(state) ? "accent" : "warn" }))} />
+        <HBars label="Checks by state" empty="No declared tables to check. Declare columns in config files, then rebuild the catalog." rows={[...byState.entries()].sort((a, b) => b[1] - a[1]).map(([state, checks]): BarRow => ({ label: state, value: checks, tone: ["Matched", "Unchecked", "Not declared", "Expected before first deployment"].includes(state) ? "accent" : "warn" }))} />
         <p className="mb-0 mt-2 text-xs text-muted">
           Scheduled checks: {d.schema_check_schedule ? <code className="font-mono">{d.schema_check_schedule}</code> : "not scheduled"}. Unchecked and unavailable comparisons are never counted as matched.
         </p>

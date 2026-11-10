@@ -1441,7 +1441,9 @@ empty-history-page handling defect, which was corrected and verified. No cloud w
   Completion records append linked events to AUD_ACTIONS; no immutable request row is updated.
   Run now reasons become optional only outside PROD. Root API docs aliases remain unchanged;
   documentation names the existing versioned endpoints. Graph/catalog chunks are lazy and shipped
-  in the committed build. Shared native select/disclosure primitives retain platform keyboard semantics.
+  in the committed build. Catalog durations adapt the recorded timestamp fields explicitly, and sparse
+  strips defer to their numeric table. Attempt IDs appear once under Process details. Shared native
+  select/disclosure primitives retain platform keyboard semantics.
   Acceptance availability: no warehouse SQL or schema migration changes; cloud suites are not applicable.
 
 - **S7.AL.4 event-file validation (owner, 2026-11-06).** Choices that differ from the item text:

@@ -63,20 +63,20 @@ def run(args: argparse.Namespace, out: Output) -> int:
                     "SLA_BREACHED",
                     "RETRIES",
                     "ROWS_WRITTEN",
-                )
+                ),
+                *(
+                    (
+                        p.pipeline_code or "ALL",
+                        p.runs,
+                        _rate(p.success_rate),
+                        _seconds(p.average_seconds),
+                        p.sla_breached,
+                        p.retries,
+                        "not measured" if p.rows_written is None else p.rows_written,
+                    )
+                    for p in (*result.per_pipeline, result.total)
+                ),
             ]
-        )
-        out.rows(
-            (
-                p.pipeline_code or "ALL",
-                p.runs,
-                _rate(p.success_rate),
-                _seconds(p.average_seconds),
-                p.sla_breached,
-                p.retries,
-                "not measured" if p.rows_written is None else p.rows_written,
-            )
-            for p in (*result.per_pipeline, result.total)
         )
 
     out.result(result, args.output_format, text=render_text)

@@ -24,8 +24,7 @@ def run(args: argparse.Namespace, out: Output) -> int:
 
     def render_text() -> None:
         out.line(f"{result.pipeline_code}.{result.task_code}: {result.handler}")
-        out.rows([("PARAMETER", "VALUE")])
-        out.rows(sorted(result.parameters.items()))
+        out.rows([("PARAMETER", "VALUE"), *(sorted(result.parameters.items()))])
 
     out.result(result, args.output_format, text=render_text)
     return ExitCode.SUCCESS

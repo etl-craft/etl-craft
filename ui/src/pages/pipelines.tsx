@@ -6,7 +6,7 @@ import { Pause, Play } from "lucide-react";
 import * as React from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { ActionButton } from "@/components/action-button";
-import { Loading, Notice, PageHeader } from "@/components/common";
+import { EmptyState, Loading, Notice, PageHeader } from "@/components/common";
 import { CsvButton } from "@/components/csv-button";
 import { DataTable } from "@/components/data-table";
 import { NextRun, PauseState, RecentRuns, TagList } from "@/components/pipeline-parts";
@@ -117,7 +117,7 @@ export function Pipelines() {
         <DataTable
           label="Pipelines"
           data={shown}
-          empty={list.isSuccess ? (tags.length ? "No pipeline carries every selected tag." : "This project has no active pipeline.") : undefined}
+          empty={list.isSuccess ? (tags.length ? <EmptyState title="No pipeline carries every selected tag.">Clear a tag to broaden the list.</EmptyState> : <EmptyState title="This project has no active pipeline.">Add a pipeline in the project config files, apply them, then refresh the pipeline definitions.</EmptyState>) : undefined}
           rowId={(p) => p.pipeline_code}
           selection={
             canRun

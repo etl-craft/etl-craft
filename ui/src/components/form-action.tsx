@@ -1,3 +1,4 @@
+import { words } from "@/lib/labels";
 import { DropdownSelect } from "@/components/dropdown";
 import * as React from "react";
 import { ActionButton } from "@/components/action-button";
@@ -61,7 +62,7 @@ export function FormAction<TResult>({
                   {f.blank ? <option value="">{f.blank}</option> : null}
                   {f.options?.map((o) => (
                     <option key={o} value={o}>
-                      {o}
+                      {["role", "kind", "permission", "governance"].includes(f.name) ? words(o) : o}
                     </option>
                   ))}
                 </DropdownSelect>

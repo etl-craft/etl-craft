@@ -151,11 +151,11 @@ def configure(
     """
     numeric_level = parse_level(level)
     formatter = (
-        JsonFormatter()
-        if parse_format(fmt) is LogFormat.JSON
-        else logging.Formatter(TEXT_FORMAT, datefmt="%Y-%m-%dT%H:%M:%SZ")
+        JsonFormatter() if parse_format(fmt) is LogFormat.JSON else logging.Formatter(TEXT_FORMAT)
     )
     formatter.converter = time.gmtime
+    formatter.default_time_format = "%Y-%m-%dT%H:%M:%S"
+    formatter.default_msec_format = "%s.%03dZ"
     logger = logging.getLogger(ROOT_LOGGER)
     for existing in [h for h in logger.handlers if isinstance(h, _ConfiguredHandler)]:
         logger.removeHandler(existing)

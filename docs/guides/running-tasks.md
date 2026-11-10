@@ -152,11 +152,11 @@ the task's process wrote: etl-craft's own log records, and anything a script pri
 Every etl-craft record in it names the pipeline, task, run and attempt:
 
 ```
-2026-09-25T10:15:02Z INFO etl_craft.execution.child [task_run_id=412 pipeline=SALES_DAILY task=load_orders pipeline_run_id=97 attempt=2]: running the SQL handler
+2026-09-25T10:15:02.114Z INFO etl_craft.execution.child [task_run_id=412 pipeline=SALES_DAILY task=load_orders pipeline_run_id=97 attempt=2]: running the SQL handler
 ```
 
 `--log-format json` writes the same records as one JSON object per line, with those names as
-fields. Text timestamps are UTC with a `Z` suffix. `run` shows WARNING and above by default;
+fields. Text timestamps are UTC with millisecond precision and a `Z` suffix. `run` shows WARNING and above by default;
 use `--log-level INFO` for progress records or `--log-level DEBUG` for the SQL each action runs.
 Other commands retain their INFO default.
 

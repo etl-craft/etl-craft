@@ -2,7 +2,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { When } from "@/components/when";
 import * as React from "react";
 import { useParams } from "react-router-dom";
-import { Loading, Notice, PageHeader } from "@/components/common";
+import { EmptyState, Loading, Notice, PageHeader } from "@/components/common";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { failureText, useProjectInfo } from "@/hooks";
@@ -168,7 +168,7 @@ export function Console() {
                 <span className="text-muted"><When iso={a.at} /></span> · <span className="font-mono text-xs">{a.command}</span> · {a.outcome}
               </li>
             ))}
-            {recent.isSuccess && recent.data.actions.length === 0 ? <li className="text-muted">No requests yet.</li> : null}
+            {recent.isSuccess && recent.data.actions.length === 0 ? <li><EmptyState title="No requests yet.">Run a change command above; completed requests appear here.</EmptyState></li> : null}
             {recent.isError ? <li className="text-muted">Your requests could not be read.</li> : null}
           </ul>
         </Card>

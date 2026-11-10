@@ -99,7 +99,6 @@ export function AttemptDetails({ code, attempt, heading, showLog = false }: { co
       <div className="flex flex-wrap items-center gap-3">
         <h3 className="m-0 text-sm font-semibold">{heading ?? `Attempt ${attempt.attempt_number}`}</h3>
         <StatusBadge status={attempt.status} />
-        <span className="num text-xs text-muted">id {attempt.attempt_id}</span>
       </div>
       {attempt.error_message ? <Notice mono>{attempt.error_message}</Notice> : null}
       <FactList className="gap-3 sm:grid-cols-4 lg:grid-cols-4">
@@ -124,6 +123,7 @@ export function AttemptDetails({ code, attempt, heading, showLog = false }: { co
       <Disclosure className="text-[13px]">
         <DisclosureSummary className="w-fit cursor-pointer text-xs font-medium text-muted hover:text-fg">Process details</DisclosureSummary>
         <FactList className="mt-3 gap-3 sm:grid-cols-4 lg:grid-cols-4">
+          <Fact label="Attempt id">{attempt.attempt_id}</Fact>
           <Fact label="Queued"><When iso={attempt.queued_at} /></Fact>
           <Fact label="Agent">{attempt.owner_id ?? "Not claimed"}</Fact>
           <Fact label="Host">

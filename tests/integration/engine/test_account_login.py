@@ -697,6 +697,30 @@ def test_account_add_accepts_a_piped_password_without_auditing_it(project, monke
             conn.execute(text("SELECT ARGUMENTS AS arguments FROM AUD_ACTIONS")).scalars().all()
         )
     assert PASSWORD not in str(evidence) + str(capsys.readouterr())
+    assert (
+        main(
+            [
+                "account",
+                "add",
+                "--name",
+                "bad-pipe",
+                "--kind",
+                "SERVICE",
+                "--role",
+                "viewer",
+                "--password-stdin",
+            ]
+        )
+        == UsageError.exit_code
+    )
+    assert "requires a password USER account" in capsys.readouterr().err
+    with ctx.engine.connect() as conn:
+        assert (
+            conn.execute(
+                text("SELECT COUNT(*) AS n FROM CFG_ACCOUNTS WHERE ACCOUNT_NAME='bad-pipe'")
+            ).scalar_one()
+            == 0
+        )
 
 
 def test_account_add_without_terminal_names_the_password_stdin_remedy(project, monkeypatch, capsys):

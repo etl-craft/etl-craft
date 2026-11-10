@@ -25,9 +25,14 @@ def run(args: argparse.Namespace, out: Output) -> int:
         if not result.hits:
             out.empty(f"nothing visible matches {result.q!r}")
             return
-        out.rows([("KIND", "NAME", "PIPELINE", "RUN_ID", "DETAIL")])
         out.rows(
-            (h.kind, h.label, h.pipeline_code or "", h.run_id or "", h.detail) for h in result.hits
+            [
+                ("KIND", "NAME", "PIPELINE", "RUN_ID", "DETAIL"),
+                *(
+                    (h.kind, h.label, h.pipeline_code or "", h.run_id or "", h.detail)
+                    for h in result.hits
+                ),
+            ]
         )
         if result.truncated:
             out.line(f"more matched; showing the first {len(result.hits)}; use --limit")

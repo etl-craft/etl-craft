@@ -3,7 +3,7 @@ import { words } from "@/lib/labels";
 import { When } from "@/components/when";
 import { CircleCheck, CircleX, Clock, Hourglass, LoaderCircle, type LucideIcon } from "lucide-react";
 import { Link, Navigate } from "react-router-dom";
-import { Eyebrow, Fact, FactList, Loading, Notice, PageHeader } from "@/components/common";
+import { EmptyState, Eyebrow, Fact, FactList, Loading, Notice, PageHeader } from "@/components/common";
 import { EnvironmentBadge } from "@/components/environment-badge";
 import { StatusBadge } from "@/components/status";
 import { Card, CardHeader } from "@/components/ui/card";
@@ -142,7 +142,7 @@ export function ProjectList({ choose = false }: { choose?: boolean }) {
             <ProjectCard key={p.project} p={p} failures={byProject.get(p.project) ?? []} since={since} />
           ))}
       </div>
-      {health.isSuccess && projects.length === 0 ? <p className="text-muted">No project is visible to this account.</p> : null}
+      {health.isSuccess && projects.length === 0 ? <EmptyState title="No project is visible to this account.">Ask an administrator to register a project or grant you access.</EmptyState> : null}
     </div>
   );
 }

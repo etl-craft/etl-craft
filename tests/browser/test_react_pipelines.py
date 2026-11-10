@@ -426,5 +426,13 @@ def test_the_newest_grid_run_is_next_to_task_names(scene):
         sign_in(page, url, "/ui/projects/default/pipelines/SALES")
         first = page.get_by_role("table", name="Run grid").locator("thead th a").first
         expect(first).to_have_attribute("href", re.compile(rf"/pipelines/SALES\?run={active}$"))
+        square = (
+            page.get_by_role("table", name="Run grid")
+            .get_by_role("img", name=re.compile("success$"))
+            .first
+        )
+        expect(square).to_be_visible()
+        size = square.bounding_box()
+        assert size["width"] >= 24 and size["height"] >= 24
         assert problems == []
         browser.close()

@@ -59,7 +59,7 @@ def shoot(page, name):
 
 
 def test_a_failed_task_explains_itself_and_leads_to_its_attempt_and_history(scene):
-    _, url, _, bad, _failed = scene
+    _, url, _, bad, failed = scene
     with sync_playwright() as pw:
         browser, page, problems = open_page(pw, viewport={"width": 1280, "height": 1000})
         page.context.set_default_timeout(8000)
@@ -75,7 +75,9 @@ def test_a_failed_task_explains_itself_and_leads_to_its_attempt_and_history(scen
         shoot(page, "run-task-panel")
         panel.get_by_role("link", name="Open attempt 1").click()
         expect(page.get_by_role("heading", name="Attempt 1 of LOAD")).to_be_visible()
+        expect(page.get_by_text(f"attempt id {failed}")).to_have_count(0)
         page.get_by_text("Process details").click()  # internals sit behind one disclosure
+        expect(page.get_by_text("Attempt id", exact=True)).to_be_visible()
         expect(page.get_by_text("How the process ended")).to_be_visible()
         expect(page.get_by_text(ERROR).first).to_be_visible()
         shoot(page, "attempt")
