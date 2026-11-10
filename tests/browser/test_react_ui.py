@@ -9,7 +9,7 @@ from playwright.sync_api import expect, sync_playwright
 from sqlalchemy import text
 
 from etl_craft.core.actor import Actor, ActorKind, acting_as
-from etl_craft.core.enums import ActionName
+from etl_craft.core.enums import ActionName, RunStatus
 from fixtures.actions import act
 from fixtures.metadata import (
     add_dependency,
@@ -338,5 +338,51 @@ def test_a_task_opens_in_its_row_and_the_run_shows_its_identifier(scene):
         shoot(page, "run-page")
         table.get_by_role("button", name="Hide details of LOAD").click()
         expect(page.get_by_label("Task LOAD")).to_have_count(0)
+        assert problems == []
+        browser.close()
+
+
+def test_an_active_run_graph_refreshes_task_states_without_the_run_tab(site):
+    ctx, url = site
+    with acting_as(Actor("owner", ActorKind.USER)), ctx.engine.begin() as conn:
+        pipeline = add_pipeline(conn, "LIVE")
+        copy = add_task(conn, pipeline, "COPY")
+        after = add_task(conn, pipeline, "AFTER")
+        done = add_task(conn, pipeline, "DONE")
+        run = start_run(conn, pipeline)
+        task_run(conn, copy, run, RunStatus.IN_PROGRESS)
+        task_run(conn, done, run, RunStatus.SUCCESS)
+    with sync_playwright() as pw:
+        browser, page, problems = open_page(pw, viewport={"width": 1280, "height": 900})
+        sign_in(page, url, f"/ui/projects/default/pipelines/LIVE?run={run}")
+        page.get_by_role("button", name="Graph", exact=True).click()
+        page.get_by_role("tab", name="Overview", exact=True).click()
+        page.wait_for_load_state("networkidle")
+        graph = page.get_by_role("group", name="Task graph")
+        copy_node = graph.locator('.react-flow__node[data-id="COPY"]')
+        after_node = graph.locator('.react-flow__node[data-id="AFTER"]')
+        done_node = graph.locator('.react-flow__node[data-id="DONE"]')
+        expect(copy_node.get_by_text("Running", exact=True)).to_be_visible()
+        expect(after_node.get_by_text("Queued", exact=True)).to_be_visible()
+        with acting_as(Actor("owner", ActorKind.USER)), ctx.engine.begin() as conn:
+            task_run(conn, copy, run, RunStatus.SKIPPED)
+            task_run(conn, after, run, RunStatus.IN_PROGRESS)
+        expect(copy_node.get_by_text("Skipped", exact=True)).to_be_visible(timeout=12_000)
+        expect(copy_node.locator("[data-focus]")).to_have_class(re.compile("border-l-idle-solid"))
+        expect(after_node.get_by_text("Running", exact=True)).to_be_visible()
+        expect(after_node.locator("[data-focus]")).to_have_class(re.compile("border-l-run-solid"))
+        expect(done_node.locator("[data-focus]")).to_have_class(re.compile("border-l-ok-solid"))
+        assert (
+            page.request.get(url + f"/api/v1/projects/default/runs/{run}").json()["status"]
+            == RunStatus.IN_PROGRESS
+        )
+        shots = os.environ.get("ETL_CRAFT_UI_SCREENSHOTS")
+        if shots:
+            Path(shots).mkdir(parents=True, exist_ok=True)
+            for scheme in ["light", "dark"]:
+                page.evaluate("theme => document.documentElement.dataset.theme = theme", scheme)
+                for width in [1280, 390]:
+                    page.set_viewport_size({"width": width, "height": 900})
+                    page.screenshot(path=f"{shots}/active-graph-{scheme}-{width}.png")
         assert problems == []
         browser.close()

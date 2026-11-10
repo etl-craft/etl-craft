@@ -331,7 +331,7 @@ def test_a_narrow_grid_hides_the_oldest_runs_never_the_newest(scene):
 
 @pytest.mark.parametrize("method", ["keyboard", "pointer"])
 @pytest.mark.parametrize("labels", ["id", "time"])
-def test_task_names_resize_independently_until_the_latest_run_needs_room(site, method, labels):
+def test_one_grid_divider_fits_names_and_keeps_the_latest_run_visible(site, method, labels):
     ctx, url = site
     name = "load_customer_and_product_relationship_history"
     with acting_as(Actor("owner", ActorKind.USER)), ctx.engine.begin() as conn:
@@ -346,10 +346,10 @@ def test_task_names_resize_independently_until_the_latest_run_needs_room(site, m
         sign_in(page, url, f"/ui/projects/default/pipelines/RESIZE?columns={labels}")
         outer = page.get_by_role("separator", name="Resize the panes")
         task_cell = page.get_by_role("table", name="Tasks").get_by_role("rowheader", name=name)
-        inner = task_cell.locator("xpath=ancestor::div[3]").get_by_role("separator")
         grid = page.get_by_role("table", name="Run grid")
         area = grid.locator("xpath=ancestor::div[@dir='rtl']")
         expect(grid.locator("thead th a").last).to_be_visible()
+        expect(page.get_by_role("separator")).to_have_count(1)
         full = task_cell.evaluate("""el => {
             const range = document.createRange();
             range.selectNodeContents(el);
@@ -358,16 +358,16 @@ def test_task_names_resize_independently_until_the_latest_run_needs_room(site, m
                 + parseFloat(style.paddingLeft) + parseFloat(style.paddingRight));
         }""")
 
-        def resize_names(wide):
+        def resize_grid(wide):
             if method == "keyboard":
-                inner.press("End" if wide else "Home")
+                for _ in range(30):
+                    outer.press("ArrowRight" if wide else "ArrowLeft")
             else:
-                box = inner.bounding_box()
+                box = outer.bounding_box()
                 page.mouse.move(box["x"] + box["width"] / 2, box["y"] + 30)
                 page.mouse.down()
-                page.mouse.move(box["x"] + (800 if wide else -800), box["y"] + 30, steps=8)
+                page.mouse.move(1100 if wide else 250, box["y"] + 30, steps=8)
                 page.mouse.up()
-            expect(inner).to_have_attribute("aria-valuenow", str(full if wide else 96))
 
         def latest_visible():
             box = area.bounding_box()
@@ -375,33 +375,17 @@ def test_task_names_resize_independently_until_the_latest_run_needs_room(site, m
             assert latest["x"] >= box["x"] - 1
             assert latest["x"] + latest["width"] <= box["x"] + box["width"] + 1
 
-        for _ in range(30):
-            outer.press("ArrowLeft")
-        resize_names(False)
-        before = outer.bounding_box()["x"]
-        resize_names(True)
-        assert outer.bounding_box()["x"] > before, "names must push the narrowed grid divider"
-        latest_visible()
-        shoot(page, f"grid-pushed-{method}-{labels}")
-        before = outer.bounding_box()["x"]
-        inner.press("ArrowLeft")
-        expect(inner).to_have_attribute("aria-valuenow", str(full - 16))
-        assert outer.bounding_box()["x"] < before, "coupled dividers must narrow together"
-        for _ in range(30):
-            outer.press("ArrowRight")
-        before = outer.bounding_box()["x"]
-        resize_names(False)
-        resize_names(True)
-        assert abs(outer.bounding_box()["x"] - before) < 1, "roomy grid divider must stay put"
-        latest_visible()
-        shoot(page, f"grid-roomy-{method}-{labels}")
-        inner.press("ArrowRight")
-        expect(inner).to_have_attribute("aria-valuenow", str(full))
-        for _ in range(30):
-            outer.press("ArrowLeft")
+        resize_grid(False)
         assert task_cell.bounding_box()["width"] < full
         latest_visible()
-        shoot(page, f"grid-dividers-{method}-{labels}")
+        resize_grid(True)
+        expect(task_cell).to_have_js_property("clientWidth", full)
+        latest_visible()
+        shoot(page, f"grid-expanded-{method}-{labels}")
+        resize_grid(False)
+        assert task_cell.bounding_box()["width"] < full
+        latest_visible()
+        shoot(page, f"grid-narrowed-{method}-{labels}")
         assert problems == []
         browser.close()
 

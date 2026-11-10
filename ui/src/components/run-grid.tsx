@@ -19,7 +19,7 @@ export const GRID_COLUMNS = { id: { width: 24, minimum: 26 }, time: { width: 176
  * Every task against the pipeline's recent runs, newest on the right, like the duration bars above it: one glance shows where and when a task
  * started failing. A column header selects a run; a cell selects the run and opens that task in it.
  */
-export function RunGrid({ code, pipeline, graph, runs, extra, selected, onSelect, bars = true, labels = "id", pane }: { code: string; pipeline: string; graph: Graph; runs: RunView[]; extra?: RunView; selected?: number; onSelect: (runId: number, task?: string) => void; bars?: boolean; labels?: "id" | "time"; pane?: { maximum: number; resize: (width: number) => void } }) {
+export function RunGrid({ code, pipeline, graph, runs, extra, selected, onSelect, bars = true, labels = "id" }: { code: string; pipeline: string; graph: Graph; runs: RunView[]; extra?: RunView; selected?: number; onSelect: (runId: number, task?: string) => void; bars?: boolean; labels?: "id" | "time" }) {
   const cell = GRID_COLUMNS[labels].width;
   const reserve = GRID_COLUMNS[labels].minimum;
   const tasks = graph.waves.flat();
@@ -51,17 +51,8 @@ export function RunGrid({ code, pipeline, graph, runs, extra, selected, onSelect
     head.current?.querySelectorAll("tbody th span").forEach((name) => observer?.observe(name));
     return () => observer?.disconnect();
   }, [graph, hasRuns]);
-  const [wanted, setWanted] = React.useState<number | null>(null);
-  const maximum = Math.max(MIN_TASKS, Math.min(natural, (pane?.maximum || room + 6) - 6 - reserve));
-  const taskWidth = Math.max(MIN_TASKS, Math.min(wanted ?? Math.min(natural, Math.max(128, room * 0.45)), natural, room - reserve));
+  const taskWidth = Math.max(MIN_TASKS, Math.min(natural, room - reserve));
   const matrixWidth = Math.max(0, Math.min(room - taskWidth, shown.length * cell + 2));
-  const resizeTasks = (next: number) => {
-    const width = Math.max(MIN_TASKS, Math.min(maximum, next));
-    if (width > taskWidth && width + reserve > room) pane?.resize(width + 6 + reserve);
-    else if (width < taskWidth && room <= taskWidth + reserve + 1) pane?.resize(room + 6 + width - taskWidth);
-    setWanted(width);
-  };
-  const start = React.useRef<{ x: number; width: number } | null>(null);
   const [bar, setBar] = React.useState(0);
   // A run chosen from elsewhere is brought into view.
   React.useEffect(() => {
@@ -128,38 +119,7 @@ export function RunGrid({ code, pipeline, graph, runs, extra, selected, onSelect
             </table>
           </div>
         </div>
-        <div
-          role="separator"
-          tabIndex={0}
-          aria-orientation="vertical"
-          aria-label="Resize task names"
-          aria-valuemin={MIN_TASKS}
-          aria-valuemax={Math.round(maximum)}
-          aria-valuenow={Math.round(taskWidth)}
-          aria-valuetext={`${Math.round(taskWidth)} pixels`}
-          className="group relative w-1.5 shrink-0 cursor-col-resize touch-none outline-none"
-          onPointerDown={(event) => {
-            event.preventDefault();
-            start.current = { x: event.clientX, width: taskWidth };
-            event.currentTarget.setPointerCapture(event.pointerId);
-          }}
-          onPointerMove={(event) => {
-            if (start.current && event.currentTarget.hasPointerCapture(event.pointerId)) resizeTasks(start.current.width + event.clientX - start.current.x);
-          }}
-          onLostPointerCapture={() => { start.current = null; }}
-          onDoubleClick={() => resizeTasks(natural)}
-          onKeyDown={(event) => {
-            if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
-              event.preventDefault();
-              resizeTasks(taskWidth + (event.key === "ArrowRight" ? 16 : -16));
-            } else if (event.key === "Home" || event.key === "End") {
-              event.preventDefault();
-              resizeTasks(event.key === "Home" ? MIN_TASKS : natural);
-            }
-          }}
-        >
-          <span aria-hidden className="absolute inset-y-0 left-0.5 w-px bg-border-strong group-hover:w-0.5 group-hover:bg-accent group-focus-visible:bg-accent" />
-        </div>
+        <div aria-hidden className="w-1.5 shrink-0 border-l border-border-strong" />
         {/* Right to left, so the scroll origin is the right edge: the newest run stays in view as the matrix narrows, and the oldest runs are the ones that scroll away. */}
         <div ref={box} dir="rtl" onScroll={sync} style={{ width: matrixWidth, minWidth: 0 }} className="min-h-0 shrink-0 overflow-auto">
           <div dir="ltr" className="w-max">

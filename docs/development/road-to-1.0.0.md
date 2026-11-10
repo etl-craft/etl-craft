@@ -194,7 +194,7 @@ item's text, or work done early under another item.
 | S7.AL Pre-demo package gaps | In progress | #314, #315 | Slices 1–3 ship duplicate counts, current references and guarded-table validation guidance. Slice 4 (event-file validation) is in review; slices 5–6 remain. |
 | S7.AM Protection on every warehouse | Done | #311, #312, #313 | Atomic SCD merges, in-row protection and recovery, private audit identities and provider acceptance |
 | S7.AN Always show the environment | Done | #328 | CLI context and production confirmation; designed, sandboxed alert/SLA templates and catalog environment |
-| S7.AO UI rebuild | Done | #329–#335 | Seven slices: shell, Home, runs, pipelines, tasks, uploads, insights, console, catalog, system, agents, administration, maintenance, settings, search, sign-in; the new interface is the only one, served at `/ui`, and the old pages are deleted; audit follow-ups align time preferences, human labels and independent grid dividers |
+| S7.AO UI rebuild | Done | #329–#335 | Seven slices: shell, Home, runs, pipelines, tasks, uploads, insights, console, catalog, system, agents, administration, maintenance, settings, search, sign-in; the new interface is the only one, served at `/ui`, and the old pages are deleted; audit follow-ups align time preferences, human labels and automatic grid sizing |
 | S7.AP Native catalog | In progress | | The catalog moves into the app from a JSON read action, built from the app's own components; the generated static site stays only for `publish-docs` |
 | S7.AQ Readable run identifiers | In progress | #347 | A label beside every run and task run id, stored by the Engine DB; accepted wherever the integer is, and shown beside it |
 | S7.AR Restarting pipelines | In progress | slice 1 PR | A pipeline setting, `RESTART_CONDITION`, starts the next run when the last one ends in a chosen status, so a file watcher runs continuously without a schedule |
@@ -1424,10 +1424,10 @@ empty-history-page handling defect, which was corrected and verified. No cloud w
   time-labelled run grids and session warnings use the account's shared time display. Search
   handler labels and the System health schema number are presentation only: API/CLI codes and
   migration identities are unchanged, and the filename remains available on hover.
-  At the owner's request, the same branch also separates task-name sizing from grid-pane sizing:
-  names stop at the measured longest name and push the grid divider only to preserve the latest
-  run; narrowing at that boundary moves both dividers together. This supersedes the prior coupled
-  resize behaviour without changing catalog panes.
+  At the owner's request, the grid has one adjustable outer divider: task names size automatically
+  to the measured longest name and narrow only to preserve the latest run. The task-name boundary
+  is not adjustable. Active-run graphs refresh recorded task statuses even outside the run tab;
+  queued states are not drawn before the selected run's task-status read succeeds.
   Acceptance availability: warehouse SQL is unchanged; cloud suites are not applicable.
 
 - **S7.AL.4 event-file validation (owner, 2026-11-06).** Choices that differ from the item text:

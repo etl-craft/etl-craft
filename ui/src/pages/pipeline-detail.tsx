@@ -86,6 +86,7 @@ export function PipelineDetail() {
     queryKey: ["steps", code, pipeline, selected],
     queryFn: () => getJson<Steps>(`${project(code)}/steps`, { pipeline_code: pipeline, run_id: selected }),
     enabled: view === "graph" && selected !== undefined,
+    refetchInterval: selectedRun?.status === "IN-PROGRESS" ? 5_000 : false,
   });
   const tab = TAB_IDS.includes(asked) && (asked !== "run" || selected !== undefined) ? asked : chosen !== undefined ? "run" : "overview";
   const tabs = [
@@ -222,7 +223,7 @@ export function PipelineDetail() {
         // On a narrow screen the selected run's details come before the grid of every run.
         narrowFirst={tab === "run" ? "right" : "left"}
         className="lg:min-h-0 lg:flex-1"
-        left={(pane) => (
+        left={
         <Card className="flex min-h-0 flex-1 flex-col overflow-hidden">
           <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5 border-b border-border px-3 py-2">
             <div role="group" aria-label="Run view" className="inline-flex rounded-md border border-border p-0.5 text-sm">
@@ -280,7 +281,9 @@ export function PipelineDetail() {
             {!graph.isSuccess ? (
               graph.isError ? <Notice className="m-3">{(graph.error as Error).message}</Notice> : <Loading what="tasks" className="p-3" />
             ) : view === "grid" ? (
-              <RunGrid code={code} pipeline={pipeline} graph={graph.data} runs={gridRuns} extra={outside && extraRun.data?.pipeline_code === pipeline ? extraRun.data : undefined} selected={selected} onSelect={select} bars={!hideBars} labels={byTime ? "time" : "id"} pane={pane} />
+              <RunGrid code={code} pipeline={pipeline} graph={graph.data} runs={gridRuns} extra={outside && extraRun.data?.pipeline_code === pipeline ? extraRun.data : undefined} selected={selected} onSelect={select} bars={!hideBars} labels={byTime ? "time" : "id"} />
+            ) : selected !== undefined && !steps.isSuccess ? (
+              steps.isError ? <Notice className="m-3">{(steps.error as Error).message}</Notice> : <Loading what="task statuses" className="p-3" />
             ) : (
               <div className="absolute inset-0 flex flex-col">
               {selectedRun ? (
@@ -307,7 +310,7 @@ export function PipelineDetail() {
             )}
           </div>
         </Card>
-        )}
+        }
         right={
         <Card className="flex min-h-0 flex-1 flex-col overflow-hidden">
           <div className="px-3">
