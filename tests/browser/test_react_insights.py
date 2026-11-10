@@ -290,12 +290,20 @@ def test_phone_date_filters_have_aligned_controls_and_keep_their_actions(scene, 
             .locator("summary")
         )
         pipelines = page.locator("summary").filter(has_text="Pipelines")
+        expect(page.get_by_role("region", name="Runs per day")).to_be_visible()
         expect(custom).to_be_visible()
-        preset_box = presets.bounding_box()
-        custom_box = custom.bounding_box()
+        boxes = presets.evaluate(
+            """(presets, controls) => ({
+                presets: presets.getBoundingClientRect().toJSON(),
+                custom: controls.custom.getBoundingClientRect().toJSON(),
+                pipelines: controls.pipelines.getBoundingClientRect().toJSON(),
+            })""",
+            {"custom": custom.element_handle(), "pipelines": pipelines.element_handle()},
+        )
+        preset_box, custom_box = boxes["presets"], boxes["custom"]
         assert abs(preset_box["height"] - custom_box["height"]) <= 1
         assert abs(preset_box["y"] - custom_box["y"]) <= 1
-        assert abs(pipelines.bounding_box()["height"] - custom_box["height"]) <= 1
+        assert abs(boxes["pipelines"]["height"] - custom_box["height"]) <= 1
         presets.get_by_role("button", name="24 h", exact=True).click()
         expect(presets.get_by_role("button", name="24 h", exact=True)).to_have_attribute(
             "aria-pressed", "true"
