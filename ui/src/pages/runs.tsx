@@ -44,8 +44,7 @@ export function Runs() {
   return (
     <div className="grid grid-cols-1 gap-4">
       <PageHeader
-        title="Pipeline runs"
-        subtitle={code}
+        title="Runs"
       />
       <RunsPanel
         code={code}

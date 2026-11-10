@@ -3,6 +3,8 @@ import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { RunBars } from "@/components/pipeline-parts";
 import { RunsTable, useRuns, type RunFilters } from "@/components/runs-table";
 
+const MIN_CHART = 5;
+
 /**
  * The one runs layout: a strip of the latest runs' durations above their table. A pipeline's Runs tab and
  * the project's Runs page both use it, so they look and behave alike. The toolbar, the filters of the scope,
@@ -12,7 +14,8 @@ export function RunsPanel({ code, pipeline, status, codes, filters = {}, highlig
   const { all } = useRuns(code, pipeline, filters);
   return (
     <>
-      {bars && all.length ? (
+      {/* Under five runs a chart says less than the table below it, so it is left out. */}
+      {bars && all.length >= MIN_CHART ? (
         <Card>
           <CardHeader>
             <CardTitle>Run durations</CardTitle>

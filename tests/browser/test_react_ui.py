@@ -1,6 +1,7 @@
 """The React interface in a real browser: Home, a pipeline's runs and one run with its recovery."""
 
 import os
+import re
 from pathlib import Path
 
 import pytest
@@ -244,16 +245,19 @@ def test_a_run_offers_its_logs_and_a_running_run_offers_reconcile(scene):
     with sync_playwright() as pw:
         browser, page, problems = open_page(pw, viewport={"width": 1280, "height": 900})
         sign_in(page, url, f"/ui/projects/default/runs/OPS/{good}")
-        page.get_by_role("button", name="Run key and logs").click()  # the logs are in one menu
+        actions = page.get_by_role("button", name="Run actions, logs and key")
+        actions.click()  # the logs are in the run's one actions menu
         link = page.get_by_role("menuitem", name="Download run log")
         expect(link).to_have_attribute(
             "href", f"/api/v1/projects/default/run-log?pipeline_code=OPS&run_id={good}"
         )
         expect(page.get_by_role("menuitem", name="Download logs (zip)")).to_be_visible()
+        reconcile = page.get_by_role("menuitem").filter(has_text="Reconcile")
+        expect(reconcile).to_have_count(0)  # it has ended
         page.keyboard.press("Escape")
-        expect(page.get_by_role("button", name="Reconcile")).to_have_count(0)  # it has ended
         page.goto(url + f"/ui/projects/default/runs/OPS/{running}")
-        page.get_by_role("button", name="Reconcile", exact=True).click()
+        page.get_by_role("button", name="Run actions, logs and key").click()
+        page.get_by_role("menuitem").filter(has_text="Reconcile").click()
         dialog = page.get_by_role("dialog")
         expect(dialog.get_by_text("fences attempts", exact=False)).to_be_visible()
         dialog.get_by_role("button", name="Cancel").click()
@@ -270,7 +274,7 @@ def test_shortcuts_copy_run_key_and_live_status_are_offered(scene):
         page.context.grant_permissions(["clipboard-read", "clipboard-write"], origin=url)
         sign_in(page, url, f"/ui/projects/default/runs/OPS/{good}")
         expect(page.get_by_role("status").filter(has_text="Live")).to_be_visible()
-        page.get_by_role("button", name="Run key and logs").click()
+        page.get_by_role("button", name="Run actions, logs and key").click()
         page.get_by_role("menuitem", name="Copy run key").click()
         expect(page.get_by_role("status").filter(has_text="Run key copied.")).to_be_visible()
         page.keyboard.press("?")
@@ -297,9 +301,13 @@ def test_the_project_runs_list_and_a_pipeline_share_one_layout(scene):
     with sync_playwright() as pw:
         browser, page, problems = open_page(pw, viewport={"width": 1280, "height": 800})
         sign_in(page, url, "/ui/projects/default/runs")
-        expect(page.get_by_text("Run durations")).to_be_visible()
-        expect(page.get_by_role("columnheader", name="Identifier")).to_be_visible()
-        expect(page.get_by_text("OPS-").first).to_be_visible()  # the string identifier, beside #id
+        expect(page.get_by_text("Run durations")).to_have_count(
+            0
+        )  # under five runs the table says it all
+        expect(page.get_by_role("columnheader", name="Identifier")).to_have_count(0)
+        expect(page.get_by_role("link", name=f"#{good}", exact=True)).to_have_attribute(
+            "title", re.compile(r"^OPS-")
+        )  # the string identifier is the run number's tooltip
         shoot(page, "runs-list")
         page.get_by_role("link", name=f"#{good}", exact=True).click()
         expect(

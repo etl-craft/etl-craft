@@ -1,3 +1,4 @@
+import { ShieldAlert } from "lucide-react";
 import * as React from "react";
 import { Notice } from "@/components/common";
 import { Button } from "@/components/ui/button";
@@ -43,7 +44,14 @@ export function ConfirmDialog({
   const production = !!env && !!projectCode && isProduction(env);
   const ready = canSubmit && (!askReason || reason.trim().length > 0) && (!production || typed === projectCode);
   return (
-    <Dialog open={open} onClose={onClose} labelledBy="confirm-title">
+    <Dialog open={open} onClose={onClose} labelledBy="confirm-title" className={production ? "border-2 border-[var(--env-prod)]" : undefined}>
+      {production ? (
+        // The page's own strip is behind the backdrop while this is open, so the dialog says it again.
+        <p className="m-0 flex items-center gap-2 bg-[var(--env-prod)] px-5 py-2 text-sm font-bold text-[var(--env-prod-fg)]">
+          <ShieldAlert aria-hidden className="size-4 shrink-0" />
+          Production — this changes live data
+        </p>
+      ) : null}
       <form
         className="grid gap-4 p-5"
         onSubmit={(event) => {

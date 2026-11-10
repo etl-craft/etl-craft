@@ -22,8 +22,23 @@ export function SessionGuard() {
   const [ended, setEnded] = React.useState(false);
   const ends = identity.data?.session_expires_at ? Date.parse(identity.data.session_expires_at) : null;
   const left = ends === null ? null : ends - now;
-  const over = ended || (left !== null && left <= 0);
   const warning = left !== null && left > 0 && left < WARN_MS;
+  const lapsed = left !== null && left <= 0;
+  // The end time is from the last read of the account; reading pages since may have extended the session. So the
+  // account is read again when the warning is due and when the time has passed, and only that answer (or a refused
+  // request) ends the session on screen.
+  const asked = React.useRef(0);
+  const [confirmed, setConfirmed] = React.useState(false);
+  const { refetch } = identity;
+  React.useEffect(() => {
+    if (!(warning || lapsed) || Date.now() - asked.current < 60_000) return;
+    asked.current = Date.now();
+    void refetch().then((read) => {
+      const until = read.data?.session_expires_at;
+      setConfirmed(Boolean(until) && Date.parse(until!) <= Date.now());
+    });
+  }, [warning, lapsed, refetch]);
+  const over = ended || (lapsed && confirmed);
   const renew = React.useCallback(() => void client.invalidateQueries({ queryKey: ["whoami"] }), [client]);
 
   React.useEffect(() => {

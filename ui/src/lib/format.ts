@@ -26,8 +26,9 @@ export function runIdOf(value: string | null | undefined): number | undefined {
   return label ? Number(label[1]) : undefined;
 }
 
-/** A length of time the way every duration is written: 45s, 2m 06s, 1h 05m. */
+/** A length of time the way every duration is written: 6.4s, 45s, 2m 06s, 1h 05m. */
 export function formatSeconds(value: number): string {
+  if (value < 9.95) return `${Math.max(0, Math.round(value * 10) / 10)}s`;
   const seconds = Math.max(0, Math.round(value));
   if (seconds < 60) return `${seconds}s`;
   const minutes = Math.floor(seconds / 60);
@@ -45,7 +46,8 @@ export function formatAgo(iso: string | null, now = Date.now()): string {
   return `${Math.floor(seconds / 86400)}d ago`;
 }
 
-export const seconds = (value: number | null): string => (value === null ? "None" : `${value.toFixed(1)} s`);
+/** A measured duration in the one duration format, or a dash when nothing finished. */
+export const seconds = (value: number | null): string => (value === null ? "—" : formatSeconds(value));
 export const percent = (value: number | null): string => (value === null ? "No finished runs" : `${Math.round(value * 100)}%`);
 export const measured = (value: number | null): string => (value === null ? "Not measured" : value.toLocaleString("en-GB"));
 

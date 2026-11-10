@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { createColumnHelper } from "@tanstack/react-table";
 import * as React from "react";
 import { Link, useParams } from "react-router-dom";
-import { Loading, Notice, PageHeader } from "@/components/common";
+import { Loading, Notice, PageHeader, EmptyState } from "@/components/common";
 import { DataTable } from "@/components/data-table";
 import { PauseState, RecentRuns } from "@/components/pipeline-parts";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
@@ -36,7 +36,7 @@ export function Scheduled() {
   const schedule = columns.accessor("run_schedule", { header: "Schedule", enableSorting: false, cell: (c) => <code className="whitespace-nowrap font-mono text-xs">{c.getValue()}</code> });
   return (
     <div className="grid grid-cols-1 gap-5">
-      <PageHeader title="Scheduled runs" subtitle={`${code} · what runs next`} />
+      <PageHeader title="Scheduled runs" subtitle="What runs next" />
       <AutoStartNotice code={code} />
       {list.isError ? <Notice>{(list.error as Error).message}</Notice> : null}
       {list.isPending ? <Loading what="schedules" /> : null}
@@ -47,7 +47,7 @@ export function Scheduled() {
         <DataTable find
           label="Next runs"
           data={upcoming}
-          empty={list.isSuccess ? "No scheduled pipeline has a next run." : undefined}
+          empty={list.isSuccess ? <EmptyState title="No scheduled pipeline has a next run">A pipeline is listed here once its RUN_SCHEDULE is set in the project's config files and automatic runs are on.</EmptyState> : undefined}
           columns={[
             columns.accessor("next_run", { header: "Next run", enableSorting: false, cell: (c) => <span className="num whitespace-nowrap"><span className="font-medium"><When iso={c.getValue()} now={now} /></span></span> }),
             link,

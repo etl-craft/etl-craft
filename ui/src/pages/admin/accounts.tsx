@@ -1,18 +1,17 @@
 import { createColumnHelper } from "@tanstack/react-table";
-import { ActionButton } from "@/components/action-button";
+import { When } from "@/components/when";
 import { DataTable } from "@/components/data-table";
 import { FormAction } from "@/components/form-action";
+import { RowActions } from "@/components/row-actions";
 import { StatusBadge } from "@/components/status";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
-import { useIdentity, useTimezone } from "@/hooks";
-import { formatTime } from "@/lib/format";
+import { useIdentity } from "@/hooks";
 import type { Account } from "@/lib/types";
 import { done, ListState, ROLES, useAdminList } from "./shared";
 
 const columns = createColumnHelper<Account>();
 
 export function AccountsTab() {
-  const tz = useTimezone();
   const me = useIdentity().data?.name;
   const list = useAdminList<{ accounts: Account[] }>("/api/v1/accounts");
   const accounts = list.data?.accounts ?? [];
@@ -38,7 +37,7 @@ export function AccountsTab() {
                 { name: "kind", label: "Kind", kind: "select", options: ["USER", "SERVICE"] },
                 { name: "first_name", label: "First name" },
                 { name: "last_name", label: "Last name" },
-                { name: "email", label: "Email", hint: "With Auth.Oidc_bind_by_email, an account with only an email takes its SSO subject at first sign-in." },
+                { name: "email", label: "Email", help: "With Auth.Oidc_bind_by_email, an account with only an email takes its SSO subject at first sign-in." },
                 { name: "password", label: "Temporary password (users)", kind: "password" },
               ]}
             />
@@ -88,7 +87,7 @@ export function AccountsTab() {
               },
             }),
             columns.accessor("failed_signins", { header: "Failed sign-ins" }),
-            columns.accessor("last_signin_at", { header: "Last sign-in", cell: (c) => (c.getValue() ? <span className="num whitespace-nowrap">{formatTime(c.getValue(), tz)}</span> : "Never") }),
+            columns.accessor("last_signin_at", { header: "Last sign-in", cell: (c) => <When iso={c.getValue()} empty="Never" /> }),
             columns.display({
               id: "act",
               header: "Actions",
@@ -96,13 +95,17 @@ export function AccountsTab() {
                 const a = c.row.original;
                 if (a.name === me) return <span className="text-muted">You</span>;
                 if (a.active_flag !== "Y") return null;
+                // Row actions sit behind one menu, so the table keeps its width at any size; each still confirms.
                 return (
-                  <div className="flex gap-2">
-                    {a.locked_at ? (
-                      <ActionButton<unknown> label="Unlock" title={`Unlock ${a.name}`} effect="Clears the lock and the failed sign-in count so the account can sign in again." endpoint="/accounts/unlock" askReason={false} body={() => ({ name: a.name })} describe={done(`${a.name} unlocked.`)} size="sm" />
-                    ) : null}
-                    <ActionButton<unknown> label="Disable" title={`Disable ${a.name}`} effect="Stops this account signing in and revokes its sessions and tokens; its history stays." endpoint="/accounts/disable" askReason={false} body={() => ({ name: a.name })} describe={done(`${a.name} disabled.`)} variant="danger" size="sm" />
-                  </div>
+                  <RowActions
+                    name={a.name}
+                    actions={[
+                      ...(a.locked_at
+                        ? [{ label: "Unlock", title: `Unlock ${a.name}`, effect: "Clears the lock and the failed sign-in count so the account can sign in again.", endpoint: "/accounts/unlock", askReason: false, body: () => ({ name: a.name }), describe: done(`${a.name} unlocked.`) }]
+                        : []),
+                      { label: "Disable", title: `Disable ${a.name}`, effect: "Stops this account signing in and revokes its sessions and tokens; its history stays.", endpoint: "/accounts/disable", askReason: false, body: () => ({ name: a.name }), describe: done(`${a.name} disabled.`), danger: true },
+                    ]}
+                  />
                 );
               },
             }),

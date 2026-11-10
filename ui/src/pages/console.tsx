@@ -1,12 +1,12 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { When } from "@/components/when";
 import * as React from "react";
 import { useParams } from "react-router-dom";
 import { Loading, Notice, PageHeader } from "@/components/common";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
-import { failureText, useProjectInfo, useTimezone } from "@/hooks";
+import { failureText, useProjectInfo } from "@/hooks";
 import { getJson, postJson, project } from "@/lib/api";
-import { formatTime } from "@/lib/format";
 import type { AuditAction, ConsoleResult } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { useDocumentTitle } from "@/title";
@@ -19,7 +19,6 @@ interface Line {
 /** One etl-craft command line, run as the signed-in person through the same actions as the CLI. */
 export function Console() {
   const { project: code = "" } = useParams();
-  const tz = useTimezone();
   const client = useQueryClient();
   const info = useProjectInfo(code);
   useDocumentTitle("Console", code, info.project && { type: info.project.environment_type, name: info.project.environment_name });
@@ -166,7 +165,7 @@ export function Console() {
           <ul className="m-0 grid list-none gap-1 p-4 text-[13px]">
             {(recent.data?.actions ?? []).slice(-15).reverse().map((a) => (
               <li key={a.action_id}>
-                <span className="num text-muted">{formatTime(a.at, tz)}</span> · <span className="font-mono text-xs">{a.command}</span> · {a.outcome}
+                <span className="text-muted"><When iso={a.at} /></span> · <span className="font-mono text-xs">{a.command}</span> · {a.outcome}
               </li>
             ))}
             {recent.isSuccess && recent.data.actions.length === 0 ? <li className="text-muted">No requests yet.</li> : null}

@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { When } from "@/components/when";
 import { createColumnHelper } from "@tanstack/react-table";
 import { Link } from "react-router-dom";
 import { Fact, FactList, Loading, Notice, PageHeader } from "@/components/common";
@@ -6,9 +7,8 @@ import { DataTable } from "@/components/data-table";
 import { EnvironmentBadge } from "@/components/environment-badge";
 import { StatusBadge } from "@/components/status";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
-import { useHealth, useTimezone } from "@/hooks";
+import { useHealth } from "@/hooks";
 import { getJson } from "@/lib/api";
-import { formatTime } from "@/lib/format";
 import { agentsPath, runsPath } from "@/lib/routes";
 import type { About, AgentsView, ControllerVersion, PoolCapacity, ProjectCounts } from "@/lib/types";
 import { useDocumentTitle } from "@/title";
@@ -19,7 +19,6 @@ const projects = createColumnHelper<ProjectCounts>();
 
 export function System() {
   useDocumentTitle("System health");
-  const tz = useTimezone();
   const about = useQuery({ queryKey: ["about"], queryFn: () => getJson<About>("/api/v1/about"), refetchInterval: 15_000 });
   const agents = useQuery({ queryKey: ["agents"], queryFn: () => getJson<AgentsView>("/api/v1/agents"), refetchInterval: 15_000 });
   const health = useHealth();
@@ -45,7 +44,7 @@ export function System() {
                 columns={[
                   controllers.accessor("controller_id", { header: "Controller" }),
                   controllers.accessor("version", { header: "Version" }),
-                  controllers.accessor("heartbeat_at", { header: "Last heartbeat", cell: (c) => <span className="num whitespace-nowrap">{formatTime(c.getValue(), tz)}</span> }),
+                  controllers.accessor("heartbeat_at", { header: "Last heartbeat", cell: (c) => <When iso={c.getValue()} /> }),
                 ]}
               />
             ) : (

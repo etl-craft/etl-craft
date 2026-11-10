@@ -44,10 +44,11 @@ describe("the shared runs layout", () => {
     Element.prototype.scrollIntoView = () => undefined;
   });
 
-  it("shows each run's string identifier beside its number", () => {
+  it("names each run's string identifier on its number, not in a column of its own", () => {
     panel(undefined);
-    expect(screen.getByText("REF-2026-11-07 02:27:37-6")).toBeTruthy();
-    expect(screen.getByText("SETUP-2026-11-07 02:27:37-5")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "#6" }).getAttribute("title")).toBe("REF-2026-11-07 02:27:37-6");
+    expect(screen.getByRole("link", { name: "#5" }).getAttribute("title")).toBe("SETUP-2026-11-07 02:27:37-5");
+    expect(screen.queryByRole("columnheader", { name: /Identifier/ })).toBeNull();
   });
 
   it("opens a run in its pipeline workspace from both lists", () => {
@@ -67,7 +68,7 @@ describe("the shared runs layout", () => {
 
   it("lists only the runs of pipelines that carry the selected tags", () => {
     panel(undefined, undefined, new Set(["REF"]));
-    expect(screen.getByText("REF-2026-11-07 02:27:37-6")).toBeTruthy();
-    expect(screen.queryByText("SETUP-2026-11-07 02:27:37-5")).toBeNull();
+    expect(screen.getByRole("link", { name: "#6" })).toBeTruthy();
+    expect(screen.queryByRole("link", { name: "#5" })).toBeNull();
   });
 });

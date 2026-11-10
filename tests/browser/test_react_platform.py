@@ -219,10 +219,8 @@ def test_the_pages_render_cleanly_in_both_themes_and_on_a_phone(scene, scheme, w
             page.goto(url + path)
             page.wait_for_load_state("networkidle")
             expect(page.locator("main")).to_be_visible()
-            if name != "projects":  # the project chooser is a root page
-                expect(
-                    page.locator("main").get_by_role("button", name="Back").first
-                ).to_be_visible()
+            # pages reached from the navigation or the account menu have no back arrow
+            expect(page.locator("main").get_by_role("button", name="Back")).to_have_count(0)
             overflow = page.evaluate("document.documentElement.scrollWidth - window.innerWidth")
             assert overflow <= 0, f"{name} scrolls sideways by {overflow}px at {width}px"
             shoot(page, f"{name}-{scheme}-{width}")

@@ -39,6 +39,6 @@ describe("the pipeline overview tab", () => {
     expect(within(tile("Runs")).getByText("2")).toBeTruthy(); // the last 24 hours
     expect(within(tile("Failed runs")).getByText("1")).toBeTruthy();
     expect(within(tile("Success rate")).getByText("50%")).toBeTruthy();
-    expect(screen.getByRole("link", { name: "#4" })).toBeTruthy(); // the failure, linked to its run
+    expect(within(screen.getByRole("region", { name: "Recent failures" })).getByRole("link", { name: "#4" })).toBeTruthy(); // the failure, linked to its run
   });
 });

@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { When } from "@/components/when";
 import * as React from "react";
 import { createColumnHelper } from "@tanstack/react-table";
 import { Link, Navigate, useLocation, useParams, useSearchParams } from "react-router-dom";
@@ -7,7 +8,8 @@ import { CsvButton } from "@/components/csv-button";
 import { Field, inputClass, Loading, Notice, PageHeader } from "@/components/common";
 import { CatalogInsights } from "@/components/catalog-insights";
 import { DataTable } from "@/components/data-table";
-import { HBars, KpiTile, Panel, StackedBars, Trend, type BarRow } from "@/components/charts";
+import { HBars, KpiTile, Panel, type BarRow } from "@/components/charts";
+import { Overview } from "@/components/overview";
 import { Tabs } from "@/components/tabs";
 import { StatusBadge } from "@/components/status";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,7 +18,7 @@ import { useProjectInfo, useRoleAtLeast, useTimezone } from "@/hooks";
 import { getJson, project } from "@/lib/api";
 import { useCatalog } from "@/lib/catalog";
 import { formatTime, measured, percent, seconds } from "@/lib/format";
-import { catalogPath, pipelinePath, runPath } from "@/lib/routes";
+import { catalogPath, pipelinePath } from "@/lib/routes";
 import type { AgentsView, FailureInsight, Insights as InsightsView, Pipeline, PipelineInsight, RuleInsight, TaskInsight } from "@/lib/types";
 import { projectHomePath } from "@/lib/routes";
 import { useDocumentTitle } from "@/title";
@@ -139,7 +141,7 @@ export function Insights() {
       next.set("from", isoDay(today - (days - 1) * 86_400_000));
       next.delete("to");
     });
-  const activePreset = RANGES.find((r) => from === isoDay(today - (r.days - 1) * 86_400_000) && !to)?.id;
+  const activePreset = !from && !to ? "7" : RANGES.find((r) => from === isoDay(today - (r.days - 1) * 86_400_000) && !to)?.id;
   const togglePipeline = (name: string) =>
     change((next) => {
       const now = next.getAll("pipeline");
@@ -148,34 +150,40 @@ export function Insights() {
     });
   const d = found.data;
   const total = d?.total;
-  const when = (value: string | null) => <span className="num whitespace-nowrap">{formatTime(value, tz)}</span>;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-2">
       <PageHeader back={null}
         compact
         title="Home"
-        subtitle={d ? `Runs started ${formatTime(d.window_start, tz)} to ${formatTime(d.window_end, tz)}; rates use finished runs.` : code}
+        subtitle={d ? `${code} · runs started ${formatTime(d.window_start, tz)} to ${formatTime(d.window_end, tz)}` : code}
         actions={
           <div className="flex flex-wrap items-end justify-end gap-2">
-            <div role="group" aria-label="Time range" className="inline-flex rounded-md border border-border p-0.5 text-sm">
+            <div role="group" aria-label="Time range" className="inline-flex h-8 items-center rounded-md bg-surface-2 p-0.5 text-[13px]">
               {RANGES.map((r) => (
-                <button key={r.id} type="button" aria-pressed={activePreset === r.id} onClick={() => preset(r.days)} className={cn("cursor-pointer rounded-sm px-2.5 py-1", activePreset === r.id ? "bg-accent/15 font-medium text-fg" : "text-muted hover:text-fg")}>
+                <button key={r.id} type="button" aria-pressed={activePreset === r.id} onClick={() => preset(r.days)} className={cn("h-7 cursor-pointer rounded-[5px] px-3", activePreset === r.id ? "bg-surface font-medium text-fg shadow-raised" : "text-muted hover:text-fg")}>
                   {r.label}
                 </button>
               ))}
             </div>
-            <Field compact label="From (UTC day)">
-              <input type="date" value={from} onChange={(event) => set("from", event.target.value)} className={cn(inputClass, "w-36")} />
-            </Field>
-            <Field compact label="To (UTC day)">
-              <input type="date" value={to} onChange={(event) => set("to", event.target.value)} className={cn(inputClass, "w-36")} />
-            </Field>
             <details className="relative">
-              <summary className="flex h-9 cursor-pointer items-center rounded-md border border-border-strong bg-surface px-3 text-sm max-sm:h-11">
+              <summary className="flex h-8 cursor-pointer list-none items-center rounded-md bg-surface px-3 text-[13px] font-medium shadow-raised hover:bg-surface-2 max-sm:h-11">
+                {from || to ? `${from || "start"} to ${to || "today"}` : "Custom range"}
+              </summary>
+              <div className="absolute right-0 z-30 mt-1.5 flex gap-3 rounded-xl bg-surface p-3 shadow-pop">
+                <Field compact label="From (UTC day)">
+                  <input type="date" value={from} onChange={(event) => set("from", event.target.value)} className={cn(inputClass, "w-36")} />
+                </Field>
+                <Field compact label="To (UTC day)">
+                  <input type="date" value={to} onChange={(event) => set("to", event.target.value)} className={cn(inputClass, "w-36")} />
+                </Field>
+              </div>
+            </details>
+            <details className="relative">
+              <summary className="flex h-8 cursor-pointer list-none items-center rounded-md bg-surface px-3 text-[13px] font-medium shadow-raised hover:bg-surface-2 max-sm:h-11">
                 Pipelines {chosen.length ? `(${chosen.length} selected)` : "(all you can view)"}
               </summary>
-              <fieldset className="absolute right-0 z-30 mt-1 grid max-h-72 min-w-64 gap-1 overflow-auto rounded-md border border-border bg-surface p-3 shadow-lg">
+              <fieldset className="absolute right-0 z-30 mt-1 grid max-h-72 min-w-64 gap-1 overflow-auto rounded-xl bg-surface p-3 shadow-pop">
                 <legend className="sr-only">Pipelines</legend>
                 {(choices.data?.pipelines ?? []).map((p) => (
                   <label key={p.pipeline_code} className="flex items-center gap-2 text-sm">
@@ -195,7 +203,7 @@ export function Insights() {
           <div role="tabpanel" id="tabpanel" aria-labelledby={`tab-${tab}`} className="flex min-h-0 flex-1 flex-col gap-3 overflow-auto lg:overflow-hidden">
             {tab === "capacity" ? <Capacity /> : null}
             {tab === "catalog" ? <CatalogTab code={code} /> : null}
-            {tab === "overview" ? <Overview code={code} d={d} when={when} /> : null}
+            {tab === "overview" ? <div className="min-h-0 flex-1 overflow-auto"><Overview code={code} d={d} /></div> : null}
             {tab === "pipelines" ? (
               <TablePanel
                 title="Pipelines"
@@ -272,7 +280,7 @@ export function Insights() {
                 </TablePanel>
               </div>
             ) : null}
-            {tab === "quality" ? <Quality code={code} d={d} developer={developer} tz={tz} /> : null}
+            {tab === "quality" ? <Quality code={code} d={d} developer={developer} /> : null}
             {tab === "failures" ? (
               <TablePanel title="Failures">
                 <DataTable find
@@ -296,60 +304,8 @@ export function Insights() {
   );
 }
 
-/** The one-screen summary: headline numbers, then the trend and where the problems are. */
-function Overview({ code, d, when }: { code: string; d: InsightsView; when: (value: string | null) => React.ReactNode }) {
-  const t = d.total;
-  const worst = [...d.per_pipeline].filter((p) => p.success_rate !== null).sort((a, b) => (a.success_rate ?? 0) - (b.success_rate ?? 0));
-  return (
-    <>
-      <div className="grid shrink-0 grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">
-        <KpiTile label="Runs" value={t.runs} hint={t.in_progress ? `${t.in_progress} running now` : `${t.finished} finished`} />
-        <KpiTile label="Success rate" value={percent(t.success_rate)} hint={t.failed ? `${t.failed} failed` : "none failed"} tone={t.failed ? "bad" : t.success_rate === null ? undefined : "ok"} />
-        <KpiTile label="Average duration" value={seconds(t.average_seconds)} hint={t.longest_seconds === null ? undefined : `longest ${seconds(t.longest_seconds)}`} />
-        <KpiTile label="SLA breached" value={t.sla_breached} tone={t.sla_breached ? "warn" : undefined} />
-        <KpiTile label="Retries" value={t.retries} hint={t.lost_attempts ? `${t.lost_attempts} attempts lost` : `${t.attempts} attempts`} tone={t.lost_attempts ? "warn" : undefined} />
-        <KpiTile label="Rows written" value={measured(t.rows_written)} hint={t.rows_per_second === null ? "rate not measured" : `${t.rows_per_second.toFixed(1)} rows/s`} />
-      </div>
-      <div className="grid min-h-0 flex-1 gap-3 lg:grid-cols-3 lg:grid-rows-[minmax(0,1fr)_minmax(0,1fr)]">
-        <Panel title="Runs per day" className="min-h-64 lg:col-span-2">
-          {d.days.length ? <StackedBars days={d.days} /> : <p className="m-0 text-sm text-muted">No runs started in this window. Widen the range or check the pipelines&apos; schedules.</p>}
-        </Panel>
-        <Panel title="Success rate by pipeline" aside={<span className="text-xs text-muted">lowest first</span>} className="min-h-48">
-          <HBars
-            label="Success rate by pipeline"
-            empty="No pipeline has a finished run in this window."
-            rows={worst.slice(0, 10).map((p): BarRow => ({ label: p.pipeline_code ?? "", value: p.success_rate ?? 0, text: percent(p.success_rate), tone: (p.success_rate ?? 0) >= 0.95 ? "ok" : (p.success_rate ?? 0) >= 0.8 ? "warn" : "bad", to: pipelinePath(code, p.pipeline_code ?? "") }))}
-          />
-        </Panel>
-        <Panel title="Average duration per day" className="min-h-48">
-          <Trend days={d.days} value={(day) => day.average_seconds} format={(n) => seconds(n)} />
-        </Panel>
-        <Panel title="Latest runs" className="min-h-48 lg:col-span-2" aside={<Link className="text-xs text-accent hover:underline" to="?tab=runs">All runs</Link>}>
-          {d.latest.length ? (
-            <ul aria-label="Latest runs" className="m-0 grid min-h-0 flex-1 list-none content-start gap-1 overflow-auto p-0 text-[13px]">
-              {d.latest.slice(0, 12).map((r) => (
-                <li key={r.pipeline_run_id} className="grid grid-cols-[7rem_minmax(8rem,1fr)_auto] items-center gap-3 border-b border-border py-1 last:border-0">
-                  <StatusBadge status={r.status} />
-                  <span className="truncate">
-                    <Link className="text-accent hover:underline" to={runPath(code, r.pipeline_code, r.pipeline_run_id)}>
-                      {r.pipeline_code} <span className="num">#{r.pipeline_run_id}</span>
-                    </Link>
-                  </span>
-                  <span className="text-xs text-muted">{when(r.start_date)}</span>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="m-0 text-sm text-muted">No runs in this window.</p>
-          )}
-        </Panel>
-      </div>
-    </>
-  );
-}
-
 /** Rules and schema checks: what ran, what did not pass, and how far the declared tables are checked. */
-function Quality({ code, d, developer, tz }: { code: string; d: InsightsView; developer: boolean; tz: string }) {
+function Quality({ code, d, developer }: { code: string; d: InsightsView; developer: boolean }) {
   const open = d.gaps.filter((g) => !["Matched", "Unchecked", "Not declared", "Expected before first deployment"].includes(g.state));
   const byState = new Map<string, number>();
   for (const g of d.gaps) byState.set(g.state, (byState.get(g.state) ?? 0) + g.checks);
@@ -385,7 +341,7 @@ function Quality({ code, d, developer, tz }: { code: string; d: InsightsView; de
         }
       >
         <p className="mb-2 mt-0 text-[13px]">
-          {d.gaps_compared_at ? `Last warehouse check ${formatTime(d.gaps_compared_at, tz)}.` : <strong>Not checked against the warehouse yet: most states read Unchecked.</strong>}{" "}
+          {d.gaps_compared_at ? <>Last warehouse check <When iso={d.gaps_compared_at} />.</> : <strong>Not checked against the warehouse yet: most states read Unchecked.</strong>}{" "}
           {open.length ? (
             <Link className="text-accent hover:underline" to={catalogPath(code, "gaps")}>
               {open.length} open gap{open.length === 1 ? "" : "s"}

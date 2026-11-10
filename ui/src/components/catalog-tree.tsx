@@ -1,7 +1,7 @@
 import { ChevronDown, ChevronRight, Database, ListChecks, Search, Table2, TriangleAlert, Workflow } from "lucide-react";
 import * as React from "react";
 import { Link } from "react-router-dom";
-import { schemasOf, type CatalogDoc } from "@/lib/catalog";
+import { pipelineGraph, schemasOf, type CatalogDoc } from "@/lib/catalog";
 import { catalogPath, type CatalogKind } from "@/lib/routes";
 import { cn } from "@/lib/utils";
 
@@ -76,7 +76,14 @@ export function CatalogTree({ code, doc, selected }: { code: string; doc: Catalo
   };
 
   const hit = (...texts: (string | null | undefined)[]) => !needle || texts.some((t) => t?.toLowerCase().includes(needle));
-  const tasksOf = (pipeline: string) => doc.tasks.filter((t) => t.pipeline === pipeline);
+  // A pipeline's tasks in the order they run, as in its grid.
+  const runOrder = React.useMemo(() => {
+    const at = new Map<string, number>();
+    for (const p of doc.pipelines) pipelineGraph(doc, p).waves.flat().forEach((task, i) => at.set(`${p.code}.${task}`, i));
+    return at;
+  }, [doc]);
+  const tasksOf = (pipeline: string) =>
+    doc.tasks.filter((t) => t.pipeline === pipeline).sort((a, b) => (runOrder.get(`${pipeline}.${a.code}`) ?? 1e9) - (runOrder.get(`${pipeline}.${b.code}`) ?? 1e9) || a.code.localeCompare(b.code));
   const pipelines = doc.pipelines.filter((p) => hit(p.code, p.name) || tasksOf(p.code).some((t) => hit(t.code)));
   const schemas = schemasOf(doc)
     .map((g) => ({ ...g, tables: g.tables.filter((t) => hit(g.schema, t.table) || t.columns.some((c) => hit(c.name))) }))

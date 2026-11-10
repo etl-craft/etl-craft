@@ -47,7 +47,7 @@ export function Search() {
   const pageRows = shown.slice((page - 1) * size, page * size);
   return (
     <div className="grid grid-cols-1 gap-5">
-      <PageHeader title="Search" subtitle={`${code} · press / or Ctrl+K on any page`} />
+      <PageHeader title="Search" subtitle="Press / or Ctrl+K on any page" />
       {found.isError ? <Notice>{(found.error as Error).message}</Notice> : null}
       {found.isFetching ? <Loading what="results" /> : null}
       {q === "" ? <p className="m-0 text-sm text-muted">Type part of a pipeline, task or table name, or an exact run id or run key, in the search box above.</p> : null}

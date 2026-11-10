@@ -1,13 +1,14 @@
 import { useQueries, useQuery } from "@tanstack/react-query";
+import { When } from "@/components/when";
 import * as React from "react";
 import { Link } from "react-router-dom";
 import { Fact, FactList, Loading, Notice, SelectField } from "@/components/common";
 import { RunBars } from "@/components/pipeline-parts";
-import { StatusBadge, toneClass } from "@/components/status";
+import { isFailure, StatusBadge, taskStatus, toneClass } from "@/components/status";
 import { columnsOf, DataTable } from "@/components/data-table";
-import { useTimezone } from "@/hooks";
 import { getJson, project } from "@/lib/api";
-import { formatDuration, formatSeconds, formatTime } from "@/lib/format";
+import { formatDuration, formatSeconds } from "@/lib/format";
+import { handlerLabel } from "@/lib/labels";
 import { catalogPath, taskPath } from "@/lib/routes";
 import type { AuditRecords, Graph, Pipeline, RunView, Steps, TaskDefinition } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -57,7 +58,22 @@ export function OverviewTab({ code, pipeline, runs }: { code: string; pipeline: 
       </div>
       <section className="grid gap-2" aria-label="Latest run durations">
         <h3 className="m-0 text-sm font-semibold">{runs.length === 1 ? "The only run" : `Last ${Math.min(10, runs.length)} runs`}</h3>
-        {runs.length ? <RunBars project={code} runs={runs.slice(0, 10)} /> : <p className="m-0 text-muted">No runs yet.</p>}
+        {runs.length >= 5 ? (
+          <RunBars project={code} runs={runs.slice(0, 10)} />
+        ) : runs.length ? (
+          // A few runs are listed with their durations; a chart of two bars says less.
+          <ul className="m-0 grid list-none gap-1 p-0 text-[13px]">
+            {runs.map((run) => (
+              <li key={run.pipeline_run_id} className="flex flex-wrap items-center gap-2">
+                <StatusBadge status={run.status} />
+                <Link className="num text-accent hover:underline" to={`/projects/${encodeURIComponent(code)}/pipelines/${encodeURIComponent(run.pipeline_code)}?run=${run.pipeline_run_id}`}>#{run.pipeline_run_id}</Link>
+                <span className="num text-muted">{formatDuration(run.start_date, run.end_date)}</span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="m-0 text-muted">No runs yet.</p>
+        )}
       </section>
       <section className="grid gap-2" aria-label="Recent failures">
         <h3 className="m-0 text-sm font-semibold">Recent failures</h3>
@@ -94,7 +110,7 @@ export function useTaskDefinitions(code: string, pipeline: string, tasks: string
 }
 
 /** Every task of the pipeline with its handler, what it waits for, and its state in the selected run. */
-export function TasksTab({ code, pipeline, graph, runId }: { code: string; pipeline: string; graph: Graph; runId?: number }) {
+export function TasksTab({ code, pipeline, graph, runId, run }: { code: string; pipeline: string; graph: Graph; runId?: number; run?: RunView }) {
   const tasks = graph.waves.flat();
   const { definitions, loading, error } = useTaskDefinitions(code, pipeline, tasks);
   const steps = useQuery({
@@ -102,7 +118,7 @@ export function TasksTab({ code, pipeline, graph, runId }: { code: string; pipel
     queryFn: () => getJson<Steps>(`${project(code)}/steps`, { pipeline_code: pipeline, run_id: runId }),
     enabled: runId !== undefined,
   });
-  const status = new Map((steps.data?.steps ?? []).map((s) => [s.task_code, s.status ?? "QUEUED"]));
+  const status = new Map((steps.data?.steps ?? []).map((s) => [s.task_code, taskStatus(s.status, run)]));
   return (
     <div className="grid gap-3">
       {error ? <Notice>{error.message}</Notice> : null}
@@ -113,9 +129,9 @@ export function TasksTab({ code, pipeline, graph, runId }: { code: string; pipel
           data={tasks}
           columns={columnsOf<string>([
             { id: "task", header: "Task", value: (t) => t, size: 280, cell: (t) => <Link className="font-medium text-accent hover:underline" to={taskPath(code, pipeline, t)}>{t}</Link> },
-            { id: "handler", header: "Handler", value: (t) => definitions.get(t)?.handler ?? "", size: 130, cell: (t) => definitions.get(t)?.handler ?? "…" },
+            { id: "handler", header: "Handler", value: (t) => definitions.get(t)?.handler ?? "", size: 130, cell: (t) => (definitions.get(t) ? handlerLabel(definitions.get(t)?.handler) : "…") },
             { id: "waits", header: "Waits for", value: (t) => (graph.depends_on[t] ?? []).map(([upstream]) => upstream).join(", "), size: 320, cell: (t) => <span className="text-muted">{(graph.depends_on[t] ?? []).map(([upstream]) => upstream).join(", ") || "—"}</span> },
-            ...(runId !== undefined ? [{ id: "state", header: `Run #${runId}`, value: (t: string) => status.get(t) ?? "", size: 150, cell: (t: string) => (status.has(t) ? <StatusBadge status={status.get(t)!} /> : "—") }] : []),
+            ...(runId !== undefined ? [{ id: "state", header: `Run #${runId}`, value: (t: string) => status.get(t) ?? "", size: 150, cell: (t: string) => (status.has(t) ? <StatusBadge quiet status={status.get(t)!} /> : "—") }] : []),
           ])}
         />
       </div>
@@ -125,7 +141,6 @@ export function TasksTab({ code, pipeline, graph, runId }: { code: string; pipel
 
 /** The pipeline as its files define it: its settings, then each task's handler and parameters. What the pipeline and its tasks are for is documented in the catalog. */
 export function DetailsTab({ code, pipeline, graph }: { code: string; pipeline: Pipeline; graph?: Graph }) {
-  const tz = useTimezone();
   const tasks = graph ? graph.waves.flat() : [];
   const { definitions, loading, error } = useTaskDefinitions(code, pipeline.pipeline_code, tasks);
   return (
@@ -136,7 +151,7 @@ export function DetailsTab({ code, pipeline, graph }: { code: string; pipeline: 
         <Fact label="Refresh">{pipeline.refresh_type.toLowerCase()}</Fact>
         <Fact label="Schedule">{pipeline.run_schedule ? <code className="font-mono">{pipeline.run_schedule}</code> : "Not scheduled"}</Fact>
         <Fact label="Restarts">{pipeline.restart_note ?? "On its schedule only"}</Fact>
-        <Fact label="Next run">{pipeline.next_run ? formatTime(pipeline.next_run, tz) : (pipeline.schedule_problem ?? "—")}</Fact>
+        <Fact label="Next run"><When iso={pipeline.next_run} empty={pipeline.schedule_problem ?? "—"} /></Fact>
         <Fact label="SLA">{pipeline.sla_in_hours ? `${pipeline.sla_in_hours} h` : "None"}</Fact>
         <Fact label="Automatic runs">{pipeline.paused ? `Paused by ${pipeline.paused.paused_by}: ${pipeline.paused.reason}` : "On"}</Fact>
         <Fact label="Tasks">{tasks.length}</Fact>
@@ -157,7 +172,7 @@ export function DetailsTab({ code, pipeline, graph }: { code: string; pipeline: 
           return (
             <details key={task} className="rounded-md border border-border">
               <summary className="cursor-pointer px-3 py-2 text-[13px] font-medium">
-                {task} <span className="font-normal text-muted">{def?.handler ?? ""}</span>
+                {task} <span className="font-normal text-muted">{handlerLabel(def?.handler)}</span>
               </summary>
               <dl className="m-0 grid gap-x-4 gap-y-1 border-t border-border p-3 text-xs sm:grid-cols-[max-content_1fr]">
                 {Object.entries(def?.parameters ?? {}).map(([name, value]) => (
@@ -184,10 +199,31 @@ export function CalendarTab({ runs }: { runs: RunView[] }) {
   const [today] = React.useState(() => Date.now());
   const byDay = new Map<string, RunView[]>();
   for (const run of runs) if (run.start_date) byDay.set(run.start_date.slice(0, 10), [...(byDay.get(run.start_date.slice(0, 10)) ?? []), run]);
+  // Until runs cover five days, twelve weeks of empty squares hide them: the days are listed instead.
+  if (byDay.size < 5)
+    return (
+      <div className="grid gap-2">
+        <p className="m-0 text-[13px] text-muted">{byDay.size ? `Runs on ${byDay.size} day${byDay.size === 1 ? "" : "s"} so far; the calendar appears once runs cover five days.` : "No runs yet."}</p>
+        <ul className="m-0 grid list-none gap-1 p-0 text-[13px]">
+          {[...byDay.entries()].sort(([x], [y]) => y.localeCompare(x)).map(([key, list]) => {
+            const failed = list.filter((r) => isFailure(r.status)).length;
+            return (
+              <li key={key} className="flex items-center gap-3">
+                <span className="num w-24">{key}</span>
+                <span className="num">{list.length} run{list.length === 1 ? "" : "s"}</span>
+                {failed ? <span className="num font-medium text-bad">{failed} failed</span> : null}
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+    );
   const last = new Date(today);
   const monday = today - ((last.getUTCDay() + 6) % 7) * DAY - (WEEKS - 1) * 7 * DAY;
   const weeks = Array.from({ length: WEEKS }, (_, w) => Array.from({ length: 7 }, (_, d) => monday + (w * 7 + d) * DAY));
-  const worst = (list: RunView[]) => (list.some((r) => r.status === "FAILED" || r.status === "LOST") ? "FAILED" : list.some((r) => r.status === "IN-PROGRESS") ? "IN-PROGRESS" : "SUCCESS");
+  // A day takes its worst run's colour: failed, then running, then green only when every run succeeded.
+  const worst = (list: RunView[]) =>
+    list.some((r) => isFailure(r.status)) ? "FAILED" : list.some((r) => r.status === "IN-PROGRESS") ? "IN-PROGRESS" : list.every((r) => r.status === "SUCCESS") ? "SUCCESS" : "SKIPPED";
   const names = ["Mon", "", "Wed", "", "Fri", "", ""];
   return (
     <div className="grid gap-2">
@@ -210,7 +246,7 @@ export function CalendarTab({ runs }: { runs: RunView[] }) {
               {week.map((ms) => {
                 const key = day(ms);
                 const list = byDay.get(key) ?? [];
-                const label = `${key}: ${list.length ? `${list.length} run${list.length === 1 ? "" : "s"}, ${list.filter((r) => r.status === "FAILED" || r.status === "LOST").length} failed` : "no runs"}`;
+                const label = `${key}: ${list.length ? `${list.length} run${list.length === 1 ? "" : "s"}, ${list.filter((r) => isFailure(r.status)).length} failed` : "no runs"}`;
                 return <span key={key} role="gridcell" aria-label={label} title={label} className={cn("size-5 rounded-sm border", ms > today ? "border-transparent" : list.length ? cn(toneClass(worst(list)), "border-current") : "border-border bg-surface-2")} />;
               })}
             </div>
@@ -224,7 +260,6 @@ export function CalendarTab({ runs }: { runs: RunView[] }) {
 
 /** What was done to this pipeline: the commands run on it and the metadata changes to it. */
 export function AuditTab({ code, pipeline }: { code: string; pipeline: string }) {
-  const tz = useTimezone();
   const audit = useQuery({ queryKey: ["audit", code, pipeline], queryFn: () => getJson<AuditRecords>(`${project(code)}/audit`, { pipeline_code: pipeline }) });
   if (audit.isError) return <Notice>{(audit.error as Error).message}</Notice>;
   if (!audit.data) return <Loading what="the audit log" />;
@@ -247,7 +282,7 @@ export function AuditTab({ code, pipeline }: { code: string; pipeline: string })
             label="Commands run on this pipeline"
             data={actions.slice(0, 50)}
             columns={columnsOf<(typeof actions)[number]>([
-              { id: "when", header: "When", value: (a) => a.at, size: 200, cell: (a) => formatTime(a.at, tz) },
+              { id: "when", header: "When", value: (a) => a.at, size: 200, cell: (a) => <When iso={a.at} /> },
               { id: "who", header: "Who", value: (a) => a.actor, size: 160 },
               { id: "command", header: "Command", value: (a) => a.command, size: 320 },
               { id: "outcome", header: "Outcome", value: (a) => a.outcome, size: 140, cell: (a) => <span className="text-muted">{a.outcome.toLowerCase()}</span> },
@@ -264,7 +299,7 @@ export function AuditTab({ code, pipeline }: { code: string; pipeline: string })
             label="Metadata changes"
             data={changes.slice(0, 50)}
             columns={columnsOf<(typeof changes)[number]>([
-              { id: "when", header: "When", value: (g) => g.change.at, size: 200, cell: (g) => formatTime(g.change.at, tz) },
+              { id: "when", header: "When", value: (g) => g.change.at, size: 200, cell: (g) => <When iso={g.change.at} /> },
               { id: "who", header: "Who", value: (g) => g.change.actor, size: 160 },
               { id: "table", header: "Table", value: (g) => g.change.table_name, size: 280, cell: (g) => <span className="font-mono text-xs">{g.change.table_name}</span> },
               { id: "change", header: "Change", value: (g) => g.change.operation, size: 140, cell: (g) => <span className="text-muted">{g.change.operation.toLowerCase()}</span> },

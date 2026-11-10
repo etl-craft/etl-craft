@@ -19,7 +19,7 @@ function stored(id: string, fallback: number): number {
  * Two panes side by side with a divider to drag (or focus and use the arrow keys; double-click or Home resets).
  * The width is remembered in this browser. Below the `lg` breakpoint the panes stack and the divider is gone.
  */
-export function SplitPane({ id, left, right, initial = 0.42, className }: { id: string; left: React.ReactNode; right: React.ReactNode; initial?: number; className?: string }) {
+export function SplitPane({ id, left, right, initial = 0.42, className, narrowFirst = "left" }: { id: string; left: React.ReactNode; right: React.ReactNode; initial?: number; className?: string; /** Which pane comes first once they stack below `lg`. */ narrowFirst?: "left" | "right" }) {
   const [ratio, setRatio] = React.useState(() => stored(id, initial));
   const frame = React.useRef<HTMLDivElement>(null);
   const set = (next: number) => {
@@ -62,7 +62,7 @@ export function SplitPane({ id, left, right, initial = 0.42, className }: { id: 
       >
         <span className="h-full w-px bg-border-strong group-hover:w-0.5 group-hover:bg-accent group-focus-visible:bg-accent group-active:bg-accent" />
       </div>
-      <div data-pane className="flex min-h-0 min-w-0 flex-col">{right}</div>
+      <div data-pane className={cn("flex min-h-0 min-w-0 flex-col", narrowFirst === "right" && "max-lg:order-first")}>{right}</div>
     </div>
   );
 }

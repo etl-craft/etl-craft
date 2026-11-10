@@ -12,10 +12,11 @@ import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { columnsOf, DataTable } from "@/components/data-table";
 import { When } from "@/components/when";
-import { useRoleAtLeast, useTimezone } from "@/hooks";
+import { useRoleAtLeast } from "@/hooks";
 import { getJson, project } from "@/lib/api";
 import { impact, isOpenGap, pipelineGraph, tableLineage, typeOf, type CatalogColumn, type CatalogDoc, type ImpactRow, type CatalogEdge, type CatalogRun, type CatalogTable, type CatalogTask } from "@/lib/catalog";
-import { describeCron, formatDuration, formatTime } from "@/lib/format";
+import { describeCron, formatDuration } from "@/lib/format";
+import { handlerLabel } from "@/lib/labels";
 import { catalogPath, pipelinePath, taskPath } from "@/lib/routes";
 import type { RunView, TablePreview } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -120,7 +121,6 @@ const Links = ({ code, labels, kind }: { code: string; labels: string[]; kind: "
 
 /** What a run row says: its state and when it ran. */
 function RunsTable({ code, pipeline, runs, task }: { code: string; pipeline: string; runs: CatalogRun[]; task?: boolean }) {
-  const tz = useTimezone();
   if (!runs.length) return <p className="m-0 text-muted">No runs recorded in the last build.</p>;
   return (
     <DataTable
@@ -130,7 +130,7 @@ function RunsTable({ code, pipeline, runs, task }: { code: string; pipeline: str
       columns={columnsOf<CatalogRun>([
         { id: "run", header: "Run", value: (r) => r.pipeline_run_id, size: 90, cell: (r) => <Link className={`num ${link}`} to={`${pipelinePath(code, pipeline)}?run=${r.pipeline_run_id}`}>#{r.pipeline_run_id}</Link> },
         { id: "status", header: "Status", value: (r) => r.status, size: 130, cell: (r) => <StatusBadge status={r.status} /> },
-        { id: "started", header: "Started", value: (r) => r.start, size: 190, cell: (r) => formatTime(r.start, tz) },
+        { id: "started", header: "Started", value: (r) => r.start, size: 190, cell: (r) => <When iso={r.start} /> },
         { id: "duration", header: "Duration", value: (r) => (r.start && r.end ? new Date(r.end).getTime() - new Date(r.start).getTime() : null), size: 110, cell: (r) => formatDuration(r.start, r.end) },
         ...(task ? [{ id: "written", header: "Written", value: (r: CatalogRun) => (r.insert_count ?? 0) + (r.update_count ?? 0) + (r.delete_count ?? 0), size: 120, cell: (r: CatalogRun) => [["+", r.insert_count], ["~", r.update_count], ["−", r.delete_count]].filter(([, n]) => n).map(([sign, n]) => `${sign}${n}`).join(" ") || "—" }] : []),
       ])}
@@ -140,7 +140,6 @@ function RunsTable({ code, pipeline, runs, task }: { code: string; pipeline: str
 
 /** The catalog's front page: what it holds and what needs attention. */
 export function CatalogHome({ code, doc }: { code: string; doc: CatalogDoc }) {
-  const tz = useTimezone();
   const tables = doc.tables.filter((t) => !t.external);
   const columns = tables.reduce((n, t) => n + t.columns.length, 0);
   const undocumented = doc.tasks.filter((t) => !t.documentation).length;
@@ -156,8 +155,8 @@ export function CatalogHome({ code, doc }: { code: string; doc: CatalogDoc }) {
     <div className="grid min-w-0 grid-cols-1 gap-4 p-4">
       <Title icon={Table2} name={`${doc.project} catalog`} />
       <p className="m-0 text-[13px] text-muted">
-        Built {formatTime(doc.generated_at, tz)}
-        {doc.compared_at ? `; compared with the warehouse ${formatTime(doc.compared_at, tz)}` : "; the warehouse was not compared"}. Rebuild it after metadata changes.
+        Built <When iso={doc.generated_at} />
+        {doc.compared_at ? <>; compared with the warehouse <When iso={doc.compared_at} /></> : "; the warehouse was not compared"}. Rebuild it after metadata changes.
       </p>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         {tile("Pipelines", doc.pipelines.length)}
@@ -186,13 +185,15 @@ export function CatalogHome({ code, doc }: { code: string; doc: CatalogDoc }) {
 
 /** A pipeline: what it does, its tasks, how they connect, and its latest runs. */
 export function PipelineObject({ code, doc, name, tab, onTab }: { code: string; doc: CatalogDoc; name: string; tab: string; onTab: (tab: string) => void }) {
-  const tz = useTimezone();
   const navigate = useNavigate();
   const pipeline = doc.pipelines.find((p) => p.code === name);
   const [focused, setFocused] = React.useState<string | null>(null);
   if (!pipeline) return <Notice className="m-4">No pipeline {name} in this catalog build.</Notice>;
-  const tasks = doc.tasks.filter((t) => t.pipeline === pipeline.code);
   const graph = pipelineGraph(doc, pipeline);
+  // Tasks in the order they run, as the grid lists them, not alphabetically.
+  const order = new Map(graph.waves.flat().map((label, i) => [label, i]));
+  const at = (t: CatalogTask) => order.get(t.label) ?? order.get(t.code) ?? Number.MAX_SAFE_INTEGER;
+  const tasks = doc.tasks.filter((t) => t.pipeline === pipeline.code).sort((a, b) => at(a) - at(b) || a.code.localeCompare(b.code));
   const tabs = [{ id: "overview", label: "Overview" }, { id: "lineage", label: "Task graph" }, { id: "runs", label: "Runs" }];
   const on = tabs.some((t) => t.id === tab) ? tab : "overview";
   return (
@@ -219,7 +220,7 @@ export function PipelineObject({ code, doc, name, tab, onTab }: { code: string; 
                 data={tasks}
                 columns={columnsOf<CatalogTask>([
                   { id: "task", header: "Task", value: (t) => t.code, size: 240, cell: (t) => <Link className={`font-medium ${link}`} to={catalogPath(code, "tasks", t.label)}>{t.code}</Link> },
-                  { id: "handler", header: "Handler", value: (t) => t.handler, size: 120 },
+                  { id: "handler", header: "Handler", value: (t) => handlerLabel(t.handler), size: 120 },
                   { id: "reads", header: "Reads", value: (t) => t.sources.join(" "), size: 260, cell: (t) => (t.sources.length ? <Links code={code} labels={t.sources} kind="tables" /> : <span className="text-muted">—</span>) },
                   { id: "writes", header: "Writes", value: (t) => t.target ?? "", size: 240, cell: (t) => (t.target ? <Links code={code} labels={[t.target]} kind="tables" /> : <span className="text-muted">—</span>) },
                 ])}
@@ -232,7 +233,7 @@ export function PipelineObject({ code, doc, name, tab, onTab }: { code: string; 
               {pipeline.runs[0] ? (
                 <Fact label="Last run">
                   <span className="inline-flex flex-wrap items-center gap-1.5">
-                    <StatusBadge status={pipeline.runs[0].status} /> {formatTime(pipeline.runs[0].start, tz)}
+                    <StatusBadge status={pipeline.runs[0].status} /> <When iso={pipeline.runs[0].start} />
                   </span>
                 </Fact>
               ) : null}
@@ -344,7 +345,7 @@ export function TaskObject({ code, doc, name, tab, onTab }: { code: string; doc:
             <h2 className="m-0 text-sm font-semibold">About this task</h2>
             <FactList className="grid-cols-1 sm:grid-cols-1 lg:grid-cols-1">
               <Fact label="Pipeline">{task.pipeline}</Fact>
-              <Fact label="Handler">{task.handler}</Fact>
+              <Fact label="Handler">{handlerLabel(task.handler)}</Fact>
               <Fact label="Runs when">{task.run_condition ? task.run_condition.toLowerCase() : "all upstream succeed"}</Fact>
               <Fact label="Script">{task.script ?? "None"}</Fact>
               <Fact label="Documentation">{task.documentation_version ? `version ${task.documentation_version}` : "Not versioned"}</Fact>
@@ -396,7 +397,6 @@ function TableData({ code, table }: { code: string; table: string }) {
 /** A table, as a data explorer shows it: description, columns with their types, then lineage, history and quality. */
 export function TableObject({ code, doc, name, tab, onTab }: { code: string; doc: CatalogDoc; name: string; tab: string; onTab: (tab: string) => void }) {
   const navigate = useNavigate();
-  const tz = useTimezone();
   const [filter, setFilter] = React.useState("");
   const [column, setColumn] = React.useState("");
   const [focused, setFocused] = React.useState<string | null>(null);
@@ -421,6 +421,8 @@ export function TableObject({ code, doc, name, tab, onTab }: { code: string; doc
   ];
   const on = tabs.some((t) => t.id === tab) ? tab : "overview";
   const shown = table.columns.filter((c) => !filter || `${c.name} ${c.comment ?? ""} ${typeOf(c)}`.toLowerCase().includes(filter.toLowerCase()));
+  const hasType = table.columns.some((c) => Boolean(c.warehouse_type ?? c.data_type));
+  const hasDeclared = table.columns.some((c) => Boolean(c.declared_type));
   const edges = doc.column_edges.filter((e) => e.target_object === table.name && (!column || e.target_column === column));
   const everyRun = writers.flatMap((w) => w.runs.map((r) => ({ ...r, pipeline: w.pipeline })));
   const lastWrite = everyRun.filter((r) => r.end).sort((a, b) => (b.end ?? "").localeCompare(a.end ?? ""))[0];
@@ -488,8 +490,9 @@ export function TableObject({ code, doc, name, tab, onTab }: { code: string; doc
                   data={shown}
                   columns={columnsOf<CatalogColumn>([
                     { id: "column", header: "Column", value: (c) => c.name, size: 260, cell: (c) => <span className="font-mono text-xs font-medium">{c.name}{c.engine_managed ? <span className="ml-1.5 rounded-sm bg-idle-bg px-1 text-[10px] text-idle">engine</span> : null}</span> },
-                    { id: "type", header: "Type", value: (c) => typeOf(c), size: 200, cell: (c) => <span className="font-mono text-xs">{typeOf(c)}</span> },
-                    { id: "declared", header: "Declared", value: (c) => c.declared_type ?? "", size: 200, cell: (c) => <span className={c.declared_type && c.warehouse_type && c.declared_type.toLowerCase() !== c.warehouse_type.toLowerCase() ? "font-mono text-xs text-warn" : "font-mono text-xs text-muted"}>{c.declared_type ?? "—"}</span> },
+                    // A column with nothing in any row is left out; the note below says how to fill it.
+                    ...(hasType ? [{ id: "type", header: "Type", value: (c: CatalogColumn) => typeOf(c), size: 200, cell: (c: CatalogColumn) => <span className="font-mono text-xs">{typeOf(c)}</span> }] : []),
+                    ...(hasDeclared ? [{ id: "declared", header: "Declared", value: (c: CatalogColumn) => c.declared_type ?? "", size: 200, cell: (c: CatalogColumn) => <span className={c.declared_type && c.warehouse_type && c.declared_type.toLowerCase() !== c.warehouse_type.toLowerCase() ? "font-mono text-xs text-warn" : "font-mono text-xs text-muted"}>{c.declared_type ?? "—"}</span> }] : []),
                     { id: "nullable", header: "Nullable", value: (c) => c.warehouse_nullable ?? c.declared_nullable ?? "", size: 100, cell: (c) => <span className="text-muted">{c.warehouse_nullable ?? c.declared_nullable ?? "—"}</span> },
                     { id: "comment", header: "Comment", value: (c) => c.comment ?? "", size: 300, cell: (c) => <span className="text-muted">{c.comment ?? ""}</span> },
                   ])}
@@ -497,6 +500,12 @@ export function TableObject({ code, doc, name, tab, onTab }: { code: string; doc
               ) : (
                 <p className="m-0 text-muted">{table.columns.length ? "No column matches." : "No columns are declared or reported for this table."}</p>
               )}
+              {shown.length && (!hasType || !hasDeclared) ? (
+                <p className="m-0 mt-2 text-xs text-muted">
+                  {!hasType ? "Types appear once the catalog is checked against the warehouse. " : ""}
+                  {!hasDeclared ? "Declared types appear once the table's columns are declared in the project's config files." : ""}
+                </p>
+              ) : null}
             </Section>
           </div>
           <aside aria-label="About this table" className="grid min-h-0 min-w-0 content-start gap-3 overflow-auto">
@@ -506,7 +515,7 @@ export function TableObject({ code, doc, name, tab, onTab }: { code: string; doc
               <Fact label="Type">{(table.warehouse_kind ?? table.declared_kind ?? "table").toLowerCase()}</Fact>
               <Fact label="Data source">{doc.warehouse ?? "Not compared"}</Fact>
               <Fact label="In warehouse">{table.warehouse_checked ? (table.in_warehouse ? "Yes" : "Not found") : "Not checked"}</Fact>
-              <Fact label="Last written">{lastWrite ? formatTime(lastWrite.end, tz) : "No run recorded"}</Fact>
+              <Fact label="Last written"><When iso={lastWrite?.end} empty="No run recorded" /></Fact>
               <Fact label="Written by">
                 <Links code={code} labels={table.writers} kind="tasks" />
               </Fact>
@@ -587,7 +596,7 @@ export function TableObject({ code, doc, name, tab, onTab }: { code: string; doc
                 { id: "task", header: "Task", value: (r) => r.task, size: 280, cell: (r) => <Link className={link} to={catalogPath(code, "tasks", r.task)}>{r.task}</Link> },
                 { id: "run", header: "Run", value: (r) => r.pipeline_run_id, size: 90, cell: (r) => <Link className={`num ${link}`} to={`${pipelinePath(code, r.pipeline)}?run=${r.pipeline_run_id}`}>#{r.pipeline_run_id}</Link> },
                 { id: "status", header: "Status", value: (r) => r.status, size: 130, cell: (r) => <StatusBadge status={r.status} /> },
-                { id: "started", header: "Started", value: (r) => r.start, size: 190, cell: (r) => formatTime(r.start, tz) },
+                { id: "started", header: "Started", value: (r) => r.start, size: 190, cell: (r) => <When iso={r.start} /> },
                 { id: "duration", header: "Duration", value: (r) => (r.start && r.end ? new Date(r.end).getTime() - new Date(r.start).getTime() : null), size: 110, cell: (r) => formatDuration(r.start, r.end) },
                 { id: "rows", header: "Rows", value: (r) => (r.insert_count ?? 0) + (r.update_count ?? 0) + (r.delete_count ?? 0), size: 120, cell: (r) => [["+", r.insert_count], ["~", r.update_count], ["−", r.delete_count]].filter(([, n]) => n).map(([sign, n]) => `${sign}${n}`).join(" ") || "—" },
               ])}
@@ -633,6 +642,8 @@ export function TableObject({ code, doc, name, tab, onTab }: { code: string; doc
   );
 }
 
+type Gap = CatalogDoc["gaps"][number];
+
 function GapRows({ code, gaps }: { code: string; gaps: CatalogDoc["gaps"] }) {
   return (
     <DataTable find
@@ -642,8 +653,9 @@ function GapRows({ code, gaps }: { code: string; gaps: CatalogDoc["gaps"] }) {
         { id: "object", header: "Object", value: (g) => `${g.table}${g.column ? `.${g.column}` : ""}`, size: 300, cell: (g) => <span className="font-mono text-xs"><Link className={link} to={catalogPath(code, "tables", g.table)}>{g.table}</Link>{g.column ? `.${g.column}` : ""}</span> },
         { id: "attribute", header: "Attribute", value: (g) => g.attribute, size: 150, cell: (g) => g.attribute.toLowerCase().replace(/_/g, " ") },
         { id: "state", header: "State", value: (g) => g.state, size: 140, cell: (g) => g.state.toLowerCase().replace(/_/g, " ") },
-        { id: "declared", header: "Declared", value: (g) => g.declared ?? "", size: 160, cell: (g) => <span className="font-mono text-xs">{g.declared ?? "—"}</span> },
-        { id: "deployed", header: "Deployed", value: (g) => g.deployed ?? "", size: 160, cell: (g) => <span className="font-mono text-xs">{g.deployed ?? "—"}</span> },
+        // Declared and deployed values exist only for schema gaps; a list of lineage gaps leaves the columns out.
+        ...(gaps.some((g) => g.declared) ? [{ id: "declared", header: "Declared", value: (g: Gap) => g.declared ?? "", size: 160, cell: (g: Gap) => <span className="font-mono text-xs">{g.declared ?? "—"}</span> }] : []),
+        ...(gaps.some((g) => g.deployed) ? [{ id: "deployed", header: "Deployed", value: (g: Gap) => g.deployed ?? "", size: 160, cell: (g: Gap) => <span className="font-mono text-xs">{g.deployed ?? "—"}</span> }] : []),
         { id: "why", header: "Why", value: (g) => g.reason, size: 380, cell: (g) => <span className="text-muted">{g.reason}</span> },
       ])}
     />

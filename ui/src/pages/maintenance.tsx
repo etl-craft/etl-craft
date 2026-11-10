@@ -25,7 +25,7 @@ export function Maintenance() {
   const upgrade = { action: action || undefined, target: upgradeTarget.trim() || undefined };
   return (
     <div className="grid grid-cols-1 gap-5">
-      <PageHeader title="Maintenance" subtitle={`${code} · each task shows what it would do first; every request is recorded with your account`} />
+      <PageHeader title="Maintenance" subtitle="Each task shows what it would do first; every request is recorded with your account." />
       <div className="grid gap-5 lg:grid-cols-2">
         <Card>
           <CardHeader>

@@ -28,6 +28,8 @@ const MAX_ROWS = 4;
 const MAX_COLS = 3;
 const GAP_ROW = 56;
 const GAP_COL = 40;
+/** Fitting a large graph never shrinks it below this zoom (13 px text stays about 9 px): the rest is reached by panning. */
+const READABLE = 0.7;
 
 const NODE_TONE: Record<Focus, string> = {
   none: "border-border-strong",
@@ -201,26 +203,24 @@ export function RunGraph({
   }, [focused]);
   // Resizing the pane refits the whole graph, so a divider drag never hides a task.
   React.useEffect(() => {
-    if (fill && width > 0 && frameHeight > 0) void flow.current?.fitView({ padding: 0.08, minZoom: 0.15, maxZoom: 1.3 });
+    if (fill && width > 0 && frameHeight > 0) void flow.current?.fitView({ padding: 0.08, minZoom: READABLE, maxZoom: 1.3 });
   }, [fill, width, frameHeight, shown]);
   // A graph wider than its card keeps readable boxes starting at the left; a small one is fitted whole.
   const wide = !fill && width > 0 && columns * (WIDTH + GAP_X) - GAP_X + 48 > width;
   return (
-    <div ref={frame} style={fill ? undefined : { height }} role="group" aria-label="Task graph" className={cn("relative w-full", fill && "h-full min-h-64")}>
-      {edges.length === 0 ? (
-        <p className="absolute left-3 top-2 z-10 m-0 text-xs text-muted">No dependencies between these tasks: they can run at the same time.</p>
-      ) : (
-        <p className="absolute left-3 top-2 z-10 m-0 text-xs text-muted">
-          {focused ? `Showing everything upstream and downstream of ${focused}. Click the background to clear.` : "Click a task to highlight its lineage."}
-        </p>
-      )}
+    <div style={fill ? undefined : { height }} role="group" aria-label="Task graph" className={cn("flex w-full flex-col", fill && "h-full min-h-64")}>
+      {/* The hint sits above the canvas, so a graph shown at a readable size never runs under it. */}
+      <p className="m-0 shrink-0 px-3 py-1.5 text-xs text-muted">
+        {edges.length === 0 ? "No dependencies between these tasks: they can run at the same time." : focused ? `Showing everything upstream and downstream of ${focused}. Click the background to clear.` : "Click a task to highlight its lineage; drag to pan."}
+      </p>
+      <div ref={frame} className="relative min-h-0 flex-1">
       <ReactFlow
         key={`${wide ? "wide" : "fit"}:${shown}:${nodes.map((n) => n.id).join("|")}`}
         nodes={nodes}
         edges={edges}
         nodeTypes={nodeTypes}
         fitView={!wide}
-        fitViewOptions={fill ? { padding: 0.08, minZoom: 0.15, maxZoom: 1.3 } : { padding: 0.12, minZoom: 0.8, maxZoom: 1 }}
+        fitViewOptions={fill ? { padding: 0.08, minZoom: READABLE, maxZoom: 1.3 } : { padding: 0.12, minZoom: 0.8, maxZoom: 1 }}
         defaultViewport={wide ? { x: 24, y: 40, zoom: 0.9 } : undefined}
         minZoom={fill ? 0.15 : 0.5}
         maxZoom={1.5}
@@ -237,6 +237,7 @@ export function RunGraph({
         <Background gap={20} color="var(--border)" />
         <Controls showInteractive={false} position="bottom-right" />
       </ReactFlow>
+      </div>
     </div>
   );
 }

@@ -10,7 +10,10 @@ export interface FieldSpec {
   /** A select's empty choice, such as "Keep"; without it the first option is chosen. */
   blank?: string;
   required?: boolean;
+  /** Shown inside an empty text field, as an example value. */
   hint?: string;
+  /** A sentence below the field about what it does. */
+  help?: string;
   initial?: string;
 }
 
@@ -50,7 +53,8 @@ export function FormAction<TResult>({
       fields={
         <div className="grid gap-3">
           {fields.map((f) => (
-            <Field key={f.name} label={f.label + (f.required ? "" : " (optional)")}>
+            // A select without an empty choice always has a value, so it is never called optional.
+            <Field key={f.name} label={f.label + (f.required || (f.kind === "select" && !f.blank) ? "" : " (optional)")}>
               {f.kind === "select" ? (
                 <select value={values[f.name]} onChange={(e) => setValues({ ...values, [f.name]: e.target.value })} className={inputClass}>
                   {f.blank ? <option value="">{f.blank}</option> : null}
@@ -72,6 +76,7 @@ export function FormAction<TResult>({
                   className={inputClass}
                 />
               )}
+              {f.help ? <span className="text-xs font-normal text-muted">{f.help}</span> : null}
             </Field>
           ))}
         </div>

@@ -1,4 +1,5 @@
 import { createColumnHelper } from "@tanstack/react-table";
+import { When } from "@/components/when";
 import * as React from "react";
 import { Notice } from "@/components/common";
 import { ActionButton } from "@/components/action-button";
@@ -7,19 +8,16 @@ import { FormAction } from "@/components/form-action";
 import { StatusBadge } from "@/components/status";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
-import { useTimezone } from "@/hooks";
-import { formatTime } from "@/lib/format";
 import type { TokenRow } from "@/lib/types";
 import { done, ListState, ROLES, useAdminList } from "./shared";
 
 const columns = createColumnHelper<TokenRow>();
 
 export function TokensTab() {
-  const tz = useTimezone();
   const list = useAdminList<{ tokens: TokenRow[] }>("/api/v1/tokens");
   const [created, setCreated] = React.useState<string | null>(null);
   const [copied, setCopied] = React.useState(false);
-  const when = (value: string | null, none: string) => (value ? <span className="num whitespace-nowrap">{formatTime(value, tz)}</span> : none);
+  const when = (value: string | null, none: string) => <When iso={value} empty={none} />;
   return (
     <div className="grid gap-5">
       <ListState query={list} what="tokens" />

@@ -1,19 +1,21 @@
 import { useQuery } from "@tanstack/react-query";
-import { ChevronDown, ChevronRight, Copy, Download, LifeBuoy } from "lucide-react";
+import { ChevronDown, ChevronRight, CircleX, Copy, Download, LifeBuoy } from "lucide-react";
 import * as React from "react";
 import { Link } from "react-router-dom";
 import { Fact, FactList, Loading, Notice } from "@/components/common";
-import { DropdownContent, DropdownItem, DropdownMenu, DropdownTrigger } from "@/components/dropdown";
+import { DropdownContent, DropdownItem, DropdownLabel, DropdownMenu, DropdownSeparator, DropdownTrigger } from "@/components/dropdown";
 import { ActionButton } from "@/components/action-button";
 import { AttemptDetails } from "@/components/attempt-details";
 import { useToast } from "@/components/toast";
-import { ScopeControls } from "@/components/scope-controls";
-import { StatusBadge } from "@/components/status";
+import { DANGER, EFFECT, label as actionLabel, ScopeControls } from "@/components/scope-controls";
+import { isFailure, slaVerdict, StatusBadge, taskStatus } from "@/components/status";
 import { Button } from "@/components/ui/button";
 import { Table, Td, Th } from "@/components/ui/table";
-import { useCanRun, useTimezone } from "@/hooks";
+import { useCanRun } from "@/hooks";
 import { getJson, project } from "@/lib/api";
-import { formatDuration, formatTime } from "@/lib/format";
+import { formatDuration } from "@/lib/format";
+import { handlerLabel, runConditionLabel, words } from "@/lib/labels";
+import { When } from "@/components/when";
 import { attemptPath, itemsPath, taskPath } from "@/lib/routes";
 import type { Capabilities, ControlView, Explanation, Graph, RunView, Steps, TaskHistory } from "@/lib/types";
 
@@ -30,8 +32,7 @@ function Why({ code, pipeline, runId, task }: { code: string; pipeline: string; 
     <section className="grid gap-2" aria-label="Why this task is in this state">
       <h3 className="m-0 text-sm font-semibold">Dependencies</h3>
       <p className="m-0 text-[13px] text-muted">
-        Runs when {condition.toLowerCase()}
-        {required ? ` (${required} required)` : ""}.{retry ? ` Retry at ${retry}.` : ""}
+        Runs when {runConditionLabel(condition, required)}.{retry ? <> Retry at <When iso={retry} />.</> : ""}
       </p>
       <ul className="m-0 grid list-none gap-1 p-0 text-[13px]">
         {dependencies.map((d) => (
@@ -69,7 +70,8 @@ function TaskDetails({ code, pipeline, runId, task, handler }: { code: string; p
       {history.isPending ? <Loading what="task" /> : null}
       {history.isError ? <Notice>{(history.error as Error).message}</Notice> : null}
       {history.isSuccess && !run ? <p className="m-0 text-muted">This task has not started under this run.</p> : null}
-      {run?.error_message ? <Notice mono>{run.error_message}</Notice> : null}
+      {/* The message is shown once: on the attempt that recorded it, or here when no attempt did. */}
+      {run?.error_message && !run.attempts.some((a) => a.error_message === run.error_message) ? <Notice mono>{run.error_message}</Notice> : null}
       <ScopeControls code={code} pipeline={pipeline} runId={runId} task={task} />
       {run && run.status !== "SUCCESS" ? <Why code={code} pipeline={pipeline} runId={runId} task={task} /> : null}
       {run && run.attempts.length === 0 ? (
@@ -87,35 +89,88 @@ function TaskDetails({ code, pipeline, runId, task, handler }: { code: string; p
   );
 }
 
-/** The run's key and logs, as the API streams them, and, while it runs, fencing of expired owners: one menu, not a row of buttons. */
-function RunTools({ code, run, canRun }: { code: string; run: RunView; canRun: boolean }) {
-  const query = `pipeline_code=${encodeURIComponent(run.pipeline_code)}&run_id=${run.pipeline_run_id}`;
+/**
+ * Everything else that can be done to the run, in one menu beside its one primary action: each control says what
+ * it does, the run's key and logs are at the bottom, and controls that are not possible now say why.
+ */
+function RunActions({ code, run, canRun }: { code: string; run: RunView; canRun: boolean }) {
   const toast = useToast();
-  const file = (path: string, name: string, label: string) => (
+  const [chosen, setChosen] = React.useState<string | null>(null);
+  const caps = useQuery({
+    queryKey: ["capabilities", code, run.pipeline_code, run.pipeline_run_id, ""],
+    queryFn: () => getJson<Capabilities>(`${project(code)}/capabilities`, { pipeline_code: run.pipeline_code, run_id: run.pipeline_run_id }),
+    enabled: canRun,
+  });
+  const query = `pipeline_code=${encodeURIComponent(run.pipeline_code)}&run_id=${run.pipeline_run_id}`;
+  const scope = `run ${run.pipeline_run_id}`;
+  // Recover is the primary button beside this menu, so it is not repeated here.
+  const actions = (caps.data?.actions ?? []).filter((a) => a.action !== "RECOVER");
+  const open = actions.filter((a) => a.available);
+  const blocked = actions.filter((a) => !a.available);
+  const reconcile = canRun && !run.end_date;
+  const item = (id: string, title: string, line: string, danger = false) => (
+    <DropdownItem key={id} onSelect={() => setChosen(id)} className="grid gap-0.5">
+      <span className={danger ? "font-medium text-bad" : "font-medium"}>{title}</span>
+      <span className="max-w-72 text-xs text-muted">{line}</span>
+    </DropdownItem>
+  );
+  const file = (path: string, name: string, text: string) => (
     <DropdownItem asChild>
       <a href={`${project(code)}${path}?${query}`} download={name}>
-        <Download className="size-4" aria-hidden /> {label}
+        <Download className="size-4" aria-hidden /> {text}
       </a>
     </DropdownItem>
   );
   return (
-    <div className="flex flex-wrap items-center gap-2">
+    <>
       <DropdownMenu>
         <DropdownTrigger asChild>
-          <Button size="sm" variant="outline" aria-label="Run key and logs">
-            Logs and key
+          <Button variant="outline" aria-label="Run actions, logs and key">
+            Actions
             <ChevronDown className="size-3.5" aria-hidden />
           </Button>
         </DropdownTrigger>
-        <DropdownContent align="end">
+        <DropdownContent align="end" className="w-80">
+          {canRun ? (
+            <>
+              {open.map((a) => item(a.action, actionLabel(a.action), EFFECT[a.action] ?? "", DANGER.has(a.action)))}
+              {reconcile ? item("RECONCILE", "Reconcile", "Records attempts whose owner stopped renewing its lease as lost, so their tasks can be retried.") : null}
+              {open.length || reconcile ? <DropdownSeparator /> : null}
+            </>
+          ) : null}
           <DropdownItem onSelect={() => void navigator.clipboard.writeText(run.run_key).then(() => toast("Run key copied."))}>
             <Copy className="size-4" aria-hidden /> Copy run key
           </DropdownItem>
           {file("/run-log", `run-${run.pipeline_run_id}.log`, "Download run log")}
           {file("/run-zip", `run-${run.pipeline_run_id}-logs.zip`, "Download logs (zip)")}
+          {canRun && blocked.length ? (
+            <>
+              <DropdownSeparator />
+              <DropdownLabel>Not available now</DropdownLabel>
+              {blocked.map((a) => (
+                <DropdownItem key={a.action} disabled className="grid gap-0.5 data-[disabled]:cursor-default">
+                  <span className="font-medium text-muted">{actionLabel(a.action)}</span>
+                  <span className="max-w-72 text-xs text-muted">{a.reason}</span>
+                </DropdownItem>
+              ))}
+            </>
+          ) : null}
         </DropdownContent>
       </DropdownMenu>
-      {canRun && !run.end_date ? (
+      {open.map((a) => (
+        <ActionButton<ControlView>
+          key={a.action}
+          code={code}
+          label={actionLabel(a.action)}
+          title={`${actionLabel(a.action)} ${scope}`}
+          effect={`${EFFECT[a.action] ?? ""} ${a.preserves_successful_work ? "Work that already succeeded is kept." : "Work that already succeeded may be replaced."}`.trim()}
+          endpoint="/controls"
+          body={(reason) => ({ pipeline_code: run.pipeline_code, run_id: run.pipeline_run_id, action: a.action, reason })}
+          describe={(r) => `${actionLabel(a.action)} requested: control #${r.control_id}. ${r.message}`}
+          menu={{ open: chosen === a.action, setOpen: (on) => setChosen(on ? a.action : null) }}
+        />
+      ))}
+      {reconcile ? (
         <ActionButton<{ message: string }>
           code={code}
           label="Reconcile"
@@ -124,10 +179,10 @@ function RunTools({ code, run, canRun }: { code: string; run: RunView; canRun: b
           endpoint="/reconciliations"
           body={(reason) => ({ pipeline_code: run.pipeline_code, reason })}
           describe={(r) => r.message}
-          size="sm"
+          menu={{ open: chosen === "RECONCILE", setOpen: (on) => setChosen(on ? "RECONCILE" : null) }}
         />
       ) : null}
-    </div>
+    </>
   );
 }
 
@@ -162,12 +217,53 @@ function RecoverRun({ code, run, canRun }: { code: string; run: RunView; canRun:
   );
 }
 
+/** The first line of the message a failed task recorded, read with the request its row makes when opened. */
+function FirstError({ code, pipeline, runId, task }: { code: string; pipeline: string; runId: number; task: string }) {
+  const history = useQuery({
+    queryKey: ["task-history", code, pipeline, runId, task],
+    queryFn: () => getJson<TaskHistory>(`${project(code)}/history`, { pipeline_code: pipeline, run_id: runId, task_code: task }),
+  });
+  const entry = history.data?.entries[0];
+  const message = entry?.error_message ?? [...(entry?.attempts ?? [])].reverse().find((a) => a.error_message)?.error_message;
+  if (!message) return null;
+  return <p className="m-0 line-clamp-2 break-words font-mono text-xs text-fg">{message.split("\n")[0]}</p>;
+}
+
+/**
+ * A failed run leads with its failure: which tasks failed, the first one's message, and a button that opens each
+ * in the list below, so the cause is read before the run's details.
+ */
+function FailedTasks({ code, pipeline, runId, steps, open }: { code: string; pipeline: string; runId: number; steps: Steps["steps"]; open: (task: string) => void }) {
+  const failed = steps.filter((step) => isFailure(step.status));
+  if (failed.length === 0) return null;
+  const skipped = steps.filter((step) => step.status === "SKIPPED").length;
+  return (
+    <section aria-label="Failed tasks" className="grid gap-1.5 rounded-md border border-bad/40 bg-bad-bg px-3 py-2.5 text-[13px] text-bad">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+        <CircleX aria-hidden className="size-4 shrink-0" />
+        <span className="font-semibold">
+          {failed.length} task{failed.length === 1 ? "" : "s"} failed:
+        </span>
+        {failed.map((step, i) => (
+          <React.Fragment key={step.task_code}>
+            {i > 0 ? <span aria-hidden>,</span> : null}
+            <button type="button" onClick={() => open(step.task_code)} className="cursor-pointer font-mono font-medium underline underline-offset-2 hover:no-underline">
+              {step.task_code}
+            </button>
+          </React.Fragment>
+        ))}
+        {skipped ? <span className="text-fg">· {skipped} skipped</span> : null}
+      </div>
+      <FirstError code={code} pipeline={pipeline} runId={runId} task={failed[0]!.task_code} />
+    </section>
+  );
+}
+
 /**
  * The selected run: its state, identifier, times and controls, and one task table whose rows open in place
  * to the task's attempts, evidence and log. The task open is the address's, so a grid cell can open it.
  */
 export function RunOverview({ code, pipeline, runId, task, onTask }: { code: string; pipeline: string; runId: number; task: string | null; onTask: (task: string | null) => void }) {
-  const tz = useTimezone();
   const toast = useToast();
   const canRun = useCanRun(code);
   const panel = React.useRef<HTMLDivElement>(null);
@@ -205,12 +301,12 @@ export function RunOverview({ code, pipeline, runId, task, onTask }: { code: str
     <div className="grid gap-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2">
-          <StatusBadge status={r.status} />
+          <StatusBadge status={r.status} className="px-2 py-0.5 text-sm" />
           <span className="num text-muted">#{r.pipeline_run_id}</span>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <RunTools code={code} run={r} canRun={canRun} />
           <RecoverRun code={code} run={r} canRun={canRun} />
+          <RunActions code={code} run={r} canRun={canRun} />
         </div>
       </div>
       {r.run_label ? (
@@ -221,16 +317,16 @@ export function RunOverview({ code, pipeline, runId, task, onTask }: { code: str
           </Button>
         </p>
       ) : null}
+      <FailedTasks code={code} pipeline={pipeline} runId={runId} steps={ordered} open={(name) => onTask(name)} />
       <FactList inline>
-        <Fact inline label="Started">{formatTime(r.start_date, tz)}</Fact>
-        <Fact inline label="Ended">{formatTime(r.end_date, tz)}</Fact>
+        <Fact inline label="Started"><When iso={r.start_date} /></Fact>
+        <Fact inline label="Ended"><When iso={r.end_date} empty="Not yet" /></Fact>
         <Fact inline label="Duration">{formatDuration(r.start_date, r.end_date)}</Fact>
         <Fact inline label="Logical date">{r.run_date ?? "—"}</Fact>
-        <Fact inline label="Trigger">{r.trigger_kind.toLowerCase()}</Fact>
+        <Fact inline label="Trigger">{words(r.trigger_kind).toLowerCase()}</Fact>
         <Fact inline label="Started by">{r.started_by ?? "—"}</Fact>
-        {r.sla_status ? <Fact inline label="SLA">{r.sla_status}</Fact> : null}
+        {slaVerdict(r) ? <Fact inline label="SLA"><StatusBadge status={slaVerdict(r)!} /></Fact> : null}
       </FactList>
-      <ScopeControls code={code} pipeline={pipeline} runId={runId} elsewhere={["RECOVER"]} />
       <div data-card className="overflow-hidden rounded-sm border border-border">
         <Table aria-label="Task list">
           <thead>
@@ -262,10 +358,10 @@ export function RunOverview({ code, pipeline, runId, task, onTask }: { code: str
                       </button>
                     </Td>
                     <Td>
-                      <StatusBadge status={step.status ?? "QUEUED"} />
+                      <StatusBadge quiet status={taskStatus(step.status, r)} />
                     </Td>
-                    <Td>{step.handler}</Td>
-                    <Td className="text-muted">{step.run_condition ? step.run_condition.toLowerCase() : "all upstream succeed"}</Td>
+                    <Td>{handlerLabel(step.handler)}</Td>
+                    <Td className="text-muted">{runConditionLabel(step.run_condition)}</Td>
                   </tr>
                   {isOpen ? (
                     <tr>

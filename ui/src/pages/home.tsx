@@ -1,4 +1,6 @@
 import { useQueries } from "@tanstack/react-query";
+import { words } from "@/lib/labels";
+import { When } from "@/components/when";
 import { CircleCheck, CircleX, Clock, Hourglass, LoaderCircle, type LucideIcon } from "lucide-react";
 import { Link, Navigate } from "react-router-dom";
 import { Eyebrow, Fact, FactList, Loading, Notice, PageHeader } from "@/components/common";
@@ -50,7 +52,7 @@ function ProjectCard({ p, failures, since }: { p: ProjectCounts; failures: Histo
           </Link>
           <EnvironmentBadge env={{ type: p.environment_type, name: p.environment_name }} />
         </div>
-        <span className="text-xs text-muted">{p.governance}</span>
+        <span className="text-xs text-muted">{words(p.governance)} governance</span>
       </CardHeader>
       <FactList className="gap-4 p-4 sm:grid-cols-4 lg:grid-cols-4">
         <Metric label="Failed" value={p.failed} icon={CircleX} tone="text-bad" />
@@ -77,7 +79,7 @@ function ProjectCard({ p, failures, since }: { p: ProjectCounts; failures: Histo
                 </Link>
               </li>
             ))}
-            {failures.length === 0 ? <li className="px-2 py-1.5 text-muted">Failures since {formatTime(since, tz)} are in the runs list.</li> : null}
+            {failures.length === 0 ? <li className="px-2 py-1.5 text-muted">Failures since <When iso={since} /> are in the runs list.</li> : null}
           </ul>
         </div>
       ) : (
