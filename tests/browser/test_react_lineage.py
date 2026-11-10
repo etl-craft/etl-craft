@@ -189,8 +189,9 @@ def test_all_tables_lists_every_table_and_filters_by_name(chain):
         expect(table.get_by_role("link", name="mart.daily")).to_be_visible()
         # a table's page leads with how fresh and how checked it is
         table.get_by_role("link", name="mart.daily").click()
-        expect(page.get_by_text("Last written")).to_be_visible()
-        expect(page.get_by_text("Open gaps")).to_be_visible()
+        summary = page.locator("dl").filter(has=page.get_by_text("Open gaps", exact=True))
+        expect(summary.get_by_text("Last written", exact=True)).to_be_visible()
+        expect(summary.get_by_text("Open gaps", exact=True)).to_be_visible()
         page.get_by_role("tab", name="Object lineage", exact=True).click()
         page.get_by_role("button", name="List", exact=True).click()
         expect(
