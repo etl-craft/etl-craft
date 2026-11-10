@@ -117,6 +117,14 @@ columns, each cell a task run's status and duration that opens that task in its 
 the whole pipeline for the controller, optionally for a run date. The details panel shows the schedule, refresh type, SLA, tags, upstream pipelines
 and paused tasks. **Pause** and **Resume** act on automatic runs of this pipeline only.
 
+The pipeline grid has two dividers: one resizes task names and one resizes the grid pane
+beside the details panel. Task names stop widening at the longest complete name. They use
+space occupied by older runs first; the grid divider moves outward only when the latest run
+would otherwise be hidden. Narrowing names moves the grid divider inward only while the two
+are at that minimum boundary. Narrowing the grid pane squeezes names as needed to preserve
+the latest run. Drag either divider or focus it and use Left/Right. On the task-name divider,
+Home narrows names, and End or double-click fits the longest name, subject to the page's space.
+
 A run's page draws its tasks as a graph coloured by status, with the same tasks in a table;
 the **Timeline** view puts each attempt on one time axis, its wait to start apart from its run.
 Select a task in the graph or the table to open its panel (status, rows, rejects, attempts and

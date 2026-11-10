@@ -6,6 +6,9 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+- The pipeline grid has independent dividers for task names and the grid pane. Task names expand
+  only to the longest name; the grid divider moves with them only when needed to keep the latest
+  run visible. Both dividers work with the mouse and keyboard.
 - Home summaries, dashboard windows, time-labelled run grids and session warnings follow the
   account's Time display and timezone settings. Search names task handlers in words, and System
   health shows the schema number with the migration filename available on hover.

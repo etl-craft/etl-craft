@@ -11,7 +11,7 @@ import { AuditTab, CalendarTab, DetailsTab, OverviewTab, TasksTab } from "@/comp
 import { StatusBadge, taskStatus } from "@/components/status";
 import { PauseState } from "@/components/pipeline-parts";
 import { RunGraph } from "@/components/run-graph";
-import { DEFAULT_RUNS, RunGrid } from "@/components/run-grid";
+import { DEFAULT_RUNS, GRID_COLUMNS, MIN_TASKS, RunGrid } from "@/components/run-grid";
 import { RunOverview } from "@/components/run-overview";
 import { RunsPanel } from "@/components/runs-panel";
 import { useRuns } from "@/components/runs-table";
@@ -218,10 +218,11 @@ export function PipelineDetail() {
       ) : null}
       <SplitPane
         id="pipeline"
+        minimumLeft={view === "grid" ? MIN_TASKS + 6 + GRID_COLUMNS[byTime ? "time" : "id"].minimum : 0}
         // On a narrow screen the selected run's details come before the grid of every run.
         narrowFirst={tab === "run" ? "right" : "left"}
         className="lg:min-h-0 lg:flex-1"
-        left={
+        left={(pane) => (
         <Card className="flex min-h-0 flex-1 flex-col overflow-hidden">
           <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5 border-b border-border px-3 py-2">
             <div role="group" aria-label="Run view" className="inline-flex rounded-md border border-border p-0.5 text-sm">
@@ -279,7 +280,7 @@ export function PipelineDetail() {
             {!graph.isSuccess ? (
               graph.isError ? <Notice className="m-3">{(graph.error as Error).message}</Notice> : <Loading what="tasks" className="p-3" />
             ) : view === "grid" ? (
-              <RunGrid code={code} pipeline={pipeline} graph={graph.data} runs={gridRuns} extra={outside && extraRun.data?.pipeline_code === pipeline ? extraRun.data : undefined} selected={selected} onSelect={select} bars={!hideBars} labels={byTime ? "time" : "id"} />
+              <RunGrid code={code} pipeline={pipeline} graph={graph.data} runs={gridRuns} extra={outside && extraRun.data?.pipeline_code === pipeline ? extraRun.data : undefined} selected={selected} onSelect={select} bars={!hideBars} labels={byTime ? "time" : "id"} pane={pane} />
             ) : (
               <div className="absolute inset-0 flex flex-col">
               {selectedRun ? (
@@ -306,7 +307,7 @@ export function PipelineDetail() {
             )}
           </div>
         </Card>
-        }
+        )}
         right={
         <Card className="flex min-h-0 flex-1 flex-col overflow-hidden">
           <div className="px-3">

@@ -12,15 +12,16 @@ import { cn } from "@/lib/utils";
 
 /** How many of the newest runs the grid shows unless asked for more. */
 export const DEFAULT_RUNS = 25;
-const MIN_TASKS = 96;
-const MIN_MATRIX = 60;
+export const MIN_TASKS = 96;
+export const GRID_COLUMNS = { id: { width: 24, minimum: 60 }, time: { width: 176, minimum: 178 } };
 
 /**
  * Every task against the pipeline's recent runs, newest on the right, like the duration bars above it: one glance shows where and when a task
  * started failing. A column header selects a run; a cell selects the run and opens that task in it.
  */
-export function RunGrid({ code, pipeline, graph, runs, extra, selected, onSelect, bars = true, labels = "id" }: { code: string; pipeline: string; graph: Graph; runs: RunView[]; extra?: RunView; selected?: number; onSelect: (runId: number, task?: string) => void; bars?: boolean; labels?: "id" | "time" }) {
-  const cell = labels === "time" ? 176 : 24;
+export function RunGrid({ code, pipeline, graph, runs, extra, selected, onSelect, bars = true, labels = "id", pane }: { code: string; pipeline: string; graph: Graph; runs: RunView[]; extra?: RunView; selected?: number; onSelect: (runId: number, task?: string) => void; bars?: boolean; labels?: "id" | "time"; pane?: { maximum: number; resize: (width: number) => void } }) {
+  const cell = GRID_COLUMNS[labels].width;
+  const reserve = GRID_COLUMNS[labels].minimum;
   const tasks = graph.waves.flat();
   const latest = runs;
   const newest = latest[0]?.pipeline_run_id;
@@ -31,28 +32,36 @@ export function RunGrid({ code, pipeline, graph, runs, extra, selected, onSelect
   const outer = React.useRef<HTMLDivElement>(null);
   const hasRuns = shown.length > 0;
   // The task column is as wide as the longest task code, up to this much of the pane: it gives way only so far.
-  const [pane, setPane] = React.useState(0);
+  const [room, setRoom] = React.useState(0);
   React.useLayoutEffect(() => {
     const element = outer.current;
     if (!element) return;
-    const measure = () => setPane(Math.max(0, element.clientWidth - 6));
+    const measure = () => setRoom(Math.max(0, element.clientWidth - 6));
     measure();
     const watch = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(measure);
     watch?.observe(element);
     return () => watch?.disconnect();
   }, [hasRuns]);
-  // The task list and the matrix are one object: the divider between them moves both, and narrowing the pane narrows both, so each shows part of itself.
-  const widest = Math.max(...tasks.map((t) => t.length), 4);
-  const [share, setShare] = React.useState<number | null>(null);
-  const natural = Math.round(widest * 7.4 + 28);
-  const matrixWanted = shown.length * cell;
-  const autoTasks = Math.round(Math.min(Math.max(natural, 128), Math.max(128, pane * 0.45)));
-  // With room to spare the task list takes it, so the last run sits against the pane's edge.
-  // The task list is as wide as its names need and the runs start right after it, newest at its end: a status sits
-  // next to its task's name instead of across the pane, and the spare room is left at the far edge.
-  const taskWidth = share === null ? autoTasks : Math.round(Math.min(Math.max(share * pane, MIN_TASKS), Math.max(MIN_TASKS, pane - MIN_MATRIX)));
-  const matrixWidth = Math.max(0, Math.min(pane - taskWidth, matrixWanted + 2));
   const head = React.useRef<HTMLDivElement>(null);
+  const [natural, setNatural] = React.useState(128);
+  React.useLayoutEffect(() => {
+    const measure = () => setNatural(Math.max(128, ...Array.from(head.current?.querySelectorAll("tbody th span") ?? [], (name) => Math.ceil(name.getBoundingClientRect().width) + 24)));
+    measure();
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(measure);
+    head.current?.querySelectorAll("tbody th span").forEach((name) => observer?.observe(name));
+    return () => observer?.disconnect();
+  }, [graph, hasRuns]);
+  const [wanted, setWanted] = React.useState<number | null>(null);
+  const maximum = Math.max(MIN_TASKS, Math.min(natural, (pane?.maximum || room + 6) - 6 - reserve));
+  const taskWidth = Math.max(MIN_TASKS, Math.min(wanted ?? Math.min(natural, Math.max(128, room * 0.45)), natural, room - reserve));
+  const matrixWidth = Math.max(0, Math.min(room - taskWidth, shown.length * cell + 2));
+  const resizeTasks = (next: number) => {
+    const width = Math.max(MIN_TASKS, Math.min(maximum, next));
+    if (width > taskWidth && width + reserve > room) pane?.resize(width + 6 + reserve);
+    else if (width < taskWidth && room <= taskWidth + reserve + 1) pane?.resize(room + 6 + width - taskWidth);
+    setWanted(width);
+  };
+  const start = React.useRef<{ x: number; width: number } | null>(null);
   const [bar, setBar] = React.useState(0);
   // A run chosen from elsewhere is brought into view.
   React.useEffect(() => {
@@ -83,18 +92,6 @@ export function RunGrid({ code, pipeline, graph, runs, extra, selected, onSelect
       setBar(box.current.offsetHeight - box.current.clientHeight);
     }
   };
-  const drag = (event: React.PointerEvent) => {
-    event.preventDefault();
-    const from = event.clientX;
-    const start = taskWidth;
-    const move = (e: PointerEvent) => setShare((start + e.clientX - from) / Math.max(1, pane));
-    const stop = () => {
-      window.removeEventListener("pointermove", move);
-      window.removeEventListener("pointerup", stop);
-    };
-    window.addEventListener("pointermove", move);
-    window.addEventListener("pointerup", stop);
-  };
   const tall = bars ? "h-20" : "h-0";
   const open = (run: RunView) => (event: React.MouseEvent) => {
     event.preventDefault();
@@ -123,7 +120,7 @@ export function RunGrid({ code, pipeline, graph, runs, extra, selected, onSelect
                 {tasks.map((task) => (
                   <tr key={task}>
                     <th scope="row" className="h-7 truncate border-t border-border bg-surface px-3 py-0 text-left font-medium" title={task}>
-                      {task}
+                      <span className="inline-block">{task}</span>
                     </th>
                   </tr>
                 ))}
@@ -135,15 +132,29 @@ export function RunGrid({ code, pipeline, graph, runs, extra, selected, onSelect
           role="separator"
           tabIndex={0}
           aria-orientation="vertical"
-          aria-label="Resize the task list and the runs"
+          aria-label="Resize task names"
+          aria-valuemin={MIN_TASKS}
+          aria-valuemax={Math.round(maximum)}
           aria-valuenow={Math.round(taskWidth)}
+          aria-valuetext={`${Math.round(taskWidth)} pixels`}
           className="group relative w-1.5 shrink-0 cursor-col-resize touch-none outline-none"
-          onPointerDown={drag}
-          onDoubleClick={() => setShare(null)}
+          onPointerDown={(event) => {
+            event.preventDefault();
+            start.current = { x: event.clientX, width: taskWidth };
+            event.currentTarget.setPointerCapture(event.pointerId);
+          }}
+          onPointerMove={(event) => {
+            if (start.current && event.currentTarget.hasPointerCapture(event.pointerId)) resizeTasks(start.current.width + event.clientX - start.current.x);
+          }}
+          onLostPointerCapture={() => { start.current = null; }}
+          onDoubleClick={() => resizeTasks(natural)}
           onKeyDown={(event) => {
             if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
               event.preventDefault();
-              setShare((taskWidth + (event.key === "ArrowRight" ? 16 : -16)) / Math.max(1, pane));
+              resizeTasks(taskWidth + (event.key === "ArrowRight" ? 16 : -16));
+            } else if (event.key === "Home" || event.key === "End") {
+              event.preventDefault();
+              resizeTasks(event.key === "Home" ? MIN_TASKS : natural);
             }
           }}
         >
