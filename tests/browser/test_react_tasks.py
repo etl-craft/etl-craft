@@ -210,3 +210,22 @@ def test_a_skipped_task_names_its_failed_upstream(site):
         ).to_be_visible()
         assert problems == []
         browser.close()
+
+
+def test_attempt_addresses_validate_the_parent_run_label(scene):
+    from urllib.parse import quote
+
+    ctx, url, _, bad, failed = scene
+    label = act(ctx, ActionName.RUN_DETAIL, run_id=bad).run_label
+    with sync_playwright() as pw:
+        browser, page, _ = open_page(pw)
+        sign_in(page, url, "/ui/projects/default/pipelines/ORDERS")
+        suffix = f"/tasks/LOAD/attempts/{failed}"
+        base = url + "/ui/projects/default/runs/ORDERS/"
+        page.goto(base + quote(label, safe="") + suffix, wait_until="domcontentloaded")
+        expect(page.get_by_role("region", name="Attempt 1", exact=True)).to_be_visible()
+        page.goto(base + quote(label.lower(), safe="") + suffix, wait_until="domcontentloaded")
+        expect(page.get_by_role("alert")).to_contain_text("stored label differs")
+        expect(page.get_by_role("alert")).to_contain_text(label)
+        expect(page.get_by_role("region", name="Attempt 1", exact=True)).to_have_count(0)
+        browser.close()

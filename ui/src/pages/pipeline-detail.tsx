@@ -19,8 +19,8 @@ import { Tabs } from "@/components/tabs";
 import { SplitPane } from "@/components/split-pane";
 import { Card } from "@/components/ui/card";
 import { autoStarts } from "@/lib/auto-starts";
-import { useAutoStarts, useCanRun, useProjectInfo } from "@/hooks";
-import { describeCron, formatDuration, runIdOf } from "@/lib/format";
+import { useAutoStarts, useCanRun, useProjectInfo, useRunReference } from "@/hooks";
+import { describeCron, formatDuration } from "@/lib/format";
 import { getJson, project } from "@/lib/api";
 import { pipelinesPath, projectHomePath, taskPath } from "@/lib/routes";
 import { cn } from "@/lib/utils";
@@ -38,7 +38,8 @@ export function PipelineDetail() {
   const byTime = params.get("columns") === "time";
   const flow = params.get("flow") === "lr" ? "LR" : params.get("flow") === "tb" ? "TB" : undefined;
   const asLabel = params.get("run") ?? "";
-  const chosen = runIdOf(asLabel);
+  const addressed = useRunReference(code, asLabel);
+  const chosen = addressed.data?.pipeline_run_id;
   const task = params.get("task");
   const filters = { pool: params.get("pool") ?? "", agent: params.get("agent") ?? "", failure_class: params.get("failure_class") ?? "" };
   const setFilter = (key: string, value: string) => {
@@ -127,6 +128,8 @@ export function PipelineDetail() {
   const [then, setThen] = React.useState("wait");
   const p = found.data;
 
+  if (asLabel && addressed.isError) return <Notice>{(addressed.error as Error).message}</Notice>;
+  if (asLabel && addressed.isPending) return <Loading what="the selected run" />;
   if (found.isError) return <Notice>{(found.error as Error).message}</Notice>;
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-2">
@@ -214,11 +217,6 @@ export function PipelineDetail() {
           <Loading what="pipeline" />
         )}
       </PageHeader>
-      {!/^\d*$/.test(asLabel) && selectedRun?.run_label && selectedRun.run_label !== asLabel ? (
-        <Notice className="mx-3 my-2">
-          The address names run {asLabel}, but run {selectedRun.pipeline_run_id} is {selectedRun.run_label}; the label in the address is stale or mistyped.
-        </Notice>
-      ) : null}
       <SplitPane
         id="pipeline"
         minimumLeft={view === "grid" ? MIN_TASKS + 6 + GRID_COLUMNS[byTime ? "time" : "id"].minimum : 0}

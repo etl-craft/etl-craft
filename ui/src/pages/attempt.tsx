@@ -3,7 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { AttemptDetails } from "@/components/attempt-details";
 import { Breadcrumbs, Loading, Notice, PageHeader } from "@/components/common";
 import { Card } from "@/components/ui/card";
-import { useProjectInfo } from "@/hooks";
+import { useProjectInfo, useRunReference } from "@/hooks";
 import { getJson, project } from "@/lib/api";
 import { pipelinePath, pipelinesPath, runPath, taskPath } from "@/lib/routes";
 import type { AttemptView } from "@/lib/types";
@@ -12,6 +12,7 @@ import { useDocumentTitle } from "@/title";
 export function Attempt() {
   const { project: code = "", pipeline = "", runId = "", task = "", attemptId = "" } = useParams();
   const info = useProjectInfo(code);
+  const addressed = useRunReference(code, runId);
   const live = new Set(["QUEUED", "CLAIMED", "RUNNING"]);
   const found = useQuery({
     queryKey: ["attempt", code, attemptId],
@@ -21,7 +22,9 @@ export function Attempt() {
   useDocumentTitle(`Attempt ${found.data?.attempt_number ?? ""} · ${task} · run ${runId}`, code, info.project && { type: info.project.environment_type, name: info.project.environment_name });
   const a = found.data;
   // Only an attempt of the run in the address is shown; any other pairing is not found, as for runs.
-  const mismatch = a && String(a.pipeline_run_id) !== runId;
+  const mismatch = a && addressed.data && a.pipeline_run_id !== addressed.data.pipeline_run_id;
+  if (addressed.isError) return <Notice>{(addressed.error as Error).message}</Notice>;
+  if (addressed.isPending) return <Loading what="the selected run" />;
   return (
     <div className="grid grid-cols-1 gap-5">
       <Breadcrumbs

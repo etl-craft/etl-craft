@@ -833,3 +833,31 @@ def test_a_refused_enum_value_keeps_the_case_of_the_values_it_lists(api):
     assert response.status_code == 400
     message = response.json()["message"]
     assert "'BOTH', 'UPSTREAM' or 'DOWNSTREAM'" in message
+
+
+def test_api_run_labels_match_exactly_for_paths_queries_and_json(api):
+    ctx, client, creds, run, _ = api
+    auth = headers(creds[ApiRole.ADMIN])
+    label = invoke(ctx, ActionName.RUN_DETAIL, RunId(run_id=run)).run_label
+    assert (
+        client.get(f"/api/v1/projects/default/runs/{label}", headers=auth).json()["pipeline_run_id"]
+        == run
+    )
+    for value in (run, str(run), label):
+        response = client.get(
+            "/api/v1/projects/default/status", params={"run_id": value}, headers=auth
+        )
+        assert response.status_code == 200, response.text
+        assert response.json()["run"]["pipeline_run_id"] == run
+    response = client.post(
+        "/api/v1/projects/default/controls",
+        headers=auth,
+        json={"pipeline_code": "P", "run_id": label, "action": "HOLD", "reason": "exact label"},
+    )
+    assert response.status_code == 200, response.text
+    for wrong in ("WRONG-" + label, label.lower()):
+        response = client.get(
+            "/api/v1/projects/default/status", params={"run_id": wrong}, headers=auth
+        )
+        assert response.status_code == 409, response.text
+        assert label in response.text

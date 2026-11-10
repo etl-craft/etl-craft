@@ -353,3 +353,7 @@ email-binding guidance is help text beside the email field.
 The console's recent requests show completed command outcomes. These do not substitute for run
 status: admission of a run can succeed while the run later fails. API documentation remains at
 `/api/v1/docs` and `/api/v1/openapi.json`.
+
+Run addresses accept the complete stored label as well as an integer. The browser sends the
+full value to the shared operations resolver; a wrong-case or mismatched label displays the
+server's refusal and expected label, without opening controls for the numeric suffix.

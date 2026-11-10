@@ -507,6 +507,7 @@ class StatusListView:
 
 def pipeline_status(ctx: OperationContext, request: RunFilter) -> StatusView | StatusListView:
     """Inspect one selected run, or all current runs carrying every given tag."""
+    assert not isinstance(request.run_id, str), "run reference must be resolved"
     if request.run_id is not None and request.pipeline_code is None:
         from etl_craft.services.operations.permissions import run_pipeline_code
 

@@ -386,3 +386,32 @@ def test_an_active_run_graph_refreshes_task_states_without_the_run_tab(site):
                     page.screenshot(path=f"{shots}/active-graph-{scheme}-{width}.png")
         assert problems == []
         browser.close()
+
+
+def test_run_addresses_validate_the_complete_stored_label(scene):
+    from urllib.parse import quote
+
+    ctx, url, _, bad = scene
+    label = act(ctx, ActionName.RUN_DETAIL, run_id=bad).run_label
+    with sync_playwright() as pw:
+        browser, page, _ = open_page(pw)
+        sign_in(page, url, "/ui/projects/default/pipelines/OPS")
+        page.goto(
+            url + "/ui/projects/default/pipelines/OPS?run=" + quote(label, safe=""),
+            wait_until="domcontentloaded",
+        )
+        expect(page.get_by_label("Run identifier", exact=True)).to_contain_text(label)
+        for value in (label.lower(), "WRONG-" + label):
+            page.goto(url + "/ui/projects/default/pipelines/OPS?run=" + quote(value, safe=""))
+            expect(page.get_by_role("alert")).to_contain_text("stored label differs")
+            expect(page.get_by_role("alert")).to_contain_text(label)
+            expect(page.get_by_role("button", name="Recover run", exact=True)).to_have_count(0)
+        shots = os.environ.get("ETL_CRAFT_UI_SCREENSHOTS")
+        if shots:
+            Path(shots).mkdir(parents=True, exist_ok=True)
+            for theme in ("light", "dark"):
+                page.evaluate("theme => document.documentElement.dataset.theme = theme", theme)
+                for width in (1280, 390):
+                    page.set_viewport_size({"width": width, "height": 900})
+                    page.screenshot(path=f"{shots}/run-label-refusal-{theme}-{width}.png")
+        browser.close()

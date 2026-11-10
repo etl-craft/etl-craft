@@ -102,8 +102,11 @@ def read_selection(path: Path) -> tuple[ControlRequest, ...]:
     for index, row in enumerate(data):
         if not isinstance(row, dict) or set(row) - allowed:
             raise UsageError(f"control selection {path}[{index}]: expected only {sorted(allowed)}")
-        if row.get("run_id") is not None and type(row["run_id"]) is not int:
-            raise UsageError(f"control selection {path}[{index}]: run_id must be a whole number")
+        if row.get("run_id") is not None and type(row["run_id"]) not in (int, str):
+            raise UsageError(
+                f"control selection {path}[{index}]: run_id must be a whole number "
+                "or stored run label"
+            )
         try:
             action = ControlAction(str(row.get("action")))
             requests.append(ControlRequest(**{**row, "action": action}))

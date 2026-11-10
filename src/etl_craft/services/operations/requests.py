@@ -102,16 +102,21 @@ class TagFilter(Request):
 class RunIdentity(Request):
     """Shared exact run identity for read selections and execution requests."""
 
-    run_id: int | None = None
+    run_id: int | str | None = None
     run_key: str | None = None
 
     def __post_init__(self) -> None:
         """Refuse conflicting or malformed identities."""
-        RunSelector(self.run_id, self.run_key)
+        RunSelector(None if isinstance(self.run_id, str) else self.run_id, self.run_key)
+        if isinstance(self.run_id, str):
+            require_text("run_id", self.run_id, limit=512)
+            if self.run_key is not None:
+                raise UsageError("choose `run_id` or `run_key`, not both")
 
     @property
     def selector(self) -> RunSelector:
         """Select the exact run, or the single non-terminal whole-pipeline run."""
+        assert not isinstance(self.run_id, str), "run identity must be resolved before execution"
         return RunSelector(self.run_id, self.run_key)
 
 
@@ -181,11 +186,13 @@ class CapabilitiesInput(RunSelection):
 class RunId(Request):
     """One pipeline run, by id."""
 
-    run_id: int
+    run_id: int | str
 
     def __post_init__(self) -> None:
         """Refuse an id that cannot exist."""
-        if self.run_id < 1:
+        if isinstance(self.run_id, str):
+            require_text("run_id", self.run_id, limit=512)
+        elif self.run_id < 1:
             raise UsageError(f"`run_id` is {self.run_id}; give a positive run id")
 
 

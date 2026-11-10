@@ -264,3 +264,13 @@ grant-filtered running, failed, SLA-miss and queued-task counts; failed/SLA are 
 `POST /api/v1/accounts/unlock` takes name and requires admin. Cookie-authorized changes,
 including sign-in and sign-out, require a CSRF challenge; bearer callers retain their JSON
 protocol. Browser sign-in returns only secure cookies and a same-site redirect, never token JSON.
+
+### Run ID input
+
+A `run_id` in query parameters, JSON bodies or run paths accepts a positive integer or the
+complete stored run label. JSON may send an integer or a string. URL-encode labels in paths
+and query values. The shared operations resolver verifies the full label with case-sensitive
+comparison after project and pipeline visibility checks. A visible mismatch returns
+`RunStateError` (HTTP 409) naming the expected label; a hidden or foreign run remains not found.
+Responses continue to contain numeric IDs. A label is an alternative spelling of an exact
+selection, never a request for the latest run.

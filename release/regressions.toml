@@ -326,3 +326,13 @@ ui-audit-operability = [
     "tests/browser/test_react_pipelines.py::test_the_newest_grid_run_is_next_to_task_names",
     "tests/browser/test_react_tasks.py::test_a_skipped_task_names_its_failed_upstream",
 ]
+
+exact-run-label-selection = [
+    "tests/browser/test_react_tasks.py::test_attempt_addresses_validate_the_parent_run_label",
+    "tests/integration/engine/test_project_isolation.py::test_run_label_cannot_select_another_projects_run",
+    "tests/unit/test_operations.py::test_exact_run_labels_and_integers_share_operation_selection",
+    "tests/unit/test_operations.py::test_mismatched_run_labels_name_the_exact_expected_label",
+    "tests/integration/api/test_api.py::test_api_run_labels_match_exactly_for_paths_queries_and_json",
+    "tests/integration/engine/test_pipeline_permissions.py::test_run_label_refusal_does_not_disclose_hidden_pipeline_labels",
+    "tests/browser/test_react_ui.py::test_run_addresses_validate_the_complete_stored_label",
+]
