@@ -269,6 +269,7 @@ def test_run_is_quiet_by_default_but_honours_explicit_info(capsys, restore_logge
     command = _record(calls)
     command = Command(name="run", help=command.help, configure=command.configure, run=command.run)
     assert main(["run", "--pipeline-code", "P"], commands=[command]) == 0
-    assert calls[-1].log_level == "WARNING"
+    assert calls[-1].log_level == "INFO"  # child attempt logs keep their normal detail
+    assert logging.getLogger("etl_craft").level == logging.WARNING
     assert main(["run", "--pipeline-code", "P", "--log-level", "INFO"], commands=[command]) == 0
     assert calls[-1].log_level == "INFO"

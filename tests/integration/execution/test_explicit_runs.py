@@ -20,14 +20,14 @@ def test_mark_refuses_ambiguous_runs_and_lists_their_identity(cli_project):
         "mark", "--pipeline-code", "P", "--status", "FAILED", "--reason", "repair"
     )
     assert code == 9, output
-    for run_id, key in [(first, "first"), (second, "second")]:
-        assert f"id={run_id} key={key} kind=MANUAL" in output
-    assert "run_date=" in output and "status=IN-PROGRESS" in output
     with project.engine.connect() as conn:
-        assert [r.status for r in runlog.run_candidates(conn, project.pipeline_id)] == [
-            "IN-PROGRESS",
-            "IN-PROGRESS",
-        ]
+        candidates = runlog.run_candidates(conn, project.pipeline_id)
+    assert [run.pipeline_run_id for run in candidates] == [second, first]
+    for run in candidates:
+        assert f"{run.run_label}: IN-PROGRESS; select with --run-id {run.pipeline_run_id}" in output
+        assert run.status == "IN-PROGRESS"
+    assert output.index(candidates[0].run_label) < output.index(candidates[1].run_label)
+    assert "key=first" not in output and "key=second" not in output
 
 
 def test_an_id_from_another_pipeline_is_refused(cli_project):

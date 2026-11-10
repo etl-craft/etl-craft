@@ -398,9 +398,14 @@ def test_legacy_cli_upgrade_reports_unknown_environment_without_prompt(
     with db.engine.connect() as conn:
         assert "environment_type" in db.dialect.column_names(conn, "CFG_PROJECTS")
         assert db.dialect.has_table(conn, "CFG_TEAM_LEGACY") == with_project_migration
-        assert (
-            conn.execute(
-                text("SELECT COUNT(*) FROM AUD_ACTIONS WHERE COMMAND='migrate'")
-            ).scalar_one()
-            == 1
-        )
+        requests = conn.execute(
+            text(
+                "SELECT ACTION_ID AS id, OUTCOME AS outcome, ARGUMENTS AS arguments "
+                "FROM AUD_ACTIONS WHERE COMMAND='migrate' ORDER BY ACTION_ID"
+            )
+        ).all()
+        assert [row.outcome for row in requests] == ["REQUESTED", "SUCCESS"]
+        arguments = requests[-1].arguments
+        if isinstance(arguments, str):
+            arguments = json.loads(arguments)
+        assert arguments["_request_action_id"] == requests[0].id

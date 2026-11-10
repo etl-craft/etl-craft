@@ -58,14 +58,17 @@ def test_status_includes_unrun_tasks_and_transitive_failure_blocks(engine_db):
     event.listen(engine, "before_cursor_execute", record)
     try:
         status = act(ctx, ActionName.STATUS, pipeline_code="P")
-        assert [task.task_code for task in status.tasks] == ["after", "first", "last"]
+        assert [task.task_code for task in status.tasks] == ["first", "after", "last"]
+        tasks = {task.task_code: task for task in status.tasks}
         assert status.blocked_by_failures == ("after", "last")
-        assert status.tasks[1].error == "first line"
-        assert status.tasks[1].attempts == 1
-        assert status.tasks[0].explanation.task is None
+        assert tasks["first"].error == "first line"
+        assert tasks["first"].attempts == 1
+        assert tasks["after"].explanation.task is None
         doc = to_json(status)
         assert doc["run"]["pipeline_run_id"] == run
-        recorded = doc["tasks"][1]["explanation"]["task"]["attempts"][0]
+        recorded = next(task for task in doc["tasks"] if task["task_code"] == "first")[
+            "explanation"
+        ]["task"]["attempts"][0]
         assert recorded["failure_class"] == FailureClass.UNKNOWN
         assert recorded["retry_on"] == RetryOn.TRANSIENT
         assert recorded["retryable"] is False

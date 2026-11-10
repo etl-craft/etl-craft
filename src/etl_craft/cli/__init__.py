@@ -222,8 +222,12 @@ def main(argv: Sequence[str] | None = None, commands: Sequence[Command] = COMMAN
             out.line("")
         parser.print_usage(out.stdout)
         return ExitCode.USAGE
-    args.log_level = args.log_level or ("WARNING" if args.command == "run" else DEFAULT_LOG_LEVEL)
-    log.configure(args.log_level, args.log_format)
+    requested_level = args.log_level
+    args.log_level = requested_level or DEFAULT_LOG_LEVEL
+    console_level = (
+        "WARNING" if args.command == "run" and requested_level is None else args.log_level
+    )
+    log.configure(console_level, args.log_format)
     args.api = args.api or os.environ.get("ETL_CRAFT_API")
     try:
         if args.api or args.command == "agent" or (args.command == "doctor" and args.agent):

@@ -157,7 +157,9 @@ Every etl-craft record in it names the pipeline, task, run and attempt:
 
 `--log-format json` writes the same records as one JSON object per line, with those names as
 fields. Text timestamps are UTC with millisecond precision and a `Z` suffix. `run` shows WARNING and above by default;
-use `--log-level INFO` for progress records or `--log-level DEBUG` for the SQL each action runs.
+use `--log-level INFO` for terminal progress or `--log-level DEBUG` for the SQL each action runs.
+The quiet terminal default retains INFO records in child attempt logs. An explicit log level
+applies to both the terminal and child logs.
 Other commands retain their INFO default.
 
 Agents write to a temporary local file and send ordered UTF-8 chunks through the existing agent

@@ -20,7 +20,8 @@ All notable changes are recorded here. The format follows
   status durations and SLA budgets use readable units, and pipelines includes last/next run times.
   Piped table columns and JSON shapes are preserved. Text audit lists show the newest 100 entries
   in each section; JSON retains the complete result. Help groups commands, suggests typos and
-  lists global options once. `run` logs WARNING and above by default; `--log-level INFO` restores detail.
+  lists global options once. `run` shows WARNING and above in the terminal by default, while
+  child attempt logs retain INFO detail; `--log-level INFO` restores terminal progress.
 - `account add --password-stdin` reads one temporary USER password line from a pipe without
   putting the secret in arguments or audit records. Noninteractive password errors name this remedy.
 
