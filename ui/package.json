@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
+    "build:design": "vite build -c vite.design.config.ts && tsc -p tsconfig.design.json",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src",
     "test": "vitest run"
@@ -46,5 +47,6 @@
   },
   "overrides": {
     "minimatch": "11.0.1"
-  }
+  },
+  "types": "./design-dist/design-system.d.ts"
 }

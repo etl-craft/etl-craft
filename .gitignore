@@ -39,3 +39,8 @@ htmlcov/
 .etl-craft/
 
 .testmondata*
+ui/design-dist/
+ui/.ds-sync/
+ui/ds-bundle/
+ui/.design-sync/.cache/
+ui/.design-sync/node_modules

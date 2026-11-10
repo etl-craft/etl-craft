@@ -1,0 +1,37 @@
+{
+  "projectId": "3d6b5a30-1f9c-4636-863c-f7c5780524d7",
+  "shape": "package",
+  "pkg": "etl-craft-ui",
+  "globalName": "etlCraftUi",
+  "buildCmd": "npm run build:design",
+  "cssEntry": "./design-dist/index.css",
+  "extraFonts": [
+    "node_modules/@fontsource-variable/inter/index.css",
+    "node_modules/@fontsource-variable/jetbrains-mono/index.css"
+  ],
+  "overrides": {
+    "ConfirmDialog": {
+      "cardMode": "single",
+      "primaryStory": "Reason"
+    },
+    "Dialog": {
+      "cardMode": "single",
+      "primaryStory": "Default"
+    },
+    "EnvironmentStrip": {
+      "cardMode": "column"
+    },
+    "PageHeader": {
+      "cardMode": "column"
+    },
+    "SettingRow": {
+      "cardMode": "column"
+    }
+  },
+  "componentSrcMap": {
+    "MemoryRouter": null,
+    "QueryClient": null,
+    "QueryClientProvider": null
+  },
+  "readmeHeader": ".design-sync/conventions.md"
+}

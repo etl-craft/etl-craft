@@ -1,0 +1,6 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": { "noEmit": false, "rootDir": "./src", "emitDeclarationOnly": true, "declaration": true, "outDir": "design-dist", "noUnusedLocals": false },
+  "include": ["src/design-system.ts", "src/components", "src/lib", "src/hooks.ts"],
+  "exclude": ["src/**/*.test.tsx"]
+}
