@@ -6,9 +6,9 @@ import { cn } from "@/lib/utils";
 /** A headline number with a line of context: the form for one value, not a chart. */
 export function KpiTile({ label, value, hint, tone }: { label: string; value: React.ReactNode; hint?: React.ReactNode; tone?: "bad" | "warn" | "ok" }) {
   return (
-    <div data-card className="grid min-w-0 gap-0.5 rounded-sm border border-border bg-surface px-3 py-2.5">
+    <div data-card className="grid min-w-0 gap-0.5 rounded-sm border border-border bg-surface px-5 py-4">
       <span className="truncate text-xs text-muted">{label}</span>
-      <span className={cn("truncate text-2xl font-semibold leading-tight", tone === "bad" && "text-bad", tone === "warn" && "text-warn", tone === "ok" && "text-ok")}>{value}</span>
+      <span className={cn("truncate text-[28px] font-semibold leading-9 tracking-tight", tone === "bad" && "text-bad", tone === "warn" && "text-warn", tone === "ok" && "text-ok")}>{value}</span>
       <span className="truncate text-xs text-muted">{hint ?? " "}</span>
     </div>
   );
@@ -18,11 +18,11 @@ export function KpiTile({ label, value, hint, tone }: { label: string; value: Re
 export function Panel({ title, aside, className, children }: { title: string; aside?: React.ReactNode; className?: string; children: React.ReactNode }) {
   return (
     <section data-card aria-label={title} className={cn("flex min-h-0 min-w-0 flex-col rounded-lg border border-border bg-surface", className)}>
-      <header className="flex shrink-0 items-center justify-between gap-2 border-b border-border px-3 py-2">
+      <header className="flex shrink-0 items-center justify-between gap-2 px-5 pb-1 pt-4">
         <h2 className="m-0 truncate text-sm font-semibold">{title}</h2>
         {aside}
       </header>
-      <div className="flex min-h-0 flex-1 flex-col p-3">{children}</div>
+      <div className="flex min-h-0 flex-1 flex-col px-5 pb-4 pt-2">{children}</div>
     </section>
   );
 }
@@ -47,8 +47,8 @@ export function StackedBars({ days }: { days: DayInsight[] }) {
           </>
         ) : (
           <span className="flex items-center gap-3 text-muted">
-            <span><span aria-hidden className="mr-1 inline-block size-2 rounded-sm bg-ok" />Succeeded</span>
-            <span><span aria-hidden className="mr-1 inline-block size-2 rounded-sm bg-bad" />Failed</span>
+            <span><span aria-hidden className="mr-1 inline-block size-2 rounded-full bg-ok-solid" />Succeeded</span>
+            <span><span aria-hidden className="mr-1 inline-block size-2 rounded-full bg-bad-solid" />Failed</span>
             <span><span aria-hidden className="mr-1 inline-block size-2 rounded-sm bg-idle-bg ring-1 ring-border-strong" />Other</span>
           </span>
         )}
@@ -73,8 +73,8 @@ export function StackedBars({ days }: { days: DayInsight[] }) {
                 <li key={d.day} className="flex h-full min-w-1 max-w-14 flex-1 flex-col justify-end" onPointerEnter={() => setAt(i)} onPointerLeave={() => setAt(null)}>
                   <button type="button" className="flex h-full w-full flex-col justify-end outline-none focus-visible:ring-2 focus-visible:ring-accent" aria-label={`${d.day}: ${d.runs} runs, ${d.succeeded} succeeded, ${d.failed} failed`} onFocus={() => setAt(i)} onBlur={() => setAt(null)}>
                     <span aria-hidden className="block w-full bg-idle-bg" style={{ height: pct(other) }} />
-                    <span aria-hidden className="block w-full border-t-2 border-surface bg-bad" style={{ height: pct(d.failed), borderTopWidth: d.failed ? 2 : 0 }} />
-                    <span aria-hidden className={cn("block w-full rounded-t-sm bg-ok", at === i && "opacity-80")} style={{ height: pct(d.succeeded) }} />
+                    <span aria-hidden className="block w-full border-t-2 border-surface bg-bad-solid" style={{ height: pct(d.failed), borderTopWidth: d.failed ? 2 : 0 }} />
+                    <span aria-hidden className={cn("block w-full rounded-t-sm bg-ok-solid", at === i && "opacity-80")} style={{ height: pct(d.succeeded) }} />
                   </button>
                 </li>
               );
@@ -152,7 +152,7 @@ export interface BarRow {
   tone?: "ok" | "bad" | "accent" | "warn";
 }
 
-const FILL = { ok: "bg-ok", bad: "bg-bad", accent: "bg-accent", warn: "bg-warn" } as const;
+const FILL = { ok: "bg-ok-solid", bad: "bg-bad-solid", accent: "bg-accent", warn: "bg-warn-solid" } as const;
 
 /** Ranked horizontal bars: names on the left where they can be read, the value at the end of each bar. */
 export function HBars({ rows, empty, label }: { rows: BarRow[]; empty: string; label: string }) {

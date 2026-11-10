@@ -64,10 +64,10 @@ export function Table({ className, more, children, ...props }: React.TableHTMLAt
 }
 export const Th = ({ className, ...props }: React.ThHTMLAttributes<HTMLTableCellElement>) => (
   <th
-    className={cn("sticky top-0 z-10 border-b border-border bg-surface-2 px-2.5 py-1.5 text-left text-xs font-medium text-muted", className)}
+    className={cn("sticky top-0 z-10 border-b border-border bg-surface px-3 py-2 text-left text-xs font-medium text-muted", className)}
     {...props}
   />
 );
 export const Td = ({ className, ...props }: React.TdHTMLAttributes<HTMLTableCellElement>) => (
-  <td className={cn("border-b border-border px-2.5 py-1 align-middle", className)} {...props} />
+  <td className={cn("border-b border-border/70 px-3 py-1 align-middle", className)} {...props} />
 );

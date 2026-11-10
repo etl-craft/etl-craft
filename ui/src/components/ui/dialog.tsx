@@ -35,7 +35,7 @@ export function Dialog({
         if (event.target === ref.current) onClose();
       }}
       className={cn(
-        "m-auto w-[min(32rem,calc(100vw-2rem))] rounded-lg border border-border bg-surface p-0 text-fg shadow-xl backdrop:bg-black/50",
+        "m-auto w-[min(32rem,calc(100vw-2rem))] rounded-xl bg-surface p-0 text-fg shadow-pop",
         className,
       )}
     >

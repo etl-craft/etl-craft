@@ -105,7 +105,7 @@ export const SearchBox = React.forwardRef<HTMLInputElement, { code: string }>(fu
           }}
           onFocus={() => setOpen(true)}
           onKeyDown={key}
-          className="h-9 w-full rounded-md border border-border-strong bg-surface px-3 text-sm"
+          className="h-8 w-full rounded-lg border border-transparent bg-surface px-3 text-[13px] shadow-raised"
         />
       </form>
       {open ? (

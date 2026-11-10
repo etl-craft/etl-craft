@@ -46,7 +46,7 @@ export function StatusBadge({ status, label: named, className }: { status: strin
   const { label: own, icon: Icon, tone, spin } = statusMeta(status);
   const label = named ?? own;
   return (
-    <span className={cn("inline-flex items-center gap-1 rounded-sm px-1.5 py-px text-xs font-medium", TONE[tone], className)}>
+    <span className={cn("inline-flex items-center gap-1 rounded-full py-0.5 pl-1.5 pr-2 text-xs font-medium", TONE[tone], className)}>
       <Icon aria-hidden className={cn("size-3.5", spin && "animate-spin")} />
       {label}
     </span>
