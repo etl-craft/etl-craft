@@ -1,8 +1,9 @@
+import { DailyRuns } from "@/components/charts";
 import { RunLabel } from "@/components/run-label";
 import { ArrowUpRight, CircleCheck, Timer } from "lucide-react";
 import * as React from "react";
 import { Link } from "react-router-dom";
-import { Area, AreaChart, Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Area, AreaChart, ResponsiveContainer } from "recharts";
 import { StatusMark } from "@/components/status";
 import { When } from "@/components/when";
 import { formatDuration, formatSeconds, percent, seconds } from "@/lib/format";
@@ -11,7 +12,6 @@ import type { DayInsight, Insights, PipelineInsight, RunView } from "@/lib/types
 import { cn } from "@/lib/utils";
 
 const DAY = 86_400_000;
-const dayLabel = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
 
 /** Every UTC day of the window, so a quiet day is a gap in the chart instead of a missing column. */
 export function everyDay(days: DayInsight[], start: string, end: string): DayInsight[] {
@@ -39,23 +39,9 @@ function TileTitle({ children, aside }: { children: React.ReactNode; aside?: Rea
   );
 }
 
-function Readout({ active, payload, label }: { active?: boolean; payload?: { payload: DayInsight }[]; label?: string }) {
-  const day = payload?.[0]?.payload;
-  if (!active || !day) return null;
-  return (
-    <div className="grid gap-1 rounded-lg bg-surface px-3 py-2 text-xs shadow-pop">
-      <span className="font-medium">{dayLabel(label ?? day.day)}</span>
-      <span className="flex items-center gap-2"><i aria-hidden className="size-2 rounded-full bg-ok-solid" />{day.succeeded} succeeded</span>
-      <span className="flex items-center gap-2"><i aria-hidden className="size-2 rounded-full bg-bad-solid" />{day.failed} failed</span>
-      {day.runs - day.succeeded - day.failed > 0 ? <span className="flex items-center gap-2"><i aria-hidden className="size-2 rounded-full bg-idle-solid" />{day.runs - day.succeeded - day.failed} other</span> : null}
-    </div>
-  );
-}
-
 /** What happened in the window, said in one sentence, above the runs of each day. */
 function Headline({ d, days }: { d: Insights; days: DayInsight[] }) {
   const t = d.total;
-  const rows = days.map((day) => ({ ...day, other: day.runs - day.succeeded - day.failed }));
   const sentence = !t.runs ? "No runs yet in this window" : t.failed ? `${t.failed} of ${t.runs} runs failed` : `All ${t.runs} runs succeeded`;
   return (
     <Tile aria-label="Runs per day" className="flex flex-col lg:col-span-2">
@@ -74,19 +60,7 @@ function Headline({ d, days }: { d: Insights; days: DayInsight[] }) {
           <span className="flex items-center gap-1.5"><i aria-hidden className="size-2 rounded-full bg-idle-solid" />Other</span>
         </p>
       </div>
-      <div className="h-64 px-3 pb-3 pt-4">
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={rows} margin={{ top: 4, right: 8, bottom: 0, left: -18 }} barCategoryGap="28%">
-            <CartesianGrid vertical={false} stroke="var(--border)" strokeDasharray="3 4" />
-            <XAxis dataKey="day" tickFormatter={dayLabel} tickLine={false} axisLine={false} tick={{ fill: "var(--muted)", fontSize: 11 }} tickMargin={8} minTickGap={16} />
-            <YAxis allowDecimals={false} tickLine={false} axisLine={false} tick={{ fill: "var(--muted)", fontSize: 11 }} width={44} />
-            <Tooltip cursor={{ fill: "var(--surface-2)" }} content={<Readout />} />
-            <Bar dataKey="succeeded" stackId="runs" fill="var(--ok-solid)" maxBarSize={36} radius={[0, 0, 3, 3]} />
-            <Bar dataKey="failed" stackId="runs" fill="var(--bad-solid)" maxBarSize={36} />
-            <Bar dataKey="other" stackId="runs" fill="var(--idle-solid)" maxBarSize={36} radius={[3, 3, 0, 0]} />
-          </BarChart>
-        </ResponsiveContainer>
-      </div>
+      <DailyRuns days={days} />
     </Tile>
   );
 }

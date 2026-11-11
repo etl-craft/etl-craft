@@ -29,3 +29,7 @@ Run selections accept an exact stored label as well as the integer: copy the lab
 `etl-craft status --pipeline-code DEMO`, then use `etl-craft history --run-id COPIED_LABEL`. Replace `COPIED_LABEL` with the complete
 shell-quoted label from text output or the browser's copy button; it already includes the quotes.
 The label is case-sensitive; a mismatched label is refused instead of selecting by suffix.
+
+In Home, select a one-to-four-day window to read dated run counts and average durations as
+numbers. Longer windows keep a slot per day in the chart. In a pipeline or catalog graph,
+**Fit view** keeps task names readable; drag to pan to tasks outside the pane.

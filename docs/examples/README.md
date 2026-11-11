@@ -223,3 +223,9 @@ Update the example's CSV files and team SQL references after the command; do not
 The [erasure guide](../guides/erasure.md) shows the `Privacy.Hmac_secret` variable reference,
 admin preview/register/list/lift commands and placement of ordinary `ERASURE` tasks after loads.
 Register at the earliest managed warehouse table; external sources are outside erasure's scope.
+
+## Viewing example runs
+
+Use the [browser guide](../guides/browser-ui.md) to inspect an example project's runs. Home
+shows dated numbers for one-to-four-day windows and daily charts for longer windows. Graph
+**Fit view** keeps labels readable; drag to pan through a large pipeline or catalog lineage.

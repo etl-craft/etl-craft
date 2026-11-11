@@ -29,7 +29,7 @@ def shoot(page, name):
     shots = os.environ.get("ETL_CRAFT_UI_SCREENSHOTS")
     if shots:
         Path(shots).mkdir(parents=True, exist_ok=True)
-        page.screenshot(path=f"{shots}/{name}.png")
+        page.screenshot(path=f"{shots}/{name}.png", animations="disabled")
 
 
 @pytest.fixture
@@ -316,4 +316,36 @@ def test_phone_date_filters_have_aligned_controls_and_keep_their_actions(scene, 
         page.wait_for_load_state("networkidle")
         shoot(page, f"phone-date-filters-{scheme}")
         assert problems == []
+        browser.close()
+
+
+@pytest.mark.parametrize("days", [1, 4])
+def test_short_daily_windows_show_numbers_then_long_windows_keep_the_day_axis(scene, days):
+    _, url = scene
+    with sync_playwright() as pw:
+        browser, page, problems = open_page(pw, viewport={"width": 1280, "height": 900})
+        sign_in(page, url, f"/ui/projects/default?from=2020-01-01&to=2020-01-0{days}")
+        panel = page.get_by_role("region", name="Runs per day")
+        summary = panel.get_by_label("Daily run totals")
+        expect(summary.get_by_role("term")).to_have_count(days)
+        expect(summary.get_by_text("0 runs · 0 succeeded · 0 failed", exact=True)).to_have_count(
+            days
+        )
+        expect(summary.get_by_text("No finished runs", exact=True)).to_have_count(days)
+        expect(panel.locator("svg")).to_have_count(0)
+        shoot(page, f"daily-numbers-{days}")
+        for scheme, width in (("dark", 1280), ("light", 390), ("dark", 390)):
+            choice = "Use the dark theme" if scheme == "dark" else "Use the light theme"
+            page.get_by_role("button", name=choice, exact=True).click()
+            expect(page.locator("html")).to_have_attribute("data-theme", scheme)
+            page.set_viewport_size({"width": width, "height": 900})
+            expect(summary.get_by_role("term")).to_have_count(days)
+            assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
+            shoot(page, f"daily-numbers-{days}-{scheme}-{width}")
+        page.set_viewport_size({"width": 1280, "height": 900})
+        page.goto(url + "/ui/projects/default?from=2020-01-01&to=2020-01-07")
+        expect(panel.get_by_label("Daily run totals")).to_have_count(0)
+        expect(panel.get_by_text("1 Jan", exact=True)).to_be_visible()
+        expect(panel.get_by_text("7 Jan", exact=True)).to_be_visible()
+        assert not problems
         browser.close()

@@ -479,3 +479,32 @@ def test_run_and_task_history_show_stored_labels_with_numeric_links(scene):
         ).to_be_visible()
         assert not problems
         browser.close()
+
+
+def test_fit_view_keeps_task_labels_readable_after_zooming_out(site):
+    ctx, url = site
+    with acting_as(Actor("owner", ActorKind.USER)), ctx.engine.begin() as conn:
+        pipeline = add_pipeline(conn, "LEGIBLE")
+        previous = None
+        for number in range(12):
+            task = add_task(conn, pipeline, f"TASK_{number:02d}")
+            if previous is not None:
+                add_dependency(conn, pipeline, task, previous)
+            previous = task
+    with sync_playwright() as pw:
+        browser, page, problems = open_page(pw, viewport={"width": 1440, "height": 900})
+        sign_in(page, url, "/ui/projects/default/pipelines/LEGIBLE?view=graph&flow=lr")
+        graph = page.get_by_role("group", name="Task graph")
+        expect(graph.get_by_text("TASK_00", exact=True)).to_have_count(1)
+        zoom = (
+            "() => new DOMMatrixReadOnly(getComputedStyle("
+            "document.querySelector('.react-flow__viewport')).transform).a"
+        )
+        page.wait_for_function(f"{zoom} >= 0.699")
+        graph.get_by_role("button", name="Zoom Out", exact=True).click()
+        page.wait_for_function(f"{zoom} < 0.699")
+        graph.get_by_role("button", name="Fit View", exact=True).click()
+        page.wait_for_function(f"{zoom} >= 0.699")
+        shoot(page, "graph-readable-fit")
+        assert not problems
+        browser.close()

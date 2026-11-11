@@ -30,6 +30,8 @@ const GAP_ROW = 56;
 const GAP_COL = 40;
 /** Fitting a large graph never shrinks it below this zoom (13 px text stays about 9 px): the rest is reached by panning. */
 const READABLE = 0.7;
+const FILL_FIT = { padding: 0.08, minZoom: READABLE, maxZoom: 1.3 };
+const CARD_FIT = { padding: 0.12, minZoom: 0.8, maxZoom: 1 };
 
 const NODE_TONE: Record<Focus, string> = {
   none: "border-border-strong",
@@ -187,6 +189,7 @@ export function RunGraph({
     observer.observe(element);
     return () => observer.disconnect();
   }, []);
+  const fitOptions = fill ? FILL_FIT : CARD_FIT;
   const flow = React.useRef<ReactFlowInstance | null>(null);
   const shown: Direction = direction ?? (fill && frameHeight > width ? "TB" : "LR");
   const { nodes, edges, height, columns } = layout(graph, statuses, focused, onOpen, plain, shown);
@@ -201,10 +204,10 @@ export function RunGraph({
     void instance.setCenter(node.position.x + WIDTH / 2, node.position.y + HEIGHT / 2, { zoom, duration: 250 });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focused]);
-  // Resizing the pane refits the whole graph, so a divider drag never hides a task.
+  // Refit after resizing without shrinking task text below the readable fit zoom.
   React.useEffect(() => {
-    if (fill && width > 0 && frameHeight > 0) void flow.current?.fitView({ padding: 0.08, minZoom: READABLE, maxZoom: 1.3 });
-  }, [fill, width, frameHeight, shown]);
+    if (fill && width > 0 && frameHeight > 0) void flow.current?.fitView(fitOptions);
+  }, [fill, width, frameHeight, shown, fitOptions]);
   // A graph wider than its card keeps readable boxes starting at the left; a small one is fitted whole.
   const wide = !fill && width > 0 && columns * (WIDTH + GAP_X) - GAP_X + 48 > width;
   return (
@@ -220,7 +223,7 @@ export function RunGraph({
         edges={edges}
         nodeTypes={nodeTypes}
         fitView={!wide}
-        fitViewOptions={fill ? { padding: 0.08, minZoom: READABLE, maxZoom: 1.3 } : { padding: 0.12, minZoom: 0.8, maxZoom: 1 }}
+        fitViewOptions={fitOptions}
         defaultViewport={wide ? { x: 24, y: 40, zoom: 0.9 } : undefined}
         minZoom={fill ? 0.15 : 0.5}
         maxZoom={1.5}
@@ -235,7 +238,7 @@ export function RunGraph({
         proOptions={{ hideAttribution: true }}
       >
         <Background gap={20} color="var(--border)" />
-        <Controls showInteractive={false} position="bottom-right" />
+        <Controls fitViewOptions={fitOptions} showInteractive={false} position="bottom-right" />
       </ReactFlow>
       </div>
     </div>

@@ -6,6 +6,10 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+- Graph Fit view uses the same readable minimum zoom as automatic fits. Home shows one-to-four-day
+  windows as dated run totals and average durations, with zero-run days retained; longer windows
+  keep their daily chart and capped bar widths.
+
 - Run and task-run displays show the stored readable label beside the integer throughout the
   CLI, browser and catalog histories. CLI text labels and the browser copy action include shell
   quoting. Existing JSON identity fields and numeric link targets stay unchanged; run-bearing
