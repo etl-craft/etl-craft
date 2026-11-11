@@ -93,6 +93,7 @@ class SignInMethods:
     local: bool = True
     contact: str | None = None
     notice: str | None = None
+    browser_sso: bool = False
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -525,6 +526,7 @@ def sign_in_methods(ctx: OperationContext, request: NoInput) -> SignInMethods:
     """Say whether SSO is configured, so a sign-in can offer it."""
     auth = ctx.config.auth
     return SignInMethods(
+        browser_sso=bool(ctx.config.auth.browser_state_secret),
         sso=bool(auth.oidc_issuer),
         contact=auth.admin_contact or None,
         notice=auth.signin_notice or None,

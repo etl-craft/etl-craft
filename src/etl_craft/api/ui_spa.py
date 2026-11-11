@@ -49,7 +49,7 @@ def add_spa_pages(app: FastAPI, ctx: OperationContext) -> None:
     @app.get("/ui", include_in_schema=False)
     @app.get("/ui/{path:path}", include_in_schema=False)
     def shell(request: Request, path: str = "") -> Response:
-        public = path.rstrip("/") == "signin"
+        public = path.rstrip("/") in ("signin", "signin/callback")
         try:
             browser.cookie_context(ctx, request)
         except HTTPException:

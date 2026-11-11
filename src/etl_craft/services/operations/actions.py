@@ -125,6 +125,7 @@ from etl_craft.services.operations.requests import (
 from etl_craft.services.operations.run_identity import resolve_run_reference
 from etl_craft.services.operations.run_labels import with_run_labels
 from etl_craft.services.operations.seed_actions import SEED_ACTIONS
+from etl_craft.services.operations.signin_actions import SIGN_IN_ACTIONS
 from etl_craft.services.operations.upload_actions import UPLOAD_ACTIONS
 from etl_craft.services.operations.visibility import visible_result
 from etl_craft.services.rehash import RehashResult
@@ -192,18 +193,7 @@ _ROWS = (
     Action(ActionName.AGENT_LOG, agent_logs.upload, agent_models.AgentLog,
            agent_models.AgentReply, ApiRole.AGENT, POST, f"{API}/agent/log"),
     *UPLOAD_ACTIONS, *SEED_ACTIONS, *ERASURE_ACTIONS,
-    Action(ActionName.LOGIN_METHODS, sessions.sign_in_methods, NoInput, sessions.SignInMethods,
-           None, GET, f"{API}/login/methods"),
-    Action(ActionName.LOGIN, sessions.sign_in, sessions.SignIn, sessions.Session, None, POST,
-           f"{API}/login/password", BY_ACTION),
-    Action(ActionName.LOGIN_SSO, sessions.start_sso, NoInput, sessions.SsoStart, None, POST,
-           f"{API}/login/sso", BY_ACTION),
-    Action(ActionName.LOGIN_SSO_POLL, sessions.poll_sso, sessions.SsoPollInput, sessions.SsoPoll,
-           None, POST, f"{API}/login/sso/poll", BY_ACTION),
-    Action(ActionName.REFRESH, sessions.refresh, sessions.TokenInput, sessions.Session, None,
-           POST, f"{API}/login/refresh"),
-    Action(ActionName.LOGOUT, sessions.sign_out, sessions.TokenInput, None, None, POST,
-           f"{API}/login/revoke", BY_ACTION),
+    *SIGN_IN_ACTIONS,
     Action(ActionName.WHOAMI, sessions.whoami, sessions.IdentityInput, sessions.Identity,
            VIEWER, GET, f"{API}/whoami"),
     Action(ActionName.ABOUT, about.read_about, NoInput, about.About, VIEWER, GET, f"{API}/about"),

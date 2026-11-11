@@ -74,6 +74,10 @@ export function SignIn() {
     mutationFn: () => postJson<Redirect>("/api/v1/login/password", { name, password, _return_to: returnTo }),
     onSuccess: (answer) => window.location.assign(answer.redirect ?? "/ui"),
   });
+  const browser = useMutation({
+    mutationFn: () => postJson<{ authorization_url: string }>("/api/v1/login/browser/start", { return_to: returnTo }),
+    onSuccess: answer => window.location.assign(answer.authorization_url),
+  });
   const sso = useMutation({ mutationFn: () => postJson<SsoStart>("/api/v1/login/sso", { _return_to: returnTo }) });
   const data = methods.data;
   return (
@@ -107,9 +111,11 @@ export function SignIn() {
         ) : null}
         {data?.sso ? (
           <div className="grid gap-3">
-            <Button disabled={sso.isPending} onClick={() => sso.mutate()}>
+            <Button disabled={sso.isPending || browser.isPending} onClick={() => data.browser_sso ? browser.mutate() : sso.mutate()}>
               Sign in with SSO
             </Button>
+            {!data.browser_sso ? <Notice info>Browser sign-in needs Auth.Browser_state_secret; see the security guide.</Notice> : null}
+            {browser.isError ? <Notice>{failureText(browser.error)}</Notice> : null}
             {sso.isError ? <Notice>{failureText(sso.error)}</Notice> : null}
             {sso.data ? <SsoWait grant={sso.data} returnTo={returnTo} /> : null}
           </div>
@@ -122,4 +128,29 @@ export function SignIn() {
       </Card>
     </main>
   );
+}
+
+export function SsoCallback() {
+  useDocumentTitle("Signing in");
+  const [params] = useSearchParams();
+  const code = params.get("code") ?? "";
+  const state = params.get("state") ?? "";
+  const refusal = params.get("error");
+  const started = React.useRef(false);
+  const login = useMutation({
+    mutationFn: () => postJson<Redirect>("/api/v1/login/browser/callback", { code, state }),
+    onSuccess: answer => window.location.assign(answer.redirect ?? "/ui"),
+  });
+  const { mutate } = login;
+  React.useEffect(() => {
+    if (started.current) return;
+    started.current = true;
+    window.history.replaceState(null, "", window.location.pathname);
+    if (!refusal) mutate();
+  }, [mutate, refusal]);
+  return <main className="grid min-h-dvh place-items-center bg-bg p-4"><Card className="grid w-full max-w-sm gap-4 p-6">
+    <PageHeader title="Signing in…" />
+    {refusal || login.isError ? <Notice>{refusal ? "The identity provider refused sign-in. Start again." : failureText(login.error)}</Notice> : <p role="status">Signing in…</p>}
+    {refusal || login.isError ? <a href="/ui/signin" className="text-accent hover:underline">Start sign-in again</a> : null}
+  </Card></main>;
 }

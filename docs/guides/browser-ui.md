@@ -9,6 +9,13 @@ The layout remains usable at 200% zoom.
 
 ## Sign-in and sessions
 
+With `Auth.Browser_state_secret` configured, **Sign in with SSO** redirects to the identity
+provider and returns to the page you asked for; no code needs copying. The callback briefly
+shows “Signing in…” and displays a refusal with a way to start again when proof fails.
+See [browser SSO setup](../deploying/security.md#browser-single-sign-on) for the public callback
+address and signing-secret requirements. Without that optional setting, the button keeps the
+device-flow fallback and explains which setting enables browser redirects.
+
 Local accounts and configured SSO use the existing login actions. Wrong account names and
 passwords give the same message. Recovery means contacting the administrator shown on the
 sign-in page; there are no emailed resets. SSO accounts use their identity provider.

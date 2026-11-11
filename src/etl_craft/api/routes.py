@@ -208,6 +208,10 @@ async def _answer(caller: OperationContext, action: Action, request: Request) ->
 
 def _browser_fields(body: dict[str, object], action: ActionName, request: Request) -> None:
     """Consume browser-only proof fields before the action request is parsed."""
+    if action == ActionName.LOGIN_BROWSER_START:
+        body["return_to"] = browser.return_path(str(body.get("return_to", "/ui")))
+    if action == ActionName.LOGIN_BROWSER_CALLBACK:
+        body["cookie"] = request.cookies.get(browser.SSO_COOKIE, "")
     confirmation = body.pop("_confirm_password", None)
     if confirmation is not None and confirmation != body.get("password"):
         raise UsageError("password confirmation differs; enter the same new password twice")

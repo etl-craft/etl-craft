@@ -169,7 +169,7 @@ def jwt(**changes):
 )
 def test_device_token_requires_issuer_client_nonce_and_fresh_lifetime(claims):
     with pytest.raises(ConfigurationError):
-        oidc._claims(jwt(**claims), "https://issuer", "etl", "nonce")
+        oidc.token_claims(jwt(**claims), "https://issuer", "etl", "nonce")
 
 
 def _sso(expires_in=60, interval=2):
@@ -191,8 +191,8 @@ def test_sso_sign_in_waits_while_pending_and_backs_off_when_asked(monkeypatch):
 @pytest.mark.parametrize("error", ["access_denied", "expired_token", "invalid_client"])
 def test_device_polling_stops_on_refusal(monkeypatch, error):
     metadata = {"token_endpoint": "https://issuer/token"}
-    monkeypatch.setattr(oidc, "_client", lambda auth: ("https://issuer", "etl", metadata))
-    monkeypatch.setattr(oidc, "_request", lambda *a, **options: {"error": error})
+    monkeypatch.setattr(oidc, "client_metadata", lambda auth: ("https://issuer", "etl", metadata))
+    monkeypatch.setattr(oidc, "request_json", lambda *a, **options: {"error": error})
     with pytest.raises(ConfigurationError, match="refused or expired"):
         oidc.poll_device(AuthConfig(), "device", "nonce")
 
@@ -214,7 +214,7 @@ def test_oidc_never_accepts_insecure_or_credentialed_endpoints():
         "oops",
     ):
         with pytest.raises(ConfigurationError, match="HTTPS"):
-            oidc._request(url)
+            oidc.request_json(url)
 
 
 def test_failed_credential_replacement_keeps_the_previous_session(monkeypatch):

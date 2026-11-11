@@ -40,7 +40,7 @@ Issues = "https://github.com/etl-craft/etl-craft/issues"
 [project.optional-dependencies]
 duckdb = ["duckdb-engine>=0.13,<1", "duckdb>=1.5.5,<2"]
 excel = ["openpyxl>=3.1.5,<4"]
-ui = ["fastapi>=0.115,<1", "pydantic>=2.9.2,<3", "uvicorn>=0.35,<1", "starlette>=0.37.2,<2"]
+ui = ["PyJWT[crypto]>=2.10,<3", "fastapi>=0.115,<1", "pydantic>=2.9.2,<3", "uvicorn>=0.35,<1", "starlette>=0.37.2,<2"]
 all = ["etl-craft[ui]"]
 aws = [
     "boto3>=1.28,<2",

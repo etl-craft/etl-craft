@@ -348,3 +348,9 @@ exact-run-label-selection = [
 session-refresh-unavailable = [
     "tests/browser/test_react_platform.py::test_failed_identity_refresh_does_not_end_a_live_session",
 ]
+
+browser-sso-pkce = [
+    "tests/browser/test_sso_redirect.py::test_sso_browser_returns_signed_in_without_a_copy_code_panel",
+    "tests/integration/api/test_browser_sso.py::test_browser_proof_refusals_are_audited_without_sessions",
+    "tests/integration/api/test_browser_sso.py::test_authorization_parameters_verified_session_actor_and_single_use",
+]

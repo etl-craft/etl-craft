@@ -85,7 +85,7 @@ def test_oidc_clock_leeway_and_discovery_cache(issuer, monkeypatch):
     auth, state = issuer
     clock = [1000.0]
     monkeypatch.setattr(oidc.time, "monotonic", lambda: clock[0])
-    original = oidc._request
+    original = oidc.request_json
     discoveries = []
 
     def counted(url, data=None, **options):
@@ -93,7 +93,7 @@ def test_oidc_clock_leeway_and_discovery_cache(issuer, monkeypatch):
             discoveries.append(url)
         return original(url, data, **options)
 
-    monkeypatch.setattr(oidc, "_request", counted)
+    monkeypatch.setattr(oidc, "request_json", counted)
     grant = start_device(auth)
     state["extra_claims"] = {
         "iat": oidc.time.time() + 119,
@@ -114,7 +114,7 @@ def test_oidc_refuses_non_https_token_endpoint_and_does_not_cache_failure(issuer
     from etl_craft.services import oidc
 
     auth, _state = issuer
-    original = oidc._request
+    original = oidc.request_json
     invalid = [True]
 
     def discovery(url, data=None):
@@ -123,7 +123,7 @@ def test_oidc_refuses_non_https_token_endpoint_and_does_not_cache_failure(issuer
             value["token_endpoint"] = "http://localhost/token"
         return value
 
-    monkeypatch.setattr(oidc, "_request", discovery)
+    monkeypatch.setattr(oidc, "request_json", discovery)
     with pytest.raises(ConfigurationError, match="HTTPS URL"):
         start_device(auth)
     assert auth.oidc_issuer not in oidc._DISCOVERY

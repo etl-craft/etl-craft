@@ -578,6 +578,7 @@ export interface Announcement {
 }
 
 export interface SignInMethods {
+  browser_sso?: boolean;
   sso: boolean;
   local: boolean;
   contact: string | null;

@@ -15,7 +15,7 @@ import { Maintenance } from "@/pages/maintenance";
 import { Password } from "@/pages/password";
 import { Search } from "@/pages/search";
 import { Settings } from "@/pages/settings";
-import { SignIn } from "@/pages/signin";
+import { SignIn, SsoCallback } from "@/pages/signin";
 import { System } from "@/pages/system";
 import { Held } from "@/pages/held";
 import { Insights, InsightsRedirect } from "@/pages/insights";
@@ -45,6 +45,7 @@ createRoot(document.getElementById("root")!).render(
       <BrowserRouter basename="/ui">
         <Routes>
           <Route path="signin" element={<SignIn />} />
+          <Route path="signin/callback" element={<SsoCallback />} />
           <Route element={<AppShell />}>
             <Route index element={<HomeEntry />} />
             <Route path="projects" element={<ProjectList />} />
