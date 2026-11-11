@@ -135,7 +135,7 @@ jobs:
         with:
           enable-cache: ${{ inputs.cache != 'cold' }}
       - run: uv sync --locked --all-groups --python 3.11
-      - run: uv run playwright install --with-deps chromium firefox
+      - run: uv run playwright install --with-deps chromium
       - name: Execute browser tests and record complete collection
         env:
           ETL_CRAFT_REQUIRE_SERVICES: "1"
