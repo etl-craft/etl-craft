@@ -6,6 +6,18 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+### Compatibility policy and pre-public inventory (S7.G)
+
+- Document the approved 0.9.0 compatibility baseline, retained 0.9.0 contracts through 1.x,
+  removal no earlier than 2.0.0 after one complete minor of warnings, and additive rolling-upgrade
+  obligations. The policy distinguishes those obligations from current exact-version checks.
+- Core runtime dependencies before and after: `jinja2>=3.1.6,<4`, `psutil>=6.0,<7`,
+  `psycopg[binary]>=3.3.6,<4`, `pyyaml>=6.0.3,<7`, `sqlalchemy>=2.0.54,<3`,
+  `sqlglot>=30.22,<30.23`, `watchdog>=6,<7`. All seven have direct runtime use; none moved or removed.
+- Deleted public names: none. Retain released-schema conversion/history readers, warehouse
+  upgrade commands, documented exports and active dialect fallbacks; deleting them changes
+  behavior and needs a contract-specific owner decision. No compatibility shim was added.
+
 - Browser/API sign-out revokes the local session, then returns an HTTPS provider logout URL
   when discovery advertises one. Its return address is the configured public origin; foreign
   addresses are refused. Providers without a logout endpoint retain local-only sign-out with

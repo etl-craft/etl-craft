@@ -12,6 +12,9 @@ Generated from the code, so they always match the release:
 
 And:
 
+- [Compatibility policy](compatibility.md): the 0.9.0 public baseline, supported/tested matrix,
+  forward/rolling upgrades, deprecations and the pre-public dependency/name inventory.
+
 - [Exit codes](exit-codes.md): what each `etl-craft` exit status means.
 
 Project-owned commands require `--project` or `Orchestration.Project` in the loaded

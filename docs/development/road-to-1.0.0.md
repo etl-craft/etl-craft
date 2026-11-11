@@ -186,7 +186,7 @@ item's text, or work done early under another item.
 | S7.D Alert channels | Planned |  | Signed webhooks, Slack-shaped bodies and channel delivery evidence remain; email is already supported |
 | S7.E Secrets providers | In progress | #84, #120, #323 | ENVIRONMENT/FILE task declarations, fenced TLS delivery and private child pipe; secret managers and Cache_seconds remain |
 | S7.F Packaging and deployment | Done | #227, #231, #316 | Wheel-built role images, tagged release smoke and publishing, Compose/Kubernetes manifests and systemd units |
-| S7.G Compatibility policy | Planned |  | 0.9.0 compatibility policy, rolling mixed-version contracts and public-surface cleanup remain |
+| S7.G Compatibility policy | In progress | #379 | Evidence-backed 0.9.0 policy and dependency/name inventory; rolling version ranges, additive upgrade acceptance and release-aware refusals remain |
 | S7.H Cloud acceptance | In progress | #104–#110, #208, #231, #236, #247 | Native/Iceberg and managed-engine contracts exist; complete candidate evidence and unavailable provider cases remain |
 | S7.I The endurance run | Planned |  | 72-hour accelerated Support Insights candidate run, faults and bounded growth evidence after S8 is running |
 | S7.J Documentation to finish | In progress | #85, #227, #277 | Generated references and guides exist; supported public contracts, complete reference and recipes remain |
@@ -220,6 +220,19 @@ item's text, or work done early under another item.
 | S8.H Support Insights scenario coverage | Planned | | Deterministic mixed-quality generators, every-feature demonstrations, business-rule and stewardship cases, and runnable README coverage |
 
 ### Handover notes
+
+- **S7.G policy and inventory (#379).** Choices that differ from the item text: the owner
+  confirmed the recorded 0.9.0 compatibility decision supersedes the unchanged 1.0.0 bullets;
+  retained contracts survive through 1.x and removal waits for 2.0.0 after a complete minor
+  of warnings. All seven core dependencies have direct runtime callers, so before/after lists
+  are identical and no public name is removed. Released upgrade/history readers, warehouse
+  upgrade commands, exports and active dialect fallbacks are retained; removing these would
+  change behavior and needs separate contract-specific evidence and an owner decision.
+  The new policy distinguishes release obligations from current enforcement: exact agent
+  versions/current-schema checks still apply before rolling ranges, old/new-role acceptance
+  and release-aware input refusals are implemented. S7.G remains in progress for those checks.
+  Acceptance availability: static checks, strict docs and the unit suite run locally; no
+  runtime, schema, dependency or UI change requires services, cloud or a UI rebuild here.
 
 What a person picking up the work needs that the code and the item texts do not say.
 
