@@ -179,6 +179,22 @@ login audit. Consumption commits under the existing cross-process account lock b
 exchange, so replicas, retries and a process restart cannot replay a state. After a refused
 exchange, start again. All replicas must share the configured signing secret and Engine DB.
 
+### Provider sign-out
+
+Browser and API sign-out revoke the local session first. If OIDC discovery advertises an
+HTTPS `end_session_endpoint`, the response includes its logout URL and the browser visits it.
+`post_logout_redirect_uri` is restricted to the existing public origin from
+`Docs_site.External_url`, else `Docs_site.Domain`; a catalog path prefix is not part of that
+origin. A supplied foreign address is refused, with no redirect, after local revocation.
+There is no additional setting. CLI sign-out remains local.
+
+If discovery has no endpoint, the response explicitly says provider sign-out stayed local;
+the browser returns to sign-in with that notice. The provider's session can still let a later
+SSO sign-in complete without entering credentials. ID tokens are discarded at sign-in, so
+logout does not send `id_token_hint` or introduce storage for it. Some providers may prompt
+for confirmation without a hint. If discovery is unavailable or advertises an insecure
+endpoint, sign-out reports that error; local revocation is already committed.
+
 !!! warning "The device flow's ID-token nonce is optional"
     The device flow (RFC 8628) has no nonce parameter, and Dex, Google and Keycloak do not echo one,
     so device sign-in accepts an ID token that has no `nonce` claim. Browser sign-in always requires it. A `nonce` that is present must match

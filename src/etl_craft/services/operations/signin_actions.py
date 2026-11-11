@@ -25,7 +25,7 @@ SIGN_IN_ACTIONS = (
            None, POST, f"{API}/login/sso/poll", BY_ACTION),
     Action(ActionName.REFRESH, sessions.refresh, sessions.TokenInput, sessions.Session, None,
            POST, f"{API}/login/refresh"),
-    Action(ActionName.LOGOUT, sessions.sign_out, sessions.TokenInput, None, None, POST,
-           f"{API}/login/revoke", BY_ACTION),
+    Action(ActionName.LOGOUT, sessions.sign_out, sessions.SignOutInput, sessions.SignOutResult,
+           None, POST, f"{API}/login/revoke", BY_ACTION),
 )
 # fmt: on

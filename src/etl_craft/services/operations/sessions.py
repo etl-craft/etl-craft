@@ -72,6 +72,22 @@ class TokenInput(Request):
     token: str
 
 
+@dataclass(frozen=True, kw_only=True)
+class SignOutInput(TokenInput):
+    """A session to revoke and an optional assertion of the configured public origin."""
+
+    post_logout_redirect_uri: str | None = None
+
+
+@dataclass(frozen=True)
+class SignOutResult:
+    """Local sign-out confirmation and the optional provider logout address."""
+
+    SCHEMA: ClassVar[str] = "etl-craft/sign-out/1"
+    message: str
+    redirect: str | None = None
+
+
 @dataclass(frozen=True)
 class Session:
     """A signed-in user's access token, and the refresh token of a server session."""
@@ -503,11 +519,11 @@ def refresh(ctx: OperationContext, request: TokenInput) -> Session:
     return Session(access.token, access.metadata, refresh_expires_at=found.expires_at)
 
 
-def sign_out(ctx: OperationContext, request: TokenInput) -> None:
+def sign_out(ctx: OperationContext, request: SignOutInput) -> SignOutResult:
     """Revoke a session token, and a refresh token's access tokens, as the token's own account.
 
-    An expired or unknown token is revoked under the caller's actor, so signing out always
-    succeeds.
+    An expired or unknown token is revoked under the caller's actor. Provider logout is
+    resolved only after local revocation commits, so its failure cannot leave a live session.
     """
     token = request.token
     found = find_token(ctx, token)
@@ -520,6 +536,12 @@ def sign_out(ctx: OperationContext, request: TokenInput) -> None:
                 "now": datetime.now(UTC),
             },
         )
+
+    if ctx.transport != Transport.HTTP:
+        return SignOutResult("Signed out.")
+    from etl_craft.services.operations.provider_logout import provider_sign_out
+
+    return provider_sign_out(caller, request.post_logout_redirect_uri)
 
 
 def sign_in_methods(ctx: OperationContext, request: NoInput) -> SignInMethods:

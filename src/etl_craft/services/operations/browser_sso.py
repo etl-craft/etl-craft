@@ -7,7 +7,7 @@ import secrets
 import time
 from dataclasses import dataclass, field, replace
 from typing import ClassVar
-from urllib.parse import urlencode, urlsplit
+from urllib.parse import urlencode
 
 from etl_craft.config.resolve import resolve_named_secret
 from etl_craft.core.actor import SYSTEM_ACTOR
@@ -17,7 +17,7 @@ from etl_craft.core.text import sha256_hex
 from etl_craft.engine import locks
 from etl_craft.engine.queries import statement
 from etl_craft.services import oidc
-from etl_craft.services.operations.browser_paths import return_path
+from etl_craft.services.operations.browser_paths import public_origin, return_path
 from etl_craft.services.operations.context import OperationContext
 from etl_craft.services.operations.recording import record_refusal, recorded
 from etl_craft.services.operations.requests import Request
@@ -84,15 +84,7 @@ def signing_key(ctx: OperationContext) -> str:
 
 def redirect_address(ctx: OperationContext) -> str:
     """Use the configured deployment URL, never the request authority."""
-    site = ctx.config.docs_site
-    base = site.external_url or (f"https://{site.domain}" if site.domain else None)
-    if not base or not base.startswith("https://"):
-        raise ConfigurationError(
-            "browser SSO needs an HTTPS public address; configure Docs_site.External_url "
-            "or Docs_site.Domain and register its /ui/signin/callback with the issuer"
-        )
-    origin = urlsplit(base)
-    return f"{origin.scheme}://{origin.netloc}{CALLBACK}"
+    return public_origin(ctx.config) + CALLBACK
 
 
 def start(ctx: OperationContext, request: StartInput) -> BrowserStart:

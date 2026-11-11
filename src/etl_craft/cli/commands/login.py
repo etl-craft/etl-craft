@@ -81,7 +81,7 @@ def _login(args: argparse.Namespace, out: Output) -> int:
         where = _store(args, session)
     except BaseException:
         token = session.refresh_token or session.access_token
-        call(args, ActionName.LOGOUT, sessions.TokenInput(token=token))
+        call(args, ActionName.LOGOUT, sessions.SignOutInput(token=token))
         raise
     if CONSOLE.get() is None and command_project(args):
         scoped = command_identity.get()
@@ -141,7 +141,7 @@ def _logout(args: argparse.Namespace, out: Output) -> int:
         credentials.store_session(key, None)
         where = ""
     if token is not None:
-        call(args, ActionName.LOGOUT, sessions.TokenInput(token=token))
+        call(args, ActionName.LOGOUT, sessions.SignOutInput(token=token))
     out.line(f"Signed out{where}")
     return 0
 

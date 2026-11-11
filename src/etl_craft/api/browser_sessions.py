@@ -19,7 +19,7 @@ from etl_craft.services.operations.browser_sso import LIFETIME, BrowserFinish, B
 from etl_craft.services.operations.context import OperationContext
 from etl_craft.services.operations.identity import authenticated_context
 from etl_craft.services.operations.recording import record_refusal
-from etl_craft.services.operations.sessions import Session, SsoPoll
+from etl_craft.services.operations.sessions import Session, SignOutResult, SsoPoll
 from etl_craft.services.operations.tokens import authenticate
 
 SESSION = "__Host-etl-craft-session"
@@ -148,6 +148,10 @@ def browser_answer(
         return response
     if isinstance(result, SsoPoll):
         return JSONResponse({"interval": result.interval})
+    if isinstance(result, SignOutResult):
+        response = JSONResponse({"message": result.message, "redirect": result.redirect})
+        signed_out(response)
+        return response
     if action in (ActionName.LOGOUT, ActionName.PASSWORD_CHANGE):
         response = JSONResponse({"message": getattr(result, "message", "Signed out.")})
         signed_out(response)

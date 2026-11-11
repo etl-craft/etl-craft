@@ -32,6 +32,13 @@ def issuer(tmp_path, monkeypatch):
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self):
             path = urlsplit(self.path)
+            if path.path == "/logout":
+                params = parse_qs(path.query)
+                state["logout_requests"] = params
+                self.send_response(302)
+                self.send_header("Location", params["post_logout_redirect_uri"][0])
+                self.end_headers()
+                return
             if path.path == "/jwks":
                 self.reply({"keys": [jwk]})
                 return
@@ -65,6 +72,11 @@ def issuer(tmp_path, monkeypatch):
                     "token_endpoint": address + "/token",
                     "authorization_endpoint": address + "/authorize",
                     "jwks_uri": address + "/jwks",
+                    **(
+                        {"end_session_endpoint": state["end_session_endpoint"]}
+                        if "end_session_endpoint" in state
+                        else {}
+                    ),
                 }
             )
 
