@@ -35,9 +35,7 @@ def issuer(tmp_path, monkeypatch):
             if path.path == "/logout":
                 params = parse_qs(path.query)
                 state["logout_requests"] = params
-                self.send_response(302)
-                self.send_header("Location", params["post_logout_redirect_uri"][0])
-                self.end_headers()
+                self.redirect(params["post_logout_redirect_uri"][0])
                 return
             if path.path == "/jwks":
                 self.reply({"keys": [jwk]})
@@ -46,9 +44,7 @@ def issuer(tmp_path, monkeypatch):
                 params = {k: v[0] for k, v in parse_qs(path.query).items()}
                 code = secrets.token_urlsafe(24)
                 codes[code] = params
-                self.send_response(302)
-                self.send_header(
-                    "Location",
+                self.redirect(
                     params["redirect_uri"]
                     + "?"
                     + urlencode(
@@ -58,7 +54,6 @@ def issuer(tmp_path, monkeypatch):
                         }
                     ),
                 )
-                self.end_headers()
                 return
             if state["redirect"]:
                 self.send_response(302)
@@ -140,6 +135,14 @@ def issuer(tmp_path, monkeypatch):
                 if browser and state.get("bad_signature"):
                     token = token.rsplit(".", 1)[0] + ".invalid"
                 self.reply({"id_token": token})
+
+        def redirect(self, target):
+            if "\r" in target or "\n" in target:
+                self.reply({"error": "invalid_redirect_uri"}, 400)
+                return
+            self.send_response(302)
+            self.send_header("Location", target)
+            self.end_headers()
 
         def reply(self, value, status=200):
             self.send_response(status)
