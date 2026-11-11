@@ -123,6 +123,7 @@ from etl_craft.services.operations.requests import (
     arguments,
 )
 from etl_craft.services.operations.run_identity import resolve_run_reference
+from etl_craft.services.operations.run_labels import with_run_labels
 from etl_craft.services.operations.seed_actions import SEED_ACTIONS
 from etl_craft.services.operations.upload_actions import UPLOAD_ACTIONS
 from etl_craft.services.operations.visibility import visible_result
@@ -617,11 +618,9 @@ def invoke(ctx: OperationContext, name: ActionName, request: object) -> object:
             else:
                 with using_policy(governance.project_policy(ctx, request)):
                     result = call(project_settings(ctx, name, request), request)
-            return (
-                visible_result(ctx, result)
-                if ACTIONS[name].scope == ActionScope.PIPELINE
-                else result
-            )
+            if ACTIONS[name].scope == ActionScope.PIPELINE:
+                result = visible_result(ctx, result)
+            return with_run_labels(ctx, result)
     finally:
         sso_groups.reset(claims)
 

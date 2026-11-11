@@ -431,11 +431,24 @@ def test_attempt_logs_stream_from_the_server_within_the_role(server, monkeypatch
         )
     monkeypatch.setenv("ETL_CRAFT_TOKEN", server["service"]["viewer"])
     attempt = str(server["attempt"])
-    assert run(capsys, "logs", "--attempt-id", attempt, "--api", url) == (
-        0,
-        "first\nsecond é\n",
-        f"default · CUSTOM · {url}\n",
-    )
+    code, content, context = run(capsys, "logs", "--attempt-id", attempt, "--api", url)
+    assert (code, content) == (0, "first\nsecond é\n")
+    assert context.startswith(f"default · CUSTOM · {url}\n")
+    with ctx.engine.connect() as conn:
+        detail = conn.execute(
+            text(
+                "SELECT pr.RUN_LABEL AS run_label, tr.TASK_RUN_ID AS task_run_id, "
+                "tr.TASK_RUN_LABEL AS task_run_label FROM AUD_TASK_ATTEMPTS a "
+                "JOIN AUD_TASK_RUN_LOG tr ON tr.TASK_RUN_ID=a.TASK_RUN_ID "
+                "JOIN AUD_PIPELINES_RUN_LOG pr ON pr.PIPELINE_RUN_ID=tr.PIPELINE_RUN_ID "
+                "WHERE a.ATTEMPT_ID=:id"
+            ),
+            {"id": server["attempt"]},
+        ).one()
+    import shlex
+
+    assert f"run_id={server['run']} {shlex.quote(detail.run_label)}\n" in context
+    assert f"task_run_id={detail.task_run_id} {shlex.quote(detail.task_run_label)}\n" in context
     assert run(capsys, "logs", "--attempt-id", attempt, "--offset", "6", "--api", url)[1] == (
         "second é\n"
     )

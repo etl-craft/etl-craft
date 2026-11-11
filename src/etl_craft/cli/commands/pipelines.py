@@ -50,7 +50,7 @@ def _run(args: argparse.Namespace, out: Output) -> int:
         extra = ("LAST_RUN", "NEXT_RUN") if out.stdout.isatty() else ()
         out.rows(
             [
-                (*header, *extra, "TAGS", "PAUSED"),
+                (*header, "LAST_RUN_ID", *extra, "TAGS", "PAUSED"),
                 *(
                     (
                         p.pipeline_code,
@@ -58,6 +58,7 @@ def _run(args: argparse.Namespace, out: Output) -> int:
                         p.refresh_type,
                         p.run_schedule,
                         hours(p.sla_in_hours) if out.stdout.isatty() else p.sla_in_hours,
+                        p.recent_runs[0].pipeline_run_id if p.recent_runs else None,
                         *(
                             (p.recent_runs[0].start_date if p.recent_runs else None, p.next_run)
                             if extra
@@ -72,7 +73,7 @@ def _run(args: argparse.Namespace, out: Output) -> int:
         )
         return
 
-    out.result(done, args.output_format, text=render_text)
+    out.result(done, args.output_format, text=render_text, include_key=False)
     return ExitCode.SUCCESS
 
 

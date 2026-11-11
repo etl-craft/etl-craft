@@ -96,6 +96,8 @@ class Observation:
     passed: str | None
     observed: str
 
+    run_label: str = ""
+
 
 @dataclass(frozen=True)
 class RuleInsight:
@@ -122,6 +124,8 @@ class LatestRun:
     start_date: datetime
     end_date: datetime | None
     trigger_kind: str
+
+    run_label: str = ""
 
 
 @dataclass(frozen=True)

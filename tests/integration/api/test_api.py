@@ -861,3 +861,35 @@ def test_api_run_labels_match_exactly_for_paths_queries_and_json(api):
         )
         assert response.status_code == 409, response.text
         assert label in response.text
+
+
+def test_run_display_labels_are_carried_by_nested_and_attempt_responses(api):
+    ctx, client, creds, run, attempt = api
+    auth = headers(creds[ApiRole.ADMIN])
+    with ctx.engine.connect() as conn:
+        stored = conn.execute(
+            text("SELECT RUN_LABEL AS label FROM AUD_PIPELINES_RUN_LOG WHERE PIPELINE_RUN_ID=:id"),
+            {"id": run},
+        ).scalar_one()
+        task = conn.execute(
+            text(
+                "SELECT TASK_RUN_ID AS id, TASK_RUN_LABEL AS label FROM AUD_TASK_RUN_LOG "
+                "WHERE PIPELINE_RUN_ID=:id"
+            ),
+            {"id": run},
+        ).one()
+    paths = [
+        f"/api/v1/projects/default/attempts/{attempt}",
+        "/api/v1/projects/default/history?pipeline_code=P&task_code=T&all=true",
+        "/api/v1/projects/default/pipelines",
+        f"/api/v1/projects/default/steps?pipeline_code=P&run_id={run}",
+    ]
+    for path in paths:
+        response = client.get(path, headers=auth)
+        assert response.status_code == 200, response.text
+        document = response.json()
+        assert stored in json.dumps(document), path
+        if "attempts/" in path:
+            assert document["pipeline_run_id"] == run
+            assert document["task_run_id"] == task.id
+            assert document["task_run_label"] == task.label

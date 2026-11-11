@@ -3,6 +3,8 @@ import { getText, project } from "@/lib/api";
 import type { Graph } from "@/lib/types";
 
 export interface CatalogRun {
+  task_run_id?: number;
+  task_run_label?: string;
   pipeline_run_id: number;
   status: string;
   start: string | null;
@@ -18,6 +20,7 @@ export interface CatalogRun {
   delete_count?: number | null;
   reject_count?: number | null;
   error_message?: string | null;
+  run_label?: string;
 }
 export interface CatalogPipeline {
   code: string;
@@ -88,7 +91,7 @@ export interface CatalogRule {
   table: string;
   task: string;
   key_column: string | null;
-  observations: { status: string; passed: string | null; observed: string | null; detail: string | null; pipeline_run_id: number }[];
+  observations: { status: string; passed: string | null; observed: string | null; detail: string | null; run_label?: string; pipeline_run_id: number }[];
 }
 export interface CatalogEdge {
   target_object: string;

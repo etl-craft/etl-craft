@@ -18,3 +18,35 @@ def duration(seconds: float | None) -> str:
 def hours(value: float | None) -> str:
     """Render an SLA budget as a duration rather than fractional hours."""
     return "not configured" if value is None else duration(value * 3600)
+
+
+def run_labels(result: object) -> dict[str, dict[int, str]]:
+    """Collect the stored display labels carried by the operation, including nested summaries."""
+    from etl_craft.services.operations.run_labels import OPAQUE, PAIRS
+    from etl_craft.services.operations.serialization import encode
+
+    labels: dict[str, dict[int, str]] = {"run": {}, "task": {}}
+
+    def visit(value: object) -> None:
+        if isinstance(value, dict):
+            for identity, label in PAIRS.items():
+                number, name = value.get(identity), value.get(label)
+                if isinstance(number, int) and isinstance(name, str) and name:
+                    labels["task" if "task" in identity else "run"][number] = name
+                elif (
+                    isinstance(number, list) and isinstance(name, list) and len(number) == len(name)
+                ):
+                    labels["task" if "task" in identity else "run"].update(
+                        (identity, label)
+                        for identity, label in zip(number, name, strict=True)
+                        if label
+                    )
+            for key, child in value.items():
+                if key not in OPAQUE:
+                    visit(child)
+        elif isinstance(value, list):
+            for child in value:
+                visit(child)
+
+    visit(encode(result))
+    return labels

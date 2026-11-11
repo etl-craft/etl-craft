@@ -212,8 +212,11 @@ readable label, status and exact `--run-id` selector, newest first. `history --p
 
 Terminal status tables show tasks in dependency order, compact durations and SLA budgets;
 `pipelines` adds last and next run times. Labels containing spaces are shell-quoted in terminal
-status output; numeric or stored-label `--run-id` and exact `--run-key` remain the selectors. Piped tables retain
-their tab-separated columns and numeric duration fields, and `--format json` retains its shape.
+text output; numeric or stored-label `--run-id` and exact `--run-key` remain the selectors. Piped tables retain
+their first column and numeric duration fields, with a shell-quoted label column beside each run
+integer. Other narrative references go to an ID/label key on standard error. JSON numeric identity fields
+keep their names and types; run-bearing responses also carry stored display labels. Log downloads
+keep their bytes; the CLI writes their ID/label key to standard error.
 Terminal `whoami` labels the account and role explicitly. Root help groups commands by purpose;
 subcommand help points to root help for global options, which still work before or after the command.
 

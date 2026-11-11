@@ -1,3 +1,4 @@
+import { RunLabel } from "@/components/run-label";
 import { useQuery } from "@tanstack/react-query";
 import { createColumnHelper } from "@tanstack/react-table";
 import * as React from "react";
@@ -7,7 +8,7 @@ import { EmptyState, Breadcrumbs, Loading, Notice, PageHeader, SelectField } fro
 import { DataTable } from "@/components/data-table";
 import { StatusBadge } from "@/components/status";
 import { Card } from "@/components/ui/card";
-import { useCanRun, useProjectInfo } from "@/hooks";
+import { useCanRun, useProjectInfo, useRunReference } from "@/hooks";
 import { getJson, project } from "@/lib/api";
 import { pipelinesPath, pipelinePath, runPath, taskPath } from "@/lib/routes";
 import type { ItemRecord, Items as ItemsView } from "@/lib/types";
@@ -18,6 +19,7 @@ const result = (r: { message?: string }) => r.message ?? "Request recorded.";
 
 export function Items() {
   const { project: code = "", pipeline = "", runId = "", task = "" } = useParams();
+  const addressed = useRunReference(code, runId);
   const canRun = useCanRun(code);
   const info = useProjectInfo(code);
   const [status, setStatus] = React.useState("SUCCESS");
@@ -45,9 +47,11 @@ export function Items() {
       size="sm"
     />
   );
+  if (addressed.isError) return <Notice>{(addressed.error as Error).message}</Notice>;
+  if (addressed.isPending) return <Loading what="the selected run" />;
   return (
     <div className="grid grid-cols-1 gap-5">
-      <Breadcrumbs trail={[{ label: "Pipelines", to: pipelinesPath(code) }, { label: pipeline, to: pipelinePath(code, pipeline) }, { label: `Run ${runId}`, to: runPath(code, pipeline, runId) }, { label: task, to: taskPath(code, pipeline, task) }, { label: "Items" }]} />
+      <Breadcrumbs trail={[{ label: "Pipelines", to: pipelinesPath(code) }, { label: pipeline, to: pipelinePath(code, pipeline) }, { label: `Run ${addressed.data.pipeline_run_id} · ${addressed.data.run_label ?? ""}`, to: runPath(code, pipeline, addressed.data.pipeline_run_id) }, { label: task, to: taskPath(code, pipeline, task) }, { label: "Items" }]} />
       <PageHeader
         title={`Items of ${task}`}
         subtitle={progress ? `items ${progress.done} / ${progress.total}, ${progress.failed} failed, ${progress.skipped} skipped` : undefined}
@@ -68,6 +72,7 @@ export function Items() {
       />
       {items.isError ? <Notice>{(items.error as Error).message}</Notice> : null}
       {items.isPending ? <Loading what="items" /> : null}
+      {items.data ? <RunLabel id={items.data.task_run_id} label={items.data.task_run_label} /> : null}
       <Card>
         <DataTable
           label="Items"

@@ -52,6 +52,9 @@ class UploadSubmission:
     waiting_behind_run_id: int | None
     status: UploadStatus
 
+    run_label: str = ""
+    waiting_behind_run_label: str = ""
+
 
 @dataclass(frozen=True)
 class UploadHistory:

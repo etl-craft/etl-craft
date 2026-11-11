@@ -9,11 +9,13 @@ from __future__ import annotations
 import codecs
 import json
 import os
+import shlex
 import sys
 from collections.abc import Callable, Iterable
 from typing import TextIO
 
 from etl_craft.cli.prompts import can_prompt
+from etl_craft.cli.rendering import run_labels
 from etl_craft.core.enums_access import EnvironmentType
 from etl_craft.core.environment import Environment
 from etl_craft.core.errors import UsageError
@@ -32,6 +34,8 @@ class Output:
 
     def __init__(self, stdout: TextIO | None = None, stderr: TextIO | None = None) -> None:
         """Write to the given streams instead of the process's standard streams."""
+        self._labels: dict[str, dict[int, str]] = {"run": {}, "task": {}}
+        self._shown: set[tuple[str, int]] = set()
         self._stdout = stdout
         self._stderr = stderr
         self.environment: Environment | None = None
@@ -140,8 +144,11 @@ class Output:
         output_format: str,
         *,
         text: Callable[[], None] | None = None,
+        include_key: bool = True,
     ) -> None:
         """Write JSON or render the command's text, defaulting to its outcome message."""
+        self._shown.clear()
+        self._labels = {"run": {}, "task": {}} if output_format == "json" else run_labels(done)
         if output_format == "json":
             self.document(done)
         elif text is not None:
@@ -149,30 +156,75 @@ class Output:
         elif isinstance(done, ControlView):
             self.line(
                 f"control_id={done.control_id} {done.action} {done.status}; "
-                f"run_id={done.pipeline_run_id} task={done.task_code or 'all'} "
-                f"run_status={done.run_status} execution_run_id={done.execution_run_id}: "
+                f"run_id={self.identity(done.pipeline_run_id)} task={done.task_code or 'all'} "
+                f"run_status={done.run_status} "
+                f"execution_run_id={self.identity(done.execution_run_id)}: "
                 f"{done.message}"
             )
         else:
             assert isinstance(done, (OperationResult, BackfillView, ReconciliationView))
             self.line(done.message)
-            label = getattr(getattr(done, "run", None), "run_label", "")
-            if label:  # beside the id, off the result line that scripts read
-                print(f"run label: {label}", file=self.stderr)
+        if output_format != "json" and include_key:
+            self.identifiers()
+        self._labels = {"run": {}, "task": {}}
+
+    def identity(self, number: int | None) -> str:
+        """Keep an integer first and its shell-quoted stored label beside it."""
+        label = self._labels["run"].get(number) if number is not None else None
+        if label and number is not None:
+            self._shown.add(("run", number))
+        return f"{number} {shlex.quote(label)}" if label else str(number)
+
+    def identifiers(self) -> None:
+        """Print the result's identities that were not already displayed in a labelled table."""
+        for kind, names in self._labels.items():
+            unseen = [number for number in names if (kind, number) not in self._shown]
+            for number in unseen:
+                field = "task_run_id" if kind == "task" else "run_id"
+                self.context_line(f"{field}={number} {shlex.quote(names[number])}")
 
     def rows(self, rows: Iterable[Iterable[object]]) -> None:
         """Align terminal columns; pipes retain TSV and ``None`` stays an empty field."""
-        rendered = [["" if value is None else str(value) for value in row] for row in rows]
+        given = [list(row) for row in rows]
+        if given:
+            columns = [
+                (i, "task" if "TASK" in str(header).upper() else "run")
+                for i, header in enumerate(given[0])
+                if str(header).upper()
+                in {"RUN", "RUN_ID", "LAST_RUN_ID", "PIPELINE_RUN_ID", "TASK_RUN_ID"}
+            ]
+            for index, kind in reversed(columns):
+                if self._labels[kind]:
+                    for number, row in enumerate(given):
+                        identity = row[index]
+                        name = (
+                            self._labels[kind].get(identity, "")
+                            if isinstance(identity, int)
+                            else ""
+                        )
+                        if name and isinstance(identity, int):
+                            self._shown.add((kind, identity))
+                        row.insert(
+                            index + 1,
+                            ("TASK_RUN_LABEL" if kind == "task" else "RUN_LABEL")
+                            if number == 0
+                            else shlex.quote(name)
+                            if name
+                            else "",
+                        )
+        rendered = [["" if value is None else str(value) for value in row] for row in given]
         if not self.stdout.isatty():
-            for row in rendered:
-                self.line("\t".join(row))
+            for rendered_row in rendered:
+                self.line("\t".join(rendered_row))
             return
         widths = [
             max(len(row[i]) if i < len(row) else 0 for row in rendered)
             for i in range(max((len(row) for row in rendered), default=0))
         ]
-        for row in rendered:
-            self.line("  ".join(value.ljust(widths[i]) for i, value in enumerate(row)).rstrip())
+        for rendered_row in rendered:
+            self.line(
+                "  ".join(value.ljust(widths[i]) for i, value in enumerate(rendered_row)).rstrip()
+            )
 
     def agents(self, view: AgentsView | None) -> None:
         """Render the shared registry's advertised, reserved and free resources."""

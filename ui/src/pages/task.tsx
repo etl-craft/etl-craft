@@ -1,7 +1,8 @@
+import { RunLabel } from "@/components/run-label";
 import { useQuery } from "@tanstack/react-query";
 import { When } from "@/components/when";
 import { createColumnHelper } from "@tanstack/react-table";
-import { Link, useParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import { EmptyState, Breadcrumbs, Fact, FactList, Loading, Notice, PageHeader, ParamList } from "@/components/common";
 import { CsvButton } from "@/components/csv-button";
 import { DataTable } from "@/components/data-table";
@@ -75,7 +76,8 @@ export function Task() {
           empty={history.isSuccess ? <EmptyState title="This task has not run yet.">Run its pipeline; task history appears after the task starts.</EmptyState> : undefined}
           initialSort={[{ id: "run", desc: true }]}
           columns={[
-            columns.accessor("pipeline_run_id", { id: "run", header: "Run", cell: (c) => <Link className="num font-medium text-accent hover:underline" to={runPath(code, pipeline, c.getValue())}>#{c.getValue()}</Link> }),
+            columns.accessor("pipeline_run_id", { id: "run", header: "Run", cell: (c) => <RunLabel id={c.getValue()} label={c.row.original.run_label} to={runPath(code, pipeline, c.getValue())} /> }),
+            columns.accessor("task_run_id", { header: "Task run", cell: (c) => <RunLabel id={c.getValue()} label={c.row.original.task_run_label} /> }),
             columns.accessor("status", { header: "Status", cell: (c) => <StatusBadge quiet status={c.getValue()} /> }),
             columns.accessor("start_date", { header: "Started", cell: (c) => <When iso={c.getValue()} empty="Not started" /> }),
             columns.display({ id: "duration", header: "Duration", cell: (c) => <span className="num">{c.row.original.start_date ? formatDuration(c.row.original.start_date, c.row.original.end_date) : "—"}</span> }),
@@ -109,7 +111,7 @@ export function Task() {
           )}
         </div>
       </Card>
-      {offset.data ? <OffsetCard key={offset.data.offset_value ?? ""} code={code} pipeline={pipeline} task={task} offset={offset.data} runs={runs.map((r) => r.pipeline_run_id)} /> : null}
+      {offset.data ? <OffsetCard key={offset.data.offset_value ?? ""} code={code} pipeline={pipeline} task={task} offset={offset.data} runs={runs} /> : null}
       {def.data?.merge_key.length ? <ProvenanceCard code={code} pipeline={pipeline} task={task} keys={def.data.merge_key} columns={def.data.merge_columns} /> : null}
     </div>
   );

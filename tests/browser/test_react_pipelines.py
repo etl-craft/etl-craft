@@ -436,3 +436,46 @@ def test_the_newest_grid_run_is_next_to_task_names(scene):
         assert size["width"] >= 24 and size["height"] >= 24
         assert problems == []
         browser.close()
+
+
+def test_run_and_task_history_show_stored_labels_with_numeric_links(scene):
+    ctx, url, _ = scene
+    with ctx.engine.connect() as conn:
+        run = conn.execute(
+            text(
+                "SELECT PIPELINE_RUN_ID AS id, RUN_LABEL AS label FROM AUD_PIPELINES_RUN_LOG "
+                "WHERE PIPELINE_ID=(SELECT PIPELINE_ID FROM CFG_PIPELINES "
+                "WHERE PIPELINE_CODE='OPS')"
+            )
+        ).one()
+        task = conn.execute(
+            text(
+                "SELECT TASK_RUN_ID AS id, TASK_RUN_LABEL AS label FROM AUD_TASK_RUN_LOG "
+                "WHERE PIPELINE_RUN_ID=:id ORDER BY TASK_RUN_ID"
+            ),
+            {"id": run.id},
+        ).first()
+    with sync_playwright() as pw:
+        browser, page, problems = open_page(pw)
+        sign_in(page, url, "/ui/projects/default/pipelines/OPS/tasks/EXTRACT")
+        table = page.get_by_role("table", name="Task runs")
+        expect(table.get_by_text(run.label, exact=True)).to_be_visible()
+        expect(table.get_by_text(task.label, exact=True)).to_be_visible()
+        link = table.get_by_role("link", name=f"#{run.id}", exact=True)
+        expect(link).to_have_attribute("href", re.compile(rf"[?&]run={run.id}(?:$|&)"))
+        link.click()
+        expect(page.get_by_label("Run identifier", exact=True)).to_contain_text(run.label)
+        page.evaluate(
+            "navigator.clipboard.writeText = async (text) => { window.copiedLabel = text; }"
+        )
+        page.get_by_role("button", name="Copy the run identifier", exact=True).click()
+        import shlex
+
+        assert shlex.split(page.evaluate("window.copiedLabel")) == [run.label]
+        assert page.evaluate("window.copiedLabel").startswith("'")
+        page.goto(f"{url}/ui/projects/default/runs")
+        expect(
+            page.get_by_role("table", name="Runs").get_by_text(run.label, exact=True)
+        ).to_be_visible()
+        assert not problems
+        browser.close()

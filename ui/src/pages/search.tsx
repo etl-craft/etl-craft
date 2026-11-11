@@ -1,3 +1,4 @@
+import { RunLabel } from "@/components/run-label";
 import { searchDetail } from "@/lib/labels";
 import { useQuery } from "@tanstack/react-query";
 import { createColumnHelper } from "@tanstack/react-table";
@@ -83,6 +84,7 @@ export function Search() {
                 header: "Name",
                 cell: (c) => {
                   const target = hitLink(code, c.row.original);
+                  if (c.row.original.kind === "RUN" && c.row.original.run_id !== null) return <RunLabel id={c.row.original.run_id} label={c.row.original.run_label} to={target.to}><Highlight text={c.getValue()} words={q} /></RunLabel>;
                   return (
                     <Link className="font-medium text-accent hover:underline" to={target.to}>
                       <Highlight text={c.getValue()} words={q} />

@@ -38,6 +38,8 @@ class CapabilitiesView:
     task_code: str | None
     actions: tuple[Capability, ...]
 
+    run_label: str = ""
+
 
 def control_capabilities(ctx: OperationContext, request: CapabilitiesInput) -> CapabilitiesView:
     """Inspect exact-scope controls through the same policy used when accepting them."""

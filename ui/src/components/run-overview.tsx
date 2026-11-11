@@ -1,3 +1,4 @@
+import { RunLabel, copyRunLabel } from "@/components/run-label";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronDown, ChevronRight, CircleX, Copy, Download, LifeBuoy } from "lucide-react";
 import * as React from "react";
@@ -204,7 +205,7 @@ function RecoverRun({ code, run, canRun }: { code: string; run: RunView; canRun:
           effect={`Reopens ${run.pipeline_code} run #${run.pipeline_run_id}: tasks that succeeded are kept; failed and unfinished tasks run again.`}
           endpoint="/controls"
           body={(reason) => ({ pipeline_code: run.pipeline_code, run_id: run.pipeline_run_id, action: "RECOVER", reason })}
-          describe={(r) => `Recover accepted: control #${r.control_id}${r.execution_run_id ? `, execution #${r.execution_run_id}` : ""}. ${r.message}`}
+          describe={(r) => `Recover accepted: control #${r.control_id}${r.execution_run_id ? `, execution #${r.execution_run_id} ${copyRunLabel(r.execution_run_label ?? "")}` : ""}. ${r.message}`}
           icon={<LifeBuoy className="size-4" aria-hidden />}
           variant="primary"
         />
@@ -311,7 +312,7 @@ export function RunOverview({ code, pipeline, runId, task, onTask }: { code: str
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2">
           <StatusBadge status={r.status} className="px-2 py-0.5 text-sm" />
-          <span className="num text-muted">#{r.pipeline_run_id}</span>
+          <span aria-label="Run identifier"><RunLabel id={r.pipeline_run_id} label={r.run_label} /></span>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <RecoverRun code={code} run={r} canRun={canRun} />
@@ -319,9 +320,8 @@ export function RunOverview({ code, pipeline, runId, task, onTask }: { code: str
         </div>
       </div>
       {r.run_label ? (
-        <p className="m-0 flex items-center gap-2 font-mono text-xs text-muted" aria-label="Run identifier">
-          <span className="break-all">{r.run_label}</span>
-          <Button size="icon" variant="ghost" className="size-6" aria-label="Copy the run identifier" onClick={() => void navigator.clipboard.writeText(r.run_label ?? "").then(() => toast("Run identifier copied."))}>
+        <p className="m-0 flex items-center gap-2 font-mono text-xs text-muted">
+          <Button size="icon" variant="ghost" className="size-6" aria-label="Copy the run identifier" onClick={() => void navigator.clipboard.writeText(copyRunLabel(r.run_label ?? "")).then(() => toast("Run identifier copied."))}>
             <Copy className="size-3.5" aria-hidden />
           </Button>
         </p>
@@ -365,6 +365,7 @@ export function RunOverview({ code, pipeline, runId, task, onTask }: { code: str
                       <button type="button" className="cursor-pointer font-medium text-accent hover:underline" aria-pressed={isOpen} onClick={toggle}>
                         {step.task_code}
                       </button>
+                      {step.task_run_id ? <div><RunLabel id={step.task_run_id} label={step.task_run_label} /></div> : null}
                     </Td>
                     <Td>
                       <StatusBadge quiet status={taskStatus(step.status, r)} />

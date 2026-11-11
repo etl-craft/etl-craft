@@ -54,46 +54,14 @@ def _render(args: argparse.Namespace, out: Output, done: HistoryView) -> int:
             out.empty("no runs yet")
             return
         if args.task_code is None:
-            out.rows(
-                [
-                    (
-                        "PIPELINE_CODE",
-                        "PIPELINE_RUN_ID",
-                        "STATUS",
-                        "RUN_DATE",
-                        "START_DATE",
-                        "END_DATE",
-                        "SLA_STATUS",
-                        "STARTED_BY",
-                        "STARTED_BY_KIND",
-                        "ENDED_BY",
-                        "ENDED_BY_KIND",
-                    ),
-                    *(
-                        (
-                            e.pipeline_code,
-                            e.pipeline_run_id,
-                            e.status,
-                            f"{e.run_date} (backfill)" if e.backfill else e.run_date,
-                            e.start_date,
-                            e.end_date,
-                            e.sla_status,
-                            e.started_by,
-                            e.started_by_kind,
-                            e.ended_by,
-                            e.ended_by_kind,
-                        )
-                        for e in entries
-                        if isinstance(e, RunView)
-                    ),
-                ]
-            )
+            _pipeline_history(out, entries)
             _interventions(out, changes)
             return
         out.rows(
             [
                 (
                     "PIPELINE_RUN_ID",
+                    "TASK_RUN_ID",
                     "STATUS",
                     "ATTEMPTS",
                     "SOURCE_COUNT",
@@ -107,6 +75,7 @@ def _render(args: argparse.Namespace, out: Output, done: HistoryView) -> int:
                 *(
                     (
                         e.pipeline_run_id,
+                        e.task_run_id,
                         e.status,
                         e.attempt_count,
                         e.source_count,
@@ -127,6 +96,44 @@ def _render(args: argparse.Namespace, out: Output, done: HistoryView) -> int:
 
     out.result(done, args.output_format, text=render_text)
     return ExitCode.SUCCESS
+
+
+def _pipeline_history(out: Output, entries: Sequence[RunView | TaskRunView]) -> None:
+    """Display pipeline histories without task-only fields."""
+    out.rows(
+        [
+            (
+                "PIPELINE_CODE",
+                "PIPELINE_RUN_ID",
+                "STATUS",
+                "RUN_DATE",
+                "START_DATE",
+                "END_DATE",
+                "SLA_STATUS",
+                "STARTED_BY",
+                "STARTED_BY_KIND",
+                "ENDED_BY",
+                "ENDED_BY_KIND",
+            ),
+            *(
+                (
+                    e.pipeline_code,
+                    e.pipeline_run_id,
+                    e.status,
+                    f"{e.run_date} (backfill)" if e.backfill else e.run_date,
+                    e.start_date,
+                    e.end_date,
+                    e.sla_status,
+                    e.started_by,
+                    e.started_by_kind,
+                    e.ended_by,
+                    e.ended_by_kind,
+                )
+                for e in entries
+                if isinstance(e, RunView)
+            ),
+        ]
+    )
 
 
 def _interventions(out: Output, changes: Sequence[Intervention]) -> None:

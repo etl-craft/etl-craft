@@ -1,3 +1,4 @@
+import { RunLabel } from "@/components/run-label";
 import { When } from "@/components/when";
 import { useQueries } from "@tanstack/react-query";
 import * as React from "react";
@@ -105,7 +106,7 @@ export function RunGrid({ code, pipeline, graph, runs, extra, selected, onSelect
                   </tr>
                 ) : null}
                 <tr>
-                  <th scope="col" className={cn("sticky z-20 h-7 bg-surface-2 px-3 text-left text-xs font-medium text-muted", showBars ? "top-20" : "top-0")}>Task</th>
+                  <th scope="col" className={cn("sticky z-20 bg-surface-2 px-3 text-left text-xs font-medium text-muted", labels === "time" ? "h-10" : "h-7", showBars ? "top-20" : "top-0")}>Task</th>
                 </tr>
               </thead>
               <tbody>
@@ -134,8 +135,8 @@ export function RunGrid({ code, pipeline, graph, runs, extra, selected, onSelect
                           <Link
                             to={runPath(code, pipeline, run.pipeline_run_id)}
                             onClick={open(run)}
-                            title={`Run ${run.pipeline_run_id} · ${statusMeta(run.status).label} · ${formatDuration(run.start_date, run.end_date)}`}
-                            aria-label={`Run ${run.pipeline_run_id}, ${statusMeta(run.status).label}, ${formatDuration(run.start_date, run.end_date)}`}
+                            title={`Run ${run.pipeline_run_id}${run.run_label ? ` · ${run.run_label}` : ""} · ${statusMeta(run.status).label} · ${formatDuration(run.start_date, run.end_date)}`}
+                            aria-label={`Run ${run.pipeline_run_id}${run.run_label ? ` · ${run.run_label}` : ""}, ${statusMeta(run.status).label}, ${formatDuration(run.start_date, run.end_date)}`}
                             style={{ height: `${Math.max(10, (seconds(run) / longest) * 100)}%` }}
                             className={cn("w-3 rounded-xs hover:brightness-110", solidClass(run.status))}
                           />
@@ -146,9 +147,10 @@ export function RunGrid({ code, pipeline, graph, runs, extra, selected, onSelect
                 ) : null}
                 <tr>
                   {shown.map((run) => (
-                    <th key={run.pipeline_run_id} scope="col" className={cn("sticky z-10 h-7 px-0 text-center text-xs font-medium", showBars ? "top-20" : "top-0", apart(run) && "border-l-2 border-dashed border-border-strong", run.pipeline_run_id === selected ? "bg-accent/15 text-fg" : "bg-surface-2 text-muted")}>
+                    <th key={run.pipeline_run_id} scope="col" className={cn("sticky z-10 px-0 text-center text-xs font-medium", labels === "time" ? "h-10" : "h-7", showBars ? "top-20" : "top-0", apart(run) && "border-l-2 border-dashed border-border-strong", run.pipeline_run_id === selected ? "bg-accent/15 text-fg" : "bg-surface-2 text-muted")}>
                       <Link className="num hover:text-accent hover:underline" to={runPath(code, pipeline, run.pipeline_run_id)} onClick={open(run)} aria-current={run.pipeline_run_id === selected ? "true" : undefined}>
-                        {labels === "time" && run.start_date ? <span className="block truncate"><When iso={run.start_date} /></span> : run.pipeline_run_id}
+                        <RunLabel id={run.pipeline_run_id} label={run.run_label} compact />
+                        {labels === "time" && run.start_date ? <span className="block truncate text-[9px]"><When iso={run.start_date} /></span> : null}
                       </Link>
                     </th>
                   ))}
@@ -163,7 +165,7 @@ export function RunGrid({ code, pipeline, graph, runs, extra, selected, onSelect
                       return (
                         <td key={run.pipeline_run_id} className={cn("h-8 border-l border-t border-border px-0 py-0 text-center align-middle", apart(run) && "border-l-2 border-dashed border-l-border-strong", chosen && "bg-accent/10")}>
                           {entry ? (
-                            <button type="button" className="inline-grid cursor-pointer rounded-sm hover:ring-2 hover:ring-accent" onClick={() => onSelect(run.pipeline_run_id, task)}>
+                            <button type="button" title={`${run.run_label ?? ""} · ${entry.task_run_label ?? ""}`} className="inline-grid cursor-pointer rounded-sm hover:ring-2 hover:ring-accent" onClick={() => onSelect(run.pipeline_run_id, task)}>
                               <StatusMark solid className="size-6" status={entry.status} label={`${task} in run ${run.pipeline_run_id}: ${entry.status.toLowerCase()}`} />
                             </button>
                           ) : (

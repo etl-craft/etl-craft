@@ -46,7 +46,7 @@ def _run(args: argparse.Namespace, out: Output) -> int:
         terminal = out.stdout.isatty()
         out.rows(
             [
-                ("AT", "ACTOR", "KIND", "COMMAND", "OUTCOME", "ARGUMENTS"),
+                ("AT", "ACTOR", "KIND", "COMMAND", "OUTCOME", "RUN_ID", "ARGUMENTS"),
                 *(
                     (
                         row.at,
@@ -54,6 +54,7 @@ def _run(args: argparse.Namespace, out: Output) -> int:
                         row.kind,
                         row.command,
                         row.outcome,
+                        row.pipeline_run_id,
                         _values(row.arguments, terminal),
                     )
                     for row in sorted(done.actions, key=lambda row: row.action_id, reverse=True)[
@@ -95,7 +96,7 @@ def _run(args: argparse.Namespace, out: Output) -> int:
         )
         return
 
-    out.result(done, args.output_format, text=render_text)
+    out.result(done, args.output_format, text=render_text, include_key=False)
     return ExitCode.SUCCESS
 
 

@@ -95,6 +95,8 @@ class ItemView:
     records: tuple[ItemRecord, ...]
     progress: ItemProgress
 
+    task_run_label: str = ""
+
 
 def inspect(ctx: OperationContext, request: ItemInput) -> ItemView:
     """Read items only from the explicitly selected pipeline run and task."""

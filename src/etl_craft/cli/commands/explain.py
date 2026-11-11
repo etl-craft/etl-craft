@@ -41,7 +41,7 @@ def _render(args: argparse.Namespace, out: Output, done: Explanation) -> int:
             out.line(done.task.standing_pause.describe())
         out.line(f"{done.pipeline.pipeline_code}.{done.task_code}: {done.state}")
         out.line(
-            f"pipeline_run_id={done.run.pipeline_run_id} status={done.run.status} "
+            f"pipeline_run_id={out.identity(done.run.pipeline_run_id)} status={done.run.status} "
             f"task_status={done.task.status if done.task else 'NOT RUN'} "
             f"attempts={done.task.attempt_count if done.task else 0}"
             + (
