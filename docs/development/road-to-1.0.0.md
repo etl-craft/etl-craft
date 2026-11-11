@@ -194,7 +194,7 @@ item's text, or work done early under another item.
 | S7.AL Pre-demo package gaps | In progress | #314, #315 | Slices 1–3 ship duplicate counts, current references and guarded-table validation guidance. Slice 4 (event-file validation) is in review; slices 5–6 remain. |
 | S7.AM Protection on every warehouse | Done | #311, #312, #313 | Atomic SCD merges, in-row protection and recovery, private audit identities and provider acceptance |
 | S7.AN Always show the environment | Done | #328 | CLI context and production confirmation; designed, sandboxed alert/SLA templates and catalog environment |
-| S7.AO UI rebuild | Done | #329–#335 | Seven slices: shell, Home, runs, pipelines, tasks, uploads, insights, console, catalog, system, agents, administration, maintenance, settings, search, sign-in; the new interface is the only one, served at `/ui`, and the old pages are deleted; audit follow-ups align time preferences, human labels, automatic grid sizing and phone date controls; remaining audit closes sparse summaries, controls, lazy loading and CLI operability |
+| S7.AO UI rebuild | Done | #329–#335, #368, #371 | Seven slices: shell, Home, runs, pipelines, tasks, uploads, insights, console, catalog, system, agents, administration, maintenance, settings, search, sign-in; the new interface is the only one, served at `/ui`, and the old pages are deleted; audit follow-ups align time preferences, human labels, automatic grid sizing and phone date controls; remaining audit closes sparse summaries, controls, lazy loading and CLI operability |
 | S7.AP Native catalog | In progress | | The catalog moves into the app from a JSON read action, built from the app's own components; the generated static site stays only for `publish-docs` |
 | S7.AQ Readable run identifiers | Done | #347, #369, #370 | A label beside every run and task run id, stored by the Engine DB; accepted wherever the integer is, and shown beside it |
 | S7.AR Restarting pipelines | In progress | slice 1 PR | A pipeline setting, `RESTART_CONDITION`, starts the next run when the last one ends in a chosen status, so a file watcher runs continuously without a schedule |
@@ -1419,6 +1419,17 @@ empty-history-page handling defect, which was corrected and verified. No cloud w
   not echo a nonce and Dex answers a pending poll with 401; the security guide warns about the first. Not
   done: `--run-id` and the HTTP API accepting a run label (S7.AQ slice 2), which needs one resolver in the
   operations layer.
+
+- **S7.AO audit batch 3 (A5, A6, B3).** Choices that differ from the item text:
+  acceptance for this follow-up is derived from the owner's audit batch: readable automatic
+  and button-driven graph fits, and numbers for short daily series. Shared RunGraph fit options
+  cover pipeline/run workspaces and catalog pipeline/table-lineage graphs. Shared DailyRuns in
+  charts supplies Home Overview: one-to-four UTC calendar days show dated counts and average
+  durations, including quiet days; longer windows retain daily slots and capped bars. B4 is
+  already fixed and unchanged. A9, B10, B11 and B12 remain for the next batch; A14, B15 and C6
+  remain owner decisions and are untouched.
+  Acceptance availability: Python unit, UI unit and browser checks run locally, including the
+  existing B4 grid tests; no warehouse SQL changes, so cloud suites are not applicable.
 
 - **S7.AO audit presentation follow-up.** Home summaries, dashboard window boundaries,
   time-labelled run grids and session warnings use the account's shared time display. Search

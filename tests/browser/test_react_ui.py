@@ -3,6 +3,7 @@
 import os
 import re
 from pathlib import Path
+from urllib.parse import quote
 
 import pytest
 from playwright.sync_api import expect, sync_playwright
@@ -47,7 +48,7 @@ def scene(site):
 
 
 def sign_in(page, url, destination="/ui", name="owner"):
-    page.goto(url + "/ui/signin?return_to=" + destination.replace("/", "%2F"))
+    page.goto(url + "/ui/signin?return_to=" + quote(destination, safe=""))
     page.get_by_label("Account name", exact=True).fill(name)
     page.get_by_label("Password", exact=True).fill(PASSWORD)
     page.get_by_role("button", name="Sign in", exact=True).click()
@@ -59,7 +60,14 @@ def open_page(pw, **options):
     page = browser.new_context(ignore_https_errors=True, **options).new_page()
     page.context.set_default_timeout(10_000)  # a loaded runner needs more than 5 s
     problems = []
-    page.on("console", lambda m: problems.append(m.text) if m.type == "error" else None)
+    page.on(
+        "console",
+        lambda m: (
+            problems.append(f"{m.text} [{m.location.get('url', '')}]")
+            if m.type == "error"
+            else None
+        ),
+    )
     page.on("pageerror", lambda e: problems.append(str(e)))
     return browser, page, problems
 

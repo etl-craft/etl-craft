@@ -126,6 +126,10 @@ When the latest run would otherwise be hidden, names narrow instead. Once names 
 space shows more runs. The task-name boundary is not adjustable. Drag the grid divider or
 focus it and use Left/Right; Home or double-click restores the default pane width.
 
+Automatic graph fits and **Fit view** share a readable minimum zoom (0.7 in filled panes).
+Large graphs remain reachable by dragging to pan; manual zoom controls still work. Wide panes
+use a horizontal layout unless another direction is selected.
+
 The graph reads task statuses for the selected run and refreshes them every five seconds while
 the run is in progress, even when the run-details tab is closed. Recorded skipped tasks say
 Skipped with the shared slate colour; running tasks stay blue and successful tasks green.
@@ -181,12 +185,14 @@ writes the same zip, and `GET /api/v1/projects/{project}/run-zip` serves it.
 
 ## Pipeline Insights
 
-**Insights** in the sidebar shows the operational panels for the pipelines you can view, over a
+**Home** shows operational panels in its tabs for the pipelines you can view, over a
 window of UTC days (the last 7 by default, at most 92), optionally for selected pipelines:
 
 - totals: runs, success rate (of finished runs), average duration, SLA breaches, retries, the
   average wait to start and the average execution time, and rows written;
-- runs per day, succeeded and failed, as a chart and a table;
+- daily runs: one-to-four-day windows show dated counts and average durations as numbers;
+  longer windows use a chart with a slot for every UTC day, including quiet days, and capped bars;
+  days without a finished run say “No finished runs” instead of drawing a duration point;
 - per pipeline: runs, success rate, average and longest duration, SLA breaches, attempts,
   retries, lost attempts, rows written and rows per second of measured execution;
 - rows by task: source, target, inserted, updated, deleted and rejected counts of successful
