@@ -10156,6 +10156,30 @@ rules on real data.
 every expected table and rule result, starts clean every time, honours both keep options, and
 CI can gate a deploy on it.
 
+## After 1.0.0: provider integration follow-ups
+
+These three items are deferred beyond 1.0.0; none changes the approved browser redirect,
+state-cookie, replay protection, device flow or CLI design.
+
+- **Confidential OIDC clients, when required.** Add optional `Auth.Oidc_client_secret` only
+  when a provider or policy requires it. The setting names a variable, resolved through the
+  existing secret resolver on use; send the value only in the browser/device token exchange,
+  never in configuration, logs, audit payloads or responses. Public clients remain unchanged.
+- **Provider offboarding — design decision required before code.** Consider (1) disable an
+  account on a refused sign-in, (2) reconcile membership against a group claim or directory,
+  or (3) accept SCIM deprovisioning with its own authenticated endpoints and storage. Start
+  with disable-on-refusal only after deciding how a provider refusal can be securely tied
+  to a previously bound subject; an unauthenticated or generic refusal must not let someone
+  disable another account. This option acts only on the person's next sign-in attempt and
+  does not itself revoke an already-live session when the provider removes them. Group
+  reconciliation and SCIM need separate scope, settings/storage review and owner decisions.
+- **MFA enforcement — design decision required before code.** Choose between an optional
+  `Auth.Oidc_required_acr` setting that requires the provider's named ACR value in a verified
+  ID token, and relying on the provider's MFA policy with documentation. Prefer the explicit
+  setting when package-side enforcement is needed, with the administrator choosing the
+  provider's MFA context. Claim values vary: no ACR enforcement values have been tested by
+  etl-craft yet; record tested and untested provider values before selecting a contract.
+
 ## Appendix A: Defect traceability
 
 Defects found by the reviews, with the work item that fixes each. Severity as defined in
