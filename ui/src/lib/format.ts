@@ -81,3 +81,6 @@ export function relative(iso: string | null, now: number): string {
   const [n, unit] = abs < 60 ? [abs, "s"] : abs < 3600 ? [Math.round(abs / 60), "min"] : abs < 86_400 ? [Math.round(abs / 3600), "h"] : [Math.round(abs / 86_400), "d"];
   return seconds >= 0 ? `in ${n} ${unit}` : `${n} ${unit} ago`;
 }
+
+/** A UTC calendar day on the dashboard axis, tooltip and numeric readout. */
+export const dayLabel = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });

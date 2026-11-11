@@ -350,6 +350,8 @@ refresh recorded task statuses and shared colours while the run is still in prog
 Sparse rankings and duration series show numbers rather than tiny charts. Catalog gaps name the
 next corrective step. Nested pages use breadcrumbs and shared controls; empty lists explain what
 fills them. Graph code loads on opening the graph; catalog code loads on entering the catalog.
+Home’s daily chart and sparkline renderers load when used, with their space reserved while
+loading. Numeric summaries and the run/catalog duration strips keep their existing rendering.
 
 Run now still opens a confirmation naming the project and environment. Its reason follows the project’s governance: STRICT requires one in every environment;
 RELAXED permits an empty reason. Production projects remain STRICT and still require the exact
