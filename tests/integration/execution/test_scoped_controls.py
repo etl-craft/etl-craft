@@ -197,6 +197,12 @@ def test_missing_query_adapter_refuses_abort_before_mutating_the_scope(ctx, monk
     attempt = queue(ctx, run, first)
     with ctx.engine.begin() as conn:
         conn.execute(text("UPDATE CFG_TASKS SET HANDLER='SQL' WHERE TASK_ID=:id"), {"id": first})
+        conn.execute(
+            text(
+                "DELETE FROM CFG_TASK_PARAMETERS WHERE TASK_ID=:id AND PARAMETER_NAME='SCRIPT_KIND'"
+            ),
+            {"id": first},
+        )
     claim_again(ctx, attempt)
     server = replace(
         ctx,
@@ -529,6 +535,12 @@ def test_server_query_acknowledgement_requires_handler_completion_not_just_exit(
     pipeline, run, first, _ = seed(ctx, admit=False)
     with ctx.engine.begin() as conn:
         conn.execute(text("UPDATE CFG_TASKS SET HANDLER='SQL' WHERE TASK_ID=:id"), {"id": first})
+        conn.execute(
+            text(
+                "DELETE FROM CFG_TASK_PARAMETERS WHERE TASK_ID=:id AND PARAMETER_NAME='SCRIPT_KIND'"
+            ),
+            {"id": first},
+        )
         conn.execute(
             text(
                 "UPDATE CFG_TASK_PARAMETERS SET PARAMETER_VALUE=:behavior "

@@ -25,6 +25,7 @@ from sqlalchemy import inspect
 from sqlalchemy.engine import Connection, Engine
 from sqlalchemy.exc import SQLAlchemyError
 
+from etl_craft import __version__
 from etl_craft.core.actor import migration as current_migration
 from etl_craft.core.errors import MigrationError
 from etl_craft.core.text import sha256_hex, strip_comments_and_literals
@@ -181,12 +182,14 @@ def _load_ledger(conn: Connection) -> dict[tuple[str, str], str]:
 
 
 def verify_ledger(ledger: dict[tuple[str, str], str], streams: list[Stream]) -> None:
-    """Raise ``MigrationError`` unless every applied file is present and unchanged."""
+    """Verify known files; stable binaries also accept newer additive Engine migrations."""
     files = {(f.source, f.version): f for stream in streams for f in stream.files}
     directories = {stream.source: stream.directory for stream in streams}
     for (source, version), checksum in sorted(ledger.items()):
         migration = files.get((source, version))
         if migration is None:
+            if source == ENGINE and _future_additive_version(version, streams):
+                continue
             if source not in directories:
                 raise MigrationError(
                     f"applied {source.lower()} migration {version!r} cannot be verified because "
@@ -203,6 +206,18 @@ def verify_ledger(ledger: dict[tuple[str, str], str], streams: list[Stream]) -> 
                 "applied: migration files are never edited. Restore the original file and add "
                 "a new migration."
             )
+
+
+def _future_additive_version(version: str, streams: list[Stream]) -> bool:
+    release = tuple(int(part) for part in __version__.split(".")[:2])
+    if release < (0, 9):
+        return False
+    files = [f.version for stream in streams if stream.source == ENGINE for f in stream.files]
+    return (
+        bool(files)
+        and bool(re.fullmatch(r"\d{4}_[a-z0-9_]+\.sql", version))
+        and int(version.split("_", 1)[0]) > int(max(files).split("_", 1)[0])
+    )
 
 
 def _record(conn: Connection, migration: MigrationFile) -> None:

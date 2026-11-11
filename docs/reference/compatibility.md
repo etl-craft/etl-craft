@@ -10,8 +10,9 @@ unchanged S7.G item bullets that say “from 1.0.0”.
 This page states the release contract, not a claim that unreleased compatibility gates
 already pass. The package currently identifies itself as 0.3.0 in
 [`pyproject.toml`](https://github.com/etl-craft/etl-craft/blob/main/pyproject.toml).
-There are no 0.9.0 or 1.x released schema fixtures yet. Before shipping 0.9.0, the remaining
-rolling-version and additive-upgrade checks below must be implemented and demonstrated.
+There are no 0.9.0 or 1.x released schema fixtures yet. The rolling checks below are unit-level until 0.9.0 is cut; the release gate then certifies
+actual mixed-version controller, UI, agent and CLI deployments and previous binaries against
+the upgraded database. No released 0.9.x binary exists to run that acceptance today.
 
 ## Versioning and public surfaces
 
@@ -26,7 +27,7 @@ release with a warning. Moving from 0.x to 1.0 is not permission to break the 0.
 | CLI | Removing/renaming flags or commands, changing accepted values or established meanings/defaults, reassigning exit codes, or changing machine-readable output contracts | Add optional features without changing old invocations. Human-readable text may gain explanation, but promised columns/streams and JSON remain contracts. The parser lives in [`cli/__init__.py`](https://github.com/etl-craft/etl-craft/blob/main/src/etl_craft/cli/__init__.py) and command modules; [`test_core_errors.py`](https://github.com/etl-craft/etl-craft/blob/main/tests/unit/test_core_errors.py) checks released exit-code numbers and distinct codes per error. |
 | HTTP | Removing/changing version-one routes, methods, authorization requirements, request/response fields, types or meanings; adding a required input to an existing request | Keep `/api/v1/` contracts additive; a new major API path does not remove v1 before the package's removal boundary. [`actions.py`](https://github.com/etl-craft/etl-craft/blob/main/src/etl_craft/services/operations/actions.py) and [`api/routes.py`](https://github.com/etl-craft/etl-craft/blob/main/src/etl_craft/api/routes.py) supply the registered action/route contract; [`test_action_routes.py`](https://github.com/etl-craft/etl-craft/blob/main/tests/unit/test_action_routes.py) checks their agreement. |
 | JSON documents | Removing/renaming fields, changing types or meanings, making optional fields required, or silently changing a document's incompatible shape | Documents identify their contract as `"schema": "etl-craft/<kind>/<n>"`. Add optional response fields; readers tolerate unknown additive output fields. An incompatible document needs a new schema number and retained old readers/contracts until removal is permitted. [`serialization.py`](https://github.com/etl-craft/etl-craft/blob/main/src/etl_craft/services/operations/serialization.py) emits schema identifiers, rejects mismatches and checks required fields; it is not a complete cross-release test. |
-| YAML and configuration CSVs | Removing/renaming keys or columns, changing accepted types/units/default meanings, adding required input without an old-input path, or silently ignoring unsupported input | Old files continue to work. New-only keys, columns and task parameters must be refused by older supported binaries with the required release named, never silently ignored. Current unknown-key checks are in [`loader_helpers.py`](https://github.com/etl-craft/etl-craft/blob/main/src/etl_craft/config/loader_helpers.py); config-file contracts live in [`services/config_files`](https://github.com/etl-craft/etl-craft/blob/main/src/etl_craft/services/config_files.py). Release-aware refusals still need rolling-compatibility acceptance. |
+| YAML and configuration CSVs | Removing/renaming keys or columns, changing accepted types/units/default meanings, adding required input without an old-input path, or silently ignoring unsupported input | Old files continue to work. New-only keys, columns and task parameters must be refused, never silently ignored. Name the required release only when the installed registry knows it; otherwise name the binary version, input and upgrade remedy. Current unknown-key checks are in [`loader_helpers.py`](https://github.com/etl-craft/etl-craft/blob/main/src/etl_craft/config/loader_helpers.py); config-file contracts live in [`services/config_files`](https://github.com/etl-craft/etl-craft/blob/main/src/etl_craft/services/config_files.py). Installed registry refusals are unit-tested; actual released mixed-version acceptance waits for 0.9.0. |
 | Engine DB | Dropping/renaming tables or columns, narrowing types, making an existing column required, or changing meaning so supported older binaries cannot run | Post-0.9 migrations add tables, nullable columns or indexes only. Both dialect schemas/migrations must agree. Existing checks in [`engine/migrations.py`](https://github.com/etl-craft/etl-craft/blob/main/src/etl_craft/engine/migrations.py) protect the migration ledger and checksums; they do not by themselves prove old binaries run on a new DB. |
 | Documented Python contracts | Removing public scripting/configuration/operation names or changing their established signature or behavior | Keep the documented entry points and explicitly exported names; private implementation details are not new promises merely because their source can be browsed. See the [Python API](../api/etl_craft/index.md) and [service-operation guide](../guides/service-operations.md). |
 
@@ -59,16 +60,59 @@ Post-0.9 migrations must leave supported older binaries usable against the upgra
 Rollback is reinstalling a compatible previous binary, **not** reversing the migration.
 This additive rule concerns package Engine DB migrations; it does not permit destructive
 team metadata edits or warehouse writes without their own controls. New features may need
-new settings/columns/parameters, but older binaries must name the release required rather
-than guessing or ignoring them. Back up and follow the [deployment guide](../deploying/index.md)
+new settings/columns/parameters, but older binaries must refuse unsupported inputs rather than ignoring them. They name a
+required release only when their installed registry knows it, as detailed below. Back up and follow the [deployment guide](../deploying/index.md)
 for the installed release.
 
-Current enforcement is intentionally narrower: [`check_agent`](https://github.com/etl-craft/etl-craft/blob/main/src/etl_craft/services/operations/agents.py)
-still refuses unequal agent/API versions; [`require_current_schema`](https://github.com/etl-craft/etl-craft/blob/main/src/etl_craft/services/operations/schema_status.py)
-requires pending package migrations. These pre-0.9 safeguards are **not** mixed-version
-support. Replacing the exact checks with tested ranges, additive migration gates, and
-release-aware input refusals remains S7.G work before 0.9.0. Do not use this policy page as
-evidence that a current mixed-version deployment is safe.
+### Implemented checks and their limits
+
+[`require_peer_version`](https://github.com/etl-craft/etl-craft/blob/main/src/etl_craft/core/compatibility.py)
+is the one package peer rule: a local `M.x.y` accepts `>=M.0.0,<(M+1).0.0`, including newer
+minor and patch peers. A different major or malformed version is refused, naming both versions,
+the expected range and the component to upgrade. Agent admission calls this function instead
+of comparing package versions for equality. Controller heartbeats only record versions; the
+UI and CLI do not currently negotiate package versions. They retain their additive response
+readers. A required field must not be added to an existing wire document without a default;
+the existing JSON schema checks still refuse a different document generation or a missing
+required field. The same-major rule is not permission to change `/api/v1` or schema contracts.
+
+[`verify_ledger`](https://github.com/etl-craft/etl-craft/blob/main/src/etl_craft/engine/migrations.py)
+keeps known migration checksums immutable. From package 0.9.0 onward it accepts later Engine
+migration filenames, while still refusing missing earlier files, changed known files and
+missing project files. Newer binaries still require their own migrations to have been applied.
+Pre-0.9 binaries retain strict ledger verification. Future Engine entries rely on the additive
+release gate and the actor-guarded ledger, not on an older binary understanding future SQL.
+
+The [additive SQL check](https://github.com/etl-craft/etl-craft/blob/main/src/etl_craft/dialects/engine/compatibility.py)
+allows only new tables, indexes and nullable columns; drops, renames, type changes, data
+rewrites, Python conversion markers and non-null column additions (including those with defaults) are refused. Its
+[repository test](https://github.com/etl-craft/etl-craft/blob/main/tests/unit/test_additive_compatibility.py)
+scans migrations absent from the `v0.9.0` tag once that tag exists (fetch the baseline tag in
+the gate checkout). Until then it exercises
+synthetic allowed/refused SQL. The 74 migration pairs `0019`–`0092` since `v0.3.0` are
+**unreleased**: 65 PostgreSQL and 66 SQLite files contain changes outside this strict additive
+subset. They stay unchanged; they are not post-baseline migrations. No released migration
+has been rewritten and no previous-binary acceptance is claimed for these pre-baseline files.
+
+### Release-aware input refusals
+
+The installed [`INTRODUCED` registry](https://github.com/etl-craft/etl-craft/blob/main/src/etl_craft/core/compatibility.py)
+records settings, config-file columns, built-in task/pipeline parameters and CLI options.
+Existing names are registered at their first stable contract baseline, 0.9.0, rather than
+claiming their historical pre-stable creation dates. Every release adding a name must add
+its introducing release to this module. The
+[inventory test](https://github.com/etl-craft/etl-craft/blob/main/tests/unit/test_rolling_compatibility.py)
+compares it with the accepted loader, CSV, handler and CLI inventories and refuses an
+unregistered addition. Python scripts' own argument names belong to the team, not this registry.
+
+An unsupported name known to the installed registry names its required release. An unknown
+future name **cannot** name a release the binary has never heard of: it instead names the
+installed binary version, the input name and the remedy, “upgrade the component to a release
+that supports this input”. There is no external manifest or future-release lookup. YAML and
+CSV readers, CLI option parsing and parameter validation use that shared refusal. Built-in
+handlers also refuse unknown task parameters before local or agent execution; validation no
+longer warns and proceeds. Unknown additive **response** fields remain accepted, as required
+for rolling API compatibility; this rule concerns inputs, not response extensions.
 
 ## Deprecation warnings
 

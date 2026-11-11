@@ -114,3 +114,24 @@ def test_invalid_migration_markers_are_refused(tmp_path, source, marker, message
     (tmp_path / "0099_marked.sql").write_text(f"-- etl-craft: {marker}\nSELECT 1;")
     with pytest.raises(MigrationError, match=message):
         migrations.read_stream(source, tmp_path)
+
+
+def test_stable_binary_accepts_future_engine_ledger_but_keeps_known_checksums(
+    tmp_path, monkeypatch
+):
+    (tmp_path / "0092_existing.sql").write_text("CREATE TABLE EXAMPLE (ID INT);")
+    stream = migrations.read_stream(migrations.ENGINE, tmp_path)
+    current = stream.files[0]
+    monkeypatch.setattr(migrations, "__version__", "0.9.0", raising=False)
+    ledger = {
+        (migrations.ENGINE, current.version): current.checksum,
+        (migrations.ENGINE, "0093_future.sql"): "newer-binary-checksum",
+    }
+    migrations.verify_ledger(ledger, [stream])
+    ledger[(migrations.ENGINE, current.version)] = "changed"
+    with pytest.raises(MigrationError, match="has changed"):
+        migrations.verify_ledger(ledger, [stream])
+    with pytest.raises(MigrationError, match="missing"):
+        migrations.verify_ledger({(migrations.ENGINE, "0091_missing.sql"): "missing"}, [stream])
+    with pytest.raises(MigrationError, match="missing"):
+        migrations.verify_ledger({(migrations.ENGINE, "0092_other.sql"): "missing"}, [stream])
