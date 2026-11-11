@@ -137,11 +137,12 @@ def issuer(tmp_path, monkeypatch):
                 self.reply({"id_token": token})
 
         def redirect(self, target):
-            if "\r" in target or "\n" in target:
+            header_value = target.replace("\r", "").replace("\n", "")
+            if header_value != target:
                 self.reply({"error": "invalid_redirect_uri"}, 400)
                 return
             self.send_response(302)
-            self.send_header("Location", target)
+            self.send_header("Location", header_value)
             self.end_headers()
 
         def reply(self, value, status=200):
