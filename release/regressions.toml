@@ -354,3 +354,9 @@ browser-sso-pkce = [
     "tests/integration/api/test_browser_sso.py::test_browser_proof_refusals_are_audited_without_sessions",
     "tests/integration/api/test_browser_sso.py::test_authorization_parameters_verified_session_actor_and_single_use",
 ]
+
+provider-single-logout = [
+    "tests/integration/api/test_single_logout.py::test_logout_revokes_the_session_and_reports_provider_redirect",
+    "tests/integration/api/test_single_logout.py::test_logout_refuses_a_foreign_post_logout_address_without_a_redirect",
+    "tests/browser/test_sso_redirect.py::test_sign_out_follows_provider_discovery_and_revokes_local_session",
+]

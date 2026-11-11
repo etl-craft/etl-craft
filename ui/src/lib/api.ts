@@ -95,14 +95,8 @@ export async function postForm<T>(path: string, body: FormData, params?: Params)
 }
 
 export async function signOut(): Promise<void> {
-  await fetch("/api/v1/login/revoke", {
-    method: "POST",
-    credentials: "same-origin",
-    redirect: "manual",
-    headers: { "Content-Type": "application/json", "X-CSRF-Token": csrfToken() },
-    body: "{}",
-  });
-  window.location.assign("/ui/signin");
+  const answer = await postJson<{ redirect: string | null; message: string }>("/api/v1/login/revoke", {});
+  window.location.assign(answer.redirect ?? "/ui/signin?signed_out=local");
 }
 
 export const project = (code: string): string => `/api/v1/projects/${encodeURIComponent(code)}`;

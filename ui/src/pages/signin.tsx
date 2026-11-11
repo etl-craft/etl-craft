@@ -86,6 +86,7 @@ export function SignIn() {
         <Logo className="size-12" />
         <PageHeader title="Sign in to etl-craft" />
         {params.get("changed") ? <Notice info>Your password was changed. Sign in with the new one.</Notice> : null}
+        {params.get("signed_out") === "local" ? <Notice info>Signed out of etl-craft; provider sign-out stayed local.</Notice> : null}
         {data?.notice ? <Notice info>{data.notice}</Notice> : null}
         {methods.isPending ? <Loading what="sign-in options" /> : null}
         {methods.isError ? <Notice>{failureText(methods.error)}</Notice> : null}

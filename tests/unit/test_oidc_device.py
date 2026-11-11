@@ -179,3 +179,32 @@ def test_a_401_from_the_device_authorization_endpoint_is_a_plain_http_failure(is
     state["device_status"] = 401
     with pytest.raises(ConfigurationError, match="HTTP 401"):
         start_device(auth)
+
+
+@pytest.mark.parametrize("endpoint", ["logout", "authorize"])
+@pytest.mark.parametrize("control", ["\r", "\n"])
+def test_issuer_refuses_response_splitting_in_redirect_headers(issuer, endpoint, control):
+    import http.client
+    import os
+    import ssl
+    from urllib.parse import urlencode, urlsplit
+
+    auth, _ = issuer
+    address = urlsplit(auth.oidc_issuer)
+    connection = http.client.HTTPSConnection(
+        address.hostname,
+        address.port,
+        context=ssl.create_default_context(cafile=os.environ["SSL_CERT_FILE"]),
+    )
+    field = "post_logout_redirect_uri" if endpoint == "logout" else "redirect_uri"
+    target = "https://localhost/" + control + "X-Injected: yes"
+    params = {field: target, "state": "test-state"}
+    connection.request("GET", f"/{endpoint}?" + urlencode(params))
+    response = connection.getresponse()
+    try:
+        assert response.status == 400
+        assert response.getheader("Location") is None
+        assert response.getheader("X-Injected") is None
+    finally:
+        response.read()
+        connection.close()

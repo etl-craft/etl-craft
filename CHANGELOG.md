@@ -6,6 +6,11 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+- Browser/API sign-out revokes the local session, then returns an HTTPS provider logout URL
+  when discovery advertises one. Its return address is the configured public origin; foreign
+  addresses are refused. Providers without a logout endpoint retain local-only sign-out with
+  an explicit message. CLI sign-out remains local and ID tokens are not retained.
+
 - Browser SSO can use authorization code with PKCE and a required nonce. Configure the optional
   `Auth.Browser_state_secret` variable reference (at least 32 secret bytes) and the existing public
   URL; state is signed, expires after five minutes and cannot be replayed across server copies.

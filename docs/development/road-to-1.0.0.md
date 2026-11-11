@@ -128,7 +128,7 @@ item's text, or work done early under another item.
 | S5.O.2b Normalized object contracts | Done | #150, #151, #152, #153, #154, #160, #162, #181 | Merge column lists retain parameter storage; lineage versions use component endpoints; target state, view statements and rule results are keyed by components, and target locks use the resolved identity |
 | S5.P Project documentation gap UI | Done | #165 | Structured schema/lineage gaps, accessible column/graph warnings and read-only comparison API |
 | S5.R Consolidate before the cluster | Done | #179, #185, #188 to #193, #195, #201 | Items 1 to 8 complete: the execution core and configuration loader are split by responsibility; the moved execution functions are shortened with shared run records and unchanged transactions and retries |
-| S5.S Accounts, login and roles | Done | #203, #204, #205, #206, #207, #376 | Account identities, local and server sign-in with refresh tokens, one service-role policy, explicit actors with an `etl-craft` writer on every run, and a local installation operating a server over HTTPS; every action has one implementation that the CLI, the API and later the UI call |
+| S5.S Accounts, login and roles | Done | #203, #204, #205, #206, #207, #376, #377 | Account identities, local and server sign-in with refresh tokens, one service-role policy, explicit actors with an `etl-craft` writer on every run, and a local installation operating a server over HTTPS; every action has one implementation that the CLI, the API and later the UI call |
 | S5.O.3 SCD human override protection | Done | #208 | Native PostgreSQL/DuckDB protection, admin edits/unlocks and column provenance; cloud acceptance unavailable on its try |
 | S5.Q Scoped operator controls | Done | #209, #210, #211 | Isolated manual selections, scoped holds/stop/abort, durable recovery/restart preparation, one-run pause permission, selected bulk outcomes and shared capabilities |
 | S5.Q.4 Recorded run-parameter overrides | Planned | | Separate engine follow-up retained from S7.A: immutable per-run overrides, CLI first, then shared API/UI |
@@ -760,6 +760,15 @@ values, provenance, authenticated API roles on both Engine DBs, rollback and rep
 unlock races. The owner merged #208 after the fresh Databricks probe could not start compute. That
 availability limit is timed and must be checked against the provider, not treated as waiting
 for a human quota reset. A fixed-checkout Snowflake acceptance run is being completed separately.
+
+S5.S single logout (#377). Choices that differ from the item text: owner-approved provider
+logout discovery extends the shared sign-out operation for browser/API callers; the CLI remains
+local. Local revocation commits before discovery or return-address validation. The existing
+public origin is the only post-logout destination; no ID token is retained for a hint.
+Acceptance availability: static/strict docs, UI build checks, unit/API sign-out and browser
+sign-in/sign-out tests run locally, including source-only failure proofs. Package PostgreSQL
+service cases remain unavailable while demo k3d is up; its instructions prohibit starting the
+package stack alongside it. Live demo discovery/sign-out availability is recorded in the PR.
 
 S5.S browser redirect sign-in (#376). Choices that differ from the item text: the owner approved
 an optional `Auth.Browser_state_secret` secret-variable reference and browser authorization code

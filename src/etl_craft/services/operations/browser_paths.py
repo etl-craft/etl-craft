@@ -1,8 +1,13 @@
 """Same-site return addresses shared by sign-in operations and HTTP rendering."""
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from etl_craft.config.model import ConnectorConfig
+
 from urllib.parse import unquote, urlsplit
 
-from etl_craft.core.errors import UsageError
+from etl_craft.core.errors import ConfigurationError, UsageError
 
 
 def return_path(value: str) -> str:
@@ -24,3 +29,16 @@ def return_path(value: str) -> str:
     ):
         raise UsageError(f"return_to={value!r}; expected a same-site path such as /ui; open /ui")
     return value
+
+
+def public_origin(config: "ConnectorConfig") -> str:
+    """Return the configured HTTPS public origin, independent of request headers."""
+    site = config.docs_site
+    base = site.external_url or (f"https://{site.domain}" if site.domain else None)
+    if not base or not base.startswith("https://"):
+        raise ConfigurationError(
+            "browser SSO needs an HTTPS public address; configure Docs_site.External_url "
+            "or Docs_site.Domain for this deployment"
+        )
+    origin = urlsplit(base)
+    return f"{origin.scheme}://{origin.netloc}"
