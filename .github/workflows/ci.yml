@@ -105,6 +105,7 @@ jobs:
         with:
           enable-cache: ${{ inputs.cache != 'cold' }}
       - run: uv sync --locked --all-groups --python ${{ matrix.python }}
+      - uses: ./.github/actions/docker-images
       - name: Start the relay and database required by SQLite integration tests
         if: matrix.profile == 'coverage-3.11-ubuntu-latest'
         run: docker compose up -d --wait postgres mailpit
@@ -170,6 +171,7 @@ jobs:
         with:
           enable-cache: ${{ inputs.cache != 'cold' }}
       - run: uv sync --locked --all-groups --python 3.11
+      - uses: ./.github/actions/docker-images
       - name: Start the services this suite requires
         env:
           PROFILE: ${{ matrix.profile }}
@@ -223,6 +225,7 @@ jobs:
         with:
           name: wheel-and-sdist
           path: dist
+      - uses: ./.github/actions/docker-images
       - name: Start the Engine DB, relay and selected warehouse
         env:
           WAREHOUSE: ${{ matrix.warehouse }}
