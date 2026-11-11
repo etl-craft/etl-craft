@@ -30,7 +30,7 @@ def restore_logger():
 
 @pytest.fixture
 def bound(engine_db, tmp_path, request):
-    """A config file, a task T with parameter X=1, and its row bound under a run."""
+    """A config file, a task T with parameter DOCUMENTATION=1, and its row bound under a run."""
     profile = engine_db.config.engine
     schema = "public" if profile.jdbc_url.startswith("jdbc:postgresql") else "main"
     block = {"Jdbc_url": profile.jdbc_url, "Schema": schema}
@@ -63,7 +63,7 @@ def bound(engine_db, tmp_path, request):
         conn.execute(
             text(
                 "INSERT INTO CFG_TASK_PARAMETERS (TASK_ID, PARAMETER_NAME, PARAMETER_VALUE) "
-                "VALUES (:t, 'X', '1')"
+                "VALUES (:t, 'DOCUMENTATION', '1')"
             ),
             {"t": task},
         )
@@ -108,7 +108,7 @@ def test_the_context_is_rebuilt_from_the_task_run(bound):
     )
     assert (context.refresh_type, dict(context.task_params), context.force) == (
         "INCREMENTAL",
-        {"X": "1"},
+        {"DOCUMENTATION": "1"},
         True,
     )
 

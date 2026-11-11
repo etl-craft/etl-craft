@@ -59,7 +59,8 @@ from etl_craft.config.retention import parse_retention
 from etl_craft.config.targets import active_catalog
 from etl_craft.config.uploads import ARCHIVE_KEYS, parse_uploads
 from etl_craft.config.uploads import KEYS as UPLOAD_KEYS
-from etl_craft.core.enums import AuthMode
+from etl_craft.core.compatibility import input_refusal
+from etl_craft.core.enums import AuthMode, InputKind
 from etl_craft.core.errors import ConfigurationError, MetadataError
 
 SECTIONS = (
@@ -306,7 +307,8 @@ def _check_layout(raw: object, path: Path) -> dict[str, object]:
     unknown = sorted(set(raw) - set(SECTIONS))
     if unknown:
         raise ConfigurationError(
-            f"{path}: unknown top-level section(s) {unknown} — expected {list(SECTIONS)}"
+            f"{path}: unknown top-level section(s) {unknown} — expected {list(SECTIONS)}; "
+            + "; ".join(input_refusal(InputKind.SETTING, name) for name in unknown)
         )
     # A reader finds where secrets come from before anything that names one.
     present = [section for section in raw if section in SECTIONS]

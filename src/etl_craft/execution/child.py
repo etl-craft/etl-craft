@@ -46,6 +46,7 @@ from etl_craft.execution.classify import classify_failure
 from etl_craft.execution.context import build_task_context
 from etl_craft.execution.control_flow import process_local_queries
 from etl_craft.execution.leases import process_start
+from etl_craft.handlers.parameters import require_task_parameters
 from etl_craft.handlers.registry import TaskContext, format_task_log, resolve_handler
 from etl_craft.warehouse.fencing import cancellation_scope, stop_current_queries
 
@@ -173,6 +174,7 @@ def run_handler(
         context = replace(context, attempt_id=identity[0], owner=identity[1])
     logger.info("running the %s handler", context.handler)
     try:
+        require_task_parameters(context.handler, context.task_params)
         if "WATERMARK_SOURCE_PIPELINES" in context.task_params:
             from etl_craft.execution.reconcile import settle_sources
             from etl_craft.handlers.sql.watermarks import source_pipelines

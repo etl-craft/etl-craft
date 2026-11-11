@@ -31,7 +31,8 @@ from sqlalchemy.engine import Connection, Engine
 
 from etl_craft.config import ConnectorConfig
 from etl_craft.core.actor import migration as current_migration
-from etl_craft.core.enums import YesNo
+from etl_craft.core.compatibility import input_refusal
+from etl_craft.core.enums import InputKind, YesNo
 from etl_craft.core.errors import EngineDbError, MetadataFileError
 from etl_craft.core.text import suggest
 from etl_craft.dialects.engine import for_engine
@@ -140,7 +141,8 @@ def _read_table(
         return {}
     known = {column.name for column in table.columns}
     header_problems = [
-        f"{path} line 1: unknown column {name!r}; its columns are {columns}"
+        f"{path} line 1: unknown column {name!r}; its columns are {columns}; "
+        + input_refusal(InputKind.COLUMN, f"{table.file}.{name}")
         for name in header
         if name not in known
     ]

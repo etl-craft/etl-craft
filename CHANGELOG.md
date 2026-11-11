@@ -6,6 +6,18 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+### Rolling compatibility checks (S7.G)
+
+- Agent admission accepts same-major package peers through one shared range rule; refusals name
+  both versions, the compatible range and the upgrade remedy. Wire schema generations stay exact.
+- From package 0.9.0, known Engine migration checksums stay immutable while later additive Engine
+  ledger entries are accepted. The additive SQL gate applies after the `v0.9.0` baseline tag;
+  unreleased pre-baseline migrations are unchanged. Actual old/new-binary acceptance awaits 0.9.0.
+- Settings, CSV columns, built-in parameters and CLI options have one installed introduction
+  registry. Unknown inputs name the installed version and upgrade remedy; known unsupported
+  inputs also name their required release. Built-in unknown task parameters now fail validation
+  and execution rather than warning and being ignored. Python scripts retain their own arguments.
+
 ### Compatibility policy and pre-public inventory (S7.G)
 
 - Document the approved 0.9.0 compatibility baseline, retained 0.9.0 contracts through 1.x,

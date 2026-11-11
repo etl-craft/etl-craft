@@ -264,20 +264,10 @@ def test_task_definitions_are_checked_with_the_handlers_own_rules(project):
     assert only("no_action").startswith("SQL_ACTION is required")
     assert "read-only" in only("writes")
     assert "missing.sql" in only("no_file")
-    assert sorted(by_task["BAD.typo"]) == [
-        (fail, "CFG_TASK_PARAMETERS.TASK_TIMEOUT_SECONDS='soon' is not a whole number"),
-        (
-            Status.WARN,
-            "SQL task parameter MERGE_KEYS is not read by etl-craft, so it has no "
-            "effect; did you mean MERGE_KEY, MERGE_COMPARE_COLUMNS, "
-            "MERGE_DEDUPE_ORDER",
-        ),
-        (
-            Status.WARN,
-            "SQL task parameter SOURCE_SQL_FILE is not read by etl-craft, so it has no "
-            "effect; did you mean SCRIPT_FILE",
-        ),
-    ]
+    assert all(status is fail for status, _ in by_task["BAD.typo"])
+    messages = "\n".join(message for _, message in by_task["BAD.typo"])
+    for part in ("TASK_TIMEOUT_SECONDS='soon'", "MERGE_KEYS", "SOURCE_SQL_FILE", "upgrade"):
+        assert part in messages
     assert "set SETUP_FOR" in only("orphan_setup")
     assert "EXTERNAL_LOCATION does not apply to DuckDB" in only("iceberg_path")
     assert only("engine_columns") == (

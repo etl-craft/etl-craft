@@ -186,7 +186,7 @@ item's text, or work done early under another item.
 | S7.D Alert channels | Planned |  | Signed webhooks, Slack-shaped bodies and channel delivery evidence remain; email is already supported |
 | S7.E Secrets providers | In progress | #84, #120, #323 | ENVIRONMENT/FILE task declarations, fenced TLS delivery and private child pipe; secret managers and Cache_seconds remain |
 | S7.F Packaging and deployment | Done | #227, #231, #316 | Wheel-built role images, tagged release smoke and publishing, Compose/Kubernetes manifests and systemd units |
-| S7.G Compatibility policy | In progress | #379 | Evidence-backed 0.9.0 policy and dependency/name inventory; rolling version ranges, additive upgrade acceptance and release-aware refusals remain |
+| S7.G Compatibility policy | In progress | #379; rolling checks | Policy, shared same-major admission, additive SQL/ledger checks and installed input registry implemented; actual mixed-version certification waits for the 0.9.0 release gate |
 | S7.H Cloud acceptance | In progress | #104–#110, #208, #231, #236, #247 | Native/Iceberg and managed-engine contracts exist; complete candidate evidence and unavailable provider cases remain |
 | S7.I The endurance run | Planned |  | 72-hour accelerated Support Insights candidate run, faults and bounded growth evidence after S8 is running |
 | S7.J Documentation to finish | In progress | #85, #227, #277 | Generated references and guides exist; supported public contracts, complete reference and recipes remain |
@@ -233,6 +233,21 @@ item's text, or work done early under another item.
   and release-aware input refusals are implemented. S7.G remains in progress for those checks.
   Acceptance availability: static checks, strict docs and the unit suite run locally; no
   runtime, schema, dependency or UI change requires services, cloud or a UI rebuild here.
+
+- **S7.G rolling checks.** Choices that differ from the item text: the approved installed
+  registry can name only releases it knows; unknown future inputs name the binary version,
+  input and upgrade remedy. No external manifest is added. Existing inputs use the 0.9.0
+  stable contract baseline in the registry, not historical pre-stable introduction dates.
+  Only agents had an exact rejecting package check; controller/UI/CLI gain no new handshake.
+  Same-major acceptance is shared; JSON generation/required-field checks stay in place.
+  Stable binaries accept later Engine ledger entries, preserving known checksums and strict
+  project-file verification. Additive SQL is gated against the v0.9.0 tag once available;
+  the 74 unreleased migration pairs since v0.3.0 stay unchanged. Fetch the baseline tag in
+  the release-gate checkout once it exists. Python scripts keep team
+  argument names; built-in handler parameters are refused by validation and both executors.
+  Acceptance availability: rolling coverage is unit-level because no released 0.9.x binary
+  exists; certify actual mixed-version roles and previous binaries on upgraded databases when
+  0.9.0 is cut. The progress row remains in progress for that release-gate certification.
 
 What a person picking up the work needs that the code and the item texts do not say.
 

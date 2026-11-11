@@ -8,12 +8,12 @@ read and checked, Python scripts are parsed, not imported. Active source definit
 compared with existing warehouse tables by the standalone validate command.
 
 Each finding is a ``FAIL`` (a run would fail, hang or silently do something else) or a ``WARN``
-(it works, but look at this, such as a parameter no handler reads).
+(it works, but deserves attention, such as an unmanaged overlapping SQL write).
 """
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
 from typing import ClassVar
@@ -24,13 +24,21 @@ from sqlalchemy.exc import SQLAlchemyError
 from etl_craft.config import ConnectorConfig
 from etl_craft.config.project import python_script
 from etl_craft.config.targets import active_catalog
+from etl_craft.core.compatibility import input_refusal
 from etl_craft.core.cron import parse, timezone
-from etl_craft.core.enums import BusinessRuleLevel, DependencyType, EmailFlavour, Handler, SqlAction
+from etl_craft.core.enums import (
+    BusinessRuleLevel,
+    DependencyType,
+    EmailFlavour,
+    Handler,
+    InputKind,
+    SqlAction,
+)
 from etl_craft.core.errors import EtlCraftError
 from etl_craft.core.graph import build_graph, cycles
 from etl_craft.core.placement import ResourceRequest, resource_request
 from etl_craft.core.script_kinds import script_kind
-from etl_craft.core.text import is_metadata_code, qualify, suggest
+from etl_craft.core.text import is_metadata_code, qualify
 from etl_craft.dialects.business_rules import expand_scope, output_key
 from etl_craft.dialects.engine import for_engine
 from etl_craft.dialects.query_analysis import managed_select_problem, output_columns, read_query
@@ -64,15 +72,14 @@ from etl_craft.handlers import (
     event_wait,
     file_validation,
     python_scripts,
-    run_pipeline,
     sql_script,
 )
 from etl_craft.handlers.business_rules import check_output, check_rule
-from etl_craft.handlers.registry import COMMON_PARAMETERS, TaskContext
+from etl_craft.handlers.parameters import parameter_problems
+from etl_craft.handlers.registry import TaskContext
 from etl_craft.handlers.resources import LocalLocker
 from etl_craft.handlers.sql import task_dialect
 from etl_craft.handlers.sql.creation import writer_action
-from etl_craft.handlers.sql.spec import PARAMETERS as SQL_PARAMETERS
 from etl_craft.handlers.sql.spec import WRITERS, SqlTask, read_sql_task
 from etl_craft.handlers.sql.tables import ENGINE_COLUMNS
 from etl_craft.handlers.sql.watermarks import source_pipelines
@@ -100,18 +107,6 @@ ROWS_REPORTED = frozenset(WRITERS)
 
 FULL_REPLACE = frozenset({SqlAction.CREATE_TABLE, SqlAction.OVERWRITE_TABLE})
 """The SQL actions that rebuild every row of their target, and so every ``ROW_ID``."""
-
-KNOWN_PARAMETERS: dict[str, frozenset[str]] = {
-    Handler.FILE_VALIDATION: file_validation.PARAMETERS,
-    Handler.ERASURE: frozenset(),
-    Handler.EVENT_WAIT: event_wait.PARAMETERS,
-    Handler.RUN_PIPELINE: run_pipeline.PARAMETERS,
-    Handler.SQL: SQL_PARAMETERS,
-    Handler.SQL_SCRIPT: sql_script.PARAMETERS,
-    Handler.BUSINESS_RULES: frozenset(),
-    Handler.EMAIL_ALERT: email_alert.PARAMETERS,
-}
-"""The parameters each handler reads. A PYTHON task's script may read any, so none is unknown."""
 
 
 @dataclass(frozen=True)
@@ -321,7 +316,8 @@ def _pipelines(conn: Connection, config: ConnectorConfig, data: _Metadata, repor
                 code,
                 f"CFG_PIPELINES.PIPELINE_PARAMETERS contains unknown key {name!r}; "
                 f"allowed keys: {', '.join(PIPELINE_PARAMETER_KINDS)}; "
-                "remove the unknown key or replace it with an allowed key",
+                "remove the unknown key or replace it with an allowed key; "
+                + input_refusal(InputKind.PARAMETER, name),
             )
         try:
             pipeline_id = resolve_pipeline_id(
@@ -471,10 +467,8 @@ def _task(
         task_retry_policy(params, config, task.handler)
     except EtlCraftError as error:
         report.fail(where, str(error))
-    known = KNOWN_PARAMETERS.get(task.handler)
-    if known is not None:
-        for name in sorted(set(params) - known - COMMON_PARAMETERS):
-            report.warn(where, _unknown(f"{task.handler} task parameter", name, sorted(known)))
+    for problem in parameter_problems(task.handler, params):
+        report.fail(where, problem)
     context = _context(config, task, params)
     check = CHECKS.get(task.handler)
     if check is None:
@@ -727,21 +721,6 @@ def _code_problem(column: str, code: str) -> str:
         f"{column}={code!r} must start with an ASCII letter and contain only letters, digits "
         "and underscores, at most 128 characters; rename it before generating commands"
     )
-
-
-RENAMED_PARAMETERS = {
-    "SCRIPT_NAME": "SCRIPT_FILE",
-    "SOURCE_SQL": "SELECT_QUERY",
-    "SOURCE_SQL_FILE": "SCRIPT_FILE",
-}
-"""Task parameters renamed without aliases, and the names that replace them."""
-
-
-def _unknown(what: str, name: str, known: Sequence[str]) -> str:
-    renamed = RENAMED_PARAMETERS.get(name, "")
-    hints = [renamed] if renamed in known else suggest(name, list(known))
-    hint = f"; did you mean {', '.join(hints)}" if hints else ""
-    return f"{what} {name} is not read by etl-craft, so it has no effect{hint}"
 
 
 def _script_overlap(context: TaskContext, data: _Metadata, report: Report) -> None:

@@ -27,6 +27,7 @@ from etl_craft.execution.child import exit_now
 from etl_craft.execution.classify import classify_failure
 from etl_craft.execution.leases import process_start
 from etl_craft.execution.secret_pipe import read_values
+from etl_craft.handlers.parameters import require_task_parameters
 from etl_craft.handlers.registry import TaskContext, format_task_log, resolve_handler
 from etl_craft.services.operations.agent_models import AgentTask
 from etl_craft.services.operations.serialization import encode, from_json
@@ -121,6 +122,7 @@ def main() -> int:
         sys.dont_write_bytecode = True
         os.chdir(config.project_dir)
         with cancellation_scope(config, store.session_tag):
+            require_task_parameters(context.handler, context.task_params)
             counts = resolve_handler(context.handler)(context, store)
         result = replace(
             result,

@@ -13,7 +13,8 @@ from urllib.parse import parse_qsl, urlencode
 from etl_craft.config.auth import AUTH_EXTRA_FIELDS
 from etl_craft.config.model import EXAMPLE_PATH, SourceConfig
 from etl_craft.config.resolve import Resolver
-from etl_craft.core.enums import SecretsSource, enum_value
+from etl_craft.core.compatibility import input_refusal
+from etl_craft.core.enums import InputKind, SecretsSource, enum_value
 from etl_craft.core.errors import ConfigurationError
 from etl_craft.core.text import SECRET_KEYS, is_safe_identifier
 
@@ -166,7 +167,13 @@ def reject_unknown(
     """Refuse settings outside the accepted keys; ``fields`` shows a block's field keys."""
     unknown = sorted((shown(key) if fields else key) for key in set(settings) - set(allowed))
     if unknown:
-        raise ConfigurationError(f"{path}: unknown key(s) {unknown} in {where}")
+        scope = where.split(".")[0]
+        if where.endswith((".Email", ".Archive_to")):
+            scope += "." + where.rsplit(".", 1)[1]
+        raise ConfigurationError(
+            f"{path}: unknown key(s) {unknown} in {where}; "
+            + "; ".join(input_refusal(InputKind.SETTING, f"{scope}.{key}") for key in unknown)
+        )
 
 
 def parse_source(secrets: dict[str, object], path: Path, environment: Resolver) -> SourceConfig:

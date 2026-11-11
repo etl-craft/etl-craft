@@ -17,6 +17,8 @@ from etl_craft.cli.banner import Facts, is_terminal, render, suppressed, wants_a
 from etl_craft.cli.commands import COMMANDS, Command
 from etl_craft.cli.output import Output
 from etl_craft.core import log
+from etl_craft.core.compatibility import input_refusal
+from etl_craft.core.enums import InputKind
 from etl_craft.core.errors import EtlCraftError, ExitCode
 
 logger = logging.getLogger(__name__)
@@ -92,7 +94,7 @@ class CommandParser(argparse.ArgumentParser):
             if isinstance(action, argparse._SubParsersAction):
                 values.extend(action.choices)
         invalid = re.search(r"invalid choice: '([^']+)'", message)
-        words = [invalid.group(1)] if invalid else re.findall(r"--[\w-]+", message)
+        words = [invalid.group(1)] if invalid else re.findall(r"(?<!\w)-{1,2}[\w-]+", message)
         suggestion = next(
             (
                 match[0]
@@ -101,6 +103,8 @@ class CommandParser(argparse.ArgumentParser):
             ),
             None,
         )
+        if message.startswith("unrecognized arguments:"):
+            message += "; " + " ".join(input_refusal(InputKind.CLI_OPTION, word) for word in words)
         message = message.split(" (choose from", 1)[0]
         hint = f" Did you mean {suggestion!r}?" if suggestion else ""
         self.exit(2, f"{self.prog}: error: {message}.{hint} Use {self.prog} --help.\n")

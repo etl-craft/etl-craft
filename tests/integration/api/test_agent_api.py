@@ -1572,7 +1572,7 @@ def test_running_agent_refuses_api_upgrade_before_mutating_ownership(
 
     db, client, headers, _, _, _ = agent_scene
     attempt = queue(db)
-    monkeypatch.setattr(agents, "__version__", "next-version")
+    monkeypatch.setattr(agents, "__version__", "99.0.0")
     fields = {
         "register": {"pool": "default", "resources": encode(resources())},
         "claim": {"free_kinds": ["warehouse"]},
@@ -1582,7 +1582,13 @@ def test_running_agent_refuses_api_upgrade_before_mutating_ownership(
         f"/api/v1/agent/{route}", headers=headers, json={"version": __version__, **fields}
     )
     assert response.status_code == 409
-    for part in (f"agent version={__version__}", "API version=next-version", "install", "restart"):
+    for part in (
+        f"agent version={__version__}",
+        "local version=99.0.0",
+        ">=99.0.0,<100.0.0",
+        "upgrade",
+        "restart",
+    ):
         assert part in response.text
     with db.engine.connect() as conn:
         row = conn.execute(

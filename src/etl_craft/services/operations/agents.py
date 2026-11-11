@@ -14,9 +14,9 @@ from sqlalchemy.engine import Connection, Row
 
 from etl_craft import __version__
 from etl_craft.core.agent_resources import AgentResources, capacity
+from etl_craft.core.compatibility import require_peer_version
 from etl_craft.core.enums import AgentStatus, ApiRole, DeploymentProfile, SlotKind
 from etl_craft.core.errors import (
-    ConfigurationError,
     PermissionDeniedError,
     RunRefusedError,
     StaleTransitionError,
@@ -92,11 +92,7 @@ class AgentsView:
 
 def check_agent(ctx: OperationContext, request: AgentRequest) -> int:
     """Derive identity from the authenticated credential and refuse incompatible roles."""
-    if request.version != __version__:
-        raise ConfigurationError(
-            f"agent version={request.version}, API version={__version__}; "
-            "install the API's etl-craft version on the agent and restart it"
-        )
+    require_peer_version(__version__, request.version, "agent")
     if ctx.credential_token_id is None:
         raise RunRefusedError("agent token identity is missing; use an issued agent token")
     if (

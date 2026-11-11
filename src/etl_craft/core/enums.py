@@ -759,3 +759,12 @@ class AgentReport(StrEnum):
     ALERT = "ALERT"
     LOCK = "LOCK"
     UNLOCK = "UNLOCK"
+
+
+class InputKind(StrEnum):
+    """Public input inventories governed by release compatibility."""
+
+    SETTING = "setting"
+    COLUMN = "column"
+    PARAMETER = "parameter"
+    CLI_OPTION = "CLI option"
