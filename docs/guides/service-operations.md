@@ -44,6 +44,7 @@ try:
         init_only=True,
         run_date=date(2026, 10, 1),
         run_key="python:2026-10-01",
+        reason="requested data load",
     )
     done = invoke(ctx, ActionName.RUN, request)
     print(json.dumps(to_json(done), indent=2))
@@ -124,7 +125,7 @@ These commands accept `--format json`: `run`, `mark`, `stop`, `abort`, `hold`, `
 etl-craft pipelines --format json
 etl-craft history --pipeline-code SALES --run-id 42 --format json
 etl-craft history --pipeline-code SALES --task-code load --run-id 42 --format json
-etl-craft run --pipeline-code SALES --init-only --run-key daily:2026-10-01 --format json
+etl-craft run --reason "requested data load" --pipeline-code SALES --init-only --run-key daily:2026-10-01 --format json
 ```
 
 Standard output contains one JSON document produced by `to_json`, including empty lists.

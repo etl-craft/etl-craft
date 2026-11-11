@@ -62,7 +62,9 @@ def test_missing_required_upload_is_recorded_once_and_sends_failure_alert(cli_pr
         add_dependency(conn, p.pipeline_id, alert, p.task_id, "FAILURE")
     code, output = p.run("pipelines", "refresh")
     assert code == 0, output
-    code, output = p.run("run", "--pipeline-code", "P", timeout=60)
+    code, output = p.run(
+        "run", "--reason", "test requested run", "--pipeline-code", "P", timeout=60
+    )
     assert code != 0, output
     with p.engine.connect() as conn:
         attempts = (

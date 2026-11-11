@@ -351,9 +351,9 @@ Sparse rankings and duration series show numbers rather than tiny charts. Catalo
 next corrective step. Nested pages use breadcrumbs and shared controls; empty lists explain what
 fills them. Graph code loads on opening the graph; catalog code loads on entering the catalog.
 
-Run now still opens a confirmation naming the project and environment. Its reason is optional
-outside PROD. Production still requires both a reason and the exact project code; other writes
-retain their reason requirements. Account Kind and Role are populated required fields, and SSO
+Run now still opens a confirmation naming the project and environment. Its reason follows the project’s governance: STRICT requires one in every environment;
+RELAXED permits an empty reason. Production projects remain STRICT and still require the exact
+project code to be typed. Other run actions follow the same governance policy. Account Kind and Role are populated required fields, and SSO
 email-binding guidance is help text beside the email field.
 
 The console's recent requests show completed command outcomes. These do not substitute for run

@@ -83,7 +83,9 @@ def set_parameter(demo: Demo, pipeline: str, task: str, name: str, value: str) -
 
 def run_clients(demo: Demo) -> None:
     for pipeline in ("SOURCE_A", "SOURCE_B"):
-        assert "SUCCESS" in demo.ok("run", "--pipeline-code", pipeline)
+        assert "SUCCESS" in demo.ok(
+            "run", "--reason", "test requested run", "--pipeline-code", pipeline
+        )
 
 
 @pytest.mark.parametrize(("installer", "engine", "warehouse"), CASES)
@@ -96,26 +98,26 @@ def test_the_demo_runs_locally(make_demo, installer, engine, warehouse):
 
     # The mart's first run: the flaky feed fails, what needs it is skipped, and the alerts run.
     run_clients(demo)
-    first = demo.run("run", "--pipeline-code", "DEMO")
+    first = demo.run("run", "--reason", "test requested run", "--pipeline-code", "DEMO")
     assert first.returncode == 1, first.stderr[-3000:]
     assert "flaky_feed (FAILED)" in first.stdout
     skipped = first.stdout.split("skipped because of the failure: ", 1)[1].split("\n")[0]
     assert set(skipped.split(", ")) >= {"interactions", "setup_fact", "fact", "quality"}
     # A failed run consumes nothing, so the next one builds on the same client runs; after that
     # the mart waits for both clients to succeed again.
-    assert "SUCCESS" in demo.ok("run", "--pipeline-code", "DEMO")
-    assert "SKIPPED" in demo.ok("run", "--pipeline-code", "DEMO")
+    assert "SUCCESS" in demo.ok("run", "--reason", "test requested run", "--pipeline-code", "DEMO")
+    assert "SKIPPED" in demo.ok("run", "--reason", "test requested run", "--pipeline-code", "DEMO")
     run_clients(demo)
-    assert "SUCCESS" in demo.ok("run", "--pipeline-code", "DEMO")
+    assert "SUCCESS" in demo.ok("run", "--reason", "test requested run", "--pipeline-code", "DEMO")
 
     # The export overruns its time limit and its SLA.
-    export = demo.run("run", "--pipeline-code", "EXPORT")
+    export = demo.run("run", "--reason", "test requested run", "--pipeline-code", "EXPORT")
     assert export.returncode == 1
     assert "export (FAILED)" in export.stdout and "BREACHED" in export.stdout
     assert "timed out after 2s" in export.stderr
 
     # A backfill stopped part way is resumed, without repeating what finished.
-    running = demo.popen("run", "--pipeline-code", "BACKFILL")
+    running = demo.popen("run", "--reason", "test requested run", "--pipeline-code", "BACKFILL")
     deadline = time.monotonic() + 120
     while True:
         rows = demo.engine_rows(
@@ -135,7 +137,9 @@ def test_the_demo_runs_locally(make_demo, installer, engine, warehouse):
         "backfill": ("FAILED", 1),
     }
     set_parameter(demo, "BACKFILL", "backfill", "INPUT_PARAMS", '{"seconds": 0}')
-    assert f"pipeline_run_id={run_id} SUCCESS" in demo.ok("run", "--pipeline-code", "BACKFILL")
+    assert f"pipeline_run_id={run_id} SUCCESS" in demo.ok(
+        "run", "--reason", "test requested run", "--pipeline-code", "BACKFILL"
+    )
     assert demo.task_runs("BACKFILL", run_id) == {
         "prepare": ("SUCCESS", 1),
         "backfill": ("SUCCESS", 2),

@@ -144,7 +144,14 @@ def test_a_pipeline_pauses_resumes_and_links_to_its_runs_and_tasks(scene):
 
 
 def test_run_now_allows_an_optional_reason_and_names_the_project(scene):
-    _, url, _ = scene
+    ctx, url, _ = scene
+    act(
+        ctx,
+        ActionName.PROJECT_SET,
+        project="default",
+        governance="RELAXED",
+        reason="set test policy",
+    )
     with sync_playwright() as pw:
         browser, page, _ = open_page(pw)
         page.context.set_default_timeout(8000)
@@ -507,4 +514,46 @@ def test_fit_view_keeps_task_labels_readable_after_zooming_out(site):
         page.wait_for_function(f"{zoom} >= 0.699")
         shoot(page, "graph-readable-fit")
         assert not problems
+        browser.close()
+
+
+def test_run_dialog_follows_governance_and_keeps_production_confirmation(site):
+    ctx, url = site
+    with acting_as(Actor("owner", ActorKind.USER)), ctx.engine.begin() as conn:
+        pipeline = add_pipeline(conn, "REASONS")
+        add_task(conn, pipeline, "T", "PYTHON")
+    with sync_playwright() as pw:
+        browser, page, problems = open_page(pw)
+        sign_in(page, url, "/ui/projects/default/pipelines/REASONS")
+        expect(page.get_by_role("button", name="Run now", exact=True)).to_be_visible()
+        page.evaluate("() => document.fonts.ready.then(() => true)")
+        for environment, governance in (("DEV", "STRICT"), ("DEV", "RELAXED"), ("PROD", "STRICT")):
+            act(
+                ctx,
+                ActionName.PROJECT_SET,
+                project="default",
+                environment_type=environment,
+                governance=governance,
+                reason="set test governance",
+            )
+            page.goto(url + "/ui/projects/default/pipelines/REASONS")
+            page.evaluate("() => document.fonts.ready.then(() => true)")
+            page.get_by_role("button", name="Run now", exact=True).click()
+            dialog = page.get_by_role("dialog")
+            reason = dialog.get_by_label("Reason", exact=False)
+            submit = dialog.get_by_role("button", name="Run now", exact=True)
+            if governance == "RELAXED":
+                expect(reason).not_to_have_attribute("required", "")
+                expect(submit).to_be_enabled()
+            else:
+                expect(reason).to_have_attribute("required", "")
+                expect(submit).to_be_disabled()
+                reason.fill("start the approved load")
+                if environment == "PROD":
+                    expect(submit).to_be_disabled()
+                    dialog.get_by_label("This is PRODUCTION.", exact=False).fill("default")
+                expect(submit).to_be_enabled()
+            shoot(page, f"reason-{environment}-{governance}")
+            dialog.get_by_role("button", name="Cancel").click()
+        assert problems == []
         browser.close()

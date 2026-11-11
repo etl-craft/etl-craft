@@ -43,13 +43,23 @@ def run(task):
     try:
         code, output = run_writer(w, project, "pipelines", "refresh", timeout=90)
         assert code == 0, output
-        code, output = run_writer(w, project, "run", "--pipeline-code", "P", timeout=90)
+        code, output = run_writer(
+            w, project, "run", "--reason", "test requested run", "--pipeline-code", "P", timeout=90
+        )
         assert code == 0, output
         with w.engine_db.connect() as conn:
             before = fetch_task_offset(conn, project.task_id)
         assert json.loads(before.offset_value) == {"0": 1, "1": 1}
         code, output = run_writer(
-            w, project, "run", "--pipeline-code", "P", fault=point + ":kill", timeout=90
+            w,
+            project,
+            "run",
+            "--reason",
+            "test requested run",
+            "--pipeline-code",
+            "P",
+            fault=point + ":kill",
+            timeout=90,
         )
         assert code != 0, output
         with w.engine_db.connect() as conn:

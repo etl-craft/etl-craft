@@ -223,7 +223,7 @@ def test_parent_sigkill_reconciles_and_retries_real_child(cli_project):
     )
     code, output = project.run("pipelines", "refresh")
     assert code == 0, output
-    parent = project.start("run", "--pipeline-code", "P")
+    parent = project.start("run", "--reason", "test requested run", "--pipeline-code", "P")
     project.wait_for("SELECT STATUS FROM AUD_TASK_ATTEMPTS", expected="RUNNING")
     with project.engine.connect() as conn:
         row = conn.execute(
@@ -246,7 +246,7 @@ def test_parent_sigkill_reconciles_and_retries_real_child(cli_project):
             text("UPDATE AUD_PIPELINES_RUN_LOG SET LEASE_EXPIRES_AT=:expiry"),
             {"expiry": datetime.now(UTC) - timedelta(seconds=1)},
         )
-    code, output = project.run("run", "--pipeline-code", "P")
+    code, output = project.run("run", "--reason", "test requested run", "--pipeline-code", "P")
     assert code == 0, output
     assert leases.process_start(row[1]) != row[2]
     with project.engine.connect() as conn:
@@ -289,11 +289,11 @@ def test_child_sigkill_is_failed_by_live_parent(cli_project):
     )
     code, output = project.run("pipelines", "refresh")
     assert code == 0, output
-    parent = project.start("run", "--pipeline-code", "P")
+    parent = project.start("run", "--reason", "test requested run", "--pipeline-code", "P")
     project.wait_for("SELECT STATUS FROM AUD_TASK_ATTEMPTS", expected="RUNNING")
     with project.engine.connect() as conn:
         pid = conn.execute(text("SELECT PID FROM AUD_TASK_ATTEMPTS")).scalar_one()
-    code, output = project.run("run", "--pipeline-code", "P")
+    code, output = project.run("run", "--reason", "test requested run", "--pipeline-code", "P")
     assert code == 9, output
     assert "is supervised by" in output
     code, output = project.run(
@@ -309,7 +309,9 @@ def test_child_sigkill_is_failed_by_live_parent(cli_project):
         "test live lease",
     )
     assert code == 10, output
-    code, output = project.run("reconcile", "--pipeline-code", "P")
+    code, output = project.run(
+        "reconcile", "--pipeline-code", "P", "--reason", "verify live ownership"
+    )
     assert code == 0 and "0 attempt(s) LOST" in output, output
     parent.descendants()
     os.kill(pid, signal.SIGKILL)

@@ -70,7 +70,12 @@ def test_two_ui_processes_share_sessions_runs_refresh_and_revocation(cli_project
     admission = httpx.post(
         one + "/api/v1/projects/default/runs",
         headers=headers,
-        json={"pipeline_code": "P", "init_only": True, "run_key": "split-api"},
+        json={
+            "pipeline_code": "P",
+            "init_only": True,
+            "run_key": "split-api",
+            "reason": "test shared UI admission",
+        },
     )
     assert admission.status_code == 200, admission.text
     run_id = admission.json()["run"]["pipeline_run_id"]

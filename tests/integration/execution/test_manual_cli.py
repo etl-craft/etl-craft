@@ -39,6 +39,8 @@ def test_standalone_cli_runs_only_selected_sql_and_preserves_exact_key(
     assert code == 0, output
     args = (
         "run",
+        "--reason",
+        "test requested run",
         "--pipeline-code",
         "P",
         "--task-code",

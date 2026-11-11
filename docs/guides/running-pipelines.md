@@ -3,7 +3,7 @@
 ## Running every task
 
 ```bash
-etl-craft run --pipeline-code SALES_DAILY
+etl-craft run --reason "requested data load" --pipeline-code SALES_DAILY
 ```
 
 This runs every active task under one pipeline run. Each completion releases any
@@ -112,3 +112,7 @@ unless its stopping outcome failed or was cancelled (exit `1`). A paused pipelin
 nothing retains exit `0`, as does `--init-only`, which deliberately initializes a run for later
 steps. Dependency waits that record nothing in `run --task-code` exit `23` (`WAITING`).
 Use [`status` and `explain`](inspecting.md) to inspect the selected run before resuming it.
+
+Run requests require `--reason REASON` in a STRICT project, including non-production projects.
+RELAXED projects allow it to be omitted. Production projects always use STRICT governance.
+The CLI, API and browser apply the same project policy.

@@ -178,7 +178,15 @@ def test_waiting_and_paused_backfill_exit_codes(ctx, capsys):
         after = add_task(conn, pipeline, "after", "PYTHON")
         add_dependency(conn, pipeline, after, task)
         transitions.create_active_run(conn, pipeline)
-    args = ["--config", str(ctx.config.config_path), "run", "--pipeline-code", "P"]
+    args = [
+        "--config",
+        str(ctx.config.config_path),
+        "run",
+        "--pipeline-code",
+        "P",
+        "--reason",
+        "test requested run",
+    ]
     assert main([*args, "--task-code", "after", "--format", "json"]) == ExitCode.WAITING
     assert json.loads(capsys.readouterr().out)["waiting"] is True
     invoke(

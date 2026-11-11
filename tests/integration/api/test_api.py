@@ -893,3 +893,41 @@ def test_run_display_labels_are_carried_by_nested_and_attempt_responses(api):
             assert document["pipeline_run_id"] == run
             assert document["task_run_id"] == task.id
             assert document["task_run_label"] == task.label
+
+
+def test_run_api_requires_reasons_by_governance_not_environment(api):
+    from fixtures.actions import act
+
+    ctx, client, creds, _, _ = api
+    for environment, policy in (("DEV", "STRICT"), ("DEV", "RELAXED"), ("PROD", "STRICT")):
+        act(
+            ctx,
+            ActionName.PROJECT_SET,
+            project="default",
+            environment_type=environment,
+            governance=policy,
+            reason="set test policy",
+        )
+        code = f"REASON_{environment}_{policy}"
+        with ctx.engine.begin() as conn:
+            pipeline = add_pipeline(conn, code)
+            add_task(conn, pipeline, "T", "PYTHON")
+        response = client.post(
+            "/api/v1/projects/default/runs",
+            json={"pipeline_code": code},
+            headers=headers(creds[ApiRole.ADMIN]),
+        )
+        if policy == "STRICT":
+            assert response.status_code == 400, response.text
+            assert "non-empty reason" in response.json()["message"]
+            assert "STRICT" in response.json()["message"]
+            refused = client.post(
+                "/api/v1/projects/default/reconciliations",
+                json={"pipeline_code": code},
+                headers=headers(creds[ApiRole.ADMIN]),
+            )
+            assert refused.status_code == 400
+            assert "STRICT" in refused.json()["message"]
+        else:
+            assert response.status_code == 200, response.text
+            assert response.json()["run"]["pipeline_run_id"] is not None

@@ -55,10 +55,12 @@ def repair(project, run, *, status="SUCCESS"):
 def test_pipeline_consumes_the_admitted_revision_after_upstream_reopens(cli_project):
     project = cli_project
     run, _ = upstream(project)
-    code, output = project.run("run", "--pipeline-code", "P", "--init-only")
+    code, output = project.run(
+        "run", "--reason", "test requested run", "--pipeline-code", "P", "--init-only"
+    )
     assert code == 0, output
     repair(project, run)
-    code, output = project.run("run", "--pipeline-code", "P")
+    code, output = project.run("run", "--reason", "test requested run", "--pipeline-code", "P")
     assert code == 0, output
     with project.engine.connect() as conn:
         assert tuple(
@@ -98,7 +100,7 @@ def test_task_consumes_its_claim_snapshot_after_upstream_repairs(cli_project):
     )
     code, output = project.run("pipelines", "refresh", "--pipeline", "P")
     assert code == 0, output
-    parent = project.start("run", "--pipeline-code", "P")
+    parent = project.start("run", "--reason", "test requested run", "--pipeline-code", "P")
     project.wait_for("SELECT STATUS FROM AUD_TASK_ATTEMPTS", expected="RUNNING")
     repair(project, run)
     (project.config.project_dir / "release").touch()
@@ -129,10 +131,10 @@ def test_repaired_upstream_is_new_only_when_the_dependency_consumes_repairs(
     run, _ = upstream(
         project, task_edge=kind == "task", pipeline_edge=kind == "pipeline", repairs=repairs
     )
-    code, output = project.run("run", "--pipeline-code", "P")
+    code, output = project.run("run", "--reason", "test requested run", "--pipeline-code", "P")
     assert code == 0, output
     repair(project, run)
-    code, output = project.run("run", "--pipeline-code", "P")
+    code, output = project.run("run", "--reason", "test requested run", "--pipeline-code", "P")
     assert code == 0, output
     with project.engine.connect() as conn:
         statuses = (
@@ -200,7 +202,14 @@ def test_failed_repair_keeps_revision_until_successful_publication(cli_project):
 def test_pipeline_decisions_roll_back_with_admission(cli_project):
     project = cli_project
     upstream(project)
-    code, output = project.run("run", "--pipeline-code", "P", fault="pipeline.after_insert")
+    code, output = project.run(
+        "run",
+        "--reason",
+        "test requested run",
+        "--pipeline-code",
+        "P",
+        fault="pipeline.after_insert",
+    )
     assert code == 19, output
     with project.engine.connect() as conn:
         assert conn.execute(text("SELECT COUNT(*) FROM AUD_GATE_DECISIONS")).scalar_one() == 0
@@ -216,7 +225,9 @@ def test_pipeline_decisions_roll_back_with_admission(cli_project):
 def test_attempt_decisions_roll_back_with_claim(cli_project, monkeypatch):
     project = cli_project
     upstream(project, task_edge=True, pipeline_edge=False)
-    code, output = project.run("run", "--pipeline-code", "P", "--init-only")
+    code, output = project.run(
+        "run", "--reason", "test requested run", "--pipeline-code", "P", "--init-only"
+    )
     assert code == 0, output
     original = trackers.record_decisions
 
@@ -253,7 +264,7 @@ def test_bypassed_pipeline_decisions_never_consume_an_upstream(cli_project, poli
     path.write_text(yaml.safe_dump(raw, sort_keys=False))
     code, output = project.run("pipelines", "refresh", "--pipeline", "P")
     assert code == 0, output
-    code, output = project.run("run", "--pipeline-code", "P")
+    code, output = project.run("run", "--reason", "test requested run", "--pipeline-code", "P")
     assert code == 0, output
     with project.engine.connect() as conn:
         assert (
@@ -267,7 +278,7 @@ def test_bypassed_pipeline_decisions_never_consume_an_upstream(cli_project, poli
 def test_consumption_from_decisions_is_idempotent(cli_project):
     project = cli_project
     upstream(project, task_edge=True)
-    code, output = project.run("run", "--pipeline-code", "P")
+    code, output = project.run("run", "--reason", "test requested run", "--pipeline-code", "P")
     assert code == 0, output
     with project.engine.begin() as conn:
         run = conn.execute(
@@ -335,7 +346,12 @@ def test_run_ending_and_consumption_roll_back_together(cli_project, point, crash
     code, output = project.run("pipelines", "refresh", "--pipeline", "P")
     assert code == 0, output
     code, output = project.run(
-        "run", "--pipeline-code", "P", fault=point + (":kill" if crash else "")
+        "run",
+        "--reason",
+        "test requested run",
+        "--pipeline-code",
+        "P",
+        fault=point + (":kill" if crash else ""),
     )
     assert code == (137 if crash else 19), output
     with project.engine.begin() as conn:
@@ -355,7 +371,7 @@ def test_run_ending_and_consumption_roll_back_together(cli_project, point, crash
             text("UPDATE AUD_PIPELINES_RUN_LOG SET LEASE_EXPIRES_AT=:past WHERE PIPELINE_ID=:id"),
             {"id": project.pipeline_id, "past": "2000-01-01 00:00:00"},
         )
-    code, output = project.run("run", "--pipeline-code", "P")
+    code, output = project.run("run", "--reason", "test requested run", "--pipeline-code", "P")
     assert code == 0, output
     with project.engine.connect() as conn:
         assert tuple(
@@ -397,12 +413,16 @@ def test_attempt_success_offset_and_consumption_roll_back_together(cli_project, 
     )
     code, output = project.run("pipelines", "refresh", "--pipeline", "P")
     assert code == 0, output
-    code, output = project.run("run", "--pipeline-code", "P", "--init-only")
+    code, output = project.run(
+        "run", "--reason", "test requested run", "--pipeline-code", "P", "--init-only"
+    )
     assert code == 0, output
     with project.engine.begin() as conn:
         save_task_offset(conn, project.task_id, StoredOffset("NUMBER", "3"))
     code, output = project.run(
         "run",
+        "--reason",
+        "test requested run",
         "--pipeline-code",
         "P",
         "--task-code",
@@ -416,7 +436,9 @@ def test_attempt_success_offset_and_consumption_roll_back_together(cli_project, 
         assert (
             conn.execute(text("SELECT COUNT(*) FROM AUD_DEPENDENCY_CONSUMPTION")).scalar_one() == 0
         )
-    code, output = project.run("run", "--pipeline-code", "P", "--task-code", "load")
+    code, output = project.run(
+        "run", "--reason", "test requested run", "--pipeline-code", "P", "--task-code", "load"
+    )
     assert code == 0, output
     with project.engine.connect() as conn:
         assert fetch_task_offset(conn, project.task_id) == StoredOffset("NUMBER", "9")
@@ -443,10 +465,19 @@ def test_a_child_crashing_after_commit_keeps_the_complete_success(cli_project):
     )
     code, output = project.run("pipelines", "refresh", "--pipeline", "P")
     assert code == 0, output
-    code, output = project.run("run", "--pipeline-code", "P", "--init-only")
+    code, output = project.run(
+        "run", "--reason", "test requested run", "--pipeline-code", "P", "--init-only"
+    )
     assert code == 0, output
     code, output = project.run(
-        "run", "--pipeline-code", "P", "--task-code", "load", fault="child.after_outcome:kill"
+        "run",
+        "--reason",
+        "test requested run",
+        "--pipeline-code",
+        "P",
+        "--task-code",
+        "load",
+        fault="child.after_outcome:kill",
     )
     assert code == 0, output
     with project.engine.connect() as conn:

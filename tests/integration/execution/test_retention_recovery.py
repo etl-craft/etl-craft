@@ -19,7 +19,7 @@ def test_purge_process_loss_resumes_committed_work(cli_project, point):
     raw = yaml.safe_load(p.config.config_path.read_text())
     raw["Retention"] = {"Attempt_log_days": 30, "Run_history_days": 90}
     p.config.config_path.write_text(yaml.safe_dump(raw, sort_keys=False))
-    code, output = p.run("run", "--pipeline-code", "P")
+    code, output = p.run("run", "--reason", "test requested run", "--pipeline-code", "P")
     assert code == 0, output
     with p.engine.connect() as conn:
         row = conn.execute(
@@ -56,7 +56,7 @@ def test_purge_process_loss_resumes_committed_work(cli_project, point):
         assert (
             conn.execute(text("SELECT COUNT(*) AS count FROM AUD_TASK_ATTEMPTS")).scalar_one() == 0
         )
-    code, output = p.run("run", "--pipeline-code", "P")
+    code, output = p.run("run", "--reason", "test requested run", "--pipeline-code", "P")
     assert code == 0, output
     with p.engine.connect() as conn:
         assert (

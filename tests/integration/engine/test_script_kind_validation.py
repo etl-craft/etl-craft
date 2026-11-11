@@ -85,7 +85,7 @@ def test_invalid_live_kind_keeps_the_last_passing_script_executable(refresh_proj
             )
         )
     assert act(ctx, ActionName.PIPELINE_REFRESH, pipeline_code="P").failed
-    outcome = act(ctx, ActionName.RUN, pipeline_code="P")
+    outcome = act(ctx, ActionName.RUN, pipeline_code="P", reason="test requested run")
     assert outcome.status == RunStatus.SUCCESS, outcome.message
     with ctx.engine.connect() as conn:
         row = conn.execute(

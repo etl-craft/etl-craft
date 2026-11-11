@@ -66,7 +66,14 @@ class Provider:
 
     def admit(self):
         code, output = self.project.run(
-            "run", "--pipeline-code", "P", "--init-only", "--run-key", "contract"
+            "run",
+            "--reason",
+            "test requested run",
+            "--pipeline-code",
+            "P",
+            "--init-only",
+            "--run-key",
+            "contract",
         )
         assert code == 0, output
         with self.project.engine.connect() as conn:

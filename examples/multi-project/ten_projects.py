@@ -111,7 +111,14 @@ def run_demo(config: Path) -> tuple[str, ...]:
                     writer.writerows(rows)
             command(project_file, "config", "plan")
             command(project_file, "config", "apply")
-            command(project_file, "run", "--pipeline-code", "POOL_DEMO")
+            command(
+                project_file,
+                "run",
+                "--pipeline-code",
+                "POOL_DEMO",
+                "--reason",
+                "run shared-pool demonstration",
+            )
     return projects
 
 

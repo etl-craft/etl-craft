@@ -33,3 +33,6 @@ The label is case-sensitive; a mismatched label is refused instead of selecting 
 In Home, select a one-to-four-day window to read dated run counts and average durations as
 numbers. Longer windows keep a slot per day in the chart. In a pipeline or catalog graph,
 **Fit view** keeps task names readable; drag to pan to tasks outside the pane.
+
+When starting the demo in a STRICT project, include `--reason "requested demo load"` with
+`etl-craft run`. RELAXED projects permit an empty reason; production projects remain STRICT.

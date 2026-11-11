@@ -480,7 +480,17 @@ def test_a_signal_to_run_stops_the_task_process_and_records_it(project, tmp_path
     parent_log = tmp_path / "parent.log"
     with parent_log.open("wb") as output:
         parent = subprocess.Popen(
-            [sys.executable, "-m", "etl_craft", "run", "--pipeline-code", "P", *how],
+            [
+                sys.executable,
+                "-m",
+                "etl_craft",
+                "run",
+                "--pipeline-code",
+                "P",
+                *how,
+                "--reason",
+                "test requested run",
+            ],
             env={
                 **os.environ,
                 "ETL_CRAFT_CONFIG": str(config.config_path),

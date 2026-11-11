@@ -49,7 +49,18 @@ def test_the_cluster_profile_refuses_sqlite_and_init_only_starts_nothing(ctx, ca
             sort_keys=False,
         )
     )
-    code = main(["--config", str(path), "run", "--pipeline-code", "P", "--init-only"])
+    code = main(
+        [
+            "--config",
+            str(path),
+            "run",
+            "--pipeline-code",
+            "P",
+            "--init-only",
+            "--reason",
+            "test requested run",
+        ]
+    )
     error = capsys.readouterr().err
     shared = ctx.engine.dialect.name == "postgresql"
     if shared:

@@ -151,7 +151,9 @@ def test_the_command_line_records_a_handler_failure(bound, capsys, monkeypatch, 
     # An earlier attempt failed, so this run is a retry of the same row.
     with engine.begin() as conn:
         transitions.finish_task_run(conn, task_run_id, status=RunStatus.FAILED)
-    code = cli_main(["run", "--pipeline-code", "P", "--task-code", "T"])
+    code = cli_main(
+        ["run", "--pipeline-code", "P", "--task-code", "T", "--reason", "test requested run"]
+    )
     assert code == ExitCode.FAILURE
     message = "EMAIL_TO is required: one or more addresses separated by '|'"
     assert capsys.readouterr().out == f"T: FAILED — {message}\n"
@@ -159,4 +161,9 @@ def test_the_command_line_records_a_handler_failure(bound, capsys, monkeypatch, 
     # A settled task is skipped and exits 0.
     with engine.begin() as conn:
         transitions.finish_task_run(conn, task_run_id, status=RunStatus.SUCCESS)
-    assert cli_main(["run", "--pipeline-code", "P", "--task-code", "T"]) == ExitCode.SUCCESS
+    assert (
+        cli_main(
+            ["run", "--pipeline-code", "P", "--task-code", "T", "--reason", "test requested run"]
+        )
+        == ExitCode.SUCCESS
+    )

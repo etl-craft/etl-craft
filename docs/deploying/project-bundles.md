@@ -42,7 +42,7 @@ The manifest stores the location and profile name, not their credentials.
 
 ```bash
 etl-craft bundle publish --project-dir ./project --api https://craft.example.com
-etl-craft run --pipeline-code SALES --api https://craft.example.com
+etl-craft run --reason "requested data load" --pipeline-code SALES --api https://craft.example.com
 ```
 
 The publishing CI runner needs project CAN_MANAGE on its API token and the project files; it needs no
@@ -135,7 +135,7 @@ Publish and run with the same selection:
 
 ```bash
 etl-craft bundle publish --project sales --project-dir ./sales --api https://craft.example.com
-etl-craft run --project sales --pipeline-code DAILY --api https://craft.example.com
+etl-craft run --reason "requested data load" --project sales --pipeline-code DAILY --api https://craft.example.com
 etl-craft pause --project sales --reason "Maintenance"
 ```
 
