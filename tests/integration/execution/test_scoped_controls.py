@@ -651,14 +651,19 @@ def test_reconcile_revisits_lost_workers_but_never_guesses_an_unreadable_identit
 
     monkeypatch.setattr(control_flow.psutil, "Process", unreadable)
     with pytest.raises(RunRefusedError, match="process ending cannot be verified"):
-        act(ctx, ActionName.RECONCILE, pipeline_code="P")
+        act(ctx, ActionName.RECONCILE, pipeline_code="P", reason="verify recorded process evidence")
     assert act(ctx, ActionName.CONTROL_REQUEST, control_id=pending.control_id).completed_at is None
 
     def gone(pid):
         raise control_flow.psutil.NoSuchProcess(pid)
 
     monkeypatch.setattr(control_flow.psutil, "Process", gone)
-    assert act(ctx, ActionName.RECONCILE, pipeline_code="P").lost_attempt_ids == ()
+    assert (
+        act(
+            ctx, ActionName.RECONCILE, pipeline_code="P", reason="verify recorded process evidence"
+        ).lost_attempt_ids
+        == ()
+    )
     done = act(ctx, ActionName.CONTROL_REQUEST, control_id=pending.control_id)
     assert done.status == ControlStatus.COMPLETED and done.run_status == RunStatus.CANCELLED
     assert done.attempts[0].status == AttemptStatus.LOST
@@ -716,7 +721,12 @@ def test_reconcile_observes_exited_terminal_worker_without_rewriting_its_outcome
     pending = ask(ctx, run, ControlAction.STOP)
     assert pending.completed_at is None and pending.attempt_ids == (attempt,)
     monkeypatch.setattr(control_flow, "process_start", lambda pid: "different-birth")
-    assert act(ctx, ActionName.RECONCILE, pipeline_code="P").lost_attempt_ids == ()
+    assert (
+        act(
+            ctx, ActionName.RECONCILE, pipeline_code="P", reason="verify recorded process evidence"
+        ).lost_attempt_ids
+        == ()
+    )
     done = act(ctx, ActionName.CONTROL_REQUEST, control_id=pending.control_id)
     assert done.status == ControlStatus.COMPLETED and done.run_status == RunStatus.CANCELLED
     assert done.attempts[0].status == outcome

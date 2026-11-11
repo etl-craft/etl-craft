@@ -332,7 +332,12 @@ def test_ending_evidence_upgrade_keeps_existing_observations_unclassified(empty_
     from fixtures.actions import act
 
     ctx = OperationContext(db.engine, db.config, SYSTEM_ACTOR, role=ApiRole.ADMIN)
-    result = act(ctx, ActionName.RECONCILE, pipeline_code="EVIDENCE_UPGRADE")
+    result = act(
+        ctx,
+        ActionName.RECONCILE,
+        pipeline_code="EVIDENCE_UPGRADE",
+        reason="verify upgraded ending evidence",
+    )
     assert "0 ending evidence" in result.message
     with db.engine.connect() as conn:
         legacy = conn.execute(
