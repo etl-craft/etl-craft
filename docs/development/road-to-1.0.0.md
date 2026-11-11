@@ -5771,6 +5771,40 @@ Done when the recorded run can explain each effective value and every interface 
 without modifying today's configuration or another run. This remains inside 0.9.0 and may
 run alongside S8; it is not a prerequisite for the demo's fixed configured parameters.
 
+**Design note — awaiting owner decision.**
+
+```text
+Request:        S5.Q.4: accept CLI-first per-run task inputs, recorded immutably for the shared RUN operation and later API/UI.
+Conflict:       AGENTS.md “Taking a request” requires approval for new CLI surface/storage; pinned definitions and explicit run identity must hold.
+Options:        1. Repeated --param TASK.PARAM=VALUE (split at the first =): one new flag; refuse missing task/name/=, duplicate keys and invalid values.
+                2. --params-file PATH with {"TASK":{"PARAM":"VALUE"}} JSON: one new flag plus a file contract; refuse unreadable/malformed files, duplicate keys and non-string leaves.
+                3. Repeated --set TASK.PARAM=VALUE: one new flag, same validation as option 1; its generic name suggests wider config edits that remain forbidden.
+                All forms refuse unknown tasks/names, handler-invalid types and credential/code/target/control keys; no edits to CFG_TASK_PARAMETERS or other runs.
+Storage:        Propose new AUD_RUN_PARAMETER_OVERRIDES: one immutable actor-attributed row per run, canonical task/value map plus submission key/digest, committed with admission.
+                FK to AUD_PIPELINES_RUN_LOG binds its immutable METADATA_SNAPSHOT/METADATA_VERSION; no existing column changes. New table, guards and both-dialect migrations need approval.
+Replay:         One effective-definition reader overlays that row on the pinned CFG_TASK_PARAMETERS image; reuse it in for_run and build_task_context, never live CFG reads.
+                Retries reuse it; agent payloads carry its resolved task_params. Restart-request replay reuses the already-created replacement run and its recorded values.
+                A newly requested explicit restart still pins a new base; propose copying the source overrides, refusing incompatible task/name/type changes before creating it.
+Scope:          OPERATOR plus existing project/pipeline operation grants; keep governance reasons, production confirmation and task/run scope checks in the RUN operation.
+Duplicates:     Require existing --request-key for override admission (extend beyond controls): same project/key and canonical request returns the recorded run; changed scope/payload refuses, atomically.
+Recommendation: Option 1, initially one new pipeline/init/manual run per request (refuse backfill/skip/existing-run mutation); existing task data-input keys only, validated by the handler.
+Decision needed: Approve --param TASK.PARAM=VALUE, that initial scope/key restriction and --request-key extension, and the new immutable table/migrations?
+                Approve stored-value replay and copying overrides on a new explicit restart (with incompatibility refusal), or should a new restart omit them explicitly?
+```
+
+Evidence: [CLI run](https://github.com/etl-craft/etl-craft/blob/main/src/etl_craft/cli/commands/run.py)
+and [RunRequest](https://github.com/etl-craft/etl-craft/blob/main/src/etl_craft/services/operations/requests.py)
+have no parameter-map input; ordinary RUN currently refuses `request_key`. Admission pins the
+base in [run creation](https://github.com/etl-craft/etl-craft/blob/main/src/etl_craft/engine/run_creation.py).
+[Run-definition reads](https://github.com/etl-craft/etl-craft/blob/main/src/etl_craft/engine/run_definitions.py),
+[admitted parameters](https://github.com/etl-craft/etl-craft/blob/main/src/etl_craft/engine/repository/tasks.py),
+[retry reads](https://github.com/etl-craft/etl-craft/blob/main/src/etl_craft/execution/retries.py) and
+[agent dispatch](https://github.com/etl-craft/etl-craft/blob/main/src/etl_craft/services/operations/agent_claims.py)
+provide the reuse paths. [Recovery/restart](https://github.com/etl-craft/etl-craft/blob/main/src/etl_craft/services/operations/recovery.py)
+creates a replacement with `control-restart:<control_id>`; [control idempotency](https://github.com/etl-craft/etl-craft/blob/main/src/etl_craft/services/operations/controls.py)
+already refuses a key reused for another scope/action. This proposal follows S7.A slice 2c's
+handover: overrides belong to the engine item; Run now currently keeps `run_date` only.
+
 ### S5.T Resource discovery and deployment profiles
 
 Branch: `feat/resources-profiles`. After S5.Q, before S5.C. Single-machine discovery and
