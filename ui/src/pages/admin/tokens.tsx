@@ -67,7 +67,7 @@ export function TokensTab() {
           find
           label="API tokens"
           data={list.data?.tokens ?? []}
-          empty={list.isSuccess ? <EmptyState title="No tokens.">Create a token for a registered account to authenticate a client.</EmptyState> : undefined}
+          empty={list.isSuccess ? <EmptyState title="No tokens." nextStep="Create a token for a registered account to authenticate a client." /> : undefined}
           columns={[
             columns.accessor("name", { header: "Name", cell: (c) => <span className="font-medium">{c.getValue()}</span> }),
             columns.accessor("token_kind", { header: "Kind", cell: (c) => words(c.getValue()) }),
@@ -75,7 +75,7 @@ export function TokensTab() {
             columns.display({ id: "created", header: "Created", cell: (c) => <>{when(c.row.original.created_at, "")} <span className="text-muted">by {c.row.original.created_by}</span></> }),
             columns.accessor("expires_at", { header: "Expires", cell: (c) => when(c.getValue(), "Never") }),
             columns.accessor("last_used_at", { header: "Last used", cell: (c) => when(c.getValue(), "Never") }),
-            columns.display({ id: "state", header: "State", cell: (c) => <StatusBadge status={c.row.original.revoked_at ? "REVOKED" : "ACTIVE"} /> }),
+            columns.display({ id: "state", header: "State", cell: (c) => <StatusBadge quiet status={c.row.original.revoked_at ? "REVOKED" : "ACTIVE"} /> }),
             columns.display({
               id: "act",
               header: "Actions",

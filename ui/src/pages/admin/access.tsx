@@ -43,6 +43,7 @@ export function AccessTab({ project, projects }: { project: string; projects: st
           find
           label="Access grants"
           data={grants}
+          nextStep="Register a project in Administration, then grant an account access here."
           empty={list.isSuccess ? "No grants yet." : projects.length ? undefined : "No projects."}
           columns={[
             columns.display({ id: "who", header: "Who", cell: (c) => <span className="font-medium">{who(c.row.original)}</span> }),

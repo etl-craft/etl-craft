@@ -42,13 +42,13 @@ export function Agents() {
         <DataTable find
           label="Agents"
           data={rows}
-          empty={list.isSuccess ? <EmptyState title="No agents have registered">Start one with <code className="font-mono">etl-craft agent</code> and an agent token. Deployments that run tasks on the controller&apos;s host do not use agents.</EmptyState> : undefined}
+          empty={list.isSuccess ? <EmptyState title="No agents have registered" nextStep={<>Start one with <code className="font-mono">etl-craft agent</code> and an agent token. Deployments that run tasks on the controller&apos;s host do not use agents.</>} /> : undefined}
           columns={[
             columns.accessor("agent_id", { header: "Agent" }),
             columns.accessor("pool", { header: "Pool" }),
             columns.accessor("host", { header: "Host" }),
             columns.accessor("version", { header: "Version" }),
-            columns.accessor("status", { header: "State", cell: (c) => <StatusBadge status={c.getValue()} /> }),
+            columns.accessor("status", { header: "State", cell: (c) => <StatusBadge quiet status={c.getValue()} /> }),
             columns.accessor("heartbeat_at", { header: "Last heartbeat", cell: (c) => <When iso={c.getValue()} /> }),
             columns.display({ id: "attempts", header: "Running attempts", cell: (c) => c.row.original.attempts.length }),
             columns.display({ id: "free", header: "Free CPU / memory", cell: (c) => `${c.row.original.free_cpu.toFixed(1)} / ${c.row.original.free_memory_mb} MB` }),

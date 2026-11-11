@@ -73,7 +73,7 @@ export function Task() {
         <DataTable
           label="Task runs"
           data={runs}
-          empty={history.isSuccess ? <EmptyState title="This task has not run yet.">Run its pipeline; task history appears after the task starts.</EmptyState> : undefined}
+          empty={history.isSuccess ? <EmptyState title="This task has not run yet." nextStep="Run its pipeline; task history appears after the task starts." /> : undefined}
           initialSort={[{ id: "run", desc: true }]}
           columns={[
             columns.accessor("pipeline_run_id", { id: "run", header: "Run", cell: (c) => <RunLabel id={c.getValue()} label={c.row.original.run_label} to={runPath(code, pipeline, c.getValue())} /> }),

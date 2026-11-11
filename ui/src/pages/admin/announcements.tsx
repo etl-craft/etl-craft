@@ -37,13 +37,14 @@ export function AnnouncementsTab() {
         <DataTable
           label="Announcements"
           data={rows}
+          nextStep="Post an announcement above to inform people who sign in."
           empty={list.isSuccess ? "No announcements yet." : undefined}
           columns={[
             columns.accessor("level", { header: "Level", cell: (c) => c.getValue().charAt(0) + c.getValue().slice(1).toLowerCase() }),
             columns.accessor("message", { header: "Message" }),
             columns.display({ id: "shows", header: "Shows", cell: (c) => <span className="whitespace-nowrap"><When iso={c.row.original.starts_at} /> → <When iso={c.row.original.ends_at} empty="until ended" /></span> }),
             columns.accessor("created_by", { header: "Posted by" }),
-            columns.display({ id: "state", header: "State", cell: (c) => (c.row.original.ended_at ? <StatusBadge status="ENDED" label={`Ended by ${c.row.original.ended_by}`} /> : <StatusBadge status="ACTIVE" label="Posted" />) }),
+            columns.display({ id: "state", header: "State", cell: (c) => (c.row.original.ended_at ? <StatusBadge quiet status="ENDED" label={`Ended by ${c.row.original.ended_by}`} /> : <StatusBadge quiet status="ACTIVE" label="Posted" />) }),
             columns.display({
               id: "act",
               header: "Actions",

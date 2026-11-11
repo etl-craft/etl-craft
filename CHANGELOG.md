@@ -6,6 +6,10 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+- Browser failure classifications, sources and codes appear only under Process details.
+  Empty tables and charts show caller-specific next steps. Dense statuses use a compact dot
+  and word, retaining failure and warning pills and the pills on detail pages.
+
 - Graph Fit view uses the same readable minimum zoom as automatic fits. Home shows one-to-four-day
   windows as dated run totals and average durations, with zero-run days retained; longer windows
   keep their daily chart and capped bar widths.

@@ -142,6 +142,7 @@ export function DataTable<T>({
   rowLabel,
   selection,
   empty,
+  nextStep,
   more,
   highlight,
   find,
@@ -155,6 +156,7 @@ export function DataTable<T>({
   selection?: Selection;
   /** Shown instead of the table when there are no rows: a sentence, or an EmptyState with its next step. */
   empty?: React.ReactNode;
+  nextStep?: React.ReactNode;
   /** The list continues on the server: the next rows load as the end is scrolled into view. */
   more?: More;
   /** The one row the person came for: marked, and scrolled into view. */
@@ -231,7 +233,7 @@ export function DataTable<T>({
   const widthOf = (column: (typeof leaves)[number]): number => fit.get(column.id) ?? column.getSize();
   const fitted = leaves.reduce((n, c) => n + widthOf(c), tick);
   const all = data.length > 0 && !!selection && !!rowId && data.every((row) => selection.ids.has(rowId(row)));
-  if (vacant) return typeof empty === "string" ? <EmptyState title={empty} /> : <>{empty}</>;
+  if (vacant) return typeof empty === "string" ? <EmptyState title={empty} nextStep={nextStep} /> : <>{empty}</>;
   return (
     <div ref={frame} className="w-full min-w-0">
     {find ? (

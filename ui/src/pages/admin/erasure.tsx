@@ -50,6 +50,7 @@ export function ErasureTab({ code }: { code: string }) {
         <DataTable
           label="Erasure register"
           data={list.data?.entries ?? []}
+          nextStep="Use the erasure form below to record a privacy request."
           empty={list.isSuccess ? "No erasure entries." : undefined}
           columns={[
             columns.accessor("table_name", { header: "Table" }),

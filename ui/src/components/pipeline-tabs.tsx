@@ -4,7 +4,7 @@ import { useQueries, useQuery } from "@tanstack/react-query";
 import { When } from "@/components/when";
 import * as React from "react";
 import { Link } from "react-router-dom";
-import { Fact, FactList, Loading, Notice, SelectField } from "@/components/common";
+import { EmptyState, Fact, FactList, Loading, Notice, SelectField } from "@/components/common";
 import { RunBars } from "@/components/pipeline-parts";
 import { isFailure, StatusBadge, taskStatus, toneClass } from "@/components/status";
 import { columnsOf, DataTable } from "@/components/data-table";
@@ -74,13 +74,13 @@ export function OverviewTab({ code, pipeline, runs }: { code: string; pipeline: 
             ))}
           </ul>
         ) : (
-          <p className="m-0 text-muted">No runs yet.</p>
+          <EmptyState title="No runs yet." nextStep="Use Run now on this pipeline to record its first run." />
         )}
       </section>
       <section className="grid gap-2" aria-label="Recent failures">
         <h3 className="m-0 text-sm font-semibold">Recent failures</h3>
         {failed.length === 0 ? (
-          <p className="m-0 text-muted">No failed runs in this window.</p>
+          <EmptyState title="No failed runs in this window." nextStep="Choose a wider time range to inspect earlier failures." />
         ) : (
           <ul className="m-0 grid list-none gap-1 p-0 text-[13px]">
             {failed.slice(0, 8).map((run) => (
@@ -203,7 +203,7 @@ export function CalendarTab({ runs }: { runs: RunView[] }) {
   if (byDay.size < 5)
     return (
       <div className="grid gap-2">
-        <p className="m-0 text-[13px] text-muted">{byDay.size ? `Runs on ${byDay.size} day${byDay.size === 1 ? "" : "s"} so far; the calendar appears once runs cover five days.` : "No runs yet."}</p>
+        {byDay.size ? <p className="m-0 text-[13px] text-muted">Runs on {byDay.size} day{byDay.size === 1 ? "" : "s"} so far; the calendar appears once runs cover five days.</p> : <EmptyState title="No runs yet." nextStep="Use Run now on this pipeline to record its first run." />}
         <ul className="m-0 grid list-none gap-1 p-0 text-[13px]">
           {[...byDay.entries()].sort(([x], [y]) => y.localeCompare(x)).map(([key, list]) => {
             const failed = list.filter((r) => isFailure(r.status)).length;
@@ -289,7 +289,7 @@ export function AuditTab({ code, pipeline }: { code: string; pipeline: string })
             ])}
           />
         ) : (
-          <p className="m-0 text-muted">No command has been recorded for this pipeline.</p>
+          <EmptyState title="No command has been recorded for this pipeline." nextStep="Use a pipeline action to record a request in this list." />
         )}
       </section>
       <section className="grid gap-2" aria-label="Metadata changes">
@@ -307,7 +307,7 @@ export function AuditTab({ code, pipeline }: { code: string; pipeline: string })
             ])}
           />
         ) : (
-          <p className="m-0 text-muted">No metadata change has been recorded for this pipeline.</p>
+          <EmptyState title="No metadata change has been recorded for this pipeline." nextStep="Apply changes through the project config files to record their history." />
         )}
       </section>
     </div>

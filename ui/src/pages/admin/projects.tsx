@@ -44,6 +44,8 @@ export function ProjectsTab() {
         <DataTable
           label="Projects"
           data={rows}
+          empty={list.isSuccess ? "No projects yet." : undefined}
+          nextStep="Add a project above to register an Engine DB project."
           columns={[
             columns.accessor("project", { header: "Project", cell: (c) => <span className="font-medium">{c.getValue()}</span> }),
             columns.accessor("name", { header: "Name" }),
@@ -53,7 +55,7 @@ export function ProjectsTab() {
             columns.accessor("max_running_tasks", { header: "Max tasks" }),
             columns.accessor("allowed_auto_restarts", { header: "Automatic starts", cell: (c) => words(c.getValue()) }),
             columns.display({ id: "schema", header: "Schema checks", cell: (c) => (c.row.original.schema_check_schedule ? <code className="font-mono text-xs">{c.row.original.schema_check_schedule}</code> : "Not scheduled") }),
-            columns.display({ id: "state", header: "State", cell: (c) => <StatusBadge status={c.row.original.active_flag === "Y" ? "ACTIVE" : "DISABLED"} /> }),
+            columns.display({ id: "state", header: "State", cell: (c) => <StatusBadge quiet status={c.row.original.active_flag === "Y" ? "ACTIVE" : "DISABLED"} /> }),
             columns.display({
               id: "act",
               header: "Actions",
@@ -93,10 +95,12 @@ export function PoolsTab() {
         <DataTable
           label="Pools"
           data={rows}
+          empty={list.isSuccess ? "No pools yet." : undefined}
+          nextStep="Add a pool above, then configure tasks to use it and register an agent."
           columns={[
             pools.accessor("name", { header: "Pool", cell: (c) => <span className="font-medium">{c.getValue()}</span> }),
             pools.accessor("description", { header: "Description", cell: (c) => c.getValue() ?? "" }),
-            pools.display({ id: "state", header: "State", cell: (c) => <StatusBadge status={c.row.original.active_flag === "Y" ? "ACTIVE" : "DISABLED"} /> }),
+            pools.display({ id: "state", header: "State", cell: (c) => <StatusBadge quiet status={c.row.original.active_flag === "Y" ? "ACTIVE" : "DISABLED"} /> }),
             pools.display({
               id: "act",
               header: "Actions",

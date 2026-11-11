@@ -363,3 +363,13 @@ status: admission of a run can succeed while the run later fails. API documentat
 Run addresses accept the complete stored label as well as an integer. The browser sends the
 full value to the shared operations resolver; a wrong-case or mismatched label displays the
 server's refusal and expected label, without opening controls for the numeric suffix.
+
+## Reading lists and failure details
+
+Empty lists and charts name what is missing and give the next step for that page: for example,
+set a pipeline schedule, choose an upload, or start an agent. Dense lists show a status dot and
+word; failures and warnings retain their pills, as do statuses on detail pages.
+
+An attempt leads with its recorded error message. Open **Process details** for the unchanged
+failure classification, source and code, along with process and retry evidence. The Home
+Failures table also keeps its classification under **Process details**.

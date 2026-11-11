@@ -77,10 +77,10 @@ export function Items() {
         <DataTable
           label="Items"
           data={items.data?.records ?? []}
-          empty={items.isSuccess ? <EmptyState title="This task run recorded no items.">An ingestion task publishes items through its scripting helper.</EmptyState> : undefined}
+          empty={items.isSuccess ? <EmptyState title="This task run recorded no items." nextStep="An ingestion task publishes items through its scripting helper." /> : undefined}
           columns={[
             columns.accessor("key", { header: "Item", cell: (c) => <span className="font-mono text-xs">{c.getValue()}</span> }),
-            columns.accessor("status", { header: "Status", cell: (c) => <StatusBadge status={c.getValue()} /> }),
+            columns.accessor("status", { header: "Status", cell: (c) => <StatusBadge quiet status={c.getValue()} /> }),
             columns.accessor("row_count", { header: "Rows", cell: (c) => <span className="num">{c.getValue() ?? "Not measured"}</span> }),
             columns.accessor("started", { header: "Started", cell: (c) => <span className="num whitespace-nowrap">{c.getValue() ?? ""}</span> }),
             columns.accessor("ended", { header: "Ended", cell: (c) => <span className="num whitespace-nowrap">{c.getValue() ?? ""}</span> }),

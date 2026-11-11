@@ -41,9 +41,9 @@ export interface BarRow {
 const FILL = { ok: "bg-ok-solid", bad: "bg-bad-solid", accent: "bg-accent", warn: "bg-warn-solid" } as const;
 
 /** Ranked horizontal bars: names on the left where they can be read, the value at the end of each bar. */
-export function HBars({ rows, empty, label }: { rows: BarRow[]; empty: string; label: string }) {
+export function HBars({ rows, empty, nextStep, label }: { rows: BarRow[]; empty: string; nextStep: React.ReactNode; label: string }) {
   const top = Math.max(1e-9, ...rows.map((r) => r.value));
-  if (rows.length === 0) return <EmptyState title={empty} />;
+  if (rows.length === 0) return <EmptyState title={empty} nextStep={nextStep} />;
   if (rows.length < 5) return <dl aria-label={label} className="m-0 grid content-start gap-2 text-[13px]">{rows.map((row) => <div key={row.label} className="flex justify-between gap-4"><dt>{row.to ? <Link className="hover:underline" to={row.to}>{row.label}</Link> : row.label}</dt><dd className="num m-0">{row.text ?? row.value}</dd></div>)}</dl>;
   return (
     <ul aria-label={label} className="m-0 grid min-h-0 flex-1 list-none content-start gap-1.5 overflow-auto p-0">

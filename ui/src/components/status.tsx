@@ -71,12 +71,18 @@ const unknown = (status: string): Meta => {
 
 export const statusMeta = (status: string): Meta => META[status] ?? unknown(status);
 
-/** In a dense list only failures and warnings keep their tinted pill; every other state is its symbol and word. */
+/** In a dense list only failures and warnings keep their tinted pill; every other state is a compact dot and word. */
 const QUIET: Record<Tone, string> = { ok: "text-ok", bad: TONE.bad, run: "text-run", warn: TONE.warn, idle: "text-idle" };
 
 export function StatusBadge({ status, label: named, className, quiet }: { status: string; label?: string; className?: string; quiet?: boolean }) {
   const { label: own, icon: Icon, tone, spin } = statusMeta(status);
   const label = named ?? own;
+  if (quiet && tone !== "bad" && tone !== "warn") return (
+    <span className={cn("inline-flex items-center gap-1.5 whitespace-nowrap text-xs font-medium", QUIET[tone], className)}>
+      <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-current" />
+      {label}
+    </span>
+  );
   return (
     <span className={cn("inline-flex items-center gap-1 whitespace-nowrap rounded-full py-0.5 pl-1.5 pr-2 text-xs font-medium", quiet ? QUIET[tone] : TONE[tone], className)}>
       <Icon aria-hidden className={cn("size-3.5 shrink-0", spin && "animate-spin")} />

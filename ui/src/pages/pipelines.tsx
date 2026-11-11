@@ -117,7 +117,7 @@ export function Pipelines() {
         <DataTable
           label="Pipelines"
           data={shown}
-          empty={list.isSuccess ? (tags.length ? <EmptyState title="No pipeline carries every selected tag.">Clear a tag to broaden the list.</EmptyState> : <EmptyState title="This project has no active pipeline.">Add a pipeline in the project config files, apply them, then refresh the pipeline definitions.</EmptyState>) : undefined}
+          empty={list.isSuccess ? (tags.length ? <EmptyState title="No pipeline carries every selected tag." nextStep="Clear a tag to broaden the list." /> : <EmptyState title="This project has no active pipeline." nextStep="Add a pipeline in the project config files, apply them, then refresh the pipeline definitions." />) : undefined}
           rowId={(p) => p.pipeline_code}
           selection={
             canRun

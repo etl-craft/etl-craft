@@ -77,7 +77,7 @@ export function Search() {
           <DataTable
             label="Search results"
             data={pageRows}
-            empty={<EmptyState title="Nothing you can see matches.">Try part of a name or an exact run id or key. Tables require whole-project view.</EmptyState>}
+            empty={<EmptyState title="Nothing you can see matches." nextStep="Try part of a name or an exact run id or key. Tables require whole-project view." />}
             columns={[
               columns.accessor("kind", { header: "Kind", cell: (c) => c.getValue().toLowerCase() }),
               columns.accessor("label", {

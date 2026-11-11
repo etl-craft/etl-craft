@@ -69,7 +69,7 @@ function ProjectCard({ p, failures, since }: { p: ProjectCounts; failures: Histo
                   to={runPath(p.project, run.pipeline_code, run.pipeline_run_id)}
                   className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md px-2 py-1.5 hover:bg-surface-2"
                 >
-                  <StatusBadge status={run.status} />
+                  <StatusBadge quiet status={run.status} />
                   <span className="font-medium">{run.pipeline_code}</span>
                   <RunLabel id={run.pipeline_run_id} label={run.run_label} />
                   <span className="ml-auto text-xs text-muted">
@@ -143,7 +143,7 @@ export function ProjectList({ choose = false }: { choose?: boolean }) {
             <ProjectCard key={p.project} p={p} failures={byProject.get(p.project) ?? []} since={since} />
           ))}
       </div>
-      {health.isSuccess && projects.length === 0 ? <EmptyState title="No project is visible to this account.">Ask an administrator to register a project or grant you access.</EmptyState> : null}
+      {health.isSuccess && projects.length === 0 ? <EmptyState title="No project is visible to this account." nextStep="Ask an administrator to register a project or grant you access." /> : null}
     </div>
   );
 }

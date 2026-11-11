@@ -93,12 +93,12 @@ export function Notice({ children, mono, info, className }: { children: React.Re
 }
 
 /** A list with nothing in it: a symbol, what is missing, and the step that fills it. */
-export function EmptyState({ title, children, className }: { title: React.ReactNode; children?: React.ReactNode; className?: string }) {
+export function EmptyState({ title, nextStep, className }: { title: React.ReactNode; nextStep: React.ReactNode; className?: string }) {
   return (
     <div role="status" className={cn("grid justify-items-center gap-1.5 px-4 py-10 text-center", className)}>
       <Inbox aria-hidden className="mb-1 size-6 text-muted" strokeWidth={1.5} />
       <p className="m-0 text-sm font-medium text-fg">{title}</p>
-      {children ? <p className="m-0 max-w-md text-[13px] text-muted">{children}</p> : null}
+      <p className="m-0 max-w-md text-[13px] text-muted">{nextStep}</p>
     </div>
   );
 }
