@@ -1,3 +1,4 @@
+import { RunLabel } from "@/components/run-label";
 import { ArrowUpRight, CircleCheck, Timer } from "lucide-react";
 import * as React from "react";
 import { Link } from "react-router-dom";
@@ -111,7 +112,7 @@ function Attention({ code, d }: { code: string; d: Insights }) {
               <Link to={runPath(code, r.pipeline_code, r.pipeline_run_id)} className="group flex items-center gap-3 rounded-lg px-3 py-2 hover:bg-surface-2">
                 <StatusMark status={r.status} solid className="rounded-full" />
                 <span className="grid min-w-0 flex-1">
-                  <span className="truncate text-[13px] font-medium">{r.pipeline_code} <span className="num font-normal text-muted">#{r.pipeline_run_id}</span></span>
+                  <span className="truncate text-[13px] font-medium">{r.pipeline_code} <RunLabel id={r.pipeline_run_id} label={r.run_label} /></span>
                   <span className="text-xs text-muted">Failed <When iso={r.end_date ?? r.start_date} /></span>
                 </span>
                 <ArrowUpRight aria-hidden className="size-4 text-muted opacity-0 group-hover:opacity-100" />
@@ -189,7 +190,7 @@ function RunRow({ code, r }: { code: string; r: RunView }) {
     <li>
       <Link to={runPath(code, r.pipeline_code, r.pipeline_run_id)} className="flex items-center gap-3 rounded-lg px-3 py-2 hover:bg-surface-2">
         <StatusMark status={r.status} solid className="rounded-full" />
-        <span className="min-w-0 flex-1 truncate text-[13px] font-medium">{r.pipeline_code} <span className="num font-normal text-muted">#{r.pipeline_run_id}</span></span>
+        <span className="min-w-0 flex-1 truncate text-[13px] font-medium">{r.pipeline_code} <RunLabel id={r.pipeline_run_id} label={r.run_label} /></span>
         <span className="num text-xs text-muted">{r.end_date ? formatDuration(r.start_date, r.end_date) : ""}</span>
         <span className="text-right text-xs text-muted"><When iso={r.start_date} /></span>
       </Link>

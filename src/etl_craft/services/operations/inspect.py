@@ -310,6 +310,9 @@ def audit(ctx: OperationContext, request: AuditInput) -> AuditView:
         )
         for row in (*actions, *changes):
             row["at"] = as_utc(row["at"])
+        for row in actions:
+            selected = row["arguments"].get("run_id")
+            row["pipeline_run_id"] = selected if isinstance(selected, int) else None
         if request.mine:
             mine = [row for row in actions if row["actor"] == ctx.actor.name]
             return AuditView(tuple(ActionView(**row) for row in mine), ())

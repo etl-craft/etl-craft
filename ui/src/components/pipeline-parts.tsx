@@ -27,8 +27,8 @@ export function RecentRuns({ project, pipeline }: { project: string; pipeline: P
             key={run.pipeline_run_id}
             role="listitem"
             to={runPath(project, pipeline.pipeline_code, run.pipeline_run_id)}
-            aria-label={`Run ${run.pipeline_run_id}, ${statusMeta(run.status).label}`}
-            title={`Run ${run.pipeline_run_id}: ${statusMeta(run.status).label}${run.start_date && run.end_date ? ` · ${formatDuration(run.start_date, run.end_date)}` : ""}`}
+            aria-label={`Run ${run.pipeline_run_id}${run.run_label ? ` · ${run.run_label}` : ""}, ${statusMeta(run.status).label}`}
+            title={`Run ${run.pipeline_run_id}${run.run_label ? ` · ${run.run_label}` : ""}: ${statusMeta(run.status).label}${run.start_date && run.end_date ? ` · ${formatDuration(run.start_date, run.end_date)}` : ""}`}
             style={{ height: `${Math.round(4 + (seconds(run) / longest) * 16)}px` }}
             className={cn("w-1.5 rounded-xs hover:brightness-110", solidClass(run.status))}
           />
@@ -104,7 +104,7 @@ export function TagList({ tags }: { tags: string[] }) {
 }
 
 /** Run durations, newest on the right; each bar opens its run. */
-export function RunBars({ project, runs }: { project: string; runs: Pick<RunView, "pipeline_run_id" | "pipeline_code" | "status" | "start_date" | "end_date">[] }) {
+export function RunBars({ project, runs }: { project: string; runs: Pick<RunView, "run_label" | "pipeline_run_id" | "pipeline_code" | "status" | "start_date" | "end_date">[] }) {
   const [now] = React.useState(() => Date.now());
   if (runs.length < 5) return null;
   const ordered = [...runs].reverse();
@@ -117,8 +117,8 @@ export function RunBars({ project, runs }: { project: string; runs: Pick<RunView
         <li key={run.pipeline_run_id} className="flex h-full w-3 min-w-1.5 shrink items-end">
           <Link
             to={runPath(project, run.pipeline_code, run.pipeline_run_id)}
-            title={`Run ${run.pipeline_run_id} · ${statusMeta(run.status).label} · ${formatDuration(run.start_date, run.end_date)}`}
-            aria-label={`Run ${run.pipeline_run_id}, ${statusMeta(run.status).label}, ${formatDuration(run.start_date, run.end_date)}`}
+            title={`Run ${run.pipeline_run_id}${run.run_label ? ` · ${run.run_label}` : ""} · ${statusMeta(run.status).label} · ${formatDuration(run.start_date, run.end_date)}`}
+            aria-label={`Run ${run.pipeline_run_id}${run.run_label ? ` · ${run.run_label}` : ""}, ${statusMeta(run.status).label}, ${formatDuration(run.start_date, run.end_date)}`}
             style={{ height: `${Math.max(10, (seconds(run) / longest) * 100)}%` }}
             className={cn("w-full rounded-xs hover:brightness-110", solidClass(run.status))}
           />

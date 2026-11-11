@@ -1,3 +1,4 @@
+import { RunLabel } from "@/components/run-label";
 import { useQuery } from "@tanstack/react-query";
 import { When } from "@/components/when";
 import { Check, ChevronDown, Pause, Play, PlayCircle } from "lucide-react";
@@ -92,7 +93,7 @@ export function PipelineDetail() {
   const tab = TAB_IDS.includes(asked) && (asked !== "run" || selected !== undefined) ? asked : chosen !== undefined ? "run" : "overview";
   const tabs = [
     { id: "overview", label: "Overview" },
-    ...(selected !== undefined ? [{ id: "run", label: `Run #${selected}` }] : []),
+    ...(selected !== undefined ? [{ id: "run", label: `Run #${selected} · ${selectedRun?.run_label ?? ""}` }] : []),
     { id: "runs", label: "Runs" },
     { id: "tasks", label: "Tasks" },
     { id: "calendar", label: "Calendar" },
@@ -288,7 +289,7 @@ export function PipelineDetail() {
               <div className="absolute inset-0 flex flex-col">
               {selectedRun ? (
                 <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-b border-border bg-surface-2 px-3 py-1.5 text-xs">
-                  <span className="font-medium">Run {selectedRun.pipeline_run_id}</span>
+                  <RunLabel id={selectedRun.pipeline_run_id} label={selectedRun.run_label} />
                   <StatusBadge status={selectedRun.status} />
                   <span className="text-muted"><When iso={selectedRun.start_date} /></span>
                   <span className="num text-muted">{formatDuration(selectedRun.start_date, selectedRun.end_date)}</span>

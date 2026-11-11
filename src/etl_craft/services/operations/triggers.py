@@ -39,6 +39,8 @@ class TriggerView(PipelineOutcome):
 
     SCHEMA: ClassVar[str] = "etl-craft/trigger/1"
 
+    run_label: str = ""
+
 
 @dataclass(frozen=True, kw_only=True)
 class TriggerRequest(Request):

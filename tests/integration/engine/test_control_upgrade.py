@@ -68,9 +68,19 @@ def test_migrating_populated_controls_preserves_requests_fences_and_immutability
         )
         held = controls.get(conn, control_id)
     assert migrations.apply_pending_migrations(db.engine)
-    assert act(ctx, ActionName.CONTROL_REQUEST, control_id=held.control_id) == held
     with db.engine.connect() as conn:
+        assert controls.get(conn, control_id) == held
+        run_label = conn.execute(
+            text(
+                "SELECT RUN_LABEL AS run_label FROM AUD_PIPELINES_RUN_LOG WHERE PIPELINE_RUN_ID=:id"
+            ),
+            {"id": run},
+        ).scalar_one()
         assert controls.blocked(conn, run) == {a: ControlAction.HOLD}
+    shown = act(ctx, ActionName.CONTROL_REQUEST, control_id=held.control_id)
+    assert run_label
+    assert shown.run_label == run_label
+    assert shown == replace(held, run_label=run_label)
     with pytest.raises(DBAPIError, match="immutable"), db.engine.begin() as conn:
         conn.execute(
             text("UPDATE AUD_CONTROL_REQUESTS SET REASON='replacement' WHERE CONTROL_ID=:id"),

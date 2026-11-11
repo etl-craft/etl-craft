@@ -1,6 +1,6 @@
 -- Indexed top-N history for each active definition.
 SELECT p.PIPELINE_CODE AS pipeline_code, r.PIPELINE_RUN_ID AS pipeline_run_id,
-       r.BUNDLE_ID AS bundle_id, r.METADATA_VERSION AS metadata_version,
+       r.RUN_LABEL AS run_label, r.BUNDLE_ID AS bundle_id, r.METADATA_VERSION AS metadata_version,
        r.STATUS AS status,
        COALESCE((SELECT i.FROM_STATUS FROM AUD_RUN_INTERVENTIONS i
         WHERE i.PIPELINE_RUN_ID=r.PIPELINE_RUN_ID AND i.TASK_ID IS NULL

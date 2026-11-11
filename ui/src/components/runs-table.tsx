@@ -1,8 +1,8 @@
+import { RunLabel } from "@/components/run-label";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { words } from "@/lib/labels";
 import { When } from "@/components/when";
 import * as React from "react";
-import { Link } from "react-router-dom";
 import { Loading, Notice } from "@/components/common";
 import { createColumnHelper } from "@tanstack/react-table";
 import { DataTable } from "@/components/data-table";
@@ -57,14 +57,7 @@ export function RunsTable({ code, pipeline, status, codes, filters = {}, highlig
               id: "id",
               header: "Run",
               cell: (c) => (
-                <Link
-                  // The run's readable identifier repeats its pipeline, start and number, so it is the link's tooltip, not a column.
-                  title={c.row.original.run_label || undefined}
-                  className="font-medium text-accent hover:underline"
-                  to={pipeline ? runPath(code, c.row.original.pipeline_code, c.getValue()) : pipelineRunPath(code, c.row.original.pipeline_code, c.getValue())}
-                >
-                  <span className="num">#{c.getValue()}</span>
-                </Link>
+                <RunLabel id={c.getValue()} label={c.row.original.run_label} to={pipeline ? runPath(code, c.row.original.pipeline_code, c.getValue()) : pipelineRunPath(code, c.row.original.pipeline_code, c.getValue())} />
               ),
             }),
             // Status sits beside the run number, so it is in view at phone width and read first when scanning.

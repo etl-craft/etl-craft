@@ -65,6 +65,9 @@ class ControlView:
     attempts: tuple[ControlAttempt, ...]
     execution_run_id: int | None = None
 
+    run_label: str = ""
+    execution_run_label: str = ""
+
 
 def lock_run(conn: Connection, run_id: int) -> None:
     """Serialize admission and control changes against the exact same run row."""

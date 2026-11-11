@@ -42,6 +42,8 @@ class TaskOffset:
     pending_task_run_id: int | None = None
     pending_upper_bound: datetime | None = None
 
+    pending_task_run_label: str = ""
+
 
 def position_kind(handler: str, params: dict[str, str]) -> PositionKind | None:
     """Return what the task keeps: an ingestion offset, a SQL watermark, or nothing."""

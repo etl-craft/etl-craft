@@ -67,6 +67,7 @@ export interface StepView {
   run_condition: string | null;
   run_condition_count?: number | null;
   status?: RunStatus;
+  task_run_label?: string;
 }
 
 export interface Steps {
@@ -117,6 +118,8 @@ export interface AttemptView {
   query_evidence_kind: string | null;
   query_evidence_actor: string | null;
   query_evidence_reason: string | null;
+  run_label?: string;
+  task_run_label?: string;
 }
 
 export interface TaskRunView {
@@ -138,6 +141,8 @@ export interface TaskRunView {
   error_message: string | null;
   attempts: AttemptView[];
   item_progress: string | null;
+  run_label?: string;
+  task_run_label?: string;
 }
 
 export interface TaskHistory {
@@ -158,6 +163,7 @@ export interface TaskOffset {
   offset_value: string | null;
   pending_task_run_id: number | null;
   pending_upper_bound: string | null;
+  pending_task_run_label?: string;
 }
 
 export interface Dependency {
@@ -185,6 +191,8 @@ export interface ItemRecord {
 }
 
 export interface Items {
+  task_run_id: number;
+  task_run_label?: string;
   records: ItemRecord[];
   progress: { total: number; done: number; failed: number; skipped: number };
 }
@@ -208,6 +216,8 @@ export interface ControlView {
   message: string;
   run_status: RunStatus;
   execution_run_id: number | null;
+  execution_run_label?: string;
+  run_label?: string;
 }
 
 export interface Pause {
@@ -232,6 +242,7 @@ export interface RecentRun {
   /** Absent from a server that predates them. */
   start_date?: string | null;
   end_date?: string | null;
+  run_label?: string;
 }
 
 export interface Pipeline {
@@ -262,6 +273,7 @@ export interface Hold {
   requested_by: string;
   reason: string | null;
   requested_at: string;
+  run_label?: string;
 }
 
 export interface BulkOutcome {
@@ -280,12 +292,15 @@ export interface UploadRow {
   reason: string | null;
   uploaded_at: string;
   run_status: string | null;
+  run_label?: string;
 }
 
 export interface UploadReceipt {
   upload_id: number;
   pipeline_run_id: number | null;
   waiting_behind_run_id: number | null;
+  waiting_behind_run_label?: string;
+  run_label?: string;
 }
 
 export interface ValueResult {
@@ -476,6 +491,7 @@ export interface SearchHit {
   pipeline_code: string | null;
   run_id: number | null;
   catalog_path: string | null;
+  run_label?: string;
 }
 
 export interface SearchView {

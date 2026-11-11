@@ -819,3 +819,26 @@ def test_a_developer_previews_the_first_rows_of_a_catalog_table_and_nothing_else
         act(ctx(ApiRole.DEVELOPER), ActionName.TABLE_PREVIEW, table="main.secrets")
     with pytest.raises(PermissionDeniedError):
         act(ctx(ApiRole.VIEWER), ActionName.TABLE_PREVIEW, table="sales.orders")
+
+
+def test_catalog_histories_keep_stored_pipeline_and_task_labels(project):
+    engine, config, _ = project
+    catalog = build_catalog(engine, config)
+    runs = [run for pipeline in catalog.pipelines.values() for run in pipeline.runs]
+    tasks = [run for task in catalog.tasks.values() for run in task.runs]
+    assert runs and tasks
+    with engine.connect() as conn:
+        labels = {
+            row.id: row.label
+            for row in conn.execute(
+                text("SELECT PIPELINE_RUN_ID AS id, RUN_LABEL AS label FROM AUD_PIPELINES_RUN_LOG")
+            )
+        }
+        task_labels = {
+            row.id: row.label
+            for row in conn.execute(
+                text("SELECT TASK_RUN_ID AS id, TASK_RUN_LABEL AS label FROM AUD_TASK_RUN_LOG")
+            )
+        }
+    assert all(run.run_label == labels[run.pipeline_run_id] for run in runs)
+    assert all(run.task_run_label == task_labels[run.task_run_id] for run in tasks)

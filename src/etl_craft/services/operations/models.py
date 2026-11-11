@@ -55,6 +55,10 @@ class RunView:
     item_progress: str | None = None
     rules: tuple[RuleObservation, ...] = ()
 
+    triggered_by_task_run_label: str = ""
+    parent_run_label: str = ""
+    child_run_labels: tuple[str, ...] = ()
+
 
 @dataclass(frozen=True)
 class AttemptView:
@@ -111,6 +115,9 @@ class AttemptView:
     query_evidence_reason: str | None = None
     query_evidence_checks: str | None = None
 
+    run_label: str = ""
+    task_run_label: str = ""
+
 
 @dataclass(frozen=True)
 class TaskRunView:
@@ -146,6 +153,9 @@ class TaskRunView:
     task_run_label: str = ""
     """Pipeline, task, UTC start to the second and task run id; an attempt adds its number."""
 
+    run_label: str = ""
+    child_run_labels: tuple[str, ...] = ()
+
 
 @dataclass(frozen=True)
 class RecentRun:
@@ -156,6 +166,8 @@ class RecentRun:
     sla_status: SlaStatus | None
     start_date: datetime | None = None
     end_date: datetime | None = None
+
+    run_label: str = ""
 
 
 @dataclass(frozen=True)
@@ -262,6 +274,9 @@ class StepView:
     parameters: Mapping[str, str]
     status: RunStatus | None
 
+    run_label: str = ""
+    task_run_label: str = ""
+
 
 @dataclass(frozen=True)
 class StepsView:
@@ -271,6 +286,8 @@ class StepsView:
     pipeline_id: int
     pipeline_run_id: int
     steps: tuple[StepView, ...]
+
+    run_label: str = ""
 
 
 @dataclass(frozen=True)
@@ -296,6 +313,8 @@ class ReconciliationView:
     released_pipeline_run_ids: tuple[int, ...]
     message: str
 
+    released_pipeline_run_labels: tuple[str, ...] = ()
+
 
 @dataclass(frozen=True)
 class ActionView:
@@ -311,6 +330,8 @@ class ActionView:
     command: str
     outcome: str
     arguments: Mapping[str, Any]
+    pipeline_run_id: int | None = None
+    run_label: str = ""
 
 
 @dataclass(frozen=True)

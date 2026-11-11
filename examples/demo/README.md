@@ -26,5 +26,6 @@ For the browser walkthrough, see [See it in the browser](../../docs/quick-start.
 The SQLite demo uses the all-in-one controller with the UI extra and an HTTPS reverse proxy.
 
 Run selections accept an exact stored label as well as the integer: copy the label from
-`etl-craft status --pipeline-code DEMO`, then use `etl-craft history --run-id 'COPIED LABEL'`.
+`etl-craft status --pipeline-code DEMO`, then use `etl-craft history --run-id COPIED_LABEL`. Replace `COPIED_LABEL` with the complete
+shell-quoted label from text output or the browser's copy button; it already includes the quotes.
 The label is case-sensitive; a mismatched label is refused instead of selecting by suffix.

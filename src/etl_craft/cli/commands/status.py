@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import shlex
 
 from etl_craft.cli.commands.common import (
     Command,
@@ -50,9 +49,8 @@ def _render(args: argparse.Namespace, out: Output, done: StatusView | StatusList
 
 def _text_status(out: Output, done: StatusView) -> None:
     run = done.run
-    label = shlex.quote(run.run_label) if out.stdout.isatty() else run.run_label
     out.line(
-        f"{run.pipeline_code}: pipeline_run_id={run.pipeline_run_id} label={label} "
+        f"{run.pipeline_code}: pipeline_run_id={out.identity(run.pipeline_run_id)} "
         f"key={run.run_key} kind={run.trigger_kind} run_date={run.run_date} status={run.status}"
     )
     if out.stdout.isatty():

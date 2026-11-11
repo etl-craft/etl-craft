@@ -1,9 +1,10 @@
+import { copyRunLabel, RunLabel } from "@/components/run-label";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { When } from "@/components/when";
 import { createColumnHelper } from "@tanstack/react-table";
 import { Upload } from "lucide-react";
 import * as React from "react";
-import { Link, useParams, useSearchParams } from "react-router-dom";
+import { useParams, useSearchParams } from "react-router-dom";
 import { Field, Loading, Notice, PageHeader, SelectField, EmptyState } from "@/components/common";
 import { DataTable } from "@/components/data-table";
 import { StatusBadge } from "@/components/status";
@@ -57,8 +58,8 @@ export function Uploads() {
     onSuccess: (receipt) => {
       toast(
         receipt.pipeline_run_id
-          ? `Upload ${receipt.upload_id} received; run ${receipt.pipeline_run_id} validates and loads it.`
-          : `Upload ${receipt.upload_id} received; it waits for run ${receipt.waiting_behind_run_id} to end, then runs.`,
+          ? `Upload ${receipt.upload_id} received; run ${receipt.pipeline_run_id} ${copyRunLabel(receipt.run_label ?? "")} validates and loads it.`
+          : `Upload ${receipt.upload_id} received; it waits for run ${receipt.waiting_behind_run_id} ${copyRunLabel(receipt.waiting_behind_run_label ?? "")} to end, then runs.`,
       );
       setFile(null);
       if (input.current) input.current.value = "";
@@ -149,9 +150,7 @@ export function Uploads() {
                     const f = c.row.original;
                     return f.pipeline_run_id ? (
                       <span className="flex items-center gap-2">
-                        <Link className="num text-accent hover:underline" to={runPath(code, chosen, f.pipeline_run_id)}>
-                          #{f.pipeline_run_id}
-                        </Link>
+                        <RunLabel id={f.pipeline_run_id} label={f.run_label} to={runPath(code, chosen, f.pipeline_run_id)} />
                         {f.run_status ? <StatusBadge status={f.run_status} /> : null}
                       </span>
                     ) : (

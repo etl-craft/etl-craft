@@ -63,6 +63,9 @@ class DependencyView:
     recorded: bool = False
     pipeline_dependency_id: int | None = None
 
+    selected_run_label: str = ""
+    selected_task_run_label: str = ""
+
 
 @dataclass(frozen=True)
 class GateWaitView:

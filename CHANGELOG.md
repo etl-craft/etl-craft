@@ -6,6 +6,12 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+- Run and task-run displays show the stored readable label beside the integer throughout the
+  CLI, browser and catalog histories. CLI text labels and the browser copy action include shell
+  quoting. Existing JSON identity fields and numeric link targets stay unchanged; run-bearing
+  API responses include display labels. Log download bytes stay unchanged, with CLI identities
+  printed to standard error.
+
 - `--run-id`, API `run_id` fields and run addresses accept either a positive integer or the
   complete stored run label. Labels match exactly, including case; mismatches name the expected
   label only when the run is visible in the selected project. Bare integers remain valid.

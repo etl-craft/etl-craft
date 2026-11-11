@@ -1,5 +1,5 @@
 -- Indexed top-N history for each active definition.
-SELECT r.TASK_RUN_ID AS task_run_id, r.TASK_ID AS task_id, r.PIPELINE_RUN_ID AS pipeline_run_id, r.STATUS AS status,
+SELECT pr.RUN_LABEL AS run_label, r.TASK_RUN_LABEL AS task_run_label, r.TASK_RUN_ID AS task_run_id, r.TASK_ID AS task_id, r.PIPELINE_RUN_ID AS pipeline_run_id, r.STATUS AS status,
        COALESCE((SELECT i.FROM_STATUS FROM AUD_RUN_INTERVENTIONS i
         WHERE i.PIPELINE_RUN_ID=r.PIPELINE_RUN_ID AND i.TASK_ID=r.TASK_ID
         AND i.FROM_STATUS IN ('SUCCESS','FAILED','CANCELLED')

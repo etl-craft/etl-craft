@@ -1,3 +1,4 @@
+import { RunLabel } from "@/components/run-label";
 import { gapRemedy } from "@/lib/catalog";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronDown, Copy, Table2, Workflow, ListChecks, TriangleAlert } from "lucide-react";
@@ -129,11 +130,11 @@ function RunsTable({ code, pipeline, runs, task }: { code: string; pipeline: str
       data={runs}
       initialSort={[{ id: "run", desc: true }]}
       columns={columnsOf<CatalogRun>([
-        { id: "run", header: "Run", value: (r) => r.pipeline_run_id, size: 90, cell: (r) => <Link className={`num ${link}`} to={`${pipelinePath(code, pipeline)}?run=${r.pipeline_run_id}`}>#{r.pipeline_run_id}</Link> },
+        { id: "run", header: "Run", value: (r) => r.pipeline_run_id, size: 90, cell: (r) => <RunLabel id={r.pipeline_run_id} label={r.run_label} to={`${pipelinePath(code, pipeline)}?run=${r.pipeline_run_id}`} /> },
         { id: "status", header: "Status", value: (r) => r.status, size: 130, cell: (r) => <StatusBadge status={r.status} /> },
         { id: "started", header: "Started", value: (r) => r.start, size: 190, cell: (r) => <When iso={r.start} /> },
         { id: "duration", header: "Duration", value: (r) => (r.start && r.end ? new Date(r.end).getTime() - new Date(r.start).getTime() : null), size: 110, cell: (r) => formatDuration(r.start, r.end) },
-        ...(task ? [{ id: "written", header: "Written", value: (r: CatalogRun) => (r.insert_count ?? 0) + (r.update_count ?? 0) + (r.delete_count ?? 0), size: 120, cell: (r: CatalogRun) => [["+", r.insert_count], ["~", r.update_count], ["−", r.delete_count]].filter(([, n]) => n).map(([sign, n]) => `${sign}${n}`).join(" ") || "—" }] : []),
+        ...(task ? [{ id: "task-run", header: "Task run", value: (r: CatalogRun) => r.task_run_id ?? null, cell: (r: CatalogRun) => r.task_run_id ? <RunLabel id={r.task_run_id} label={r.task_run_label} /> : "—" }, { id: "written", header: "Written", value: (r: CatalogRun) => (r.insert_count ?? 0) + (r.update_count ?? 0) + (r.delete_count ?? 0), size: 120, cell: (r: CatalogRun) => [["+", r.insert_count], ["~", r.update_count], ["−", r.delete_count]].filter(([, n]) => n).map(([sign, n]) => `${sign}${n}`).join(" ") || "—" }] : []),
       ])}
     />
   );
@@ -445,7 +446,7 @@ export function TableObject({ code, doc, name, tab, onTab }: { code: string; doc
       <FactList inline>
         <Fact inline label="Last written">
           {lastWrite?.end ? (
-            <Link className="text-accent hover:underline" to={runLink(lastWrite)} title={`Open run ${lastWrite.pipeline_run_id} of ${lastWrite.pipeline}`}>
+            <Link className="text-accent hover:underline" to={runLink(lastWrite)} title={`Open run ${lastWrite.pipeline_run_id} · ${lastWrite.run_label ?? ""} of ${lastWrite.pipeline}`}>
               <When iso={lastWrite.end} now={now} />
             </Link>
           ) : (
@@ -456,6 +457,7 @@ export function TableObject({ code, doc, name, tab, onTab }: { code: string; doc
           <Fact inline label="Last write">
             <Link to={runLink(lastRun)} title={`Open run ${lastRun.pipeline_run_id} of ${lastRun.pipeline}`}>
               <StatusBadge status={lastRun.status} />
+              <RunLabel id={lastRun.pipeline_run_id} label={lastRun.run_label} />
             </Link>
           </Fact>
         ) : null}
@@ -594,7 +596,7 @@ export function TableObject({ code, doc, name, tab, onTab }: { code: string; doc
               data={history}
               columns={columnsOf<(typeof history)[number]>([
                 { id: "task", header: "Task", value: (r) => r.task, size: 280, cell: (r) => <Link className={link} to={catalogPath(code, "tasks", r.task)}>{r.task}</Link> },
-                { id: "run", header: "Run", value: (r) => r.pipeline_run_id, size: 90, cell: (r) => <Link className={`num ${link}`} to={`${pipelinePath(code, r.pipeline)}?run=${r.pipeline_run_id}`}>#{r.pipeline_run_id}</Link> },
+                { id: "run", header: "Run", value: (r) => r.pipeline_run_id, size: 90, cell: (r) => <RunLabel id={r.pipeline_run_id} label={r.run_label} to={`${pipelinePath(code, r.pipeline)}?run=${r.pipeline_run_id}`} /> },
                 { id: "status", header: "Status", value: (r) => r.status, size: 130, cell: (r) => <StatusBadge status={r.status} /> },
                 { id: "started", header: "Started", value: (r) => r.start, size: 190, cell: (r) => <When iso={r.start} /> },
                 { id: "duration", header: "Duration", value: (r) => (r.start && r.end ? new Date(r.end).getTime() - new Date(r.start).getTime() : null), size: 110, cell: (r) => formatDuration(r.start, r.end) },

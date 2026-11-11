@@ -196,7 +196,7 @@ item's text, or work done early under another item.
 | S7.AN Always show the environment | Done | #328 | CLI context and production confirmation; designed, sandboxed alert/SLA templates and catalog environment |
 | S7.AO UI rebuild | Done | #329–#335 | Seven slices: shell, Home, runs, pipelines, tasks, uploads, insights, console, catalog, system, agents, administration, maintenance, settings, search, sign-in; the new interface is the only one, served at `/ui`, and the old pages are deleted; audit follow-ups align time preferences, human labels, automatic grid sizing and phone date controls; remaining audit closes sparse summaries, controls, lazy loading and CLI operability |
 | S7.AP Native catalog | In progress | | The catalog moves into the app from a JSON read action, built from the app's own components; the generated static site stays only for `publish-docs` |
-| S7.AQ Readable run identifiers | In progress | #347, #369 | A label beside every run and task run id, stored by the Engine DB; accepted wherever the integer is, and shown beside it |
+| S7.AQ Readable run identifiers | Done | #347, #369, #370 | A label beside every run and task run id, stored by the Engine DB; accepted wherever the integer is, and shown beside it |
 | S7.AR Restarting pipelines | In progress | slice 1 PR | A pipeline setting, `RESTART_CONDITION`, starts the next run when the last one ends in a chosen status, so a file watcher runs continuously without a schedule |
 | S7.AS Project dashboard and navigation | In progress | | Home becomes a project dashboard with tabs and charts; a pipeline and its runs are one split workspace; Projects moves into Platform; the section Project is renamed Operations |
 | S7.M Stewardship uploads | Done (M2) | #296, #305 | Atomic receipts and safe stored names; processed layout, retention archives and verified reruns; crash recovery and guarded upload history |
@@ -1431,6 +1431,16 @@ empty-history-page handling defect, which was corrected and verified. No cloud w
   Phone date controls use matching heights. Vite's missing server-issued CSRF cookie is documented
   in CONTRIBUTING rather than adding another authenticated serving/proxy path.
   Acceptance availability: warehouse SQL is unchanged; cloud suites are not applicable.
+
+- **S7.AQ slice 3 display.** S7.AQ is complete. Stored labels accompany integer identities in
+  CLI text, API results and browser histories, headers and run links. Labels are plain table text;
+  links retain integer targets. CLI ID columns remain first relative to their label, and shell
+  quotes make text and browser-copy labels directly pasteable without changing storage. Glyph-only
+  status bars and task cells carry labels in their accessible descriptions; downloads retain
+  their bytes and filenames, with the CLI identity key on stderr. Historical audit argument and
+  metadata payloads remain immutable; display metadata is separate.
+  Acceptance availability: unit, API, CLI, catalog, query-plan and browser suites run locally;
+  warehouse SQL is unchanged, so cloud suites are not applicable.
 
 - **S7.AQ slice 2 exact label selection.** The owner confirmed both integer and stored-label
   inputs, exact case-sensitive comparison, and one resolver in services/operations. CLI and API

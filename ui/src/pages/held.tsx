@@ -1,3 +1,4 @@
+import { RunLabel } from "@/components/run-label";
 import { useQuery } from "@tanstack/react-query";
 import { When } from "@/components/when";
 import { createColumnHelper } from "@tanstack/react-table";
@@ -44,7 +45,7 @@ export function Held() {
           empty={held.isSuccess ? <EmptyState title="Nothing is held.">Hold a queued or running task from its run page when work must wait.</EmptyState> : undefined}
           columns={[
             holds.accessor("pipeline_code", { header: "Pipeline", cell: (c) => <span className="font-medium">{c.getValue()}</span> }),
-            holds.accessor("pipeline_run_id", { header: "Run", cell: (c) => <Link className="num text-accent hover:underline" to={runPath(code, c.row.original.pipeline_code, c.getValue())}>#{c.getValue()}</Link> }),
+            holds.accessor("pipeline_run_id", { header: "Run", cell: (c) => <RunLabel id={c.getValue()} label={c.row.original.run_label} to={runPath(code, c.row.original.pipeline_code, c.getValue())} /> }),
             holds.accessor("task_code", { header: "Held", cell: (c) => c.getValue() ?? "Whole run" }),
             holds.accessor("requested_by", { header: "By" }),
             holds.accessor("requested_at", { header: "Since", cell: (c) => <When iso={c.getValue()} /> }),

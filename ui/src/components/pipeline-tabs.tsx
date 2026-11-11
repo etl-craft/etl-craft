@@ -1,3 +1,4 @@
+import { RunLabel } from "@/components/run-label";
 import { Disclosure, DisclosureSummary } from "@/components/dropdown";
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { When } from "@/components/when";
@@ -67,7 +68,7 @@ export function OverviewTab({ code, pipeline, runs }: { code: string; pipeline: 
             {runs.map((run) => (
               <li key={run.pipeline_run_id} className="flex flex-wrap items-center gap-2">
                 <StatusBadge status={run.status} />
-                <Link className="num text-accent hover:underline" to={`/projects/${encodeURIComponent(code)}/pipelines/${encodeURIComponent(run.pipeline_code)}?run=${run.pipeline_run_id}`}>#{run.pipeline_run_id}</Link>
+                <RunLabel id={run.pipeline_run_id} label={run.run_label} to={`/projects/${encodeURIComponent(code)}/pipelines/${encodeURIComponent(run.pipeline_code)}?run=${run.pipeline_run_id}`} />
                 <span className="num text-muted">{formatDuration(run.start_date, run.end_date)}</span>
               </li>
             ))}
@@ -85,9 +86,7 @@ export function OverviewTab({ code, pipeline, runs }: { code: string; pipeline: 
             {failed.slice(0, 8).map((run) => (
               <li key={run.pipeline_run_id} className="flex flex-wrap items-center gap-2">
                 <StatusBadge status={run.status} />
-                <Link className="num text-accent hover:underline" to={`/projects/${encodeURIComponent(code)}/pipelines/${encodeURIComponent(pipeline.pipeline_code)}?run=${run.pipeline_run_id}`}>
-                  #{run.pipeline_run_id}
-                </Link>
+                <RunLabel id={run.pipeline_run_id} label={run.run_label} to={`/projects/${encodeURIComponent(code)}/pipelines/${encodeURIComponent(pipeline.pipeline_code)}?run=${run.pipeline_run_id}`} />
                 <span className="text-muted">{formatDuration(run.start_date, run.end_date)}</span>
               </li>
             ))}
@@ -132,7 +131,7 @@ export function TasksTab({ code, pipeline, graph, runId, run }: { code: string; 
             { id: "task", header: "Task", value: (t) => t, size: 280, cell: (t) => <Link className="font-medium text-accent hover:underline" to={taskPath(code, pipeline, t)}>{t}</Link> },
             { id: "handler", header: "Handler", value: (t) => definitions.get(t)?.handler ?? "", size: 130, cell: (t) => (definitions.get(t) ? handlerLabel(definitions.get(t)?.handler) : "…") },
             { id: "waits", header: "Waits for", value: (t) => (graph.depends_on[t] ?? []).map(([upstream]) => upstream).join(", "), size: 320, cell: (t) => <span className="text-muted">{(graph.depends_on[t] ?? []).map(([upstream]) => upstream).join(", ") || "—"}</span> },
-            ...(runId !== undefined ? [{ id: "state", header: `Run #${runId}`, value: (t: string) => status.get(t) ?? "", size: 150, cell: (t: string) => (status.has(t) ? <StatusBadge quiet status={status.get(t)!} /> : "—") }] : []),
+            ...(runId !== undefined ? [{ id: "state", header: `Run #${runId} · ${run?.run_label ?? ""}`, value: (t: string) => status.get(t) ?? "", size: 150, cell: (t: string) => (status.has(t) ? <StatusBadge quiet status={status.get(t)!} /> : "—") }] : []),
           ])}
         />
       </div>

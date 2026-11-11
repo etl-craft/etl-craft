@@ -1,3 +1,4 @@
+import { RunLabel } from "@/components/run-label";
 import { useQueries } from "@tanstack/react-query";
 import { words } from "@/lib/labels";
 import { When } from "@/components/when";
@@ -70,7 +71,7 @@ function ProjectCard({ p, failures, since }: { p: ProjectCounts; failures: Histo
                 >
                   <StatusBadge status={run.status} />
                   <span className="font-medium">{run.pipeline_code}</span>
-                  <span className="num text-muted">#{run.pipeline_run_id}</span>
+                  <RunLabel id={run.pipeline_run_id} label={run.run_label} />
                   <span className="ml-auto text-xs text-muted">
                     <When iso={run.end_date ?? run.start_date} />
                   </span>

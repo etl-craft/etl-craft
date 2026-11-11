@@ -180,6 +180,7 @@ class RunSummary:
     metadata_version: str | None = None
     newer_metadata_available: bool = False
     first_status: str | None = None
+    run_label: str = ""
 
     @property
     def seconds(self) -> float | None:
@@ -210,6 +211,10 @@ class TaskRunSummary:
     failure_reasons: tuple[str, ...] = ()
     item_progress: str | None = None
     first_status: str | None = None
+    run_label: str = ""
+
+    task_run_id: int | None = None
+    task_run_label: str = ""
 
     @property
     def seconds(self) -> float | None:
@@ -273,7 +278,7 @@ def fetch_task_runs(conn: Connection, limit: int = RUN_HISTORY) -> dict[int, lis
     for row in rows:
         values = dict(row._mapping)
         task_id = values.pop("task_id")
-        task_run_id = values.pop("task_run_id")
+        task_run_id = values["task_run_id"]
         if values.pop("has_items", False):
             values["item_progress"] = str(item_progress[task_run_id])
         values["failure_reasons"] = tuple(failures.get(task_run_id, []))

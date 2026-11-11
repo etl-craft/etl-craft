@@ -1,3 +1,4 @@
+import { RunLabel } from "@/components/run-label";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useParams } from "react-router-dom";
 import { AttemptDetails } from "@/components/attempt-details";
@@ -31,7 +32,7 @@ export function Attempt() {
         trail={[
           { label: "Pipelines", to: pipelinesPath(code) },
           { label: pipeline, to: pipelinePath(code, pipeline) },
-          { label: `Run ${runId}`, to: runPath(code, pipeline, runId) },
+          { label: `Run ${addressed.data.pipeline_run_id} · ${addressed.data.run_label ?? ""}`, to: runPath(code, pipeline, addressed.data.pipeline_run_id) },
           { label: task, to: taskPath(code, pipeline, task) },
           { label: `Attempt ${a?.attempt_number ?? ""}` },
         ]}
@@ -50,6 +51,7 @@ export function Attempt() {
       {mismatch ? <Notice>Attempt {attemptId} belongs to run {a?.pipeline_run_id}, not run {runId}; open it from its own run.</Notice> : null}
       {a && !mismatch ? (
         <Card className="p-4">
+          <RunLabel id={a.task_run_id} label={a.task_run_label} />
           <AttemptDetails code={code} attempt={a} heading="Recorded outcome" showLog />
         </Card>
       ) : null}
