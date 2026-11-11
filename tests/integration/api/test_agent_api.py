@@ -1601,7 +1601,9 @@ def test_running_agent_refuses_api_upgrade_before_mutating_ownership(
         assert row.status == "QUEUED" and row.owner is None
 
 
-def test_registered_agent_stops_claiming_when_the_api_version_changes(agent_scene, monkeypatch):
+def test_registered_agent_stops_claiming_when_the_api_major_version_changes(
+    agent_scene, monkeypatch
+):
     import threading
 
     from etl_craft.agent.client import AgentClient
@@ -1617,7 +1619,7 @@ def test_registered_agent_stops_claiming_when_the_api_version_changes(agent_scen
     def exchange(self, action, request, **kwargs):
         calls.append(action)
         if action == ActionName.AGENT_REGISTER:
-            monkeypatch.setattr(agents, "__version__", "upgraded-api")
+            monkeypatch.setattr(agents, "__version__", "99.0.0")
             return AgentReply({"agent_id": owner, "lease_seconds": 60})
         route = "renew" if action == ActionName.AGENT_RENEW else "claim"
         response = client.post(f"/api/v1/agent/{route}", headers=headers, json=encode(request))
@@ -1628,7 +1630,10 @@ def test_registered_agent_stops_claiming_when_the_api_version_changes(agent_scen
     monkeypatch.setenv("ETL_CRAFT_TOKEN", "test-agent")
     monkeypatch.setattr(AgentClient, "call", exchange)
     stop = threading.Event()
-    with pytest.raises(ConfigurationError, match=r"upgraded-api.*install.*restart"):
+    with pytest.raises(
+        ConfigurationError,
+        match=r"local version=99\.0\.0.*>=99\.0\.0,<100\.0\.0.*upgrade agent.*restart",
+    ):
         AgentLoop(
             config, AgentOptions("http://127.0.0.1:1", "default", ceilings(config)), stop
         ).serve()
