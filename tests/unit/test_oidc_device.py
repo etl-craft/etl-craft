@@ -16,7 +16,7 @@ def test_device_sign_in_checks_tls_and_returns_only_a_verified_subject(issuer):
     assert grant.user_code == "ABCD-EFGH"
     assert grant.verification_uri.endswith("/verify")
     assert poll_device(auth, grant.device_code, grant.nonce) == IdentityClaims("known-subject")
-    assert state["requests"][0][1]["scope"] == ["openid"]
+    assert state["requests"][0][1]["scope"] == ["openid email profile"]
     assert state["requests"][1][1]["grant_type"] == ["urn:ietf:params:oauth:grant-type:device_code"]
     assert state["requests"][1][1]["device_code"] == ["private-device-code"]
 
@@ -85,15 +85,15 @@ def test_oidc_clock_leeway_and_discovery_cache(issuer, monkeypatch):
     auth, state = issuer
     clock = [1000.0]
     monkeypatch.setattr(oidc.time, "monotonic", lambda: clock[0])
-    original = oidc._request
+    original = oidc.request_json
     discoveries = []
 
-    def counted(url, data=None):
+    def counted(url, data=None, **options):
         if url.endswith("openid-configuration"):
             discoveries.append(url)
-        return original(url, data)
+        return original(url, data, **options)
 
-    monkeypatch.setattr(oidc, "_request", counted)
+    monkeypatch.setattr(oidc, "request_json", counted)
     grant = start_device(auth)
     state["extra_claims"] = {
         "iat": oidc.time.time() + 119,
@@ -114,7 +114,7 @@ def test_oidc_refuses_non_https_token_endpoint_and_does_not_cache_failure(issuer
     from etl_craft.services import oidc
 
     auth, _state = issuer
-    original = oidc._request
+    original = oidc.request_json
     invalid = [True]
 
     def discovery(url, data=None):
@@ -123,9 +123,88 @@ def test_oidc_refuses_non_https_token_endpoint_and_does_not_cache_failure(issuer
             value["token_endpoint"] = "http://localhost/token"
         return value
 
-    monkeypatch.setattr(oidc, "_request", discovery)
+    monkeypatch.setattr(oidc, "request_json", discovery)
     with pytest.raises(ConfigurationError, match="HTTPS URL"):
         start_device(auth)
     assert auth.oidc_issuer not in oidc._DISCOVERY
     invalid[0] = False
     assert start_device(auth).device_code
+
+
+def test_names_come_from_the_given_and_family_claims_or_the_full_name():
+    from etl_craft.services.oidc import _person
+
+    assert _person({"given_name": " Ada ", "family_name": "Lovelace"}) == ("Ada", "Lovelace")
+    assert _person({"name": "Ada King Lovelace"}) == ("Ada King", "Lovelace")
+    assert _person({"name": "Ada"}) == ("Ada", None)
+    assert _person({"given_name": 7}) == (None, None)
+
+
+def test_an_issuer_that_leaves_out_the_nonce_is_accepted_and_a_wrong_one_is_not(issuer):
+    auth, state = issuer
+    state["omit_claims"] = ("nonce",)
+    grant = start_device(auth)
+    assert poll_device(auth, grant.device_code, grant.nonce) == IdentityClaims("known-subject")
+    state["omit_claims"] = ()
+    with pytest.raises(ConfigurationError, match="nonce: value differs"):
+        poll_device(auth, grant.device_code, "another-sign-in")
+
+
+def test_profile_claims_are_read_with_the_verified_flag(issuer):
+    auth, state = issuer
+    state["extra_claims"] = {
+        "email": "ada@example.com",
+        "email_verified": True,
+        "given_name": "Ada",
+        "family_name": "Lovelace",
+    }
+    grant = start_device(auth)
+    assert poll_device(auth, grant.device_code, grant.nonce) == IdentityClaims(
+        "known-subject", (), "ada@example.com", True, "Ada", "Lovelace"
+    )
+
+
+@pytest.mark.parametrize("status", [400, 401])
+def test_a_pending_poll_is_read_from_the_body_whether_the_issuer_answers_400_or_401(issuer, status):
+    auth, state = issuer  # RFC 8628 says 400; Dex answers 401
+    grant = start_device(auth)
+    state["error_status"] = status
+    state["errors"] = ["authorization_pending", "slow_down"]
+    assert poll_device(auth, grant.device_code, grant.nonce) == 0
+    assert poll_device(auth, grant.device_code, grant.nonce) == 5
+
+
+def test_a_401_from_the_device_authorization_endpoint_is_a_plain_http_failure(issuer):
+    auth, state = issuer
+    state["device_status"] = 401
+    with pytest.raises(ConfigurationError, match="HTTP 401"):
+        start_device(auth)
+
+
+@pytest.mark.parametrize("endpoint", ["logout", "authorize"])
+@pytest.mark.parametrize("control", ["\r", "\n"])
+def test_issuer_refuses_response_splitting_in_redirect_headers(issuer, endpoint, control):
+    import http.client
+    import os
+    import ssl
+    from urllib.parse import urlencode, urlsplit
+
+    auth, _ = issuer
+    address = urlsplit(auth.oidc_issuer)
+    connection = http.client.HTTPSConnection(
+        address.hostname,
+        address.port,
+        context=ssl.create_default_context(cafile=os.environ["SSL_CERT_FILE"]),
+    )
+    field = "post_logout_redirect_uri" if endpoint == "logout" else "redirect_uri"
+    target = "https://localhost/" + control + "X-Injected: yes"
+    params = {field: target, "state": "test-state"}
+    connection.request("GET", f"/{endpoint}?" + urlencode(params))
+    response = connection.getresponse()
+    try:
+        assert response.status == 400
+        assert response.getheader("Location") is None
+        assert response.getheader("X-Injected") is None
+    finally:
+        response.read()
+        connection.close()

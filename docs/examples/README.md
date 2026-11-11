@@ -138,6 +138,9 @@ project, one CSV file per supported package-owned config table: copy the folder 
 `config/` is exactly what `etl-craft config export` writes once the migrations are applied, and
 the tests check both on SQLite and PostgreSQL.
 
+The [SQL merge guide](../guides/sql-tasks.md#joined-merge-updates) explains the single-target
+MERGE contract, including atomic SCD2 version publication and the older PostgreSQL fallback.
+
 [SQL source watermark](sql-watermark.md) shows an incremental external-source merge and an
 audited reload.
 
@@ -171,7 +174,7 @@ for the upgrade procedure when old token names collide.
 After applying your metadata, use a non-watermarked SQL task with no outside dependencies:
 
 ```bash
-etl-craft run --pipeline-code SALES_DAILY --task-code load_orders --standalone
+etl-craft run --reason "requested data load" --pipeline-code SALES_DAILY --task-code load_orders --standalone
 ```
 
 Add `--with-downstream` for its selected continuation, or explicitly justify current inputs
@@ -214,3 +217,15 @@ For a pipeline or task code change, use `etl-craft rename --project P --pipeline
 --reason "Clearer code"` (add `--task OLD` for a task). See
 [Renaming pipelines and tasks](../guides/configuration-files.md#renaming-pipelines-and-tasks).
 Update the example's CSV files and team SQL references after the command; do not replace its IDs.
+
+## Standing personal-data erasure
+
+The [erasure guide](../guides/erasure.md) shows the `Privacy.Hmac_secret` variable reference,
+admin preview/register/list/lift commands and placement of ordinary `ERASURE` tasks after loads.
+Register at the earliest managed warehouse table; external sources are outside erasure's scope.
+
+## Viewing example runs
+
+Use the [browser guide](../guides/browser-ui.md) to inspect an example project's runs. Home
+shows dated numbers for one-to-four-day windows and daily charts for longer windows. Graph
+**Fit view** keeps labels readable; drag to pan through a large pipeline or catalog lineage.

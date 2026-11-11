@@ -1,4 +1,4 @@
-SELECT u.UPLOAD_ID AS upload_id, u.ACCOUNT AS account, u.FILE_NAME AS file_name,
+SELECT u.UPLOAD_ID AS upload_id, u.ACCOUNT AS account, u.FILE_NAME AS file_name,u.STORED_NAME AS stored_name,
  u.SIZE_BYTES AS size_bytes, u.SHA256 AS sha256,a.ACCOUNT_KIND AS actor_kind
 FROM AUD_UPLOADS u LEFT JOIN CFG_ACCOUNTS a ON a.ACCOUNT_NAME=u.ACCOUNT
 WHERE u.PIPELINE_RUN_ID=:run_id

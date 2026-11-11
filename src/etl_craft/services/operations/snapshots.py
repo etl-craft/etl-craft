@@ -10,6 +10,7 @@ from sqlalchemy.engine import Connection, RowMapping
 
 from etl_craft.core.enums import (
     AttemptStatus,
+    EndingEvidenceKind,
     FailureClass,
     RunStatus,
     SlaStatus,
@@ -18,6 +19,7 @@ from etl_craft.core.enums import (
 )
 from etl_craft.core.errors import RunStateError, UsageError
 from etl_craft.core.failures import retry_reason
+from etl_craft.core.restart import restart_note
 from etl_craft.core.time import as_utc
 from etl_craft.engine.queries import statement
 from etl_craft.engine.repository.business_rules import fetch_rule_observations
@@ -56,6 +58,9 @@ def pipeline_view(conn: Connection, pipeline_id: int) -> PipelineView:
         tuple(detail.tags or ()),
         tuple(p for p in current(conn, pipeline_id) if p.active(datetime.now(UTC))),
         resumes(conn, pipeline_id)[:1],
+        auto_restart_condition=detail.auto_restart_condition,
+        restart_note=restart_note(detail.auto_restart_condition),
+        description=detail.description,
     )
 
 
@@ -195,6 +200,10 @@ def attempt_document(row: RowMapping) -> AttemptView:
         "not_before",
     ):
         captured[key] = timestamp(captured[key])
+    for prefix in ("process", "query"):
+        key = f"{prefix}_evidence_kind"
+        if captured.get(key) is not None:
+            captured[key] = EndingEvidenceKind(captured[key])
     captured["status"] = AttemptStatus(captured["status"])
     captured["failure_class"] = FailureClass(captured["failure_class"])
     captured["retry_reason"] = retry_reason(

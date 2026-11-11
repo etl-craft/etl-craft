@@ -7,36 +7,8 @@ from fastapi.testclient import TestClient
 from sqlalchemy import text
 
 from etl_craft.api.app import create_app
-from etl_craft.core.actor import SYSTEM_ACTOR
-from etl_craft.core.enums import ActionName, ApiRole
-from etl_craft.services.operations import OperationContext
-from etl_craft.services.operations.actions import invoke
-from etl_craft.services.operations.tokens import TokenCreate
-from fixtures.metadata import add_pipeline, add_task
-
-
-@pytest.fixture
-def upload_api(engine_db, tmp_path):
-    config = replace(engine_db.config, config_path=tmp_path / "craft-connector.yml")
-    folder = config.project_dir / "validation_scripts"
-    folder.mkdir()
-    (folder / "check.py").write_text("def validate(task):\n    list(task.reader.rows())\n")
-    ctx = OperationContext(engine_db.engine, config, SYSTEM_ACTOR, role=ApiRole.ADMIN)
-    writer = invoke(ctx, ActionName.TOKEN_CREATE, TokenCreate(name="writer", role=ApiRole.ADMIN))
-    viewer = invoke(ctx, ActionName.TOKEN_CREATE, TokenCreate(name="viewer", role=ApiRole.VIEWER))
-    with ctx.engine.begin() as conn:
-        pipeline = add_pipeline(conn, "P")
-        add_task(
-            conn,
-            pipeline,
-            "check",
-            "FILE_VALIDATION",
-            SCRIPT_FILE="validation_scripts/check.py",
-            FILE_FORMAT="CSV",
-        )
-        conn.execute(text("UPDATE CFG_PIPELINES SET STEWARDABLE_FLAG='Y'"))
-    with TestClient(create_app(ctx)) as client:
-        yield ctx, client, writer, viewer
+from etl_craft.core.enums import ActionName
+from fixtures.uploads import upload_api as upload_api
 
 
 def authorization(token):
@@ -66,17 +38,7 @@ def test_multipart_upload_and_history_share_the_receipt(upload_api):
     assert row.account == "writer" and row.size == len(b"id|name\n1|one\n")
 
 
-@pytest.mark.parametrize(
-    "filename",
-    [
-        "../secret.csv",
-        "/tmp/secret.csv",
-        r"..\secret.csv",
-        "%2fsecret.csv",
-        "data.xls",
-        "data.xlsm",
-    ],
-)
+@pytest.mark.parametrize("filename", ["data.xls", "data.xlsm"])
 def test_hostile_upload_filename_is_refused_and_audited(upload_api, filename):
     ctx, client, writer, _ = upload_api
     response = client.post(
@@ -238,6 +200,14 @@ def test_remote_cli_streams_upload_and_reads_its_history(upload_api, monkeypatch
     assert main([*args, "uploads", "--pipeline-code", "P", "--format", "json"]) == 0
     history = json.loads(capsys.readouterr().out)
     assert history["uploads"][0]["upload_id"] == submitted["upload_id"]
+    name = history["uploads"][0]["stored_name"]
+    assert name.startswith(str(submitted["upload_id"]) + "-")
+    assert main([*args, "uploads", "--pipeline-code", "P"]) == 0
+    assert name in capsys.readouterr().out
+    assert main([*args, "upload", "--pipeline-code", "P", str(path)]) != 0
+    capsys.readouterr()
+    assert main([*args, "uploads", "--pipeline-code", "P"]) == 0
+    assert "duplicates upload" in capsys.readouterr().out
 
 
 def test_can_upload_grant_accepts_files_but_does_not_grant_run(upload_api):

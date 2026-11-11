@@ -36,3 +36,52 @@ def test_given_streams_are_used_instead_of_the_process_streams(capsys):
     out.error("b")
     assert (stdout.getvalue(), stderr.getvalue()) == ("a\n", "error: b\n")
     assert capsys.readouterr() == ("", "")
+
+
+def test_terminal_rows_align_while_pipes_keep_their_contract():
+    class Terminal(io.StringIO):
+        def isatty(self):
+            return True
+
+    terminal = Terminal()
+    Output(stdout=terminal).rows([("Name", "Role"), ("a", "admin")])
+    assert terminal.getvalue() == "Name  Role\na     admin\n"
+
+
+def test_run_labels_follow_numeric_columns_and_are_shell_words():
+    import json
+    import shlex
+
+    from etl_craft.core.enums import RunStatus, TriggerKind
+    from etl_craft.services.operations.models import RunView
+
+    label = "SALES-2026-11-10 06:28:20-3"
+    done = RunView(
+        1,
+        "SALES",
+        3,
+        "key",
+        TriggerKind.MANUAL,
+        None,
+        RunStatus.SUCCESS,
+        None,
+        None,
+        None,
+        False,
+        None,
+        None,
+        None,
+        None,
+        run_label=label,
+    )
+    stdout = io.StringIO()
+    out = Output(stdout=stdout)
+    out.result(done, "text", text=lambda: out.rows([("RUN_ID", "STATUS"), (3, "SUCCESS")]))
+    columns = stdout.getvalue().splitlines()[1].split("\t")
+    assert columns[0] == "3"
+    assert shlex.split(columns[1]) == [label]
+    stdout.seek(0)
+    stdout.truncate()
+    out.result(done, "json")
+    assert json.loads(stdout.getvalue())["pipeline_run_id"] == 3
+    assert "RUN_LABEL" not in stdout.getvalue()

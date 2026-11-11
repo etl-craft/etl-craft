@@ -72,6 +72,7 @@ class TaskInsight:
     updated: int | None
     deleted: int | None
     rejected: int | None
+    duplicates: int | None
 
 
 @dataclass(frozen=True)
@@ -94,6 +95,8 @@ class Observation:
     observed_at: datetime | None
     passed: str | None
     observed: str
+
+    run_label: str = ""
 
 
 @dataclass(frozen=True)
@@ -121,6 +124,8 @@ class LatestRun:
     start_date: datetime
     end_date: datetime | None
     trigger_kind: str
+
+    run_label: str = ""
 
 
 @dataclass(frozen=True)
@@ -318,6 +323,7 @@ def _tasks(
                     _measured(row, "updated", "update_measured"),
                     _measured(row, "deleted", "delete_measured"),
                     _measured(row, "rejected", "reject_measured"),
+                    _measured(row, "duplicates", "duplicate_measured"),
                 )
                 for row in _rows(conn, "insights_tasks", params, pipelines)
             ),

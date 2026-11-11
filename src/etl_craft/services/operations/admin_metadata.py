@@ -10,6 +10,7 @@ from etl_craft.core.cron import next_after, timezone
 from etl_craft.core.enums import ApiRole, YesNo
 from etl_craft.core.enums_access import EnvironmentType, Governance
 from etl_craft.core.errors import EtlCraftError, MetadataError, UsageError
+from etl_craft.core.restart import EVERYTHING, parse_auto_restart
 from etl_craft.core.text import is_metadata_code
 from etl_craft.engine import locks
 from etl_craft.engine.queries import statement
@@ -39,6 +40,7 @@ class ProjectFields(ProjectIdentity):
     governance: Governance | None = None
     schema_check_schedule: str | None = None
     schema_check_on_demand: YesNo | None = None
+    allowed_auto_restarts: str | None = None
 
     def __post_init__(self) -> None:
         """Validate supplied enums and the check schedule even for direct Python callers."""
@@ -51,6 +53,11 @@ class ProjectFields(ProjectIdentity):
                     f"--schema-check-schedule={schedule!r}: {error}; give a five-field cron "
                     "expression, or none to stop scheduled checks"
                 ) from error
+        if self.allowed_auto_restarts is not None:
+            try:
+                parse_auto_restart(self.allowed_auto_restarts)
+            except EtlCraftError as error:
+                raise UsageError(f"--allowed-auto-restarts: {error}") from error
         for flag, value, allowed in (
             ("--environment-type", self.environment_type, tuple(EnvironmentType)),
             ("--governance", self.governance, tuple(Governance)),
@@ -93,6 +100,7 @@ class Project:
     shared_warehouse: bool = False
     schema_check_schedule: str | None = None
     schema_check_on_demand: str = YesNo.YES
+    allowed_auto_restarts: str = EVERYTHING
 
 
 @dataclass(frozen=True)
@@ -169,6 +177,7 @@ def list_projects(ctx: OperationContext, request: ProjectIdentity) -> Projects:
                     r.project_code in shared,
                     r.schema_check_schedule,
                     r.schema_check_on_demand,
+                    r.allowed_auto_restarts,
                 )
                 for r in rows
                 if (request.project is None or r.project_code == request.project)
@@ -240,12 +249,13 @@ def change_project(ctx: OperationContext, request: ProjectFields, *, adding: boo
         request.governance,
         request.schema_check_schedule,
         request.schema_check_on_demand,
+        request.allowed_auto_restarts,
     )
     if not adding and all(value is None for value in fields):
         raise UsageError(
             "project set: no field given; supply --name, --timezone, --default-pool, "
             "--max-running-tasks, --environment-type, --environment-name, --governance, "
-            "--schema-check-schedule or --schema-check-on-demand"
+            "--schema-check-schedule, --schema-check-on-demand or --allowed-auto-restarts"
         )
     with locks.MIGRATE.hold(ctx.engine, wait_seconds=30), ctx.engine.begin() as conn:
         old = conn.execute(
@@ -292,6 +302,9 @@ def change_project(ctx: OperationContext, request: ProjectFields, *, adding: boo
             if adding and request.schema_check_schedule == "none"
             else request.schema_check_schedule,
             "schema_check_on_demand": request.schema_check_on_demand,
+            "allowed_auto_restarts": None
+            if request.allowed_auto_restarts is None
+            else parse_auto_restart(request.allowed_auto_restarts),
         }
         conn.execute(
             statement(conn, "admin_project_add" if adding else "admin_project_set"), values

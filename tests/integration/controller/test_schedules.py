@@ -270,10 +270,30 @@ def test_sqlite_catchup_bound_requires_a_positive_whole_number(engine_db):
             )
 
 
-def test_allow_schedule_false_starts_no_scheduled_runs(engine_db):
+def test_allowed_auto_restarts_none_starts_no_scheduled_runs(engine_db):
     _, ctx = configure(engine_db)
-    off = replace(ctx, config=replace(ctx.config, allow_schedule=False))
+    off = replace(ctx, config=replace(ctx.config, allowed_auto_restarts="NONE"))
     Schedules().refresh(off, NOW)
+    with ctx.engine.connect() as conn:
+        count = conn.execute(text("SELECT COUNT(*) FROM AUD_PIPELINES_RUN_LOG")).scalar_one()
+    assert count == 0
+
+
+def test_a_project_that_allows_no_automatic_start_starts_no_scheduled_runs(engine_db):
+    _, ctx = configure(engine_db)
+    with ctx.engine.begin() as conn:
+        conn.execute(text("UPDATE CFG_PROJECTS SET ALLOWED_AUTO_RESTARTS='NONE'"))
+    Schedules().refresh(ctx, NOW)
+    with ctx.engine.connect() as conn:
+        count = conn.execute(text("SELECT COUNT(*) FROM AUD_PIPELINES_RUN_LOG")).scalar_one()
+    assert count == 0
+
+
+def test_a_project_setting_the_controller_cannot_read_starts_no_scheduled_runs(engine_db):
+    _, ctx = configure(engine_db)
+    with ctx.engine.begin() as conn:
+        conn.execute(text("UPDATE CFG_PROJECTS SET ALLOWED_AUTO_RESTARTS='FOO'"))
+    Schedules().refresh(ctx, NOW)  # must not raise
     with ctx.engine.connect() as conn:
         count = conn.execute(text("SELECT COUNT(*) FROM AUD_PIPELINES_RUN_LOG")).scalar_one()
     assert count == 0

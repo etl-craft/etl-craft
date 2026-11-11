@@ -60,6 +60,7 @@ and managed SQL keep `Orchestration.Retry_on`. `explain` shows the effective pol
 |---|---|
 | `SCRIPT_KIND` | required: `INGESTION` or `UTILITY` |
 | `SCRIPT_FILE` | the script's path from the project directory, inside `python_scripts/`, such as `python_scripts/crm/customers.py` |
+| `SECRETS` | optional: pipe-separated provider names, for example `SOURCE_USER|SOURCE_PASSWORD`; values stay outside metadata |
 | `INPUT_PARAMS` | optional: a JSON object the script receives as a dictionary, such as `{"region": "eu", "days": 30}` |
 | `SOURCE_OBJECT` | optional: where the script reads from, for the [catalog](catalog.md)'s lineage graphs |
 
@@ -164,6 +165,33 @@ other modules. A script may use `ProcessPoolExecutor` with the `fork` start meth
 that support it. The `spawn` start method cannot re-import the script by its generated module
 name; put functions needed by spawned agents in a normally importable helper module.
 
+## Task credentials
+
+Declare credential names with the `SECRETS` task parameter and read them with
+`task.secret("SOURCE_PASSWORD")`. The configured `Secrets.Source_type` resolves names from
+ENVIRONMENT or FILE (`Secrets.Path`); non-secret source hosts and database names belong in
+INPUT_PARAMS. Never put values in task parameters or source code.
+
+Validation checks every declared name against the provider and checks literal `task.secret`
+calls for undeclared names without running the script. Dynamic names are checked when read.
+A refusal names the pipeline, task, name, provider and remedy, never the value.
+
+For controller/agent deployment, mount the provider file only on controller/API hosts.
+The API resolves declared names for the current fenced claim over HTTPS (plain HTTP is
+allowed only on localhost). Agents receive only that task's declared values, pass them over
+a private stdin pipe, and do not need provider credentials. Values are absent from process
+environments, command arguments, work files and bundle files. Local task processes use the
+same pipe. Registered values are masked from logs, errors, audit-visible results and returned
+script variables; output filtering also covers print/stdout/stderr and split writes.
+
+```python
+def run(task):
+    password = task.secret("SOURCE_PASSWORD")
+    # Use the credential with the source client; never return or print it.
+```
+
+AWS Secrets Manager, Vault and configurable caching are not implemented by this slice.
+
 ## Output and logs
 
 The script runs inside the task's own process. Everything it prints, writes to stderr or logs
@@ -244,9 +272,21 @@ exception class even when the script handler adds its script-name diagnostic.
 Use `task.fan_out(keys, fn, *, max_items, max_parallel=None, retries=0,
 processes=False)` when a script discovers independent files, pages or partitions. `keys` is
 an iterable of unique, nonempty text identifiers (at most 512 characters each). The function
-receives one key and returns a `ScriptResult` with its row count and no offset. The helper
-returns a `ScriptResult` containing the total rows, including successful items retained from
-previous attempts. Return the task's offset only after the helper succeeds.
+receives one key and returns a `ScriptResult` with its row count and an optional PARTITIONS
+offset holding exactly that key. Other types, foreign keys, several keys, or a task with a
+committed offset of another type fail permanently, naming the item and expected key. A first
+run may establish PARTITIONS. Items without offsets keep their existing behavior.
+
+An item position is provisional: it is stored with its success in `AUD_TASK_ITEMS`, never as
+the task checkpoint. After every item succeeds, the helper returns the total rows and combines
+retained and new positions with the committed task positions. A no-data item returns its
+committed position. Return this combined offset; a script cannot override a retained position.
+Positions cannot move backwards; deliberate resets use `etl-craft mark --offset`.
+
+A failed or lost attempt publishes no task checkpoint. On retry, successful items are skipped
+and their provisional positions reused; failed or unfinished items start from the committed
+task offset, never a failed attempt's position. Only successful attempt ending commits the
+combined task checkpoint together with its outcome, summary and dependency consumption.
 
 ```python
 from etl_craft.scripting import ScriptResult
@@ -291,13 +331,37 @@ fails the task, naming its key and error. The attempt's offset is not committed 
 
 ### Repeatable landing batches
 
-The write and the item result are separate commits. A process can stop between them, so a
-retried item must replace its own batch or merge by a stable key. Tag landing rows with
-`task.task_run_id` and the item key; delete and replace that pair in one warehouse transaction.
-Do not append the same batch on retry. Use bound SQL parameters for keys. The
-[stream landing rules](streams.md) apply here too: one downstream
-managed SQL task performs the final target write. See the
-[executable example](../examples/python_scripts/fan_out.py).
+Use `task.replace_landing(rows, *, item_key=None)` for the task's declared landing target.
+`rows` is an iterable of mappings with exactly the business columns declared in `CFG_COLUMNS`.
+The full table contract also declares its generated audit/tag columns; omit those from input
+rows because the helper supplies them. Bootstrap the table shape before validation.
+Every value is cast to its declared type; types are never inferred. The helper streams bounded
+batches into scratch storage before atomically replacing the live batch. A failed cast leaves
+the previous live batch intact. Scripts do not supply pipeline/task run identities or item tags.
+
+Outside fan-out, omit `item_key` to replace every row owned by this task. Inside the item
+function, pass its own key: `task.replace_landing(rows, item_key=key)`. A foreign key, an item
+key outside fan-out, or an omitted key inside fan-out is refused before a warehouse write.
+Other tasks' and items' rows are preserved. The helper supplies `landing_task_id`, `item_key`,
+`pipeline_id`, `pipeline_run_id`, `task_run_id` and generated row identities. Landing ownership
+uses the immutable task definition ID, so replacement also removes that task's previous runs.
+
+The live publication is one dialect-owned atomic unit. Scratch batches may commit separately;
+they are never read as a published batch. Native transactional warehouses commit replacement
+as a transaction; Iceberg/Delta publish the target through one MERGE. Retrying after publication
+but before the item result commits replaces the same owned batch instead of appending it.
+The return value is the measured number of new rows, including zero for an empty replacement.
+
+```python
+def load(key):
+    count = task.replace_landing(read_partition(key), item_key=key)
+    return ScriptResult(count)
+```
+
+Each staged batch is bounded by the existing bind-value limit and a 256 KiB byte allowance.
+An individual row above the 16 MiB conservative allowance is refused. Readers must still
+bound their own source buffers and use measured `MEMORY_REQUEST_MB`; the helper cannot
+bound memory already allocated by a caller. See the [executable example](../examples/python_scripts/fan_out.py).
 
 ### Inspecting and controlling items
 
@@ -341,3 +405,12 @@ Every run uses the version that last passed `etl-craft pipelines refresh`. A scr
 that version's verified copy, with the project directory as its working directory, so relative
 paths it writes land in the project directory and the copy stays unchanged. Read the version's
 own files through `task.config.project_dir`; bytecode is not written into the cache.
+
+For stewardship files, import `UploadReader` from `etl_craft.scripting` and stream
+`UploadReader(upload, "CSV").rows(schema={"LOCKED": bool})`. The header is preserved; the optional
+column becomes bool or None. CSV accepts trimmed case-insensitive true/false or empty NULL;
+XLSX accepts boolean cells or empty NULL. Other values fail with upload, row, column and remedy.
+Only bool schemas are supported. Without `schema`, the reader returns its original raw values.
+Carry the typed control into a BOOLEAN landing column and explicitly SELECT it beside UPLOAD_ID.
+See the [reference loader](../examples/python_scripts/reference_upload.py) and
+[validator](../examples/validation_scripts/reference.py), and the [stewardship guide](stewardship.md).

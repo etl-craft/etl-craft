@@ -8,18 +8,28 @@ from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import BinaryIO, ClassVar
+from uuid import uuid4
 
 from etl_craft.core.actor import acting_as
 from etl_craft.core.enums import ActionName, ActorKind, ApiRole, YesNo
 from etl_craft.core.enums_access import Permission
 from etl_craft.core.errors import ConfigurationError, PermissionDeniedError, UsageError
+from etl_craft.core.faults import fault_point
 from etl_craft.core.file_bytes import parent_directory
 from etl_craft.core.text import mask_arguments
+from etl_craft.core.upload_names import stored_name, upload_key
 from etl_craft.core.uploads import UploadStatus
 from etl_craft.engine.queries import statement
 from etl_craft.engine.repository.accounts import find_account
 from etl_craft.engine.repository.pipelines import resolve_pipeline_id, selected_project
 from etl_craft.engine.runlog import fetch_exclusive_run_id
+from etl_craft.engine.upload_storage import (
+    rename_file,
+    settled_upload,
+    storage_lock,
+    sync_parents,
+    unlink_file,
+)
 from etl_craft.engine.uploads import admit_queued
 from etl_craft.services.operations.context import OperationContext
 from etl_craft.services.operations.permissions import pipeline_access
@@ -41,6 +51,9 @@ class UploadSubmission:
     pipeline_run_id: int | None
     waiting_behind_run_id: int | None
     status: UploadStatus
+
+    run_label: str = ""
+    waiting_behind_run_label: str = ""
 
 
 @dataclass(frozen=True)
@@ -66,6 +79,10 @@ class UploadReceipt:
     ctx: OperationContext
     pipeline_id: int
     upload_id: int
+    pipeline_code: str
+    temporary: str = ""
+    final_name: str = ""
+    uncertain_commit: bool = False
     created_file: bool = False
     file_count: int = 0
     file_name: str = ""
@@ -78,28 +95,21 @@ class UploadReceipt:
         self._digest = hashlib.sha256()
 
     def begin_file(self, file_name: str, content_type: str) -> None:
-        """Reject extra files, path-shaped names and unsupported declared media types."""
+        """Bound client labels and refuse extra files or unsupported declared media types."""
         self.file_count += 1
         if self.file_count != 1:
             raise UsageError(
                 f"upload {self.upload_id}: files={self.file_count}; expected exactly one; "
                 "upload one corrected file"
             )
-        lowered = file_name.lower()
-        if (
-            not file_name
-            or not file_name.isprintable()
-            or len(file_name) > 255
-            or any(c in file_name for c in ("/", "\\", "\0"))
-            or file_name in {".", ".."}
-            or any(c in lowered for c in ("%2f", "%5c", "%00"))
-        ):
+        if len(file_name) > 255 or "\0" in file_name:
             raise UsageError(
-                f"upload {self.upload_id}: file_name={file_name!r}; expected a plain file "
-                "name without path traversal; upload a corrected file"
+                f"upload {self.upload_id}: file_name length={len(file_name)} or NUL; expected "
+                "at most 255 characters without NUL; upload a corrected file"
             )
         suffix = Path(file_name).suffix.lower()
         allowed = {
+            "": {"text/csv", "text/plain", "application/octet-stream"},
             ".csv": {"text/csv", "text/plain", "application/octet-stream"},
             ".txt": {"text/plain", "text/csv", "application/octet-stream"},
             ".xlsx": {
@@ -114,16 +124,22 @@ class UploadReceipt:
                 "upload a corrected file"
             )
         self.file_name = file_name
-        root = self.ctx.config.host_dir / "uploads"
-        with parent_directory(root, f"{self.upload_id}/content", create=True) as parent:
+        self.final_name = stored_name(self.upload_id, file_name)
+        self.temporary = f"uploads/{self.pipeline_code}/.incoming/{self.upload_id}-{uuid4().hex}"
+        with parent_directory(self.ctx.config.host_dir, self.temporary, create=True) as parent:
             descriptor = os.open(
-                "content",
+                self.temporary.rsplit("/", 1)[-1],
                 os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
                 0o600,
                 dir_fd=parent,
             )
         self._stream = os.fdopen(descriptor, "wb")
         self.created_file = True
+
+    @property
+    def final_path(self) -> str:
+        """The canonical received location, built from its recorded name."""
+        return "uploads/" + upload_key(self.pipeline_code, self.final_name)
 
     def write(self, data: bytes) -> None:
         """Enforce the project ceiling before writing each received chunk."""
@@ -142,6 +158,27 @@ class UploadReceipt:
         self._digest.update(data)
         self.size_bytes = found
 
+    def committed_result(self) -> bool:
+        """Resolve a lost commit acknowledgement before deciding whether to remove bytes."""
+        self.uncertain_commit = True
+        row = settled_upload(self.ctx.engine, self.upload_id, self.pipeline_id)
+        with self.ctx.engine.connect() as conn:
+            waiting = (
+                fetch_exclusive_run_id(conn, self.pipeline_id)
+                if row and row.run_id is None
+                else None
+            )
+        self.uncertain_commit = False
+        if row is None:
+            return False
+        self.result = {
+            "upload_id": self.upload_id,
+            "pipeline_run_id": row.run_id,
+            "waiting_behind_run_id": waiting,
+            "status": UploadStatus.QUEUED,
+        }
+        return True
+
     def finish(self) -> dict[str, object]:
         """Publish the complete digest, refuse duplicates, and take the durable queue."""
         if self.file_count != 1 or self._stream is None:
@@ -153,11 +190,8 @@ class UploadReceipt:
         os.fsync(self._stream.fileno())
         self._stream.close()
         self._stream = None
-        root = self.ctx.config.host_dir / "uploads"
-        with parent_directory(root, f"{self.upload_id}/content") as parent:
-            os.fsync(parent)
-        with parent_directory(root, "directory") as parent:
-            os.fsync(parent)
+        sync_parents(self.ctx.config.host_dir, self.temporary)
+        fault_point("upload.after_bytes")
         digest = self._digest.hexdigest()
         with self.ctx.engine.begin() as conn:
             from etl_craft.engine.standing_pauses import lock
@@ -187,12 +221,16 @@ class UploadReceipt:
                     "now": datetime.now(UTC),
                     "ended_at": None,
                     "file_name": self.file_name,
+                    "stored_name": self.final_name,
                     "size_bytes": self.size_bytes,
                     "sha256": digest,
                 },
             )
             run_id = admit_queued(conn, self.pipeline_id)
             waiting = fetch_exclusive_run_id(conn, self.pipeline_id) if run_id is None else None
+            rename_file(self.ctx.config.host_dir, self.temporary, self.final_path)
+            fault_point("upload.after_rename")
+        fault_point("upload.after_commit")
         self.result = {
             "upload_id": self.upload_id,
             "pipeline_run_id": run_id,
@@ -248,54 +286,62 @@ def receive(ctx: OperationContext, request: UploadRequest) -> Iterator[UploadRec
     ):
         audit.record()
         assert audit.action_id is not None
-        receipt = None
-        pipeline_id = None
-        try:
-            pipeline_id = _require_pipeline(ctx, request)
-            receipt = UploadReceipt(ctx, pipeline_id, audit.action_id)
-            yield receipt
-            _require_pipeline(ctx, request)
-            receipt.finish()
-        except Exception as error:
-            failure = (
-                ConfigurationError(
-                    f"upload {audit.action_id}, pipeline {request.pipeline_code}: storage "
-                    f"failed with errno={error.errno}; expected writable durable upload storage; "
-                    "restore disk space and permissions, then upload a corrected file"
+        with storage_lock(ctx.config, audit.action_id):
+            receipt = None
+            pipeline_id = None
+            try:
+                pipeline_id = _require_pipeline(ctx, request)
+                receipt = UploadReceipt(ctx, pipeline_id, audit.action_id, request.pipeline_code)
+                yield receipt
+                _require_pipeline(ctx, request)
+                receipt.finish()
+            except Exception as error:
+                if receipt is not None and receipt.committed_result():
+                    return
+                failure = (
+                    ConfigurationError(
+                        f"upload {audit.action_id}, pipeline {request.pipeline_code}: storage "
+                        f"failed with errno={error.errno}; expected writable durable upload "
+                        "storage; "
+                        "restore disk space and permissions, then upload a corrected file"
+                    )
+                    if isinstance(error, OSError)
+                    else error
                 )
-                if isinstance(error, OSError)
-                else error
-            )
-            # Receipt boundary: preserve refusals without ever publishing an incomplete queue entry.
-            with ctx.engine.begin() as conn:
-                conn.execute(
-                    statement(conn, "upload_insert"),
-                    {
-                        "upload_id": audit.action_id,
-                        "pipeline_id": pipeline_id,
-                        "account": ctx.actor.name,
-                        "file_name": receipt.file_name
-                        if receipt and receipt.file_name
-                        else "(no file)",
-                        "size_bytes": receipt.size_bytes if receipt else 0,
-                        "sha256": None,
-                        "status": UploadStatus.REFUSED,
-                        "reason": str(mask_arguments({"reason": str(failure)})["reason"]),
-                        "now": audit.requested_at,
-                        "ended_at": datetime.now(UTC),
-                    },
-                )
-            if failure is error:
-                raise
-            raise failure from error
-        finally:
-            if receipt is not None and receipt._stream is not None:
-                receipt._stream.close()
-            if receipt is not None and receipt.created_file and not receipt.result:
-                with parent_directory(
-                    ctx.config.host_dir / "uploads", f"{receipt.upload_id}/content"
-                ) as parent:
-                    os.unlink("content", dir_fd=parent)
+                # Receipt boundary: record refusal without publishing incomplete work.
+                with ctx.engine.begin() as conn:
+                    conn.execute(
+                        statement(conn, "upload_insert"),
+                        {
+                            "upload_id": audit.action_id,
+                            "pipeline_id": pipeline_id,
+                            "account": ctx.actor.name,
+                            "file_name": receipt.file_name
+                            if receipt and receipt.file_name
+                            else "(no file)",
+                            "size_bytes": receipt.size_bytes if receipt else 0,
+                            "sha256": None,
+                            "stored_name": None,
+                            "status": UploadStatus.REFUSED,
+                            "reason": str(mask_arguments({"reason": str(failure)})["reason"]),
+                            "now": audit.requested_at,
+                            "ended_at": datetime.now(UTC),
+                        },
+                    )
+                if failure is error:
+                    raise
+                raise failure from error
+            finally:
+                if receipt is not None and receipt._stream is not None:
+                    receipt._stream.close()
+                if (
+                    receipt is not None
+                    and receipt.created_file
+                    and not receipt.result
+                    and not receipt.uncertain_commit
+                ):
+                    unlink_file(ctx.config.host_dir, receipt.temporary)
+                    unlink_file(ctx.config.host_dir, receipt.final_path)
 
 
 def history(ctx: OperationContext, request: UploadRequest) -> UploadHistory:

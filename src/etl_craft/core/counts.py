@@ -14,6 +14,7 @@ class Counts:
     delete_count: int | None = None
     rows_written: int | None = None
     reject_count: int | None = None
+    duplicate_count: int | None = None
 
     def __post_init__(self) -> None:
         """Derive writes when insert, update or delete counts were reported."""
@@ -22,7 +23,7 @@ class Counts:
             object.__setattr__(self, "rows_written", sum(count or 0 for count in writes))
 
     def parameters(self) -> dict[str, int | None]:
-        """Return the seven audit columns, including when a handler extends this record."""
+        """Return the audit count columns, including when a handler extends this record."""
         return {field.name: getattr(self, field.name) for field in fields(Counts)}
 
 

@@ -107,7 +107,11 @@ def _caller(
     """Prove the bearer token's account; the action table decides what it may do."""
     if credentials is None and browser.browser_request(request):
         return browser.cookie_context(ctx, request)
-    identity = None if credentials is None else authenticate(ctx, credentials.credentials)
+    identity = (
+        None
+        if credentials is None
+        else authenticate(ctx, credentials.credentials, background=browser.is_background(request))
+    )
     if identity is None:
         if request.method == "POST" and request.url.path.endswith("/uploads"):
             from etl_craft.core.errors import PermissionDeniedError
@@ -204,6 +208,10 @@ async def _answer(caller: OperationContext, action: Action, request: Request) ->
 
 def _browser_fields(body: dict[str, object], action: ActionName, request: Request) -> None:
     """Consume browser-only proof fields before the action request is parsed."""
+    if action == ActionName.LOGIN_BROWSER_START:
+        body["return_to"] = browser.return_path(str(body.get("return_to", "/ui")))
+    if action == ActionName.LOGIN_BROWSER_CALLBACK:
+        body["cookie"] = request.cookies.get(browser.SSO_COOKIE, "")
     confirmation = body.pop("_confirm_password", None)
     if confirmation is not None and confirmation != body.get("password"):
         raise UsageError("password confirmation differs; enter the same new password twice")
@@ -243,7 +251,8 @@ def parse_request(action: Action, given: dict[str, object]) -> object:
         return _adapter(action.name).validate_python(given)
     except ValidationError as error:
         problems = "; ".join(
-            f"`{'.'.join(str(p) for p in e['loc'])}` {e['msg'].lower()}" for e in error.errors()
+            f"`{'.'.join(str(p) for p in e['loc'])}` {e['msg'][:1].lower()}{e['msg'][1:]}"
+            for e in error.errors()
         )
         raise UsageError(f"{action.name}: {problems}") from None
 

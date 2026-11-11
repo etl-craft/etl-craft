@@ -3,21 +3,33 @@
 Run `etl-craft ui` with the `ui` extra, or use the controller's HTTP server. Put an HTTPS
 reverse proxy in front of it, preserving the public Host header (for example nginx
 `proxy_set_header Host $http_host`): browser cookies are always Secure, including local sign-in.
-Open `/ui`. The minimum width is 320 CSS pixels; 960 pixels or wider gives the desktop layout.
+Open `/ui`; sign-in is at `/ui/signin`. The minimum width is 320 CSS pixels; 960 pixels or
+wider gives the desktop layout.
 The layout remains usable at 200% zoom.
 
 ## Sign-in and sessions
+
+With `Auth.Browser_state_secret` configured, **Sign in with SSO** redirects to the identity
+provider and returns to the page you asked for; no code needs copying. The callback briefly
+shows “Signing in…” and displays a refusal with a way to start again when proof fails.
+See [browser SSO setup](../deploying/security.md#browser-single-sign-on) for the public callback
+address and signing-secret requirements. Without that optional setting, the button keeps the
+device-flow fallback and explains which setting enables browser redirects.
 
 Local accounts and configured SSO use the existing login actions. Wrong account names and
 passwords give the same message. Recovery means contacting the administrator shown on the
 sign-in page; there are no emailed resets. SSO accounts use their identity provider.
 
-Browser sessions have one fixed lifetime of `Auth.Session_hours` (default 12). Credentials
-stay in HTTP-only, Secure, SameSite=Lax host-only cookies, never browser storage. The page
-warns two minutes before expiry. Signing in again retains the requested same-site page;
-external return addresses are refused. Signing out revokes the session in every tab, and
-open tabs return to sign-in. Every browser change needs its CSRF challenge. Browser pages
-refuse framing by other sites and ship a content security policy.
+A session ends after `Auth.Session_idle_minutes` (default 60) without use, and always
+`Auth.Session_hours` (default 12) after sign-in; the command line follows the same rule.
+Credentials stay in HTTP-only, Secure, SameSite=Lax host-only cookies, never browser storage.
+The page warns ten minutes before the end ("Stay signed in" renews it), and when the server
+ends the session it says so in a dialog and offers sign-in, which returns to the same
+same-site page; external return addresses are refused. The page's own refreshes are marked
+as background (`X-ETL-Background: 1`) and do not extend a session. Signing out revokes the
+session in every tab. A failed identity refresh keeps the current session state and retries;
+cached expiry alone does not confirm a sign-out. Every browser change needs its CSRF challenge. Browser pages refuse
+framing by other sites and ship a content security policy.
 
 After `Auth.Lockout_after` consecutive wrong passwords (default 5; 0 disables lockout), a
 local user locks until an admin runs `etl-craft account unlock --name ACCOUNT`. A locked
@@ -29,16 +41,18 @@ the user must change one before opening other pages. Password changes revoke all
 ## Profile, settings and themes
 
 The profile menu shows the account, deployment role, current project permission and groups,
-the CLI sign-in line for this server, last sign-in in settings, keyboard shortcuts, help,
-About and sign-out. Local users have Change password; SSO users do not.
+last sign-in in settings, help, About and sign-out. Local users have Change password; SSO users do not.
 
 Personal settings belong to the account: theme (`system`, `light`, `dark`), IANA timezone,
 default project, page size (1–100) and relative or absolute times. The top-bar theme switch
-saves to the same account setting. Both themes use the catalog's shared assets and data-flow
-mark. Pins and saved filters will arrive with the list pages that use them.
+saves to the same account setting. Home summaries, dashboard window boundaries, time-labelled
+run grids and session warnings use the same time preference: relative times show the exact time
+and timezone on hover; exact times show the relative time on hover. Calendar dates and chart
+day labels stay dates. Both themes use the catalog's shared assets and the product mark. Every list shows values
+unwrapped (hover shows the full value); **Wrap text** wraps them, and the choice is kept.
 
-Use Tab and Shift+Tab to move, the skip link to reach content, `?` for shortcuts, and Escape
-to close the shortcut dialog or profile menu. Every project page names its environment and
+Use Tab and Shift+Tab to move, the skip link to reach content, `/` or Ctrl+K for search, and
+Escape to close a dialog or menu. Every project page names its environment and
 governance; production has a stronger bordered badge as well as the word PRODUCTION.
 
 ```sh
@@ -49,6 +63,9 @@ etl-craft account unlock --name alice
 
 ## Home, About and catalog
 
+On phones, Home's time presets, custom date range and pipeline filter use the same control
+height and wrap within the page. The custom range still opens the two UTC-day fields.
+
 Home shows only authorized projects and pipeline work. Running runs and queued tasks are
 current; failed runs and SLA misses use a rolling **last 24 h**, including the start and
 excluding the end. The JSON supplies both UTC window boundaries. Counts have no links until
@@ -58,6 +75,7 @@ the filtered list pages exist. All counts come from the shared `PROJECT_HEALTH` 
 etl-craft project-health --json
 etl-craft --project SALES project-health --json
 etl-craft about --json
+etl-craft --project SALES about
 etl-craft --project SALES catalog page --path index.html --output catalog-page.html
 ```
 
@@ -75,6 +93,21 @@ The corresponding API reads are `GET /api/v1/project-health`, `GET /api/v1/about
 `GET /api/v1/projects/{project}/catalog/page?path=index.html`. Catalog paths must be literal
 relative generated HTML, CSS, JavaScript or SVG files, without traversal, encodings or symlinks.
 CLI and API stream the same bytes.
+
+## Previewing a table's rows
+
+A table's page in the catalog has a **Data** tab for developers and administrators: the first 100
+rows, read from the warehouse when the tab opens, with long values cut at 200 characters.
+
+```sh
+etl-craft --project SALES catalog preview --table ods.orders --limit 20
+```
+
+`GET /api/v1/projects/{project}/table-preview?table=ods.orders&limit=100` returns the same rows
+(`etl-craft/table-preview/1`: columns, rows as text, `more`). Only a table the project's catalog lists
+is read, only by whole-project accounts with the developer role or above, and every request is
+recorded in the audit log like an administrator's access reads, because it reads business rows. A
+viewer sees no Data tab. It is a preview, not a query tool: it takes no SQL.
 
 ## Pipelines, runs and controls
 
@@ -95,6 +128,20 @@ columns, each cell a task run's status and duration that opens that task in its 
 the whole pipeline for the controller, optionally for a run date. The details panel shows the schedule, refresh type, SLA, tags, upstream pipelines
 and paused tasks. **Pause** and **Resume** act on automatic runs of this pipeline only.
 
+The pipeline grid has one adjustable divider beside the details panel. Task names automatically
+expand to the longest complete name as the grid widens, taking space from older runs first.
+When the latest run would otherwise be hidden, names narrow instead. Once names fit, extra
+space shows more runs. The task-name boundary is not adjustable. Drag the grid divider or
+focus it and use Left/Right; Home or double-click restores the default pane width.
+
+Automatic graph fits and **Fit view** share a readable minimum zoom (0.7 in filled panes).
+Large graphs remain reachable by dragging to pan; manual zoom controls still work. Wide panes
+use a horizontal layout unless another direction is selected.
+
+The graph reads task statuses for the selected run and refreshes them every five seconds while
+the run is in progress, even when the run-details tab is closed. Recorded skipped tasks say
+Skipped with the shared slate colour; running tasks stay blue and successful tasks green.
+
 A run's page draws its tasks as a graph coloured by status, with the same tasks in a table;
 the **Timeline** view puts each attempt on one time axis, its wait to start apart from its run.
 Select a task in the graph or the table to open its panel (status, rows, rejects, attempts and
@@ -102,8 +149,9 @@ what it waits for); the page address keeps the selection, so a link or Back retu
 Actions act on the selection only: the whole run, or the selected task in it. Each action comes
 from the `capabilities` read: an unavailable one is disabled and says why. Choosing one opens a
 confirmation with the exact scope, its data effect and whether successful work is kept; the
-request goes to `POST /api/v1/projects/{project}/controls`, as `etl-craft control` does, and the
-page shows the recorded status. A request is not completion: the page shows the run's state
+request goes to `POST /api/v1/projects/{project}/controls`. The scoped CLI commands
+`hold`, `release`, `stop`, `abort`, `run --recover` and `run --restart` submit the
+corresponding requests. The page shows the recorded status. A request is not completion: the page shows the run's state
 when it changes.
 
 A selected task's panel also has **Task actions**, each with the same confirmation: **Rerun
@@ -117,12 +165,8 @@ tasks can be retried. The pipeline header has **Refresh**, which validates and p
 definition. Each posts the same `/api/v1` request as the CLI (`run`, `mark`, `pause`, `items`,
 `reconcile`, `pipelines refresh`).
 
-The list, pipeline and run pages update live. Every 10 seconds the server re-reads what the
-page shows, as you, and the page fetches itself again when that changed; "Updated N s ago" says
-when it last checked. While a dialog is open or you are working inside the page, a notice says
-the page has changed and offers **Refresh now** instead, so nothing moves under you. A lost
-connection shows "Live updates lost, reconnecting"; signing out or losing access stops live
-updates with the reason.
+The list, pipeline and run pages refresh themselves every 10 to 30 seconds while you use them,
+as you, and stop refreshing in a background tab.
 
 Each attempt in a task's panel opens the attempt's page: status, owner, host and process, exit
 code, times, rows, the error with its failure class, and the log. The log shows its last
@@ -149,12 +193,14 @@ writes the same zip, and `GET /api/v1/projects/{project}/run-zip` serves it.
 
 ## Pipeline Insights
 
-**Insights** in the sidebar shows the operational panels for the pipelines you can view, over a
+**Home** shows operational panels in its tabs for the pipelines you can view, over a
 window of UTC days (the last 7 by default, at most 92), optionally for selected pipelines:
 
 - totals: runs, success rate (of finished runs), average duration, SLA breaches, retries, the
   average wait to start and the average execution time, and rows written;
-- runs per day, succeeded and failed, as a chart and a table;
+- daily runs: one-to-four-day windows show dated counts and average durations as numbers;
+  longer windows use a chart with a slot for every UTC day, including quiet days, and capped bars;
+  days without a finished run say “No finished runs” instead of drawing a duration point;
 - per pipeline: runs, success rate, average and longest duration, SLA breaches, attempts,
   retries, lost attempts, rows written and rows per second of measured execution;
 - rows by task: source, target, inserted, updated, deleted and rejected counts of successful
@@ -197,7 +243,8 @@ their code or name, a run by its exact run id or run key, and tables when you ca
 whole project. Results open the object's page; a table opens its catalog page. The search page
 also lists the pipelines and runs you opened recently in this browser; they are kept in the
 browser only. `etl-craft search TEXT` and `GET /api/v1/projects/{project}/search?q=TEXT` return
-the same hits.
+the same hits. The interface names task handlers in words (for example, Email alert); API and
+CLI results retain the handler codes.
 
 ## Administration
 
@@ -235,6 +282,22 @@ validates and loads it, or which run it waits behind. The table below lists the 
 recent files with their state, run and the validation reason for a refused file. See
 [Stewardship uploads](stewardship.md).
 
+## Task definitions and data
+
+A task's page also shows its **Definition**: the handler and every parameter, as new runs use
+them (`etl-craft task` prints the same). On an SCD1 or SCD2 merge task, the **Data** panel looks
+up one business key in the target and shows who last wrote each value and which values are
+locked against the next merge. Administrators can **Save values** (edited values stay locked)
+and **Unlock** values so the next merge applies source values again. Every lookup, edit and
+unlock is recorded.
+
+## Catalog and refresh actions
+
+The **Catalog** page offers **Validate metadata** to everyone, **Rebuild catalog** and
+**Refresh lineage** to developers, and **Record catalog versions** to administrators; before the
+first build it says the catalog is not generated yet. The **Pipelines** list has **Refresh all**
+for developers, which validates every pipeline's current definition and pins passing versions.
+
 ## Held and paused work
 
 **Held and paused** lists what is waiting on a person: runs or tasks on hold (operators can
@@ -255,6 +318,7 @@ controllers run another version than the server, gives the Engine DB schema vers
 `Deployment.Profile` is `CONTROLLER_AGENTS`, the active agents and each pool's free capacity.
 It also lists each project's running, queued, failed and SLA-missed work for the last 24
 hours. Warehouse connections are checked by each task and by `etl-craft doctor` on the host.
+The schema version shows its number; hover over it for the complete migration filename.
 
 **Agents** lists registered agents with their pool, version, heartbeat, running attempts and
 free capacity. Operators can **Drain** an agent (it finishes its tasks and claims no more),
@@ -284,3 +348,38 @@ adds partial indexes for recent health counts and successful sign-in/catalog aud
 
 Migration `0078_announcements.sql` adds the `AUD_ANNOUNCEMENTS` audit table; existing data is
 unchanged.
+
+## Audit presentation
+
+The run grid keeps the newest run beside task names. Its single outer divider remains
+adjustable; names size automatically to the longest name and narrow only to preserve the newest
+run. Recorded skipped tasks name their failed upstream in the task list, and active-run graphs
+refresh recorded task statuses and shared colours while the run is still in progress.
+Sparse rankings and duration series show numbers rather than tiny charts. Catalog gaps name the
+next corrective step. Nested pages use breadcrumbs and shared controls; empty lists explain what
+fills them. Graph code loads on opening the graph; catalog code loads on entering the catalog.
+Home’s daily chart and sparkline renderers load when used, with their space reserved while
+loading. Numeric summaries and the run/catalog duration strips keep their existing rendering.
+
+Run now still opens a confirmation naming the project and environment. Its reason follows the project’s governance: STRICT requires one in every environment;
+RELAXED permits an empty reason. Production projects remain STRICT and still require the exact
+project code to be typed. Other run actions follow the same governance policy. Account Kind and Role are populated required fields, and SSO
+email-binding guidance is help text beside the email field.
+
+The console's recent requests show completed command outcomes. These do not substitute for run
+status: admission of a run can succeed while the run later fails. API documentation remains at
+`/api/v1/docs` and `/api/v1/openapi.json`.
+
+Run addresses accept the complete stored label as well as an integer. The browser sends the
+full value to the shared operations resolver; a wrong-case or mismatched label displays the
+server's refusal and expected label, without opening controls for the numeric suffix.
+
+## Reading lists and failure details
+
+Empty lists and charts name what is missing and give the next step for that page: for example,
+set a pipeline schedule, choose an upload, or start an agent. Dense lists show a status dot and
+word; failures and warnings retain their pills, as do statuses on detail pages.
+
+An attempt leads with its recorded error message. Open **Process details** for the unchanged
+failure classification, source and code, along with process and retry evidence. The Home
+Failures table also keeps its classification under **Process details**.

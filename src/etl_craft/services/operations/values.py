@@ -5,13 +5,15 @@ from __future__ import annotations
 import math
 from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from typing import ClassVar
 
 from etl_craft.config.targets import active_catalog
-from etl_craft.core.enums import ActionName, ActorKind, Handler, ProtectionEvent
+from etl_craft.core.enums import ActionName, ActorKind, Handler
+from etl_craft.core.enums_protection import ProtectionKind
 from etl_craft.core.errors import PermissionDeniedError, SqlGuardError, UsageError
 from etl_craft.core.governance import check_reason
+from etl_craft.core.redaction import mask_text, registering
 from etl_craft.core.time import as_utc
 from etl_craft.engine import locks
 from etl_craft.engine.repository.pipelines import resolve_pipeline_id
@@ -21,11 +23,19 @@ from etl_craft.engine.repository.tasks import (
     fetch_task_parameters,
     resolve_task_id,
 )
+from etl_craft.engine.task_store import LocalTaskStore
+from etl_craft.handlers.protection_recovery import committed, recover
 from etl_craft.handlers.registry import TaskContext, task_store
 from etl_craft.handlers.resources import LocalLocker
 from etl_craft.handlers.sql.actions import ACTIONS
 from etl_craft.handlers.sql.context import ActionContext
-from etl_craft.handlers.sql.protection import MERGES, Protection, ProtectionRequest, exists
+from etl_craft.handlers.sql.protection import (
+    MERGES,
+    Protection,
+    ProtectionRequest,
+    exists,
+    refuse_legacy,
+)
 from etl_craft.handlers.sql.session import Session
 from etl_craft.handlers.sql.spec import read_sql_task
 from etl_craft.services.operations.context import OperationContext
@@ -40,15 +50,15 @@ class ValueKey(Request):
 
     pipeline_code: str
     task_code: str
-    key: dict[str, object]
+    key: dict[str, object] = field(repr=False, metadata={"audit": False})
 
 
 @dataclass(frozen=True, kw_only=True)
 class ValueEdit(ValueKey):
     """Explicit values for one key; omitted existing values are retained."""
 
-    values: dict[str, object]
-    reason: str = ""
+    values: dict[str, object] = field(repr=False, metadata={"audit": False})
+    reason: str = field(default="", repr=False, metadata={"audit": False})
     row_lock: bool = False
 
 
@@ -56,7 +66,7 @@ class ValueEdit(ValueKey):
 class ValueUnlock(ValueKey):
     """An explicit release; no columns means all active locks on the selected key."""
 
-    reason: str = ""
+    reason: str = field(default="", repr=False, metadata={"audit": False})
     columns: tuple[str, ...] = ()
 
 
@@ -119,26 +129,32 @@ def _selected(
             "give the target one merge action before editing"
         )
     catalog = active_catalog(ctx.config)
+    locker = LocalLocker(ctx.engine, ctx.config)
+    store = LocalTaskStore.standalone(ctx.engine, ctx.config, locker)
     with (
-        locks.target(spec.target_object, catalog).hold(LocalLocker(ctx.engine, ctx.config)),
-        open_warehouse(ctx.config, LocalLocker(ctx.engine, ctx.config)) as warehouse,
-        warehouse.begin() as conn,
+        locks.target(spec.target_object, catalog).hold(locker),
+        open_warehouse(ctx.config, locker) as warehouse,
     ):
-        session = Session(
-            conn,
-            task_warehouse_dialect(ctx.config, context.task_params),
-            catalog=catalog,
-            action=spec.action,
-            target_object=spec.target_object,
-            task_run_id=0,
-            params=context.task_params,
-        )
-        guard = Protection(session, spec)
-        guard.acquire()
-        try:
-            yield guard, context
-        finally:
-            session.sweep()
+        with warehouse.begin() as conn:
+            session = Session(
+                conn,
+                task_warehouse_dialect(ctx.config, context.task_params),
+                catalog=catalog,
+                action=spec.action,
+                target_object=spec.target_object,
+                task_run_id=0,
+                params=context.task_params,
+            )
+            session.protection_store = store
+            refuse_legacy(session)
+            recover(session, store)
+            guard = Protection(session, spec)
+            guard.acquire()
+            try:
+                yield guard, context
+            finally:
+                session.sweep()
+        committed(store, session.target, session.protection_requests)
 
 
 def _validate_input(guard: Protection, key: Mapping[str, object]) -> None:
@@ -180,7 +196,7 @@ def _key_row(guard: Protection, key: Mapping[str, object]) -> dict[str, object] 
         .mappings()
         .all()
     )
-    return None if not rows else dict(rows[0])
+    return None if not rows else {k.lower(): v for k, v in rows[0].items()}
 
 
 def _edit_stage(guard: Protection, edit: ValueEdit) -> tuple[str, str]:
@@ -202,16 +218,18 @@ def _edit_stage(guard: Protection, edit: ValueEdit) -> tuple[str, str]:
             f"edit columns={tuple(edit.values)}; "
             "supply at least one value and every business column for a new key"
         )
-    stage = s.scratch("edit")
-    names = ", ".join(guard.business)
-    s.create_scratch(stage, f"SELECT {names} FROM {s.target} WHERE 1 = 0", step="stage an edit")
     types = s.column_types(s.target)
+    columns = (*guard.business, *(("upload_id",) if "upload_id" in types else ()))
+    values.setdefault("upload_id", None)
+    stage = s.scratch("edit")
+    names = ", ".join(columns)
+    s.create_scratch(stage, f"SELECT {names} FROM {s.target} WHERE 1 = 0", step="stage an edit")
     expressions = ", ".join(
-        f"CAST(:value_{i} AS {types[c.lower()]})" for i, c in enumerate(guard.business)
+        f"CAST(:value_{i} AS {types[c.lower()]})" for i, c in enumerate(columns)
     )
     s.run(
         f"INSERT INTO {stage} ({names}) SELECT {expressions}",
-        {f"value_{i}": values[c] for i, c in enumerate(guard.business)},
+        {f"value_{i}": values[c] for i, c in enumerate(columns)},
         step="bind edited values",
     )
     key_hash = str(
@@ -222,51 +240,119 @@ def _edit_stage(guard: Protection, edit: ValueEdit) -> tuple[str, str]:
     return stage, key_hash
 
 
-def _result(guard: Protection, key_hash: str, request_id: str | None) -> ValueResult:
+def _result(
+    ctx: OperationContext, guard: Protection, key_hash: str, request_id: str | None
+) -> ValueResult:
     """Return current attribution and the last hundred events for exactly this key."""
-    records = (
-        guard.session.run(
-            f"SELECT * FROM ({guard.sql.state()}) p WHERE key_hash = :key ORDER BY column_name",
-            {"key": key_hash},
-            step="read column provenance",
+    from etl_craft.core.privacy import PrivacyDomain, fingerprint
+    from etl_craft.engine.privacy import check
+
+    with ctx.engine.connect() as conn:
+        privacy_key = check(conn, ctx.config)
+    assert privacy_key is not None
+    from etl_craft.engine.protection_events import target_identity
+
+    private_target = target_identity(ctx.config, guard.session.target)[0]
+    private_key = fingerprint(privacy_key, PrivacyDomain.KEY, private_target, key_hash)
+    guard.refresh(key_hash)
+    state = guard.states.get(key_hash)
+    current = (
+        ()
+        if state is None
+        else tuple(
+            {
+                **cell,
+                "key_hash": private_key,
+                "value_hash": None
+                if cell.get("value_hash") is None
+                else fingerprint(
+                    privacy_key, PrivacyDomain.VALUE, private_target, str(cell["value_hash"]), name
+                ),
+                "column_name": name,
+                "happened_at": as_utc(cell["happened_at"]) if cell.get("happened_at") else None,
+            }
+            for name, cell in sorted(state.cells.items())
         )
-        .mappings()
-        .all()
-    )
-    history = (
-        guard.session.run(
-            f"SELECT * FROM {guard.sql.journal} WHERE key_hash = :key "
-            "ORDER BY revision DESC, column_name LIMIT 100",
-            {"key": key_hash},
-            step="read protection history",
-        )
-        .mappings()
-        .all()
     )
     return ValueResult(
         guard.session.target,
         True,
         request_id,
-        tuple({**row, "happened_at": as_utc(row["happened_at"])} for row in records),
-        tuple({**row, "happened_at": as_utc(row["happened_at"])} for row in history),
+        current,
+        _history(ctx, guard, private_target, private_key),
     )
+
+
+def _history(
+    ctx: OperationContext, guard: Protection, private_target: str, private_key: str
+) -> tuple[dict[str, object], ...]:
+    """Keep physical-row maintenance events out of business-key attribution."""
+    store = guard.session.protection_store
+    assert store is not None
+    history: list[dict[str, object]] = []
+    from etl_craft.engine.protection_events import history as event_history
+
+    with ctx.engine.connect() as conn:
+        recent = event_history(
+            conn,
+            private_target,
+            private_key,
+            guard.request_id,
+        )
+    for record in recent:
+        event = record.event
+        if (
+            event is None
+            or event.key_hash != private_key
+            or event.kind == ProtectionKind.REHASH
+            or (
+                event.kind
+                in {ProtectionKind.KEY, ProtectionKind.ERASURE, ProtectionKind.HARD_DELETE}
+                and event.columns != guard.key_columns
+            )
+        ):
+            continue
+        for column, hashed in zip(event.columns, event.value_hashes, strict=True):
+            history.append(
+                {
+                    "key_hash": private_key,
+                    "column_name": column,
+                    "value_hash": hashed,
+                    "event_kind": event.kind,
+                    "actor": record.uploader or record.created_by,
+                    "upload_id": record.upload_id,
+                    "reason": (
+                        f"upload {record.upload_id}: LOCKED=false"
+                        if record.upload_id is not None and event.kind == ProtectionKind.UNLOCK
+                        else f"upload {record.upload_id}"
+                        if record.upload_id is not None
+                        else None
+                    ),
+                    "happened_at": as_utc(record.created_at),
+                    "request_id": record.request_id,
+                    "revision": record.event_id,
+                }
+            )
+    return tuple(history[:100])
 
 
 def write_values(ctx: OperationContext, edit: ValueEdit) -> ValueResult:
     """Apply an admin's edit or authenticated integration write with accurate attribution.
 
-    The audit row names the columns, not their values, and the protection request id.
+    The command audit names columns, never values; the intent log owns its request id.
     """
     pipeline, task = edit.pipeline_code, edit.task_code
     request = ProtectionRequest.create(ctx.actor, edit.reason)
+    private = tuple(v for v in (*edit.key.values(), *edit.values.values()) if isinstance(v, str))
+    with registering(*private):
+        reason = mask_text(edit.reason or "")
     arguments = {
         "pipeline_code": pipeline,
         "task_code": task,
         "columns": tuple(edit.values),
-        "reason": edit.reason,
-        "request_id": request.request_id,
+        "reason": reason,
     }
-    with recorded(ctx, ActionName.DATA_EDIT, arguments):
+    with recorded(ctx, ActionName.DATA_EDIT, arguments), registering(*private):
         _check_reason(edit.reason)
         if ctx.actor.kind not in {ActorKind.USER, ActorKind.SERVICE}:
             raise PermissionDeniedError(
@@ -283,6 +369,8 @@ def write_values(ctx: OperationContext, edit: ValueEdit) -> ValueResult:
             stage, key_hash = _edit_stage(guard, edit)
             spec = replace(guard.task, preserve_target=False, watermark=None)
             guard.session.protection = guard
+            guard.request = request
+            guard.row_lock = edit.row_lock
             ACTIONS[spec.action](
                 guard.session,
                 ActionContext(
@@ -295,27 +383,12 @@ def write_values(ctx: OperationContext, edit: ValueEdit) -> ValueResult:
                     respect_protection=ctx.actor.kind != ActorKind.USER,
                 ),
             )
-            guard.finish(request)
-            if edit.row_lock:
-                _set_row_lock(guard, key_hash, request)
-            return _result(guard, key_hash, request.request_id)
+            return _result(ctx, guard, key_hash, guard.request_id)
 
 
 def _check_reason(reason: str) -> None:
     """Keep every successful edit/unlock explainable without accepting unbounded evidence."""
     check_reason(reason)
-
-
-def _set_row_lock(guard: Protection, key_hash: str, request: ProtectionRequest) -> None:
-    """Explicit whole-row protection can also accompany a human update."""
-    guard.session.run(
-        guard.sql.insert_event(
-            "SELECT :revision, :key, '*', NULL, TRUE, :actor, :actor_kind, :actor, :actor_kind, "
-            ":now, :request_id, :reason, :event, NULL"
-        ),
-        {**guard.parameters(request, ProtectionEvent.LOCK), "key": key_hash},
-        step="protect the whole business row",
-    )
 
 
 def _selected_key(guard: Protection, key: Mapping[str, object]) -> str:
@@ -338,15 +411,20 @@ def unlock_values(ctx: OperationContext, edit: ValueUnlock) -> ValueResult:
     """Release protection explicitly; integrations cannot unlock a person's values."""
     pipeline, task = edit.pipeline_code, edit.task_code
     request = ProtectionRequest.create(ctx.actor, edit.reason)
-    with recorded(
-        ctx,
-        ActionName.DATA_UNLOCK,
-        {
-            "pipeline_code": pipeline,
-            "task_code": task,
-            "reason": edit.reason,
-            "request_id": request.request_id,
-        },
+    private = tuple(v for v in edit.key.values() if isinstance(v, str))
+    with registering(*private):
+        reason = mask_text(edit.reason or "")
+    with (
+        recorded(
+            ctx,
+            ActionName.DATA_UNLOCK,
+            {
+                "pipeline_code": pipeline,
+                "task_code": task,
+                "reason": reason,
+            },
+        ),
+        registering(*private),
     ):
         _check_reason(edit.reason)
         if ctx.actor.kind != ActorKind.USER:
@@ -367,31 +445,18 @@ def unlock_values(ctx: OperationContext, edit: ValueUnlock) -> ValueResult:
                     "columns or '*' for the row lock; correct the column names"
                 )
             key_hash = _selected_key(guard, edit.key)
-            predicate = "key_hash = :key AND locked"
-            if edit.columns:
-                predicate += (
-                    " AND column_name IN ("
-                    + ", ".join(f":column_{i}" for i in range(len(edit.columns)))
-                    + ")"
-                )
-            guard.session.run(
-                guard.sql.lock_change(predicate),
-                {
-                    **guard.parameters(request, ProtectionEvent.UNLOCK),
-                    "key": key_hash,
-                    "locked": False,
-                    **{f"column_{i}": c for i, c in enumerate(edit.columns)},
-                },
-                step="release selected human locks",
-            )
-            return _result(guard, key_hash, request.request_id)
+            guard.unlock(key_hash, edit.columns, request)
+            return _result(ctx, guard, key_hash, guard.request_id)
 
 
 def provenance(ctx: OperationContext, request: ValueKey) -> ValueResult:
     """Read known writers and lock evidence; never infer identity from actor-column strings."""
     key = request.key
-    with _selected(ctx, request.pipeline_code, request.task_code) as (guard, _context):
-        if not exists(guard.session):
+    with (
+        registering(*(v for v in key.values() if isinstance(v, str))),
+        _selected(ctx, request.pipeline_code, request.task_code) as (guard, _context),
+    ):
+        if not exists(guard.session) and not guard.session.protection_active:
             return ValueResult(guard.session.target, False, None, (), ())
         guard.check()
-        return _result(guard, _selected_key(guard, key), None)
+        return _result(ctx, guard, _selected_key(guard, key), None)

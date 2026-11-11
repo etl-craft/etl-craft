@@ -5,7 +5,15 @@ from datetime import date
 import pytest
 
 from etl_craft.core.errors import HandlerError
-from fixtures.sql_rejects import MERGE, MESSY, SHAPE, check_rejects, loaded, set_aside
+from fixtures.sql_rejects import (
+    MERGE,
+    MESSY,
+    SHAPE,
+    check_dedupe_counts,
+    check_rejects,
+    loaded,
+    set_aside,
+)
 from fixtures.sql_warehouse import warehouses
 
 ORDERS = {**MERGE, "SQL_ACTION": "SCD1_MERGE", "TARGET_OBJECT": "orders"}
@@ -34,21 +42,9 @@ def test_over_the_limit_the_most_common_reasons_are_named(sql_world):
     assert len(set_aside(w, "orders")) == 4
 
 
-def test_with_a_dedupe_order_duplicate_keys_load_their_first_row(sql_world):
-    w = sql_world
-    w.setup("orders", SHAPE, "SCD1_MERGE")
-    params = {**ORDERS, "MERGE_DEDUPE_ORDER": "order_date DESC", "REJECT_LIMIT": "2"}
-    result = w.run("load", **params, SELECT_QUERY=MESSY)
-    assert (result.source_count, result.insert_count, result.reject_count) == (6, 3, 2)
-    assert loaded(w, "orders") == [
-        (1, date(2026, 1, 31), "Pune"),
-        (3, date(2026, 1, 3), "Goa"),
-        (4, date(2026, 1, 4), "Leh"),
-    ]
-    assert [row[3] for row in set_aside(w, "orders")] == [
-        "does not cast to date",
-        "null in merge_key",
-    ]
+@pytest.mark.parametrize("kind", ["SCD1_MERGE", "SCD2_MERGE"])
+def test_with_a_dedupe_order_duplicate_keys_load_their_first_row(sql_world, kind):
+    check_dedupe_counts(sql_world, "orders", kind)
 
 
 def test_skip_rejects_over_limit_writes_nothing_over_the_limit(sql_world):

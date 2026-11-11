@@ -1,7 +1,7 @@
 site_name: etl-craft
 site_description: Metadata-driven ETL orchestration engine
-site_url: https://venkatcg00.github.io/etl-craft/
-repo_url: https://github.com/venkatcg00/etl-craft
+site_url: https://docs.etl-craft.dev/
+repo_url: https://github.com/etl-craft/etl-craft
 repo_name: venkatcg00/etl-craft
 edit_uri: edit/main/docs/
 copyright: Apache License 2.0
@@ -102,6 +102,7 @@ nav:
   - Quick Start: quick-start.md
   - Guides:
       - guides/index.md
+      - Personal-data erasure: guides/erasure.md
       - Pipelines and tasks: guides/pipelines-and-tasks.md
       - Configuration files: guides/configuration-files.md
       - Configuration migrations: guides/configuration-migrations.md
@@ -109,6 +110,7 @@ nav:
       - SQL tasks: guides/sql-tasks.md
       - SQL scripts: guides/sql-scripts.md
       - Stewardship uploads: guides/stewardship.md
+      - Seed tables: guides/seeds.md
       - Protecting human SCD edits: guides/human-overrides.md
       - Business rules: guides/business-rules.md
       - Python scripts: guides/python-scripts.md
@@ -127,6 +129,7 @@ nav:
       - Running a task and reading its logs: guides/running-tasks.md
       - "Stepping in: mark, cancel, pause, backfill, rerun and bypasses": guides/run-control.md
   - Deploying:
+      - Cluster layouts: deploying/cluster.md
       - deploying/index.md
       - The project directory: deploying/project-layout.md
       - Pinned project bundles: deploying/project-bundles.md
@@ -158,6 +161,7 @@ nav:
       - reference/index.md
       - Command line: reference/cli.md
       - Actions: reference/actions.md
+      - Compatibility policy: reference/compatibility.md
       - Exit codes: reference/exit-codes.md
       - craft-connector.yml: reference/configuration.md
       - Task parameters: reference/task-parameters.md

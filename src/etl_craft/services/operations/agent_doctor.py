@@ -3,8 +3,10 @@
 from dataclasses import dataclass
 from typing import ClassVar
 
+from etl_craft.core.environment import Environment
 from etl_craft.core.errors import ConfigurationError, UsageError
 from etl_craft.engine.bundles import Bundle
+from etl_craft.engine.environment import project_environment
 from etl_craft.engine.project_files import script_imports
 from etl_craft.engine.queries import statement
 from etl_craft.services.operations.agent_models import AgentRequest
@@ -28,12 +30,14 @@ class AgentImports:
     bundle_id: str
     imports: tuple[str, ...]
     missing: tuple[str, ...] | None
+    environment: Environment | None = None
 
 
 def inspect(ctx: OperationContext, request: AgentDoctor) -> AgentImports:
     """Authorize the agent, read the exact bundle, and judge bounded module observations."""
     check_agent(ctx, request)
     with ctx.engine.connect() as conn:
+        _, environment = project_environment(conn)
         identity = (
             request.bundle_id or conn.execute(statement(conn, "bundle_latest")).scalar_one_or_none()
         )
@@ -52,4 +56,4 @@ def inspect(ctx: OperationContext, request: AgentDoctor) -> AgentImports:
             f"{identity}; expected only its returned import names; repeat "
             f"discovery and inspect those names"
         )
-    return AgentImports(identity, imports, request.missing)
+    return AgentImports(identity, imports, request.missing, environment)

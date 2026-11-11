@@ -12,7 +12,7 @@ from etl_craft.config.auth import warehouse_by_key
 from etl_craft.config.loader_helpers import shown
 from etl_craft.config.targets import attached_catalog_name
 from etl_craft.core.enums import AuthMode
-from etl_craft.core.errors import ConfigurationError, SqlGuardError
+from etl_craft.core.errors import ConfigurationError, HandlerError, SqlGuardError
 from etl_craft.core.text import quote_identifier
 from etl_craft.dialects.warehouse.base import Presented, ReplaceStrategy, SurrogateKey
 from etl_craft.dialects.warehouse.duckdb import DuckDBWarehouse
@@ -32,11 +32,6 @@ class DuckDBIcebergWarehouse(DuckDBWarehouse):
 
     views = False
 
-    def supports_insert_merge(self, conn: Connection) -> bool:
-        """Use separate joined UPDATE and INSERT mutations with the Iceberg extension."""
-        return False
-
-    atomic_protection = False
     spec = warehouse_by_key("duckdb_iceberg")
     replace_strategy: ReplaceStrategy = "copy_and_restore"
     single_writer = False
@@ -164,6 +159,25 @@ class DuckDBIcebergWarehouse(DuckDBWarehouse):
                 f"{target}: replacement properties did not match; use OVERWRITE_TABLE"
             )
 
+    def erasure_table(self, conn: Connection, table: str) -> str:
+        """Resolve DuckDB's case-insensitive reference to the REST catalog's actual spelling."""
+        catalog, schema, name = table.split(".")
+        found = conn.execute(
+            text(
+                "SELECT table_catalog AS table_catalog,table_schema AS table_schema, "
+                "table_name AS table_name FROM information_schema.tables "
+                "WHERE lower(table_catalog)=lower(:catalog) AND lower(table_schema)=lower(:schema) "
+                "AND lower(table_name)=lower(:table)"
+            ),
+            {"catalog": catalog, "schema": schema, "table": name},
+        ).all()
+        if len(found) > 1:
+            raise HandlerError(
+                f"{table}: found {len(found)} physical tables; expected one unambiguous native "
+                "identity; create the missing table or rename case-distinct tables before erasing"
+            )
+        return ".".join(str(part) for part in found[0]) if found else table
+
     def load_table_metadata(self, conn: Connection, schema: str, table: str) -> None:
         """Load an Iceberg table's schema so information_schema.columns reports it.
 
@@ -173,13 +187,16 @@ class DuckDBIcebergWarehouse(DuckDBWarehouse):
         """
         rows = conn.execute(
             text(
-                "SELECT table_catalog AS table_catalog FROM information_schema.tables "
+                "SELECT table_catalog AS table_catalog,table_schema AS table_schema, "
+                "table_name AS table_name FROM information_schema.tables "
                 "WHERE lower(table_schema) = lower(:schema) AND lower(table_name) = lower(:table)"
             ),
             {"schema": schema, "table": table},
         ).all()
-        for (catalog,) in rows:
-            name = ".".join(quote_identifier(part) for part in (catalog, schema, table))
+        for catalog, actual_schema, actual_table in rows:
+            name = ".".join(
+                quote_identifier(part) for part in (catalog, actual_schema, actual_table)
+            )
             conn.execute(text(f"SELECT * FROM {name} LIMIT 0")).all()
 
 

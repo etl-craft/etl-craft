@@ -28,6 +28,7 @@ from etl_craft.dialects.engine.metadata import (
 )
 from etl_craft.dialects.engine.tables import (
     CONFIG_TABLES,
+    HISTORYLESS_TABLES,
     OWNED_CONFIG_TABLES,
     retired_history,
     team_config,
@@ -74,6 +75,13 @@ def _columns(conn: Connection, table: str) -> list[tuple[str, str, bool]]:
     ]
 
 
+def _stamp_historyless(conn: Connection, tables: list[str]) -> None:
+    """Stamp the tables that keep no history; their changes are not recorded."""
+    for table in tables:
+        if table.upper() in HISTORYLESS_TABLES:
+            _change_triggers(conn, table, lambda *_: "SELECT 1;")
+
+
 def refresh_metadata_triggers(conn: Connection) -> None:
     """Rebuild the change triggers from every current column, including project columns."""
     history = _exists(conn, history_table("CFG_PIPELINES"))
@@ -99,8 +107,9 @@ def refresh_metadata_triggers(conn: Connection) -> None:
     configs = sorted(
         table
         for table in tables
-        if table.upper() in owned and (history or table.upper() != "CFG_API_TOKENS")
+        if table.upper() in owned and table.upper() not in HISTORYLESS_TABLES
     )
+    _stamp_historyless(conn, tables)
     if config_base_enabled(conn):
         for table in configs:
             require_config_base(conn, table)

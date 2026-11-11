@@ -145,6 +145,7 @@ def counts(run: LastRun | TaskRunSummary) -> str:
         ("updated", run.update_count),
         ("deleted", run.delete_count),
         ("rejected", run.reject_count),
+        ("duplicates", run.duplicate_count),
     ]
     return ", ".join(f"{name} {value:,}" for name, value in counts if value is not None)
 

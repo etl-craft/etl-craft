@@ -17,3 +17,5 @@ Running etl-craft on a machine or under an orchestrator.
 - [Controller](controller.md): leadership, submitting active runs, crash recovery and graceful shutdown.
 
 - [Agents and the queue](agents.md): API-only execution, capacity, fencing and controls.
+
+- [Cluster layouts](cluster.md): role images, Compose, Kubernetes and systemd examples.

@@ -264,7 +264,7 @@ def test_item_reruns_use_the_run_verb_and_the_item_operation(monkeypatch, select
     assert run_command.COMMAND.run(args, Output(stdout=io.StringIO())) == 0
     name, request = calls.pop()
     assert name == ActionName.ITEM_CONTROL and request.action == ItemAction.RERUN
-    assert request.run_id == 1 and request.task_code == "T"
+    assert request.run_id == "1" and request.task_code == "T"
     assert request.item_key == (None if selection == ["--all-failed"] else "one")
 
 
@@ -320,3 +320,87 @@ def test_utility_fan_out_preserves_item_counts_and_honest_totals():
         )
         assert again.row_count == expected
     assert task().fan_out([], lambda _: ScriptResult(1), max_items=1).row_count == 0
+
+
+def test_partition_positions_survive_partial_failure_without_advancing_task_offset():
+    from etl_craft.core.errors import TransientError
+    from etl_craft.scripting import Offset
+
+    helper = replace(task(), offset=Offset.partitions({"A": 10, "B": 20}))
+    calls = []
+
+    def first(key):
+        calls.append((key, helper.offset.value[key]))
+        if key == "B":
+            raise TransientError("retry B")
+        return ScriptResult(1, Offset.partitions({key: 15}))
+
+    with pytest.raises(HandlerError, match="retry B"):
+        helper.fan_out(["A", "B"], first, max_items=2, max_parallel=1)
+    assert helper.offset.value == {"A": 10, "B": 20}
+    result = helper.fan_out(
+        ["A", "B"],
+        lambda key: (
+            calls.append((key, helper.offset.value[key]))
+            or ScriptResult(1, Offset.partitions({key: 25}))
+        ),
+        max_items=2,
+        max_parallel=1,
+    )
+    assert calls == [("A", 10), ("B", 20), ("B", 20)]
+    assert result.offset.value == {"A": 15, "B": 25}
+
+
+@pytest.mark.parametrize("returned", [{"other": 12}, {"A": 12, "B": 13}, "text"])
+def test_item_offsets_refuse_wrong_keys_or_type_permanently(returned):
+    from etl_craft.core.errors import PermanentError
+    from etl_craft.scripting import Offset
+
+    offset = Offset.text(returned) if isinstance(returned, str) else Offset.partitions(returned)
+    with pytest.raises(PermanentError, match=r"item A.*expected.*A"):
+        task().fan_out(["A"], lambda key: ScriptResult(1, offset), max_items=1)
+
+
+def test_item_offset_refuses_a_task_with_another_committed_type():
+    from etl_craft.core.errors import PermanentError
+    from etl_craft.scripting import Offset
+
+    helper = replace(task(), offset=Offset.number(10))
+    with pytest.raises(PermanentError, match=r"item A.*NUMBER.*PARTITIONS"):
+        helper.fan_out(
+            ["A"], lambda key: ScriptResult(1, Offset.partitions({key: 12})), max_items=1
+        )
+
+
+def test_item_partition_position_cannot_move_backwards():
+    from etl_craft.core.errors import PermanentError
+    from etl_craft.scripting import Offset
+
+    helper = replace(task(), offset=Offset.partitions({"A": 10}))
+    with pytest.raises(PermanentError, match=r"partition 'A'.*9.*committed position 10"):
+        helper.fan_out(["A"], lambda key: ScriptResult(1, Offset.partitions({key: 9})), max_items=1)
+
+
+def test_script_cannot_override_the_combined_position():
+    from etl_craft.core.errors import PermanentError
+    from etl_craft.fan_out_offsets import check_return
+    from etl_craft.scripting import Offset
+
+    helper = task()
+    helper.fan_out(["A"], lambda key: ScriptResult(1, Offset.partitions({key: 12})), max_items=1)
+    with pytest.raises(PermanentError, match=r"item A.*expected retained position 12"):
+        check_return(helper, ScriptResult(1, Offset.partitions({"A": 13})))
+
+
+def test_an_offset_free_empty_item_keeps_its_committed_partition():
+    from etl_craft.scripting import Offset
+
+    helper = replace(task(), offset=Offset.partitions({"A": 10, "B": 20}))
+    result = helper.fan_out(
+        ["A", "B"],
+        lambda key: (
+            ScriptResult(0) if key == "B" else ScriptResult(1, Offset.partitions({key: 12}))
+        ),
+        max_items=2,
+    )
+    assert result.offset.value == {"A": 12, "B": 20}

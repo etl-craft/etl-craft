@@ -14,7 +14,7 @@ pytestmark = pytest.mark.docs
 build_docs_site = load("build_docs_site")
 check_docs_content = load("check_docs_content")
 REPO_ROOT = SCRIPTS_DIR.parent
-SITE_URL = "https://venkatcg00.github.io/etl-craft"
+SITE_URL = "https://docs.etl-craft.dev"
 
 
 def _git(repo, *args):

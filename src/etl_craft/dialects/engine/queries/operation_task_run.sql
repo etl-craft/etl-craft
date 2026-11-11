@@ -1,11 +1,11 @@
 -- One exact task run, or the task's row beneath one exact pipeline run.
 SELECT p.PIPELINE_ID AS pipeline_id, r.PIPELINE_RUN_ID AS pipeline_run_id,
-       t.TASK_ID AS task_id, t.TASK_CODE AS task_code, r.TASK_RUN_ID AS task_run_id,
+       t.TASK_ID AS task_id, t.TASK_CODE AS task_code, r.TASK_RUN_ID AS task_run_id, r.TASK_RUN_LABEL AS task_run_label,
        r.STATUS AS status, r.START_DATE AS start_date, r.END_DATE AS end_date,
        r.ATTEMPT_COUNT AS attempt_count, r.SOURCE_COUNT AS source_count,
        r.TARGET_COUNT AS target_count, r.INSERT_COUNT AS insert_count,
        r.UPDATE_COUNT AS update_count, r.DELETE_COUNT AS delete_count,
-       r.ROWS_WRITTEN AS rows_written, r.REJECT_COUNT AS reject_count,
+       r.ROWS_WRITTEN AS rows_written, r.REJECT_COUNT AS reject_count, r.DUPLICATE_COUNT AS duplicate_count,
        r.WATERMARK_FROM AS watermark_from, r.WATERMARK_TO AS watermark_to,
        r.ERROR_MESSAGE AS error_message,
        (SELECT 1 AS has_item FROM AUD_TASK_ITEMS i WHERE i.TASK_RUN_ID=r.TASK_RUN_ID LIMIT 1) AS has_items,

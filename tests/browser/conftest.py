@@ -67,6 +67,25 @@ def site(tmp_path, request):
     listener = socket.socket()
     listener.bind(("127.0.0.1", 0))
     port = listener.getsockname()[1]
+    if getattr(request, "param", None) == "sso-browser":
+        from types import SimpleNamespace
+
+        from etl_craft.config.model import DocsSiteConfig
+
+        auth, _ = request.getfixturevalue("issuer")
+        request.getfixturevalue("monkeypatch").setenv(
+            "BROWSER_TEST_SECRET", "browser-test-key-material-of-at-least-thirty-two-bytes"
+        )
+        ctx = replace(
+            ctx,
+            config=replace(
+                config,
+                auth=SimpleNamespace(
+                    **(vars(auth) | {"browser_state_secret": "BROWSER_TEST_SECRET"})
+                ),
+                docs_site=DocsSiteConfig(external_url=f"https://localhost:{port}"),
+            ),
+        )
     server = Server(
         uvicorn.Config(
             create_app(ctx, console=console()),

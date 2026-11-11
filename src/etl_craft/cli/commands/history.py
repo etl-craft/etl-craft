@@ -54,24 +54,68 @@ def _render(args: argparse.Namespace, out: Output, done: HistoryView) -> int:
             out.empty("no runs yet")
             return
         if args.task_code is None:
-            out.rows(
-                [
+            _pipeline_history(out, entries)
+            _interventions(out, changes)
+            return
+        out.rows(
+            [
+                (
+                    "PIPELINE_RUN_ID",
+                    "TASK_RUN_ID",
+                    "STATUS",
+                    "ATTEMPTS",
+                    "SOURCE_COUNT",
+                    "TARGET_COUNT",
+                    "REJECT_COUNT",
+                    "DUPLICATE_COUNT",
+                    "START_DATE",
+                    "END_DATE",
+                    "ERROR_MESSAGE",
+                ),
+                *(
                     (
-                        "PIPELINE_CODE",
-                        "PIPELINE_RUN_ID",
-                        "STATUS",
-                        "RUN_DATE",
-                        "START_DATE",
-                        "END_DATE",
-                        "SLA_STATUS",
-                        "STARTED_BY",
-                        "STARTED_BY_KIND",
-                        "ENDED_BY",
-                        "ENDED_BY_KIND",
+                        e.pipeline_run_id,
+                        e.task_run_id,
+                        e.status,
+                        e.attempt_count,
+                        e.source_count,
+                        e.target_count,
+                        e.reject_count,
+                        e.duplicate_count,
+                        e.start_date,
+                        e.end_date,
+                        e.error_message,
                     )
-                ]
-            )
-            out.rows(
+                    for e in entries
+                    if isinstance(e, TaskRunView)
+                ),
+            ]
+        )
+        _interventions(out, changes)
+        return
+
+    out.result(done, args.output_format, text=render_text)
+    return ExitCode.SUCCESS
+
+
+def _pipeline_history(out: Output, entries: Sequence[RunView | TaskRunView]) -> None:
+    """Display pipeline histories without task-only fields."""
+    out.rows(
+        [
+            (
+                "PIPELINE_CODE",
+                "PIPELINE_RUN_ID",
+                "STATUS",
+                "RUN_DATE",
+                "START_DATE",
+                "END_DATE",
+                "SLA_STATUS",
+                "STARTED_BY",
+                "STARTED_BY_KIND",
+                "ENDED_BY",
+                "ENDED_BY_KIND",
+            ),
+            *(
                 (
                     e.pipeline_code,
                     e.pipeline_run_id,
@@ -87,44 +131,9 @@ def _render(args: argparse.Namespace, out: Output, done: HistoryView) -> int:
                 )
                 for e in entries
                 if isinstance(e, RunView)
-            )
-            _interventions(out, changes)
-            return
-        out.rows(
-            [
-                (
-                    "PIPELINE_RUN_ID",
-                    "STATUS",
-                    "ATTEMPTS",
-                    "SOURCE_COUNT",
-                    "TARGET_COUNT",
-                    "REJECT_COUNT",
-                    "START_DATE",
-                    "END_DATE",
-                    "ERROR_MESSAGE",
-                )
-            ]
-        )
-        out.rows(
-            (
-                e.pipeline_run_id,
-                e.status,
-                e.attempt_count,
-                e.source_count,
-                e.target_count,
-                e.reject_count,
-                e.start_date,
-                e.end_date,
-                e.error_message,
-            )
-            for e in entries
-            if isinstance(e, TaskRunView)
-        )
-        _interventions(out, changes)
-        return
-
-    out.result(done, args.output_format, text=render_text)
-    return ExitCode.SUCCESS
+            ),
+        ]
+    )
 
 
 def _interventions(out: Output, changes: Sequence[Intervention]) -> None:
@@ -133,19 +142,23 @@ def _interventions(out: Output, changes: Sequence[Intervention]) -> None:
         return
     out.line()
     out.line("Interventions:")
-    out.rows([("PIPELINE_RUN_ID", "TASK", "ACTION", "FROM", "TO", "BY", "AT", "REASON")])
     out.rows(
-        (
-            c.pipeline_run_id,
-            c.task_code or "(the run)",
-            c.action,
-            c.from_status or "-",
-            c.to_status or "(reset)",
-            c.requested_by,
-            c.requested_at,
-            c.reason,
-        )
-        for c in changes
+        [
+            ("PIPELINE_RUN_ID", "TASK", "ACTION", "FROM", "TO", "BY", "AT", "REASON"),
+            *(
+                (
+                    c.pipeline_run_id,
+                    c.task_code or "(the run)",
+                    c.action,
+                    c.from_status or "-",
+                    c.to_status or "(reset)",
+                    c.requested_by,
+                    c.requested_at,
+                    c.reason,
+                )
+                for c in changes
+            ),
+        ]
     )
 
 

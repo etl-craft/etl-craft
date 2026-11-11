@@ -5,6 +5,7 @@ explain and history documents as JSON. Entries are compressed as they are read a
 chunk by chunk, so neither a log nor the zip is ever held whole in memory.
 """
 
+import contextvars
 import json
 import zipfile
 from collections.abc import Callable, Iterator
@@ -41,6 +42,8 @@ class RunZip(Iterator[bytes]):
     CONTENT_TYPE: ClassVar[str] = "application/zip"
     filename: str
     chunks: Iterator[bytes]
+    scope: contextvars.Context = field(default_factory=contextvars.copy_context)
+    """The project the caller selected; the files are read while streaming, after that call ends."""
 
     def __iter__(self) -> Iterator[bytes]:
         """Return the stream itself."""
@@ -48,7 +51,7 @@ class RunZip(Iterator[bytes]):
 
     def __next__(self) -> bytes:
         """Return the next compressed bytes."""
-        return next(self.chunks)
+        return self.scope.run(next, self.chunks)
 
 
 @dataclass

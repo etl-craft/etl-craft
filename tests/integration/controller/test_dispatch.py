@@ -60,13 +60,16 @@ def test_fast_branch_starts_its_downstream_before_the_slow_branch_finishes(
         add_dependency(conn, p.pipeline_id, following, p.task_id)
     assert p.run("pipelines", "refresh")[0] == 0
     if server_mode:
-        assert p.run("run", "--pipeline-code", "P", "--init-only")[0] == 0
+        assert (
+            p.run("run", "--reason", "test requested run", "--pipeline-code", "P", "--init-only")[0]
+            == 0
+        )
         server = p.start("controller")
         p.wait_for("SELECT STATUS FROM AUD_PIPELINES_RUN_LOG", expected="SUCCESS", timeout=20)
         server.signal(signal.SIGTERM)
         assert server.wait() == 0, server.output
     else:
-        code, output = p.run("run", "--pipeline-code", "P")
+        code, output = p.run("run", "--reason", "test requested run", "--pipeline-code", "P")
         assert code == 0, output
     with p.engine.connect() as conn:
         assert (
@@ -307,8 +310,14 @@ def test_shutdown_cancels_all_runs_before_joining_the_shared_pool(cli_project):
         other = add_pipeline(conn, "OTHER")
         add_task(conn, other, "block", "PYTHON", SCRIPT_FILE="python_scripts/block.py")
     assert p.run("pipelines", "refresh")[0] == 0
-    assert p.run("run", "--pipeline-code", "P", "--init-only")[0] == 0
-    assert p.run("run", "--pipeline-code", "OTHER", "--init-only")[0] == 0
+    assert (
+        p.run("run", "--reason", "test requested run", "--pipeline-code", "P", "--init-only")[0]
+        == 0
+    )
+    assert (
+        p.run("run", "--reason", "test requested run", "--pipeline-code", "OTHER", "--init-only")[0]
+        == 0
+    )
     server = p.start("controller")
     deadline = time.monotonic() + 15
     while not (p.config.project_dir / "other-run-started").exists() and time.monotonic() < deadline:

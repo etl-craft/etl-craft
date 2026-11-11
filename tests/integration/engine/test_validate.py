@@ -264,20 +264,10 @@ def test_task_definitions_are_checked_with_the_handlers_own_rules(project):
     assert only("no_action").startswith("SQL_ACTION is required")
     assert "read-only" in only("writes")
     assert "missing.sql" in only("no_file")
-    assert sorted(by_task["BAD.typo"]) == [
-        (fail, "CFG_TASK_PARAMETERS.TASK_TIMEOUT_SECONDS='soon' is not a whole number"),
-        (
-            Status.WARN,
-            "SQL task parameter MERGE_KEYS is not read by etl-craft, so it has no "
-            "effect; did you mean MERGE_KEY, MERGE_COMPARE_COLUMNS, "
-            "MERGE_DEDUPE_ORDER",
-        ),
-        (
-            Status.WARN,
-            "SQL task parameter SOURCE_SQL_FILE is not read by etl-craft, so it has no "
-            "effect; did you mean SCRIPT_FILE",
-        ),
-    ]
+    assert all(status is fail for status, _ in by_task["BAD.typo"])
+    messages = "\n".join(message for _, message in by_task["BAD.typo"])
+    for part in ("TASK_TIMEOUT_SECONDS='soon'", "MERGE_KEYS", "SOURCE_SQL_FILE", "upgrade"):
+        assert part in messages
     assert "set SETUP_FOR" in only("orphan_setup")
     assert "EXTERNAL_LOCATION does not apply to DuckDB" in only("iceberg_path")
     assert only("engine_columns") == (
@@ -713,8 +703,9 @@ def test_bounded_source_findings_are_shared_by_validate_refresh_and_config_apply
     )
 
 
+@pytest.mark.parametrize("cte", [False, True])
 @pytest.mark.parametrize("column", ["UPDATE_DATE", "changed"])
-def test_known_coarse_timestamp_definitions_are_validation_findings(project, column):
+def test_known_coarse_timestamp_definitions_are_validation_findings(project, column, cte):
     from fixtures.metadata import add_source_column
 
     engine, config, _ = project
@@ -732,6 +723,12 @@ def test_known_coarse_timestamp_definitions_are_validation_findings(project, col
             "WATERMARK_COLUMN": "changed",
             "WATERMARK_START": "2000-01-01T00:00:00+00:00",
         }
+        if cte:
+            params["SELECT_QUERY"] = (
+                "WITH recent AS (SELECT id, changed FROM raw.events) "
+                "SELECT id, changed FROM recent WHERE changed >= $$watermark "
+                "AND changed < $$watermark_max"
+            )
         add_task(conn, pipeline, "read", "SQL", **params)
         add_source_column(
             conn, target if column == "UPDATE_DATE" else "raw.events", column, "TIMESTAMP(0)", 1
@@ -809,3 +806,179 @@ def test_a_pipeline_that_takes_uploads_needs_one_validation_task(project):
         _validated_upload_pipeline(conn, root, validators=0)
     messages = [message for _, _, message in found(validate(engine, config))]
     assert any("FILE_VALIDATION tasks=0 on a pipeline that takes uploads" in m for m in messages)
+
+
+@pytest.mark.parametrize("entrypoint", ["validate", "refresh"])
+def test_stewardable_nested_merge_columns_fail_early_in_validate_and_refresh(project, entrypoint):
+    from etl_craft.core.actor import SYSTEM_ACTOR
+    from etl_craft.core.enums import ActionName, ApiRole, RunStatus
+    from etl_craft.services.operations import OperationContext
+    from fixtures.actions import act
+    from fixtures.metadata import add_source_column
+
+    engine, config, root = project
+    raw = yaml.safe_load(config.config_path.read_text())
+    raw["Artifacts"] = {"Store": (root / "store").as_uri()}
+    config.config_path.write_text(yaml.safe_dump(raw, sort_keys=False))
+    config = load_config(config.config_path)
+    with engine.begin() as conn:
+        pipeline = _validated_upload_pipeline(conn, root)
+        add_task(
+            conn,
+            pipeline,
+            "merge",
+            SQL_ACTION="SCD1_MERGE",
+            TARGET_OBJECT="main.people",
+            SELECT_QUERY="SELECT 1 AS id, 'a' AS name, ARRAY[1,2] AS numbers, 1 AS UPLOAD_ID",
+            MERGE_KEY="id",
+            MERGE_COMPARE_COLUMNS="name",
+            MERGE_DEDUPE_ORDER="UPLOAD_ID ASC",
+        )
+        add_source_column(conn, "main.people", "numbers", "INTEGER[]", 1)
+    if entrypoint == "validate":
+        report = validate(engine, config)
+        assert report.failed
+        messages = [finding.message for finding in report.findings]
+    else:
+        ctx = OperationContext(
+            engine, config, SYSTEM_ACTOR, role=ApiRole.ADMIN, project="default", project_id=1
+        )
+        result = act(ctx, ActionName.PIPELINE_REFRESH).refreshes[0]
+        assert result.status == RunStatus.FAILED
+        messages = [finding.message for finding in result.findings]
+    for part in (
+        "main.people",
+        "numbers",
+        "INTEGER[]",
+        "canonical scalar hash",
+        "cast it to a scalar type in the SELECT",
+    ):
+        assert any(part in message for message in messages), messages
+
+
+@pytest.mark.parametrize("entrypoint", ["validate", "refresh"])
+@pytest.mark.parametrize("problem", ["target", "stage"])
+def test_locked_upload_control_refused_early_by_validate_and_refresh(project, entrypoint, problem):
+    from etl_craft.core.actor import SYSTEM_ACTOR
+    from etl_craft.core.enums import ActionName, ApiRole, RunStatus
+    from etl_craft.services.operations import OperationContext
+    from fixtures.actions import act
+    from fixtures.metadata import add_source_column
+
+    engine, config, root = project
+    raw = yaml.safe_load(config.config_path.read_text())
+    raw["Artifacts"] = {"Store": (root / "store").as_uri()}
+    config.config_path.write_text(yaml.safe_dump(raw, sort_keys=False))
+    config = load_config(config.config_path)
+    with engine.begin() as conn:
+        pipeline = _validated_upload_pipeline(conn, root)
+        add_task(
+            conn,
+            pipeline,
+            "merge",
+            SQL_ACTION="SCD1_MERGE",
+            TARGET_OBJECT="main.people",
+            SELECT_QUERY=(
+                "SELECT 1 AS id,'a' AS name,CAST('true' AS VARCHAR) AS LOCKED,1 AS UPLOAD_ID"
+            )
+            if problem == "stage"
+            else "SELECT 1 AS id,'a' AS name,1 AS UPLOAD_ID",
+            MERGE_KEY="id",
+            MERGE_COMPARE_COLUMNS="name",
+            MERGE_DEDUPE_ORDER="UPLOAD_ID ASC",
+        )
+        if problem == "target":
+            add_source_column(conn, "main.people", "LOCKED", "BOOLEAN", 1)
+    if entrypoint == "validate":
+        result = validate(engine, config)
+        assert result.failed
+        messages = [finding.message for finding in result.findings]
+    else:
+        ctx = OperationContext(
+            engine, config, SYSTEM_ACTOR, role=ApiRole.ADMIN, project="default", project_id=1
+        )
+        result = act(ctx, ActionName.PIPELINE_REFRESH).refreshes[0]
+        assert result.status == RunStatus.FAILED
+        messages = [finding.message for finding in result.findings]
+    parts = (
+        ("main.people", "LOCKED", "rename")
+        if problem == "target"
+        else ("merge", "LOCKED", "TEXT", "BOOLEAN", "CAST", "landing")
+    )
+    for part in parts:
+        assert any(part in message for message in messages), messages
+
+
+@pytest.mark.parametrize("kind", [None, "HAS_DATA", "FAILURE", "SUCCESS"])
+def test_rule_flag_scope_requires_success_dependency(project, kind):
+    engine, config, _ = project
+    with engine.begin() as conn:
+        pipeline = add_pipeline(conn, "FLAGS")
+        rules = add_task(conn, pipeline, "rules", "BUSINESS_RULES")
+        add_rule(conn, pipeline, rules, "bad")
+        consumer = add_task(
+            conn,
+            pipeline,
+            "consume",
+            "SQL",
+            SQL_ACTION="APPEND_TABLE",
+            TARGET_OBJECT="sales.clean",
+            SELECT_QUERY="SELECT id FROM sales.orders WHERE CAST(id AS VARCHAR) "
+            "NOT IN ($$rule_flags(rules, REJECT))",
+        )
+        if kind is not None:
+            add_dependency(conn, pipeline, consumer, rules, kind)
+    report = validate(engine, config)
+    failures = [
+        f for f in report.findings if f.where == "FLAGS.consume" and f.status == Status.FAIL
+    ]
+    if kind == "SUCCESS":
+        assert not failures
+    else:
+        assert any(
+            "$$rule_flags(rules, REJECT)" in f.message
+            and "SUCCESS" in f.message
+            and "remedy" in f.message
+            for f in failures
+        )
+
+
+def test_required_uploads_refuses_a_pipeline_that_cannot_receive_files(project):
+    engine, config, root = project
+    folder = root / "validation_scripts"
+    folder.mkdir()
+    (folder / "check.py").write_text("def validate(task):\n    return None\n")
+    with engine.begin() as conn:
+        pipeline = add_pipeline(conn, "UPLOAD_REQUIRED")
+        add_task(
+            conn,
+            pipeline,
+            "validate_file",
+            "FILE_VALIDATION",
+            SCRIPT_FILE="validation_scripts/check.py",
+            FILE_FORMAT="CSV",
+            REQUIRE_UPLOADS="Y",
+        )
+    report = validate(engine, config)
+    findings = [
+        f
+        for f in report.findings
+        if f.where == "UPLOAD_REQUIRED.validate_file" and f.status == Status.FAIL
+    ]
+    assert any(
+        "REQUIRE_UPLOADS=Y" in f.message
+        and "STEWARDABLE_FLAG=N" in f.message
+        and "remedy" in f.message
+        for f in findings
+    )
+    with engine.begin() as conn:
+        conn.execute(
+            text("UPDATE CFG_PIPELINES SET STEWARDABLE_FLAG='Y' WHERE PIPELINE_ID=:id"),
+            {"id": pipeline},
+        )
+    report = validate(engine, config)
+    assert not [
+        f
+        for f in report.findings
+        if f.where == "UPLOAD_REQUIRED.validate_file" and f.status == Status.FAIL
+    ]

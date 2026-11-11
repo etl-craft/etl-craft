@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import os
 import re
+import shlex
 import shutil
 import sqlite3
 import subprocess
@@ -26,6 +27,9 @@ from fixtures.terminal import login_answers, setup_answers, terminal_run
 pytestmark = [pytest.mark.e2e_pip, pytest.mark.timeout(1800)]
 
 PAGE = REPO / "docs" / "quick-start.md"
+# A token's last use is recorded in the same history, but it is not a config change.
+NOT_TOKENS = "TABLE_NAME <> 'CFG_API_TOKENS'"
+CONFIG_CHANGES = f"SELECT COUNT(*) FROM AUD_METADATA_CHANGES WHERE {NOT_TOKENS}"
 BLOCK = re.compile(r"^( *)```(\w+)\n(.*?)^\1```", re.MULTILINE | re.DOTALL)
 RUNS = ("etl-craft ", "python prepare.py ")
 
@@ -59,7 +63,7 @@ def test_the_quick_start_runs_as_written(tmp_path):
     if only not in (None, "duckdb"):
         pytest.skip(f"the Quick Start's warehouse is DuckDB; this run covers {only}")
     require("mailpit_smtp")
-    cli = installed_cli("pip", tmp_path / "venvs", extras="trino")
+    cli = installed_cli("pip", tmp_path / "venvs", extras="duckdb")
     python = cli.with_name(cli.name.replace("etl-craft", "python"))
     project = tmp_path / "demo"
     shutil.copytree(
@@ -73,7 +77,7 @@ def test_the_quick_start_runs_as_written(tmp_path):
     printed = []
     for line in commands():
         command, _, comment = line.partition("#")
-        argv = command.split()
+        argv = shlex.split(command)
         program = cli if argv[0] == "etl-craft" else python
         if argv[:2] in (["etl-craft", "setup"], ["etl-craft", "login"]):
             done = terminal_run(
@@ -102,11 +106,11 @@ def test_the_quick_start_runs_as_written(tmp_path):
     assert (project / "catalog" / "index.html").is_file()
 
     with sqlite3.connect(project / "engine.db") as conn:
-        count = conn.execute("SELECT COUNT(*) FROM AUD_METADATA_CHANGES").fetchone()[0]
+        count = conn.execute(CONFIG_CHANGES).fetchone()[0]
         assert count > 0
         assert conn.execute(
             "SELECT VERSION FROM SCHEMA_MIGRATIONS WHERE SOURCE='PROJECT'"
-        ).fetchall() == [("0001_support_insights.sql",)]
+        ).fetchall() == [("0001_demo.sql",)]
     repeated = subprocess.run(
         [str(python), "prepare.py", "metadata"],
         cwd=project,
@@ -118,10 +122,19 @@ def test_the_quick_start_runs_as_written(tmp_path):
     )
     assert repeated.returncode == 0, repeated.stderr
     with sqlite3.connect(project / "engine.db") as conn:
-        assert conn.execute("SELECT COUNT(*) FROM AUD_METADATA_CHANGES").fetchone()[0] == count
-    migration = project / "migrations" / "0001_support_insights.sql"
+        after = conn.execute(CONFIG_CHANGES).fetchone()[0]
+        newest = conn.execute(
+            f"SELECT * FROM AUD_METADATA_CHANGES WHERE {NOT_TOKENS} ORDER BY 1 DESC LIMIT ?",
+            (max(after - count, 0) + 1,),
+        )
+        named = [column[0] for column in newest.description]
+        assert after == count, (
+            f"repeating prepare.py metadata recorded {after - count} more config change(s); "
+            f"newest rows ({', '.join(named)}): {newest.fetchall()}"
+        )
+    migration = project / "migrations" / "0001_demo.sql"
     original = migration.read_bytes()
-    seed = project / "metadata" / "support_insights.sql"
+    seed = project / "metadata" / "demo.sql"
     seed.write_text(seed.read_text() + "\n-- edited seed\n")
     refused = subprocess.run(
         [str(python), "prepare.py", "metadata"],

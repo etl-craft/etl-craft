@@ -59,7 +59,7 @@ def server(monkeypatch):
     monkeypatch.setattr(
         routes,
         "authenticate",
-        lambda ctx, token: types.SimpleNamespace(
+        lambda ctx, token, **_: types.SimpleNamespace(
             actor=ADMIN,
             role=ApiRole.ADMIN.value,
             token_id=1,
@@ -138,6 +138,8 @@ def test_the_client_and_the_route_hand_the_operation_the_same_request(server, mo
     with pytest.raises(CapturedError):
         result = ApiClient("http://127.0.0.1:8000", "default").invoke(name, request)
         list(result)  # a streamed action sends its request when read
+    if "{run_id}" in action_path(ACTIONS[name]):
+        request = replace(request, run_id=str(request.run_id))
     assert calls == [(name, request)]
 
 
@@ -250,7 +252,8 @@ def test_an_audited_change_is_recorded_once_and_a_refusal_never_runs(operations,
     entered, refused = [], []
 
     @contextmanager
-    def recorded(ctx, recorded_name, given):
+    def recorded(ctx, recorded_name, given, *, on_completion=False):
+        assert on_completion == (recorded_name == ActionName.MIGRATE)
         entered.append(recorded_name)
         yield
 

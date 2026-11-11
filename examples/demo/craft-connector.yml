@@ -1,4 +1,4 @@
-# Support Insights demo: an Engine DB in a SQLite file and a DuckDB warehouse beside this file,
+# Small package demo: an Engine DB in a SQLite file and a DuckDB warehouse beside this file,
 # with alerts sent to a local Mailpit (make services-up starts one on port 51025).
 #
 # Each setting is marked `# variable` or `# value`. A variable is looked up in the secrets
@@ -18,7 +18,7 @@ Orchestration:
     Host: localhost                    # value
     Port: 51025                        # value — Mailpit's SMTP port
     From_address: etl-craft@example.com  # value
-    From_name: Support Insights        # value
+    From_name: Small package        # value
     Tls_mode: NONE                     # value
 
 Engine:
@@ -63,4 +63,9 @@ Auth:
 
 # Blanket stewardship upload ceiling; validation tasks may lower it.
 Uploads:
-  Max_file_mb: 50                      # value
+  Max_file_mb: 50
+  # Archive_to: file:///srv/etl-archive/uploads
+  # Or: {Store: s3://team-archive/uploads, Profile: archive}                      # value
+
+Privacy:
+  Hmac_secret: ETL_CRAFT_DEMO_PRIVACY_HMAC  # variable — retain the same secret for project history

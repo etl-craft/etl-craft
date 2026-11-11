@@ -12,6 +12,7 @@ from etl_craft.core.enums import ApiRole, RunCondition, RunStatus
 from etl_craft.core.errors import ConfigurationError, ResourceNotFoundError
 from etl_craft.core.file_bytes import open_regular
 from etl_craft.core.graph import build_graph
+from etl_craft.core.restart import restart_note
 from etl_craft.core.time import as_utc
 from etl_craft.engine.connection import read_snapshot
 from etl_craft.engine.logs import (
@@ -105,6 +106,9 @@ def list_pipelines(ctx: OperationContext, request: TagFilter) -> PipelineListVie
                     pause,
                     tags,
                     tuple(p for p in task_pauses if p.pipeline_id == row.pipeline_id),
+                    auto_restart_condition=row.auto_restart_condition,
+                    restart_note=restart_note(row.auto_restart_condition),
+                    description=row.description,
                 )
             )
         return PipelineListView(summarize(conn, views, datetime.now(UTC), _pinned(ctx)))
@@ -178,6 +182,11 @@ def pipeline_steps(ctx: OperationContext, request: RunSelection) -> StepsView:
 
 def run_history(ctx: OperationContext, request: HistoryInput) -> HistoryView:
     """Read one pipeline's history, or a bounded page across matching active pipelines."""
+    assert not isinstance(request.run_id, str), "run reference must be resolved"
+    if request.run_id is not None and request.pipeline_code is None:
+        from etl_craft.services.operations.permissions import run_pipeline_code
+
+        request = replace(request, pipeline_code=run_pipeline_code(ctx, request.run_id))
     if request.pipeline_code is not None and not request.tag:
         return _pipeline_history(ctx, request)
     with read_snapshot(ctx.engine) as conn:
@@ -301,6 +310,9 @@ def audit(ctx: OperationContext, request: AuditInput) -> AuditView:
         )
         for row in (*actions, *changes):
             row["at"] = as_utc(row["at"])
+        for row in actions:
+            selected = row["arguments"].get("run_id")
+            row["pipeline_run_id"] = selected if isinstance(selected, int) else None
         if request.mine:
             mine = [row for row in actions if row["actor"] == ctx.actor.name]
             return AuditView(tuple(ActionView(**row) for row in mine), ())
@@ -327,6 +339,7 @@ def _pinned(ctx: OperationContext) -> bool:
 
 def get_run(ctx: OperationContext, request: RunId) -> RunView:
     """Read one run by id, never an active or recent replacement."""
+    assert isinstance(request.run_id, int), "run reference must be resolved"
     with read_snapshot(ctx.engine) as conn:
         code = conn.execute(
             statement(conn, "api_run_code"), {"run_id": request.run_id}

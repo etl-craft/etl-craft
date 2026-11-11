@@ -62,9 +62,6 @@ def _configure(parser: argparse.ArgumentParser, *, action: ControlAction) -> Non
             help="Atomically replace an existing task pause; no unpaused window.",
         )
     configure_tags(parser)
-    parser.add_argument(
-        "--yes", action="store_true", help="Confirm the printed pipeline selection."
-    )
     parser.add_argument("--reason", default="", help=f"Why; recorded with the {verb}.")
 
 

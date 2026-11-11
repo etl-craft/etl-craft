@@ -6,7 +6,10 @@ from dataclasses import dataclass
 
 from sqlalchemy import text
 from sqlalchemy.engine import Connection
+from sqlglot import exp
+from sqlglot.errors import SqlglotError
 
+from etl_craft.core.text import is_safe_identifier, is_safe_object_ref
 from etl_craft.dialects.engine import for_engine
 from etl_craft.engine.queries import statement
 
@@ -52,3 +55,30 @@ def fetch_source_columns(conn: Connection) -> list[SourceColumn]:
         )
         for row in conn.execute(statement(conn, "source_columns"))
     ]
+
+
+def definition_problem(column: SourceColumn, dialect: str | None) -> str | None:
+    """Check definitions from either CSV files or project migrations."""
+    if not is_safe_object_ref(column.table_name):
+        return (
+            f"TABLE_NAME={column.table_name!r}: expected schema.table or "
+            f"database.schema.table; correct the source definition"
+        )
+    if not is_safe_identifier(column.column_name):
+        return (
+            f"COLUMN_NAME={column.column_name!r}: expected an unquoted SQL identifier; "
+            f"correct the source definition"
+        )
+    try:
+        kind = exp.DataType.build(column.data_type, dialect=dialect)
+        if kind.this == exp.DataType.Type.UNKNOWN:
+            return (
+                f"DATA_TYPE={column.data_type!r}: expected a known SQL type; "
+                "correct the source definition"
+            )
+    except (SqlglotError, ValueError) as error:
+        return (
+            f"DATA_TYPE={column.data_type!r}: expected a SQL type for "
+            f"{dialect or 'the warehouse'} ({error}); correct the source definition"
+        )
+    return None

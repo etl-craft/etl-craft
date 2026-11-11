@@ -24,9 +24,10 @@ from fixtures.engine_db import apply_schema, sqlite_engine_db
 from fixtures.metadata import add_pipeline, start_run
 from fixtures.round_trips import count_round_trips
 from fixtures.scd_lifecycle import check_scd1_upgrade, check_scd_lifecycle
+from fixtures.single_merge import check_single_merge
 from fixtures.sql_evolution import check_evolution, check_interrupted_evolution
 from fixtures.sql_merges import check_composite_merge
-from fixtures.sql_rejects import check_rejects
+from fixtures.sql_rejects import check_dedupe_counts, check_rejects
 from fixtures.sql_replacement import check_replacement_failure
 from fixtures.sql_row_ids import check_row_id_generation
 from fixtures.sql_warehouse import SqlWorld
@@ -579,8 +580,9 @@ def walk_rejects(w):
     target = f"etl_craft_rejects_{uuid.uuid4().hex[:8]}"
     try:
         check_rejects(w, target)
+        check_dedupe_counts(w, target + "_dedupe", "SCD2_MERGE")
     finally:
-        for name in (target, target + "__rejects"):
+        for name in (target, target + "__rejects", target + "_dedupe", target + "_dedupe__rejects"):
             w.execute(f"DROP TABLE IF EXISTS {w.name(name)}")
         close_world(w)
 
@@ -814,10 +816,12 @@ def test_composite_merges(tmp_path, name, variables, table_format):
     schema = os.environ[f"ETL_CRAFT_TEST_{prefix}_SCHEMA"]
     w = cloud_world(tmp_path, name, fields, table_format, schema)
     suffix = uuid.uuid4().hex[:8]
-    targets = [f"etl_joined_{kind}_{suffix}" for kind in ("scd1", "scd2")]
+    targets = [f"etl_joined_{kind}_{suffix}" for kind in ("scd1", "scd2", "atomic1", "atomic2")]
     try:
         check_composite_merge(w, targets[0], "SCD1_MERGE")
         check_composite_merge(w, targets[1], "SCD2_MERGE")
+        check_single_merge(w, "SCD1_MERGE", targets[2])
+        check_single_merge(w, "SCD2_MERGE", targets[3])
     finally:
         for target in targets:
             w.execute(f"DROP TABLE IF EXISTS {w.name(target)}")
@@ -876,5 +880,35 @@ def test_table_business_rules_on_snowflake(tmp_path):
     w = cloud_world(tmp_path, "Snowflake", fields, TableFormat.NATIVE, schema)
     try:
         check_table_business_rules(w)
+    finally:
+        close_world(w)
+
+
+@pytest.mark.cloud_databricks
+def test_rule_flags_on_databricks(tmp_path):
+    from fixtures.rule_flags import check_literal_keys, check_rule_flags
+
+    require_variables("DATABRICKS", DATABRICKS_VARS)
+    fields = {name.lower(): f"ETL_CRAFT_TEST_DATABRICKS_{name}" for name in DATABRICKS_VARS}
+    schema = os.environ["ETL_CRAFT_TEST_DATABRICKS_SCHEMA"]
+    w = cloud_world(tmp_path, "Databricks", fields, TableFormat.NATIVE, schema)
+    try:
+        check_rule_flags(w)
+        check_literal_keys(w)
+    finally:
+        close_world(w)
+
+
+@pytest.mark.cloud_snowflake
+def test_rule_flags_on_snowflake(tmp_path):
+    from fixtures.rule_flags import check_literal_keys, check_rule_flags
+
+    require_variables("SNOWFLAKE", SNOWFLAKE_VARS)
+    fields = {name.lower(): f"ETL_CRAFT_TEST_SNOWFLAKE_{name}" for name in SNOWFLAKE_VARS}
+    schema = os.environ["ETL_CRAFT_TEST_SNOWFLAKE_SCHEMA"]
+    w = cloud_world(tmp_path, "Snowflake", fields, TableFormat.NATIVE, schema)
+    try:
+        check_rule_flags(w)
+        check_literal_keys(w)
     finally:
         close_world(w)

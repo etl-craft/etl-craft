@@ -11,6 +11,8 @@ from dataclasses import replace
 from datetime import UTC, datetime
 from typing import TypeVar
 
+from sqlalchemy.engine import Row
+
 from etl_craft.config.targets import active_catalog
 from etl_craft.core.actor import acting_as
 from etl_craft.core.counts import NO_COUNTS
@@ -19,6 +21,7 @@ from etl_craft.core.enums import (
     ActionOutcome,
     AgentReport,
     AttemptStatus,
+    ControlAcknowledgement,
     Handler,
     YesNo,
 )
@@ -44,6 +47,7 @@ from etl_craft.engine.agent_state import fence
 from etl_craft.engine.audit import ActionRequest
 from etl_craft.engine.notifications import notification_hub
 from etl_craft.engine.queries import statement
+from etl_craft.engine.repository.pipelines import selected_project
 from etl_craft.engine.task_store import LocalTaskStore, TaskIdentity
 from etl_craft.execution.bundle_files import prepare_task
 from etl_craft.execution.context import build_task_context
@@ -98,6 +102,7 @@ def _store(ctx: OperationContext, task: TaskContext) -> LocalTaskStore:
         ),
         LocalLocker(ctx.engine, task.config),
         definition=task._definition,
+        parameters=task.task_params,
     )
 
 
@@ -191,7 +196,7 @@ async def _wait_lock(ctx: OperationContext, request: AgentTask) -> AgentReply:
         raise UsageError("lock_wait_seconds must be finite and between 0 and 30")
     deadline = time.monotonic() + limit
     hub = notification_hub(ctx.config, ctx.engine)
-    with acting_as(ctx.actor):
+    with acting_as(ctx.actor), selected_project(ctx.project_id):
         while True:
             generation = hub.generation
             task = await asyncio.to_thread(_context, ctx, request)
@@ -220,15 +225,51 @@ def _credential_context(ctx: OperationContext) -> OperationContext:
     return ctx
 
 
+def _protection_report(ctx: OperationContext, request: AgentTask) -> AgentReply:
+    """Parse and fence both operations before the common local event service."""
+    from etl_craft.core.actor import SYSTEM_ACTOR, acting_as
+
+    target = required(request.target, "target")
+    try:
+        task = _context(ctx, request)
+    except (StaleTransitionError, PermissionDeniedError) as error:
+        raise type(error)(
+            f"attempt {request.attempt_id}, target {target}: "
+            "live-attempt/token/admitted-target/lock check "
+            f"failed: {error}; stop this writer and obtain its "
+            "current admitted attempt and target lock"
+        ) from error
+    from etl_craft.engine.run_definitions import for_run
+
+    store = _store(ctx, task)
+    with for_run(ctx.engine, task.pipeline_run_id), acting_as(SYSTEM_ACTOR):
+        if request.operation == AgentReport.PROTECTION_READ:
+            if request.protection_candidates is not None:
+                return AgentReply(store.protection_match(target, request.protection_candidates))
+            return AgentReply(store.protection_read(target, request.protection_cursor))
+        return AgentReply(
+            store.protection_event(target, required(request.protection, "protection"))
+        )
+
+
 def report(ctx: OperationContext, request: AgentTask) -> AgentReply | Awaitable[AgentReply]:
     """Apply this token's bounded task operation; no route accepts SQL or another task's ids."""
     check_agent(ctx, request)
     ctx = _credential_context(ctx)
-    if request.operation in {AgentReport.END, AgentReport.CANCEL}:
-        return {AgentReport.END: _end, AgentReport.CANCEL: _cancel}[request.operation](ctx, request)
-    if request.operation == AgentReport.LOCK:
-        return _wait_lock(ctx, request)
+    direct: dict[
+        AgentReport, Callable[[OperationContext, AgentTask], AgentReply | Awaitable[AgentReply]]
+    ] = {
+        AgentReport.END: _end,
+        AgentReport.CANCEL: _cancel,
+        AgentReport.LOCK: _wait_lock,
+        AgentReport.PROTECTION_READ: _protection_report,
+        AgentReport.PROTECTION_EVENT: _protection_report,
+    }
+    if request.operation in direct:
+        return direct[request.operation](ctx, request)
     task = _context(ctx, request)
+    if request.operation == AgentReport.ERASURE:
+        return _erasure(ctx, task)
     store = _store(ctx, task)
     if (
         request.operation in {AgentReport.ITEMS, AgentReport.ITEM_EVENT, AgentReport.ITEM_PREPARE}
@@ -243,6 +284,15 @@ def report(ctx: OperationContext, request: AgentTask) -> AgentReply | Awaitable[
         AgentReport.UPLOAD_VALIDATION: lambda: store.validation_result(
             required(request.upload_id, "upload_id"), request.error_message
         ),
+        AgentReport.EVENT_FILES: lambda: store.event_file_candidates(
+            required(request.wait_code, "wait_code")
+        ),
+        AgentReport.EVENT_FILE_RESULT: lambda: store.event_file_result(
+            required(request.wait_code, "wait_code"),
+            required(request.file_path, "file_path"),
+            (required(request.sha256, "sha256"), required(request.size_bytes, "size_bytes")),
+            request.error_message,
+        ),
         AgentReport.BUNDLE: lambda: bundle_report(ctx, task, request),
         AgentReport.STATE: lambda: store.state(task.task_params.get("SQL_ACTION")),
         AgentReport.ALERT: lambda: store.alert(task.task_params.get("EMAIL_PIPELINES")),
@@ -254,7 +304,7 @@ def report(ctx: OperationContext, request: AgentTask) -> AgentReply | Awaitable[
     if request.operation in progress:
         return AgentReply(progress[request.operation]())
     match request.operation:
-        case AgentReport.LOCK | AgentReport.UNLOCK:
+        case AgentReport.UNLOCK:
             return _lock(ctx, task, request)
         case AgentReport.START:
             return _start(ctx, task, request)
@@ -337,6 +387,7 @@ def _commit_end(ctx: OperationContext, request: AgentTask) -> AgentReply:
                 "keep the original ending"
             )
         fence(conn, request.attempt_id, owner)
+        observed = _ending_identity(row, request) and ctx.credential_attempt_id is None
         if request.failure is not None:
             transitions.record_attempt_failure(conn, request.attempt_id, request.failure)
         if status == AttemptStatus.CANCELLED and request.queries_ended:
@@ -362,7 +413,7 @@ def _commit_end(ctx: OperationContext, request: AgentTask) -> AgentReply:
             offset=request.offset,
         )
         log_storage.ensure_source(conn, request.attempt_id)
-        if status == AttemptStatus.CANCELLED:
+        if observed:
             controls.observe_exit(conn, request.attempt_id, queries_ended=request.queries_ended)
         ActionRequest(
             ActionName.AGENT_REPORT,
@@ -378,6 +429,21 @@ def _commit_end(ctx: OperationContext, request: AgentTask) -> AgentReply:
             exit_code=request.exit_code,
         ).write(conn)
     return AgentReply()
+
+
+def _ending_identity(row: Row[tuple[object, ...]] | None, request: AgentTask) -> bool:
+    """Admit only an observation of the recorded task's PID and birth identity."""
+    supplied = request.pid is not None or request.process_start is not None
+    matches = (
+        row is not None and request.pid == row.pid and request.process_start == row.process_start
+    )
+    if supplied and not matches:
+        raise PermissionDeniedError(
+            f"attempt {request.attempt_id}: ending process identity differs from its "
+            "recorded PID/birth; expected the admitted task process; report only the "
+            "process this supervisor started and observed"
+        )
+    return supplied and matches and request.pid is not None and request.process_start is not None
 
 
 def _cancel(ctx: OperationContext, request: AgentTask) -> AgentReply:
@@ -400,10 +466,25 @@ def _cancel(ctx: OperationContext, request: AgentTask) -> AgentReply:
             fence(conn, request.attempt_id, owner)
             if request.queries_ended:
                 attempt_cancellation.acknowledge_cancellation(conn, request.attempt_id, owner)
-        controls.observe_exit(conn, request.attempt_id, queries_ended=request.queries_ended)
+        if _ending_identity(row, request) and ctx.credential_attempt_id is None:
+            controls.observe_exit(conn, request.attempt_id, queries_ended=request.queries_ended)
+        elif request.queries_ended and ctx.credential_attempt_id is None:
+            controls.acknowledge(
+                conn,
+                request.attempt_id,
+                ControlAcknowledgement.QUERIES,
+                reason="agent confirmed tagged queries absent",
+                checks=("tagged_queries_absent",),
+            )
     from etl_craft.execution.control_flow import advance
 
-    advance(ctx.engine, row.pipeline_run_id, observed=True, reason=request.error_message)
+    advance(
+        ctx.engine,
+        row.pipeline_run_id,
+        observed=True,
+        reason=request.error_message,
+        config=ctx.config,
+    )
     return AgentReply()
 
 
@@ -440,3 +521,27 @@ def _watermark(store: LocalTaskStore, task: TaskContext, request: AgentTask) -> 
         required(request.watermark_to, "watermark_to"),
     )
     return None
+
+
+def _erasure(ctx: OperationContext, task: TaskContext) -> AgentReply:
+    """Execute only the admitted ERASURE task; personal keys never cross the agent API."""
+    from etl_craft.core.erasure import ErasureEntry
+    from etl_craft.engine.run_definitions import for_run
+    from etl_craft.handlers.erasure import apply_entries
+
+    if task.handler != Handler.ERASURE:
+        raise PermissionDeniedError(
+            f"{task.pipeline_code}.{task.task_code}: handler={task.handler}; expected ERASURE; "
+            "use the ERASURE task's own live attempt credential"
+        )
+    store = _store(ctx, task)
+    holder = resource_locks.Holder(
+        store.identity.holder_id, task.owner or "", ctx.actor, task.attempt_id
+    )
+    with for_run(ctx.engine, task.pipeline_run_id), resource_locks.holder_scope(holder):
+        with ctx.engine.connect() as conn:
+            entries = tuple(
+                ErasureEntry(r.table_name, r.column_name, r.subject_key, r.key_hmac)
+                for r in conn.execute(statement(conn, "erasure_entries"), {"all_entries": False})
+            )
+        return AgentReply(apply_entries(ctx.engine, task.config, entries, store=store))

@@ -6,6 +6,7 @@ import codecs
 import json
 import logging
 import os
+import signal
 import sys
 import tempfile
 import threading
@@ -17,6 +18,7 @@ from pathlib import Path
 
 from etl_craft import __version__
 from etl_craft.agent.client import AgentClient
+from etl_craft.agent.renewal import renewal_marker
 from etl_craft.agent.task_store import RemoteTaskStore
 from etl_craft.config import ConnectorConfig
 from etl_craft.config.project import project_config
@@ -27,19 +29,22 @@ from etl_craft.core.enums import (
     AgentReport,
     AgentStatus,
     AttemptStatus,
+    FailureClass,
     Handler,
+    SecretsSource,
     SlotKind,
 )
 from etl_craft.core.errors import ConfigurationError, EtlCraftError, RunStateError, ServerError
+from etl_craft.core.failures import Failure
 from etl_craft.core.faults import fault_point
 from etl_craft.core.ownership import attempt_holder
 from etl_craft.core.placement import slot_kind
-from etl_craft.core.resources import Ceilings
+from etl_craft.core.resources import MIB, Ceilings, discover
 from etl_craft.core.text import sha256_hex
 from etl_craft.engine.resource_locks import holder_tag
 from etl_craft.execution.child_environment import child_environment
 from etl_craft.execution.control_flow import process_local_queries
-from etl_craft.execution.leases import process_start
+from etl_craft.execution.leases import owner_id, process_start
 from etl_craft.execution.processes import ChildResult, ChildSpec, run_child
 from etl_craft.execution.query_cancellation import confirm
 from etl_craft.services.operations.agent_models import (
@@ -77,6 +82,8 @@ class Work:
     timeout_seconds: int
     credential: str
     holder_id: str
+    secret_values: dict[str, str] = field(default_factory=dict, repr=False)
+    secret_provider: SecretsSource | None = None
 
 
 @dataclass
@@ -101,6 +108,7 @@ class RunningTask:
     fenced: bool = False
     trigger: bool = False
     decoded: bool = False
+    started_reported: bool = False
 
     def lease(self, deadline: float) -> None:
         """Publish a conservative monotonic deadline before the task's existing one expires."""
@@ -136,6 +144,16 @@ class AgentLoop:
         self.commands: tuple[int, ...] = ()
         measured = report(options.ceilings, options.declared)
         self.resources = measured
+        logger.info(
+            "dedicated agent %s (%s): memory %.0f MB; reserve and supervisor %.0f MB; "
+            "Python slots %d (%s)",
+            measured.host,
+            measured.sizing.profile,
+            (measured.allocation.memory.value or 0) / MIB,
+            (measured.sizing.reserve_memory or 0) / MIB,
+            measured.sizing.python_slots.value,
+            measured.sizing.python_slots.reason,
+        )
         self.executor = ThreadPoolExecutor(
             max(1, measured.sizing.task_slots.value), thread_name_prefix="agent-task"
         )
@@ -160,12 +178,14 @@ class AgentLoop:
 
     def serve(self) -> None:
         """Stay outbound-only; retain processes only while their conservative lease permits."""
+        renewal_marker(self.config.host_dir).unlink(missing_ok=True)
         registered = self.client.call(
             ActionName.AGENT_REGISTER,
             AgentRegister(
                 version=__version__,
                 pool=self.options.pool,
                 resources=self.resources,
+                instance_id=os.environ.get("ETL_CRAFT_AGENT_INSTANCE_ID") or owner_id(),
             ),
         )
         if not isinstance(registered.data, dict):
@@ -270,7 +290,11 @@ class AgentLoop:
         path = folder / "craft-connector.yml"
         path.write_bytes(store.bundle_file("craft-connector.yml"))
         pinned = project_config(self.config, path)
-        return child_environment(self.config) | child_environment(pinned)
+        environment = child_environment(self.config) | child_environment(pinned)
+        for name in (self.config.privacy_hmac_secret, pinned.privacy_hmac_secret):
+            if name is not None:
+                environment.pop(name, None)
+        return environment
 
     def _start(self, work: Work, started: float) -> None:
         attempt_id = int(str(work.task["attempt_id"]))
@@ -290,6 +314,9 @@ class AgentLoop:
                     "birth": self.birth,
                     "credential": work.credential,
                     "holder_id": work.holder_id,
+                    "secret_provider": (
+                        None if work.secret_provider is None else work.secret_provider.value
+                    ),
                 }
             ),
             encoding="utf-8",
@@ -316,6 +343,9 @@ class AgentLoop:
             cwd=self.config.project_dir,
             env=self._environment(work, folder),
         )
+        from etl_craft.execution.secret_pipe import with_values
+
+        spec = with_values(spec, work.secret_values)
         with self.lock:
             self.tasks[attempt_id] = task
             task.future = self.executor.submit(
@@ -324,7 +354,34 @@ class AgentLoop:
                 tail_bytes=self.config.logs.tail_bytes,
                 cancel=task.cancel,
                 kill_grace_seconds=1,
+                on_started=None if task.trigger else lambda pid: self._started(task, pid),
             )
+
+    def _started(self, task: RunningTask, pid: int) -> None:
+        """Pin the observed process before its bootstrap can time out."""
+        try:
+            self._report_started(task, pid, process_start(pid))
+        except ServerError as error:
+            task.forced_status = AttemptStatus.FAILED
+            task.forced_message = (
+                f"attempt {task.attempt_id}: agent START report failed ({error}); "
+                "the supervisor stopped the child; restore the API and retry the failed attempt"
+            )
+            task.cancel.set()
+
+    def _report_started(self, task: RunningTask, pid: int, birth: str | None) -> None:
+        """Retry the same observed identity before reporting an ending."""
+        self.client.call(
+            ActionName.AGENT_REPORT,
+            AgentTask(
+                version=__version__,
+                attempt_id=task.attempt_id,
+                operation=AgentReport.START,
+                pid=pid,
+                process_start=birth,
+            ),
+        )
+        task.started_reported = True
 
     def _heartbeats(self) -> None:
         while not self.closed.is_set():
@@ -395,6 +452,7 @@ class AgentLoop:
                 )
                 acknowledged.append(int(item["command_id"]))
         self.commands = tuple(acknowledged)
+        renewal_marker(self.config.host_dir).touch()
         if acknowledged:
             self.wake.set()
 
@@ -464,6 +522,8 @@ class AgentLoop:
         result = json.loads(path.read_text(encoding="utf-8")) if path.is_file() else None
         if isinstance(result, dict) and result.get("trigger"):
             return True
+        if not task.trigger and not task.started_reported and outcome.pid is not None:
+            self._report_started(task, outcome.pid, outcome.process_start)
         if result is None:
             ending = AgentTask(
                 version=__version__,
@@ -475,15 +535,22 @@ class AgentLoop:
             )
         else:
             ending = from_json(AgentTask, result)
+        if (
+            outcome.returncode == -signal.SIGKILL
+            and not outcome.cancelled
+            and not outcome.timed_out
+            and task.forced_status is None
+        ):
+            ending = self._killed_task(task, ending)
         if outcome.timed_out:
             ending = replace(
                 ending, status=AttemptStatus.TIMED_OUT, error_message="agent task timeout"
             )
         if task.forced_status is not None:
             ending = replace(ending, status=task.forced_status, error_message=task.forced_message)
-        queries_ended = task.kind != SlotKind.PYTHON or process_local_queries(self.config)
+        queries_ended = process_local_queries(self.config)
         assert self.client.token is not None
-        if outcome.cancelled or outcome.timed_out or outcome.returncode < 0:
+        if not queries_ended or outcome.cancelled or outcome.timed_out or outcome.returncode < 0:
             tag = holder_tag(
                 attempt_holder(task.attempt_id, sha256_hex(self.client.token.encode()))
             )
@@ -496,13 +563,49 @@ class AgentLoop:
                         version=__version__,
                         attempt_id=task.attempt_id,
                         operation=AgentReport.CANCEL,
+                        pid=outcome.pid,
+                        process_start=outcome.process_start,
                         error_message=reason,
                     ),
                 )
                 return False
-        ending = replace(ending, queries_ended=queries_ended)
+        ending = replace(
+            ending,
+            queries_ended=queries_ended,
+            pid=outcome.pid,
+            process_start=outcome.process_start,
+        )
         self.client.call(ActionName.AGENT_REPORT, ending)
         return True
+
+    def _killed_task(self, task: RunningTask, ending: AgentTask) -> AgentTask:
+        """SIGKILL includes container OOM; retain the limit and explicit slot setting."""
+        limit = discover().memory
+        message = (
+            f"agent {self.resources.host} task process killed by SIGKILL (possible container OOM); "
+            f"container memory limit {(limit.value or 0) / MIB:.0f} MB ({limit.source}); "
+            "Orchestration.Local_python_slots/--python-slots="
+            f"{self.options.ceilings.python_slots}; "
+            "lower the slot setting or task memory use, or raise the container memory limit "
+            "before explicitly recovering the failed attempt"
+        )
+        self.client.call(
+            ActionName.AGENT_LOG,
+            AgentLog(
+                version=__version__,
+                attempt_id=task.attempt_id,
+                sequence=task.sequence,
+                content=message + "\n",
+            ),
+        )
+        task.sequence += 1
+        return replace(
+            ending,
+            status=AttemptStatus.FAILED,
+            exit_code=-signal.SIGKILL,
+            error_message=message,
+            failure=Failure(FailureClass.PERMANENT, "SIGKILL"),
+        )
 
     def _forget(self, task: RunningTask) -> None:
         with self.lock:

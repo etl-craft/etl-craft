@@ -14,7 +14,9 @@ import logging
 import os
 import re
 import tomllib
+from collections.abc import Callable
 from contextlib import nullcontext
+from contextvars import ContextVar
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Unpack
@@ -23,6 +25,7 @@ from sqlalchemy import inspect
 from sqlalchemy.engine import Connection, Engine
 from sqlalchemy.exc import SQLAlchemyError
 
+from etl_craft import __version__
 from etl_craft.core.actor import migration as current_migration
 from etl_craft.core.errors import MigrationError
 from etl_craft.core.text import sha256_hex, strip_comments_and_literals
@@ -40,6 +43,11 @@ from etl_craft.engine.migration_steps import (
 from etl_craft.engine.queries import run_script, statement
 
 logger = logging.getLogger(__name__)
+
+before_project_migrations: ContextVar[Callable[[], None] | None] = ContextVar(
+    "before_project_migrations", default=None
+)
+"""An interface may confirm after packaged upgrades, before the first project write."""
 
 MIGRATIONS_DIR_ENV_VAR = "ETL_CRAFT_MIGRATIONS_DIR"
 ENGINE = "ENGINE"
@@ -125,7 +133,11 @@ def read_stream(source: str, directory: Path, dialect: str = "") -> Stream:
 
 
 def migration_streams(
-    engine: Engine, project_dir: Path | str | None = None, project_default: Path | None = None
+    engine: Engine,
+    project_dir: Path | str | None = None,
+    project_default: Path | None = None,
+    *,
+    package_only: bool = False,
 ) -> list[Stream]:
     """Return the packaged ENGINE stream, followed by the PROJECT stream when there is one."""
     package_dir = for_engine(engine).migrations_dir()
@@ -135,6 +147,8 @@ def migration_streams(
             "installed etl-craft package is missing its SQL files"
         )
     streams = [read_stream(ENGINE, package_dir, for_engine(engine).name)]
+    if package_only:
+        return streams
     project = resolve_project_migrations_dir(project_dir, project_default)
     if project is None:
         return streams
@@ -168,12 +182,14 @@ def _load_ledger(conn: Connection) -> dict[tuple[str, str], str]:
 
 
 def verify_ledger(ledger: dict[tuple[str, str], str], streams: list[Stream]) -> None:
-    """Raise ``MigrationError`` unless every applied file is present and unchanged."""
+    """Verify known files; stable binaries also accept newer additive Engine migrations."""
     files = {(f.source, f.version): f for stream in streams for f in stream.files}
     directories = {stream.source: stream.directory for stream in streams}
     for (source, version), checksum in sorted(ledger.items()):
         migration = files.get((source, version))
         if migration is None:
+            if source == ENGINE and _future_additive_version(version, streams):
+                continue
             if source not in directories:
                 raise MigrationError(
                     f"applied {source.lower()} migration {version!r} cannot be verified because "
@@ -190,6 +206,18 @@ def verify_ledger(ledger: dict[tuple[str, str], str], streams: list[Stream]) -> 
                 "applied: migration files are never edited. Restore the original file and add "
                 "a new migration."
             )
+
+
+def _future_additive_version(version: str, streams: list[Stream]) -> bool:
+    release = tuple(int(part) for part in __version__.split(".")[:2])
+    if release < (0, 9):
+        return False
+    files = [f.version for stream in streams if stream.source == ENGINE for f in stream.files]
+    return (
+        bool(files)
+        and bool(re.fullmatch(r"\d{4}_[a-z0-9_]+\.sql", version))
+        and int(version.split("_", 1)[0]) > int(max(files).split("_", 1)[0])
+    )
 
 
 def _record(conn: Connection, migration: MigrationFile) -> None:
@@ -272,6 +300,7 @@ def pending_migrations(
     *,
     project_default: Path | None = None,
     connection: Connection | None = None,
+    package_only: bool = False,
 ) -> list[str]:
     """Return the migrations ``migrate`` would apply, without applying any.
 
@@ -281,7 +310,11 @@ def pending_migrations(
     return [
         f"{migration.source.lower()}/{migration.version}"
         for migration in pending_files(
-            engine, project_dir, project_default=project_default, connection=connection
+            engine,
+            project_dir,
+            project_default=project_default,
+            connection=connection,
+            package_only=package_only,
         )
     ]
 
@@ -292,11 +325,14 @@ def pending_files(
     *,
     project_default: Path | None = None,
     connection: Connection | None = None,
+    package_only: bool = False,
 ) -> list[MigrationFile]:
     """Return the files ``migrate`` would apply, in order, after verifying the applied ones."""
-    streams = migration_streams(engine, project_dir, project_default)
+    streams = migration_streams(engine, project_dir, project_default, package_only=package_only)
     with nullcontext(connection) if connection is not None else engine.connect() as conn:
         ledger = _load_ledger(conn)
+    if package_only:
+        ledger = {key: checksum for key, checksum in ledger.items() if key[0] == ENGINE}
     verify_ledger(ledger, streams)
     return [
         migration
@@ -342,6 +378,12 @@ def apply_pending_migrations(
                 with engine.connect() as conn:
                     step.check(conn, target)
         for stream in streams:
+            if (
+                stream.source == PROJECT
+                and any((file.source, file.version) not in ledger for file in stream.files)
+                and (confirm := before_project_migrations.get())
+            ):
+                confirm()
             for migration in stream.files:
                 if (migration.source, migration.version) in ledger:
                     continue

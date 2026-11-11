@@ -46,6 +46,7 @@ from etl_craft.execution.classify import classify_failure
 from etl_craft.execution.context import build_task_context
 from etl_craft.execution.control_flow import process_local_queries
 from etl_craft.execution.leases import process_start
+from etl_craft.handlers.parameters import require_task_parameters
 from etl_craft.handlers.registry import TaskContext, format_task_log, resolve_handler
 from etl_craft.warehouse.fencing import cancellation_scope, stop_current_queries
 
@@ -65,6 +66,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--rerun", action="store_true")
     parser.add_argument("--log-level", default="INFO")
     parser.add_argument("--log-format", default="text")
+    parser.add_argument("--task-secrets-stdin", action="store_true")
     args = parser.parse_args(argv)
     if (args.attempt_id is None) != (args.owner_id is None):
         parser.error("--attempt-id and --owner-id must be supplied together")
@@ -138,6 +140,10 @@ def _run_bound(
             logger.error("could not start the task: %s", error)
             _record_failure(engine, args.task_run_id, error, config)
             return error.exit_code
+        if args.task_secrets_stdin:
+            from etl_craft.execution.secret_pipe import read_values
+
+            context = replace(context, _secret_values=read_values(sys.stdin))
         if context.bundle_id is not None:
             # The bundle cache stays unwritten: tasks and warehouse drivers that write relative
             # paths do so in the host project directory, as without a bundle.
@@ -168,6 +174,7 @@ def run_handler(
         context = replace(context, attempt_id=identity[0], owner=identity[1])
     logger.info("running the %s handler", context.handler)
     try:
+        require_task_parameters(context.handler, context.task_params)
         if "WATERMARK_SOURCE_PIPELINES" in context.task_params:
             from etl_craft.execution.reconcile import settle_sources
             from etl_craft.handlers.sql.watermarks import source_pipelines
@@ -224,13 +231,15 @@ def run_handler(
             controls.acknowledge(conn, identity[0], ControlAcknowledgement.QUERIES)
     fault_point("child.after_outcome")
     logger.info(
-        "task succeeded: source %s, target %s, inserted %s, updated %s, deleted %s, rejected %s",
+        "task succeeded: source %s, target %s, inserted %s, updated %s, deleted %s, "
+        "rejected %s, duplicates %s",
         result.source_count,
         result.target_count,
         result.insert_count,
         result.update_count,
         result.delete_count,
         result.reject_count,
+        result.duplicate_count,
     )
     return ExitCode.SUCCESS
 

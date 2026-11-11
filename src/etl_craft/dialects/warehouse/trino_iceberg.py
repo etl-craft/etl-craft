@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any, ClassVar
 
 from sqlalchemy import TextClause, text
 from sqlalchemy.engine import Connection
+from sqlalchemy.exc import SQLAlchemyError
 
 from etl_craft.config.auth import warehouse_by_key
 from etl_craft.core.enums import AuthMode, FailureClass, IcebergMaintenance
@@ -57,17 +58,6 @@ class TrinoIcebergWarehouse(WarehouseDialect):
         """Read the previous committed snapshot under the target lock."""
         return f"(SELECT COALESCE(MAX(ROW_ID), 0) FROM {target})"
 
-    def merge_source(self, target: str, stage: str, keys: tuple[str, ...]) -> str:
-        """Allocate only new keys, preventing duplicate targets from multiplying source rows."""
-        match = " AND ".join(f"found.{key}=src.{key}" for key in keys)
-        missing = f"found.{keys[0]} IS NULL"
-        return (
-            f"(SELECT src.*, CASE WHEN {missing} THEN {self.row_id_base_sql(target)} + "
-            f"CAST(ROW_NUMBER() OVER (PARTITION BY {missing} ORDER BY NULL) AS BIGINT) "
-            f"END AS ROW_ID FROM {stage} src LEFT JOIN "
-            f"(SELECT DISTINCT {', '.join(keys)} FROM {target}) found ON {match})"
-        )
-
     def session_tag_args(self, tag: str) -> Mapping[str, Any]:
         """Label every query of the session through the client's source."""
         return {"source": tag}
@@ -84,12 +74,22 @@ class TrinoIcebergWarehouse(WarehouseDialect):
         for row in rows:
             if not re.fullmatch(r"[0-9a-z_]+", row.query_id):
                 raise SqlGuardError(f"Trino returned an unexpected query id {row.query_id!r}")
-            conn.execute(
-                text(
-                    f"CALL system.runtime.kill_query(query_id => '{row.query_id}', "
-                    "message => 'etl-craft: the lock passed to a new holder')"
+            try:
+                conn.execute(
+                    text(
+                        f"CALL system.runtime.kill_query(query_id => '{row.query_id}', "
+                        "message => 'etl-craft: the lock passed to a new holder')"
+                    )
                 )
-            )
+            except SQLAlchemyError as error:
+                failure = driver_error(error)
+                if not (
+                    getattr(failure, "error_name", None) == "NOT_SUPPORTED"
+                    and getattr(failure, "message", None)
+                    == f"Target query is not running: {row.query_id}"
+                ):
+                    raise
+                # The common fence still proves that no tagged statement remains running.
 
     def running_tagged(self, conn: Connection, tag: str) -> int:
         """Count unfinished queries; a state this code does not know counts as running."""

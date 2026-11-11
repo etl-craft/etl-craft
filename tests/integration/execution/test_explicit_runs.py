@@ -20,14 +20,14 @@ def test_mark_refuses_ambiguous_runs_and_lists_their_identity(cli_project):
         "mark", "--pipeline-code", "P", "--status", "FAILED", "--reason", "repair"
     )
     assert code == 9, output
-    for run_id, key in [(first, "first"), (second, "second")]:
-        assert f"id={run_id} key={key} kind=MANUAL" in output
-    assert "run_date=" in output and "status=IN-PROGRESS" in output
     with project.engine.connect() as conn:
-        assert [r.status for r in runlog.run_candidates(conn, project.pipeline_id)] == [
-            "IN-PROGRESS",
-            "IN-PROGRESS",
-        ]
+        candidates = runlog.run_candidates(conn, project.pipeline_id)
+    assert [run.pipeline_run_id for run in candidates] == [second, first]
+    for run in candidates:
+        assert f"{run.run_label}: IN-PROGRESS; select with --run-id {run.pipeline_run_id}" in output
+        assert run.status == "IN-PROGRESS"
+    assert output.index(candidates[0].run_label) < output.index(candidates[1].run_label)
+    assert "key=first" not in output and "key=second" not in output
 
 
 def test_an_id_from_another_pipeline_is_refused(cli_project):
@@ -36,8 +36,8 @@ def test_an_id_from_another_pipeline_is_refused(cli_project):
         other = add_pipeline(conn, "OTHER")
         foreign = transitions.create_run(conn, other, SYSTEM_ACTOR, run_key="foreign")
     for command, arguments in [
-        ("run", ["--task-code", "load"]),
-        ("run", ["--init-only"]),
+        ("run", ["--task-code", "load", "--reason", "test foreign selection"]),
+        ("run", ["--init-only", "--reason", "test foreign selection"]),
         ("mark", ["--status", "FAILED", "--reason", "repair"]),
         ("abort", ["--reason", "repair"]),
         ("history", []),
@@ -79,12 +79,30 @@ def test_a_mismatched_logical_date_refuses_before_reopening(cli_project):
     project = cli_project
     for step in [()]:
         code, output = project.run(
-            "run", "--pipeline-code", "P", *step, "--run-key", "dated", "--run-date", "2026-09-01"
+            "run",
+            "--reason",
+            "test requested run",
+            "--pipeline-code",
+            "P",
+            *step,
+            "--run-key",
+            "dated",
+            "--run-date",
+            "2026-09-01",
         )
         assert code == 0, output
     for step in [("--init-only",), ("--task-code", "load"), ()]:
         code, output = project.run(
-            "run", "--pipeline-code", "P", *step, "--run-key", "dated", "--run-date", "2026-09-02"
+            "run",
+            "--reason",
+            "test requested run",
+            "--pipeline-code",
+            "P",
+            *step,
+            "--run-key",
+            "dated",
+            "--run-date",
+            "2026-09-02",
         )
         assert code != 0 and "date cannot change" in output
     with project.engine.connect() as conn:

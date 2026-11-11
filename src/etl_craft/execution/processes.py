@@ -17,7 +17,7 @@ import threading
 import time
 from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import IO
 
@@ -55,6 +55,8 @@ class ChildSpec:
     log_path: Path | None = None
     env: Mapping[str, str] | None = None
     cwd: Path | None = None
+    input_data: bytes | None = field(default=None, repr=False)
+    redacted_values: tuple[str, ...] = field(default=(), repr=False)
 
 
 @dataclass(frozen=True)
@@ -73,6 +75,8 @@ class ChildResult:
     output_tail: str
     cancelled: bool = False
     queries_ended: bool = False
+    pid: int | None = None
+    process_start: str | None = None
 
     @property
     def succeeded(self) -> bool:
@@ -108,35 +112,28 @@ def run_child(
         start_offset = output.tell()
         started = time.monotonic()
         interrupts.checkpoint()
-        process = subprocess.Popen(
-            spec.argv,
-            stdin=subprocess.DEVNULL,
-            stdout=output,
-            stderr=subprocess.STDOUT,
-            env=None if spec.env is None else dict(spec.env),
-            cwd=spec.cwd,
-            start_new_session=True,
-        )
+        process = _launch(spec, output)
         birth = process_start(process.pid)
         logger.debug("started pid %s: %s", process.pid, " ".join(spec.argv))
         timed_out = cancelled = False
-        try:
-            if on_started is not None:
-                on_started(process.pid)
-            fault_point("supervisor.after_popen")
-            cancelled = _wait(process, spec.timeout_seconds or None, cancel)
-            if cancelled:
-                logger.warning("stopping pid %s: cancellation was requested", process.pid)
-                _stop_group(process, birth, min(kill_grace_seconds, 1))
-        except subprocess.TimeoutExpired:
-            timed_out = True
-            logger.warning(
-                "pid %s exceeded its %gs limit; stopping it", process.pid, spec.timeout_seconds
-            )
-            _stop_group(process, birth, kill_grace_seconds)
-        except BaseException:
-            _stop_group(process, birth, kill_grace_seconds)
-            raise
+        with _task_pipes(process, spec, output, cancel) as task_cancel:
+            try:
+                if on_started is not None:
+                    on_started(process.pid)
+                fault_point("supervisor.after_popen")
+                cancelled = _wait(process, spec.timeout_seconds or None, task_cancel)
+                if cancelled:
+                    logger.warning("stopping pid %s: cancellation was requested", process.pid)
+                    _stop_group(process, birth, min(kill_grace_seconds, 1))
+            except subprocess.TimeoutExpired:
+                timed_out = True
+                logger.warning(
+                    "pid %s exceeded its %gs limit; stopping it", process.pid, spec.timeout_seconds
+                )
+                _stop_group(process, birth, kill_grace_seconds)
+            except BaseException:
+                _stop_group(process, birth, kill_grace_seconds)
+                raise
         elapsed = time.monotonic() - started
         tail = _read_tail(output, start_offset, tail_bytes)
     result = ChildResult(
@@ -146,9 +143,72 @@ def run_child(
         elapsed_seconds=elapsed,
         output_tail=tail,
         cancelled=cancelled,
+        pid=process.pid,
+        process_start=birth,
     )
     logger.debug("pid %s %s after %.1fs", process.pid, result.describe(), elapsed)
     return result
+
+
+@contextmanager
+def _task_pipes(
+    process: subprocess.Popen[bytes],
+    spec: ChildSpec,
+    output: IO[bytes],
+    cancel: threading.Event | None,
+) -> Iterator[threading.Event | None]:
+    """Drain output and feed credentials while supervision retains its timeout and cancellation."""
+    from etl_craft.execution.secret_pipe import capture_output, send_input
+
+    threads = []
+    finished = threading.Event()
+    failures: list[OSError] = []
+    if spec.redacted_values or spec.input_data is not None:
+        cancel = cancel or threading.Event()
+    if spec.redacted_values:
+        assert process.stdout is not None and cancel is not None
+        threads.append(
+            threading.Thread(
+                target=capture_output,
+                args=(process.stdout, output, spec.redacted_values, cancel, failures, finished),
+                daemon=True,
+            )
+        )
+    if spec.input_data is not None:
+        assert process.stdin is not None and cancel is not None
+        threads.append(
+            threading.Thread(
+                target=send_input,
+                args=(process.stdin, spec.input_data, cancel, failures, finished),
+                daemon=True,
+            )
+        )
+    for thread in threads:
+        thread.start()
+    try:
+        yield cancel
+    finally:
+        finished.set()
+        for thread in threads:
+            thread.join()
+    if failures:
+        raise RunStateError(
+            f"child log {spec.log_path}: pipe I/O failed ({type(failures[0]).__name__}); "
+            "restore writable log storage and retry the task"
+        )
+
+
+def _launch(spec: ChildSpec, output: IO[bytes]) -> subprocess.Popen[bytes]:
+    """Choose private stdin and filtered stdout only for credential-bearing tasks."""
+    return subprocess.Popen(
+        spec.argv,
+        stdin=subprocess.PIPE if spec.input_data is not None else subprocess.DEVNULL,
+        stdout=subprocess.PIPE if spec.redacted_values else output,
+        stderr=subprocess.STDOUT,
+        env=None if spec.env is None else dict(spec.env),
+        cwd=spec.cwd,
+        start_new_session=True,
+    )
 
 
 def _wait(

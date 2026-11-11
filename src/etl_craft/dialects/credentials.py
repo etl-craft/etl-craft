@@ -23,6 +23,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from collections.abc import Iterator
+from contextlib import contextmanager
 from typing import TYPE_CHECKING, Any, BinaryIO
 
 from etl_craft.core.enums import AuthMode, ObjectStoreAuth
@@ -222,6 +223,39 @@ class S3Objects:
                 f"Object_stores.{self.name}, s3://{bucket}/{key}: immutable write "
                 f"failed ({type(error).__name__}); expected a writable prefix; "
                 f"check the object store and permissions"
+            ) from None
+
+    @contextmanager
+    def open_stream(self, bucket: str, key: str) -> Iterator[BinaryIO]:
+        """Stream a recorded object without materializing the upload body."""
+        try:
+            response = self.client.get_object(Bucket=bucket, Key=key)
+            with response["Body"] as stream:
+                yield stream
+        except ConfigurationError:
+            raise
+        except Exception as error:
+            # Provider boundary: signed URLs and credential values never enter diagnostics.
+            raise ConfigurationError(
+                f"Object_stores.{self.name}, s3://{bucket}/{key}: streaming read failed "
+                f"({type(error).__name__}); expected the recorded object; restore it and retry"
+            ) from None
+
+    def write_stream(self, bucket: str, key: str, stream: BinaryIO) -> None:
+        """Publish a seekable upload file using the provider's atomic object write."""
+        try:
+            self.client.put_object(Bucket=bucket, Key=key, Body=stream, IfNoneMatch="*")
+        except Exception as error:
+            # A repeated archive write verifies the existing object in its caller.
+            response = getattr(error, "response", {})
+            if isinstance(response, dict) and response.get("Error", {}).get("Code") in {
+                "PreconditionFailed",
+                "412",
+            }:
+                return
+            raise ConfigurationError(
+                f"Object_stores.{self.name}, s3://{bucket}/{key}: streaming write failed "
+                f"({type(error).__name__}); expected a writable archive; fix the profile and retry"
             ) from None
 
     def probe(self, bucket: str, prefix: str) -> None:

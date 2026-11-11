@@ -39,13 +39,18 @@ from etl_craft.core.log import capture_all_loggers
 from etl_craft.core.script_kinds import reported_count, script_kind
 from etl_craft.engine.repository.offsets import StoredOffset
 from etl_craft.engine.task_store import TaskStore
-from etl_craft.handlers.registry import HandlerResult, TaskContext, task_store
+from etl_craft.handlers.registry import (
+    HandlerResult,
+    TaskContext,
+    require_event_files_unchanged,
+    task_store,
+)
 from etl_craft.scripting import Offset, ScriptResult, ScriptTask
 from etl_craft.warehouse.connection import warehouse_task
 
 logger = logging.getLogger(__name__)
 
-PARAMETERS = frozenset({"SCRIPT_FILE", "INPUT_PARAMS", "SCRIPT_KIND"})
+PARAMETERS = frozenset({"SCRIPT_FILE", "INPUT_PARAMS", "SCRIPT_KIND", "SECRETS"})
 """The task parameters a Python-script task reads."""
 
 SCRIPT_LOGGER = "etl_craft_script"
@@ -54,7 +59,32 @@ SCRIPT_LOGGER = "etl_craft_script"
 
 @warehouse_task()
 def run(context: TaskContext, engine_db: Engine | TaskStore) -> HandlerResult:
-    """Run the task's Python script and return the counts it reports."""
+    """Run with only admitted credentials and mask results before leaving their scope."""
+    from dataclasses import replace
+
+    from etl_craft.core.redaction import mask, mask_text, registering
+    from etl_craft.handlers.task_secrets import resolve
+
+    values = resolve(context) if context._secret_values is None else dict(context._secret_values)
+    with registering(*values.values()):
+        result = _run(replace(context, _secret_values=values), engine_db)
+        if (
+            result.offset is not None
+            and result.offset.offset_value is not None
+            and any(value in result.offset.offset_value for value in values.values())
+        ):
+            raise PermanentError(
+                f"{context.pipeline_code}.{context.task_code}: returned offset contains a "
+                "declared secret; return a source position without credential values"
+            )
+        return replace(
+            result,
+            variables={mask_text(str(key)): mask(value) for key, value in result.variables.items()},
+        )
+
+
+def _run(context: TaskContext, engine_db: Engine | TaskStore) -> HandlerResult:
+    """Load and invoke the admitted script, then check its result."""
     params = context.task_params
     kind = script_kind(params, f"{context.pipeline_code}.{context.task_code}")
     name = (params.get("SCRIPT_FILE") or "").strip()
@@ -87,6 +117,9 @@ def run(context: TaskContext, engine_db: Engine | TaskStore) -> HandlerResult:
     with capture_all_loggers():
         result = _call(entry, task, name)
     checked = check_result(result, name, stored, task=context)
+    from etl_craft.fan_out_offsets import check_return
+
+    check_return(task, checked)
     result_variables = dict(checked.variables)
     elapsed = time.monotonic() - started
     variables: dict[str, object] = {}
@@ -349,6 +382,7 @@ def script_task(
     input_params: Mapping[str, Any],
 ) -> ScriptTask:
     """Bind the script helper to the exact admitted attempt and shared store."""
+    require_event_files_unchanged(context)
     params = context.task_params
     return ScriptTask(
         uploads=store.upload_files() if context.uploads else (),
@@ -365,6 +399,9 @@ def script_task(
         config=context.config,
         _locks=store,
         _items=store,
+        _landing=lambda: store.state().landing,
+        _secret_values=context._secret_values or {},
+        _secret_provider=context._secret_provider,
         logger=logging.getLogger(f"{SCRIPT_LOGGER}.{context.task_code}"),
         run_date=context.run_date,
         backfill=context.backfill,

@@ -45,10 +45,16 @@ Engine DB clock governs the 60-second attempt leases. A child also watches its o
 lease deadline and its parent's process birth identity: it stops before lease expiry if the
 agent dies or cannot renew. A retry gets a new attempt row; expired ownership is never adopted.
 
+Use `etl-craft agent health` in the same bootstrap directory to check the last successful
+renewal. The check needs no API credentials and opens no port. Use a separate writable
+bootstrap directory per agent.
+
 ## Capacity and controls
 
 The shared resource report measures CPU and memory allocation, reserves and pressure at startup
-and on renewals. Flags cap the derived Python and warehouse slots; they cannot create capacity.
+and on renewals. An explicit Python count can exceed the default memory estimate within measured CPU,
+process-base memory and total-slot bounds; warehouse flags remain ceilings.
+See [small Python containers](sizing.md#small-python-agent-containers).
 Unknown CPU or memory capacity is visible and admits no task. Claims account for reservations
 on overlapping allocations on the same host, so two agents cannot count that host twice.
 A task must fit one agent; capacity on different hosts is never combined to fit a task.
@@ -192,3 +198,101 @@ ORDER BY ACTOR, STARTED_AT;
 The last registered pool is retained; earlier pools do not retain authority. Use a distinct
 pool-bound token per agent. Existing token expiry is preserved; `never` in token list means
 it needs an explicit rotation policy.
+
+## Project attribution
+
+The API derives a report or log operation's project from its recorded attempt and authenticated
+owner, before resolving any project-owned metadata. The agent's bootstrap project and a
+client-supplied project name cannot redirect an attempt's writes. The same scope is retained
+while asynchronous lock requests wait.
+
+If an existing development Engine DB has agent-created hash contracts under the default
+project instead of the intended project, inspect the affected targets and run
+`etl-craft --project PROJECT rehash --target TARGET` for each intended merge target before
+resuming. Review default-project contracts against that project's own warehouse. There is no
+automatic reassignment or deletion of historical contracts.
+
+## Protection reports
+
+The internal `POST /api/v1/agent/report` protocol supports `PROTECTION_READ` and
+`PROTECTION_EVENT`. Agents and servers must run the same package version; the normal
+protocol-version refusal applies. No extra endpoint, credential, setting or CLI flag is needed.
+
+Each report is bound to its live attempt and fencing credential, its admitted target and
+its current Engine DB target lock. Actor and project are derived on the server. An event
+contains only kind, key hash, column names, value hashes and status; unknown fields are refused.
+PENDING allocates a request id on the server, which the target MERGE stamps on changed rows.
+Normal finalization is creator-only. Recovery can finalize a previous attempt's intent only
+after that attempt is terminal or reconciled LOST, reporting stamp presence/absence, or
+complete keyed-row absence for HARD_DELETE/ERASURE. The status keeps the creator and records
+the recovering attempt and actor separately.
+
+Batches contain at most 256 events, with at most 128 column names and corresponding hashes
+per event. Oversized lists are refused, never truncated. Reads return at most 256 records
+with an event-id cursor; callers follow every page. Both task stores use these same limits
+and the same fenced event implementation. Recovery runs where warehouse access exists,
+including agents, before mutation and on provenance reads. Controller startup logs an
+inaccessible project once and defers its recovery until the next mutation.
+
+Upload-caused PENDING protection reports carry the receipt's `upload_id` as a claim. The server
+verifies it against the attempt's run and the successful pinned FILE_VALIDATION task before
+storing it; it derives the uploader from AUD_UPLOADS. Upload writes and LOCKED=false UNLOCK
+intents share that id. Finalization and recovery retain the original verified id; callers
+cannot replace it. Non-upload mutation kinds must omit it. No raw business value is accepted.
+
+Protection reports carry typed warehouse MD5 fingerprints only in transient request bodies.
+The host converts them to domain-separated HMAC-SHA-256 identities before audit persistence;
+responses and persisted logs never echo those MD5s. `Privacy.Hmac_secret` stays on the host,
+including when agent bootstrap and pinned configuration name different secret variables.
+
+`PROTECTION_READ` accepts optional `protection_candidates` only for a PENDING HARD_DELETE or
+ERASURE request: its server request id, exact column shape, at most 256 candidate hashes and
+an event cursor. The ordinary live-attempt, admitted-target and held-lock fence applies;
+the creating attempt must be terminal or reconciled LOST. The host returns matched event
+ids for that request and a page cursor, never HMACs or unrelated keys.
+The agent scans only non-NULL protection rows, restarts an interrupted scan, and finalizes
+only after complete evidence. Stamped writes use the existing request-id recovery path.
+
+## Ending evidence and operator attestation
+
+The parent agent records an observed process exit with the task's admitted PID and birth
+identity, separately from confirmed warehouse query absence. This applies to SUCCESS,
+FAILED, TIMED_OUT and CANCELLED outcomes. A task-process credential cannot certify its own
+exit. Local supervisors use the same evidence rules. Attempt JSON and the attempt page show
+process/query evidence kind, actor and reason; migrated old observations remain unclassified.
+
+Agent registration records `ETL_CRAFT_AGENT_INSTANCE_ID` (the pod UID in Kubernetes through
+the downward API); a native host process uses its birth and a fresh process instance identity.
+Each claim retains the registration identity, so replacing a pod cannot impersonate its exit.
+Roll controller, API and agents together after migration 0085.
+
+An old failed, timed-out, cancelled or lost attempt without ending evidence can hold a
+timestamp reader's high mark. Successful commits retain their existing window semantics.
+Use `reconcile --pipeline-code P --task-code T --reason 'Verified recovery'` first. It verifies
+local PID/birth exit and warehouse query absence where possible. If the original pod is gone,
+an operator may explicitly attest only its process ending:
+
+```sh
+etl-craft reconcile --pipeline-code P --task-code T --attest-ended \
+  --reason 'Original pod <name> was deleted; I attest that its task process ended'
+```
+
+Attestation requires an expired lease and a terminal/fenced attempt. Ordinary verified
+reconciliation of a terminal local worker does not wait for its lease to expire. The warehouse must independently
+confirm that no query with its session tag remains. The original instance must not have a
+live registration. Legacy claims without an instance column use their recorded hostname and
+a later replacement registration; an ambiguous identity is refused. No privileged node or
+process-namespace inspection is used. A missing adapter, live query or original instance
+refuses the request with a remedy. Stop the original process/queries or restore warehouse
+access, then retry; never advance the watermark or edit audit rows to bypass the fence.
+
+Attestation requires the operator role used by reconcile; CAN_RUN alone is insufficient.
+The reason is mandatory. Its process row records ATTESTED, actor, reason and the checks that
+were verified, while its independently verified query row records VERIFIED. Either explicit
+evidence kind releases the same watermark fence. No migration guesses missing evidence.
+
+If the parent's START report loses its API response, the supervisor stops the child and
+retains its observed PID/birth and exit. The attempt fails with a START-report message once
+the API is reachable; it is not renewed forever as CLAIMED. On an older installation, drain
+or replace the owning agent, let its attempt lease expire, reconcile through the documented
+verified/attested path, then explicitly retry the failed run. Never edit audit rows.

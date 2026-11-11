@@ -30,7 +30,6 @@ from etl_craft.config.loader_engine import parse_engine
 from etl_craft.config.loader_helpers import (
     CONNECTION_FIELDS,
     SECRETS_KEYS,
-    flag,
     mapping,
     parse_source,
     profiled_settings,
@@ -42,21 +41,26 @@ from etl_craft.config.loader_helpers import (
 )
 from etl_craft.config.loader_orchestration import (
     ORCHESTRATION_KEYS,
+    parse_allowed_auto_restarts,
     parse_dependency_gates,
     parse_limits,
     parse_project,
     parse_retry_on,
 )
 from etl_craft.config.loader_warehouse import WAREHOUSE_SECTION_KEYS, parse_warehouse
-from etl_craft.config.managed_engine import managed_cloning_problem
+from etl_craft.config.managed_engine import MANAGED_FIELDS, managed_cloning_problem
 from etl_craft.config.model import DEFAULT_LOG_DIR, EXAMPLE_PATH, ConnectionProfile, ConnectorConfig
 from etl_craft.config.object_stores import ARTIFACT_KEYS, LOG_KEYS, STORE_KEYS, with_artifacts
+from etl_craft.config.privacy import KEYS as PRIVACY_KEYS
+from etl_craft.config.privacy import parse_privacy
 from etl_craft.config.resolve import Resolver
 from etl_craft.config.retention import KEYS as RETENTION_KEYS
 from etl_craft.config.retention import parse_retention
 from etl_craft.config.targets import active_catalog
-from etl_craft.config.uploads import parse_uploads
-from etl_craft.core.enums import AuthMode
+from etl_craft.config.uploads import ARCHIVE_KEYS, parse_uploads
+from etl_craft.config.uploads import KEYS as UPLOAD_KEYS
+from etl_craft.core.compatibility import input_refusal
+from etl_craft.core.enums import AuthMode, InputKind
 from etl_craft.core.errors import ConfigurationError, MetadataError
 
 SECTIONS = (
@@ -73,6 +77,7 @@ SECTIONS = (
     "Logs",
     "Retention",
     "Uploads",
+    "Privacy",
 )
 
 
@@ -93,7 +98,9 @@ def settings_by_section() -> dict[str, frozenset[str]]:
         "Orchestration": ORCHESTRATION_KEYS - {"Email"},
         "Orchestration.Email": frozenset(map(shown, EMAIL_KEYS)),
         "Deployment": DEPLOYMENT_KEYS,
-        "Engine": frozenset({"Name", "Listen_jdbc_url"}) | fields,
+        "Engine": frozenset({"Name", "Listen_jdbc_url"})
+        | fields
+        | frozenset(map(shown, MANAGED_FIELDS)),
         "Warehouse": WAREHOUSE_SECTION_KEYS | fields | frozenset(map(shown, warehouse_fields)),
         "Cloning": CLONING_KEYS,
         "Docs_site": DOCS_SITE_KEYS,
@@ -102,7 +109,9 @@ def settings_by_section() -> dict[str, frozenset[str]]:
         "Artifacts": ARTIFACT_KEYS,
         "Logs": LOG_KEYS,
         "Retention": RETENTION_KEYS,
-        "Uploads": frozenset({"Max_file_mb"}),
+        "Uploads": UPLOAD_KEYS,
+        "Uploads.Archive_to": ARCHIVE_KEYS,
+        "Privacy": PRIVACY_KEYS,
     }
 
 
@@ -245,7 +254,8 @@ def parse_config(raw: object, path: Path, *, agent: bool = False) -> ConnectorCo
         api_address=api_address,
     )
     config = ConnectorConfig(
-        uploads=parse_uploads(raw, path),
+        uploads=parse_uploads(raw, path, resolver),
+        privacy_hmac_secret=parse_privacy(raw, path, resolver),
         retention=parse_retention(raw, global_profile, path, resolver),
         deployment=deployment,
         api_address=api_address,
@@ -262,9 +272,10 @@ def parse_config(raw: object, path: Path, *, agent: bool = False) -> ConnectorCo
         max_warehouse_queries=parse_warehouse_limit(raw, global_profile, path, resolver),
         retries=whole_number(orchestration, "Retries", None, path),
         email_recipients=string_list(orchestration, "Email_recipients", path),
-        allow_schedule=flag(orchestration, "Allow_schedule", True, path),
+        allowed_auto_restarts=parse_allowed_auto_restarts(orchestration, path),
         retry_on=parse_retry_on(orchestration, path),
         email=email,
+        email_template=orchestration.text("Email_template"),
         limits=limits,
         config_path=path,
         dependency_gates=dependency_gates,
@@ -296,7 +307,8 @@ def _check_layout(raw: object, path: Path) -> dict[str, object]:
     unknown = sorted(set(raw) - set(SECTIONS))
     if unknown:
         raise ConfigurationError(
-            f"{path}: unknown top-level section(s) {unknown} — expected {list(SECTIONS)}"
+            f"{path}: unknown top-level section(s) {unknown} — expected {list(SECTIONS)}; "
+            + "; ".join(input_refusal(InputKind.SETTING, name) for name in unknown)
         )
     # A reader finds where secrets come from before anything that names one.
     present = [section for section in raw if section in SECTIONS]

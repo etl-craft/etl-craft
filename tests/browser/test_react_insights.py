@@ -1,0 +1,407 @@
+"""Insights, the command console and the catalog in a real browser."""
+
+import os
+import re
+from pathlib import Path
+
+import pytest
+from playwright.sync_api import expect, sync_playwright
+from sqlalchemy import text
+from test_react_ui import open_page, sign_in
+
+from etl_craft.core.actor import Actor, ActorKind, acting_as
+from etl_craft.core.enums import ActionName, RunStatus
+from etl_craft.engine import transitions
+from fixtures.actions import act
+from fixtures.metadata import (
+    add_dependency,
+    add_pipeline,
+    add_task,
+    finish_run,
+    start_run,
+    task_run,
+)
+from fixtures.run_scene import attempt
+
+pytestmark = pytest.mark.browser
+
+
+def shoot(page, name):
+    shots = os.environ.get("ETL_CRAFT_UI_SCREENSHOTS")
+    if shots:
+        Path(shots).mkdir(parents=True, exist_ok=True)
+        page.screenshot(path=f"{shots}/{name}.png", animations="disabled")
+
+
+@pytest.fixture
+def scene(site):
+    ctx, url = site
+    with acting_as(Actor("owner", ActorKind.USER)), ctx.engine.begin() as conn:
+        pipeline = add_pipeline(conn, "ORDERS")
+        extract = add_task(conn, pipeline, "EXTRACT")
+        load = add_task(conn, pipeline, "LOAD")
+        add_dependency(conn, pipeline, load, extract)
+        for _ in range(3):
+            run = start_run(conn, pipeline)
+            task_run(conn, extract, run, rows_written=10, target_count=10)
+            task_run(conn, load, run, rows_written=10, target_count=10)
+            finish_run(conn, run)
+        run = start_run(conn, pipeline)
+        task_run(conn, extract, run)
+        summary = transitions.find_or_create_task_run(conn, load, run).task_run_id
+        attempt(conn, summary, fail="connection reset by source")
+        transitions.finish_task_run(conn, summary, status=RunStatus.FAILED)
+        finish_run(conn, run, "FAILED")
+    return ctx, url
+
+
+def test_insights_summarises_runs_and_filters_through_the_address(scene):
+    _, url = scene
+    with sync_playwright() as pw:
+        browser, page, problems = open_page(pw, viewport={"width": 1280, "height": 1000})
+        sign_in(page, url, "/ui/projects/default")
+        expect(page.get_by_role("heading", name="Home", exact=True)).to_be_visible()
+        expect(page.get_by_text(re.compile(r"\d+% success rate"))).to_be_visible()
+        expect(page.get_by_role("region", name="Runs per day")).to_be_visible()
+        expect(page.get_by_role("region", name="Latest runs")).to_be_visible()
+        shoot(page, "insights")
+        tabs = [t.strip() for t in page.get_by_role("tab").all_inner_texts()]
+        assert tabs[:4] == ["Overview", "Capacity", "Catalog", "Pipelines"], tabs
+        assert "Latest runs" not in tabs
+        page.get_by_role("tab", name="Pipelines").click()
+        pipelines = page.get_by_role("table", name="Pipelines")
+        expect(pipelines.get_by_role("link", name="ORDERS")).to_be_visible()
+        page.get_by_role("tab", name="Failures").click()
+        expect(page.get_by_role("table", name="Failures").get_by_text("LOAD")).to_be_visible()
+        page.get_by_role("tab", name="Overview").click()
+        page.get_by_text("Custom range").click()  # the day fields sit behind the range button
+        page.get_by_label("To (UTC day)").fill("2020-01-05")
+        page.get_by_label("From (UTC day)").fill("2020-01-01")
+        expect(page.get_by_text("No runs yet in this window")).to_be_visible()
+        assert "from=2020-01-01" in page.url and "to=2020-01-05" in page.url
+        page.get_by_text("Pipelines (all you can view)").click()
+        page.get_by_label("ORDERS").click()
+        expect(page.get_by_label("ORDERS")).to_be_checked()
+        assert "pipeline=ORDERS" in page.url
+        page.reload()
+        expect(page.get_by_text("Pipelines (1 selected)")).to_be_visible()
+        assert problems == []
+        browser.close()
+
+
+def test_the_console_runs_a_line_completes_commands_and_recalls_history(scene):
+    _, url = scene
+    with sync_playwright() as pw:
+        browser, page, problems = open_page(pw, viewport={"width": 1280, "height": 1000})
+        sign_in(page, url, "/ui/projects/default/console")
+        log = page.get_by_role("log", name="Console output")
+        expect(
+            page.get_by_role("button", name="pipelines", exact=True)
+        ).to_be_visible()  # commands loaded
+        expect(log).to_contain_text("type help for the commands you can run")
+        line = page.get_by_label("$ etl-craft")
+        line.fill("pipe")
+        line.press("Tab")
+        expect(line).to_have_value("pipelines ")
+        line.press("Enter")
+        expect(log).to_contain_text("$ etl-craft pipelines")
+        expect(log).to_contain_text("ORDERS")
+        line.press("ArrowUp")
+        expect(line).to_have_value("pipelines")
+        line.fill("nonsense")
+        line.press("Enter")
+        expect(log).to_contain_text("exit")
+        shoot(page, "console")
+        page.get_by_role("button", name="status", exact=True).click()
+        expect(line).to_have_value("status ")
+        assert problems == []
+        browser.close()
+
+
+def test_a_viewer_is_offered_fewer_console_commands(scene):
+    ctx, url = scene
+    act(
+        ctx,
+        ActionName.ACCESS_GRANT,
+        project="default",
+        account="alice",
+        permission="CAN_VIEW",
+        reason="read",
+    )
+    with sync_playwright() as pw:
+        browser, page, _ = open_page(pw)
+        sign_in(page, url, "/ui/projects/default/console")
+        expect(page.get_by_role("button", name="status", exact=True)).to_be_visible()
+        owner_commands = (
+            page.get_by_role("list")
+            .filter(has=page.get_by_role("button", name="status", exact=True))
+            .get_by_role("button")
+            .count()
+        )
+        browser.close()
+        browser, page, _ = open_page(pw)
+        sign_in(page, url, "/ui/projects/default/console", name="alice")
+        expect(page.get_by_role("button", name="status", exact=True)).to_be_visible()
+        viewer_commands = (
+            page.get_by_role("list")
+            .filter(has=page.get_by_role("button", name="status", exact=True))
+            .get_by_role("button")
+            .count()
+        )
+        assert 0 < viewer_commands < owner_commands
+        browser.close()
+
+
+def test_the_catalog_says_when_nothing_is_built_and_offers_the_rebuild(scene):
+    _, url = scene
+    with sync_playwright() as pw:
+        browser, page, _ = open_page(pw, viewport={"width": 1280, "height": 1000})
+        sign_in(page, url, "/ui/projects/default/catalog")
+        expect(page.get_by_role("heading", name="Catalog", exact=True)).to_be_visible()
+        expect(page.get_by_role("button", name="More catalog actions")).to_be_visible()
+        expect(page.get_by_role("button", name="Rebuild catalog")).to_be_visible()
+        expect(page.get_by_text("catalog is not generated")).to_be_visible()
+        expect(page.get_by_text("Use Rebuild catalog above.")).to_be_visible()
+        page.get_by_role("button", name="Rebuild catalog").click()
+        dialog = page.get_by_role("dialog")
+        expect(dialog.get_by_label("Reason (kept in the audit trail)")).to_have_count(
+            0
+        )  # takes none
+        dialog.get_by_role("button", name="Rebuild catalog").click()
+        expect(
+            page.get_by_role("status").filter(has_text="The catalog was rebuilt.")
+        ).to_be_visible()
+        expect(page.get_by_role("tree", name="Catalog objects")).to_be_visible()
+        expect(page.get_by_role("heading", name="default catalog")).to_be_visible()
+        expect(page.get_by_text("Pipelines", exact=True).first).to_be_visible()
+        expect(page.get_by_text("catalog is not generated")).to_have_count(0)
+        page.get_by_role("button", name="More catalog actions").click()
+        page.get_by_role("menuitem").filter(has_text="Validate metadata").click()
+        expect(
+            page.get_by_text("Checked 2 pipeline(s)").or_(page.get_by_text("Checked 1 pipeline(s)"))
+        ).to_be_visible()
+        shoot(page, "catalog")
+        browser.close()
+
+
+@pytest.mark.parametrize("scheme", ["light", "dark"])
+@pytest.mark.parametrize("width", [1280, 390])
+def test_the_pages_render_cleanly_in_both_themes_and_on_a_phone(scene, scheme, width):
+    _, url = scene
+    pages = {
+        "insights": "/ui/projects/default",
+        "console": "/ui/projects/default/console",
+        "catalog": "/ui/projects/default/catalog",
+    }
+    with sync_playwright() as pw:
+        browser, page, problems = open_page(
+            pw, color_scheme=scheme, viewport={"width": width, "height": 900}
+        )
+        sign_in(page, url)
+        for name, path in pages.items():
+            page.goto(url + path)
+            page.wait_for_load_state("networkidle")
+            expect(page.locator("main")).to_be_visible()
+            overflow = page.evaluate("document.documentElement.scrollWidth - window.innerWidth")
+            assert overflow <= 0, f"{name} scrolls sideways by {overflow}px at {width}px"
+            shoot(page, f"{name}-{scheme}-{width}")
+        assert [p for p in problems if "status of 404" not in p] == []
+        browser.close()
+
+
+def test_platform_lists_the_projects_and_the_old_insights_address_opens_home(scene):
+    _, url = scene
+    with sync_playwright() as pw:
+        browser, page, problems = open_page(pw, viewport={"width": 1280, "height": 800})
+        sign_in(page, url, "/ui/projects/default")
+        page.get_by_role("link", name="Projects", exact=True).click()
+        expect(page.get_by_role("heading", name="Projects", exact=True)).to_be_visible()
+        expect(page.get_by_role("link", name="default", exact=True)).to_be_visible()
+        shoot(page, "projects")
+        page.goto(url + "/ui/projects/default/insights?pipeline=ORDERS")
+        expect(page.get_by_role("heading", name="Home", exact=True)).to_be_visible()
+        assert page.url.endswith("/ui/projects/default?pipeline=ORDERS")
+        assert problems == []
+        browser.close()
+
+
+@pytest.mark.parametrize("display", ["Relative", "Exact"])
+def test_home_times_follow_the_account_display_and_timezone(scene, display):
+    _, url = scene
+    with sync_playwright() as pw:
+        browser, page, problems = open_page(pw)
+        sign_in(page, url, "/ui/settings")
+        page.get_by_placeholder("UTC, Europe/London, Asia/Kolkata").fill("Asia/Kolkata")
+        page.get_by_role("radio", name=display, exact=True).check()
+        page.get_by_role("button", name="Save settings").click()
+        expect(page.get_by_role("status").filter(has_text="Settings saved.")).to_be_visible()
+        page.goto(url + "/ui/projects/default")
+        latest = page.get_by_role("region", name="Latest runs").locator("time").first
+        expect(latest).to_be_visible()
+        attention = page.get_by_role("region", name="Needs attention").locator("time").first
+        expect(attention).to_be_visible()
+        window = page.locator("main header").filter(has_text="Runs started").locator("time")
+        expect(window).to_have_count(2)
+
+        def check_time(time):
+            expect(time).to_be_visible()
+            if display == "Exact":
+                expect(time).to_contain_text("GMT+5:30")
+                expect(time).to_have_attribute("title", re.compile(r"ago|^in "))
+            else:
+                expect(time).to_have_attribute("title", re.compile(r"GMT\+5:30"))
+                expect(time).to_contain_text(re.compile(r"ago|^in "))
+
+        for time in [latest, attention, window.nth(0), window.nth(1)]:
+            check_time(time)
+        pages = {
+            "home": "/ui/projects/default",
+            "projects": "/ui/projects",
+            "grid": "/ui/projects/default/pipelines/ORDERS?columns=time",
+        }
+        for name, path in pages.items():
+            page.goto(url + path)
+            if name == "projects":
+                check_time(page.get_by_role("list").filter(has_text="ORDERS").locator("time").first)
+            if name == "grid":
+                check_time(page.get_by_role("table", name="Run grid").locator("thead time").last)
+            if os.environ.get("ETL_CRAFT_UI_SCREENSHOTS"):
+                page.wait_for_load_state("networkidle")
+                for scheme in ["light", "dark"]:
+                    page.evaluate("theme => document.documentElement.dataset.theme = theme", scheme)
+                    for width in [1280, 390]:
+                        page.set_viewport_size({"width": width, "height": 900})
+                        shoot(page, f"{name}-times-{display}-{scheme}-{width}")
+        assert problems == []
+        browser.close()
+
+
+@pytest.mark.parametrize("scheme", ["light", "dark"])
+def test_phone_date_filters_have_aligned_controls_and_keep_their_actions(scene, scheme):
+    _, url = scene
+    with sync_playwright() as pw:
+        browser, page, problems = open_page(
+            pw, color_scheme=scheme, viewport={"width": 390, "height": 900}
+        )
+        sign_in(page, url, "/ui/projects/default")
+        presets = page.get_by_role("group", name="Time range")
+        custom = (
+            page.locator("details")
+            .filter(has=page.get_by_label("From (UTC day)"))
+            .locator("summary")
+        )
+        pipelines = page.locator("summary").filter(has_text="Pipelines")
+        expect(page.get_by_role("region", name="Runs per day")).to_be_visible()
+        expect(custom).to_be_visible()
+        boxes = presets.evaluate(
+            """(presets, controls) => ({
+                presets: presets.getBoundingClientRect().toJSON(),
+                custom: controls.custom.getBoundingClientRect().toJSON(),
+                pipelines: controls.pipelines.getBoundingClientRect().toJSON(),
+            })""",
+            {"custom": custom.element_handle(), "pipelines": pipelines.element_handle()},
+        )
+        preset_box, custom_box = boxes["presets"], boxes["custom"]
+        assert abs(preset_box["height"] - custom_box["height"]) <= 1
+        assert abs(preset_box["y"] - custom_box["y"]) <= 1
+        assert abs(boxes["pipelines"]["height"] - custom_box["height"]) <= 1
+        presets.get_by_role("button", name="24 h", exact=True).click()
+        expect(presets.get_by_role("button", name="24 h", exact=True)).to_have_attribute(
+            "aria-pressed", "true"
+        )
+        custom.click()
+        expect(page.get_by_label("From (UTC day)")).to_be_visible()
+        expect(page.get_by_label("To (UTC day)")).to_be_visible()
+        custom.click()
+        expect(page.get_by_role("region", name="Runs per day")).to_be_visible()
+        page.wait_for_load_state("networkidle")
+        shoot(page, f"phone-date-filters-{scheme}")
+        assert problems == []
+        browser.close()
+
+
+@pytest.mark.parametrize("days", [1, 4])
+def test_short_daily_windows_show_numbers_then_long_windows_keep_the_day_axis(scene, days):
+    _, url = scene
+    with sync_playwright() as pw:
+        browser, page, problems = open_page(pw, viewport={"width": 1280, "height": 900})
+        sign_in(page, url, f"/ui/projects/default?from=2020-01-01&to=2020-01-0{days}")
+        panel = page.get_by_role("region", name="Runs per day")
+        summary = panel.get_by_label("Daily run totals")
+        expect(summary.get_by_role("term")).to_have_count(days)
+        expect(summary.get_by_text("0 runs · 0 succeeded · 0 failed", exact=True)).to_have_count(
+            days
+        )
+        expect(summary.get_by_text("No finished runs", exact=True)).to_have_count(days)
+        expect(panel.locator("svg")).to_have_count(0)
+        shoot(page, f"daily-numbers-{days}")
+        for scheme, width in (("dark", 1280), ("light", 390), ("dark", 390)):
+            choice = "Use the dark theme" if scheme == "dark" else "Use the light theme"
+            page.get_by_role("button", name=choice, exact=True).click()
+            expect(page.locator("html")).to_have_attribute("data-theme", scheme)
+            page.set_viewport_size({"width": width, "height": 900})
+            expect(summary.get_by_role("term")).to_have_count(days)
+            assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
+            shoot(page, f"daily-numbers-{days}-{scheme}-{width}")
+        page.set_viewport_size({"width": 1280, "height": 900})
+        page.goto(url + "/ui/projects/default?from=2020-01-01&to=2020-01-07")
+        expect(panel.get_by_label("Daily run totals")).to_have_count(0)
+        expect(panel.get_by_text("1 Jan", exact=True)).to_be_visible()
+        expect(panel.get_by_text("7 Jan", exact=True)).to_be_visible()
+        assert not problems
+        browser.close()
+
+
+def test_chart_renderers_load_on_home_without_changing_run_or_catalog_charts(scene):
+    ctx, url = scene
+    with acting_as(Actor("owner", ActorKind.USER)), ctx.engine.begin() as conn:
+        for _ in range(2):
+            pipeline = conn.execute(
+                text("SELECT PIPELINE_ID AS id FROM CFG_PIPELINES WHERE PIPELINE_CODE='ORDERS'")
+            ).scalar_one()
+            run = start_run(conn, pipeline)
+            finish_run(conn, run)
+    act(ctx, ActionName.GENERATE_DOCS)
+    with sync_playwright() as pw:
+        browser, page, problems = open_page(pw, viewport={"width": 1280, "height": 1000})
+        pending = []
+        page.route("**/chart-renderers-*.js", lambda route: pending.append(route))
+        sign_in(page, url, "/ui/projects/default/runs")
+        durations = page.get_by_role("list", name="Run durations, newest on the right")
+        expect(durations.get_by_role("link")).to_have_count(6)
+        assert not pending
+        page.evaluate("() => document.fonts.ready.then(() => true)")
+        page.goto(url + "/ui/projects/default/catalog/pipelines/ORDERS?tab=runs")
+        expect(
+            page.get_by_role("list", name="Run durations, newest on the right").get_by_role("link")
+        ).to_have_count(6)
+        assert not pending
+        page.goto(url + "/ui/projects/default")
+        panel = page.get_by_role("region", name="Runs per day", exact=True)
+        placeholder = panel.get_by_role("status")
+        expect(placeholder).to_have_text("Loading chart…")
+        slot = placeholder.locator("..")
+        before = slot.bounding_box()
+        assert before is not None and before["height"] == 256
+        spark_slot = page.get_by_role("region", name="Runs", exact=True).locator(".h-10")
+        expect(spark_slot).to_be_visible()
+        spark_before = spark_slot.bounding_box()
+        assert spark_before is not None and spark_before["height"] == 40
+        expect(spark_slot.locator("svg")).to_have_count(0)
+        shoot(page, "lazy-chart-placeholder")
+        assert pending
+        for route in pending:
+            route.continue_()
+        expect(placeholder).to_have_count(0)
+        chart = panel.locator(".recharts-wrapper")
+        expect(chart).to_be_visible()
+        after = panel.locator(".h-64").bounding_box()
+        assert after is not None and after["height"] == before["height"]
+        expect(
+            page.get_by_role("region", name="Runs", exact=True).locator(".recharts-area")
+        ).to_be_visible()
+        spark_after = spark_slot.bounding_box()
+        assert spark_after is not None and spark_after["height"] == spark_before["height"]
+        shoot(page, "lazy-home-charts")
+        assert problems == []
+        browser.close()

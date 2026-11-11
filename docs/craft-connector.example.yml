@@ -52,7 +52,8 @@ Orchestration:
                                        # Engine DB waits for it after a restart or failover;
                                        # 0: fail at the first refused connection
   # Local_python_slots: 2             # value — optional: at most this many Python script
-  #                                    # tasks at once; unset, they may use every slot
+  #                                    # tasks at once; may exceed the 512 MB estimate.
+  #                                    # CPU, total slots and base memory still bound it.
   # Local_warehouse_slots: 6           # value — optional: the same for SQL, rule and alert tasks
   Gate_wait_minutes: 60                # value — how long a run waits for a running upstream
                                        # pipeline or task it depends on; 0: judge at once
@@ -66,8 +67,11 @@ Orchestration:
     Dependency_gates: WARN             # value — ENFORCE (default) | WARN | OFF. WARN
                                        # and OFF let a run go ahead when its dependencies on
                                        # other pipelines are not satisfied, and record the bypass
-    Allow_schedule: false              # value — default true; false: this environment's
-                                       # controller starts no runs from RUN_SCHEDULE
+    Allowed_auto_restarts: NONE        # value — default SCHEDULE|ALWAYS (everything); what this
+                                       # environment's controller may start on its own: NONE, or
+                                       # SCHEDULE and run endings (ALWAYS, or SUCCESS | SKIPPED |
+                                       # FAILURE) joined with |. Pipelines stay valid; only their
+                                       # automatic starts are suppressed here
     Retries: 1                         # value
   sit:
     Retries: 1                         # value
@@ -101,6 +105,7 @@ Orchestration:
   prod:
     Retries: 1                         # value
     Email_recipients: [data-alerts@example.com]  # value
+    # Email_template: email_templates/team.html  # optional SLA HTML template; project-relative
     Email:
       Host: EMAIL_HOST                 # variable
       Port: EMAIL_PORT                 # variable
@@ -160,11 +165,19 @@ Warehouse:
   # the connection. Table_format: NATIVE (the default) | ICEBERG; a task's
   # TABLE_FORMAT parameter overrides it. Both may sit here, for every profile,
   # or inside a profile, as below.
-  # Profile: prod
   dev:
-    Name: DuckDB                       # value
-    Jdbc_url: jdbc:duckdb:warehouse.duckdb  # value — relative to this file
-    Schema: main                       # value — must already exist; cloning writes here
+    Name: Postgres                     # value
+    Table_format: NATIVE               # value — always NATIVE: Postgres has no Iceberg tables
+    Jdbc_url: jdbc:postgresql://localhost:5432/analytics  # value
+    Schema: etl_craft                  # value — must already exist; cloning writes here
+    User: etl_craft                    # value
+    Auth_mode: PASSWORD                # value
+    Secret: WAREHOUSE_SECRET           # environment variable holding the password
+  # For local analytics, install etl-craft[duckdb] and use this dev profile instead.
+  # dev:
+  #   Name: DuckDB                       # value
+  #   Jdbc_url: jdbc:duckdb:warehouse.duckdb  # value — relative to this file
+  #   Schema: main                       # value — must already exist; cloning writes here
   sit:
     Name: Postgres                     # value
     Table_format: NATIVE               # value — always NATIVE: Postgres has no Iceberg tables
@@ -220,11 +233,15 @@ Cloning:
 #   Admin_contact: "your administrator"  # recovery contact shown on sign-in
 #   Signin_notice: "Authorized use only" # optional notice, shown as text
 #   Session_hours: 12                   # value — integer 1..8760; local/browser session lifetime
+#   Session_idle_minutes: 60            # value — integer 5..10080; a browser session ends after this long without activity
 #   Refresh_days: 30                    # value — integer 1..365; server sign-in refresh lifetime
 #   Oidc_issuer: https://sso.example.com # value — exact HTTPS issuer, paired with Oidc_client_id
-#   Oidc_client_id: etl-craft            # value — public device-flow client, RS256 ID tokens
+#   Oidc_client_id: etl-craft            # value — public PKCE/device client, RS256 ID tokens
+#   Browser_state_secret: BROWSER_STATE_SECRET # optional secret variable; at least 32 bytes
 
 #   Oidc_groups_claim: groups             # optional claim of group names; needs OIDC settings above
+#   Names_editable: true                  # let each account edit its own first and last name in Personal settings
+#   Oidc_bind_by_email: true              # link a first SSO sign-in to the one account registered with its verified email
 
 # Optional immutable publications; omit Artifacts for local working-tree development.
 # Artifacts:
@@ -269,3 +286,9 @@ Cloning:
 # Stewardship blanket ceiling; FILE_VALIDATION.MAX_FILE_MB may lower it.
 Uploads:
   Max_file_mb: 50
+  # Archive_to: file:///srv/etl-archive/uploads
+  # Or: {Store: s3://team-archive/uploads, Profile: archive}
+
+# Shared protection/erasure privacy HMAC: retain the original secret; rotation is unsupported.
+# Privacy:
+#   Hmac_secret: ETL_PRIVACY_HMAC

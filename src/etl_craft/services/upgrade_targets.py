@@ -10,6 +10,7 @@ from etl_craft.config import ConnectorConfig
 from etl_craft.config.targets import active_catalog, parse_warehouse_url
 from etl_craft.core.enums import Handler, SqlAction
 from etl_craft.core.errors import ConfigurationError, HandlerError
+from etl_craft.core.protection import PROTECTION_COLUMNS
 from etl_craft.core.text import qualify, split_object_ref
 from etl_craft.dialects.warehouse import WarehouseDialect, resolve
 from etl_craft.engine import locks
@@ -215,6 +216,7 @@ def _upgrade_target(
             backfill = _scd1_statements(session, columns, additions, statements)
         elif merge == {SqlAction.SCD2_MERGE}:
             backfill = _scd2_statements(session, columns, statements)
+        _protection_statements(session, columns, additions, statements, bool(merge))
         if not dry_run and statements:
             refuse_replacement(session)
         if not dry_run:
@@ -291,3 +293,23 @@ def _scd2_statements(session: Session, columns: set[str], statements: list[str])
             "WHERE ACTIVE_FLAG = 'Y' AND DELETE_FLAG = 'Y'"
         )
     return backfill
+
+
+def _protection_statements(
+    session: Session,
+    columns: set[str],
+    additions: list[str],
+    statements: list[str],
+    merge: bool,
+) -> None:
+    """Add nullable row-state fields to existing unprotected merge targets."""
+    if not merge:
+        return
+    dialect = session.dialect
+    for column in PROTECTION_COLUMNS:
+        if column.lower() not in columns:
+            additions.append(column)
+            kind = dialect.evolution_column_type(dialect.audit_column_type(column))
+            statements.append(
+                dialect.add_column_sql(session.target_object, column, kind, target=True)
+            )

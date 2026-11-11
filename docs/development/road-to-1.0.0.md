@@ -128,9 +128,10 @@ item's text, or work done early under another item.
 | S5.O.2b Normalized object contracts | Done | #150, #151, #152, #153, #154, #160, #162, #181 | Merge column lists retain parameter storage; lineage versions use component endpoints; target state, view statements and rule results are keyed by components, and target locks use the resolved identity |
 | S5.P Project documentation gap UI | Done | #165 | Structured schema/lineage gaps, accessible column/graph warnings and read-only comparison API |
 | S5.R Consolidate before the cluster | Done | #179, #185, #188 to #193, #195, #201 | Items 1 to 8 complete: the execution core and configuration loader are split by responsibility; the moved execution functions are shortened with shared run records and unchanged transactions and retries |
-| S5.S Accounts, login and roles | Done | #203, #204, #205, #206, #207 | Account identities, local and server sign-in with refresh tokens, one service-role policy, explicit actors with an `etl-craft` writer on every run, and a local installation operating a server over HTTPS; every action has one implementation that the CLI, the API and later the UI call |
+| S5.S Accounts, login and roles | Done | #203, #204, #205, #206, #207, #376, #377 | Account identities, local and server sign-in with refresh tokens, one service-role policy, explicit actors with an `etl-craft` writer on every run, and a local installation operating a server over HTTPS; every action has one implementation that the CLI, the API and later the UI call |
 | S5.O.3 SCD human override protection | Done | #208 | Native PostgreSQL/DuckDB protection, admin edits/unlocks and column provenance; cloud acceptance unavailable on its try |
 | S5.Q Scoped operator controls | Done | #209, #210, #211 | Isolated manual selections, scoped holds/stop/abort, durable recovery/restart preparation, one-run pause permission, selected bulk outcomes and shared capabilities |
+| S5.Q.4 Recorded run-parameter overrides | Planned | | Separate engine follow-up retained from S7.A: immutable per-run overrides, CLI first, then shared API/UI |
 | S5.T Resource discovery and deployment profiles | Done | #212 | `core/resources.py` measures affinity, cgroup v1/v2 quotas and memory limits; `Deployment.Profile` sizes `run` and `server` slots, server threads and the Engine DB pool within written ceilings; doctor/setup report measurements, sizes, fallbacks and the PostgreSQL connection budget |
 | S5.V Team-owned config tables | Done | #213 | Fixed package ownership, unrestricted team config, retained read-only team history and collision preflight; Databricks acceptance unavailable on its try |
 | S5.U Robustness before the cluster | Done | #176, #182, #183, #184 | Engine DB restarts ridden out; SLA breach writes retried; no single-writer guess; timing tests verified under load; subprocess code measured by coverage |
@@ -141,7 +142,7 @@ item's text, or work done early under another item.
 | S5.AB Pipeline tags and filters | Done | #222 | `TAGS` labels pipelines; one tag filter on list, status, history, catalog and UI views, and tag-selected bulk actions |
 | S5.AC Pipeline trigger tasks | Done | #223 | Durable child admission, controller-held WAIT outcomes, DETACH at QUEUED admission and linked run inspection |
 | S5.AD Pipeline permission groups | Done | #225 | Admin-managed groups, audited direct/tag grants, effective pipeline roles, retained SSO group IDs and child-start permission checks |
-| S5.AE One gateway | In progress | #227 | Slice 1: stateless PostgreSQL `ui`, headless health-only controller, package schema checks, `ui`/`all` extras and `--api`; agent API and deployment layouts remain with S5.C/S7.F |
+| S5.AE One gateway | Done | #227, #231, #316 | Stateless UI replicas, headless probes, fenced API-only agents, deployment layouts and tick metrics |
 | S5.AF Indexes for every query | Done | #229 | Selective history indexes, bounded catalog reads and a PostgreSQL full-scan guard |
 | S5.X Unmanaged SQL tasks | Done | #230 | `SQL_SCRIPT` runs any SQL as an ordinary dependent task with per-statement audit; pre- and post-SQL are upstream and downstream tasks |
 | S5.C The PostgreSQL queue and the agent | Done | #231 | API-only agents with claims, renewals, fenced reports, shared log chunks and durable drain/resume/stop; durable resource locks that pass only after the expired holder's warehouse statements are confirmed stopped |
@@ -173,27 +174,80 @@ item's text, or work done early under another item.
 | S7.AJ Required CI under ten minutes | Done | #269 | Complete PR suite once, explicit platform compatibility, fail-closed ownership and three clean execution-time runs |
 | S7.AC Table-level business rules | Done | #271 | Strict TABLE results on the existing run log, scoped checks and shared observation history; ROW flags unchanged |
 | S7.AD Python script kinds | Done | #270 | Explicit ingestion/utility contracts, nullable utility counts and safe unmanaged retry defaults |
-| S7.AE Pipeline samples | Planned | | Optional whole-pipeline CI sample cases; business rules remain the correctness check on real data |
+| S7.AE Pipeline samples | Moved after 0.9.0 | | Optional whole-pipeline CI sample cases; business rules remain the correctness check on real data |
 | S7.AF Config files are helpers | Done | #262 | Engine DB truth; partial, non-destructive config upserts; owner-approved plan/risk/release text accompanies code |
 | S7.AG Project migrations stay in their project | Done | #274 | Statement preflight, project-scoped row guards, team-table claims and doctor checks on both Engine DBs |
-| S7.A Web UI pages | In progress, slice 6e | #277, #281, #282, #283, #284, #285, #286, #287, #290, #291, #292, #294, #295, #297, slice 6e PR | Shell, sessions, settings, About and catalog (1); pipeline list, pipeline and run pages with capability-driven controls (2a); list schedule/run summaries, matrix, timeline, run now, bulk pause/resume, CSV (2b); search, recently viewed, live updates and stale notice (2c); attempt page with live log tail and download (3a); pipeline run log from the audit, CLI/API/page, SLA_BREACHED_AT (3b); run zip with manifest, CLI --zip, API and page download (3c); Pipeline Insights read, CLI, page and catalog tab (4); command console (5); task and run actions, items page, Reconcile, Refresh (6a); administration page and announcements (6b); system health, agents, scheduled runs and maintenance (6c); task page with statistics and offsets, Uploads page, grouped sidebar (6d); held and paused work, run filters by pool, agent and failure class (6e) |
+| S7.A Web UI pages | Done | #277, #281, #282, #283, #284, #285, #286, #287, #290, #291, #292, #294, #295, #297, #298, slice 6f PR | Shell, sessions, settings, About and catalog (1); pipeline list, pipeline and run pages with capability-driven controls (2a); list schedule/run summaries, matrix, timeline, run now, bulk pause/resume, CSV (2b); search, recently viewed, live updates and stale notice (2c); attempt page with live log tail and download (3a); pipeline run log from the audit, CLI/API/page, SLA_BREACHED_AT (3b); run zip with manifest, CLI --zip, API and page download (3c); Pipeline Insights read, CLI, page and catalog tab (4); command console (5); task and run actions, items page, Reconcile, Refresh (6a); administration page and announcements (6b); system health, agents, scheduled runs and maintenance (6c); task page with statistics and offsets, Uploads page, grouped sidebar (6d); held and paused work, run filters by pool, agent and failure class (6e); catalog actions, Refresh all, task definition and Data panel, capability-matrix test (6f) |
 | S7.AH Renames keep identity | Done | #273 | Atomic attributed renames retain IDs, offsets, events and grants; stale config inserts refuse |
 | S7.AI Fixes from the 2026-10-27 audit | Done | #264 | Pool/attempt credentials, bounded SSO, publishing, sign-in, dependency bounds, setup and first-ending metrics. |
 | S7.AK Schema checker | Done | S7.AK PR | Optional per-project schedule plus an on-demand check that compare declared tables with the warehouse; Insights and the catalog show the last check |
-| S7.M Stewardship uploads | In progress (M1 of M2) | M1 PR | `STEWARDABLE_FLAG` lists a pipeline for uploads; one pipe-delimited CSV/TXT or XLSX file per upload; `FILE_VALIDATION` accepts files before `HAS_DATA` dependents load them; blanket and per-pipeline size limits |
-| S7.S Seed tables | Planned | | Folder-addressed seed files replace their table on change until stewardship takes it over |
+| S7.B Users, roles and identities | In progress | #203–#207, #231, #261, #263, #264, #277 | Accounts, fixed roles, scoped grants, pool-bound agents and browser sign-in exist; custom roles, bindings and access explain remain |
+| S7.C Redaction | In progress | #228, #309 | Recursive name masking and shared operation-scoped value masking exist; resolved-secret registration and Sensitive_patterns remain |
+| S7.D Alert channels | Planned |  | Signed webhooks, Slack-shaped bodies and channel delivery evidence remain; email is already supported |
+| S7.E Secrets providers | In progress | #84, #120, #323 | ENVIRONMENT/FILE task declarations, fenced TLS delivery and private child pipe; secret managers and Cache_seconds remain |
+| S7.F Packaging and deployment | Done | #227, #231, #316 | Wheel-built role images, tagged release smoke and publishing, Compose/Kubernetes manifests and systemd units |
+| S7.G Compatibility policy | In progress | #379; rolling checks | Policy, shared same-major admission, additive SQL/ledger checks and installed input registry implemented; actual mixed-version certification waits for the 0.9.0 release gate |
+| S7.H Cloud acceptance | In progress | #104–#110, #208, #231, #236, #247 | Native/Iceberg and managed-engine contracts exist; complete candidate evidence and unavailable provider cases remain |
+| S7.I The endurance run | Planned |  | 72-hour accelerated Support Insights candidate run, faults and bounded growth evidence after S8 is running |
+| S7.J Documentation to finish | In progress | #85, #227, #277 | Generated references and guides exist; supported public contracts, complete reference and recipes remain |
+| S7.L ETL Craft logo and CLI banner | In progress | #277, banner PR | Shared mark, favicon and theme assets and the CLI banner (`etl-craft about`, bare invocation) exist; branding guidance, vector sources and the documentation logo remain |
+| S7.AL Pre-demo package gaps | In progress | #314, #315 | Slices 1–3 ship duplicate counts, current references and guarded-table validation guidance. Slice 4 (event-file validation) is in review; slices 5–6 remain. |
+| S7.AM Protection on every warehouse | Done | #311, #312, #313 | Atomic SCD merges, in-row protection and recovery, private audit identities and provider acceptance |
+| S7.AN Always show the environment | Done | #328 | CLI context and production confirmation; designed, sandboxed alert/SLA templates and catalog environment |
+| S7.AO UI rebuild | Done | #329–#335, #368, #371, #372, #373, #374, #375 | Seven slices: shell, Home, runs, pipelines, tasks, uploads, insights, console, catalog, system, agents, administration, maintenance, settings, search, sign-in; the new interface is the only one, served at `/ui`, and the old pages are deleted; audit follow-ups align time preferences, human labels, automatic grid sizing and phone date controls; remaining audit closes sparse summaries, controls, lazy loading and CLI operability |
+| S7.AP Native catalog | In progress | | The catalog moves into the app from a JSON read action, built from the app's own components; the generated static site stays only for `publish-docs` |
+| S7.AQ Readable run identifiers | Done | #347, #369, #370 | A label beside every run and task run id, stored by the Engine DB; accepted wherever the integer is, and shown beside it |
+| S7.AR Restarting pipelines | In progress | slice 1 PR | A pipeline setting, `RESTART_CONDITION`, starts the next run when the last one ends in a chosen status, so a file watcher runs continuously without a schedule |
+| S7.AS Project dashboard and navigation | In progress | | Home becomes a project dashboard with tabs and charts; a pipeline and its runs are one split workspace; Projects moves into Platform; the section Project is renamed Operations |
+| S7.M Stewardship uploads | Done (M2) | #296, #305 | Atomic receipts and safe stored names; processed layout, retention archives and verified reruns; crash recovery and guarded upload history |
+| S7.S Seed tables | Done | #308 | Typed pinned-bundle seeds replace reference tables until recorded stewardship handover |
 | S7.T Business calendars | Done | #276 | Shared holiday and weekend calendars for schedules, run dates, backfill and catch-up |
-| S7.U Personal-data erasure | Planned | | A standing erasure register and ERASURE tasks remove subjects after loads, outside managed writes |
+| S7.U Personal-data erasure | Done | #309 | Standing table/column erasure follows pinned lineage, with private keys and recoverable ERASURE tasks |
 | S7.V Empty replacements | Done | #275 | ALLOW_EMPTY can refuse an empty CREATE_TABLE or OVERWRITE_TABLE before changing its target |
 | S7.W Docs toolchain after MkDocs 1.x | Planned | | Evaluate Zensical against the API pages, navigation and published versions; migrate only when every requirement works |
-| S7.O Package and demo repositories | Planned | | A very small demo stays in package CI; Support Insights holds its project and supplies release evidence the package gate validates |
+| S7.O Package and demo repositories | Done | #317, #318 | Small package demo, public demo seed and pinned candidate evidence validation |
 | S7.P Obvious failures do not stop 1.0.0 | In progress | #173, #178 | Audit done (#173); the log-folder and port checks close their catalog rows (#178); item 4 keeps the catalog current |
-| S7.Q A generic ANSI SQL warehouse | Planned | | A `generic` dialect over SQLAlchemy for rare databases: ANSI SQL only, NULL-safe column comparison for merges, refusals for anything without an ANSI form |
+| S7.Q A generic ANSI SQL warehouse | Moved after 0.9.0 | | A `generic` dialect over SQLAlchemy for rare databases: ANSI SQL only, NULL-safe column comparison for merges, refusals for anything without an ANSI form |
 | S7.R Complete the test suite | In progress | #228 | Slice 1: recursive secret masking, merge crash windows and full-column/catalog upgrade guards; six-skill coverage audit remains after S7.A |
 | S7.N Faster complete pull-request CI | Done | #170 | Fail-closed collection/shard accounting, isolated schema templates and shared demo workers; complete checks in 6m33s-8m15s (owner-approved ten-minute target) |
+| S8.A The project layout | In progress | #319, #320 | Small-agent Python slots, compiled role images and singleton rollout; demo acceptance in progress |
+| S8.B Pipelines | Done | #322, #324, #325, #326, #327 | Demo source/ODS, bounded DM, all steward uploads and explicit drained maintenance validated in separate slices |
+| S8.C Configuration through CI | Planned | | Secretless local DuckDB validation and developer-token deployment of one pinned project commit |
+| S8.D Views | Planned | | Fact and data-metrics views reconciled with independent reference queries |
+| S8.E The CI pipelines | Planned | | Validate, deploy and manual/pre-release full-stack workflows |
+| S8.F Acceptance checks | Planned | | Rows, provenance, faults, UI and memory checks against the candidate |
+| S8.G The release gate | Planned | | Validate demo wheel/commit/scenario evidence through S7.O without running the external demo in package CI |
 | S8.H Support Insights scenario coverage | Planned | | Deterministic mixed-quality generators, every-feature demonstrations, business-rule and stewardship cases, and runnable README coverage |
 
 ### Handover notes
+
+- **S7.G policy and inventory (#379).** Choices that differ from the item text: the owner
+  confirmed the recorded 0.9.0 compatibility decision supersedes the unchanged 1.0.0 bullets;
+  retained contracts survive through 1.x and removal waits for 2.0.0 after a complete minor
+  of warnings. All seven core dependencies have direct runtime callers, so before/after lists
+  are identical and no public name is removed. Released upgrade/history readers, warehouse
+  upgrade commands, exports and active dialect fallbacks are retained; removing these would
+  change behavior and needs separate contract-specific evidence and an owner decision.
+  The new policy distinguishes release obligations from current enforcement: exact agent
+  versions/current-schema checks still apply before rolling ranges, old/new-role acceptance
+  and release-aware input refusals are implemented. S7.G remains in progress for those checks.
+  Acceptance availability: static checks, strict docs and the unit suite run locally; no
+  runtime, schema, dependency or UI change requires services, cloud or a UI rebuild here.
+
+- **S7.G rolling checks.** Choices that differ from the item text: the approved installed
+  registry can name only releases it knows; unknown future inputs name the binary version,
+  input and upgrade remedy. No external manifest is added. Existing inputs use the 0.9.0
+  stable contract baseline in the registry, not historical pre-stable introduction dates.
+  Only agents had an exact rejecting package check; controller/UI/CLI gain no new handshake.
+  Same-major acceptance is shared; JSON generation/required-field checks stay in place.
+  Stable binaries accept later Engine ledger entries, preserving known checksums and strict
+  project-file verification. Additive SQL is gated against the v0.9.0 tag once available;
+  the 74 unreleased migration pairs since v0.3.0 stay unchanged. Fetch the baseline tag in
+  the release-gate checkout once it exists. Python scripts keep team
+  argument names; built-in handler parameters are refused by validation and both executors.
+  Acceptance availability: rolling coverage is unit-level because no released 0.9.x binary
+  exists; certify actual mixed-version roles and previous binaries on upgraded databases when
+  0.9.0 is cut. The progress row remains in progress for that release-gate certification.
 
 What a person picking up the work needs that the code and the item texts do not say.
 
@@ -391,6 +445,31 @@ does not move worker work ahead of the metadata, account or operator-control cor
     implementing pull requests update `AGENTS.md`'s design rules to match.
 
 **Acceptance availability.**
+
+S7.O slice 3 passed unit tests, fixture manifest refusal/acceptance checks, static checks
+and strict docs without accessing or running the external demo. S8.E produces real manifests;
+S8.F/S8.H must fill both empty inventories before release.
+
+S7.O slices 1–2 passed unit and affected Engine DB, seed, lineage, alert, catalog and
+Iceberg-isolation checks locally. The reduced installed-wheel fixture, Quick Start as
+written, event delivery and headless controller lifecycle passed. Static checks and
+strict docs passed; the complete installed-artifact matrix remains CI's authority.
+The new public demo repository contains only initial sources, not S8 acceptance evidence.
+Cloud runs and CI timing were excluded by owner direction.
+
+S7.U exercised erasure, lineage, SQL handlers, API and admin browser behavior on the local
+warehouses, with SQLite/PostgreSQL upgrades, actor guards and indexed query plans. Real
+process loss, resent rows, masking failures and twenty rounds of shared target-lock races
+were exercised. Static checks and strict docs passed. Cloud acceptance was unavailable:
+no cloud compute budget was authorized; the complete platform suite and wheel demos remain
+CI’s authority.
+
+S7.S exercised seeds, stewardship, API actions, upgrades, audit guards, query plans and
+retained handover evidence on SQLite and PostgreSQL; replacements and SCD shapes ran on all
+four local warehouses. Native stewardship of all three demo seed tables and real process loss
+between warehouse and audit commits were exercised. Target-lock races passed twenty rounds.
+Cloud acceptance was unavailable: no credentials or cloud budget were provided. The full
+CI suite and installed-wheel demos remain CI's authority.
 
 S7.AH exercises identity, offsets/events, dependency consumption, grants, reference updates,
 stale helper files, atomic refresh failures and recorded-log reads/retention on both Engine DBs.
@@ -710,6 +789,27 @@ unlock races. The owner merged #208 after the fresh Databricks probe could not s
 availability limit is timed and must be checked against the provider, not treated as waiting
 for a human quota reset. A fixed-checkout Snowflake acceptance run is being completed separately.
 
+S5.S single logout (#377). Choices that differ from the item text: owner-approved provider
+logout discovery extends the shared sign-out operation for browser/API callers; the CLI remains
+local. Local revocation commits before discovery or return-address validation. The existing
+public origin is the only post-logout destination; no ID token is retained for a hint.
+Acceptance availability: static/strict docs, UI build checks, unit/API sign-out and browser
+sign-in/sign-out tests run locally, including source-only failure proofs. Package PostgreSQL
+service cases remain unavailable while demo k3d is up; its instructions prohibit starting the
+package stack alongside it. Live demo discovery/sign-out availability is recorded in the PR.
+
+S5.S browser redirect sign-in (#376). Choices that differ from the item text: the owner approved
+an optional `Auth.Browser_state_secret` secret-variable reference and browser authorization code
+with PKCE and strict nonce verification, while the CLI keeps its device protocol. The existing
+public Docs_site address supplies the callback origin. A signed five-minute cookie retains proof;
+existing login audit rows record issuance and consumed digests under the cross-process account
+lock, avoiding a new table or migration. PyJWT with cryptography belongs only to the optional UI
+extra: it signs state cookies and verifies browser ID-token signatures against HTTPS JWKS.
+Acceptance availability: unit, API/sign-in, query-plan, browser and strict/static/UI checks run
+locally. Package PostgreSQL service cases are unavailable while the demo k3d cluster is up;
+its instructions prohibit starting the package stack alongside it. Device nonce/401 regression
+cases remain in the touched suites. Live demo acceptance is recorded in its own pull request.
+
 S5.S item 5 (#207) passed `make static docs` and the complete unit suite (1,897). Against a real
 HTTP server on both Engine DBs it passed password and SSO sign-in, renewal, refresh expiry,
 logout, account disabling, matching local and remote output, the role boundary with recorded
@@ -916,6 +1016,676 @@ empty-history-page handling defect, which was corrected and verified. No cloud w
 
 **Choices that differ from the item text.**
 
+- **S7.AN legacy upgrades.** Before environment metadata exists, migrate explicitly shows
+  the Engine DB with environment unknown (Engine DB predates environment metadata); JSON
+  records environment null and its reason. It does not invent PROD or prompt. Project
+  migrations confirm the selected PROD context after packaged migrations, before their first
+  write; current-schema invocations follow the normal context rules.
+
+- **S7.AN / S8.E handover.** When implementing S8.E, deploy.yml must pass global --yes
+  explicitly before state-changing command groups. No existing setting is a public UI base
+  URL (Docs_site.External_url serves the static catalog), so the email template omits View run.
+  UI context/dialog changes remain S7.AO.
+
+- **S7.AN acceptance availability.** CLI, sandbox/template, released-schema upgrade, catalog
+  and Mailpit delivery/render checks passed locally, with PROD project migration checks
+  repeated 20 times. PostgreSQL service cases were unavailable while the demo stack ran alone.
+  Screenshots cover Chromium desktop/mobile; native mail clients were unavailable. No cloud
+  SQL changed.
+
+- **S8.B final pipeline slice.** Source-to-ODS and SI_DM merged in support-insights#2/#3;
+  the final demo slice adds the four upload-only steward pipelines and nine explicit
+  Iceberg maintenance tasks. SI_DM now fences SI_STEWARD_BUSINESS as well as all clients.
+  CSV validators accept optional LOCKED, check declared numeric/boolean/timestamp shapes
+  before landing, and preserve UPLOAD_ID through the full business chain. Only REJECT
+  flags exclude ODS rows. Local demo USER credentials live in ignored .env.demo-users
+  (mode 0600), excluded from Docker contexts and project bundles.
+  Trino ALTER TABLE EXECUTE parses as an opaque unmanaged command, so its expected
+  managed-target overlap warning is not inferred; the demo checks the explicit lake-table
+  inventory independently and requires operator holds/draining before maintenance.
+  Acceptance: all eleven pipelines validated; independent source, mart, upload-chain and
+  reference-history expectations passed. Two USER uploaders in one run retained per-row
+  attribution through landing/PRS/CDC/PRE_ODS/ODS. Restore/unlock batches and following DM
+  windows passed. Nine maintenance tasks completed without retry; rows and a held Gamma
+  wait's original budget were preserved. Original failed validation and interrupted-attempt
+  evidence remain audited with expected outcomes and checked reconciliation. Full S8.F/H
+  acceptance remains separate; no generated package SQL changed and no cloud run applies.
+
+- **S8.B DM START-report defect.** A parent START exchange that loses the API response
+  stops the real child and records its observed ending as FAILED once the API returns;
+  the monitor must not retain a failed Future and renew CLAIMED forever. Existing stuck
+  attempts need the documented agent replacement, lease expiry and reconcile path, never
+  a migration or direct audit update. Unit, PostgreSQL agent API/process and ending-evidence
+  checks passed, including twenty local START-loss repetitions. Static/docs and local
+  Semgrep passed; warehouse SQL is unchanged, so no cloud suite applies. The live DM slice
+  continues after this fix merges.
+
+- **S8.B DM slice.** The source-to-ODS demo slice merged as support-insights#2.
+  SI_DM's initial writer list contains the three existing clients; the stewardship slice
+  adds SI_STEWARD_BUSINESS when that pipeline exists, because validation refuses unknown
+  codes. No inactive placeholder or freshness dependency is introduced. The DM SELECT
+  expands lookup-only changes and defers rows whose joined ODS stamps reach the admitted
+  high bound. Deterministic fixtures check inclusive low/exclusive high, empty ranges,
+  lookup expansion and later joined values; independent live expectations use generator
+  inputs and original seeds. Full concurrent-writer acceptance remains S8.F.
+
+- **S8.B slicing (owner).** Finish package ending evidence and attested reconciliation on
+  `fix/s8b-defects-3` first and reconcile the live blocked attempt through its merged path.
+  Then merge three independent demo slices in order: (1) SI_SETUP, seeds, SI_REFERENCE,
+  Alpha/Beta/Gamma through ODS, independent expected rows and measured Beta memory;
+  (2) SI_DM and watermark checks; (3) SI_STEWARD_* and SI_MAINTENANCE. Each slice validates
+  and merges before the next; further defects stay on that slice's package branch.
+- **S8.B ending evidence (owner).** `reconcile --attest-ended --reason` distinguishes an
+  operator's process attestation from verified query absence. The API records all observed
+  terminal outcomes, claims retain instance identities, and attempt UI/JSON show the kind,
+  actor and reason. Legacy evidence is not silently classified or backfilled. Verified
+  local terminal exits retain their existing reconciliation before lease expiry; the
+  expiry gate remains mandatory for attestation. Existing committed-success window
+  semantics are unchanged; historical unowned successes are not silently backfilled.
+  Acceptance: unit, agent/API/browser, both Engine DB upgrades/guards/query plans, and
+  bounded watermark checks on all four local warehouses passed. Agent ending and recovery
+  cases passed twenty local repetitions; the final ordering change passed twenty more
+  recovery repetitions. Local Semgrep found no issue. Generated warehouse SQL is unchanged,
+  so cloud suites do not apply.
+
+- **S7.E task-secret slice (owner).** SECRETS and task.secret use ENVIRONMENT/FILE;
+  fenced claim delivery uses TLS and a private stdin pipe, with redaction before child log
+  persistence. AWS Secrets Manager, Vault and Secrets.Cache_seconds remain unimplemented;
+  S7.E stays In progress. This slice unblocks S8.B without widening inherited environments.
+  Acceptance: unit/script/validation/agent suites passed; insecure, expired and fenced claims
+  and pipe output/timeout cases passed 20 local repetitions. Security review found and fixed
+  split-prefix redaction before publication. Cloud suites are not applicable to this slice.
+- **S8.B (owner).** A separate `fix/s8b-defects-2` package PR collects defects found after
+  #322 merged; #323 remains the task-secret slice. Multi-project contract isolation exercises
+  the shared operation/write path on SQLite and PostgreSQL and the real agent/API chain on
+  PostgreSQL; SQLite continues to refuse CONTROLLER_AGENTS deployments. Existing misattributed
+  contracts require explicit per-project inspection and rehash, with no silent audit repair.
+  The follow-up also scopes rehash candidate tasks to their selected project.
+
+- **S8.B (owner).** Seed data headers may omit declared non-key columns, which receive
+  dialect-cast NULLs. Keys remain mandatory and blank cells retain their meaning. Stewarded
+  DS seeds declare UPLOAD_ID without placing it in data.csv; no fabricated upload is used.
+- **S8.B (owner).** Only REJECT flags exclude rows from ODS; INCOMPLETE and REPORT
+  rows remain eligible. Rejectable generator batches contain parseable negative durations,
+  so business rules, rather than data-type parsing, reject them.
+- **S8.B (owner).** The requested rejectable-data slice is included: each generator has
+  a bounded --rejectable negative-duration batch, with explicit identity, duration and rating
+  REJECT rules. The remainder of S8.H's mixed-quality scenario matrix stays with S8.H.
+  SQL files and rule SELECTs are formatted. Steward CDC joins active PRS keys to current-run
+  landing receipts so unchanged-value uploads can still carry their UPLOAD_ID/LOCKED control.
+- **S8.B (owner).** Provenance is never lost: every upload-bound APPEND_TABLE,
+  OVERWRITE_TABLE and SCD merge requires UPLOAD_ID in both SELECT and target. Unprotected
+  staging targets may omit actor columns; each declared actor column is still stamped from
+  the upload mapping. Merge/protected targets retain their full audit requirements.
+  The original repository's DS records replace the toy seeds, including source-specific
+  lookup IDs and values; generator lookup initialization uses those same records.
+- **S8.B (owner).** Landing rows carry UPLOAD_ID and optional LOCKED as declared
+  business columns. replace_landing adds no actor columns: managed writes resolve uploader
+  attribution through the existing upload mapping when their targets declare actor columns. Steward SELECTs retain UPLOAD_ID through PRS, CDC,
+  PRE_ODS and ODS; no SETUP_TABLE change or landing actor stamping is introduced.
+- **S8.B (owner).** Fan-out ingestion items may return own-key PARTITIONS positions,
+  retained provisionally with item success, including skipped successes on retry. The task
+  checkpoint still commits only with successful attempt ending. Both Engine DBs migrate
+  AUD_TASK_ITEMS; scripts cannot override combined retained positions.
+- **S8.B (owner).** Managed SQL uses explicit `$$rule_flags(task, TYPE[, TYPE])` scopes
+  for committed active row decisions from the same run, guarded by a direct SUCCESS edge,
+  one target/key contract and a 10,000-key cap. `ScriptTask.replace_landing` streams declared
+  types and publishes one owned batch atomically; item replacement is restricted to the
+  current fan-out key. Every stewardship validator sets `REQUIRE_UPLOADS=Y`; missing uploads
+  fail permanently and fire ordinary FAILURE edges. Their downstream edges use HAS_DATA,
+  replacing the item's SUCCESS text because the package already refuses that edge.
+  S8.D valid-count reporting reads rejected keys from cloned audit tables; current-run ODS
+  admission uses recorded rule scopes, never asynchronous mirrors. Full demo validation and
+  Beta memory measurement remain in progress. Paired cloud provenance and omitted-column
+  seed checks passed, together with atomic landing crash/retry and rule-scope checks on both
+  clouds concurrently. Local units, touched Engine DB/warehouse suites, upgrade/guard/query
+  checks and 20 item-offset crash repeats passed. Live source ingestion waits for S7.E task-secret
+  declarations/delivery: arbitrary source credentials are intentionally excluded from task
+  environments; no credential allowlist bypass is introduced.
+
+
+- **S8.A (owner).** Workstation: 14 GiB RAM, 12 cores, 15 GiB zram and a 16 GiB
+  NVMe swapfile. Pods use LimitedSwap through a kubelet configuration file, with verified
+  nonzero `memory.swap.max`; every pod has requests and limits, low idle-service requests
+  and Trino's request near its limit. Images build locally from a pinned merged package
+  commit using S7.F's Dockerfiles and `k3d image import`; no registry push. S8.E moves to
+  gated candidates. Install pinned CloudNativePG with kubectl; the Helm/ARC GitHub runner
+  and owner-created GitHub App move to S8.E. The demo's AGENTS.md applies package rules,
+  fixes defects in package PRs, sets disk TMPDIR and limits tests to two workers/one suite.
+  Explicit Python counts may exceed the default estimate within CPU, total-slot and measured
+  process-base bounds; defaults remain 512/128 MiB. Dedicated agents reserve their supervisor,
+  not LAPTOP memory. Gamma permits physical duplicate notifications. Its version key combines
+  object key and ETag; EVENT_SQL groups each key once. S8.F must inject a repeated notification
+  and assert one object load and one AUD_EVENT_KEYS entry. The existing package deduplicates
+  equal keyed payloads and refuses conflicting payloads naming the key and remedy.
+  Acceptance availability: local sizing/process probes and package unit/static/docs checks;
+  full demo idle/batch measurements and stack acceptance remain with the demo PR. No cloud runs.
+  Read-only role/project images compile Python bytecode during the build: cold health probes
+  otherwise repeatedly compile imports and exceed the existing three-second S7.F probe timeout
+  when the twelve agents probe together. Probe thresholds are unchanged. The S7.F singleton
+  controller Deployment uses Recreate: a rolling update keeps the old controller active and
+  causes its replacement to refuse startup, preventing the rollout from completing.
+
+- S7.O slice 3 uses the candidate wheel filesystem mtime as build time, preserved during
+  transfer, and requires `--wheel` for release validation. Both expected inventories start
+  empty and block all releases until S8 supplies real IDs; no IDs are invented here.
+
+- **S7.O slices 1–2 (owner, 2026-11-03).** One combined PR replaces the two
+  planned slice branches. Support Insights is the new public repository
+  `etl-craft/support-insights`, default branch `main`; the old repository remains
+  read-only and is neither transferred nor archived. Only the retained generators,
+  generator UI, legacy SQL reference sources and license are copied from its master.
+  The former package project's domain content seeds `project/`; S8 builds its
+  deployment and CI later. Slice 3's release evidence remains outstanding.
+  S7.N's timing re-measurement in S7.O's Done when is waived: agents do not time CI.
+  scripts/soak.py was deleted instead of taking a project directory. The small demo can't
+  run it, and S7.I's endurance runner targets the S8 deployment. S7.I may reuse its code
+  from git history. S7.I's section already describes the S8 deployment and does not
+  assume soak.py; its text is unchanged. The installed fixture uses a table summary
+  where persistent views are unsupported and asserts CREATE_VIEW's refusal explicitly;
+  supported warehouses execute it. Iceberg namespace cleanup removes views and tables.
+
+- S7.AM slice 1 acceptance availability: SQL/SCD, replay, failure, stewardship, erasure and
+  allocation contracts passed on PostgreSQL, DuckDB, Trino/Iceberg and DuckDB/Iceberg. Unit
+  checks and twenty allocation-race rounds passed on both Engine DBs. Affected native/Iceberg
+  Snowflake and Delta/UniForm Databricks action, SCD lifecycle, composite-key and ROW_ID tests
+  passed. Databricks initially refused sessions before SQL; the owner restored availability
+  and acceptance then passed. Snowflake retry/fencing failures reproduced on unchanged main;
+  the completed-history lookup and fixture-initialization fixes passed the original modules
+  without increasing deadlines or weakening cancellation assertions. Engine DB SQL is unchanged.
+
+- S7.AM slice 2 acceptance availability: native PostgreSQL, DuckDB, Trino/Iceberg and
+  DuckDB/Iceberg protection, SQL/SCD, upload, erasure, seed handover and hash contracts passed.
+  Both Engine DBs passed upgrade/actor/query-plan and recovery checks, including twenty
+  concurrency rounds. Unit, API and browser suites and static/docs checks passed.
+  Native Snowflake and Databricks protection checks passed for SCD1 and SCD2; Snowflake's
+  uppercase-column lock comparison was corrected after its first run exposed it. Full cloud
+  format/provider acceptance remains slice 3, with no local warehouse omitted. The Support
+  Insights reference seeds hand over to the real stewardship pipelines and then report LOCKED.
+  Optional LOCKED controls passed real API/CLI uploads on all four local warehouses, including
+  same-value releases/relocks and mixed-row SCD counts; received-upload crash recovery passed
+  every boundary on both Engine DBs. Both native cloud protection checks passed again with
+  the final single-matched-UPDATE shape.
+
+- S7.AM slice 3 acceptance availability: all four local warehouses, both Engine DBs and
+  twenty concurrency rounds passed. PostgreSQL's pre-15 fallback was exercised on the
+  local server with the MERGE capability disabled. All twelve Snowflake native/Iceberg
+  and twelve Databricks Delta/UniForm cells passed across runs. Snowflake's protected
+  mutation and SCD2 successor queries now use joins to avoid rejected correlated
+  subqueries. Network and driver interruptions cleared on rerun. Final cloud cleanup
+  verified that each configured schema was empty, with only the system information
+  schema alongside it. Complete release candidate evidence remains S7.H.
+
+- **S7.AM recovery protocol (owner, 2026-11-02).** Choices that differ from the item
+  text: the internal `POST /api/v1/agent/report` protocol gains PROTECTION_READ and
+  PROTECTION_EVENT, not a user route, setting or flag. Both local and remote stores use the
+  same fenced event implementation. Every report requires a live attempt, its fencing token,
+  its admitted target and its current Engine DB target lock. Project and actor are
+  server-derived; PENDING allocates the request id on the server. Events accept hashes and
+  column names only, with no business-value field. Batches and column lists have shared limits;
+  reads page with a cursor and oversized input is refused rather than truncated.
+  - Normal finalization remains creator-only. Evidence-based recovery by the current fenced
+    target-lock holder may finalize another attempt's PENDING request only after that creator
+    is terminal or reconciled LOST. An expired but unreconciled creator is refused, as is a
+    live creator; the refusal names both attempts. Reconcile first, never adopt an expired lease.
+  - Ordinary mutations recover COMMITTED when their request stamp is observed, ABANDONED
+    otherwise. HARD_DELETE and ERASURE recover COMMITTED only when every affected key is
+    absent, ABANDONED otherwise. Recovery sends only those two statuses with the evidence.
+    Status rows retain the creating attempt and request id, separately recording the
+    recovering attempt and recovery actor. Repeated finalization is an idempotent append.
+    Engine recovery explicitly uses the system actor.
+  - Recovery runs wherever warehouse access exists, including agents, before mutation and on
+    provenance reads. At controller start accessible project targets recover through the same
+    implementation; an inaccessible warehouse is logged once per project and deferred until
+    the next mutation, without failing controller startup. Agent and server ship together;
+    older servers use the existing protocol-version refusal, with no compatibility shim.
+  - Slice 2 sizing before implementation: thirteen direct production dependency sites cover
+    the four warehouse capability declarations, dialect/handler protection, SQL dispatch,
+    seed/session, value operations, rehash, stewardship checks and target upgrades. Mandatory
+    additional sites are the merge builders, erasure, controller, doctor, task stores/protocol,
+    paired migration/schema guards and query plans. Migration 0082 adds the event log.
+    The dedicated stamp is ETL_PROTECTION_REQUEST_ID; format and revision remain in JSON.
+    Recovery finalizes intents in creation order under the target lock, keeping pending
+    reads bounded by the last finalized request rather than rescanning all historical events.
+    Erasure records exact selected row identities (ROW_ID when available plus the selected
+    identifier columns), using NULL-safe matches, so an unmatched SCD2 version with the same
+    business key is retained. A further hash-only whole-business-key event is emitted only
+    when every version of that key is selected; doctor can then distinguish an authenticated
+    erasure from outside deletion. Recovery checks each event's own typed key-column shape.
+    Each upload file commits and finalizes before the next file, preventing later stamps from
+    hiding a committed but unfinalized earlier file. Existing unprotected targets can add the
+    three nullable columns with upgrade-targets and initialize fingerprints with rehash;
+    targets carrying old side tables remain refused rather than converted.
+    Typed fingerprints cover business values plus canonical protection state, excluding the
+    request stamp and ordinary audit/hash columns so rehash preserves existing attribution.
+    The command audit is recorded before execution and names columns, never values; the
+    server-allocated mutation id is returned and lives in the event log, rather than placing
+    an empty or invented id in the command request. Seed-created merge rows initialize an
+    unattributed canonical state and typed fingerprints before the first protected write.
+    UPLOAD_ID is read-only file provenance, not a protected business value: adding its nullable
+    column on the first upload does not change the business contract or invalidate fingerprints.
+    Human edits retain its current value; actual per-cell business writers stay in row metadata.
+    Other protected business-shape changes are refused before DDL.
+    Event creator/recoverer ids are immutable historical identifiers without foreign keys to
+    expiring attempt rows. Retention pins the creating attempt only while its request is
+    unresolved; after a final status, normal run-history expiry proceeds and event ids remain.
+    Recovery refuses missing creator history rather than treating absence as a terminal state.
+    Owner decision, 2026-11-02, CI follow-up: ordinary SCD merges retain nested columns
+    outside MERGE_COMPARE_COLUMNS; unsupported whole-row fingerprints remain NULL while
+    protection is inactive. First edit, lock or upload refuses unsupported business types
+    before any target write, naming target/column/type and the scalar-cast remedy. Validate
+    and refresh use that same canonical-type check for declared stewardable merge targets.
+    Canonical nested fingerprints are a possible later item, not part of this implementation.
+    Ordinary merges add no warehouse round trips: one fenced Engine DB query detects pending
+    work and established protection. Warehouse recovery reads run only for pending requests.
+    Normal protected merges add only the PENDING and COMMITTED append statements; their
+    fencing checks are part of those statements. Exact budgets remain exact; the PR lists
+    every old/new budget and what its extra query pays for. The real first-upload refusal
+    test also exposed Trino's cancellation/listing race: an exact provider response that the
+    selected query has already finished is accepted, while the common fence still proves
+    that no tagged statement remains running before handing over the target lock.
+    Common event persistence/fencing sits in
+    the Engine DB layer beneath the services entry point, preserving the import direction.
+
+- **S7.AM upload control (owner, 2026-11-02).** Choices that differ from the item text:
+  optional BOOLEAN `LOCKED` flows through file validation and landing into the explicit merge
+  SELECT, but never into target business columns, hashes or comparison columns. TRUE, NULL
+  and absence retain USER locking; FALSE releases all value locks and the row lock on the key
+  in the same MERGE. Releasing row scope is intentional: an uploader already has authority
+  to replace locked values, and keeping row scope would prevent the requested unlocked reload.
+  Service uploads neither create nor release locks. SCD2 keeps the existing unlock semantics:
+  the current key's state is inherited by future versions, without rewriting closed history.
+  - `UploadReader.rows(schema={"LOCKED": bool})` is the shared upload-schema check. Only bool
+    is implemented: trimmed case-insensitive CSV true/false or empty NULL; native XLSX booleans
+    or empty NULL. Other values fail with upload, row, column, value, allowed values and remedy.
+    Merge staging requires an actual BOOLEAN type; validate and refresh use the same type
+    refusal and reserve target business column LOCKED with a rename remedy.
+  - Nullable `AUD_PROTECTION_EVENTS.UPLOAD_ID` identifies every upload-caused write or unlock.
+    The server derives it from the run's accepted receipt and successful pinned validator;
+    claimed agent ids are never trusted without that verification. A CHECK limits non-NULL
+    ids to upload event kinds. Final/recovery rows retain the verified original id. Provenance
+    joins AUD_UPLOADS to derive uploader and `upload <id>: LOCKED=false`, with no reason column.
+    PENDING and normal final rows use that verified uploader as actor; recovery keeps its
+    deliberately selected recovery actor. Upload ids and LOCKED never manufacture a business
+    change or an SCD2 version: lock-only changes use conditional assignments in the same
+    matched UPDATE, including DuckDB/Iceberg's single-UPDATE restriction.
+    No upload-id index is added: recovery filters target/request, and provenance joins the
+    existing upload primary key rather than filtering events by upload id. FALSE uses the
+    existing target MERGE and intent appends, adding no warehouse statement.
+
+- **S7.AM private audit identities (owner, 2026-11-02).** Choices that differ from the item
+  text: erasure overrides human locks; ordinary hard deletion respects them. Committed
+  ERASURE/HARD_DELETE evidence accounts for missing keys in doctor; erasure removes row-local
+  lock state and provenance retains its event even when no target rows remain.
+  - `Privacy.Hmac_secret` replaces unreleased `Erasure.Hmac_secret`, without an alias. One
+    project secret uses separate protection-key, protection-value, erasure-key and key-check
+    domains. Warehouse typed MD5/hash version 2 and in-row fingerprints are unchanged; the
+    host HMACs event identities before persistence. Key identities bind the canonical target;
+    value identities also bind the column, preventing cross-target/column matching against
+    known live values. Agents never hold the secret.
+  - Unreleased 0081/0082 carry immutable per-project key checks on history rows; development
+    Engine DBs must be recreated. Database guards prevent a different key check, including
+    concurrent first uses, without adding ordinary append round trips. Missing/changed secrets
+    are refused before protection/erasure writes and history/doctor lookups. Restore the
+    original secret; supported rotation is a possible later item, not roadmap scope.
+  - Stamped writes recover by request id. HARD_DELETE/ERASURE recover by absence of their
+    protected keys. Deletion events cover only rows with protection state; unprotected rows
+    have no lock history to reconcile. Candidate scans use ETL_PROTECTION IS NOT NULL and
+    bounded warehouse cursor batches only for pending deletion recovery. Each key shape is
+    scanned once; indexed host matching filters by the candidate HMACs. Host reads resolve one
+    checked secret per operation. PROTECTION_READ matches transient MD5
+    candidates on the host, under the same fence and terminal/LOST creator rules, returning
+    only matched request event ids. Complete absence commits; all present abandons; a mixed
+    result fails naming request/count. Interrupted scans append no outcome and restart.
+
+- **S7.AM acceptance execution (owner, 2026-11-03).** The owner waived CI timing
+  measurement for slice 3 and requested completion of tests and the PR. Cloud acceptance
+  may run Snowflake and Databricks concurrently. After acceptance, remove generated user
+  schemas and empty each configured schema, preserving system information schemas. No
+  required suite, marker, coverage gate or CI job is removed.
+
+- **S7.AM budgets and CI (owner, 2026-11-02).** Actual staged LOCKED type inspection
+  shares the existing key-count query, including empty stages; ordinary SCD1/SCD2 retain
+  exact five/six warehouse-statement budgets. Provider type expressions stay in dialects.
+  Measured coverage shards increase from three to four and Iceberg shards from two to three,
+  balanced with existing measured durations; collection, markers and the 90% gate are unchanged.
+  Installed-demo jobs are capped at two concurrently to retain the existing twenty-runner limit.
+  Main already exceeded the execution limit before this slice; merge still requires a measured
+  execution path below 600 seconds.
+
+- **S7.AM protection design (owner, 2026-11-01).** Three implementation PRs are approved:
+  (1) single-MERGE SCD1/SCD2 builders, replay/count/ROW_ID proofs on every warehouse/format,
+  preserving current protection; (2) in-row protection and the Engine DB event log, recovery,
+  edit/upload/unlock/rehash/erasure/hard-delete integration and doctor, deleting side-table
+  authority/code, `atomic_protection` and its provider refusals; (3) every-provider acceptance,
+  one cloud try each, twenty concurrency rounds on both Engine DBs, security and docs.
+  S8's protection prerequisite is S7.AM complete, not slice 1 alone.
+  - Authoritative state is in `ETL_PROTECTION` canonical JSON, carrying its own format version,
+    plus `ETL_ROW_FINGERPRINT` and a cheaply filterable request-id column. Keep columns minimal;
+    format/revision stay in JSON unless a MERGE condition needs a column, with its reason in
+    Decisions. Per-cell actual writers and mixed-upload attribution, row/value unlock semantics,
+    typed hash/rehash rules and the PostgreSQL-before-15 transactional fallback are retained.
+  - No in-row outbox or metadata-only clear write. Approved `AUD_PROTECTION_EVENTS` is an
+    append-only, actor-guarded Engine DB table with PENDING, COMMITTED and ABANDONED status
+    rows and hashes only, never business values. Both dialect migrations/schemas, CHECK seeds,
+    actor-audit and query-plan coverage are required. Under the target lock, compute exact
+    events from staged effective values, append PENDING, run one target MERGE stamping request
+    ids, then append COMMITTED. Recover before the next target mutation, at controller start
+    and on provenance reads: rows carrying a PENDING request id mean COMMITTED; none means
+    ABANDONED; atomic MERGE has no partial target case. HARD_DELETE and ERASURE intents use
+    this same log, never a second intent store; their evidence must prove the physical-delete
+    outcome as well as the ordinary changed-row request-id case.
+  - No membership witness gates writes. Doctor compares locked-key hashes in the event log
+    with rows present and reports outside deletion with target, hashes and remedy. Warehouse
+    permissions are the trust boundary. No snapshot expiry is implicit.
+  - No conversion action or pre-0.9 compatibility shim: no release tag contains S5.O.3.
+    Refuse an old-side-table target, naming it and the remedy to back up, recreate and re-apply
+    locks; delete old side-table code. Prove DuckDB-over-Iceberg MERGE on the pinned version
+    first; if unavailable, stop with a design note instead of dropping that provider.
+  - Rejected alternative: multi-table writes followed by `rollback_to_snapshot`/RESTORE.
+    It still needs write-ahead intent, can discard intervening commits, exposes rows that later
+    vanish, and has no DuckDB-over-Iceberg form. Separate close/insert SCD2 statements are
+    replaced because they expose a crash window on Iceberg and Delta.
+  - S7.AL.6 owns the S7.U snapshot-retention gap: per-table physical persistence/expiry-bound
+    reporting in erase/ERASURE, doctor findings for no bounded expiry and the erasure guide.
+    It proposes no automatic expiry; an explicit optional expiry action requires a proposal.
+  Slice 1 Decisions: internal source-control columns avoid business-name collisions; computed
+  ROW_ID allocation stays inside the target mutation lock. Existing internal fault names after
+  a close/update now occur after the whole atomic MERGE on capable providers; older PostgreSQL
+  retains its original transactional statement boundaries. Existing protection remains native-only
+  in slice 1; the every-warehouse final requirement is not claimed implemented yet.
+  Snowflake lock verification uses an end-time lower bound at the server's current time, with
+  no upper bound, retaining running queries while omitting completed history. The maximum result
+  count, cancellation proof and test deadlines are unchanged. The fencing fixture waits for
+  connection initialization before observing the intended write, rather than its setup queries.
+
+- **Pre-demo audit owner decisions (owner, 2026-11-01).** S7.B, S7.C, S7.D, S7.E,
+  S7.F, S7.G, S7.H, S7.I, S7.J, S7.L and S7.W all stay inside 0.9.0. Only S7.Q and
+  S7.AE remain moved after 0.9.0. Their new Progress rows distinguish existing parts from
+  unbuilt work; a partial implementation or a collected test is not completed acceptance.
+  S7.H and S7.R remain separate, and no release-checklist gates are merged or removed.
+  The audit's proposals to defer other finish items are not taken.
+- **Every-warehouse stewardship (owner, 2026-11-01).** SCD human-value and row protection,
+  uploader attribution, provenance, unlock and recovery must work on every supported
+  warehouse, including Iceberg and Delta. Earlier native-only limits in S5.O.3/S7.M handovers
+  and S8 are superseded requirements, not final supported scope. An in-row protection design
+  note is reviewed before its implementation item and slice order are assigned; this plan
+  does not approve a storage design or add its columns. That implementation must merge before S8.
+- **S8 admission (owner, 2026-11-01).** Replace the old all-workstreams prerequisite with:
+  this pre-demo plan PR; S7.AM protection on every warehouse; S7.AL.1
+  (`duplicate_count`); S7.AL.2 (stale docs); S7.F images/manifests; S5.AE close-out; S7.O.
+  Every other 0.9.0 item runs alongside S8 and still closes before release. S5.AE close-out
+  proves its gateway/agent/deployment contracts and tick instrumentation; S7.I owns the
+  actual candidate endurance result once S8 runs, avoiding a circular start dependency.
+- **S8 text corrections (owner, 2026-11-01).** Use existing `ScriptTask.warehouse()` scopes,
+  not a new `task.write` helper. Gamma's walkthrough uses S8.B's keyed SQL object signal,
+  not FILE EVENT_WAIT. Secretless PR validation names a local DuckDB warehouse profile and
+  bootstraps its schemas/source shapes for seed casts. The dedupe oracle is latest per key
+  per batch, with SCD2 versions retained across batches, not every within-batch source version.
+- **S7.AL.1 duplicate counts.** Use the existing post-reject merge key query. Each
+  accepted stewardship file is a separate dedupe batch. Sum the rows it removes across
+  files in the attempt, excluding later-file wins. Unmeasured actions and historical
+  rows retain NULL. The task summary takes the current attempt's counts and the S8 Data
+  Metrics projection reads that summary from the audit mirror.
+  Acceptance availability: the shared dedupe oracle passed on Snowflake native and
+  Iceberg, and Databricks Delta and UniForm. The exact local merge budget assertions
+  remain unchanged.
+
+- **S7.AR restarting pipelines (owner, 2026-11-07).** Choices that differ from the item text: the
+  pipeline setting is `AUTO_RESTART_CONDITION`, not `RESTART_CONDITION`, and it also takes
+  `SCHEDULE` (the default: the pipeline's `RUN_SCHEDULE` starts it, as today) and keeps `NONE`
+  (only a person or a trigger starts it). `SCHEDULE` combines with the endings, so `SCHEDULE|SUCCESS`
+  restarts at once after a success and otherwise follows the schedule; `ALWAYS` is `SUCCESS|SKIPPED|
+  FAILURE` and never a cancel. The environment setting is `Orchestration.Allowed_auto_restarts`, which
+  replaces `Orchestration.Allow_schedule` with the same values (default everything; `NONE` is the old
+  `Allow_schedule: false`). It only suppresses automatic starts in that environment: a pipeline's
+  condition stays valid and validates everywhere, so one set of config files serves dev, test and
+  prod. Slice 2 adds the trigger kind `RESTART` (migration 0089; on SQLite the run log is rebuilt, as in
+  migration 0044) so a restart is visible and queryable; the run key `restart:<previous run id>` makes
+  two controllers start one next run. Acceptance availability: no warehouse SQL changed, so cloud
+  acceptance was not needed.
+
+- **S7.AP native catalog and S7.AS workspace (owner, 2026-11-07).** Choices that differ from the item
+  text: the catalog's "JSON read action" is `catalog.json`, written by `generate-docs` beside the HTML
+  pages and served by the existing catalog-file read (`CATALOG_PAGE`, path `catalog.json`), so it has the
+  same build, project check and access rule as the site and no new action exists; its shape is
+  `etl-craft/catalog/1`. The catalog's own Insights page is not rebuilt: its gap counts are the explorer's
+  front page, and Home becomes the dashboard (S7.AS slice 4). The pipeline workspace's Details tab shows
+  each task's definition (handler and parameters), not script sources, which the API does not serve.
+  `TABLE_PREVIEW` is the first API read of business rows; it is a developer-role read recorded in the
+  audit log, which is why `test_reads_record_only_explicit_admin_access_audits` lists it.
+
+- **S7.AO polish with S7.AS, accounts and projects (owner, 2026-11-08).** Choices that differ from the
+  item text, all in pull request #364 at the owner's request to keep it one pull request: the interface uses
+  small radii, flat edge-to-edge panes and an indigo palette; the Home Catalog tab replaces the catalog's own
+  Insights page; every page header has a back arrow. A project has `ALLOWED_AUTO_RESTARTS` (migration 0091)
+  beside the controller's `Orchestration.Allowed_auto_restarts`, which stays as the deployment ceiling: the
+  narrower applies, and `AUD_CONTROLLERS.ALLOWED_AUTO_RESTARTS` (migration 0090) records the controller's value
+  so the interface can say schedules are off. Accounts have `FIRST_NAME` and `LAST_NAME` (migration 0092).
+  `Auth.Oidc_bind_by_email` binds a first SSO sign-in to the one passwordless, subject-less account with the
+  same verified email, and `Auth.Names_editable` lets accounts edit their own names. The device flow accepts an
+  ID token without a `nonce` and reads a 401 poll answer from its body, because Dex, Google and Keycloak do
+  not echo a nonce and Dex answers a pending poll with 401; the security guide warns about the first. Not
+  done: `--run-id` and the HTTP API accepting a run label (S7.AQ slice 2), which needs one resolver in the
+  operations layer.
+
+- **S7.AO A11 session confirmation.** Choices that differ from the item text: none.
+  Failed identity reads retain the current guard state; successful refreshes alone confirm an
+  expired response, and the existing authentication-refusal event still ends the session.
+  The existing clock tick rechecks the minute throttle so an unavailable server is retried.
+  Acceptance availability: Vitest network-failure, recovery and authentication-refusal cases,
+  sign-in/session browser checks, the full browser and Python unit suites, static checks,
+  strict docs and the committed UI build are validated locally.
+
+- **S7.AO A14 chart loading decision.** Choices that differ from the item text:
+  shared DailyRuns and Spark load the unchanged Recharts renderers only when a chart is needed;
+  their existing fixed-height containers reserve layout while the import resolves. Sparse
+  numbers and the native run/catalog duration strips stay eager and unchanged. The main entry
+  plus its preloaded shared JS falls by more than a third, both raw and gzip, under identical
+  build settings. The renderer chunk is deferred on Runs and catalog pages. A11 remains separate.
+  Acceptance availability: static/docs, UI checks, Python unit and full browser tests run locally;
+  no API, schema or warehouse SQL changes, so cloud acceptance is not applicable.
+
+- **S7.AO B15 governance decision (option 1).** Choices that differ from the item text:
+  Run now and reconciliation validate reasons through the existing project governance policy;
+  STRICT requires a reason in every environment, RELAXED permits omission. Other run controls
+  retain the same policy. Browser confirmations read the existing project governance value
+  instead of using environment-only optionality. PROD remains STRICT, RELAXED production stays
+  refused, and typed production confirmation is unchanged. CLI/API callers in STRICT projects
+  must supply a reason. C6 keeps schema and Swagger for the docs generator and deployment smoke
+  check. A14 chart loading follows in a separate pull request after this one merges; A11 is separate.
+  Acceptance availability: unit, API and browser validation run locally on the existing services;
+  no warehouse SQL or database schema changes, so cloud acceptance is not applicable.
+
+- **S7.AO audit batch 4 (A9, B10, B11, B12).** Choices that differ from the item text:
+  acceptance is the owner's presentation follow-up. Shared failure details hide the unchanged
+  classification, source and code until Process details opens. Empty-state next steps come from
+  callers throughout operational lists, Home, catalog and administration; no guidance is chosen
+  in the shared component. Dense statuses use a dot and word, retaining failure/warning pills
+  and detail-page pills. Colour tokens are unchanged. Broad theme/phone renders run locally;
+  small behaviour regressions stay in CI. A14, B15 and C6 remain owner decisions and are untouched.
+  Acceptance availability: Python unit, UI checks and the full browser suite run locally;
+  warehouse SQL is unchanged, so cloud suites are not applicable.
+
+- **S7.AO audit batch 3 (A5, A6, B3).** Choices that differ from the item text:
+  acceptance for this follow-up is derived from the owner's audit batch: readable automatic
+  and button-driven graph fits, and numbers for short daily series. Shared RunGraph fit options
+  cover pipeline/run workspaces and catalog pipeline/table-lineage graphs. Shared DailyRuns in
+  charts supplies Home Overview: one-to-four UTC calendar days show dated counts and average
+  durations, including quiet days; longer windows retain daily slots and capped bars. B4 is
+  already fixed and unchanged. A9, B10, B11 and B12 remain for the next batch; A14, B15 and C6
+  remain owner decisions and are untouched.
+  Acceptance availability: Python unit, UI unit and browser checks run locally, including the
+  existing B4 grid tests; no warehouse SQL changes, so cloud suites are not applicable.
+
+- **S7.AO audit presentation follow-up.** Home summaries, dashboard window boundaries,
+  time-labelled run grids and session warnings use the account's shared time display. Search
+  handler labels and the System health schema number are presentation only: API/CLI codes and
+  migration identities are unchanged, and the filename remains available on hover.
+  At the owner's request, the grid has one adjustable outer divider: task names size automatically
+  to the measured longest name and narrow only to preserve the latest run. The task-name boundary
+  is not adjustable. Active-run graphs refresh recorded task statuses even outside the run tab;
+  queued states are not drawn before the selected run's task-status read succeeds.
+  Phone date controls use matching heights. Vite's missing server-issued CSRF cookie is documented
+  in CONTRIBUTING rather than adding another authenticated serving/proxy path.
+  Acceptance availability: warehouse SQL is unchanged; cloud suites are not applicable.
+
+- **S7.AQ slice 3 display.** S7.AQ is complete. Stored labels accompany integer identities in
+  CLI text, API results and browser histories, headers and run links. Labels are plain table text;
+  links retain integer targets. CLI ID columns remain first relative to their label, and shell
+  quotes make text and browser-copy labels directly pasteable without changing storage. Glyph-only
+  status bars and task cells carry labels in their accessible descriptions; downloads retain
+  their bytes and filenames, with the CLI identity key on stderr. Historical audit argument and
+  metadata payloads remain immutable; display metadata is separate.
+  Acceptance availability: unit, API, CLI, catalog, query-plan and browser suites run locally;
+  warehouse SQL is unchanged, so cloud suites are not applicable.
+
+- **S7.AQ slice 2 exact label selection.** The owner confirmed both integer and stored-label
+  inputs, exact case-sensitive comparison, and one resolver in services/operations. CLI and API
+  input fields accept either spelling; results retain integer IDs. Browser addresses send their
+  entire value for validation instead of resolving a suffix locally; attempt pages validate their
+  parent run through the same API lookup. Visibility is checked before
+  a mismatch can name the expected stored label. Labels and schema are unchanged; slice 3's
+  broader display work remains separate. Acceptance availability: no warehouse SQL changed;
+  cloud suites are not applicable.
+
+- **S7.AO remaining audit follow-up.** Choices that differ from the item text: the owner
+  requested one pull request for all remaining UI, CLI and operability findings. Exact ended-run
+  selection stays mandatory, including read-only commands. `--run-id` alone resolves within the
+  selected project and visible pipelines; readable candidate labels do not add a run-label resolver.
+  Existing stored labels and JSON/piped table columns are preserved; terminal formatting is richer.
+  Text audit output is newest first and capped at 100 per section; JSON remains complete.
+  Completion records append linked events to AUD_ACTIONS; no immutable request row is updated.
+  Run now reasons become optional only outside PROD. Root API docs aliases remain unchanged;
+  documentation names the existing versioned endpoints. Graph/catalog chunks are lazy and shipped
+  in the committed build. Catalog durations adapt the recorded timestamp fields explicitly, and sparse
+  strips defer to their numeric table. Attempt IDs appear once under Process details. Shared native
+  select/disclosure primitives retain platform keyboard semantics.
+  Acceptance availability: no warehouse SQL or schema migration changes; cloud suites are not applicable.
+
+- **S7.AL.4 event-file validation (owner, 2026-11-06).** Choices that differ from the item text:
+  the opt-in is the FILE_VALIDATION parameter `SOURCE_EVENT=<EVENT_WAIT task code>`, for waits
+  with `EVENT_FILE` (the filesystem glob that records admitted paths in `AUD_EVENT_FILES`). One
+  new append-only table, `AUD_EVENT_FILE_DECISIONS` (migration 0086, both dialects), holds each
+  decision with the SHA-256 and size read, so no upload or uploader identity is invented and
+  `AUD_UPLOADS` and its storage are unchanged. Bytes are not copied: a path stays where the wait
+  found it and its digest pins its identity (a retry compares against the first recorded digest;
+  later tasks verify accepted digests before reading). Cloud-object events are not fetched; they
+  stay on the signal-table pattern. Agents read the file through their own mount of the path.
+  Acceptance availability: no warehouse SQL changed, so cloud acceptance was not needed.
+
+- **S7.AL.2–3 combined delivery (owner, 2026-11-03).** Slices 2 and 3 ship in one
+  pull request, superseding the one-PR-per-slice instruction for these two slices.
+  The reference checks use the live action/router, loader and CLI parser inventories.
+  The guarded-table rule adds actor audit, valid CHECK seeds and typed query-plan
+  fixtures to the touched-suite procedure without adding a CI job.
+  Acceptance availability: the installed-wheel demo ran the README walkthrough locally.
+  No warehouse SQL changed, so cloud acceptance was not needed.
+
+- **S7.F and S5.AE (owner, 2026-11-03).** One PR closes S5.AE and finishes
+  the S7.F images and manifests. Exact-version base and UI images publish to GHCR on
+  tagged releases and release candidates after the release and image gates, including
+  before 0.9.0. There is no `latest` tag or publishing from untagged main or PRs.
+  PyPI and announcements still wait for 0.9.0. After merge, S8 pulls the candidate
+  images instead of building from its wheel.
+  - S5.AE's "only /health" meant no API or UI traffic. The headless controller serves
+    `/health` and `/metrics`; S7.I reads `controller_tick_duration_seconds` from
+    `/metrics`. The tick histogram excludes notification and polling waits.
+  - Scale agents with one Deployment and token Secret per agent. Token identity owns
+    the registration, so a second live process cannot share it. Use Secret environment
+    references to keep token files out of the task filesystem.
+  - Choices that differ from the item text: gated GHCR publishing starts before 0.9.0;
+    `all` resolves to core plus UI, with each warehouse extra installed separately;
+    the headless controller also serves `/metrics`; standalone UI readiness certifies
+    package compatibility using the Engine DB ledger without reading project files.
+  - Decisions: PostgreSQL is the documented default and DuckDB the local analytical
+    alternative. Both are configured in the team-owned connector, with no code default.
+    PostgreSQL commits a project migration and its ledger entry together. UI readiness
+    needs no separate project migration state because it sees the previous consistent
+    state until commit. Run migrations from the project image before rolling roles.
+  - S5.AE acceptance: `test_two_ui_processes_share_sessions_runs_refresh_and_revocation`
+    and `test_controller_no_ui_serves_only_health_and_private_value_free_metrics` cover
+    split role serving. `test_agent_runs_its_pinned_bundle_without_engine_or_store_credentials`
+    and `test_expired_lease_cannot_be_renewed_or_report_success` cover API-only execution
+    and fencing. The installed wheel test `test_it_installs_and_runs` checks the extras;
+    `test_api_address_flag_and_environment_have_no_controller_alias` checks the CLI flag.
+    The headless controller test checks the tick histogram on `/metrics`, which S7.I reads.
+  - Acceptance availability: local Compose and k3d server-side dry runs and applied roles
+    completed the demo on distinct agent credentials. The missing-token pod was refused.
+    A Trino project image executed a query against the development Trino service.
+    No warehouse SQL changed, so cloud runs were outside this acceptance scope.
+- **Pre-demo gap identity (owner, 2026-11-01).** The five package-gap slices are S7.AL.
+  S7.AK already names the merged Schema checker; its item and references retain that identity.
+- **Follow-up ownership (owner, 2026-11-01).** No promise from the pre-demo audit is dropped.
+  Completed historical slice promises retain their original item/PR; remaining work is assigned
+  below. Assigning an owner does not silently authorize new public surface or mark work done.
+
+  | Promise retained from handover | Owning item and close-out |
+  |---|---|
+  | Event-file opt-in validation | S7.AL.4; an ordinary pipeline explicitly asks its validator to check event files |
+  | Timeline gate/event-wait segments | S7.AL.5; expose recorded waits and render them distinctly |
+  | Per-run parameter overrides, removed from S7.A | S5.Q.4 is the separate engine item: recorded per-run overrides, CLI first, then shared API/UI; not part of the S7.A page close-out |
+  | Pipeline-limited catalog filtering | S7.A close-out; retain safe whole-project refusal until filtering has permission and leakage tests |
+  | Full public Python contracts, recipes and complete references | S7.J; S7.AL.2 closes the specifically listed reference defects first |
+  | Resolved-secret masking after S7.U | S7.C; register secrets into the shared core, without a second masking mechanism |
+  | Task secrets, provider integrations and declared secret delivery | S7.E; S7.C owns the shared masking boundary |
+  | Custom action-set roles, scoped bindings and access explain | S7.B; existing built-in roles/grants stay until its guarded upgrade |
+  | Agent delivery and role layouts left by S5.AE | Agent delivery is built in S5.C #231; S7.F supplies layouts and S5.AE records gateway close-out before S8 |
+  | Managed automatic token issuance not exercised with issuer credentials | S5.I owns the contract; S7.H owns live candidate acceptance and unavailable-provider follow-through |
+  | Earlier protection/cloning/cancellation cloud acceptance waivers | S7.H; a PR-time waiver is not candidate cloud evidence; every-warehouse protection also needs new acceptance |
+  | Reference load gate deferred after S8 | S6.G; retain the owner-approved timing and all load budgets |
+  | Actual accelerated candidate endurance, tick percentile and bounded growth | S7.I after S8 is running; old frozen-soak acceptance is not this result |
+  | Full SI_REFERENCE history, Kafka broker example and independent scenario oracles | S8.B/S8.H; seeds/offset unit tests are not full demo evidence |
+  | Complete feature-to-scenario manifest and pinned external-demo evidence | S7.O implements package validation; S8.E/S8.G/S8.H produce and consume the results |
+  | Six-skill coverage audit and missing regression traceability | S7.R.2; keep it separate from S7.H and complete before candidate acceptance |
+  | Open retention-budget and unreproduced Iceberg obvious-failure risks | S7.P keeps triage current; S6.A/S6.G own retention/budget evidence, S7.R owns missing regression coverage |
+  | Cold/warm complete-CI evidence as features accumulate | S7.N/S7.AJ retain the full gate and measurement contract; no repeated PR suite is added |
+  | Rolling compatibility and additive post-0.9 migrations | S7.G; the earlier same-release-only rule is superseded by the recorded compatibility decision |
+  | Branding/banner and post-MkDocs toolchain evaluation | S7.L and S7.W respectively, both still inside 0.9.0 |
+  | First read of very large attempt logs and per-attempt local cancellation grace | S6.B and S5.B respectively own these existing bounded-scope follow-ups |
+  | First-public homepage and profile-menu version checklist entries | S7.J owns homepage/release navigation; S7.A owns the shared profile-menu version line |
+
+  Acceptance availability: this is a plan-only reconciliation of the read-only pre-demo audit.
+  Documentation validation is required; no runtime capability, warehouse acceptance or release
+  result is claimed by these Progress additions.
+
+- **S7.U owner decision (owner, 2026-11-01).** Register a table, column and exact key, not a
+  SUBJECT_TYPE; columns.csv stays unchanged. Immediate erasure runs in-process under the
+  shared target lock, upstream first. Each ERASURE task recomputes direct pass-through
+  coverage from pinned versions; expressions and unmanaged targets are reported with remedies.
+  The admin project routes are `/api/v1/projects/{project}/erasure`. Lift is the only row update;
+  re-registering creates another row. `Erasure.Hmac_secret` names the HMAC variable; rotating it
+  breaks matching to old audit identities. S7.U ships before S7.C with the owner's approval:
+  `core.redaction` supplies shared operation-scoped value masking; S7.C will register resolved
+  secrets into it. No Redaction setting or Sensitive_patterns work ships here; S7.C's Progress
+  row is unchanged. Agent erasure executes on the Engine DB host through the fenced attempt
+  report; raw register keys never travel to an agent. Pinned CFG target components retain
+  their native case; metadata lookup adapts regclass/DESCRIBE and Iceberg catalog spelling.
+  Each table uses one native-typed bound DELETE across all its direct identifier columns,
+  with reject ledgers checked for package shape and locked after their parent. Repeating erase
+  resumes its active entry without creating another. Passes snapshot active entries; a lift
+  affects later passes. The acceptance checklist is derived from the item's Change and the
+  owner's explicit tests, because the item has no separate Done when. The owner also moves
+  S7.Q and S7.AE
+  after 0.9.0; neither is needed by the S8 demo.
+
+- S7.S seed loads (owner, 2026-11-01): apply executes in-process, with no pipeline run
+  or agent slot. It reuses CREATE_TABLE publication/recovery and the target mutation lock,
+  reads the deployment's pinned bundle and explicitly sets its requesting actor.
+  `SEED_LOAD_ID` replaces the item's `RUN_ID`; one immutable outcome per table per apply
+  uses the UNCHANGED/LOADED/LOCKED/FAILED enum. The command returns after its loads finish.
+  Owner-approved migration 0080 adds nullable `ERROR_MESSAGE TEXT` in both dialects:
+  a CHECK requires it exactly for FAILED. One place constructs and masks the core.errors
+  message before both returning and storing it; no traceback is stored.
+  Lock decisions use successful recorded runs with accepted AUD_UPLOADS and targets from
+  those runs' pinned versions, resolved with warehouse identifier rules; today's retargeting
+  cannot add or remove a handover. Successful-reopen evidence is retained with uploads so
+  a repair cannot unlock a seed. Project route generation exposes
+  `POST /api/v1/projects/{project}/seeds`; registration lives in `seed_actions.py`, and
+  the capability matrix records its deploy-workflow CONSOLE_ONLY reason.
+  The current demo gets five seed tables and optional native DuckDB/PostgreSQL stewardship
+  examples; the full S8 SI_REFERENCE history flow remains S8 work.
+
 - S7.M stewardable pipelines (owner, 2026-10-31): `STEWARDABLE_FLAG` only lists a pipeline
   for uploads (and `CAN_UPLOAD` lets accounts send to it); a stewardable pipeline otherwise runs
   like any other, with schedules, manual runs and no refusals on marks, pauses or single tasks.
@@ -929,11 +1699,45 @@ empty-history-page handling defect, which was corrected and verified. No cloud w
   browser page. CAN_UPLOAD is a permission, not a deployment role; S7.Y delegation supersedes
   the item's admin-only grants. SQL writes explicitly retain UPLOAD_ID, use bound per-row
   account expressions, and reject unknown ids before mutation. Upload ids define merge order.
+  **Superseded provider limit (owner, 2026-11-01):** the following native-only limit
+  describes the implementation before the every-warehouse protection follow-up.
   Stewarded SCD uploads are supported only where S5.O.3 protection is supported (native
   PostgreSQL/DuckDB); ordinary full flows and SCD attribution through the real SQL actions
   are proven on all four local warehouses. One statement per upload in the same transaction
   supplies each writer to protection evidence. The approved attempt-only agent content route
   shares local execution's fenced storage reader and verifies SHA-256 before scripts.
+
+- S7.M M2 (owner, 2026-11-01): (1) `uploads/<PIPELINE_CODE>/` holds only queued
+  files or files of an unfinished run; folders are created on demand. (2) Every run ending
+  moves only its own files, on success, failure or cancellation; later queued files stay.
+  (3) Ended files use `processed_uploads/<PIPELINE_CODE>/` until existing retention archives
+  them to `Uploads.Archive_to`. (4) Stored names are `<UPLOAD_ID>-<safe original name>` using
+  `[A-Za-z0-9._-]`; client labels never become paths. (5) Immutable `STORED_NAME` is recorded
+  at receipt and shown in CLI/API/UI history; every local, agent and validator read uses the
+  recorded state/name and verifies SHA-256, restoring archived inputs for reruns.
+  (6) Receipt streams/fsyncs into `.incoming`, then inserts/queues and renames before one
+  Engine DB commit; duplicate admission holds the existing pipeline lock until commit.
+  A lost acknowledgement checks the committed row before returning an id or deleting bytes.
+  Startup removes/logs uncommitted leftovers; missing committed bytes refuse with a remedy.
+  (7) Endings and archive intent commit before moving/copying. Startup and reads finish
+  interrupted work; the source stays until verified publication, allowing two copies but
+  never removing both. Migration 0079 is corrected in place before its first release.
+  Choices that differ from the item text: existing `Retention.Run_history_days` supplies the
+  file cutoff; `ENDED_AT` retains the first ending across reruns and validation does not set it.
+  Archive time records the durable decision, with source deletion only after verification.
+  S3 uses the existing Store/Profile value shape and records the profile name in its URI;
+  archive keys include SHA-256. Upload audit, the immutable receipt request (which pins the
+  original folder code across pipeline renames), and actual validation evidence remain retained.
+  Receipt resolution and orphan cleanup wait behind the original admission transaction before
+  proving a row absent; archive reads are bounded by the recorded size plus one byte.
+  Ended attempts' private caches are discarded at ending, recovery and archival; live
+  attempts and canonical sources are kept.
+  Acceptance availability: SQLite/PostgreSQL upgrades, audit guards, indexed query plans,
+  atomic receipt/move/archive crash recovery and repeated admission races pass locally.
+  Ordinary stewardship flows and handler attribution pass on all four local warehouses;
+  archived reruns pass through real validation/loading on native DuckDB. API and browser
+  suites pass; file and explicitly profiled MinIO archives are covered. Cloud warehouse SQL
+  is unchanged, so no cloud acceptance is required for M2.
 
 - S7.A slice 6 (owner, 2026-10-30: 6a/6b/6c; announcements as planned). 6a puts the task and run
   actions on the pages through one generic confirmation (body, URL and extra fields per button).
@@ -942,6 +1746,12 @@ empty-history-page handling defect, which was corrected and verified. No cloud w
   offered. Held and paused work and run filters by agent, pool and failure class move to 6c: no
   read lists active holds or filters runs by attempt fields yet. The offsets panel is also 6c,
   with the task page that shows the stored offset.
+- S7.A slice 6f: value provenance, edit and unlock live on the SCD merge task's page (the
+  writer of the table), not a catalog tab: the generated catalog is a static site. A new `task`
+  read gives the handler, parameters and parsed merge columns; the `|` column-list parser moved
+  to `core.text.pipe_list`, shared with the SQL spec. `tests/unit/test_capability_matrix.py`
+  lists the composed routes, the reads another view covers, and the console-only actions with
+  reasons (bundle publish, rename, the health probe, refresh history, orchestrator triggers).
 - S7.A slice 6e/6f: 6e is held and paused work (a new `holds` read over control requests on
   queued and running runs) and run filters on the existing history read (`pool`, `agent`,
   `failure_class`, which require `all` and no task). 6f is the catalog Data tab and header
@@ -1967,7 +2777,9 @@ empty-history-page handling defect, which was corrected and verified. No cloud w
 - S5.O.3 uses the owner-approved initial admin boundary: human admins edit and unlock;
   authenticated admin service integrations write without creating or releasing human locks.
   Scoped stewardship remains S7.M. The owner selected warehouse-side protection/provenance
-  committed with business writes; native PostgreSQL and DuckDB are supported, while other
+  committed with business writes. **Superseded provider limit (owner, 2026-11-01):**
+  the following describes the old implementation, not the required final scope:
+  native PostgreSQL and DuckDB are supported, while other
   warehouses refuse protected edits. Two per-target warehouse evidence tables store hashes,
   locks and actual writers, with no Engine DB migration or business-value mirror. Outside
   writes are unsupported and detected against physical-version fingerprints; historical
@@ -3522,7 +4334,7 @@ Branch: `fix/engine-migration-hygiene` plus small branches as convenient.
 
 ### S2.L Regression suite and release
 
-**Status: done** (#90, #91, #92, #93). [0.2.0 is released](https://github.com/venkatcg00/etl-craft/releases/tag/v0.2.0).
+**Status: done** (#90, #91, #92, #93). [0.2.0 is released](https://github.com/etl-craft/etl-craft/releases/tag/v0.2.0).
 All 14 required suites passed from clean commit `63e1c6d`, with 2,118 passing test outcomes and
 no skips, including both complete cloud suites. Evidence and artifact checksums are in
 `release/evidence/0.2.0/`; the release gate passes on the release tag.
@@ -4944,6 +5756,20 @@ contract when S5.C lands. S7.A.2 exposes these operations in the workflow-monito
 - *Done when.* An operator can control the selected pipeline or task independently, see the
   actual outcome and an actionable reason for any remaining limitation, without losing audit
   history or unintentionally affecting other work.
+
+#### S5.Q.4 Recorded run-parameter overrides
+
+Owner-assigned follow-up from S7.A, 2026-11-01. This is a separate engine item, not page-only
+state: record the accepted parameter overrides immutably with the run's pinned definition,
+so retries, agents and recovery use the same values after metadata changes. The CLI contract
+comes first; the API and run-now UI call the same operation. Select the public input shape
+with the owner before implementation rather than inventing a flag in the page.
+
+Tests cover absent overrides, explicit values, refused names/types, role/project scope,
+duplicate submission, retries and agent/restart replay against the original pinned values.
+Done when the recorded run can explain each effective value and every interface uses it,
+without modifying today's configuration or another run. This remains inside 0.9.0 and may
+run alongside S8; it is not a prerequisite for the demo's fixed configured parameters.
 
 ### S5.T Resource discovery and deployment profiles
 
@@ -6971,7 +7797,7 @@ Branch: `feat/ui-*`, one per area. Served by `etl-craft ui` (S5.AE), and by
 through the S5.AA action table and its `/api/v1` route; pages only render read actions.
 
 **S7.A.0 Wireframes — owner approval before page code (owner, 2026-10-25).**
-The static [console wireframes](https://github.com/venkatcg00/etl-craft/blob/main/docs/development/ui-wireframes/README.md) are produced now while S6 is in
+The static [console wireframes](https://github.com/etl-craft/etl-craft/blob/main/docs/development/ui-wireframes/README.md) are produced now while S6 is in
 progress, so missing read actions are known before S6.B logs and S6.F metrics settle their
 outputs. No S7.A page is built until the owner approves these wireframes; merging this
 `docs(plan)` PR is that approval, not approval to invent missing actions. All navigation and
@@ -7594,7 +8420,7 @@ S5.S delivers the accounts, the login, the roles and the role check on every act
   Dockerfile lives in this repository.
   - Every release candidate's release workflow builds both images and smoke-tests them. It is not
     built in pull-request CI, so that CI stays under ten minutes.
-  - It is pushed to GitHub Container Registry (`ghcr.io/venkatcg00/etl-craft`) only from
+  - It is pushed to GitHub Container Registry (`ghcr.io/etl-craft/etl-craft`) only from
     1.0.0, with the PyPI release. Nothing is published to a registry before 1.0.0.
   - A Docker Hub mirror is optional at 1.0.0.
   - Until then, the demo repository builds its own image from the pinned candidate wheel.
@@ -7855,7 +8681,7 @@ S8.G.
        new location. No package contract is dropped.
   2. **The full demo lives in its own repository** (after slice 1).
      - Move the Support Insights domain content that slice 1 removed from `examples/demo` into
-       the Support Insights repository's `etl-craft` branch as its starting point (S8).
+       the Support Insights repository's `main` branch as its starting point (S8).
      - The Quick Start runs the small demo, as written, in package CI. The README links to the
        demo repository for the full walkthrough.
      - The endurance run (S7.I) runs on the Support Insights deployment. `scripts/soak.py` takes a
@@ -7959,33 +8785,6 @@ release candidate.
   stack.
 - *Done when.* Every row names a passing regression test, and none is open.
 
-### S7.Q A generic ANSI SQL warehouse
-
-Branch: `feat/dialects-generic-ansi`. After S5.X.
-
-- *Problem.* etl-craft targets PostgreSQL, Snowflake, Databricks, DuckDB and Trino, and adds no
-  further native dialects. In rare cases a team must still load into another database.
-- *Change.*
-  1. **A `generic` warehouse dialect.** It connects through SQLAlchemy from the profile's
-     `jdbc_url`; the team installs the database's driver, and engine code never imports it.
-  2. **Only ANSI SQL:**
-     - `INSERT … SELECT`, and `DELETE` with `INSERT` in one transaction to overwrite;
-     - `CREATE TABLE` from the declared columns, then `INSERT`;
-     - `DROP VIEW` and `CREATE VIEW` in one transaction;
-     - merges as `UPDATE … WHERE EXISTS` and `INSERT … WHERE NOT EXISTS`;
-     - `ALTER TABLE … ADD` for schema evolution;
-     - `ROW_ID` as `MAX() + 1` under the Engine DB target lock;
-     - `information_schema` for metadata reads.
-  3. **Merges compare columns NULL-safely** (`a = b OR (a IS NULL AND b IS NULL)`) instead of
-     storing a change hash, so `rehash` and hash versions do not apply. This is the one
-     exception to the merge-hash design rule, approved by the owner.
-  4. **No guessing.** Anything without an ANSI form is refused at `validate`, naming the task,
-     the parameter and the reason. One example is `REJECT_LIMIT`, which needs `TRY_CAST`.
-     There are no per-database SQL fragments or settings.
-- *Tests.* The warehouse action suite runs against PostgreSQL and DuckDB acting as `generic`
-  targets, with no new CI service. It covers the refusals.
-- *Done when.* A database with an ANSI SQL SQLAlchemy dialect runs every managed action
-  except the refused ones, with the same audit and failure messages.
 
 ### S7.R Complete the test suite
 
@@ -8197,48 +8996,6 @@ refreshes a report has no source position and no loaded rows.
 *Done when:* every Python task declares its kind, utility scripts carry no offset and no
 invented row counts, and ingestion scripts behave exactly as before.
 
-### S7.AE Pipeline samples
-
-Owner decision, 2026-10-26. Branch: `feat/services-pipeline-samples`. Samples are optional
-whole-pipeline tests, like dbt tests but through every step: mock source data goes in at the
-ingestion tasks and expected rows are compared at the end. They check wiring and regressions;
-they cannot prove the logic right for data nobody anticipated, which stays the job of business
-rules on real data.
-
-- *Command.* `etl-craft samples run [--pipeline P] [--case C] [--keep | --keep-on-failure]`.
-  It runs in CI before deploy and exits non-zero on any failed case, so the deploy job never
-  runs; nothing runs samples on a schedule or inside `config apply`. Projects may have samples
-  or not.
-- *Inputs.* `samples/<case>/inputs/<task_code>.csv`, one per ingestion task the case needs: the
-  file is written to that task's target table and the task is not run. Every other task runs for
-  real. A header-only file means no data. A case may give tables' starting state in
-  `given/<table>.csv` (merges into existing rows, event-wait signal rows). An ingestion task in
-  the run with no input file fails the case.
-- *Scope.* Nothing is tested in isolation: the case runs its pipeline end to end and then every
-  dependent pipeline (pipeline dependencies, triggered pipelines, and pipelines naming it in
-  `WATERMARK_SOURCE_PIPELINES`), each once, in dependency order, ignoring schedules.
-- *Expected.* `expected/<table>.csv` per table after the run and `expected/rules.csv` for rule
-  results. Declared columns only, typed from `columns.csv`, order-independent; engine columns
-  ignored. Numbered steps (`1/`, `2/`) run several loads in order.
-- *Isolation.* A throwaway SQLite Engine DB created by the command with the project's config
-  applied, and a separate warehouse connection, `Samples.Warehouse` in `craft-connector.yml`,
-  pointing to a sample database or catalog with the production schema names, created by the
-  team. No SQL is rewritten; SQL that names a database or catalog explicitly is refused in a
-  sample run with its file and line. `UTILITY` Python tasks (S7.AD) are skipped and reported;
-  email alerts are recorded, not sent.
-- *Every run starts clean.* Each run drops and recreates every table its pipelines touch in the
-  sample warehouse and creates a new Engine DB, whatever was left from an earlier run.
-- *After a run.* By default every table and the Engine DB are removed. `--keep` keeps them;
-  `--keep-on-failure` keeps them only when a case fails. The report names where they are kept.
-  Two runs against one sample warehouse collide; CI serializes them.
-- *Report.* Per case: pass or fail, per table missing, extra and differing rows with the
-  columns that differ, rule results, and the tasks and rules the case exercised. JSON output
-  for CI.
-- S8.C's CI runs the Support Insights samples before deploy; S8.H covers them.
-
-*Done when:* a case runs its pipelines and dependents end to end from input files, compares
-every expected table and rule result, starts clean every time, honours both keep options, and
-CI can gate a deploy on it.
 
 ### S7.AF Config files are helpers
 
@@ -8367,23 +9124,419 @@ project:
 *Done when:* a project can be checked on a schedule, on demand, both or neither, and Insights
 shows real check states with their time.
 
+### S7.AL Pre-demo package gaps
+
+Owner, 2026-11-01. Branches: one implementation pull request per slice. These are package
+close-outs from the pre-demo audit, not workarounds in Support Insights. Slices 1 and 2 merge
+before S8 starts; slices 3–6 remain inside 0.9.0 and may run alongside S8. S7.AK remains the
+separate, completed Schema checker. Every-warehouse protection is S7.AM, not hidden inside
+these six slices.
+
+#### S7.AL.1 Duplicate counts
+
+- **Change.** Add `duplicate_count` to `core/counts.py` and the shared handler/attempt/task
+  summaries, warehouse audit mirrors, metrics, API and JSON output that carry counts.
+  S8.B's dedupe and S8.D's Data Metrics view need `DUPLICATE_COUNT`, not a script-side count.
+  Count source rows removed by the per-key, per-batch dedupe step after load rejects, once per
+  attempt; do not count unchanged target rows, prior SCD2 versions or refused rows as duplicates.
+  Preserve unknown versus zero for actions that do not measure duplicates. Engine DB additions
+  require a new migration in both dialects and matching schemas, actor guards and query fixtures.
+- **Tests.** Independently compute input, rejects, survivors and duplicates on every warehouse;
+  cover SCD1/SCD2, ties, unchanged inputs, retries and mixed rejects. Check identical count
+  documents through the CLI/API and summaries, plus the Data Metrics projection. Run both
+  Engine DB upgrade, actor-audit and query-plan modules for the new guarded columns.
+- **Done when.** Counts agree with the independent oracle and S8's latest-per-key-per-batch
+  policy; attempt/task summaries, metrics, mirrors and API/JSON retain the same value, including
+  zero/unknown; retries do not double-count; docs and CHANGELOG describe the contract.
+
+#### S7.AL.2 Stale docs and generated references
+
+- **Change.** Correct project route prefixes in `human-overrides.md`, `run-control.md`,
+  `running-tasks.md` and the demo README. Remove obsolete remote-mode instructions from
+  `doctor-and-setup.md`, `examples/demo/README.md` and `prepare.py`. Replace the nonexistent
+  `etl-craft control` instruction in `browser-ui.md` with the real scoped commands.
+  Include all five accepted managed Engine fields (`Managed_provider`, `Account`, `Instance`,
+  `Workspace_url`, `Endpoint`) in the generated settings reference. Render each CLI subcommand's
+  own options. Reconcile contradictory `[Unreleased]` instructions from superseded changes;
+  keep released historical notes intact and do not restore removed aliases or behavior.
+- **Tests.** Check documented operational routes against the action table and real project
+  routes, preserving the upload aliases that actually exist. Check rendered managed-setting
+  and nested-command content against loader/parser inventories. Exercise the corrected demo
+  and guide commands where meaningful; strict docs and content checks must pass.
+- **Done when.** The listed instructions use current registered commands/routes, no live demo
+  instruction names the removed seed/mode, every accepted managed field and nested CLI option
+  appears in the rendered reference, and Unreleased describes the final shipped behavior.
+
+#### S7.AL.3 Guarded-table touched suites
+
+- **Change.** Add `test_actor_audit.py` to AGENTS.md's required touched-suite list when a new
+  guarded Engine DB table or its guards/CHECK columns change, alongside upgrades and query
+  plans. Name the need for valid CHECK seeds and query-plan seed rows/typed parameters.
+- **Tests.** Documentation-only rule: no runtime test is added merely to mirror its wording;
+  review it against the existing migration, actor-audit and query-plan procedures.
+- **Done when.** The rule explicitly requires all three modules for a new guarded table,
+  including CHECK seeds, without adding an unconditional repeated CI job or weakening a gate.
+
+#### S7.AL.4 FILE_VALIDATION for event-arrived files
+
+- **Change.** An ordinary pipeline may explicitly ask its FILE_VALIDATION task to validate
+  files admitted by a successful file event wait in that exact run. Reuse the reader, per-file
+  validation boundary and recorded event consumption; do not invent uploads/uploader identities
+  for source files. No opt-in means existing behavior. Only accepted files reach dependent
+  loads; retries retain exact admitted bytes/identity and validation decisions on local and
+  agent execution. Select the minimal public opt-in contract with the owner before code;
+  this item authorizes the capability, not an unnamed flag or parameter.
+- **Tests.** Accepted and refused event files, mixed files, no files, no opt-in, changed bytes,
+  retries/recovery and agent/local parity; refuse another run's files and any bypass of real
+  validation. Messages name the file, value, expectation and remedy; no failed file is loaded.
+- **Done when.** The explicit opt-in validates only this run's recorded files, acceptance
+  controls downstream access, unchanged upload workflows still pass, and the CLI/config/guide
+  contract and failure/recovery evidence are documented.
+
+#### S7.AL.5 Timeline gate and event waits
+
+- **Change.** Extend the shared run read with recorded gate/event-wait intervals and outcomes,
+  then render distinct queue, gate, event and execution segments in S7.A's timeline. Use the
+  run's recorded waits, not today's dependency config or inferred gaps between timestamps.
+- **Tests.** Explicit-time fixtures cover open/satisfied/refused/overridden/timed-out waits,
+  retries, repairs, overlapping waits and runs with none. Check project/run visibility, shared
+  API documents and browser labels/keyboard access on desktop/mobile; do not use sleeps.
+- **Done when.** Timeline durations and outcomes match the recorded wait rows, open waits are
+  visibly open, controls remain accessible and no hidden project's waits leak into a read.
+
+#### S7.AL.6 Erasure on snapshot-versioned tables
+
+Owner addition, 2026-11-01: merged S7.U deletes current rows but old Iceberg and Delta
+snapshots can still expose their values until expiry. This sixth slice stays inside 0.9.0.
+
+- **Change.** `erase` and ERASURE results state per Iceberg/Delta table that erased rows remain
+  physically present until snapshot expiry, and show the configured bound where readable.
+  Doctor reports a table with erased subjects and no bounded expiry, naming the target and
+  remedy. The erasure guide explains time travel, retention bounds and warehouse permissions.
+  Never expire snapshots implicitly. An optional explicit expiry step may be proposed, not
+  built in this slice without approval.
+- **Tests.** Current-row erasure with old-snapshot visibility; configured and absent expiry
+  bounds; local/agent ERASURE and CLI/API result parity; doctor messages and a spy proving no
+  expiry/RESTORE/rollback statement runs as a side effect. Test every supported snapshot format.
+- **Done when.** Per-table outcomes and doctor distinguish logical deletion from physical
+  retention, expose a readable configured bound or its absence honestly, and the guide names
+  the remedy without suggesting old snapshots were silently removed.
+
+### S7.AM Protection on every warehouse
+
+Owner decision, 2026-11-01. Three separate PR slices; all must merge before S8. Reuse the
+target lock, hash contract, authenticated operations and actual uploader attribution.
+
+1. **Single-MERGE builders.** SCD1 updates/inserts and SCD2 closes/inserts mutate their target
+   with one MERGE on each supported warehouse/format. Keep current protection while this
+   foundation lands. PostgreSQL before 15 retains its same-transaction fallback. Prove the
+   pinned DuckDB-over-Iceberg MERGE first; stop with a note if it cannot execute.
+   - Tests: independently expected complete rows, unchanged rows, replay/counts, ROW_ID
+     uniqueness, composite keys, failure/process-loss boundaries and current protection;
+     every local warehouse and cloud formats, plus repeated concurrent writers on both Engine DBs.
+   - Done when target observations prove one atomic MERGE where supported, no SCD2 half-version
+     is exposed after process loss, retries converge and all existing protection tests pass.
+2. **In-row protection and event recovery.** Authoritative locks and per-cell provenance go
+   in `ETL_PROTECTION` JSON with its own format version, `ETL_ROW_FINGERPRINT` and a dedicated
+   filterable request id. No outbox, clear write or separate format/revision column unless
+   a MERGE condition needs it and Decisions explains why. Add append-only guarded
+   `AUD_PROTECTION_EVENTS`, hash-only PENDING/COMMITTED/ABANDONED status rows, migrations and
+   schemas in both dialects. Under the target lock stage exact events, append PENDING,
+   commit the stamped target MERGE, append COMMITTED. Recover before mutation, at controller
+   start and on provenance reads; stamp presence commits a pending request, none abandons it.
+   HARD_DELETE/ERASURE use the same log; prove their deletion outcome recovery too.
+   - Retain value/row unlocks, mixed-upload per-cell writers, hash/rehash semantics and the
+     PostgreSQL fallback. Integrate edits/uploads, rehash, erasure, hard deletes and doctor.
+     Doctor compares logged locked-key hashes to present rows; no membership witness gates
+     writes. Warehouse permissions are the trust boundary. Refuse old-side-table targets
+     naming backup/recreate/re-apply-locks; delete side-table code and `atomic_protection` plus
+     its provider refusals. There is no conversion action or pre-0.9 compatibility shim.
+   - Tests: both Engine DB upgrades, actor guards/CHECK seeds and indexed query plans;
+     every commit/crash/replay boundary, request-id lookup, outside deletions, no raw business
+     values in events, native old-target refusal and mixed writers through real operations.
+   - Done when data and protection change atomically, event recovery is idempotent for all
+     mutation kinds, locked data survives source reloads, and doctor gives actionable findings.
+3. **Provider acceptance.** Every supported warehouse/format, including Snowflake and
+   Databricks (one try each under AGENTS.md), twenty concurrency rounds on both Engine DBs,
+   security review, public guide/example/CHANGELOG and independent expected results.
+   - Done when every local contract passes; cloud outcomes/availability are recorded under
+     the existing owner policy, complete candidate cloud evidence remains S7.H, and docs
+     accurately describe all-provider protection, recovery, permissions and old-target remedy.
+
+**Rejected alternative.** Committing several tables then `rollback_to_snapshot`/RESTORE still
+requires intent logging, can discard later commits, exposes transient rows and has no
+DuckDB-over-Iceberg form. It is not a protection implementation strategy.
+
+
+### S7.AN Always show the environment
+
+Owner, 2026-11-04/05. Airflow never tells you which environment you are in. Alert emails
+are bare paragraph/table HTML and look broken. Reuse existing project ENVIRONMENT_TYPE
+(DEV/SIT/UAT/PROD/SANDBOX/CUSTOM) and ENVIRONMENT_NAME; add no Engine DB field. UI tab title,
+PROD dialog and “Recover run” belong to S7.AO's UI rebuild; do not touch UI templates.
+
+**Change.**
+
+1. Every project-scoped CLI command prints one context line to stderr before output:
+   `support_insights · PRODUCTION · https://etl.example`, or `· local` without --api.
+   PROD displays PRODUCTION; other types include the name when set. Text only: JSON adds
+   `environment` with type/name and prints no context line. Deployment commands print none.
+   Use one shared helper in cli/output.
+2. State-changing CLI commands use the action table's write actions (listed in the PR).
+   In an interactive terminal show context/action and require typing the exact project code;
+   mismatch exits non-zero without mutation. Non-interactive without --yes refuses with
+   project/environment/remedy, never prompts. Reuse pause's --yes pattern in one implementation.
+   Non-PROD never prompts; this is presentation only, operations/API authorization unchanged.
+3. Login/whoami show the selected project's environment with the account.
+4. Email subjects start [PRODUCTION] or [TYPE]; body names project/environment.
+5. Ship a designed built-in alert/SLA template and support team HTML templates. Jinja is banned
+   only for SQL; jinja2 is an owner-approved core dependency.
+   Render with SandboxedEnvironment, autoescape and StrictUndefined, using only a documented
+   context: environment type/name, project, pipeline, run ID/logical date/zoned start/end/
+   duration/status, task, errors, watched tasks, EMAIL_PIPELINES summary, SLA details, version,
+   recipients and selection reason. Templates cannot reach Python objects, files or network.
+   The default uses table layout/inline CSS, maximum 640px, for Gmail/Outlook/Apple Mail. Its
+   header emphasizes production and shows project/pipeline/outcome with color and symbol:
+   blue running, red failure, green success, amber only retries/warnings. Escaped body retains
+   line breaks, followed by facts, untruncated wrapped monospace errors and symbol task rows.
+   A View run button appears only if an existing public UI URL setting exists; otherwise omit
+   and record why. Footer names version and why the address received it; document the copyable
+   template location.
+   EMAIL_TEMPLATE selects an HTML file under email_templates/; optional EMAIL_TEMPLATE_TEXT
+   selects plain text, otherwise use built-in text. Confine paths: refuse absolute paths, ..
+   and escaping symlinks. SLA uses approved Orchestration.Email_template or the built-in.
+   EMAIL_SUBJECT*/EMAIL_BODY* and their $$ tokens remain; templates receive subject/body and
+   use Jinja variables. Validate parses all referenced templates for syntax/undefined names
+   against the documented context, refusing with file/line/remedy. Send-time rendering failure
+   fails without sending a partial or fallback email.
+6. The catalog/docs-site header shows the environment.
+7. Add failing-first CLI context/JSON/PROD right/wrong prompt/non-interactive/--yes/non-PROD
+   tests; email escaping/sandbox/path/validate/custom-render tests and failed/success/SLA
+   snapshots; and catalog-header checks. Render through demo Mailpit and save screenshots
+   under $HOME/.cache/etl-craft/ui-review/email/, listing them in the PR.
+8. Owner authorizes this section/Progress row in the feature PR. Update email-alerts.md with
+   context/example/security, project layout, CLI reference and CHANGELOG; S8.E Handover says
+   deploy.yml passes --yes. No CI timing/watching or cloud runs; disk TMPDIR, at most two
+   workers and one suite at a time.
+
+**Done when.** Every Change above is implemented and checked; the PR includes the write-action
+set, new public surface/dependencies, failing-first evidence and Mailpit screenshots. S7.AO
+UI templates remain untouched. The PR uses squash auto-merge and keeps its branch.
+
+
+
+### S7.AO UI rebuild
+
+Owner, 2026-11-05. The Jinja/htmx UI is unreleasable (crude, browser-default controls, no
+hierarchy). The rebuilt UI replaces it entirely: once it is polished it is the only UI, at
+`/ui`. The visual reference is Databricks (left navigation, top bar with project switcher and
+environment badge, dense tables, shaded light and dark themes).
+
+**Decisions.** React + TypeScript + Vite, shadcn/ui-style components (Radix, Tailwind) copied
+into `ui/`, TanStack Query and Table, React Flow for graphs, lucide icons. Node is needed
+only to build. The built files are committed under `src/etl_craft/api/spa/`, so the wheel and
+the sdist carry them and installing, or building a wheel from the sdist, needs no Node. One
+CI job (`make ui-check`) typechecks, lints, unit-tests, audits the production dependencies,
+rebuilds, and fails when the committed build differs from what the source produces. The SPA
+calls only `/api/v1` as the cookie session (same CSRF, roles and content policy: no inline
+script or style); it adds no server logic.
+
+**Slices.**
+
+1. Foundation (this slice): the scaffold, build, packaging and CI job; serving under `/app`
+   with sign-in redirect; the app shell (navigation, project switcher, environment strip and
+   badge, theme, account menu); Home, a pipeline's runs, and one run with the task graph,
+   task attempts and logs, and run-level "Recover run" through one confirmation dialog that
+   names the project and environment (PRODUCTION also needs the project code typed). The old
+   pages stay reachable from the new shell. Owner approves the look before auto-merge.
+2. Slice 2: Pipelines (tag filter, bulk pause and resume, CSV), a pipeline's page (run
+   durations, runs, task graph, Run now, Pause, Resume), Scheduled runs, Held and paused.
+   Slice 3: the task history page, attempt page, run items, the run matrix, run filters, and
+   run and task controls. Slice 4: a task's offset or watermark reset and data lookup (with
+   administrator edits and unlocks), and Uploads. Later slices move the rest by area: insights,
+   console and the catalog entry (slice 5); system, agents, administration, personal settings,
+   search and sign-in (slice 6); then the final deletion of the old UI.
+3. Final slice: serve the new UI at `/ui`, delete the Jinja/htmx templates, their page modules
+   and static files, and the `/app` alias. The catalog's static site is unchanged; S7.AP moves
+   the catalog into the app.
+
+**Done when.** Every page is served by the new UI, the old templates and htmx assets are
+deleted, every write action goes through the confirmation dialog, and the screenshots of every
+page in light, dark and 390 px are approved by the owner.
+
+### S7.AP Native catalog
+
+Owner, 2026-11-07. The catalog's content is the product's strongest point: every pipeline, task
+and table with its lineage graph, the declared and deployed column types, rule results, triggers
+and the schema and lineage gaps. Its presentation is not: it is a static page shown in an iframe,
+with its own header, navigation and search inside the app's, always light, with browser-default
+controls (the tag filter), repeated notes on every column ("Warehouse metadata was not requested")
+and tables whose columns do not line up. The owner wants one framework that works coherently, not
+a second interface stitched into the first.
+
+**Decisions.** The catalog is rendered by the app (S7.AO's stack and shared components: the table,
+status badges, the graph, search, the shell and theme) from a JSON read action built from the
+existing catalog model, so its information does not change. The generated static site stays only
+for `publish-docs` (a site that can be shared and read offline); the app no longer embeds it. The
+site gets only the minimum restyle needed to read well, and is not developed further.
+
+**Layout (owner, 2026-11-07, from a Databricks Catalog Explorer screenshot).** The catalog is a
+two-pane explorer like Catalog Explorer: a resizable tree on the left (project, then pipelines and
+warehouse schemas, then their tasks and tables) with a search box that filters the tree and a
+refresh control, and on the right the selected object under a breadcrumb. An object page has a
+title with copy and star, its actions, and tabs. A table's tabs are Overview, Columns, Lineage,
+History and Quality; its Overview is a Description card, a Columns table with a column filter
+(name, type, declared type, comment, tags), and an "About this table" side column (owner, type,
+data source, writers, freshness, tags). A pipeline's tabs match the pipeline workspace's. What
+Databricks shows that etl-craft has no data for (Sample Data, Permissions, Policies, Popularity)
+is not shown; nothing is added to fill the layout, with one exception the owner asked for: a Data tab
+on a table, the first 100 rows read from the warehouse for developers and above, audited, with no SQL
+input. A query console is a separate decision (a design note, not part of this item).
+
+**Slices.** (1) The catalog JSON read action, behind the current page, with the same facts the
+static site shows. (2) The shell, search and the list of pipelines with a real tag filter. (3) A
+pipeline's page: description, triggers, the task graph with reads and writes, task documentation.
+(4) The warehouse and a table's page: layers as one table, declared against deployed types,
+rule results, with a note shown once instead of on every column. (5) Schema and lineage gaps,
+grouped by cause and by object instead of one long cell of task links. (6) Insights, and the
+removal of the iframe page.
+
+**Done when.** Every catalog page is served by the app in light, dark and 390 px; the iframe
+page is deleted; the catalog JSON action is documented; and the owner approves the screenshots.
+
+### S7.AQ Readable run identifiers
+
+Owner, 2026-11-07. Run and task run ids are integers, which cannot be read in a list or a
+message. A label is stored beside the integer: a pipeline run is `<pipeline>-<UTC start to the
+second>-<run id>` and a task run is `<pipeline>-<task>-<UTC start>-<task run id>`, to which an
+attempt adds `-<attempt number>`. A pipeline run has no attempt number.
+
+**Decisions.** The integer stays the key; the label is a second way to select and to read, never
+the identity. The label is stored (`RUN_LABEL`, `TASK_RUN_LABEL`) and set by an insert trigger, in
+both dialects, because a run's `START_DATE` moves when a queued run is admitted and a label
+recomputed from it would change. Selecting by label takes the integers from it, reads the row,
+and refuses a label whose other parts differ from what is stored, naming the expected one.
+
+**Slices.** (1) The columns, triggers and backfill (migration 0087), and the label in the JSON and
+`status`. (2) One parser, in operations, so `--run-id`, the API and the UI's links accept the
+integer or the label. (3) The UI shows both wherever a run or task run appears.
+
+**Done when.** Every command, API field and UI link that takes or shows a run id accepts and shows
+both; a mismatched label is refused with the expected one; and an upgraded Engine DB labels its
+existing runs.
+
+### S7.AR Restarting pipelines
+
+Owner, 2026-11-07. A file or event watcher should not need a schedule: it waits until the source
+arrives, processes it to the end and starts the next run, and it stops only when a run fails.
+Today the demo's Gamma pipeline gets this from a five-minute schedule with `OVERLAP_POLICY=SKIP`,
+which leaves up to five minutes between runs, a skipped run about every wait timeout, and no way
+to say "continue unless the last run failed".
+
+**Decisions.** A pipeline setting `RESTART_CONDITION` (a `CFG_PIPELINES` column and a
+`pipelines.csv` column, typed in the pipeline history, one enum in `core.enums`). It is a
+`|`-separated set of the statuses a run can end with: `SUCCESS`, `SKIPPED`, `FAILURE`, plus
+`NONE` (the default: no restart) and `ALWAYS` (every ending). When a run ends in a listed status
+the controller starts the next run of the same pipeline, with its own trigger kind, recorded and
+audited like a scheduled run. It follows every existing rule: one exclusive run at a time,
+pause and holds (a paused pipeline does not restart; a resume starts the pending restart),
+calendars, SLA, and run-state transitions. A run that ends in a status not listed stops the
+chain until an operator recovers or marks it; the run that then ends in a listed status restarts
+it. A restart is created no sooner than a fixed 15 seconds after the previous run ended, so a run
+that ends at once cannot spin; that interval is documented, not a setting. A schedule may be set as
+well: its ticks are skipped while a chain's run is active, as for any active run. The setting is
+for data movement (a watcher or a stream reader); the S8 demo's Gamma pipeline is the first user.
+
+**Slices.** (1) The Engine DB column in both dialects with matching `schema.sql`, the enum,
+the config-file column, `validate` and `config apply` (values refused by name), history, and the
+docs and examples. (2) The controller starts the next run when a run ends in a listed status,
+with races tested against two controllers and against pause, hold, recover and `mark`.
+(3) The catalog and UI show the setting and a restarting pipeline's state; the demo's Gamma
+pipeline drops its schedule and sets `RESTART_CONDITION=SUCCESS|SKIPPED`.
+
+**Done when.** A pipeline with `RESTART_CONDITION=SUCCESS|SKIPPED` and an event wait runs
+continuously with no schedule, a failed run stops the chain, and recovering it resumes the chain;
+two controllers never start two next runs; every new failure names the object, the value found,
+what was expected and the remedy; and an upgraded Engine DB keeps every pipeline at `NONE`.
+
+### S7.AS Project dashboard and navigation
+
+Owner, 2026-11-07, after reviewing the rebuilt interface on the Support Insights demo. The
+navigation groups pages by where they happen to sit in the code, the project-level Runs page is a
+bare table, the run page is a long scroll (header, graph, task table, then a separate attempt
+card), and Insights is a stack of tables. The owner wants the Databricks and Airflow pattern: a
+project dashboard as Home, one shared layout for runs and pipelines, and details that open in
+place.
+
+**Decisions.**
+
+- **Navigation.** OVERVIEW: Home (the project dashboard), Pipelines, Catalog. OPERATIONS (the
+  section formerly called Project): Runs, Scheduled runs, Held and paused, Uploads, Console,
+  Maintenance. PLATFORM: Projects (a projects-list icon; the list or cards of the projects the
+  account can see, with environment, governance and the day's counts), System health, Agents,
+  Administration. Insights stops being a page of its own: its panels become Home.
+- **Home is a dashboard** with header tabs. Overview: tiles (runs, success rate, failures, SLA
+  misses, queued), runs by status over time, duration trend, recent failures. Further tabs:
+  Pipelines (health and a trend for each), Data (the tables the pipelines write, rows written and
+  freshness), Rules and Capacity. Charts come first; a table appears only where a table is the right
+  answer.
+- **A pipeline and its runs are one workspace** (owner, 2026-11-07, from the Airflow DAG overview).
+  The pipeline page is split in two. Left, a grid: tasks are rows, the pipeline's recent runs are
+  columns with newest on the right, each column topped by its duration bar so a bar and its task
+  statuses share one column; a Grid and Graph toggle swaps in the task graph for the selected run.
+  Right, a panel with Overview (the selected run: state, identifier, times, controls, and one task
+  table whose rows open in place to attempts, evidence and the log) and Runs (the filterable runs
+  table). Selecting a run column or a task cell fills the panel; the address keeps the selection
+  (`?run=ID&task=CODE`), and the older run address redirects to it. Each pane scrolls on its own, so
+  the page stays one screen tall; below 1024 px the panes stack. The project-level Runs page keeps its
+  table and links into this workspace with the run selected.
+- **The workspace follows the Airflow DAG page** (owner, 2026-11-07, from the Airflow 3.4 views).
+  The header is a facts row: Schedule, Latest run, Next run, Refresh, SLA, Tags, with Run now and
+  Pause. The right panel's tabs are Overview (a window selector; Runs, Failed runs, Success rate
+  and Median duration for it; the last ten runs' durations; recent failures), the selected run
+  (`Run #ID`, which opens when a run or task is selected), Runs (filterable by state, pool, agent
+  and failure class), Tasks (each task, its handler, what it waits for, its state in the selected
+  run), Calendar, Audit log and Details (the pipeline's settings and each task's definition). What a
+  pipeline and its tasks are for is documented once, in the catalog (owner, 2026-11-07: two panels
+  duplicated), and Details links to it. A back arrow returns to the Pipelines list. Workspace pages fill
+  the window and their panes scroll on their own; the content column is no longer capped at 1400 px.
+  Later: an Options menu beyond the grid's, and a minimap on a large graph.
+- **One list of pipelines.** The catalog's DAGs tab duplicates Pipelines: its columns (description,
+  schedule, dependencies, last run, recent success, tag filter) move into the Pipelines page, and the
+  catalog keeps Search, Warehouse and Gaps (built with S7.AP).
+- **Charts are small SVG components** in the shared component set (bars, areas, a donut,
+  sparklines), like the run-duration bars already there. No chart library is added.
+
+**Slices.** (1) The navigation, the Operations section name, Projects in Platform and the
+redirect from the old Insights address. (2) The run identifier in the run lists (S7.AQ slice 3).
+(3) The pipeline workspace above, which replaces the separate run page. (4) The Home dashboard and
+its tabs. (5) The Pipelines list takes the catalog's DAGs columns. Slice 4 is built: Home is a tabbed dashboard (owner,
+2026-11-07: Insights was still a scrolling sheet).
+
+**Done when.** Every page in the new navigation is served by the app in light, dark and 390 px;
+the Insights page is deleted; the owner approves the screenshots of each slice on the Support
+Insights demo.
+
 ## Release candidate: the Support Insights example
 
 **Goal.** Prove 1.0.0 on a real project before it is released. The
-[Support Insights platform](https://github.com/venkatcg00/Supports-Insights-Docker) is rebuilt on
+[Support Insights platform](https://github.com/etl-craft/support-insights) is rebuilt on
 etl-craft: everything etl-craft can do replaces what Airflow, PySpark and hand-written SQL do there
 today, and its project is deployed by CI. **1.0.0 is released only when every pipeline runs,
 the views match S8.F's reference queries, and every package feature has a tested and documented
 Support Insights demonstration (S8.H), visible through the README and UI.**
 
-**Depends on.** Every workstream of 0.2.0 to 0.9 merged and every defect in
-[Appendix A](#appendix-a-defect-traceability) closed. The example is built against 1.0.0 release
+**Depends on (owner, 2026-11-01).** S8 starts when the pre-demo plan PR,
+S7.AM protection on every warehouse, S7.AL slice 1 (`duplicate_count`),
+S7.AL slice 2 (stale docs), S7.F images and
+manifests, the S5.AE close-out and S7.O are merged. Every other 0.9.0 item runs alongside S8;
+all release checklist gates still apply before 0.9.0. The example is built against 1.0.0 release
 candidates (`1.0.0rc1`, `1.0.0rc2`, ...); a defect it finds is fixed in etl-craft, and a new release
 candidate is cut, never worked around in the example.
 
 **Where it lives.** Two repositories in total (S7.O): this package and Support Insights.
-The Support Insights repository's `etl-craft` branch replaces its `master` once this stage
-passes. It holds the demo code, deployment, acceptance checks and the etl-craft project in
+The new public Support Insights repository uses `main` as its default branch. It holds the
+demo code, deployment, acceptance checks and the etl-craft project in
 `project/`: `craft-connector.yml`, `config/`, `sql_scripts/`, `python_scripts/`,
 `validation_scripts/`, `migrations/` and `seeds/`.
 
@@ -8409,10 +9562,11 @@ never runs the demo itself.
 | Reference data | Hand-written DDL and inserts | **Replaced** by folder-addressed S7.S seeds: three stewarded `ds` tables, replaceable `ds.sources` and `info.data_dictionary`; duplicate object metadata tables and their `dwh` copies are removed |
 | Views | `vw.data_metrics_view`, `vw.customer_support_fact_view` | **Rewritten** over etl-craft's tables (`S8.D`) |
 
+
 ### S8.A The project layout
 
 ```
-Supports-Insights-Docker/
+support-insights/
 ├── project/                          the etl-craft project directory
 │   ├── craft-connector.yml           secrets as variable names
 │   ├── config/                       one CSV per CFG_ table
@@ -8484,7 +9638,7 @@ Every Airflow task maps to an etl-craft task; nothing in the example runs Spark 
 | `SI_REFERENCE` (deploy after `seed apply`, or detached stewardship trigger; no daily schedule) | `ds_*_to_dwh`, `info_data_dictionary_to_dwh` | SQL `SCD2_MERGE` for the four `ds` tables and dictionary | reference-history triggers |
 | | `<table>_deletes_to_dwh` (one per copy) | SQL `DELETE_ROWS` (soft), selecting `dwh` keys absent from the source | the triggers' `D` rows |
 | `SI_CLIENT_ALPHA` (every 15 min outside the maintenance hour; `OVERLAP_POLICY=SKIP`) | `alpha_source_to_lnd` | PYTHON (`SCRIPT_KIND=INGESTION`) `mongo_to_lnd.py`: reads documents after the stored offset, writes `lnd.client_alpha_cs_data`, returns the new offset | `client_alpha_check_new_data`, `client_alpha_branch`, `client_alpha_source_to_lnd` |
-| | `alpha_lnd_to_prs` (depends on the ingestion with `HAS_DATA`) | SQL `SCD2_MERGE` on `source_system_identifier`, `MERGE_DEDUPE_ORDER` on the source timestamp, so `prs` keeps every version of a source record | `client_alpha_lnd_to_prs` (insert, update and duplicate counts) |
+| | `alpha_lnd_to_prs` (depends on the ingestion with `HAS_DATA`) | SQL `SCD2_MERGE` on `source_system_identifier`, `MERGE_DEDUPE_ORDER` on the source timestamp, so `prs` keeps the latest version per key per batch and retains SCD2 versions across batches | `client_alpha_lnd_to_prs` (insert, update and duplicate counts) |
 | | `alpha_prs_to_cdc` | SQL `OVERWRITE_TABLE` with `$$pipeline_run_id` and `ACTIVE_FLAG = 'Y'` (the versions `prs` opened in this run) | `client_alpha_prs_to_cdc` |
 | | `alpha_preods_delete` | SQL `DELETE_ROWS`, `HARD_DELETE = true`: selects Alpha's keys from `pre_ods.customer_support_stage` | replacement of Alpha's stage rows |
 | | `alpha_cdc_to_preods` (depends on the delete with `SUCCESS`) | SQL `APPEND_TABLE` into `pre_ods.customer_support_stage`: joins `ds` lookups, maps codes and writes the source column | the transform half of `client_alpha_cdc_to_predm` |
@@ -8515,7 +9669,7 @@ Rules for building them:
 2. Alpha and Gamma replace their landing table's rows every run; Beta's one fan-out task
    writes disjoint item-key-tagged rows to one landing table, replacing only that item's batch
    so retries preserve successful partitions. Each returns its appropriate ScriptResult;
-   Gamma uses recorded event-file consumption instead of an independent offset. If the scripting helper cannot replace, record a package
+   Gamma uses recorded keyed SQL signal consumption instead of an independent offset. If the scripting helper cannot replace, record a package
    gap under rule 1. The layers (owner, 22 October 2026): LND overwrite, PRS SCD2, CDC
    overwrite, PRE_ODS, business rules, ODS SCD1 and normalized, DM SCD2 as one flattened wide
    table. All clients share `pre_ods.customer_support_stage`, with a source column. Each client
@@ -8535,7 +9689,7 @@ Rules for building them:
    16 MiB-per-reader batches within the 256 MiB agent/task pod. Refuse a fifth partition until
    metadata/budget is deliberately revised. AUD_TASK_ITEMS records partition keys/outcomes;
    retry runs only failed partitions and preserves successful item rows/partition offsets.
-   Use S5.AK short `task.write` scopes for each item, not one transaction around fan_out.
+   Use short `ScriptTask.warehouse()` scopes for each item, not one transaction around fan_out.
    Three ingestion and nine warehouse one-slot agents match S8.A; SQL/rules/DM use warehouse.
 5. All three clients stop at ODS; delete every `<client>_ods_to_dm` task/dependency. Schedule
    Alpha/Beta with `*/15 0-1,3-23 * * *`, Gamma with `*/5 0-1,3-23 * * *`, all UTC; reserve
@@ -8544,7 +9698,7 @@ Rules for building them:
    drain active writers. Release holds after maintenance; SKIP schedule alone does not drain
    active runs or stop an event that becomes satisfied. A wait's original deadline still applies.
    Gamma's 55-minute deadline avoids indefinite idle runs while overlapping ticks skip; a
-   no-file wait and its SUCCESS-only downstream chain end SKIPPED, never a failed baseline.
+   no-signal wait and its SUCCESS-only downstream chain end SKIPPED, never a failed baseline.
    Failure-alert tasks use FAILURE edges so a skipped wait sends no failure alert.
 6. SI_DM runs every six hours at 00:00/06:00/12:00/18:00 UTC, on committed ODS writes using
    `WATERMARK_TYPE=TIMESTAMP`, `WATERMARK_COLUMN=ods_changed_at` (the SELECT aliases the
@@ -8606,6 +9760,10 @@ admin commands outside config CI. Grant command input is not a project config fi
 - **Pull requests:** `validate.yml` runs on a GitHub-hosted runner, with no secrets. Install
   the candidate wheel, migrate an empty Engine DB, run `config plan`, `config apply` and
   `validate` against the project in the same demo commit.
+  Select an explicit secretless local DuckDB warehouse profile for this job, bootstrap its
+  schemas and declared source shapes, and validate the same seed files against that warehouse.
+  The local profile needs no Trino or deployment credentials; an empty Engine DB alone is not
+  the seed-cast validation environment.
 - **Push to `main`, filtered to `project/**`:** `deploy.yml` runs on a self-hosted runner
   container in the demo cluster, in a GitHub environment with required reviewers. It runs
   `validate`, `config apply --api`, `bundle publish --api`, `seed apply --api`, then
@@ -8772,6 +9930,8 @@ Every slice updates its runnable README walkthroughs and tests in the same examp
    writes, so S8.H's feature inventory names the SCD2 target that demonstrates SCD2 protection. Machine-originated writes alone
    create no human locks; ordinary non-SCD tables have no such overwrite protection. This
    corrects warehouse records, not the MongoDB, Kafka or MinIO source systems.
+   Protection must work on every supported warehouse, including S8's Trino/Iceberg target
+   (owner, 2026-11-01); the earlier native-only implementation limit is superseded.
 4. Maintain a feature-to-scenario coverage matrix in the example README for every package
    feature through 1.0.0, not only the source-error table below. Derive the inventory from the
    roadmap and published CLI, API, config, JSON and warehouse contracts. Link the owning roadmap
@@ -8807,7 +9967,7 @@ The source-error cases below are a minimum, not the full feature-coverage matrix
 
 | The source | etl-craft handles it with | The check |
 |---|---|---|
-| replays a batch, or sends a key twice | merges with `MERGE_DEDUPE_ORDER`; retry-safe appends | rows equal the distinct source records |
+| replays a batch, or sends a key twice | merges with `MERGE_DEDUPE_ORDER`; retry-safe appends | rows equal the latest record per key per batch; prior batches retain SCD2 history |
 | sends records late or out of order | SCD2 history; ingestion UPDATE_DATE and S7.X bounded timestamp windows | a late row lands once, in the right version |
 | adds, drops or retypes a column | S5.N source definitions: `validate` names the drift; `SCHEMA_EVOLUTION` takes added columns | `validate` reports the change before the run; the run then succeeds, or fails naming the column |
 | sends values that do not fit: bad dates, text in numbers, over-long text, NULL keys | S5.K rejects with `REJECT_LIMIT` | the injected bad rows, and only those, are in `__rejects` with reasons |
@@ -8820,7 +9980,7 @@ The source-error cases below are a minimum, not the full feature-coverage matrix
 | Alpha remains in progress while Beta finishes and DM starts | S7.X attempt-fenced timestamp window; no client run gate | Alpha is excluded from the first DM window and reaches the next exactly once; Gamma idle wait does not pin it |
 | one Beta partition fails | S5.AK fan-out and S5.AH partition offsets | successful item keys/rows stay; only failed partitions retry |
 | a task needed a value from an earlier task that wasn't data, an event or an offset | Owner watch item, 2026-10-28: only if Support Insights demonstrates the need, let later tasks in the same run read `ScriptResult.variables`, with a size cap; no XCom | record the demo case and prove the smallest data-movement fix; no implementation in S7.AJ |
-| Gamma receives no object before its deadline | S5.M FILE EVENT_WAIT with SKIP timeout | run and downstream work SKIPPED, no failure alert |
+| Gamma receives no object before its deadline | S5.AI keyed SQL EVENT_WAIT on `lnd.gamma_object_events` with SKIP timeout | run and downstream work SKIPPED, no failure alert |
 | sends timestamps without zones, or across a DST change | typed `CAST` to the declared type; UTC audit times | run dates and event times match the generator's truth |
 | resends corrected history | backfills/reopened runs with fresh engine UPDATE_DATE and S7.X windows | next SI_DM window reflects the correction once, regardless of old source run ID |
 
@@ -8840,6 +10000,9 @@ remedy; downstream tasks report "blocked by failure"; nothing is half-written.
 | sends a value the warehouse type cannot hold (numeric overflow, out-of-range date) | fail, naming the column, the value and the declared type | target unchanged |
 | sends an empty batch where `ALLOW_EMPTY` is false | refuse before replacing the target | the previous target rows remain |
 | fails a TABLE business rule of type `REJECT` (for example a row count far below the norm) | fail the rule's task with the rule, the observed value and its detail | Insights shows the observed value and the failed run |
+| agent START report ↔ process supervision | stop the real child and retain its ending when START delivery fails, then record FAILED rather than renewing a stuck claim | `test_failed_start_report_stops_child_and_preserves_ending_evidence`, `test_start_response_loss_ends_the_claim_and_keeps_observed_identity` |
+| agent ending report ↔ watermark fence | preserve verified exit/query evidence for every terminal outcome; an old uncertain process needs explicit checked operator attestation | `test_every_observed_agent_ending_records_only_verified_evidence`, `test_agent_terminal_exit_records_real_evidence`, `test_attested_legacy_ending_advances_the_window_and_names_operator`, and refusal/role tests in `test_ending_evidence.py` |
+| multi-project Engine DB ↔ agent writes | derive every write's project from its authenticated owned attempt; refuse another token's attempt | `test_agent_operation_publishes_and_reads_only_its_project` on both Engine DBs; `test_other_project_token_cannot_publish_an_owned_attempt`; PostgreSQL `test_project_two_agent_setup_and_merge_keep_contracts_isolated` |
 | becomes unreachable or refuses credentials (Kafka broker, MongoDB, MinIO) | retry by its `RETRY_ON` policy, then fail naming the source and the last error | attempts and their failure classes in the audit; the alert sent once |
 | is slow enough to pass the SLA | mark the run's SLA `BREACHED` at the deadline while it keeps running | `SLA_BREACHED_AT` set; the run log and Insights show the breach |
 
@@ -8930,6 +10093,11 @@ and the endurance run on the example passed. A partial coverage matrix cannot pa
       finding is fixed.
 - [ ] Context-free agents, given only published docs and package, install and set up controller,
       UI copy and agent, run the demo and recover a failure; every sticking point is fixed.
+- [ ] `etl-craft.dev` has a home page (owner, 2026-11-01): what etl-craft is, how to install
+      it, and links to the docs at `docs.etl-craft.dev` and the repository. It is a static page
+      served as the org's GitHub Pages site on the apex domain; the docs site stays separate.
+- [ ] The UI shows the running package version on every page (owner, 2026-11-01): one line at
+      the foot of the profile menu, linking to About, read from the version About already shows.
 
 ## After 0.9.0
 
@@ -8946,6 +10114,108 @@ These are possible enhancements after the first public release, shaped by user f
   locking, revalidation before deletion, dry-run counts and crash/concurrency tests. S6.A keeps
   its existing scope and never deletes target business rows; no fields or runtime behavior are
   introduced for this possibility now.
+
+### S7.Q A generic ANSI SQL warehouse
+
+Moved after 0.9.0 (owner, 2026-11-01). The S8 demo does not depend on this item.
+
+
+Branch: `feat/dialects-generic-ansi`. After S5.X.
+
+- *Problem.* etl-craft targets PostgreSQL, Snowflake, Databricks, DuckDB and Trino, and adds no
+  further native dialects. In rare cases a team must still load into another database.
+- *Change.*
+  1. **A `generic` warehouse dialect.** It connects through SQLAlchemy from the profile's
+     `jdbc_url`; the team installs the database's driver, and engine code never imports it.
+  2. **Only ANSI SQL:**
+     - `INSERT … SELECT`, and `DELETE` with `INSERT` in one transaction to overwrite;
+     - `CREATE TABLE` from the declared columns, then `INSERT`;
+     - `DROP VIEW` and `CREATE VIEW` in one transaction;
+     - merges as `UPDATE … WHERE EXISTS` and `INSERT … WHERE NOT EXISTS`;
+     - `ALTER TABLE … ADD` for schema evolution;
+     - `ROW_ID` as `MAX() + 1` under the Engine DB target lock;
+     - `information_schema` for metadata reads.
+  3. **Merges compare columns NULL-safely** (`a = b OR (a IS NULL AND b IS NULL)`) instead of
+     storing a change hash, so `rehash` and hash versions do not apply. This is the one
+     exception to the merge-hash design rule, approved by the owner.
+  4. **No guessing.** Anything without an ANSI form is refused at `validate`, naming the task,
+     the parameter and the reason. One example is `REJECT_LIMIT`, which needs `TRY_CAST`.
+     There are no per-database SQL fragments or settings.
+- *Tests.* The warehouse action suite runs against PostgreSQL and DuckDB acting as `generic`
+  targets, with no new CI service. It covers the refusals.
+- *Done when.* A database with an ANSI SQL SQLAlchemy dialect runs every managed action
+  except the refused ones, with the same audit and failure messages.
+
+
+### S7.AE Pipeline samples
+
+Moved after 0.9.0 (owner, 2026-11-01). The S8 demo does not depend on this item.
+
+
+Owner decision, 2026-10-26. Branch: `feat/services-pipeline-samples`. Samples are optional
+whole-pipeline tests, like dbt tests but through every step: mock source data goes in at the
+ingestion tasks and expected rows are compared at the end. They check wiring and regressions;
+they cannot prove the logic right for data nobody anticipated, which stays the job of business
+rules on real data.
+
+- *Command.* `etl-craft samples run [--pipeline P] [--case C] [--keep | --keep-on-failure]`.
+  It runs in CI before deploy and exits non-zero on any failed case, so the deploy job never
+  runs; nothing runs samples on a schedule or inside `config apply`. Projects may have samples
+  or not.
+- *Inputs.* `samples/<case>/inputs/<task_code>.csv`, one per ingestion task the case needs: the
+  file is written to that task's target table and the task is not run. Every other task runs for
+  real. A header-only file means no data. A case may give tables' starting state in
+  `given/<table>.csv` (merges into existing rows, event-wait signal rows). An ingestion task in
+  the run with no input file fails the case.
+- *Scope.* Nothing is tested in isolation: the case runs its pipeline end to end and then every
+  dependent pipeline (pipeline dependencies, triggered pipelines, and pipelines naming it in
+  `WATERMARK_SOURCE_PIPELINES`), each once, in dependency order, ignoring schedules.
+- *Expected.* `expected/<table>.csv` per table after the run and `expected/rules.csv` for rule
+  results. Declared columns only, typed from `columns.csv`, order-independent; engine columns
+  ignored. Numbered steps (`1/`, `2/`) run several loads in order.
+- *Isolation.* A throwaway SQLite Engine DB created by the command with the project's config
+  applied, and a separate warehouse connection, `Samples.Warehouse` in `craft-connector.yml`,
+  pointing to a sample database or catalog with the production schema names, created by the
+  team. No SQL is rewritten; SQL that names a database or catalog explicitly is refused in a
+  sample run with its file and line. `UTILITY` Python tasks (S7.AD) are skipped and reported;
+  email alerts are recorded, not sent.
+- *Every run starts clean.* Each run drops and recreates every table its pipelines touch in the
+  sample warehouse and creates a new Engine DB, whatever was left from an earlier run.
+- *After a run.* By default every table and the Engine DB are removed. `--keep` keeps them;
+  `--keep-on-failure` keeps them only when a case fails. The report names where they are kept.
+  Two runs against one sample warehouse collide; CI serializes them.
+- *Report.* Per case: pass or fail, per table missing, extra and differing rows with the
+  columns that differ, rule results, and the tasks and rules the case exercised. JSON output
+  for CI.
+- S8.C's CI runs the Support Insights samples before deploy; S8.H covers them.
+
+*Done when:* a case runs its pipelines and dependents end to end from input files, compares
+every expected table and rule result, starts clean every time, honours both keep options, and
+CI can gate a deploy on it.
+
+## After 1.0.0: provider integration follow-ups
+
+These three items are deferred beyond 1.0.0; none changes the approved browser redirect,
+state-cookie, replay protection, device flow or CLI design.
+
+- **Confidential OIDC clients, when required.** Add optional `Auth.Oidc_client_secret` only
+  when a provider or policy requires it. The setting names a variable, resolved through the
+  existing secret resolver on use; send the value only in the browser/device token exchange,
+  never in configuration, logs, audit payloads or responses. Public clients remain unchanged.
+- **Provider offboarding — design decision required before code.** Consider (1) disable an
+  account on a refused sign-in, (2) reconcile membership against a group claim or directory,
+  or (3) accept SCIM deprovisioning with its own authenticated endpoints and storage. Start
+  with disable-on-refusal only after deciding how a provider refusal can be securely tied
+  to a previously bound subject; an unauthenticated or generic refusal must not let someone
+  disable another account. This option acts only on the person's next sign-in attempt and
+  does not itself revoke an already-live session when the provider removes them. Group
+  reconciliation and SCIM need separate scope, settings/storage review and owner decisions.
+- **MFA enforcement — design decision required before code.** Choose between an optional
+  `Auth.Oidc_required_acr` setting that requires the provider's named ACR value in a verified
+  ID token, and relying on the provider's MFA policy with documentation. Prefer the explicit
+  setting when package-side enforcement is needed, with the administrator choosing the
+  provider's MFA context. Claim values vary: no ACR enforcement values have been tested by
+  etl-craft yet; record tested and untested provider values before selecting a contract.
 
 ## Appendix A: Defect traceability
 

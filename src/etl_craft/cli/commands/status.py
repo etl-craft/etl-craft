@@ -13,6 +13,7 @@ from etl_craft.cli.commands.common import (
     request_from,
 )
 from etl_craft.cli.output import Output
+from etl_craft.cli.rendering import duration, hours
 from etl_craft.core.enums import ActionName
 from etl_craft.services.operations.requests import RunFilter
 from etl_craft.services.operations.status import StatusListView, StatusView
@@ -49,13 +50,19 @@ def _render(args: argparse.Namespace, out: Output, done: StatusView | StatusList
 def _text_status(out: Output, done: StatusView) -> None:
     run = done.run
     out.line(
-        f"{run.pipeline_code}: pipeline_run_id={run.pipeline_run_id} key={run.run_key} "
-        f"kind={run.trigger_kind} run_date={run.run_date} status={run.status}"
+        f"{run.pipeline_code}: pipeline_run_id={out.identity(run.pipeline_run_id)} "
+        f"key={run.run_key} kind={run.trigger_kind} run_date={run.run_date} status={run.status}"
     )
-    out.line(
-        f"start={run.start_date} duration_seconds={done.duration_seconds} SLA={run.sla_status} "
-        f"sla_hours={done.pipeline.sla_in_hours}"
-    )
+    if out.stdout.isatty():
+        out.line(
+            f"started={run.start_date or 'not started'} duration={duration(done.duration_seconds)} "
+            f"SLA={run.sla_status or 'not recorded'} budget={hours(done.pipeline.sla_in_hours)}"
+        )
+    else:
+        out.line(
+            f"start={run.start_date} duration_seconds={done.duration_seconds} SLA={run.sla_status} "
+            f"sla_hours={done.pipeline.sla_in_hours}"
+        )
     out.line(
         f"metadata_version={run.metadata_version} bundle_id={run.bundle_id} "
         f"newer_metadata_available={run.newer_metadata_available}"
@@ -79,21 +86,35 @@ def _text_status(out: Output, done: StatusView) -> None:
             out.line(f"{task.task_code}: {task.explanation.next_action}")
     if done.pipeline.paused is not None:
         out.line(done.pipeline.paused.describe())
-    headers = ("TASK", "STATUS", "ATTEMPTS", "ROWS_WRITTEN", "REJECTED", "DURATION_SECONDS")
-    out.rows([(*headers, "ERROR")])
-    out.rows(
-        (
-            t.task_code,
-            t.status or "NOT RUN",
-            t.attempts,
-            t.rows_written,
-            t.reject_count,
-            t.duration_seconds,
-            t.error,
-        )
-        for t in done.tasks
+    headers = (
+        "TASK",
+        "STATUS",
+        "ATTEMPTS",
+        "ROWS_WRITTEN",
+        "REJECTED",
+        "DUPLICATES",
+        "DURATION" if out.stdout.isatty() else "DURATION_SECONDS",
     )
-    out.line("blocked by failures: " + (", ".join(done.blocked_by_failures) or "(none)"))
+    out.rows(
+        [
+            (*headers, "ERROR"),
+            *(
+                (
+                    t.task_code,
+                    t.status or "NOT RUN",
+                    t.attempts,
+                    t.rows_written,
+                    t.reject_count,
+                    t.duplicate_count,
+                    duration(t.duration_seconds) if out.stdout.isatty() else t.duration_seconds,
+                    t.error,
+                )
+                for t in done.tasks
+            ),
+        ]
+    )
+    if done.blocked_by_failures or not out.stdout.isatty():
+        out.line("blocked by failures: " + (", ".join(done.blocked_by_failures) or "(none)"))
 
 
 COMMAND = Command(

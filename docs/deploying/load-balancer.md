@@ -2,8 +2,7 @@
 
 Run PostgreSQL, one active `etl-craft controller --no-ui`, and two or more
 `etl-craft ui` copies using the same package, project configuration and Engine DB. Install
-`etl-craft[ui]` (or `[all]`) in the API image. These are small configuration fragments;
-S7.F supplies the complete Compose and Kubernetes layouts.
+`etl-craft[ui]` (or `[all]`) in the API image. See the [complete Compose and Kubernetes layouts](cluster.md).
 
 ## Health, timeouts and shutdown
 
@@ -101,7 +100,7 @@ mounts. Use an image containing `etl-craft[ui]`; omit a fixed container name or 
 services:
   ui:
     image: your-etl-craft-ui-image
-    command: [etl-craft, ui]
+    command: [ui]
     expose: ["8730"]
     stop_grace_period: 65s
     healthcheck:

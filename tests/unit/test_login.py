@@ -109,6 +109,9 @@ def test_auth_settings_validate_lifetime_and_issuer(tmp_path):
         "Engine": {"dev": {"Jdbc_url": "jdbc:sqlite:e.db", "Schema": "main"}},
     }
     assert parse_config(raw, tmp_path / "c.yml").auth.session_hours == 12
+    assert parse_config(raw, tmp_path / "c.yml").auth.session_idle_minutes == 60
+    raw["Auth"] = {"Session_idle_minutes": 15}
+    assert parse_config(raw, tmp_path / "c.yml").auth.session_idle_minutes == 15
     raw["Auth"] = {
         "Session_hours": 2,
         "Oidc_issuer": "https://issuer.example",
@@ -123,6 +126,7 @@ def test_auth_settings_validate_lifetime_and_issuer(tmp_path):
         {"Oidc_groups_claim": "groups"},
         {"Session_hours": True},
         {"Session_hours": 0},
+        {"Session_idle_minutes": 4},
         {"Oidc_client_id": "etl"},
         {"Oidc_issuer": "http://issuer", "Oidc_client_id": "etl"},
         {"Oidc_issuer": "https://[malformed", "Oidc_client_id": "etl"},
@@ -165,7 +169,7 @@ def jwt(**changes):
 )
 def test_device_token_requires_issuer_client_nonce_and_fresh_lifetime(claims):
     with pytest.raises(ConfigurationError):
-        oidc._claims(jwt(**claims), "https://issuer", "etl", "nonce")
+        oidc.token_claims(jwt(**claims), "https://issuer", "etl", "nonce")
 
 
 def _sso(expires_in=60, interval=2):
@@ -187,8 +191,8 @@ def test_sso_sign_in_waits_while_pending_and_backs_off_when_asked(monkeypatch):
 @pytest.mark.parametrize("error", ["access_denied", "expired_token", "invalid_client"])
 def test_device_polling_stops_on_refusal(monkeypatch, error):
     metadata = {"token_endpoint": "https://issuer/token"}
-    monkeypatch.setattr(oidc, "_client", lambda auth: ("https://issuer", "etl", metadata))
-    monkeypatch.setattr(oidc, "_request", lambda *a: {"error": error})
+    monkeypatch.setattr(oidc, "client_metadata", lambda auth: ("https://issuer", "etl", metadata))
+    monkeypatch.setattr(oidc, "request_json", lambda *a, **options: {"error": error})
     with pytest.raises(ConfigurationError, match="refused or expired"):
         oidc.poll_device(AuthConfig(), "device", "nonce")
 
@@ -210,7 +214,7 @@ def test_oidc_never_accepts_insecure_or_credentialed_endpoints():
         "oops",
     ):
         with pytest.raises(ConfigurationError, match="HTTPS"):
-            oidc._request(url)
+            oidc.request_json(url)
 
 
 def test_failed_credential_replacement_keeps_the_previous_session(monkeypatch):

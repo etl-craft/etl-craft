@@ -63,6 +63,9 @@ class DependencyView:
     recorded: bool = False
     pipeline_dependency_id: int | None = None
 
+    selected_run_label: str = ""
+    selected_task_run_label: str = ""
+
 
 @dataclass(frozen=True)
 class GateWaitView:
@@ -225,6 +228,7 @@ class TaskStatusView:
     attempts: int
     rows_written: int | None
     reject_count: int | None
+    duplicate_count: int | None
     duration_seconds: float | None
     error: str | None
     explanation: Explanation
@@ -332,7 +336,10 @@ def _admitted_snapshots(
                 replace(control, outcome=None) if control is not None and held else control,
             )
         )
-    return snapshots
+    order = {
+        task: index for index, task in enumerate(task for wave in graph.waves() for task in wave)
+    }
+    return sorted(snapshots, key=lambda snapshot: order[snapshot.task_id])
 
 
 def _pipeline_dependencies(
@@ -503,6 +510,11 @@ class StatusListView:
 
 def pipeline_status(ctx: OperationContext, request: RunFilter) -> StatusView | StatusListView:
     """Inspect one selected run, or all current runs carrying every given tag."""
+    assert not isinstance(request.run_id, str), "run reference must be resolved"
+    if request.run_id is not None and request.pipeline_code is None:
+        from etl_craft.services.operations.permissions import run_pipeline_code
+
+        request = replace(request, pipeline_code=run_pipeline_code(ctx, request.run_id))
     if request.pipeline_code is not None and not request.tag:
         return _pipeline_status(
             ctx,
@@ -565,6 +577,7 @@ def _pipeline_status(ctx: OperationContext, request: RunSelection) -> StatusView
                 task.attempt_count if task is not None else 0,
                 task.rows_written if task is not None else None,
                 task.reject_count if task is not None else None,
+                task.duplicate_count if task is not None else None,
                 elapsed_seconds(task.start_date, task.end_date or now)
                 if task is not None
                 else None,

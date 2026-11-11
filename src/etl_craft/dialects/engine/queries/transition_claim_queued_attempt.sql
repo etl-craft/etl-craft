@@ -45,7 +45,8 @@ AND (q.slot_kind='python' OR q.warehouse_limit IS NULL OR
  FROM AUD_TASK_ATTEMPTS a JOIN eligible e ON e.attempt_id=a.ATTEMPT_ID
  WHERE a.STATUS='QUEUED' FOR UPDATE OF a SKIP LOCKED
 )
-UPDATE AUD_TASK_ATTEMPTS a SET STATUS='CLAIMED', OWNER_ID=:owner, ERROR_MESSAGE=NULL,
+UPDATE AUD_TASK_ATTEMPTS a SET STATUS='CLAIMED', OWNER_ID=:owner,
+AGENT_INSTANCE_ID=(SELECT INSTANCE_ID FROM AUD_AGENTS WHERE AGENT_ID=:agent_id), ERROR_MESSAGE=NULL,
 CLAIMED_AT=clock_timestamp(), HEARTBEAT_AT=clock_timestamp(), LEASE_EXPIRES_AT=clock_timestamp()+interval '60 seconds',
 RESERVED_CPU=s.cpu, RESERVED_MEMORY_MB=s.memory_mb FROM selected s WHERE a.ATTEMPT_ID=s.attempt_id
 RETURNING a.ATTEMPT_ID AS attempt_id, a.LEASE_EXPIRES_AT AS lease_expires_at, clock_timestamp() AS db_now

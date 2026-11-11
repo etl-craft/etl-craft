@@ -30,7 +30,7 @@ def restore_logger():
 
 @pytest.fixture
 def bound(engine_db, tmp_path, request):
-    """A config file, a task T with parameter X=1, and its row bound under a run."""
+    """A config file, a task T with parameter DOCUMENTATION=1, and its row bound under a run."""
     profile = engine_db.config.engine
     schema = "public" if profile.jdbc_url.startswith("jdbc:postgresql") else "main"
     block = {"Jdbc_url": profile.jdbc_url, "Schema": schema}
@@ -63,7 +63,7 @@ def bound(engine_db, tmp_path, request):
         conn.execute(
             text(
                 "INSERT INTO CFG_TASK_PARAMETERS (TASK_ID, PARAMETER_NAME, PARAMETER_VALUE) "
-                "VALUES (:t, 'X', '1')"
+                "VALUES (:t, 'DOCUMENTATION', '1')"
             ),
             {"t": task},
         )
@@ -108,7 +108,7 @@ def test_the_context_is_rebuilt_from_the_task_run(bound):
     )
     assert (context.refresh_type, dict(context.task_params), context.force) == (
         "INCREMENTAL",
-        {"X": "1"},
+        {"DOCUMENTATION": "1"},
         True,
     )
 
@@ -151,7 +151,9 @@ def test_the_command_line_records_a_handler_failure(bound, capsys, monkeypatch, 
     # An earlier attempt failed, so this run is a retry of the same row.
     with engine.begin() as conn:
         transitions.finish_task_run(conn, task_run_id, status=RunStatus.FAILED)
-    code = cli_main(["run", "--pipeline-code", "P", "--task-code", "T"])
+    code = cli_main(
+        ["run", "--pipeline-code", "P", "--task-code", "T", "--reason", "test requested run"]
+    )
     assert code == ExitCode.FAILURE
     message = "EMAIL_TO is required: one or more addresses separated by '|'"
     assert capsys.readouterr().out == f"T: FAILED — {message}\n"
@@ -159,4 +161,9 @@ def test_the_command_line_records_a_handler_failure(bound, capsys, monkeypatch, 
     # A settled task is skipped and exits 0.
     with engine.begin() as conn:
         transitions.finish_task_run(conn, task_run_id, status=RunStatus.SUCCESS)
-    assert cli_main(["run", "--pipeline-code", "P", "--task-code", "T"]) == ExitCode.SUCCESS
+    assert (
+        cli_main(
+            ["run", "--pipeline-code", "P", "--task-code", "T", "--reason", "test requested run"]
+        )
+        == ExitCode.SUCCESS
+    )

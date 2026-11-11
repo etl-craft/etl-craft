@@ -68,7 +68,7 @@ def test_rehash_upgrades_every_row_then_unchanged_merge_does_nothing(sql_world, 
     with pytest.raises(HandlerError, match="rehash --target"):
         w.run("merge", **params)
     dry = rehash(w.engine_db, w.config, f"{w.schema}.people", dry_run=True)
-    assert dry.rows == len(before) and dry.sql.startswith("UPDATE ")
+    assert dry.rows == len(before) and dry.sql.startswith(("MERGE INTO ", "UPDATE "))
     assert w.rows(f"SELECT * FROM {w.name('people')} ORDER BY ROW_ID") == before
     with w.engine_db.connect() as conn:
         assert fetch_hash_version(conn, w.name("people")) is None
@@ -77,11 +77,14 @@ def test_rehash_upgrades_every_row_then_unchanged_merge_does_nothing(sql_world, 
     with w.engine_db.connect() as conn:
         assert fetch_hash_version(conn, w.name("people")) == 2
     after = w.rows(f"SELECT * FROM {w.name('people')} ORDER BY ROW_ID")
-    index = w.columns("people").index("hash_key")
-    assert [row[:index] + row[index + 1 :] for row in before] == [
-        row[:index] + row[index + 1 :] for row in after
+    names = w.columns("people")
+    retained = [
+        i for i, name in enumerate(names) if name not in {"hash_key", "etl_protection_request_id"}
     ]
-    assert all(row[index] != "legacy" for row in after)
+    assert [tuple(row[i] for i in retained) for row in before] == [
+        tuple(row[i] for i in retained) for row in after
+    ]
+    assert all(row[names.index("hash_key")] != "legacy" for row in after)
     unchanged = w.run(
         "merge",
         **{
@@ -161,6 +164,7 @@ def test_rehash_command_validates_dry_run_then_upgrades(sql_world, capsys, monke
             "Table_format": str(w.config.warehouse_table_format),
             "dev": fields,
         },
+        "Privacy": {"Hmac_secret": w.config.privacy_hmac_secret},
     }
     path = w.config.config_path
     path.write_text(yaml.safe_dump(raw, sort_keys=False))
@@ -208,7 +212,12 @@ def test_correcting_repeated_compare_columns_rehashes_without_changing_business_
     assert dry.rows == 1
     assert w.rows(f"SELECT * FROM {w.name('people')} ORDER BY ROW_ID") == legacy
     rehash(w.engine_db, w.config, f"{w.schema}.people")
-    assert w.rows(f"SELECT * FROM {w.name('people')} ORDER BY ROW_ID") == original
+    names = w.columns("people")
+    stamp = names.index("etl_protection_request_id")
+    upgraded = w.rows(f"SELECT * FROM {w.name('people')} ORDER BY ROW_ID")
+    assert [r[:stamp] + r[stamp + 1 :] for r in upgraded] == [
+        r[:stamp] + r[stamp + 1 :] for r in original
+    ]
     repaired = w.run("merge", **params)
     assert repaired.insert_count == 0 and repaired.update_count == 0
-    assert w.rows(f"SELECT * FROM {w.name('people')} ORDER BY ROW_ID") == original
+    assert w.rows(f"SELECT * FROM {w.name('people')} ORDER BY ROW_ID") == upgraded

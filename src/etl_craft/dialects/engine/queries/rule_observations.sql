@@ -1,11 +1,12 @@
 -- Table results from an exact run or the most recent fifty runs of each selected pipeline.
 SELECT b.BUSINESS_RULE_ID AS business_rule_id,r.BUSINESS_RULE_RUN_ID AS business_rule_run_id,
 b.BUSINESS_RULE_NAME AS business_rule_name,t.TASK_CODE AS task_code,
-l.PIPELINE_RUN_ID AS pipeline_run_id,l.TASK_RUN_ID AS task_run_id,r.STATUS AS status,
+pr.RUN_LABEL AS run_label,l.TASK_RUN_LABEL AS task_run_label,l.PIPELINE_RUN_ID AS pipeline_run_id,l.TASK_RUN_ID AS task_run_id,r.STATUS AS status,
 r.PASSED AS passed,r.OBSERVED AS observed,r.DETAIL AS detail,
 CASE WHEN o.CATALOG_NAME IS NULL THEN '' ELSE o.CATALOG_NAME || '.' END || o.SCHEMA_NAME || '.' || o.TABLE_NAME AS target_table
 FROM CFG_BUSINESS_RULES b JOIN AUD_BUSINESS_RULES_RUN_LOG r ON r.BUSINESS_RULE_ID=b.BUSINESS_RULE_ID
 JOIN AUD_TASK_RUN_LOG l ON l.TASK_RUN_ID=r.TASK_RUN_ID
+JOIN AUD_PIPELINES_RUN_LOG pr ON pr.PIPELINE_RUN_ID=l.PIPELINE_RUN_ID
 JOIN CFG_TASKS t ON t.TASK_ID=l.TASK_ID
 JOIN CFG_PIPELINES p ON p.PIPELINE_ID=b.PIPELINE_ID
 JOIN CFG_TABLES o ON o.TABLE_ID=b.TARGET_TABLE_ID

@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from typing import Protocol
 
@@ -15,15 +15,32 @@ from etl_craft.config.targets import active_catalog
 from etl_craft.core.actor import current_actor
 from etl_craft.core.business_rules import RULE_TEXT_LIMIT, table_result
 from etl_craft.core.definitions import Definition, using
-from etl_craft.core.enums import BusinessRuleLevel, RunStatus, SqlAction, YesNo
+from etl_craft.core.enums import BusinessRuleLevel, Handler, RunStatus, SqlAction, YesNo
+from etl_craft.core.erasure import ErasureReport
 from etl_craft.core.errors import HandlerError, StaleTransitionError
 from etl_craft.core.items import ItemRecord, ItemState, ItemStore
+from etl_craft.core.landing import GENERATED_COLUMNS, LandingContract
 from etl_craft.core.ownership import ResourceLocker, attempt_holder
+from etl_craft.core.protection import (
+    ProtectionCandidates,
+    ProtectionMatches,
+    ProtectionPage,
+    ProtectionReport,
+)
+from etl_craft.core.text import qualify
 from etl_craft.core.time import as_utc
 from etl_craft.core.uploads import UploadFile
 from etl_craft.engine import locks, resource_locks, transitions
 from etl_craft.engine.agent_state import fence
 from etl_craft.engine.alerts import AlertState, read_alert
+from etl_craft.engine.event_files import (
+    AdmittedFile,
+    Decision,
+    ValidationScope,
+    admitted,
+    record,
+    require_source_event,
+)
 from etl_craft.engine.queries import statement
 from etl_craft.engine.repository.business_rules import (
     BusinessRule,
@@ -84,6 +101,8 @@ class TaskState:
     merge_conflict: str | None
     target: str | None = None
     contract: TargetState | None = None
+    rule_flags: dict[str, tuple[str, ...]] = field(default_factory=dict)
+    landing: LandingContract | None = None
 
 
 @dataclass(frozen=True)
@@ -121,12 +140,38 @@ class RuleEnding:
 class TaskStore(ResourceLocker, ItemStore, Protocol):
     """The local and HTTP task backends expose the same bounded operations."""
 
+    def protection_match(self, target: str, candidates: ProtectionCandidates) -> ProtectionMatches:
+        """Compare bounded candidates only for this target's pending deletion recovery."""
+        ...
+
+    def protection_read(self, target: str, cursor: int = 0) -> ProtectionPage:
+        """Read a bounded page under the same admitted-target ownership fence."""
+        ...
+
+    def protection_event(self, target: str, report: ProtectionReport) -> str:
+        """Append an intent or idempotent outcome through the common event service."""
+        ...
+
+    def erasure(self) -> ErasureReport:
+        """Execute the admitted erasure without returning personal keys."""
+        ...
+
     def upload_files(self) -> tuple[UploadFile, ...]:
         """Read and verify the admitted files before exposing them to a script."""
         ...
 
     def validation_result(self, upload_id: int, reason: str | None) -> None:
         """Record this validator's decision for one admitted file."""
+        ...
+
+    def event_file_candidates(self, wait_code: str) -> tuple[AdmittedFile, ...]:
+        """List the files the named wait admitted in this run, with any recorded identity."""
+        ...
+
+    def event_file_result(
+        self, wait_code: str, path: str, digest: tuple[str, int], reason: str | None
+    ) -> None:
+        """Record this validator's decision on one file its wait admitted in this run."""
         ...
 
     def alert(self, pipelines: str | None) -> AlertState:
@@ -176,6 +221,139 @@ class LocalTaskStore:
     locks: ResourceLocker
     definition: Definition | None = None
     _contracts: dict[str, TargetState] = field(default_factory=dict, compare=False)
+    _erasure_target: str | None = None
+    parameters: Mapping[str, str] = field(default_factory=dict, repr=False)
+
+    def erasure_target(self, target: str) -> LocalTaskStore:
+        """Bind a host-validated lineage target without exposing an agent target override."""
+        from etl_craft.engine.repository.tasks import fetch_task_execution_detail
+
+        with self.engine.connect() as conn:
+            self._assert(conn)
+            with using(self.definition):
+                handler = fetch_task_execution_detail(conn, self.identity.task_id).handler
+            if handler != Handler.ERASURE:
+                raise HandlerError(
+                    f"attempt {self.identity.attempt_id}, target {target}: handler={handler}; "
+                    "expected ERASURE for a lineage target; use the admitted SQL target"
+                )
+        return replace(self, _erasure_target=target)
+
+    @classmethod
+    def standalone(
+        cls, engine: Engine, config: ConnectorConfig, locker: ResourceLocker
+    ) -> LocalTaskStore:
+        """Bind in-process maintenance to its explicit actor and target ownership."""
+        return cls(engine, config, TaskIdentity(0, 0, 0, 0, None, None), locker)
+
+    def protection_read(self, target: str, cursor: int = 0) -> ProtectionPage:
+        """Share one fenced event-store implementation with the HTTP provider."""
+        from etl_craft.engine.protection_events import fenced_read
+
+        with self.engine.begin() as conn:
+            canonical, fencing = self._protection_scope(conn, target)
+            return fenced_read(conn, canonical, fencing, cursor, config=self.config)
+
+    def protection_match(self, target: str, candidates: ProtectionCandidates) -> ProtectionMatches:
+        """Use the same host matcher as the fenced agent report."""
+        from etl_craft.engine.protection_matching import match
+
+        with self.engine.begin() as conn:
+            canonical, fencing = self._protection_scope(conn, target)
+            return match(conn, self.config, canonical, fencing, candidates)
+
+    def protection_event(self, target: str, report: ProtectionReport) -> str:
+        """Never append an event for an unfenced target or another live creator."""
+        from etl_craft.config.privacy import privacy_secret
+        from etl_craft.engine.privacy import guarded
+        from etl_craft.engine.protection_events import append, append_fenced
+
+        key = privacy_secret(self.config)
+        with guarded(self.config), self.engine.begin() as conn:
+            canonical, fencing = self._protection_scope(conn, target)
+            if request := append_fenced(conn, canonical, report, fencing, key):
+                return request
+            canonical = self._protection_fence(conn, target)
+            from etl_craft.engine.protection_events import target_identity
+
+            physical = target_identity(self.config, target)[1]
+            return append(
+                conn, canonical, report, self.identity.attempt_id, physical, privacy_key=key
+            )
+
+    def _protection_scope(self, conn: Connection, target: str) -> tuple[str, dict[str, object]]:
+        from etl_craft.core.errors import PermissionDeniedError
+        from etl_craft.engine.protection_events import target_identity
+        from etl_craft.engine.repository.tasks import fetch_task_parameters
+
+        identity = self.identity
+        where = f"attempt {identity.attempt_id}, target {target}"
+        catalog = active_catalog(self.config)
+        canonical, physical = target_identity(self.config, target)
+        key = locks.target(physical, catalog).key
+        if identity.attempt_id is None:
+            if not currently_holds(key):
+                raise StaleTransitionError(
+                    f"{where}: target lock is not held; acquire it before protection work"
+                )
+            holder = resource_locks.current_holder("")
+            holder_id, owner = holder.holder_id, holder.owner
+        else:
+            with using(self.definition):
+                expected = self._erasure_target or fetch_task_parameters(
+                    conn, identity.task_id
+                ).get("TARGET_OBJECT")
+            if expected is None or target_identity(self.config, expected)[0] != canonical:
+                raise PermissionDeniedError(
+                    f"{where}: admitted-target check failed; "
+                    "use only this attempt's admitted target"
+                )
+            holder_id, owner = identity.holder_id, identity.owner or ""
+        validators = (
+            [
+                row["task_id"]
+                for row in self.definition.rows["CFG_TASKS"]
+                if row["pipeline_id"] == identity.pipeline_id
+                and row["handler"] == Handler.FILE_VALIDATION
+                and row["active_flag"] == YesNo.YES
+            ]
+            if self.definition is not None
+            else []
+        )
+        return canonical, {
+            "attempt_id": identity.attempt_id,
+            "task_run_id": identity.task_run_id,
+            "pipeline_run_id": identity.pipeline_run_id,
+            "validator_id": validators[0] if len(validators) == 1 else None,
+            "owner": identity.owner or "",
+            "key": key,
+            "holder": holder_id,
+            "lock_owner": owner,
+        }
+
+    def _protection_fence(self, conn: Connection, target: str) -> str:
+        where = f"attempt {self.identity.attempt_id}, target {target}"
+        try:
+            self._assert(conn)
+        except StaleTransitionError as error:
+            raise StaleTransitionError(
+                f"{where}: live-attempt/token check failed; "
+                "stop this writer and obtain a fresh attempt"
+            ) from error
+        canonical, fencing = self._protection_scope(conn, target)
+        owned = conn.execute(
+            statement(conn, "resource_lock_owned"),
+            {"key": fencing["key"], "holder": fencing["holder"], "owner": fencing["lock_owner"]},
+        ).scalar_one_or_none()
+        if owned is None:
+            raise StaleTransitionError(
+                f"{where}: target-lock check failed; acquire its live lock before reporting"
+            )
+        return canonical
+
+    def erasure(self) -> ErasureReport:
+        """Require local execution to pass its Engine DB directly to the handler."""
+        raise HandlerError("local ERASURE requires its Engine DB backend; use the task runner")
 
     def upload_files(self) -> tuple[UploadFile, ...]:
         """Use the same fenced storage stream as API-only agents."""
@@ -210,6 +388,25 @@ class LocalTaskStore:
             with using(self.definition):
                 handler = fetch_task_execution_detail(conn, self.identity.task_id).handler
             validation_result(conn, self.identity.pipeline_run_id, handler, upload_id, reason)
+
+    def event_file_candidates(self, wait_code: str) -> tuple[AdmittedFile, ...]:
+        """Read this run's admitted files and their recorded identity under the live attempt."""
+        with self.engine.connect() as conn:
+            self._assert(conn)
+            require_source_event(conn, self.definition, self.identity.task_id, wait_code)
+            identity = self.identity
+            return admitted(conn, identity.pipeline_run_id, identity.pipeline_id, wait_code)
+
+    def event_file_result(
+        self, wait_code: str, path: str, digest: tuple[str, int], reason: str | None
+    ) -> None:
+        """Fence each per-file decision against this validator's live attempt."""
+        with self.engine.begin() as conn:
+            self._assert(conn)
+            require_source_event(conn, self.definition, self.identity.task_id, wait_code)
+            i = self.identity
+            scope = ValidationScope(i.pipeline_run_id, i.pipeline_id, wait_code, i.task_run_id)
+            record(conn, scope, Decision(path, digest, reason))
 
     @property
     def session_tag(self) -> str:
@@ -255,19 +452,67 @@ class LocalTaskStore:
 
     def state(self, sql_action: str | None = None) -> TaskState:
         """Read only metadata belonging to the selected task and its run."""
-        with using(self.definition):
+        from etl_craft.engine.repository.pipelines import current_project_id, selected_project
+
+        project_id = current_project_id()
+        if self.definition is not None:
+            pipeline = self.definition.row(
+                "CFG_PIPELINES", "pipeline_id", self.identity.pipeline_id
+            )
+            project_id = int(str(pipeline.get("project_id", 1)))
+        with using(self.definition), selected_project(project_id):
             identity = self.identity
             with self.engine.connect() as conn:
                 self._assert(conn)
                 if sql_action is not None:
-                    return self._sql_state(conn, sql_action)
+                    state = self._sql_state(conn, sql_action)
+                    return (
+                        state
+                        if sql_action == SqlAction.DROP_TABLE
+                        else replace(state, rule_flags=self._rule_scopes(conn))
+                    )
                 return TaskState(
                     fetch_task_offset(conn, identity.task_id),
                     tuple(fetch_business_rules_for_task(conn, identity.task_id)),
                     (),
                     {},
                     None,
+                    landing=self._landing_contract(conn),
                 )
+
+    def _landing_contract(self, conn: Connection) -> LandingContract | None:
+        """Expose only the declared landing target and active column types of this task."""
+        from etl_craft.engine.repository.source_columns import fetch_source_columns
+        from etl_craft.engine.repository.tasks import fetch_task_parameters
+
+        params = fetch_task_parameters(conn, self.identity.task_id)
+        target = params.get("TARGET_OBJECT")
+        if target is None:
+            return None
+        catalog = active_catalog(self.config)
+        canonical = qualify(target, catalog)
+        columns = tuple(
+            (c.column_name, c.data_type)
+            for c in fetch_source_columns(conn)
+            if qualify(c.table_name, catalog).lower() == canonical.lower()
+            and c.column_name.lower() not in GENERATED_COLUMNS
+        )
+        return LandingContract(self.identity.task_id, canonical, columns)
+
+    def _rule_scopes(self, conn: Connection) -> dict[str, tuple[str, ...]]:
+        """Read only scopes declared by this attempt's admitted SELECT."""
+        from etl_craft.config.project import sql_script
+        from etl_craft.core.rule_flags import parse_scopes
+        from etl_craft.engine.rule_scopes import keys
+
+        params = self.parameters
+        raw = params.get("SELECT_QUERY", "")
+        if name := params.get("SCRIPT_FILE"):
+            raw = sql_script(self.config, name).read_text(encoding="utf-8")
+        return {
+            scope.token: keys(conn, self.identity.task_id, self.identity.pipeline_run_id, scope)
+            for scope in parse_scopes(raw)
+        }
 
     def _sql_state(self, conn: Connection, sql_action: str) -> TaskState:
         """Read checkpoint, peer outcomes and target contract from one database snapshot."""
@@ -434,6 +679,10 @@ class LocalTaskStore:
             controls.lock_run(conn, self.identity.pipeline_run_id)
             self._assert(conn)
             assert self.identity.attempt_id is not None
+            from etl_craft.engine.item_offsets import check
+
+            with using(self.definition):
+                check(conn, self.identity.task_id, event)
             return items.record(conn, self.identity.task_run_id, self.identity.attempt_id, event)
 
     def _rule(self, conn: Connection, rule_id: int) -> BusinessRule:

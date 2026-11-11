@@ -4,7 +4,7 @@ SELECT t.TASK_ID AS task_id, p.PIPELINE_CODE AS pipeline_code, t.TASK_CODE AS ta
        r.STATUS AS run_status, r.START_DATE AS run_start, r.END_DATE AS run_end,
        r.SOURCE_COUNT AS source_count, r.TARGET_COUNT AS target_count,
        r.INSERT_COUNT AS insert_count, r.UPDATE_COUNT AS update_count,
-       r.DELETE_COUNT AS delete_count, r.REJECT_COUNT AS reject_count,
+       r.DELETE_COUNT AS delete_count, r.REJECT_COUNT AS reject_count, r.DUPLICATE_COUNT AS duplicate_count,
        r.ERROR_MESSAGE AS error_message,
        EXISTS (SELECT 1 FROM AUD_TASK_RUN_LOG done
                WHERE done.TASK_ID=t.TASK_ID AND done.STATUS='SUCCESS') AS has_successful_run

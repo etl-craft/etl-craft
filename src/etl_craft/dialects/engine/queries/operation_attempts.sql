@@ -5,10 +5,26 @@ SELECT p.PIPELINE_ID AS pipeline_id, r.PIPELINE_RUN_ID AS pipeline_run_id,
        a.LEASE_EXPIRES_AT AS lease_expires_at, a.HEARTBEAT_AT AS heartbeat_at,
        a.QUEUED_AT AS queued_at, a.CLAIMED_AT AS claimed_at, a.STARTED_AT AS started_at,
        a.ENDED_AT AS ended_at, a.HOST AS host, a.PID AS pid, a.PROCESS_START AS process_start,
+       (SELECT e.EVIDENCE_KIND FROM AUD_ATTEMPT_ACKNOWLEDGEMENTS e
+        WHERE e.ATTEMPT_ID = a.ATTEMPT_ID AND e.KIND = 'PROCESS') AS process_evidence_kind,
+       (SELECT e.ACTOR FROM AUD_ATTEMPT_ACKNOWLEDGEMENTS e
+        WHERE e.ATTEMPT_ID = a.ATTEMPT_ID AND e.KIND = 'PROCESS') AS process_evidence_actor,
+       (SELECT e.REASON FROM AUD_ATTEMPT_ACKNOWLEDGEMENTS e
+        WHERE e.ATTEMPT_ID = a.ATTEMPT_ID AND e.KIND = 'PROCESS') AS process_evidence_reason,
+       (SELECT e.VERIFIED_CHECKS FROM AUD_ATTEMPT_ACKNOWLEDGEMENTS e
+        WHERE e.ATTEMPT_ID = a.ATTEMPT_ID AND e.KIND = 'PROCESS') AS process_evidence_checks,
+       (SELECT e.EVIDENCE_KIND FROM AUD_ATTEMPT_ACKNOWLEDGEMENTS e
+        WHERE e.ATTEMPT_ID = a.ATTEMPT_ID AND e.KIND = 'QUERIES') AS query_evidence_kind,
+       (SELECT e.ACTOR FROM AUD_ATTEMPT_ACKNOWLEDGEMENTS e
+        WHERE e.ATTEMPT_ID = a.ATTEMPT_ID AND e.KIND = 'QUERIES') AS query_evidence_actor,
+       (SELECT e.REASON FROM AUD_ATTEMPT_ACKNOWLEDGEMENTS e
+        WHERE e.ATTEMPT_ID = a.ATTEMPT_ID AND e.KIND = 'QUERIES') AS query_evidence_reason,
+       (SELECT e.VERIFIED_CHECKS FROM AUD_ATTEMPT_ACKNOWLEDGEMENTS e
+        WHERE e.ATTEMPT_ID = a.ATTEMPT_ID AND e.KIND = 'QUERIES') AS query_evidence_checks,
        a.EXIT_CODE AS exit_code, a.SOURCE_COUNT AS source_count, a.TARGET_COUNT AS target_count,
        a.INSERT_COUNT AS insert_count, a.UPDATE_COUNT AS update_count,
        a.DELETE_COUNT AS delete_count, a.ROWS_WRITTEN AS rows_written,
-       a.REJECT_COUNT AS reject_count,
+       a.REJECT_COUNT AS reject_count, a.DUPLICATE_COUNT AS duplicate_count,
        a.WATERMARK_FROM AS watermark_from, a.WATERMARK_TO AS watermark_to,        a.ERROR_MESSAGE AS error_message, a.LOG_PATH AS log_path,
        a.REQUESTED_BY AS requested_by, a.REQUESTED_BY_KIND AS requested_by_kind,
        a.NOT_BEFORE AS not_before, a.RETRYABLE AS retryable,

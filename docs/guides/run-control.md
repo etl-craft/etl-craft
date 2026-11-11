@@ -70,7 +70,7 @@ If an explicitly selected run has ended, it is reopened (`IN-PROGRESS` again), a
 without running are reset, so running the pipeline again resumes it from there:
 
 ```bash
-etl-craft run --pipeline-code SALES_DAILY
+etl-craft run --reason "requested data load" --pipeline-code SALES_DAILY
 ```
 
 Mark a failed task `SUCCESS` and the tasks waiting on it run; the rest of the run is not repeated.
@@ -230,9 +230,10 @@ Release refuses until an earlier stop/abort in that scope has completed.
 holds are independent: `release` does not clear a definition pause, and `resume` does not release
 a hold.
 
-HTTP clients use `POST /api/v1/controls` with `pipeline_code`, `action` (`HOLD`, `RELEASE`,
-`STOP`, `ABORT`), `reason`, optional `run_id`/`run_key`, `task_code` and `request_key`.
-`GET /api/v1/control-requests/{control_id}` returns the same document as `control-request`.
+HTTP clients use `POST /api/v1/projects/{project}/controls` with `pipeline_code`,
+`action` (`HOLD`, `RELEASE`, `STOP`, `ABORT`), `reason`, optional `run_id`/`run_key`, `task_code` and `request_key`.
+`GET /api/v1/projects/{project}/control-requests/{control_id}` returns the same
+document as `control-request`.
 Controls require operator; inspection requires viewer. Local and `--api` commands call the
 same services and preserve the authenticated actor.
 
@@ -398,7 +399,7 @@ For an existing exact execution, authorize a one-run exception with a reason:
 ```bash
 etl-craft run --pipeline-code SALES_DAILY --run-id 43 --allow-paused \
     --request-key manual-43 --reason "approved maintenance run"
-etl-craft run --pipeline-code SALES_DAILY --run-id 43
+etl-craft run --reason "requested data load" --pipeline-code SALES_DAILY --run-id 43
 ```
 
 This permission lasts for that run. The definition pause stays open and blocks automatic starts
@@ -441,10 +442,10 @@ refused, while earlier accepted actions remain committed. Retry the same selecti
 same keys to inspect accepted requests safely. Bulk preparation does not wait for task execution
 or agent/query endings. The same flags support `--api`.
 
-The shared HTTP routes are `GET /api/v1/capabilities`,
-`POST /api/v1/controls` (including `RECOVER`, `RESTART`, `RUN_PAUSED`) and
-`POST /api/v1/controls/bulk` with `{"requests": [...]}`. Viewers can inspect capabilities and
-requests; operators can submit actions. `execution_run_id` is additive in `etl-craft/control/1`.
+The shared HTTP routes are `GET /api/v1/projects/{project}/capabilities`,
+`POST /api/v1/projects/{project}/controls` (including `RECOVER`, `RESTART`, `RUN_PAUSED`) and
+`POST /api/v1/projects/{project}/controls/bulk` with `{"requests": [...]}`. Viewers can
+inspect capabilities and requests. Operators can submit actions. `execution_run_id` is additive in `etl-craft/control/1`.
 Server-side queries without a cancellation adapter are named as a limitation in the
 capabilities rather than claimed as stopped.
 
@@ -465,10 +466,10 @@ tags select nothing. With JSON output, the preview goes to stderr and stdout rem
 document containing every selected code and outcome. Large CLI selections use the existing
 bulk action in batches of at most 100, after resolving the whole selection.
 
-The API first reads `/api/v1/pipelines?tag=team:sales&tag=tier:gold`, then posts explicit
-`pipeline_code`, `action` (`PAUSE` or `RESUME`) and `reason` objects in `requests` to
-`/api/v1/controls/bulk`. Definition controls need no run id or request key. Run and task controls
-still need their explicit run identity and unique request key. The audit records a `control`
+The API first reads `/api/v1/projects/{project}/pipelines?tag=team:sales&tag=tier:gold`, then posts
+explicit `pipeline_code`, `action` (`PAUSE` or `RESUME`) and `reason` objects in `requests` to
+`/api/v1/projects/{project}/controls/bulk`. Definition controls need no run id or request key.
+Run and task controls still need their explicit run identity and unique request key. The audit records a `control`
 request for each code; editing tags later cannot change that selection.
 
 ## Standing task pauses

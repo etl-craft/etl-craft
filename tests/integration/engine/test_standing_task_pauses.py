@@ -88,7 +88,7 @@ def test_standing_pause_outcome_creates_no_attempt_or_data(cli_project, outcome)
         "maintenance",
     )
     assert code == 0, output
-    code, output = project.run("run", "--pipeline-code", "P")
+    code, output = project.run("run", "--reason", "test requested run", "--pipeline-code", "P")
     assert code == (1 if outcome == RunStatus.FAILED else 0), output
     with project.engine.connect() as conn:
         task = conn.execute(
@@ -336,7 +336,9 @@ def test_preexisting_run_holds_only_the_paused_task_then_executes_after_resume(c
         add_task(conn, project.pipeline_id, "other", "PYTHON", SCRIPT_FILE="python_scripts/load.py")
     code, output = project.run("pipelines", "refresh")
     assert code == 0, output
-    code, output = project.run("run", "--pipeline-code", "P", "--init-only")
+    code, output = project.run(
+        "run", "--reason", "test requested run", "--pipeline-code", "P", "--init-only"
+    )
     assert code == 0, output
     code, output = project.run(
         "pause",
@@ -350,7 +352,7 @@ def test_preexisting_run_holds_only_the_paused_task_then_executes_after_resume(c
         "hold older run",
     )
     assert code == 0, output
-    parent = project.start("run", "--pipeline-code", "P")
+    parent = project.start("run", "--reason", "test requested run", "--pipeline-code", "P")
     try:
         project.wait_for(
             "SELECT r.STATUS FROM AUD_TASK_RUN_LOG r JOIN CFG_TASKS t ON t.TASK_ID=r.TASK_ID "
@@ -398,7 +400,7 @@ def test_supplied_success_has_no_data_and_no_fresh_cross_pipeline_output(cli_pro
         "no source data",
     )
     assert code == 0, output
-    assert project.run("run", "--pipeline-code", "P")[0] == 0
+    assert project.run("run", "--reason", "test requested run", "--pipeline-code", "P")[0] == 0
     with project.engine.connect() as conn:
         pipeline = trackers.fetch_latest_finished_pipeline_run(
             conn, project.pipeline_id, datetime.now(UTC)
@@ -421,7 +423,12 @@ def test_supplied_success_has_no_data_and_no_fresh_cross_pipeline_output(cli_pro
 @pytest.mark.parametrize("override", ["--rerun", "--ignore-dependencies"])
 def test_explicit_dependency_overrides_never_resume_a_standing_pause(cli_project, override):
     project = cli_project
-    assert project.run("run", "--pipeline-code", "P", "--init-only")[0] == 0
+    assert (
+        project.run("run", "--reason", "test requested run", "--pipeline-code", "P", "--init-only")[
+            0
+        ]
+        == 0
+    )
     assert (
         project.run(
             "pause", "--pipeline-code", "P", "--task-code", "load", "--reason", "maintenance"
@@ -465,7 +472,7 @@ def test_real_repair_after_supplied_success_publishes_a_fresh_revision(cli_proje
         )[0]
         == 0
     )
-    assert project.run("run", "--pipeline-code", "P")[0] == 0
+    assert project.run("run", "--reason", "test requested run", "--pipeline-code", "P")[0] == 0
     with project.engine.connect() as conn:
         run = conn.execute(text("SELECT PIPELINE_RUN_ID FROM AUD_PIPELINES_RUN_LOG")).scalar_one()
     assert (
@@ -549,7 +556,7 @@ def test_standing_outcomes_drive_dependencies_without_retrying_the_paused_task(
         )[0]
         == 0
     )
-    project.run("run", "--pipeline-code", "P")
+    project.run("run", "--reason", "test requested run", "--pipeline-code", "P")
     assert marker.exists() == runs_child
     with project.engine.connect() as conn:
         rows = conn.execute(
@@ -802,7 +809,7 @@ def test_standing_watermark_outcomes_leave_the_whole_window_for_real_execution(
             "maintenance",
         )
         assert code == 0, output
-        code, output = p.run("run", "--pipeline-code", "P")
+        code, output = p.run("run", "--reason", "test requested run", "--pipeline-code", "P")
         assert code == (1 if outcome == RunStatus.FAILED else 0), output
         with p.engine.connect() as conn:
             assert fetch_task_offset(conn, p.task_id) == initial
@@ -818,7 +825,7 @@ def test_standing_watermark_outcomes_leave_the_whole_window_for_real_execution(
             "resume", "--pipeline-code", "P", "--task-code", "load", "--reason", "resume real SQL"
         )
         assert code == 0, output
-        code, output = p.run("run", "--pipeline-code", "P")
+        code, output = p.run("run", "--reason", "test requested run", "--pipeline-code", "P")
         assert code == 0, output
         with warehouse.connect() as conn:
             assert conn.execute(text("SELECT COUNT(*) AS count FROM dm")).scalar_one() == 1

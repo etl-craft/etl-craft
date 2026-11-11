@@ -1,0 +1,9 @@
+-- Active keys published by one rule under the exact upstream run and target.
+SELECT DISTINCT x.BUSINESS_RULE_KEY AS rule_key
+FROM AUD_BUSINESS_RULES_RESULTS x
+JOIN AUD_BUSINESS_RULES_RUN_LOG r ON r.BUSINESS_RULE_RUN_ID=x.BUSINESS_RULE_RUN_ID
+JOIN AUD_TASK_RUN_LOG t ON t.TASK_RUN_ID=r.TASK_RUN_ID
+WHERE t.PIPELINE_RUN_ID=:pipeline_run_id AND t.TASK_ID=:task_id
+AND x.BUSINESS_RULE_ID=:rule_id AND x.ACTIVE_FLAG='Y' AND x.STATUS=:rule_type
+AND x.TARGET_SCHEMA_NAME=:schema_name AND x.TARGET_TABLE_NAME=:table_name
+AND COALESCE(x.TARGET_CATALOG_NAME,'')=:catalog_name

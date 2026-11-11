@@ -31,8 +31,14 @@ SECRET_KEYS = frozenset(
         "api_key",
         "credential",
         "private_key",
+        "subject_key",
     }
 )
+
+
+def pipe_list(value: str | None) -> tuple[str, ...]:
+    """Split a ``|``-separated column list parameter, dropping blanks."""
+    return tuple(part.strip() for part in (value or "").split("|") if part.strip())
 
 
 def is_secret_name(name: str) -> bool:
@@ -81,6 +87,9 @@ def mask_arguments(arguments: Mapping[str, object]) -> dict[str, object]:
 
 
 def _mask_value(value: object) -> object:
+    from etl_craft.core.redaction import mask
+
+    value = mask(value)
     if isinstance(value, Mapping):
         return mask_arguments(value)
     if isinstance(value, list):

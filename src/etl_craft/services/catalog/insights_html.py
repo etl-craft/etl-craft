@@ -111,6 +111,7 @@ def _tasks(insights: Insights) -> str:
             "Updated",
             "Deleted",
             "Rejected",
+            "Duplicates",
         ),
         [
             (
@@ -123,6 +124,7 @@ def _tasks(insights: Insights) -> str:
                 _count(k.updated),
                 _count(k.deleted),
                 _count(k.rejected),
+                _count(k.duplicates),
             )
             for k in insights.tasks
         ],

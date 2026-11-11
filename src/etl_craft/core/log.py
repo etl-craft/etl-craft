@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import logging
 import sys
+import time
 from collections.abc import Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
@@ -58,12 +59,14 @@ class ContextFilter(logging.Filter):
     def filter(self, record: logging.LogRecord) -> bool:
         """Add the context to ``record``; never drop it."""
         fields = mask_arguments(dict(_CONTEXT.get()))
-        masked = mask_arguments({"message": record.msg})
-        record.msg = masked["message"]
+        if not isinstance(record.msg, str):
+            record.msg = mask_arguments({"message": record.msg})["message"]
         if isinstance(record.args, tuple):
             record.args = tuple(mask_arguments({"value": item})["value"] for item in record.args)
         elif record.args is not None:
             record.args = mask_arguments(record.args)
+        record.msg = mask_arguments({"message": record.getMessage()})["message"]
+        record.args = ()
         if record.exc_info:
             detail = logging.Formatter().formatException(record.exc_info)
             record.exc_text = str(mask_arguments({"exception": detail})["exception"])
@@ -150,6 +153,9 @@ def configure(
     formatter = (
         JsonFormatter() if parse_format(fmt) is LogFormat.JSON else logging.Formatter(TEXT_FORMAT)
     )
+    formatter.converter = time.gmtime
+    formatter.default_time_format = "%Y-%m-%dT%H:%M:%S"
+    formatter.default_msec_format = "%s.%03dZ"
     logger = logging.getLogger(ROOT_LOGGER)
     for existing in [h for h in logger.handlers if isinstance(h, _ConfiguredHandler)]:
         logger.removeHandler(existing)

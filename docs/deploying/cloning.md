@@ -1,14 +1,16 @@
 # Cloning the Engine DB into the warehouse
 
-Cloning copies the Engine DB tables into the warehouse after every pipeline run, so a team can
-query its pipelines' configuration and run history with the rest of its data, without a
-connection to the Engine DB.
+Cloning copies the Engine DB tables into the warehouse on the controller's independent
+maintenance schedule, so a team can query configuration and run history alongside its data.
+`Cloning.Every_minutes` defaults to 15. Run `etl-craft clone` for an explicit refresh. A pipeline
+does not wait for cloning, so mirrored audit tables are reporting data, not admission gates.
 
 ```yaml
 Cloning:
   prod:
     Enabled: true
     Scope: ALL        # CFG | AUD | ALL | NONE
+  Every_minutes: 15
 ```
 
 | `Scope` | Copies |
@@ -45,7 +47,7 @@ database: it would empty the tables it copies. `doctor` reports that as a failed
 
 ## When cloning fails
 
-Cloning runs after a run has ended, so a failure does not change the run's status. It is logged
+Cloning runs independently of pipeline execution, so a failure does not change a run's status. It is logged
 at `ERROR` with the table and the database's message. To run it by hand and see the error:
 
 ```text

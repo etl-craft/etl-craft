@@ -20,6 +20,7 @@ from etl_craft.handlers.sql.tables import (
     check_column_names,
     create_declared_target,
     create_target_shape,
+    create_with_identity,
     refuse_empty,
 )
 
@@ -40,22 +41,45 @@ def create_table(session: Session, action: ActionContext) -> HandlerResult:
     )
     if source is not None and not action.task.allow_empty:
         refuse_empty(session, source, action.context.task_code)
-    existing = bool(session.target_columns())
-    strategy = session.dialect.replace_strategy
-    computed = session.dialect.surrogate_key == "computed"
-    row_id = ", CAST(ROW_NUMBER() OVER (ORDER BY NULL) AS BIGINT) AS ROW_ID" if computed else ""
     writer = writer_expression(action.uploads, "s.UPLOAD_ID")
     actors = f", {writer} AS CREATED_BY, {writer} AS UPDATED_BY" if action.uploads else ""
     select_sql = (
         f"SELECT s.*, CAST({int(action.context.pipeline_run_id)} AS BIGINT) AS PIPELINE_RUN_ID"
         f", CAST({int(action.context.pipeline_id)} AS BIGINT) AS PIPELINE_ID"
         f", CAST({int(action.context.task_run_id)} AS BIGINT) AS TASK_RUN_ID"
-        f"{actors}{row_id} FROM {stage} s"
+        f"{actors} FROM {stage} s"
     )
+    columns = (session.column_types(stage) if identity else {}) | dict.fromkeys(
+        ("PIPELINE_RUN_ID", "PIPELINE_ID", "TASK_RUN_ID"), "BIGINT"
+    )
+    if action.uploads:
+        columns |= dict.fromkeys(("CREATED_BY", "UPDATED_BY"), "VARCHAR(255)")
+    inserted = replace_select(session, select_sql, columns if identity else None)
+    source = inserted if source is None else source
+    session.clear_hash_version = True
+    cleanup(session, stage)
+    assert source is not None
+    return HandlerResult(source_count=source, target_count=source, insert_count=source)
+
+
+def replace_select(session: Session, select_sql: str, columns: dict[str, str] | None) -> int | None:
+    """Publish a fully shaped SELECT using CREATE_TABLE's rollback or recovery strategy.
+
+    ``columns`` declares every selected column except ROW_ID, or None for inferred SELECT types.
+    """
+    existing = bool(session.target_columns())
+    identity = session.dialect.identity_in_create
+    strategy = session.dialect.replace_strategy
+    computed = session.dialect.surrogate_key == "computed"
     if identity:
-        inserted = _replace_identity(session, stage, select_sql, existing)
-        source = inserted if source is None else source
-    elif strategy == "create_or_replace":
+        assert columns is not None
+        return _replace_identity(session, columns, select_sql, existing)
+    if computed:
+        select_sql = (
+            "SELECT s.*, CAST(ROW_NUMBER() OVER (ORDER BY NULL) AS BIGINT) AS ROW_ID "
+            f"FROM ({select_sql}) s"
+        )
+    if strategy == "create_or_replace":
         ddl = session.dialect.replacement_ddl(
             session.conn, session.target, select_sql, session.params, existing=existing
         )
@@ -83,11 +107,18 @@ def create_table(session: Session, action: ActionContext) -> HandlerResult:
         fault_point("sql.replace.before_publish")
         session.run(f"DROP TABLE IF EXISTS {session.target}", step="drop the old target")
         fault_point("sql.replace.after_clear")
-        session.create_table_as(
-            session.target, select_sql, step="create the target from the SELECT"
-        )
-        if not computed:
-            add_row_id(session)
+        if columns is not None and not computed:
+            create_with_identity(session, columns, session.target)
+            session.run(
+                f"INSERT INTO {session.target} ({', '.join(columns)}) {select_sql}",
+                step="insert the declared replacement rows",
+            )
+        else:
+            session.create_table_as(
+                session.target, select_sql, step="create the target from the SELECT"
+            )
+            if not computed:
+                add_row_id(session)
         if comment is not None:
             escaped = comment.replace("'", "''")
             session.run(
@@ -95,13 +126,12 @@ def create_table(session: Session, action: ActionContext) -> HandlerResult:
                 step="preserve the table comment",
             )
         fault_point("sql.replace.after_publish")
-    session.clear_hash_version = True
-    cleanup(session, stage)
-    assert source is not None
-    return HandlerResult(source_count=source, target_count=source, insert_count=source)
+    return None
 
 
-def _replace_identity(session: Session, stage: str, select_sql: str, existing: bool) -> int | None:
+def _replace_identity(
+    session: Session, types: dict[str, str], select_sql: str, existing: bool
+) -> int | None:
     """Populate a candidate with the target's identity and publish it atomically.
 
     Returns the rows inserted where the driver reports DML counts. A new target in managed
@@ -109,15 +139,8 @@ def _replace_identity(session: Session, stage: str, select_sql: str, existing: b
     location, by the dialect's replacement DDL.
     """
     candidate = session.scratch("replace", persistent=True)
-    types = session.column_types(stage)
-    names = [name for name, _ in session.columns(stage)]
-    columns = ", ".join(
-        [f"{name} {types[name.lower()]}" for name in names]
-        + ["PIPELINE_RUN_ID BIGINT", "PIPELINE_ID BIGINT", "TASK_RUN_ID BIGINT"]
-    )
-    actor_names = ", CREATED_BY, UPDATED_BY" if session.uploads else ""
-    if session.uploads:
-        columns += ", CREATED_BY VARCHAR(255), UPDATED_BY VARCHAR(255)"
+    names = list(types)
+    columns = ", ".join(f"{name} {kind}" for name, kind in types.items())
     renamed = not existing and not any(
         session.params.get(key) for key in ("EXTERNAL_LOCATION", "BASE_LOCATION")
     )
@@ -135,9 +158,7 @@ def _replace_identity(session: Session, stage: str, select_sql: str, existing: b
         )
     session.run(create_ddl, step="create the identity replacement")
     result = session.run(
-        f"INSERT INTO {candidate} "
-        f"({', '.join(names)}, PIPELINE_RUN_ID, PIPELINE_ID, TASK_RUN_ID{actor_names}) "
-        f"{select_sql}",
+        f"INSERT INTO {candidate} ({', '.join(names)}) {select_sql}",
         step="populate the identity replacement",
     )
     inserted = session.dialect.affected_rows(result) if session.dialect.dml_rowcounts else None

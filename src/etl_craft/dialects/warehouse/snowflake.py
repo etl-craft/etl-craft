@@ -16,6 +16,7 @@ from etl_craft.config.auth import warehouse_by_key
 from etl_craft.core.enums import AuthMode, FailureClass, TableFormat
 from etl_craft.core.errors import SqlGuardError
 from etl_craft.core.failures import Failure
+from etl_craft.dialects.business_rules import quote_output_key
 from etl_craft.dialects.failure_evidence import driver_error, sqlstate
 from etl_craft.dialects.warehouse.base import (
     Presented,
@@ -51,9 +52,11 @@ class SnowflakeWarehouse(WarehouseDialect):
         """Label every query of the session through its QUERY_TAG session parameter."""
         return {"session_parameters": {"QUERY_TAG": tag}}
 
+    # An end-time lower bound omits completed history while retaining running queries.
     _UNFINISHED = (
         "SELECT query_id AS query_id FROM TABLE(INFORMATION_SCHEMA.QUERY_HISTORY("
-        "RESULT_LIMIT => 10000)) WHERE query_tag = :tag AND execution_status NOT IN "
+        "END_TIME_RANGE_START => CURRENT_TIMESTAMP(), RESULT_LIMIT => 10000)) "
+        "WHERE query_tag = :tag AND execution_status NOT IN "
         "('SUCCESS', 'FAILED_WITH_ERROR', 'FAILED_WITH_INCIDENT', 'ABORTED')"
     )
 
@@ -65,6 +68,10 @@ class SnowflakeWarehouse(WarehouseDialect):
     def running_tagged(self, conn: Connection, tag: str) -> int:
         """Count unfinished queries; a status this code does not know counts as running."""
         return len(conn.execute(text(self._UNFINISHED), {"tag": tag}).all())
+
+    def prepare_landing_publication(self, conn: Connection) -> None:
+        """Commit the single landing MERGE without leaving an abandoned transaction lock."""
+        conn.execution_options(isolation_level="AUTOCOMMIT")
 
     def classify_failure(self, error: BaseException) -> Failure:
         """SQLSTATE and compile errors precede Snowflake's general network classes."""
@@ -156,6 +163,10 @@ class SnowflakeWarehouse(WarehouseDialect):
             f"AND ({' OR '.join(matches)})) relation WHERE position IS NOT NULL"
         )
         return query, parameters
+
+    def erasure_metadata_table(self, table: str) -> str:
+        """Preserve resolved physical case in DESCRIBE rather than folding it again."""
+        return ".".join(quote_output_key(p, self.sqlglot_dialect) for p in table.split("."))
 
     def read_metadata(self, conn: Connection, table: str) -> TableMetadata:
         """DESCRIBE supplies complete types, nullability and identity defaults together."""

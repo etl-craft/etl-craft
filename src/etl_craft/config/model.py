@@ -29,6 +29,7 @@ from etl_craft.core.enums import (
 )
 from etl_craft.core.errors import ConfigurationError
 from etl_craft.core.resources import Sizing
+from etl_craft.core.restart import EVERYTHING
 
 CONFIG_FILENAME = "craft-connector.yml"
 PROJECT_DIRNAME = "etl-craft"
@@ -225,9 +226,13 @@ class AuthConfig:
     oidc_client_id: str | None = None
     refresh_days: int = 30
     oidc_groups_claim: str | None = None
+    oidc_bind_by_email: bool = False
+    names_editable: bool = False
     lockout_after: int = 5
     admin_contact: str = "your administrator"
     signin_notice: str | None = None
+    session_idle_minutes: int = 60
+    browser_state_secret: str | None = None
 
 
 @dataclass(frozen=True)
@@ -292,9 +297,13 @@ class ConnectorConfig:
     max_warehouse_queries: int | None = None
     retries: int | None = None
     email_recipients: list[str] | None = None
-    allow_schedule: bool = True
-    """Whether this environment's controller starts pipelines on their ``RUN_SCHEDULE``."""
+    allowed_auto_restarts: str = EVERYTHING
+    """What this environment's controller may start on its own: schedule ticks and run endings.
+
+    A pipeline's ``AUTO_RESTART_CONDITION`` stays valid everywhere; this only suppresses starts.
+    """
     email: EmailProfile | None = None
+    email_template: str | None = None
     limits: ExecutionLimits = field(default_factory=ExecutionLimits)
     config_path: Path | None = None
     _host_config_path: Path | None = field(default=None, repr=False)
@@ -315,6 +324,7 @@ class ConnectorConfig:
     object_stores: dict[str, ObjectStore] = field(default_factory=dict)
     retention: Retention = field(default_factory=Retention)
     uploads: Uploads = field(default_factory=Uploads)
+    privacy_hmac_secret: str | None = None
     retry_on: RetryOn = RetryOn.TRANSIENT
 
     @property

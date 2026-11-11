@@ -25,8 +25,10 @@ from etl_craft.core.errors import (
     ConfigurationError,
     PermissionDeniedError,
     ResourceNotFoundError,
+    RunStateError,
     UsageError,
 )
+from etl_craft.core.governance import using_policy
 from etl_craft.engine.controls import ControlView
 from etl_craft.engine.migrations import pending_migrations
 from etl_craft.engine.queries import statement
@@ -57,6 +59,7 @@ from etl_craft.services.operations import (
     controls,
     diagnostics,
     documents,
+    governance,
     groups,
     holds,
     insights,
@@ -67,6 +70,7 @@ from etl_craft.services.operations import (
     offsets,
     personal,
     pipeline_refresh,
+    previews,
     processes,
     project_health,
     renames,
@@ -77,6 +81,7 @@ from etl_craft.services.operations import (
     search,
     sessions,
     status,
+    tasks,
     tokens,
     triggers,
     values,
@@ -84,6 +89,8 @@ from etl_craft.services.operations import (
 from etl_craft.services.operations.action_types import Action as Action
 from etl_craft.services.operations.agent_uploads import attempt_request
 from etl_craft.services.operations.context import OperationContext
+from etl_craft.services.operations.erasure_actions import ERASURE_ACTIONS
+from etl_craft.services.operations.permissions import has_role as has_role
 from etl_craft.services.operations.permissions import (
     pipeline_access,
     project_not_found,
@@ -115,6 +122,10 @@ from etl_craft.services.operations.requests import (
     ValidateInput,
     arguments,
 )
+from etl_craft.services.operations.run_identity import resolve_run_reference
+from etl_craft.services.operations.run_labels import with_run_labels
+from etl_craft.services.operations.seed_actions import SEED_ACTIONS
+from etl_craft.services.operations.signin_actions import SIGN_IN_ACTIONS
 from etl_craft.services.operations.upload_actions import UPLOAD_ACTIONS
 from etl_craft.services.operations.visibility import visible_result
 from etl_craft.services.rehash import RehashResult
@@ -181,25 +192,16 @@ _ROWS = (
            agent_models.AgentReply, ApiRole.AGENT, POST, f"{API}/agent/report", BY_ACTION),
     Action(ActionName.AGENT_LOG, agent_logs.upload, agent_models.AgentLog,
            agent_models.AgentReply, ApiRole.AGENT, POST, f"{API}/agent/log"),
-    *UPLOAD_ACTIONS,
-    # Sign-in: no role; the sign-in actions record their own row once the account is proven.
-    Action(ActionName.LOGIN_METHODS, sessions.sign_in_methods, NoInput, sessions.SignInMethods,
-           None, GET, f"{API}/login/methods"),
-    Action(ActionName.LOGIN, sessions.sign_in, sessions.SignIn, sessions.Session, None, POST,
-           f"{API}/login/password", BY_ACTION),
-    Action(ActionName.LOGIN_SSO, sessions.start_sso, NoInput, sessions.SsoStart, None, POST,
-           f"{API}/login/sso", BY_ACTION),
-    Action(ActionName.LOGIN_SSO_POLL, sessions.poll_sso, sessions.SsoPollInput, sessions.SsoPoll,
-           None, POST, f"{API}/login/sso/poll", BY_ACTION),
-    Action(ActionName.REFRESH, sessions.refresh, sessions.TokenInput, sessions.Session, None,
-           POST, f"{API}/login/refresh"),
-    Action(ActionName.LOGOUT, sessions.sign_out, sessions.TokenInput, None, None, POST,
-           f"{API}/login/revoke", BY_ACTION),
-    Action(ActionName.WHOAMI, sessions.whoami, NoInput, sessions.Identity, VIEWER, GET,
-           f"{API}/whoami"),
+    *UPLOAD_ACTIONS, *SEED_ACTIONS, *ERASURE_ACTIONS,
+    *SIGN_IN_ACTIONS,
+    Action(ActionName.WHOAMI, sessions.whoami, sessions.IdentityInput, sessions.Identity,
+           VIEWER, GET, f"{API}/whoami"),
     Action(ActionName.ABOUT, about.read_about, NoInput, about.About, VIEWER, GET, f"{API}/about"),
     Action(ActionName.CATALOG_PAGE, catalog_pages.read_catalog, catalog_pages.CatalogInput,
            None, VIEWER, GET, f"{API}/catalog/page", scope=ActionScope.PROJECT, streams=True),
+    Action(ActionName.TABLE_PREVIEW, previews.preview_table, previews.PreviewInput,
+           previews.TablePreview, DEVELOPER, GET, f"{API}/table-preview", REQUEST,
+           scope=ActionScope.PROJECT),
     Action(ActionName.PROJECT_HEALTH, project_health.read_health, project_health.HealthInput,
            project_health.ProjectHealth, VIEWER, GET, f"{API}/project-health"),
     Action(ActionName.ACCOUNT_SETTINGS, personal.save_settings, personal.SettingsPatch,
@@ -225,6 +227,8 @@ _ROWS = (
            GET, f"{API}/offset", scope=ActionScope.PIPELINE),
     Action(ActionName.HOLDS, holds.read_holds, NoInput, holds.Holds, VIEWER, GET, f"{API}/holds",
            scope=ActionScope.PROJECT),
+    Action(ActionName.TASK, tasks.read_task, offsets.TaskInput, tasks.TaskDefinition, VIEWER, GET,
+           f"{API}/task", scope=ActionScope.PIPELINE),
     Action(ActionName.SEARCH, search.search, search.SearchInput, search.SearchView, VIEWER, GET,
            f"{API}/search", scope=ActionScope.PIPELINE),
     Action(ActionName.PIPELINE, inspect.get_pipeline, PipelineInput, models.PipelineView, VIEWER,
@@ -401,13 +405,13 @@ _ROWS = (
     Action(ActionName.DOCTOR, diagnostics.check_configuration, NoInput, diagnostics.DoctorView,
            VIEWER, placement=HOST, remedy=ON_HOST, provisioning=True),
     Action(ActionName.CONFIG_PLAN, config_files.plan_config, config_files.ConfigDirectory,
-           ConfigSync, VIEWER, placement=HOST, remedy=CONFIG_ON_HOST,
+           ConfigSync, VIEWER, GET, f"{API}/config/plan", escalate=config_files.required_role,
            scope=ActionScope.PROJECT),
     Action(ActionName.CONFIG_EXPORT, config_files.export_config, config_files.ConfigExportInput,
            ConfigExport, VIEWER, placement=HOST, remedy=CONFIG_ON_HOST,
            scope=ActionScope.PROJECT),
     Action(ActionName.CONFIG_APPLY, config_files.apply_config, config_files.ConfigDirectory,
-           ConfigSync, DEVELOPER, audit=REQUEST, placement=HOST, remedy=CONFIG_ON_HOST,
+           ConfigSync, DEVELOPER, POST, f"{API}/config/apply", REQUEST,
            scope=ActionScope.PROJECT),
     Action(ActionName.SETUP_GRANTS, maintenance.grants, NoInput, maintenance.Grants, VIEWER,
            placement=HOST, remedy=ON_HOST),
@@ -442,15 +446,6 @@ ACTIONS: dict[ActionName, Action] = {row.name: row for row in _ROWS}
 """Every action, by name."""
 
 
-def has_role(role: ApiRole | None, required: ApiRole | None) -> bool:
-    """Whether ``role`` meets ``required``; an unproven role meets only no requirement."""
-    if ApiRole.AGENT in {role, required}:
-        return role == required
-    return required is None or (
-        role is not None and tuple(ApiRole).index(role) >= tuple(ApiRole).index(required)
-    )
-
-
 @contextmanager
 def admitted(ctx: OperationContext, name: ActionName, request: object) -> Iterator[None]:
     """Check the role and record the request once, then run the action's work inside.
@@ -473,7 +468,7 @@ def admitted(ctx: OperationContext, name: ActionName, request: object) -> Iterat
             record_refusal(ctx, name, given, error)
             raise
         if action.audit == Audit.REQUEST:
-            with recorded(ctx, name, given):
+            with recorded(ctx, name, given, on_completion=name == ActionName.MIGRATE):
                 yield
         else:
             with acting_as(ctx.actor):
@@ -513,6 +508,8 @@ def _authorize_pipeline(
 ) -> bool:
     """Apply pipeline grants without granting deployment-wide privileges."""
     if action.scope == ActionScope.PIPELINE and required is not None:
+        if isinstance(request, ReconcileInput) and request.attest_ended:
+            return False
         if action.name == ActionName.LINEAGE_REFRESH:
             _require_role(ctx, action, required)
             required = ApiRole.VIEWER
@@ -526,10 +523,9 @@ def _authorize_pipeline(
                     return True
                 policy.require(ctx, request.requests[0].pipeline_code, required)
             codes = _request_codes(conn, action, request)
-            existing = codes
-            for selected in existing:
+            for selected in codes:
                 policy.require(ctx, selected, required)
-            if existing:
+            if codes:
                 return True
             if action.name in (ActionName.RECONCILE, ActionName.LINEAGE_REFRESH):
                 if any(not policy.permits(code, required) for code in policy.roles):
@@ -540,7 +536,6 @@ def _authorize_pipeline(
                     )
                 if policy.roles:
                     return True
-            # Aggregate reads filter their selections; bulk controls invoke CONTROL per object.
             if not codes and required == ApiRole.VIEWER and ctx.role is not None:
                 return True
     return False
@@ -597,29 +592,25 @@ def invoke(ctx: OperationContext, name: ActionName, request: object) -> object:
         assert isinstance(request, ACTIONS[name].request)
         record_refusal(ctx, name, arguments(request), error)
         raise error
-    ctx = _request_context(ctx, name, request)
     try:
+        ctx = _request_context(ctx, name, request)
         ctx = _project_context(ctx, ACTIONS[name], request)
-    except (PermissionDeniedError, ResourceNotFoundError) as error:
+        request = resolve_run_reference(ctx, request)
+    except (PermissionDeniedError, ResourceNotFoundError, RunStateError) as error:
         assert isinstance(request, ACTIONS[name].request)
         record_refusal(ctx, name, arguments(request), error)
         raise
     claims = sso_groups.set(ctx.sso_group_ids)
     try:
         with using(None), selected_project(ctx.project_id), admitted(ctx, name, request):
-            from etl_craft.core.governance import using_policy
-            from etl_craft.services.operations.governance import project_policy
-
             if name == ActionName.MIGRATE:
                 result = call(project_settings(ctx, name, request), request)
             else:
-                with using_policy(project_policy(ctx, request)):
+                with using_policy(governance.project_policy(ctx, request)):
                     result = call(project_settings(ctx, name, request), request)
-            return (
-                visible_result(ctx, result)
-                if ACTIONS[name].scope == ActionScope.PIPELINE
-                else result
-            )
+            if ACTIONS[name].scope == ActionScope.PIPELINE:
+                result = visible_result(ctx, result)
+            return with_run_labels(ctx, result)
     finally:
         sso_groups.reset(claims)
 
@@ -649,6 +640,7 @@ def project_settings(ctx: OperationContext, name: ActionName, request: object) -
         ActionName.LINEAGE_REFRESH,
         ActionName.CATALOG_GAPS,
         ActionName.REHASH,
+        ActionName.RECONCILE,
         ActionName.REHASH_PLAN,
         ActionName.UPGRADE_TARGETS,
         ActionName.CLONE,
@@ -770,7 +762,7 @@ def _request_context(ctx: OperationContext, name: ActionName, request: object) -
                 initiator = initiating_context(conn, ctx, row.pipeline_run_id)
                 if ctx.actor == initiator.actor:
                     ctx = initiator
-    return ctx
+    return agents.attempt_context(ctx, request)
 
 
 def _request_codes(conn: Connection, action: Action, request: object) -> list[str]:

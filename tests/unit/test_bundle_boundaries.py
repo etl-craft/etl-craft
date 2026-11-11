@@ -263,6 +263,11 @@ def test_sla_email_uses_pinned_email_settings_and_enforcement(tmp_path, monkeypa
     monkeypatch.setattr(
         run_types, "send_sla_lapse_email", lambda selected, *a, **kw: sent.append(selected)
     )
+    from etl_craft.engine.alerts import AlertState
+
+    monkeypatch.setattr(
+        "etl_craft.engine.alerts.read_alert", lambda *a: AlertState((), None, (), ())
+    )
     engine = SimpleNamespace(connect=lambda: nullcontext(None))
     run_types.default_hooks(host, engine).on_sla_lapse(SlaLapse("P", 7, 1, 2))
     assert sent == [pinned]

@@ -103,7 +103,13 @@ def test_rename_preserves_offsets_and_events(rename_project, kind, value):
         action=ControlAction.RESUME,
         reason="resume",
     )
-    done = act(ctx, ActionName.RUN, pipeline_code="NEW", run_key="after-rename")
+    done = act(
+        ctx,
+        ActionName.RUN,
+        pipeline_code="NEW",
+        run_key="after-rename",
+        reason="test requested run",
+    )
     assert done.status == RunStatus.SUCCESS, done
     with ctx.engine.connect() as conn:
         assert fetch_task_offset(conn, task) == StoredOffset(kind, value)
@@ -566,7 +572,7 @@ def test_generated_api_rename_uses_project_permission_and_reason(rename_project,
             )
         ).all()
         assert (
-            rows[0].outcome == ActionOutcome.REFUSED and rows[-1].outcome == ActionOutcome.REQUESTED
+            rows[0].outcome == ActionOutcome.REFUSED and rows[-1].outcome == ActionOutcome.SUCCESS
         )
 
 

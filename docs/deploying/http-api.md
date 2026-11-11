@@ -26,9 +26,9 @@ Every role refuses to start unless the applied Engine DB migration names and che
 its installed package. Apply pending migrations with `etl-craft migrate`; an older package
 against a newer schema must be upgraded. No automatic migration runs at process startup.
 
-The `ui` extra includes FastAPI, uvicorn, Pydantic and Jinja2. `etl-craft[all]` adds `ui` and
-every warehouse extra (including AWS support). The former `server` extra is removed without
-an alias. UI pages are delivered separately; this role serves the shared HTTP actions.
+The `ui` extra includes FastAPI, uvicorn, Pydantic and Jinja2. `etl-craft[all]` resolves to
+the same packages as `etl-craft[ui]`. Install warehouse extras separately. The former `server`
+extra is removed without an alias. UI pages are delivered separately; this role serves the shared HTTP actions.
 
 `Orchestration.Api_address` defaults to `127.0.0.1:8730`. Set it to a `host:port`, or
 `[IPv6-address]:port`. For a team URL, place a TLS reverse proxy in front of the listener.
@@ -75,9 +75,8 @@ Except for sign-in, `/health` and `/metrics`, every resource endpoint requires `
 `developer` includes operator access, and `admin` can also create, list and revoke tokens
 through `/api/v1/tokens`.
 Token values and hashes are absent from token listings and audit arguments. The token table
-is excluded from metadata snapshots and warehouse cloning. Safe lifecycle versions live in
-`AUD_CFG_API_TOKENS_HISTORY` and appear in `AUD_METADATA_CHANGES`; these contain no token
-value or hash. Account versions live in `AUD_CFG_ACCOUNTS_HISTORY`; password hashes never
+is excluded from metadata snapshots and warehouse cloning. A token keeps only its current row, with no history table; the audit
+table `AUD_ACTIONS` records who created and revoked it. Account versions live in `AUD_CFG_ACCOUNTS_HISTORY`; password hashes never
 enter these histories, metadata exports or warehouse mirrors. Revocation sets `ACTIVE_FLAG='N'`;
 inactive credentials also fail authentication,
 even without a revocation timestamp. Storage uses the common `CREATE_DATE` and update fields;
@@ -254,7 +253,7 @@ Run-log synthesis and whole-run zip manifests remain the S7.A.3 work described b
 
 ## Browser UI reads and account changes
 
-The server-rendered `/ui` pages call the same action table. Viewer reads:
+The browser interface served at `/ui` calls the same action table. Viewer reads:
 `GET /api/v1/project-health` (optional project, after and bounded limit),
 `GET /api/v1/about`, and `GET /api/v1/projects/{project}/catalog/page?path=index.html`
 (streamed, whole-project viewers only). Health returns rolling UTC window boundaries and
@@ -265,3 +264,13 @@ grant-filtered running, failed, SLA-miss and queued-task counts; failed/SLA are 
 `POST /api/v1/accounts/unlock` takes name and requires admin. Cookie-authorized changes,
 including sign-in and sign-out, require a CSRF challenge; bearer callers retain their JSON
 protocol. Browser sign-in returns only secure cookies and a same-site redirect, never token JSON.
+
+### Run ID input
+
+A `run_id` in query parameters, JSON bodies or run paths accepts a positive integer or the
+complete stored run label. JSON may send an integer or a string. URL-encode labels in paths
+and query values. The shared operations resolver verifies the full label with case-sensitive
+comparison after project and pipeline visibility checks. A visible mismatch returns
+`RunStateError` (HTTP 409) naming the expected label; a hidden or foreign run remains not found.
+Responses continue to contain numeric IDs. A label is an alternative spelling of an exact
+selection, never a request for the latest run.

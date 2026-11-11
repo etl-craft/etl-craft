@@ -18,6 +18,26 @@ The site is plain files, with nothing loaded from elsewhere: open `catalog/index
 serve the folder from any web server, or publish it with `publish-docs`. Pages ask search engines
 not to index them.
 
+## The catalog in the app
+
+The UI's **Catalog** page is a data explorer over the same build: a resizable tree on the left (the
+project's pipelines with their tasks, and the warehouse's schemas with their tables) with a search that
+also finds columns, and on the right the selected object under a breadcrumb.
+
+- A **table** has Overview (a description from the tasks that write it, its columns with a filter, and an
+  *About this table* column), Data (the first 100 rows, for developers; see [the browser
+  UI](browser-ui.md#previewing-a-tables-rows)), Lineage (the tables upstream and downstream, to a depth you
+  choose), Column lineage (the columns each column is made from), History (the recent writes) and Quality
+  (its business rules and its schema and lineage gaps).
+- A **pipeline** has Overview (description, tasks with what they read and write, schedule, SLA, tags),
+  a task graph and its recent runs, with a link to the pipeline workspace.
+- A **task** has its documentation, reads and writes, column lineage and recent runs.
+- **Schema and lineage gaps** lists every gap with a state filter.
+
+The page reads `catalog.json`, which `generate-docs` writes beside the HTML pages from the same
+build, so the two never disagree. It shows the last build: use **Rebuild catalog** after metadata
+changes. The static site above is what `publish-docs` publishes.
+
 ## What is in it
 
 Four tabs at the top of every page, and a trail of links back up from wherever you are:
@@ -254,7 +274,7 @@ host or prefix requires `--accept-new-url`; it does not silently replace links a
 `doctor` reports organization hosting without requiring tunnel credentials or its SDK.
 
 The complete example is [docs-site-proxy.yml](../examples/docs-site-proxy.yml). The repository's
-[NGINX example](https://github.com/venkatcg00/etl-craft/blob/main/deploy/catalog/nginx.conf) forwards requests to `127.0.0.1:8080` without removing their prefix;
+[NGINX example](https://github.com/etl-craft/etl-craft/blob/main/deploy/catalog/nginx.conf) forwards requests to `127.0.0.1:8080` without removing their prefix;
 it works for both a root URL and a URL beneath `/etl-craft/`. Pages, assets, robots and directory
 redirects retain that prefix. Configure the proxy to preserve the path, rather than strip it.
 NGINX's [proxy_pass and proxy_set_header documentation](https://nginx.org/en/docs/http/ngx_http_proxy_module.html)
@@ -279,7 +299,7 @@ untrusted users on the same host. An organization URL with `Allowed_ips` require
 
 ### Persistent serving and regeneration
 
-[The systemd unit](https://github.com/venkatcg00/etl-craft/blob/main/deploy/catalog/etl-craft-catalog.service) runs `publish-docs --port 8080` under systemd.
+[The systemd unit](https://github.com/etl-craft/etl-craft/blob/main/deploy/catalog/etl-craft-catalog.service) runs `publish-docs --port 8080` under systemd.
 Adjust its account, working directory and virtual environment to your installation, and make
 its configured secrets source readable by that account. For a purely local service add
 `--local-only`. Install the unit in the host's systemd unit directory, reload systemd and enable

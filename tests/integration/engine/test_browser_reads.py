@@ -237,7 +237,15 @@ def test_cli_health_about_and_catalog_share_streamed_api_bytes(
     about = json.loads(capsys.readouterr().out)
     assert about["server_version"]
     release_line = ".".join(about["package_version"].split(".")[:2])
-    assert about["docs_url"] == f"https://venkatcg00.github.io/etl-craft/{release_line}/"
+    assert about["docs_url"] == f"https://docs.etl-craft.dev/{release_line}/"
+    assert main(["about"]) == 0  # piped: plain rows, no mark and no escape codes
+    banner = capsys.readouterr().out
+    assert banner.startswith("etl-craft\n") and "\033" not in banner
+    assert about["package_version"] in banner
+    assert "reader (viewer)" in banner and "none live" in banner
+    assert main(["--project", "default", "about"]) == 0
+    selected = capsys.readouterr().out
+    assert "Project" in selected and "default" in selected and "Environment" in selected
     folder = p.root / "catalog"
     folder.mkdir()
     (folder / ".etl-craft-catalog").write_text('{"project":"default"}')

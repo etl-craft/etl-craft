@@ -178,6 +178,7 @@ def _config(tmp_path: Path, profile: ConnectionProfile) -> ConnectorConfig:
     engine = ConnectionProfile("ENGINE", "dev", "jdbc:sqlite:engine.db", "", "NONE")
     return ConnectorConfig(
         project="default",
+        privacy_hmac_secret="ETL_CRAFT_TEST_PRIVACY_SECRET",
         source=SourceConfig(type=SecretsSource.ENVIRONMENT),
         engine=engine,
         warehouse=profile,
@@ -218,6 +219,7 @@ def sql_world(
     engine_actor: None,
 ) -> Iterator[SqlWorld]:
     """A fresh schema on each warehouse in turn, with an Engine DB and pipeline P."""
+    monkeypatch.setenv("ETL_CRAFT_TEST_PRIVACY_SECRET", "test-only-project-privacy")
     kind = request.param
     schema = namespace("t")
     if kind == "duckdb":

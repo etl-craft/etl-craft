@@ -59,6 +59,14 @@ class SettingsPatch(Request):
     default_project: str | None = None
     page_size: int | None = None
     time_display: TimeDisplay | None = None
+    first_name: str | None = None
+    last_name: str | None = None
+
+    def __post_init__(self) -> None:
+        """Bound the names before any database work."""
+        for flag, value in (("first_name", self.first_name), ("last_name", self.last_name)):
+            if value is not None and len(value.strip()) > 128:
+                raise UsageError(f"{flag}: expected at most 128 characters; shorten it")
 
 
 @dataclass(frozen=True)
@@ -117,11 +125,34 @@ def save_settings(ctx: OperationContext, request: SettingsPatch) -> Settings:
                 is None
             ):
                 raise project_not_found(request.default_project)
+    names = {"first_name": request.first_name, "last_name": request.last_name}
+    if any(value is not None for value in names.values()) and not ctx.config.auth.names_editable:
+        raise UsageError(
+            "first and last names come from your account's registration and your single sign-on "
+            "provider here; an administrator can let accounts edit their own with "
+            "Auth.Names_editable: true in craft-connector.yml"
+        )
     with locks.ACCOUNTS.hold(ctx.engine), ctx.engine.begin() as conn:
         row = find_account(conn, ctx.actor.name)
         if row is None or row.kind != AccountKind.USER:
             raise UsageError("personal settings require an active USER account; sign in as a user")
-        supplied = {key: value for key, value in asdict(request).items() if value is not None}
+        if any(value is not None for value in names.values()):
+            conn.execute(
+                statement(conn, "account_profile"),
+                {
+                    "name": ctx.actor.name,
+                    "email": None,
+                    "first_name": None
+                    if names["first_name"] is None
+                    else names["first_name"].strip(),
+                    "last_name": None if names["last_name"] is None else names["last_name"].strip(),
+                },
+            )
+        supplied = {
+            key: value
+            for key, value in asdict(request).items()
+            if value is not None and key not in names
+        }
         values = (
             {}
             if len(supplied) == len(asdict(Settings()))

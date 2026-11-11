@@ -4,8 +4,7 @@
     python prepare.py metadata    # the pipelines, as CFG_ rows, in engine.db (after setup)
 
 The team creates warehouse schemas and authors CFG_ rows as project migrations. This script
-prepares both from warehouse_schemas.sql and metadata/support_insights.sql, then runs migrate.
-Pass metadata/remote_mode.sql after `metadata` to load it too.
+prepares both from warehouse_schemas.sql and metadata/demo.sql, then runs migrate.
 """
 
 from __future__ import annotations
@@ -35,7 +34,7 @@ def metadata(files: list[str]) -> None:
         raise SystemExit("engine.db does not exist yet: run `etl-craft setup` first")
     migrations = HERE / "migrations"
     migrations.mkdir(exist_ok=True)
-    for name in files or ["metadata/support_insights.sql"]:
+    for name in files or ["metadata/demo.sql"]:
         source = HERE / name
         existing = sorted(migrations.glob(f"*_{source.name}"))
         destination = (
@@ -53,8 +52,9 @@ def metadata(files: list[str]) -> None:
         else:
             destination.write_text(sql, encoding="utf-8")
     result = main(["--config", str(HERE / "craft-connector.yml"), "migrate"])
-    if result == 0:
-        result = main(["--config", str(HERE / "craft-connector.yml"), "pipelines", "refresh"])
+    for command in (("bundle", "publish"), ("seed", "apply"), ("pipelines", "refresh")):
+        if result == 0:
+            result = main(["--config", str(HERE / "craft-connector.yml"), *command])
     if result:
         raise SystemExit(result)
 

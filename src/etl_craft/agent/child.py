@@ -26,6 +26,8 @@ from etl_craft.engine.resource_locks import holder_tag
 from etl_craft.execution.child import exit_now
 from etl_craft.execution.classify import classify_failure
 from etl_craft.execution.leases import process_start
+from etl_craft.execution.secret_pipe import read_values
+from etl_craft.handlers.parameters import require_task_parameters
 from etl_craft.handlers.registry import TaskContext, format_task_log, resolve_handler
 from etl_craft.services.operations.agent_models import AgentTask
 from etl_craft.services.operations.serialization import encode, from_json
@@ -55,15 +57,21 @@ def _watch(parent: int, birth: str, lease: Path) -> None:
 SCRIPT_HANDLERS = frozenset({Handler.PYTHON, Handler.FILE_VALIDATION})
 
 
-def main() -> int:
-    """Run one handler, leaving the parent to upload final logs before committing its ending."""
+def _arguments() -> argparse.Namespace:
+    """Parse the private task-process bootstrap contract."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", type=Path, required=True)
     parser.add_argument("--api", required=True)
     parser.add_argument("--attempt-id", type=int, required=True)
     parser.add_argument("--owner-id", required=True)
     parser.add_argument("--work-file", type=Path, required=True)
-    args = parser.parse_args()
+    parser.add_argument("--task-secrets-stdin", action="store_true")
+    return parser.parse_args()
+
+
+def main() -> int:
+    """Run one handler, leaving the parent to upload final logs before committing its ending."""
+    args = _arguments()
     signal.signal(signal.SIGTERM, _interrupt)
     log.configure("INFO", "text")
     work = json.loads(args.work_file.read_text(encoding="utf-8"))
@@ -91,6 +99,11 @@ def main() -> int:
         (folder / "result").write_text(json.dumps({"trigger": True}), encoding="utf-8")
         return ExitCode.SUCCESS
     context = started_context(context, started)
+    context = replace(
+        context,
+        _secret_values=read_values(sys.stdin) if args.task_secrets_stdin else {},
+        _secret_provider=work.get("secret_provider"),
+    )
     result = AgentTask(
         version=__version__,
         attempt_id=args.attempt_id,
@@ -109,6 +122,7 @@ def main() -> int:
         sys.dont_write_bytecode = True
         os.chdir(config.project_dir)
         with cancellation_scope(config, store.session_tag):
+            require_task_parameters(context.handler, context.task_params)
             counts = resolve_handler(context.handler)(context, store)
         result = replace(
             result,

@@ -8,10 +8,12 @@ and the SQL and catalog files that ship inside the package.
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import subprocess
 import sys
+import tarfile
 import zipfile
 from pathlib import Path
 
@@ -31,32 +33,7 @@ SHIPPED = (
     "etl_craft/core/static/mark.html",
     "etl_craft/core/static/favicon.svg",
     "etl_craft/core/static/theme.js",
-    "etl_craft/api/templates/base.html",
-    "etl_craft/api/templates/signin.html",
-    "etl_craft/api/static/shell.js",
-    "etl_craft/api/templates/monitor/run.html",
-    "etl_craft/api/templates/monitor/search.html",
-    "etl_craft/api/templates/monitor/_live_state.html",
-    "etl_craft/api/static/monitor.js",
-    "etl_craft/api/static/monitor.css",
-    "etl_craft/api/static/attempt.js",
-    "etl_craft/api/templates/monitor/attempt.html",
-    "etl_craft/api/templates/insights.html",
-    "etl_craft/api/templates/console.html",
-    "etl_craft/api/templates/admin.html",
-    "etl_craft/api/templates/uploads.html",
-    "etl_craft/api/templates/monitor/task.html",
-    "etl_craft/api/templates/operations/system.html",
-    "etl_craft/api/templates/operations/agents.html",
-    "etl_craft/api/templates/operations/scheduled.html",
-    "etl_craft/api/templates/operations/maintenance.html",
-    "etl_craft/api/templates/operations/held.html",
-    "etl_craft/api/templates/monitor/items.html",
-    "etl_craft/api/static/console.js",
-    "etl_craft/api/static/admin.js",
-    "etl_craft/api/static/uploads.js",
-    "etl_craft/api/static/htmx.min.js",
-    "etl_craft/api/static/htmx.LICENSE",
+    "etl_craft/api/spa/index.html",
 )
 
 CHECK = """
@@ -97,6 +74,20 @@ def test_the_wheel_holds_the_package_files_and_the_licence():
     names = zipfile.ZipFile(_artifact("wheel")).namelist()
     assert [name for name in SHIPPED if name not in names] == []
     assert any(name.endswith("licenses/LICENSE") for name in names)
+
+
+@pytest.mark.parametrize("kind", ["wheel", "sdist"])
+def test_the_built_browser_interface_ships_in_the_wheel_and_the_sdist(kind):
+    artifact = _artifact(kind)
+    if kind == "wheel":
+        names = zipfile.ZipFile(artifact).namelist()
+    else:
+        with tarfile.open(artifact) as archive:
+            names = archive.getnames()
+    scripts = [name for name in names if "/api/spa/assets/" in name and name.endswith(".js")]
+    sheets = [name for name in names if "/api/spa/assets/" in name and name.endswith(".css")]
+    assert scripts and sheets, "the built UI bundle (api/spa/assets) is missing from the " + kind
+    assert not [name for name in names if "node_modules" in name]
 
 
 @pytest.mark.parametrize(
@@ -144,4 +135,20 @@ def test_it_installs_and_runs(tmp_path, installer, kind, extra):
             str(_bin(venv, "python")),
             "-c",
             "import fastapi, uvicorn, jinja2; from etl_craft.api.app import create_app",
+        )
+
+    if extra == "ui":
+        assert "usage:" in run(str(_bin(venv, "etl-craft")), "--help")
+        installed = json.loads(
+            run(uv, "pip", "list", "--python", str(_bin(venv, "python")), "--format", "json")
+        )
+        subprocess.run([*install, f"{artifact}[all]"], check=True, cwd=tmp_path, timeout=600)
+        assert (
+            json.loads(
+                run(uv, "pip", "list", "--python", str(_bin(venv, "python")), "--format", "json")
+            )
+            == installed
+        )
+        assert {item["name"] for item in installed}.isdisjoint(
+            {"duckdb", "duckdb-engine", "trino", "snowflake-sqlalchemy", "databricks-sqlalchemy"}
         )

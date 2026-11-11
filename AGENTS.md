@@ -116,8 +116,9 @@ that damages the package is not helpful; saying so, with a better option, is.
   targets publish hash version 2 after creation; existing targets need `etl-craft rehash` before
   merging. Never publish a hash version before its warehouse update commits. Target mutations
   and rehashing hold the same Engine DB target lock.
-- One warehouse per project; projects may share an Engine DB. Third-party SQLAlchemy dialects are optional extras and never
-  imported by engine code; DuckDB's, the default local warehouse, is the one core dependency.
+- One warehouse per project; projects may share an Engine DB. Core carries no warehouse.
+  Each warehouse, DuckDB included, is its own optional extra; engine code never imports a
+  warehouse driver outside its dialect.
 - `craft-connector.yml` is written by the team and only read by the engine. Secrets are always
   variable names, never values. Its directory is the project directory, holding `sql_scripts/`,
   `python_scripts/`, `config/`, `migrations/` and `logs/`; relative paths start there.
@@ -280,8 +281,8 @@ it. Never copy it, and never import another module's `_private` name.
   every check re-sends the whole session.
 - Write the run's output to a log file and read it once, after the run ends.
 - After `gh pr merge --auto`, end the session; don't wait for CI at all.
-- Where an item needs CI results (timing runs, a failure to read), use `gh run watch
-  --exit-status`, then read the job logs once.
+- If a required job fails, read its log once.
+
 
 Follow `.agents/skills/pre-pr-checks/SKILL.md`. In short:
 
@@ -300,21 +301,19 @@ make services-up          # local PostgreSQL, MinIO, Iceberg REST, Trino, Mailpi
   service suites default to four workers.
   The release gate retains every Python × OS combination. CI always runs the complete suite
   and is the authority.
-- **Before a PR, run the touched suites** (owner, 2026-10-30): `tests/unit` (it holds the
-  enum, action-table and dialect checks), the test modules of the code the change touches,
-  `tests/integration/api` and `tests/browser` when `api/` or a template changes,
-  `test_query_plans.py` when Engine DB SQL changes, `test_upgrade.py` when a migration or
-  `schema.sql` changes, and `test_catalog.py` when catalog output changes. That set takes
-  minutes. `make test-changed` reruns nearly the whole suite after a change to a widely
-  imported module (`core/enums.py`, `services/operations/models.py`); use it only when its
-  selection is small.
+- **Before a PR, run the touched suites** (owner, 2026-10-30): run `tests/unit` and touched
+  modules. For API or template changes, run `tests/integration/api` and `tests/browser`.
+  Run `test_query_plans.py` for Engine DB SQL, `test_upgrade.py` for migrations or schema
+  changes, and `test_catalog.py` for catalog output changes. For a new guarded Engine DB
+  table or changes to its guards or CHECK columns, run `test_actor_audit.py`,
+  `test_upgrade.py` and `test_query_plans.py` with valid CHECK seeds and query-plan seed rows
+  with typed parameters. Use `make test-changed` only when its selection is small. A widely
+  imported module can select nearly the whole suite.
 - **Concurrency:** a change to run creation, leases, locks, ROW_ID allocation or gates runs its
   tests 20 times locally, because CI runs each test once.
-- **CI time:** required pull-request CI stays under ten minutes of execution time (the longest
-  chain of job run times through `needs`). Report runner queue time and wall time separately. A change that would take it
-  over is a stop-and-ask.
+- **CI time:** Agents do not measure or report CI time. The ten-minute limit is the owner's to watch; a required job that fails is read once from its log.
 - **Cloud suites:** CI never runs the Databricks and Snowflake suites. A change to their dialects
-  or to SQL every warehouse runs needs them (see the skill). Try each affected cloud once. When
+  or to SQL every warehouse runs needs them (see the skill). Try each affected cloud once. Run Snowflake and Databricks at the same time, never one after the other. When
   it is unavailable (no credentials, compute will not start, the provider refuses before any SQL
   runs), record that in the pull request and the roadmap's "Acceptance availability" note and
   merge as usual. A cloud test that ran and failed is a failure: fix it. Release evidence still

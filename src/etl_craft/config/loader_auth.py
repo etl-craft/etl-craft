@@ -3,7 +3,7 @@
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from etl_craft.config.loader_helpers import profiled_settings, reject_unknown, whole_number
+from etl_craft.config.loader_helpers import flag, profiled_settings, reject_unknown, whole_number
 from etl_craft.config.model import AuthConfig
 from etl_craft.config.resolve import Resolver
 from etl_craft.core.errors import ConfigurationError
@@ -11,13 +11,17 @@ from etl_craft.core.errors import ConfigurationError
 AUTH_KEYS = frozenset(
     {
         "Session_hours",
+        "Session_idle_minutes",
         "Refresh_days",
         "Oidc_issuer",
         "Oidc_client_id",
         "Oidc_groups_claim",
+        "Oidc_bind_by_email",
+        "Names_editable",
         "Lockout_after",
         "Admin_contact",
         "Signin_notice",
+        "Browser_state_secret",
     }
 )
 
@@ -26,9 +30,12 @@ def parse_auth(
     raw: dict[str, object], profile: str | None, path: Path, resolver: Resolver
 ) -> AuthConfig:
     """Validate login lifetimes and the optional registered OIDC client."""
-    settings = profiled_settings("Auth", raw, profile, path, resolver, nested=frozenset())
+    settings = profiled_settings(
+        "Auth", raw, profile, path, resolver, nested=frozenset({"Browser_state_secret"})
+    )
     reject_unknown(settings.settings, AUTH_KEYS, "Auth", path)
     hours = whole_number(settings, "Session_hours", 12, path, minimum=1, maximum=8760)
+    idle = whole_number(settings, "Session_idle_minutes", 60, path, minimum=5, maximum=10080)
     refresh_days = whole_number(settings, "Refresh_days", 30, path, minimum=1, maximum=365)
     issuer = settings.text("Oidc_issuer")
     client = settings.text("Oidc_client_id")
@@ -58,6 +65,9 @@ def parse_auth(
                 f"{path}: Auth.Oidc_issuer is invalid; expected a credential-free HTTPS issuer URL "
                 "without a query or fragment; correct the setting"
             )
+    bind = flag(settings, "Oidc_bind_by_email", False, path)
+    if bind and not issuer:
+        raise ConfigurationError(f"{path}: Auth.Oidc_bind_by_email requires Auth.Oidc_issuer")
     lockout = whole_number(settings, "Lockout_after", 5, path, minimum=0, maximum=1000000)
     return AuthConfig(
         hours,
@@ -65,7 +75,13 @@ def parse_auth(
         client,
         refresh_days=refresh_days,
         oidc_groups_claim=groups,
+        oidc_bind_by_email=bool(bind),
+        names_editable=bool(flag(settings, "Names_editable", False, path)),
         lockout_after=lockout,
+        session_idle_minutes=idle,
         admin_contact=settings.text("Admin_contact") or "your administrator",
         signin_notice=settings.text("Signin_notice"),
+        browser_state_secret=resolver.secret_reference(
+            settings.settings.get("Browser_state_secret"), "Auth.Browser_state_secret"
+        ),
     )

@@ -42,17 +42,24 @@ The manifest stores the location and profile name, not their credentials.
 
 ```bash
 etl-craft bundle publish --project-dir ./project --api https://craft.example.com
-etl-craft run --pipeline-code SALES --api https://craft.example.com
+etl-craft run --reason "requested data load" --pipeline-code SALES --api https://craft.example.com
 ```
 
 The publishing CI runner needs project CAN_MANAGE on its API token and the project files; it needs no
 Engine DB or artifact-store credentials. The API validates and stores the upload. Publication
-contains `craft-connector.yml` and every regular file under `sql_scripts/`, `python_scripts/`
-and `seeds/`, with a SHA-256 per file. Symlinks, traversal and special files are refused.
+contains `craft-connector.yml` and every regular file under `sql_scripts/`, `python_scripts/`,
+`validation_scripts/`, `email_templates/`, `seeds/` and `config/`, with a SHA-256 per file. Symlinks, traversal and special files are refused.
 Remove generated files before publishing: a publication permits at most 10,000 files and
 64 MiB of decoded content. HTTP requests are capped at 128 MiB before JSON decoding,
 including requests without Content-Length. Shorten paths or reduce content if this limit is
 reached. File bytes are omitted from action audit arguments.
+
+`config/` is in the publication so that a runner with no access to the host can apply exactly
+what it published: `etl-craft config apply --bundle latest --api https://craft.example.com` merges
+that publication's config files, then pins its pipelines to the same bundle (`--bundle ID` names
+one; `config plan --bundle` previews it). The API accepts no folder, only a bundle. Both need a
+developer token with project CAN_MANAGE, and a publication made before `config/` was included
+is refused with the remedy of publishing again.
 
 With `Artifacts.Store` set, starting a run without any publication fails before admission.
 A new publication becomes the next run's bundle, even when its files match an earlier one.
@@ -101,6 +108,9 @@ admin to establish their connection approvals before admitting new bundled runs.
 Select `--project CODE` or set `Orchestration.Project` explicitly. There is no implicit default;
 a conflicting flag and file value are refused, naming both.
 `--project-dir` selects a filesystem directory for config plan/apply, publication or agent bootstrap.
+`--allowed-auto-restarts` takes `NONE` or `SCHEDULE` and run endings joined by `|`, as
+`Orchestration.Allowed_auto_restarts` does; a run starts by itself only where both the controller's setting and
+the project's allow it.
 Each project has its own warehouse. Deployment roles remain shared, with pipeline grants
 scoped to their project. Pools remain deployment-wide.
 
@@ -110,6 +120,7 @@ Administrators create projects before applying pipeline metadata:
 etl-craft project add --project sales --name Sales --timezone UTC --default-pool default --max-running-tasks 8 --reason "Sales onboarding"
 etl-craft --project sales config apply
 etl-craft project set --project sales --max-running-tasks 12 --reason "Capacity review"
+etl-craft project set --project sales --allowed-auto-restarts NONE --reason "Person-started runs only"
 etl-craft project list --reason "Review projects"
 ```
 
@@ -124,7 +135,7 @@ Publish and run with the same selection:
 
 ```bash
 etl-craft bundle publish --project sales --project-dir ./sales --api https://craft.example.com
-etl-craft run --project sales --pipeline-code DAILY --api https://craft.example.com
+etl-craft run --reason "requested data load" --project sales --pipeline-code DAILY --api https://craft.example.com
 etl-craft pause --project sales --reason "Maintenance"
 ```
 

@@ -678,3 +678,25 @@ def test_aggregate_mutation_refusals_do_not_name_hidden_pipelines(isolation):
         message = str(caught.value)
         assert "sales" in message and "project manager" in message
         assert "PRIVATE" not in message and "OPEN" not in message
+
+
+def test_run_label_cannot_select_another_projects_run(isolation):
+    admin, _ = isolation
+    sales = replace(
+        admin, project="sales", project_id=None, config=replace(admin.config, project="sales")
+    )
+    finance = replace(
+        admin, project="finance", project_id=None, config=replace(admin.config, project="finance")
+    )
+    created = act(
+        finance, ActionName.RUN, pipeline_code="OPEN", init_only=True, reason="test requested run"
+    )
+    label = created.run.run_label
+    for value in (label, "WRONG-" + label):
+        with pytest.raises(ResourceNotFoundError) as error:
+            act(sales, ActionName.RUN_DETAIL, run_id=value)
+        assert "stored label differs" not in str(error.value)
+    assert (
+        act(finance, ActionName.RUN_DETAIL, run_id=label).pipeline_run_id
+        == created.run.pipeline_run_id
+    )

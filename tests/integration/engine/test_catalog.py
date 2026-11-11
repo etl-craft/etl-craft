@@ -272,6 +272,16 @@ def test_the_site_has_a_page_per_asset_and_a_search_index(project, tmp_path):
     # Nothing is loaded from anywhere but the site itself.
     for page in folder.rglob("*.html"):
         assert not re.search(r"(src|href)=\"(https?:)?//", page.read_text("utf-8")), page
+    document = json.loads((folder / "catalog.json").read_text("utf-8"))
+    assert document["schema"] == "etl-craft/catalog/1"
+    orders = next(t for t in document["tables"] if t["name"] == "sales.orders")
+    assert (orders["schema"], orders["table"]) == ("sales", "orders")
+    assert "SALES.convert" in orders["writers"]
+    assert {c["name"] for c in orders["columns"]} >= {"amount_usd"}
+    convert = next(t for t in document["tasks"] if t["label"] == "SALES.convert")
+    assert convert["target"] == "sales.orders" and "JOIN ref.rates" not in str(convert)
+    assert {p["code"] for p in document["pipelines"]} >= {"SALES", "MART"}
+    assert any(e["target_object"] == "sales.orders" for e in document["column_edges"])
     index_js = (folder / "search-index.js").read_text("utf-8")
     entries = json.loads(index_js.removeprefix("window.CATALOG_INDEX = ").rstrip(";\n"))
     kinds = {kind for kind, *_ in entries}
@@ -755,3 +765,80 @@ def test_catalog_first_endings_and_repair_labels(engine_db, tmp_path):
     folder = write_site(catalog, engine_db.config, tmp_path / "audit-catalog").folder
     task_page = (folder / "tasks/COUNTS.load.html").read_text()
     assert "old failure" not in task_page
+
+
+def test_catalog_header_keeps_environment_through_incremental_rebuild(project, tmp_path):
+    from dataclasses import replace
+
+    from etl_craft.services.catalog.site import write_site
+
+    engine, config, _ = project
+    catalog = build_catalog(engine, config)
+    assert catalog.project_code == "default"
+    folder = tmp_path / "environment-catalog"
+    write_site(replace(catalog, environment_label="PRODUCTION"), config, folder)
+    for name in ("index.html", "pipelines/SALES.html"):
+        assert "default · PRODUCTION</strong>" in (folder / name).read_text()
+    write_site(replace(catalog, environment_label="UAT · Owner <review>"), config, folder)
+    for name in ("index.html", "pipelines/SALES.html"):
+        assert "default · UAT · Owner &lt;review&gt;</strong>" in (folder / name).read_text()
+
+
+def test_a_developer_previews_the_first_rows_of_a_catalog_table_and_nothing_else(project):
+    import duckdb
+
+    from etl_craft.core.actor import SYSTEM_ACTOR
+    from etl_craft.core.enums import ActionName, ApiRole
+    from etl_craft.core.errors import PermissionDeniedError, ResourceNotFoundError
+    from etl_craft.services.operations import OperationContext
+    from fixtures.actions import act
+
+    engine, config, root = project
+    with duckdb.connect(str(root / "analytics.duckdb")) as conn:
+        conn.execute("CREATE SCHEMA sales")
+        conn.execute("CREATE TABLE sales.orders (id BIGINT, note VARCHAR)")
+        conn.execute("INSERT INTO sales.orders SELECT range, NULL FROM range(150)")
+        conn.execute("UPDATE sales.orders SET note=repeat('x', 500) WHERE id=1")
+
+    def ctx(role):
+        return OperationContext(engine, config, SYSTEM_ACTOR, role=role)
+
+    preview = act(ctx(ApiRole.DEVELOPER), ActionName.TABLE_PREVIEW, table="sales.orders")
+    assert preview.columns == ("id", "note")
+    assert len(preview.rows) == 100 and preview.more and preview.limit == 100
+    note = {row[0]: row[1] for row in preview.rows}
+    assert (
+        note["0"] is None and note["1"] == "x" * 199 + "…"
+    )  # a null stays null; a long value is cut
+    few = act(ctx(ApiRole.DEVELOPER), ActionName.TABLE_PREVIEW, table="sales.orders", limit=5)
+    assert len(few.rows) == 5 and few.more
+    with pytest.raises(UsageError, match="expected 1 to 100"):
+        act(ctx(ApiRole.DEVELOPER), ActionName.TABLE_PREVIEW, table="sales.orders", limit=101)
+    # only a table the catalog lists is read, and only by a developer or above
+    with pytest.raises(ResourceNotFoundError, match="not a table in the project's catalog"):
+        act(ctx(ApiRole.DEVELOPER), ActionName.TABLE_PREVIEW, table="main.secrets")
+    with pytest.raises(PermissionDeniedError):
+        act(ctx(ApiRole.VIEWER), ActionName.TABLE_PREVIEW, table="sales.orders")
+
+
+def test_catalog_histories_keep_stored_pipeline_and_task_labels(project):
+    engine, config, _ = project
+    catalog = build_catalog(engine, config)
+    runs = [run for pipeline in catalog.pipelines.values() for run in pipeline.runs]
+    tasks = [run for task in catalog.tasks.values() for run in task.runs]
+    assert runs and tasks
+    with engine.connect() as conn:
+        labels = {
+            row.id: row.label
+            for row in conn.execute(
+                text("SELECT PIPELINE_RUN_ID AS id, RUN_LABEL AS label FROM AUD_PIPELINES_RUN_LOG")
+            )
+        }
+        task_labels = {
+            row.id: row.label
+            for row in conn.execute(
+                text("SELECT TASK_RUN_ID AS id, TASK_RUN_LABEL AS label FROM AUD_TASK_RUN_LOG")
+            )
+        }
+    assert all(run.run_label == labels[run.pipeline_run_id] for run in runs)
+    assert all(run.task_run_label == task_labels[run.task_run_id] for run in tasks)

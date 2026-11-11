@@ -18,6 +18,9 @@ from etl_craft.handlers.registry import HANDLERS, HandlerResult
 logger = logging.getLogger("etl_craft.handlers.fake")
 
 
+PARAMETERS = frozenset({"BEHAVIOUR", "SOURCE_FILE", "READY_FILE", "RELEASE_FILE"})
+
+
 def handler(context, engine):
     behaviour = context.task_params.get("BEHAVIOUR", "succeed")
     logger.info("fake handler doing %s%s", behaviour, " again" if context.rerun else "")

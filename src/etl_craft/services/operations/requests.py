@@ -33,10 +33,19 @@ MAX_REASON = 4096
 
 def arguments(request: DataclassInstance) -> dict[str, Any]:
     """Return a request's fields for its audit row; the audit masks secret names."""
-    return {
-        f.name: getattr(request, f.name) if f.metadata.get("audit", True) else "[content omitted]"
-        for f in fields(request)
-    }
+    from etl_craft.core.redaction import mask, registering
+
+    private = [
+        getattr(request, f.name) for f in fields(request) if not f.metadata.get("audit", True)
+    ]
+    with registering(*(value for value in private if isinstance(value, str))):
+        result = {
+            f.name: getattr(request, f.name)
+            if f.metadata.get("audit", True)
+            else "[content omitted]"
+            for f in fields(request)
+        }
+        return {name: mask(value) for name, value in result.items()}
 
 
 def require_text(name: str, value: str | None, *, limit: int | None = None) -> None:
@@ -93,16 +102,21 @@ class TagFilter(Request):
 class RunIdentity(Request):
     """Shared exact run identity for read selections and execution requests."""
 
-    run_id: int | None = None
+    run_id: int | str | None = None
     run_key: str | None = None
 
     def __post_init__(self) -> None:
         """Refuse conflicting or malformed identities."""
-        RunSelector(self.run_id, self.run_key)
+        RunSelector(None if isinstance(self.run_id, str) else self.run_id, self.run_key)
+        if isinstance(self.run_id, str):
+            require_text("run_id", self.run_id, limit=512)
+            if self.run_key is not None:
+                raise UsageError("choose `run_id` or `run_key`, not both")
 
     @property
     def selector(self) -> RunSelector:
         """Select the exact run, or the single non-terminal whole-pipeline run."""
+        assert not isinstance(self.run_id, str), "run identity must be resolved before execution"
         return RunSelector(self.run_id, self.run_key)
 
 
@@ -117,10 +131,8 @@ class RunFilter(TagFilter, RunIdentity):
         super().__post_init__()
         RunIdentity.__post_init__(self)
         optional_text("pipeline_code", self.pipeline_code)
-        if self.pipeline_code is None and (self.run_id is not None or self.run_key is not None):
-            raise UsageError(
-                "`run_id` and `run_key` need `pipeline_code`; select its exact pipeline"
-            )
+        if self.pipeline_code is None and self.run_key is not None:
+            raise UsageError("`run_key` needs `pipeline_code`; select its exact pipeline")
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -174,11 +186,13 @@ class CapabilitiesInput(RunSelection):
 class RunId(Request):
     """One pipeline run, by id."""
 
-    run_id: int
+    run_id: int | str
 
     def __post_init__(self) -> None:
         """Refuse an id that cannot exist."""
-        if self.run_id < 1:
+        if isinstance(self.run_id, str):
+            require_text("run_id", self.run_id, limit=512)
+        elif self.run_id < 1:
             raise UsageError(f"`run_id` is {self.run_id}; give a positive run id")
 
 
@@ -336,7 +350,7 @@ class LineageRefreshInput(LineageInput):
 class RunRequest(RunSelection):
     """One pipeline, task, lifecycle step or backfill request.
 
-    ``reason`` is recorded with every request; overrides, reruns, skips and backfills need one.
+    ``reason`` is recorded with every request and required by STRICT project governance.
     """
 
     task_code: str | None = None
@@ -442,9 +456,14 @@ class ReconcileInput(Request):
 
     pipeline_code: str | None = None
     task_code: str | None = None
+    attest_ended: bool = False
+    reason: str | None = None
 
     def __post_init__(self) -> None:
         """Refuse a task without the pipeline it belongs to."""
+        if self.attest_ended:
+            require_text("reason", self.reason)
+        optional_text("reason", self.reason)
         optional_text("pipeline_code", self.pipeline_code)
         optional_text("task_code", self.task_code)
         if self.task_code and self.pipeline_code is None:

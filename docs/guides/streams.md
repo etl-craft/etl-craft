@@ -6,6 +6,12 @@ every partition as a `PARTITIONS` offset. etl-craft stores those positions only 
 succeeds, in the same Engine DB transaction as its outcome, and checks that no partition moves
 backwards or disappears.
 
+For fan-out, each partition item returns `ScriptResult(count, Offset.partitions({key: next_position}))`.
+Return the helper's combined result after all items succeed. Successful items' positions are
+provisional evidence retained across retries, while unfinished items re-read from the last
+committed task offset. An empty item returns its committed position unchanged. The task
+checkpoint advances only with a successful attempt ending.
+
 For discrete events, such as a file that landed or a job that finished, use a signal row
 instead: see [Signalling a pipeline from other systems](external-events.md).
 
@@ -62,17 +68,25 @@ def run(task):
             number = message.partition()
             if number not in open_ends or message.offset() >= open_ends[number]:
                 continue
-            rows.append((topic, number, message.offset(), message.value()))
+            rows.append(
+                {
+                    "topic": topic,
+                    "partition_id": number,
+                    "source_offset": message.offset(),
+                    "payload": message.value(),
+                }
+            )
             positions[str(number)] = message.offset() + 1
             if positions[str(number)] >= open_ends[number]:
                 del open_ends[number]
-        land(task, rows)
-        return ScriptResult(len(rows), Offset.partitions(positions))
+        written = task.replace_landing(iter(rows))
+        return ScriptResult(written, Offset.partitions(positions))
     finally:
         consumer.close()
 ```
 
-`land` writes the rows to the landing table: see the rules below.
+The task names its landing target and declares its business columns in `CFG_COLUMNS`.
+Map source records to those column names before calling `replace_landing`.
 
 ## The rules the example follows
 
@@ -81,10 +95,11 @@ def run(task):
 - **Read to the end found at the start of the run.** Each run reads from the stored positions to
   each partition's end as the run found it (`high`), capped by `max_rows`, and never chases the
   tail. A busy topic is caught up by the next runs.
-- **Make the landing write safe to repeat.** A crash after the warehouse commit and before the
-  attempt's ending makes the retry read the same range again. Land topic, partition and offset
-  with every row, and either replace the task run's batch or merge on topic, partition and
-  offset.
+- **Make the landing write safe to repeat.** Call `task.replace_landing(rows)` for the task's
+  whole batch, or `task.replace_landing(rows, item_key=key)` inside each fan-out item.
+  It streams and casts against `CFG_COLUMNS`, adds provenance/item tags and atomically
+  replaces only the owned batch. A crash between publication and the attempt/item result
+  is safe to retry. One downstream managed SQL task performs the final target write.
 - **Store the next position to read**, as Kafka reports it (`message.offset() + 1`), and never
   compute it as last plus one across a gap: compacted and transactional topics leave gaps.
 - **Fail when the stream has moved past you.** A stored position older than the earliest record

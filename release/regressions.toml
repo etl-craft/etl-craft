@@ -277,3 +277,86 @@ unmanaged-side-effect-retry = [
 fan-out-progress-cost = [
     "tests/unit/test_fan_out.py::test_a_thousand_items_at_width_two_hundred_have_bounded_pending_work",
 ]
+
+small-agent-python-slots = [
+    "tests/unit/test_resources.py::test_explicit_python_slots_can_exceed_estimate_with_agent_cpu_and_total_bounds",
+    "tests/unit/test_resources.py::test_explicit_python_slots_refuse_less_than_the_process_base_before_start",
+    "tests/integration/api/test_agent_process.py::test_explicit_small_python_agent_records_success_or_memory_failure",
+]
+
+agent-project-attribution = [
+    "tests/integration/engine/test_agent_project_scope.py::test_rehash_candidate_lookup_is_project_scoped",
+    "tests/integration/engine/test_agent_project_scope.py::test_agent_operation_publishes_and_reads_only_its_project",
+    "tests/integration/engine/test_agent_project_scope.py::test_other_project_token_cannot_publish_an_owned_attempt",
+    "tests/integration/api/test_agent_api.py::test_project_two_agent_setup_and_merge_keep_contracts_isolated",
+]
+
+agent-ending-watermark-fence = [
+    "tests/integration/engine/test_upgrade.py::test_ending_evidence_upgrade_keeps_existing_observations_unclassified",
+    "tests/integration/engine/test_ending_evidence.py::test_verified_local_exit_needs_no_attestation_or_lease_wait",
+    "tests/integration/execution/test_scoped_controls.py::test_reconcile_observes_exited_terminal_worker_without_rewriting_its_outcome",
+    "tests/integration/api/test_agent_api.py::test_every_observed_agent_ending_records_only_verified_evidence",
+    "tests/integration/api/test_agent_process.py::test_agent_terminal_exit_records_real_evidence",
+    "tests/integration/engine/test_ending_evidence.py::test_attested_legacy_ending_advances_the_window_and_names_operator",
+    "tests/integration/engine/test_ending_evidence.py::test_attestation_refuses_unverified_endings_without_writes",
+    "tests/integration/engine/test_ending_evidence.py::test_can_run_grant_does_not_grant_attestation",
+]
+
+agent-start-report-outage = [
+    "tests/integration/api/test_agent_api.py::test_start_response_loss_ends_the_claim_and_keeps_observed_identity",
+    "tests/unit/test_agent_start_report.py::test_failed_start_report_stops_child_and_preserves_ending_evidence",
+]
+
+ui-audit-operability = [
+    "tests/browser/test_react_insights.py::test_chart_renderers_load_on_home_without_changing_run_or_catalog_charts",
+    "tests/unit/test_operations.py::test_run_reason_follows_project_governance_in_every_environment",
+    "tests/integration/api/test_api.py::test_run_api_requires_reasons_by_governance_not_environment",
+    "tests/browser/test_react_pipelines.py::test_run_dialog_follows_governance_and_keeps_production_confirmation",
+    "tests/browser/test_react_tasks.py::test_failure_diagnostics_stay_in_process_details",
+    "tests/browser/test_react_tasks.py::test_dense_run_statuses_use_dots_and_keep_failure_pills",
+    "tests/browser/test_react_pipelines.py::test_fit_view_keeps_task_labels_readable_after_zooming_out",
+    "tests/browser/test_react_insights.py::test_short_daily_windows_show_numbers_then_long_windows_keep_the_day_axis",
+    "tests/browser/test_react_tasks.py::test_a_failed_task_explains_itself_and_leads_to_its_attempt_and_history",
+    "tests/unit/test_cli.py::test_a_typo_suggests_a_command_without_printing_the_inventory",
+    "tests/unit/test_operations.py::test_text_audit_is_newest_first_and_capped_while_json_stays_complete",
+    "tests/unit/test_core_log.py::test_text_timestamp_is_utc_with_an_explicit_zone",
+    "tests/unit/test_cli_output.py::test_terminal_rows_align_while_pipes_keep_their_contract",
+    "tests/unit/test_cli.py::test_run_is_quiet_by_default_but_honours_explicit_info",
+    "tests/unit/test_operations.py::test_exact_run_id_reads_do_not_require_a_pipeline_name",
+    "tests/unit/test_operations.py::test_ended_run_candidates_name_labels_status_and_exact_cli_selection",
+    "tests/unit/test_operations.py::test_completed_requests_are_reported_without_mutating_request_events",
+    "tests/unit/test_operations.py::test_failed_requests_report_failure_without_changing_original_events",
+    "tests/unit/test_operations.py::test_terminal_status_and_pipelines_show_readable_durations_and_run_times",
+    "tests/unit/test_operations.py::test_http_startup_names_the_bound_browser_address",
+    "tests/unit/test_operations.py::test_status_tasks_follow_metadata_dependencies_instead_of_the_alphabet",
+    "tests/integration/engine/test_account_login.py::test_account_add_accepts_a_piped_password_without_auditing_it",
+    "tests/integration/engine/test_account_login.py::test_account_add_without_terminal_names_the_password_stdin_remedy",
+    "tests/browser/test_react_pipelines.py::test_the_newest_grid_run_is_next_to_task_names",
+    "tests/browser/test_react_tasks.py::test_a_skipped_task_names_its_failed_upstream",
+]
+
+exact-run-label-selection = [
+    "tests/browser/test_react_tasks.py::test_attempt_addresses_validate_the_parent_run_label",
+    "tests/integration/engine/test_project_isolation.py::test_run_label_cannot_select_another_projects_run",
+    "tests/unit/test_operations.py::test_exact_run_labels_and_integers_share_operation_selection",
+    "tests/unit/test_operations.py::test_mismatched_run_labels_name_the_exact_expected_label",
+    "tests/integration/api/test_api.py::test_api_run_labels_match_exactly_for_paths_queries_and_json",
+    "tests/integration/engine/test_pipeline_permissions.py::test_run_label_refusal_does_not_disclose_hidden_pipeline_labels",
+    "tests/browser/test_react_ui.py::test_run_addresses_validate_the_complete_stored_label",
+]
+
+session-refresh-unavailable = [
+    "tests/browser/test_react_platform.py::test_failed_identity_refresh_does_not_end_a_live_session",
+]
+
+browser-sso-pkce = [
+    "tests/browser/test_sso_redirect.py::test_sso_browser_returns_signed_in_without_a_copy_code_panel",
+    "tests/integration/api/test_browser_sso.py::test_browser_proof_refusals_are_audited_without_sessions",
+    "tests/integration/api/test_browser_sso.py::test_authorization_parameters_verified_session_actor_and_single_use",
+]
+
+provider-single-logout = [
+    "tests/integration/api/test_single_logout.py::test_logout_revokes_the_session_and_reports_provider_redirect",
+    "tests/integration/api/test_single_logout.py::test_logout_refuses_a_foreign_post_logout_address_without_a_redirect",
+    "tests/browser/test_sso_redirect.py::test_sign_out_follows_provider_discovery_and_revokes_local_session",
+]

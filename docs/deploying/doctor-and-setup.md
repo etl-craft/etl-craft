@@ -6,7 +6,7 @@
 first. Each line is one check:
 
 ```text
-[OK  ] Configuration: /srv/etl-craft/craft-connector.yml (mode remote, project /srv/etl-craft)
+[OK  ] Configuration: /srv/etl-craft/craft-connector.yml (project /srv/etl-craft)
 [OK  ] Settings: 6 from variables, 3 as written
 [WARN] Setting used as written: Engine.prod.user is 'ETL_USER': no variable of that name is set in the environment source, so the text itself is the value
 [OK  ] Engine DB secret: resolved from ENGINE_PROD_SECRET
@@ -54,7 +54,9 @@ apart from the Engine DB's tables and migrations, and then:
 - when no active admin exists, asks interactively for a new admin name and password
   (12–1024 characters), or binds `--oidc-subject SUBJECT` for SSO-only sign-in.
 
-Run `etl-craft login` afterwards. The same local writer-credential boundary supports admin
+Run `etl-craft login` afterwards. A CI job that has no terminal signs in the same way, with the
+password on stdin: `printf '%s\n' "$ADMIN_PASSWORD" | etl-craft login --name owner --password-stdin`
+(terminal stdin and a lone `--name` are refused; it is a password sign-in, not SSO). The same local writer-credential boundary supports admin
 recovery if every admin was disabled or demoted. It creates a distinct identity and never
 restores old credentials or exposes recovery over HTTP. With an existing active admin,
 setup requires a signed-in admin; unattended deployments supply `ETL_CRAFT_TOKEN`.

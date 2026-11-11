@@ -38,7 +38,7 @@ from etl_craft.core.enums import (
 from etl_craft.core.errors import MetadataFileError
 from etl_craft.engine.queries import statement
 
-Kind = Literal["code", "text", "choice", "int", "float", "date", "json"]
+Kind = Literal["code", "text", "choice", "endings", "int", "float", "date", "json"]
 Value = str | int | float | date | dict[str, object] | None
 Key = tuple[Value, ...]
 
@@ -49,6 +49,7 @@ _BIND_TYPES: dict[Kind, TypeEngine[Any]] = {
     "code": String(),
     "text": String(),
     "choice": String(),
+    "endings": String(),
     "int": Integer(),
     "float": Float(),
     "date": Date(),
@@ -201,6 +202,7 @@ PIPELINES = ConfigTable(
         Column("CATCHUP", "choice", default="N", choices=YES_NO),
         Column("MAX_CATCHUP_RUNS", "int", default=1, minimum=1),
         Column("OVERLAP_POLICY", "choice", default="SKIP", choices=("SKIP", "QUEUE")),
+        Column("AUTO_RESTART_CONDITION", "endings", default="SCHEDULE"),
         Column("MAX_PARALLEL_TASKS", "int", default=DEFAULT_MAX_PARALLEL_TASKS, minimum=1),
         Column("PRIORITY", "int", default=0),
         Column("BLOCK_ON_REFRESH_ERROR", "choice", default="N", choices=YES_NO),
@@ -227,6 +229,7 @@ PIPELINES = ConfigTable(
         "CATCHUP",
         "MAX_CATCHUP_RUNS",
         "OVERLAP_POLICY",
+        "AUTO_RESTART_CONDITION",
         "MAX_PARALLEL_TASKS",
         "PRIORITY",
         "BLOCK_ON_REFRESH_ERROR",

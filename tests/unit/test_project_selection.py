@@ -83,6 +83,12 @@ def test_remote_bundle_project_directory_is_one_source(tmp_path, monkeypatch, ca
     calls = []
 
     def publish(client, name, request):
+        if name == ActionName.PROJECT_LIST:
+            from etl_craft.services.operations.admin_metadata import Project, Projects
+
+            return Projects(
+                (Project("sales", "Sales", "UTC", "default", 1, "Y", "DEV", None, "STRICT"),)
+            )
         calls.append((client.project, name, request))
         return BundleView("published", {})
 

@@ -20,7 +20,9 @@ def configure(parser: argparse.ArgumentParser) -> None:
         help="With --rerun: rerun only failed Python work items.",
     )
     parser.add_argument(
-        "--reason", default="", help="Why an override, rerun, skip or backfill is needed; recorded."
+        "--reason",
+        default="",
+        help="Why the run or change is needed; required by STRICT governance, optional in RELAXED.",
     )
 
 

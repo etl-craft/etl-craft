@@ -24,10 +24,12 @@ from pathlib import Path
 from etl_craft.config import ConnectorConfig
 from etl_craft.core.errors import UsageError
 from etl_craft.core.filelock import file_lock
+from etl_craft.core.restart import restart_note
 from etl_craft.services.catalog.collect import (
     Catalog,
     TaskAsset,
 )
+from etl_craft.services.catalog.document import catalog_document
 from etl_craft.services.catalog.gap_html import gaps_page
 from etl_craft.services.catalog.gaps import gap_snapshot
 from etl_craft.services.catalog.html import escape as _e
@@ -136,6 +138,9 @@ class _Writer(Pages):
             encoding="utf-8",
         )
         c = self.catalog
+        (self.folder / "catalog.json").write_text(
+            json.dumps(catalog_document(c), ensure_ascii=True), encoding="utf-8"
+        )
         self._gap_pages()
         self._page("index.html", "etl-craft catalog", "", self._home, "search", [])
         self._page("dags.html", "DAGs", "", self._dags, "dags", [])
@@ -313,6 +318,8 @@ class _Writer(Pages):
             f'<link rel="icon" href="{root}favicon.svg" type="image/svg+xml"></head>'
             f'<body data-root="{root}" data-generated="{generated}" data-compared="{compared}">'
             '<header class="top">'
+            f'<strong class="environment">{_e(self.catalog.project_code)} · '
+            f"{_e(self.catalog.environment_label)}</strong>"
             f'<a class="brand product-lockup" href="{root}index.html" '
             f'aria-label="etl-craft home">{mark}<span>etl-craft</span></a><nav>{nav}</nav>'
             '<div class="search"><input type="search" placeholder="Search pipelines, tasks, '
@@ -385,7 +392,7 @@ class _Writer(Pages):
                     f'<span data-pipeline-tags="{_e(" ".join(p.row.tags))}">'
                     f"{tag_chips(p.row.tags)}</span>",
                     _e(p.row.description),
-                    _e(p.row.run_schedule),
+                    _e(p.row.run_schedule or restart_note(p.row.auto_restart_condition) or ""),
                     _e(p.row.refresh_type),
                     ", ".join(self._link(pipeline_url(u), u, "") for u, _ in p.depends_on),
                     str(len(p.tasks)),

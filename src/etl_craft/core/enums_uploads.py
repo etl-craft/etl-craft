@@ -29,3 +29,12 @@ class MultipartState(StrEnum):
     HEADERS = "headers"
     BODY = "body"
     END = "end"
+
+
+class SeedStatus(StrEnum):
+    """The recorded outcome of applying one bundle seed table."""
+
+    UNCHANGED = "UNCHANGED"
+    LOADED = "LOADED"
+    LOCKED = "LOCKED"
+    FAILED = RunStatus.FAILED

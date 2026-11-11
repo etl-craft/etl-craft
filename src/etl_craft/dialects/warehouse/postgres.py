@@ -11,6 +11,7 @@ from sqlalchemy.engine import Connection
 from etl_craft.config.auth import warehouse_by_key
 from etl_craft.core.errors import SqlGuardError
 from etl_craft.core.failures import Failure
+from etl_craft.dialects.business_rules import quote_output_key
 from etl_craft.dialects.engine.postgres import DEFAULT_PORT, psycopg_auth_kwargs
 from etl_craft.dialects.warehouse.base import Presented, ReplaceStrategy, WarehouseDialect
 from etl_craft.dialects.warehouse.metadata import declarable_source, describe_result
@@ -59,7 +60,6 @@ class PostgresWarehouse(WarehouseDialect):
 
     spec = warehouse_by_key("postgres")
     dml_rowcounts = True
-    atomic_protection = True
     metadata_types_complete = True
     sqlglot_dialect = "postgres"
     secure_view = "security_barrier"
@@ -88,7 +88,7 @@ class PostgresWarehouse(WarehouseDialect):
             return None
         adapters = driver.adapters
         info = adapters.types.get(getattr(column, "type_code", None))
-        if info is None:
+        if info is None or getattr(column, "type_code", None) == getattr(info, "array_oid", None):
             return None
         name = str(info.name)
         if name in {"varchar", "bpchar"}:
@@ -215,6 +215,13 @@ class PostgresWarehouse(WarehouseDialect):
             "AND (CAST(:catalog AS varchar) IS NULL OR :catalog=current_database())) columns "
             "ORDER BY ordinal_position",
             {"name": name, "catalog": parts[0] if len(parts) == 3 else None},
+        )
+
+    def erasure_metadata_table(self, table: str) -> str:
+        """Preserve native case in regclass while keeping the catalog comparison literal."""
+        parts = table.split(".")
+        return ".".join(
+            [*parts[:-2], *(quote_output_key(p, self.sqlglot_dialect) for p in parts[-2:])]
         )
 
     def full_column_types(self, conn: Connection, table: str) -> dict[str, str]:

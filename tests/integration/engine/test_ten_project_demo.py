@@ -15,7 +15,7 @@ pytestmark = pytest.mark.parametrize(
 
 def test_ten_projects_share_the_database_and_preserve_existing_metadata(cli_project):
     p = cli_project
-    root = Path(__file__).resolve().parents[3] / "examples/demo"
+    root = Path(__file__).resolve().parents[3] / "examples/multi-project"
     script = p.config.python_scripts_dir / "pool_demo.py"
     script.write_bytes((root / "python_scripts/pool_demo.py").read_bytes())
     demo = runpy.run_path(str(root / "ten_projects.py"))

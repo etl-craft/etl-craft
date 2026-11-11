@@ -10,7 +10,14 @@ from typing import ClassVar
 from sqlalchemy import bindparam
 from sqlalchemy.engine import Connection
 
-from etl_craft.core.enums import ControlAcknowledgement, ControlAction, ControlStatus, RunStatus
+from etl_craft.core.actor import current_actor
+from etl_craft.core.enums import (
+    ControlAcknowledgement,
+    ControlAction,
+    ControlStatus,
+    EndingEvidenceKind,
+    RunStatus,
+)
 from etl_craft.core.errors import ResourceNotFoundError, RunRefusedError
 from etl_craft.core.time import as_utc
 from etl_craft.engine.queries import statement
@@ -57,6 +64,9 @@ class ControlView:
     run_status: RunStatus
     attempts: tuple[ControlAttempt, ...]
     execution_run_id: int | None = None
+
+    run_label: str = ""
+    execution_run_label: str = ""
 
 
 def lock_run(conn: Connection, run_id: int) -> None:
@@ -136,20 +146,53 @@ def get(conn: Connection, control_id: int) -> ControlView:
     return ControlView(**values)
 
 
-def observe_exit(conn: Connection, attempt_id: int, *, queries_ended: bool) -> None:
+def observe_exit(
+    conn: Connection,
+    attempt_id: int,
+    *,
+    queries_ended: bool,
+    evidence: EndingEvidenceKind = EndingEvidenceKind.VERIFIED,
+    reason: str = "owning supervisor observed process exit",
+    checks: tuple[str, ...] = ("process_exit",),
+) -> None:
     """Record physical process exit only after the owning supervisor observed it."""
     kinds = [ControlAcknowledgement.PROCESS]
     if queries_ended:
         kinds.append(ControlAcknowledgement.QUERIES)
     for kind in kinds:
-        acknowledge(conn, attempt_id, kind)
+        acknowledge(
+            conn,
+            attempt_id,
+            kind,
+            evidence=EndingEvidenceKind.VERIFIED
+            if kind == ControlAcknowledgement.QUERIES
+            else evidence,
+            reason=reason,
+            checks=checks,
+        )
 
 
-def acknowledge(conn: Connection, attempt_id: int, kind: ControlAcknowledgement) -> None:
+def acknowledge(
+    conn: Connection,
+    attempt_id: int,
+    kind: ControlAcknowledgement,
+    *,
+    evidence: EndingEvidenceKind = EndingEvidenceKind.VERIFIED,
+    reason: str = "physical ending observed",
+    checks: tuple[str, ...] = (),
+) -> None:
     """Append one observation without overwriting an earlier acknowledgement."""
     conn.execute(
         statement(conn, "control_observe_exit"),
-        {"attempt_id": attempt_id, "kind": kind, "now": datetime.now(UTC)},
+        {
+            "attempt_id": attempt_id,
+            "kind": kind,
+            "now": datetime.now(UTC),
+            "ending_evidence": evidence,
+            "actor": current_actor().name,
+            "reason": reason,
+            "checks": json.dumps(checks),
+        },
     )
 
 

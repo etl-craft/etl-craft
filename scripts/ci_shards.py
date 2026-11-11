@@ -27,10 +27,10 @@ SERVICE_MARKERS = {
 SHARDS = {
     "coverage": 1,
     "browser": 1,
-    "measured-coverage": 3,
+    "measured-coverage": 4,
     "engine": 5,
     "warehouse-local": 1,
-    "warehouse-iceberg": 2,
+    "warehouse-iceberg": 3,
     "e2e": 1,
 }
 VALIDATIONS = {"package-ubuntu-latest", "package-macos-latest"}
@@ -434,7 +434,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         (args.output / "validation.json").write_text(json.dumps(report), encoding="utf-8")
         return 0
     jobs = json.loads(os.environ.get("ETL_CRAFT_CI_JOBS", "{}"))
-    required_jobs = {"prepare", "static", "test", "service", "e2e", "package", "browser"}
+    required_jobs = {"prepare", "static", "ui", "test", "service", "e2e", "package", "browser"}
     if set(jobs) != required_jobs or any(job.get("result") != "success" for job in jobs.values()):
         print("CI jobs are missing, failed, cancelled or skipped", file=sys.stderr)
         return 1

@@ -86,6 +86,7 @@ from etl_craft.execution.processes import (
 from etl_craft.execution.readiness import backfill_cross_check, describe_unready, upstream_pending
 from etl_craft.execution.reconcile import reconcile
 from etl_craft.execution.retries import refresh_retries
+from etl_craft.execution.secret_pipe import task_values, with_values
 
 logger = logging.getLogger(__name__)
 
@@ -646,6 +647,7 @@ def _start_and_record(
     assert config.config_path is not None
     owner, log_path = claim
     argv = _child_argv(config, spec, child, owner)
+    values = task_values(engine, config, spec.task_run_id) if spec.handler == Handler.PYTHON else {}
     logger.info(
         "starting %s attempt %d (task_run_id=%d), time limit %s, log %s",
         spec.task_code,
@@ -655,21 +657,26 @@ def _start_and_record(
         log_path,
     )
     with (
-        CancelWatch(engine, spec.pipeline_run_id, child, spec_task_id(engine, spec)) as stop,
+        CancelWatch(
+            engine, spec.pipeline_run_id, child, spec_task_id(engine, spec), config=config
+        ) as stop,
         leases.heartbeat(engine, "attempt", spec.attempt_id, owner, stop),
     ):
         result = run_child(
-            ChildSpec(
-                argv=(sys.executable, *argv),
-                timeout_seconds=spec.timeout_seconds,
-                log_path=log_path,
-                # Output reaches the log as it is written, so a hang or a kill loses none of it.
-                env={
-                    **child_environment(config),
-                    "PYTHONUNBUFFERED": "1",
-                    "ETL_CRAFT_ATTEMPT_ID": str(spec.attempt_id),
-                    "ETL_CRAFT_ATTEMPT_OWNER": owner,
-                },
+            with_values(
+                ChildSpec(
+                    argv=(sys.executable, *argv),
+                    timeout_seconds=spec.timeout_seconds,
+                    log_path=log_path,
+                    # Output reaches the log as it is written, so a hang or a kill loses none of it.
+                    env={
+                        **child_environment(config, host=True),
+                        "PYTHONUNBUFFERED": "1",
+                        "ETL_CRAFT_ATTEMPT_ID": str(spec.attempt_id),
+                        "ETL_CRAFT_ATTEMPT_OWNER": owner,
+                    },
+                ),
+                values,
             ),
             tail_bytes=config.logs.tail_bytes,
             kill_grace_seconds=child.kill_grace_seconds,
@@ -678,7 +685,7 @@ def _start_and_record(
         )
     query_error = None
     queries_ended = control_flow.process_local_queries(config)
-    if result.cancelled or result.timed_out or result.returncode < 0:
+    if not queries_ended or result.cancelled or result.timed_out or result.returncode < 0:
         from etl_craft.core.ownership import attempt_holder
         from etl_craft.engine.resource_locks import holder_tag
         from etl_craft.execution.query_cancellation import confirm
@@ -706,7 +713,7 @@ def _start_and_record(
         ),
     )
 
-    control_flow.after_exit(engine, spec.pipeline_run_id, reason=query_error)
+    control_flow.after_exit(engine, spec.pipeline_run_id, reason=query_error, config=config)
     return outcome
 
 

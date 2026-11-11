@@ -15,6 +15,23 @@ DAY = f"({STAMP}+(d-1)*INTERVAL '1 day')"
 # Every run has its own task/attempt identity; completed days dominate the live working set.
 SEEDS = [
     (
+        "AUD_ERASURE_SUBJECTS",
+        "PROJECT_ID,TABLE_NAME,COLUMN_NAME,SUBJECT_KEY,KEY_HMAC,ACTIVE_FLAG,REASON,"
+        "CREATED_BY,CREATED_AT,LIFTED_BY,LIFTED_AT,LIFT_REASON,KEY_CHECK",
+        f"1,'warehouse.plan.table_'||p,'person','private-'||p,"
+        "lpad((p*10+d)::text,64,'0'),CASE WHEN d=10 THEN 'Y' ELSE 'N' END,'request',"
+        f"'plan',{STAMP},CASE WHEN d=10 THEN NULL ELSE 'plan' END,"
+        f"CASE WHEN d=10 THEN NULL ELSE {STAMP} END,"
+        "CASE WHEN d=10 THEN NULL ELSE 'lifted' END,repeat('c',64)",
+        "generate_series(1,:pipelines) p CROSS JOIN generate_series(1,10) d",
+    ),
+    (
+        "AUD_SEED_LOADS",
+        "PROJECT_ID,CATALOG_NAME,SCHEMA_NAME,TABLE_NAME,CONTENT_SHA256,SEED_LOAD_ID,STATUS,ERROR_MESSAGE,CREATED_BY,CREATED_AT",
+        f"1,'warehouse','plan','table_'||p,repeat('a',64),p::text,'LOADED',NULL,'plan',{STAMP}",
+        "generate_series(1,:pipelines) p",
+    ),
+    (
         "AUD_CLONE_STATE",
         "MIRROR_ID,TABLE_NAME,SCHEMA_SHA256,INITIALIZED,COPIED_AT",
         f"'mirror-'||p,'table-'||p,'schema',1,{STAMP}",
@@ -118,17 +135,18 @@ SEEDS = [
     ),
     (
         "AUD_TASK_RUN_LOG",
-        "TASK_RUN_ID,TASK_ID,PIPELINE_RUN_ID,START_DATE,END_DATE,STATUS",
-        f"{TASK_RUN_ID},{TASK_ID},{RUN_ID},{DAY},{DAY}+INTERVAL '1 minute','SUCCESS'",
+        "TASK_RUN_ID,TASK_ID,PIPELINE_RUN_ID,START_DATE,END_DATE,STATUS,DUPLICATE_COUNT",
+        f"{TASK_RUN_ID},{TASK_ID},{RUN_ID},{DAY},{DAY}+INTERVAL '1 minute','SUCCESS',"
+        "CAST(t%3 AS BIGINT)",
         RUNS + " CROSS JOIN generate_series(1,:tasks) t",
     ),
     (
         "AUD_TASK_ATTEMPTS",
-        "ATTEMPT_ID,TASK_RUN_ID,ATTEMPT_NUMBER,STATUS,OWNER_ID,STARTED_AT,ENDED_AT,LEASE_EXPIRES_AT,FAILURE_SOURCE",
+        "ATTEMPT_ID,TASK_RUN_ID,ATTEMPT_NUMBER,STATUS,OWNER_ID,STARTED_AT,ENDED_AT,LEASE_EXPIRES_AT,FAILURE_SOURCE,DUPLICATE_COUNT",
         f"{TASK_RUN_ID},{TASK_RUN_ID},1,"
         "CASE WHEN d=:days AND p%100=1 AND t=1 THEN 'QUEUED' ELSE 'SUCCESS' END,"
         f"'plan',{DAY},{DAY}+INTERVAL '1 minute',{DAY}+INTERVAL '1 minute',"
-        "CASE WHEN d%10=0 THEN 'WAREHOUSE' END",
+        "CASE WHEN d%10=0 THEN 'WAREHOUSE' END,CAST(t%3 AS BIGINT)",
         RUNS + " CROSS JOIN generate_series(1,:tasks) t",
     ),
     (
@@ -181,9 +199,23 @@ SEEDS = [
     ),
     (
         "AUD_UPLOADS",
-        "PIPELINE_ID,ACCOUNT,FILE_NAME,SHA256,SIZE_BYTES,PIPELINE_RUN_ID,STATUS,UPLOADED_AT,TAKEN_AT,ENDED_AT",
-        f"p,'plan','plan.csv',md5({RUN_ID}::text)||md5(p::text),1,{RUN_ID},'LOADED',{DAY},{DAY},{DAY}",
+        "PIPELINE_ID,ACCOUNT,FILE_NAME,STORED_NAME,SHA256,SIZE_BYTES,PIPELINE_RUN_ID,STATUS,UPLOADED_AT,TAKEN_AT,ENDED_AT",
+        f"p,'plan','plan.csv','1-plan.csv',md5({RUN_ID}::text)||md5(p::text),1,{RUN_ID},'LOADED',{DAY},{DAY},{DAY}",
         RUNS,
+    ),
+    (
+        "AUD_PROTECTION_EVENTS",
+        "PROJECT_ID,TARGET_ID,REQUEST_ID,ATTEMPT_ID,KIND,KEY_HASH,COLUMN_NAMES,VALUE_HASHES,STATUS,CREATED_BY,CREATED_AT,UPLOAD_ID,KEY_CHECK",
+        """1,'"warehouse"."plan"."table_'||p||'"',"""
+        "'00000000-0000-0000-0000-'||lpad((p*10+d)::text,12,'0'),"
+        "CASE WHEN p%2=0 THEN NULL ELSE ((p-1)*:days+d-1)*:tasks+1 END,'KEY',"
+        "CASE WHEN s=1 THEN repeat('a',64) END,"
+        """CASE WHEN s=1 THEN '["id"]' ELSE '[]' END,"""
+        """CASE WHEN s=1 THEN '["'||repeat('b',64)||'"]' ELSE '[]' END,"""
+        f"CASE WHEN s=1 THEN 'PENDING' ELSE 'COMMITTED' END,'plan',{STAMP},"
+        "((p-1)*:days+d),repeat('c',64)",
+        "generate_series(1,:pipelines) p CROSS JOIN generate_series(1,10) d "
+        "CROSS JOIN generate_series(1,2) s WHERE d<10 OR s=1 ORDER BY d,p,s",
     ),
     (
         "AUD_CONTROL_REQUESTS",
@@ -274,6 +306,12 @@ SEEDS = [
         "AUD_EVENT_FILES",
         "TASK_ID,FILE_PATH,TASK_RUN_ID",
         f"{TASK_ID},'plan/'||d,{TASK_RUN_ID}",
+        RUNS + " CROSS JOIN generate_series(1,1) t",
+    ),
+    (
+        "AUD_EVENT_FILE_DECISIONS",
+        "TASK_ID,FILE_PATH,VALIDATION_TASK_RUN_ID,SHA256,SIZE_BYTES,STATUS,REASON",
+        f"{TASK_ID},'plan/'||d,{TASK_RUN_ID},repeat('a',64),1,'ACCEPTED',NULL",
         RUNS + " CROSS JOIN generate_series(1,1) t",
     ),
     (

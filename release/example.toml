@@ -1,0 +1,4 @@
+repository = "https://github.com/etl-craft/support-insights"
+commit = "123fe9d0026468cf2a69c4f2e40d1e9c34420642"
+checks = []
+scenarios = []

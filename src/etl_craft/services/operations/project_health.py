@@ -44,6 +44,7 @@ class ProjectCounts:
     environment_type: EnvironmentType
     environment_name: str | None
     governance: Governance
+    allowed_auto_restarts: str
     running: int
     failed: int
     sla_misses: int

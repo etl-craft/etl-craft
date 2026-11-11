@@ -111,3 +111,27 @@ def test_cli_writes_the_zip_and_the_api_serves_it_as_an_attachment(
     paths = [entry["path"] for entry in json.loads(served.read("manifest.json"))["files"]]
     assert paths == [entry["path"] for entry in json.loads(written.read("manifest.json"))["files"]]
     assert served.read("run.log") == written.read("run.log")
+
+
+def test_log_and_zip_of_a_run_in_another_project_are_read_after_the_call_returns(engine_db):
+    from etl_craft.core.actor import SYSTEM_ACTOR
+    from etl_craft.engine.repository.pipelines import selected_project
+    from etl_craft.services.operations import OperationContext
+    from fixtures.metadata import add_pipeline, add_task, start_run
+
+    admin = OperationContext(engine_db.engine, engine_db.config, SYSTEM_ACTOR, role=ApiRole.ADMIN)
+    act(admin, ActionName.PROJECT_ADD, project="second", reason="Project scope fixture")
+    with engine_db.engine.begin() as conn:
+        project = conn.execute(
+            text("SELECT PROJECT_ID AS project_id FROM CFG_PROJECTS WHERE PROJECT_CODE='second'")
+        ).scalar_one()
+        with selected_project(project):
+            pipeline = add_pipeline(conn, "ONLY_SECOND", project_id=project)
+            add_task(conn, pipeline, "T")
+            run = start_run(conn, pipeline)
+    ctx = replace(admin, project="second")
+    log = act(ctx, ActionName.RUN_LOG, pipeline_code="ONLY_SECOND", run_id=run)
+    zipped = act(ctx, ActionName.RUN_ZIP, pipeline_code="ONLY_SECOND", run_id=run)
+    # The HTTP layer reads both after the action call has returned, outside its project scope.
+    assert b"run=" in b"".join(log)
+    assert "run.log" in zipfile.ZipFile(io.BytesIO(b"".join(zipped))).namelist()

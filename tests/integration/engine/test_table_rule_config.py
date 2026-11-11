@@ -186,7 +186,7 @@ def test_table_reject_stops_downstream_and_records_the_attempt_log(rule_project)
             SCRIPT_FILE="python_scripts/downstream.py",
         )
         add_dependency(conn, pipeline, after, task)
-    done = act(ctx, ActionName.RUN, pipeline_code="P")
+    done = act(ctx, ActionName.RUN, pipeline_code="P", reason="test requested run")
     assert done.status == RunStatus.FAILED
     with ctx.engine.connect() as conn:
         assert (
@@ -248,7 +248,7 @@ def test_table_output_validation_findings_keep_last_good_version(rule_project, s
     assert failed.failed and any(expected in f.message for f in failed.refreshes[0].findings)
     with ctx.engine.connect() as conn:
         assert admitted(conn, pipeline)[1] == good.refreshes[0].metadata_version
-    done = act(ctx, ActionName.RUN, pipeline_code="P")
+    done = act(ctx, ActionName.RUN, pipeline_code="P", reason="test requested run")
     assert done.status == RunStatus.SUCCESS, done.message
 
 
@@ -360,7 +360,7 @@ def test_table_result_fields_reach_the_existing_api_reads(rule_project):
     from fixtures.auth import service_token
 
     ctx, _, _, _ = rule_project
-    done = act(ctx, ActionName.RUN, pipeline_code="P")
+    done = act(ctx, ActionName.RUN, pipeline_code="P", reason="test requested run")
     assert done.run is not None
     app = create_app(ctx)
     headers = {"Authorization": "Bearer " + service_token(ctx.engine)}

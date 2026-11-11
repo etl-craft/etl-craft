@@ -10,11 +10,19 @@ from etl_craft import __version__
 from etl_craft.agent.client import AgentClient
 from etl_craft.config import ConnectorConfig
 from etl_craft.core.enums import ActionName, AgentReport
+from etl_craft.core.erasure import ErasureReport
 from etl_craft.core.errors import ServerError
 from etl_craft.core.items import ItemRecord, ItemState
+from etl_craft.core.protection import (
+    ProtectionCandidates,
+    ProtectionMatches,
+    ProtectionPage,
+    ProtectionReport,
+)
 from etl_craft.core.upload_copy import verified_upload
 from etl_craft.core.uploads import UploadFile, UploadInfo
 from etl_craft.engine.alerts import AlertState
+from etl_craft.engine.event_files import AdmittedFile
 from etl_craft.engine.repository.business_rules import RuleRunBinding
 from etl_craft.engine.resource_locks import confirm_stale, holder_tag
 from etl_craft.engine.task_store import RuleEnding, TargetPublication, TargetState, TaskState
@@ -39,6 +47,62 @@ class RemoteTaskStore:
     contracts: dict[str, TargetState] = field(default_factory=dict)
     files_dir: Path = field(default_factory=Path.cwd)
 
+    def protection_read(self, target: str, cursor: int = 0) -> ProtectionPage:
+        """Only the server's fenced store can expose this target's immutable event pages."""
+        from etl_craft.core.protection import validate_cursor
+
+        validate_cursor(cursor)
+        return from_json(
+            ProtectionPage,
+            self.call(
+                replace(
+                    self.request(AgentReport.PROTECTION_READ),
+                    target=target,
+                    protection_cursor=cursor,
+                )
+            ),
+        )
+
+    def protection_match(self, target: str, candidates: ProtectionCandidates) -> ProtectionMatches:
+        """Never retain candidates or receive keyed identities from the host."""
+        candidates.__post_init__()
+        return from_json(
+            ProtectionMatches,
+            self.call(
+                replace(
+                    self.request(AgentReport.PROTECTION_READ),
+                    target=target,
+                    protection_candidates=candidates,
+                )
+            ),
+        )
+
+    def protection_event(self, target: str, report: ProtectionReport) -> str:
+        """Use the same bounds as the local store before sending hash-only evidence."""
+        report.__post_init__()
+        result = self.call(
+            replace(
+                self.request(AgentReport.PROTECTION_EVENT),
+                target=target,
+                protection=report,
+            )
+        )
+        if not isinstance(result, str):
+            raise ServerError(
+                f"attempt {self.attempt_id}, target {target}: invalid "
+                "protection request id; upgrade agent and server "
+                "together"
+            )
+        return result
+
+    def erasure(self) -> ErasureReport:
+        """Return only the host's HMAC/count report for this fenced task."""
+        # The supervisor owns the task deadline while the host finishes its deletion pass.
+        reply = self.client.call(
+            ActionName.AGENT_REPORT, self.request(AgentReport.ERASURE), timeout=None
+        )
+        return from_json(ErasureReport, reply.data)
+
     def upload_files(self) -> tuple[UploadFile, ...]:
         """Stream and hash-check each file before giving a script its local cache path."""
         uploads = decode(tuple[UploadInfo, ...], self.call(self.request(AgentReport.UPLOADS)))
@@ -60,6 +124,30 @@ class RemoteTaskStore:
             replace(
                 self.request(AgentReport.UPLOAD_VALIDATION),
                 upload_id=upload_id,
+                error_message=reason,
+            )
+        )
+
+    def event_file_candidates(self, wait_code: str) -> tuple[AdmittedFile, ...]:
+        """Read the files the named wait admitted in this run through the fenced report."""
+        reply = decode(
+            tuple[AdmittedFile, ...],
+            self.call(replace(self.request(AgentReport.EVENT_FILES), wait_code=wait_code)),
+        )
+        assert isinstance(reply, tuple)
+        return reply
+
+    def event_file_result(
+        self, wait_code: str, path: str, digest: tuple[str, int], reason: str | None
+    ) -> None:
+        """Send the validator's per-file outcome through its fenced task report."""
+        self.call(
+            replace(
+                self.request(AgentReport.EVENT_FILE_RESULT),
+                wait_code=wait_code,
+                file_path=path,
+                sha256=digest[0],
+                size_bytes=digest[1],
                 error_message=reason,
             )
         )

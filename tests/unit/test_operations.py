@@ -1,6 +1,9 @@
 """Service contracts on SQLite without warehouses, network services or task subprocesses."""
 
+import io
 import json
+import sys
+import threading
 from dataclasses import FrozenInstanceError, replace
 from datetime import UTC, date, datetime, timedelta
 
@@ -11,10 +14,10 @@ from sqlalchemy import event, text
 from etl_craft.cli import main
 from etl_craft.config import load_config
 from etl_craft.core.actor import Actor, ActorKind, acting_as, current_actor
-from etl_craft.core.enums import ActionName, ApiRole, ControlAction, RunStatus
+from etl_craft.core.enums import ActionName, ActionOutcome, ApiRole, ControlAction, RunStatus
 from etl_craft.core.errors import MetadataError, RunStateError, UsageError
 from etl_craft.engine import transitions
-from etl_craft.engine.audit import command_request, register_engine
+from etl_craft.engine.audit import ActionRequest, command_request, register_engine
 from etl_craft.execution import reruns, run_types, runner
 from etl_craft.execution.attempt_types import TaskOutcome
 from etl_craft.services.operations import OperationContext, to_json
@@ -27,6 +30,7 @@ from etl_craft.services.operations.requests import (
     MarkRequest,
     PipelineInput,
     ReconcileInput,
+    RunFilter,
     RunRequest,
     TagFilter,
 )
@@ -64,9 +68,9 @@ def ctx(tmp_path, monkeypatch, engine_actor):
         db.engine.dispose()
 
 
-def run(ctx, **request):
+def run(ctx, *, reason="test requested run", **request):
     """Request a run the way every interface does."""
-    return invoke(ctx, ActionName.RUN, RunRequest(pipeline_code=P, **request))
+    return invoke(ctx, ActionName.RUN, RunRequest(pipeline_code=P, reason=reason, **request))
 
 
 def mark(ctx, **request):
@@ -118,7 +122,8 @@ def seed(ctx, *, active=False, task=False):
 
 def action_count(ctx):
     with ctx.engine.connect() as conn:
-        return conn.execute(text("SELECT COUNT(*) FROM AUD_ACTIONS")).scalar_one()
+        events = conn.execute(text("SELECT ARGUMENTS AS arguments FROM AUD_ACTIONS")).scalars()
+        return sum("_request_action_id" not in json.loads(event) for event in events)
 
 
 def test_run_lifecycle_has_one_request_per_call_and_restores_actor(ctx):
@@ -164,7 +169,7 @@ def test_trigger_skip_and_stand_in_use_their_returned_run_ids(ctx):
     doc = to_json(audit(ctx))
     assert all(action["actor"] == "api-user" for action in doc["actions"])
     assert {action["arguments"]["reason"] for action in doc["actions"]} == {
-        None,
+        "test requested run",
         "planned maintenance",
         "source verified",
     }
@@ -214,7 +219,11 @@ def test_cancel_pause_resume_and_reconcile_do_not_invent_executions(ctx):
     assert resumed.pipeline.paused is None
     cancelled = control(ctx, ControlAction.ABORT, "stop", run_id=run_id)
     assert cancelled.status == "COMPLETED" and cancelled.run_status == "CANCELLED"
-    report = invoke(ctx, ActionName.RECONCILE, ReconcileInput(pipeline_code=P))
+    report = invoke(
+        ctx,
+        ActionName.RECONCILE,
+        ReconcileInput(pipeline_code=P, reason="test requested run action"),
+    )
     assert report.lost_attempt_ids == () and report.released_pipeline_run_ids == ()
 
 
@@ -303,12 +312,28 @@ def test_wrong_pipeline_and_wrong_date_are_refused_without_changing_history(ctx)
 def test_refused_api_request_keeps_its_actor_and_does_not_leak_scope(ctx):
     parent = current_actor()
     with pytest.raises(MetadataError):
-        invoke(ctx, ActionName.RUN, RunRequest(pipeline_code="MISSING", init_only=True))
+        invoke(
+            ctx,
+            ActionName.RUN,
+            RunRequest(pipeline_code="MISSING", init_only=True, reason="test missing pipeline"),
+        )
     assert current_actor() == parent
     with ctx.engine.connect() as conn:
-        row = conn.execute(text("SELECT ACTOR, OUTCOME, ARGUMENTS FROM AUD_ACTIONS")).one()
-    assert tuple(row)[:2] == ("api-user", "REQUESTED")
-    assert json.loads(row[2])["pipeline_code"] == "MISSING"
+        events = (
+            conn.execute(
+                text(
+                    "SELECT ACTOR AS actor, OUTCOME AS outcome, ARGUMENTS AS arguments "
+                    "FROM AUD_ACTIONS ORDER BY ACTION_ID"
+                )
+            )
+            .mappings()
+            .all()
+        )
+    assert [(row["actor"], row["outcome"]) for row in events] == [
+        ("api-user", "REQUESTED"),
+        ("api-user", "FAILURE"),
+    ]
+    assert all(json.loads(row["arguments"])["pipeline_code"] == "MISSING" for row in events)
 
 
 def test_nested_requests_with_different_actors_are_distinct(ctx):
@@ -338,7 +363,7 @@ def test_nested_requests_with_different_actors_are_distinct(ctx):
         ("pipelines", []),
     ],
 )
-def test_cli_json_is_the_action_document_with_one_request(ctx, capsys, monkeypatch, command, extra):
+def test_cli_json_adds_environment_after_one_context_read(ctx, capsys, monkeypatch, command, extra):
     from etl_craft.cli.commands import common
 
     seed(ctx, active=True, task=command in {"steps", "history"})
@@ -356,13 +381,24 @@ def test_cli_json_is_the_action_document_with_one_request(ctx, capsys, monkeypat
     arguments = ["--config", str(ctx.config.config_path), command, "--format", "json"]
     if command != "pipelines":
         arguments.extend(["--pipeline-code", "P"])
+    if command in {"run", "reconcile"}:
+        arguments.extend(["--reason", "test requested run action"])
     code = main([*arguments, *extra])
     output = capsys.readouterr()
     assert code == 0, output.err
-    assert len(observed) == 1
-    assert json.loads(output.out) == to_json(observed[0])
+    from etl_craft.services.operations.admin_metadata import Projects
+
+    assert len(observed) == 2
+    assert isinstance(observed[0], Projects)
+    expected = to_json(observed[1])
+    expected["environment"] = {
+        "type": observed[0].projects[0].environment_type,
+        "name": observed[0].projects[0].environment_name,
+    }
+    assert json.loads(output.out) == expected
+    assert " · " not in output.err
     mutating = command in {"run", "mark", "abort", "pause", "resume", "reconcile"}
-    assert action_count(ctx) == before_actions + int(mutating)
+    assert action_count(ctx) == before_actions + 1 + int(mutating)
 
 
 @pytest.mark.parametrize(
@@ -387,7 +423,7 @@ def test_cli_json_is_the_action_document_with_one_request(ctx, capsys, monkeypat
 )
 def test_invalid_requests_are_rejected_before_opening_resources(kwargs):
     with pytest.raises(UsageError):
-        RunRequest(pipeline_code=P, **kwargs)
+        RunRequest(pipeline_code=P, **kwargs, reason="test requested run action")
 
 
 def test_serializer_returns_fresh_mappings_and_refuses_nondocuments():
@@ -426,7 +462,7 @@ def test_missing_override_reason_is_refused_before_a_task_runs(ctx):
     seed(ctx, active=True, task=True)
     before = to_json(history(ctx, task_code="load"))
     with pytest.raises(UsageError, match=r"default.*CUSTOM.*STRICT.*--reason"):
-        run(ctx, task_code="load", ignore_dependencies=True)
+        run(ctx, task_code="load", ignore_dependencies=True, reason="")
     assert to_json(history(ctx, task_code="load")) == before
     assert action_count(ctx) == 1
 
@@ -523,3 +559,247 @@ def test_retry_evidence_survives_config_edits_in_cli_and_catalog(ctx, capsys, tm
     html = (folder / run_url(run)).read_text()
     assert reason in html
     assert "missing &lt;table&gt;" in html
+
+
+def test_exact_run_id_reads_do_not_require_a_pipeline_name(ctx):
+    seed(ctx)
+    created = run(ctx, init_only=True, run_key="exact-read")
+    selected = invoke(ctx, ActionName.STATUS, RunFilter(run_id=created.run.pipeline_run_id))
+    assert selected.run.pipeline_run_id == created.run.pipeline_run_id
+    listed = invoke(ctx, ActionName.HISTORY, HistoryInput(run_id=created.run.pipeline_run_id))
+    assert listed.entries[0].pipeline_run_id == created.run.pipeline_run_id
+
+
+def test_completed_requests_are_reported_without_mutating_request_events(ctx):
+    seed(ctx)
+    run(ctx, init_only=True, run_key="completed-audit")
+    actions = audit(ctx).actions
+    assert actions[-1].outcome == "SUCCESS"
+    with ctx.engine.connect() as conn:
+        events = (
+            conn.execute(
+                text(
+                    "SELECT OUTCOME AS outcome, ARGUMENTS AS arguments "
+                    "FROM AUD_ACTIONS ORDER BY ACTION_ID"
+                )
+            )
+            .mappings()
+            .all()
+        )
+    assert events[0]["outcome"] == "REQUESTED"
+    assert events[-1]["outcome"] == "SUCCESS"
+    assert "_request_action_id" in json.loads(events[-1]["arguments"])
+
+    with (
+        acting_as(ctx.actor),
+        command_request("explicit completion", {"pipeline_code": "P"}) as original,
+    ):
+        register_engine(ctx.engine)
+        ActionRequest(
+            original.command,
+            original.arguments,
+            original.requested_at,
+            actor=ctx.actor,
+            engine=ctx.engine,
+            outcome=ActionOutcome.SUCCESS,
+        ).record()
+    assert len(audit(ctx).actions) == len(actions) + 1
+    with ctx.engine.connect() as conn:
+        assert (
+            conn.execute(
+                text("SELECT COUNT(*) AS n FROM AUD_ACTIONS WHERE COMMAND='explicit completion'")
+            ).scalar_one()
+            == 2
+        )
+
+
+def test_ended_run_candidates_name_labels_status_and_exact_cli_selection(ctx):
+    seed(ctx)
+    with acting_as(ctx.actor), ctx.engine.begin() as conn:
+        pipeline = conn.execute(
+            text("SELECT PIPELINE_ID FROM CFG_PIPELINES WHERE PIPELINE_CODE='P'")
+        ).scalar_one()
+        run_id = start_run(conn, pipeline)
+        transitions.finalize_pipeline_run(conn, run_id, RunStatus.SUCCESS)
+    with pytest.raises(RunStateError) as error:
+        invoke(ctx, ActionName.STATUS, RunFilter(pipeline_code="P"))
+    message = str(error.value)
+    assert f"--run-id {run_id}" in message
+    assert "P-" in message and "SUCCESS" in message
+    assert "run_key" not in message.split("Candidates")[1]
+
+
+def test_failed_requests_report_failure_without_changing_original_events(ctx):
+    seed(ctx)
+    with (
+        pytest.raises(MetadataError),
+        acting_as(ctx.actor),
+        command_request("test failure", {"pipeline_code": "P"}),
+    ):
+        register_engine(ctx.engine)
+        raise MetadataError("pipeline P: missing source; configure its source")
+    actions = audit(ctx).actions
+    assert actions[-1].outcome == "FAILURE"
+    assert actions[-1].command == "test failure"
+
+
+def test_terminal_status_and_pipelines_show_readable_durations_and_run_times(ctx, monkeypatch):
+    seed(ctx)
+    created = run(ctx, init_only=True, run_key="terminal-status")
+
+    class Terminal(io.StringIO):
+        def isatty(self):
+            return True
+
+    output = Terminal()
+    monkeypatch.setattr(sys, "stdout", output)
+    assert (
+        main(
+            [
+                "--config",
+                str(ctx.config.config_path),
+                "status",
+                "--run-id",
+                str(created.run.pipeline_run_id),
+            ]
+        )
+        == 0
+    )
+    assert "DURATION_SECONDS" not in output.getvalue()
+    assert "budget=not configured" in output.getvalue()
+    assert "blocked by failures: (none)" not in output.getvalue()
+    output.seek(0)
+    output.truncate()
+    assert main(["--config", str(ctx.config.config_path), "pipelines"]) == 0
+    assert "LAST_RUN" in output.getvalue() and "NEXT_RUN" in output.getvalue()
+    output.seek(0)
+    output.truncate()
+    assert (
+        main(
+            [
+                "--config",
+                str(ctx.config.config_path),
+                "history",
+                "--run-id",
+                str(created.run.pipeline_run_id),
+            ]
+        )
+        == 0
+    )
+    header, row = output.getvalue().splitlines()[:2]
+    assert header.index("STATUS") == row.index(created.run.status)
+
+
+def test_http_startup_names_the_bound_browser_address(ctx, monkeypatch, caplog):
+    from etl_craft.api.serve import serve_http
+
+    monkeypatch.setattr("uvicorn.Server.run", lambda self, sockets: None)
+    configured = replace(ctx, config=replace(ctx.config, api_address="127.0.0.1:0"))
+    with caplog.at_level("INFO", logger="etl_craft.api.serve"):
+        serve_http(configured, threading.Event(), controller=False)
+    assert "web interface at http://127.0.0.1:" in caplog.text
+    assert "/ui" in caplog.text
+
+
+def test_status_tasks_follow_metadata_dependencies_instead_of_the_alphabet(ctx):
+    from fixtures.metadata import add_dependency
+
+    with acting_as(ctx.actor), ctx.engine.begin() as conn:
+        pipeline = add_pipeline(conn, "ORDERED")
+        source = add_task(conn, pipeline, "Z_SOURCE")
+        load = add_task(conn, pipeline, "A_LOAD")
+        add_dependency(conn, pipeline, load, source)
+    created = invoke(
+        ctx,
+        ActionName.RUN,
+        RunRequest(pipeline_code="ORDERED", init_only=True, reason="test requested run action"),
+    )
+    selected = invoke(ctx, ActionName.STATUS, RunFilter(run_id=created.run.pipeline_run_id))
+    names = [task.task_code for task in selected.tasks]
+    assert names.index("Z_SOURCE") < names.index("A_LOAD")
+
+
+def test_text_audit_is_newest_first_and_capped_while_json_stays_complete(ctx, capsys):
+    seed(ctx)
+    for number in range(101):
+        with (
+            acting_as(ctx.actor),
+            command_request(f"audit-event-{number:03d}", {"pipeline_code": "P"}),
+        ):
+            register_engine(ctx.engine)
+    command = ["--config", str(ctx.config.config_path), "audit", "--pipeline-code", "P"]
+    assert main(command) == 0
+    shown = capsys.readouterr().out
+    assert shown.index("audit-event-100") < shown.index("audit-event-050")
+    assert "audit-event-000" not in shown
+    assert main([*command, "--format", "json"]) == 0
+    document = json.loads(capsys.readouterr().out)
+    assert any(row["command"] == "audit-event-000" for row in document["actions"])
+
+
+@pytest.mark.parametrize("form", ["integer", "digits", "label"])
+def test_exact_run_labels_and_integers_share_operation_selection(ctx, capsys, form):
+    seed(ctx)
+    created = run(ctx, init_only=True, run_key="label-selector")
+    label = created.run.run_label
+    chosen = created.run.pipeline_run_id
+    value = chosen if form == "integer" else str(chosen) if form == "digits" else label
+    selected = invoke(ctx, ActionName.STATUS, RunFilter(run_id=value))
+    assert selected.run.pipeline_run_id == chosen
+    assert invoke(ctx, ActionName.STATUS, RunFilter(run_id=label)).run.run_label == label
+    assert main(["--config", str(ctx.config.config_path), "status", "--run-id", str(value)]) == 0
+    assert label in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("alter", ["prefix", "case", "space"])
+def test_mismatched_run_labels_name_the_exact_expected_label(ctx, alter):
+    seed(ctx)
+    created = run(ctx, init_only=True, run_key="label-refusal")
+    label = created.run.run_label
+    wrong = (
+        "WRONG-" + label if alter == "prefix" else label.lower() if alter == "case" else label + " "
+    )
+    with pytest.raises(RunStateError, match="expected") as error:
+        invoke(ctx, ActionName.STATUS, RunFilter(run_id=wrong))
+    assert repr(label) in str(error.value)
+    actions = invoke(ctx, ActionName.AUDIT, AuditInput()).actions
+    assert actions[-1].outcome == "REFUSED"
+    assert actions[-1].arguments["run_id"] == wrong
+
+
+def test_run_reason_follows_project_governance_in_every_environment(ctx):
+    from fixtures.actions import act
+
+    for environment, policy in (("DEV", "STRICT"), ("DEV", "RELAXED"), ("PROD", "STRICT")):
+        act(
+            ctx,
+            ActionName.PROJECT_SET,
+            project="default",
+            environment_type=environment,
+            governance=policy,
+            reason="set test policy",
+        )
+        code = f"REASON_{environment}_{policy}"
+        with ctx.engine.begin() as conn:
+            pipeline = add_pipeline(conn, code)
+            add_task(conn, pipeline, "T", "PYTHON")
+        request = RunRequest(pipeline_code=code, init_only=True)
+        if policy == "STRICT":
+            with pytest.raises(UsageError) as refused:
+                invoke(ctx, ActionName.RUN, request)
+            assert (
+                invoke(ctx, ActionName.AUDIT, AuditInput(pipeline_code=code)).actions[-1].outcome
+                == ActionOutcome.FAILURE
+            )
+            with pytest.raises(UsageError, match="non-empty reason"):
+                invoke(ctx, ActionName.RECONCILE, ReconcileInput(pipeline_code=code))
+            for part in ("default", environment, "STRICT", "non-empty reason", "--reason"):
+                assert part in str(refused.value)
+            assert not invoke(
+                ctx, ActionName.HISTORY, HistoryInput(pipeline_code=code, all=True)
+            ).entries
+            invoke(ctx, ActionName.RUN, replace(request, reason="start the selected pipeline"))
+        else:
+            done = invoke(ctx, ActionName.RUN, request)
+            assert done.run.pipeline_run_id is not None
+            invoke(ctx, ActionName.RECONCILE, ReconcileInput(pipeline_code=code))

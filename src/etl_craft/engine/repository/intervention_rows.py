@@ -34,6 +34,8 @@ class Intervention:
     requested_at: datetime
     item_key: str | None = None
 
+    run_label: str = ""
+
 
 @dataclass(frozen=True)
 class TaskRow:

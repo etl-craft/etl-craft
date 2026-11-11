@@ -151,7 +151,7 @@ def test_read_routes_record_only_named_admin_access_or_explicit_refusals(api):
         expected = dict(before)
         if action.name in audited or action.name == ActionName.CONTROL_REQUEST:
             table = next(name for name in before if name.upper() == "AUD_ACTIONS")
-            expected[table] += 1
+            expected[table] += 1 if action.name == ActionName.CONTROL_REQUEST else 2
             with ctx.engine.connect() as conn:
                 row = conn.execute(
                     text(
@@ -340,7 +340,7 @@ def test_tokens_store_hash_only_expiry_validation_and_audit(api):
         requests = conn.execute(
             text("SELECT COMMAND AS command, ARGUMENTS AS arguments FROM AUD_ACTIONS")
         ).all()
-        assert len(requests) == len(creds) + 1
+        assert len(requests) == 2 * (len(creds) + 1)
         assert all(row.command == "token create" for row in requests)
         audit = str(requests)
         assert value.token not in audit
@@ -427,31 +427,12 @@ def test_run_history_cursor_is_bounded_and_exact(api):
     assert last["before"] is None
 
 
-def test_token_metadata_does_not_capture_hash_or_accept_project_scope(api):
+def test_token_changes_are_not_captured_and_accept_no_project_scope(api):
     ctx, client, creds, _run, _attempt = api
     with ctx.engine.begin() as conn:
-        changes = (
-            conn.execute(
-                text(
-                    "SELECT AFTER_JSON FROM AUD_METADATA_CHANGES WHERE TABLE_NAME='CFG_API_TOKENS'"
-                )
-            )
-            .scalars()
-            .all()
-        )
-        assert changes
-        for change in changes:
-            assert "token_sha256" not in str(change).lower()
-            for credential in creds.values():
-                assert credential.token not in str(change)
-        assert "TOKEN_SHA256" not in {
-            column["name"].upper()
-            for column in sql_inspect(conn).get_columns(
-                "aud_cfg_api_tokens_history"
-                if conn.dialect.name == "postgresql"
-                else "AUD_CFG_API_TOKENS_HISTORY"
-            )
-        }
+        assert not conn.execute(
+            text("SELECT 1 AS found FROM AUD_METADATA_CHANGES WHERE TABLE_NAME='CFG_API_TOKENS'")
+        ).first()
         conn.execute(
             text("UPDATE CFG_API_TOKENS SET PROJECT_ID=1 WHERE TOKEN_ID=:id"),
             {"id": creds["viewer"].metadata.token_id},
@@ -464,7 +445,7 @@ def test_engine_unavailable_response_does_not_echo_storage_parameters(api, monke
 
     _ctx, client, _creds, _run, _attempt = api
 
-    def broken(*args):
+    def broken(*args, **kwargs):
         raise SQLAlchemyError("secret credential")
 
     monkeypatch.setattr("etl_craft.api.routes.authenticate", broken)
@@ -841,3 +822,112 @@ def test_foreign_project_prefix_cannot_masquerade_as_a_local_pipeline_grant(api)
     redacted = visible_result(replace(ctx, role=ApiRole.VIEWER, project_id=1), value)
     assert redacted.selected_pipeline_run_id is None
     assert redacted.status is None and "private" not in redacted.reason
+
+
+def test_a_refused_enum_value_keeps_the_case_of_the_values_it_lists(api):
+    _ctx, client, creds, _run, _attempt = api
+    response = client.get(
+        "/api/v1/projects/default/lineage?table=a.b&direction=sideways",
+        headers=headers(creds["viewer"]),
+    )
+    assert response.status_code == 400
+    message = response.json()["message"]
+    assert "'BOTH', 'UPSTREAM' or 'DOWNSTREAM'" in message
+
+
+def test_api_run_labels_match_exactly_for_paths_queries_and_json(api):
+    ctx, client, creds, run, _ = api
+    auth = headers(creds[ApiRole.ADMIN])
+    label = invoke(ctx, ActionName.RUN_DETAIL, RunId(run_id=run)).run_label
+    assert (
+        client.get(f"/api/v1/projects/default/runs/{label}", headers=auth).json()["pipeline_run_id"]
+        == run
+    )
+    for value in (run, str(run), label):
+        response = client.get(
+            "/api/v1/projects/default/status", params={"run_id": value}, headers=auth
+        )
+        assert response.status_code == 200, response.text
+        assert response.json()["run"]["pipeline_run_id"] == run
+    response = client.post(
+        "/api/v1/projects/default/controls",
+        headers=auth,
+        json={"pipeline_code": "P", "run_id": label, "action": "HOLD", "reason": "exact label"},
+    )
+    assert response.status_code == 200, response.text
+    for wrong in ("WRONG-" + label, label.lower()):
+        response = client.get(
+            "/api/v1/projects/default/status", params={"run_id": wrong}, headers=auth
+        )
+        assert response.status_code == 409, response.text
+        assert label in response.text
+
+
+def test_run_display_labels_are_carried_by_nested_and_attempt_responses(api):
+    ctx, client, creds, run, attempt = api
+    auth = headers(creds[ApiRole.ADMIN])
+    with ctx.engine.connect() as conn:
+        stored = conn.execute(
+            text("SELECT RUN_LABEL AS label FROM AUD_PIPELINES_RUN_LOG WHERE PIPELINE_RUN_ID=:id"),
+            {"id": run},
+        ).scalar_one()
+        task = conn.execute(
+            text(
+                "SELECT TASK_RUN_ID AS id, TASK_RUN_LABEL AS label FROM AUD_TASK_RUN_LOG "
+                "WHERE PIPELINE_RUN_ID=:id"
+            ),
+            {"id": run},
+        ).one()
+    paths = [
+        f"/api/v1/projects/default/attempts/{attempt}",
+        "/api/v1/projects/default/history?pipeline_code=P&task_code=T&all=true",
+        "/api/v1/projects/default/pipelines",
+        f"/api/v1/projects/default/steps?pipeline_code=P&run_id={run}",
+    ]
+    for path in paths:
+        response = client.get(path, headers=auth)
+        assert response.status_code == 200, response.text
+        document = response.json()
+        assert stored in json.dumps(document), path
+        if "attempts/" in path:
+            assert document["pipeline_run_id"] == run
+            assert document["task_run_id"] == task.id
+            assert document["task_run_label"] == task.label
+
+
+def test_run_api_requires_reasons_by_governance_not_environment(api):
+    from fixtures.actions import act
+
+    ctx, client, creds, _, _ = api
+    for environment, policy in (("DEV", "STRICT"), ("DEV", "RELAXED"), ("PROD", "STRICT")):
+        act(
+            ctx,
+            ActionName.PROJECT_SET,
+            project="default",
+            environment_type=environment,
+            governance=policy,
+            reason="set test policy",
+        )
+        code = f"REASON_{environment}_{policy}"
+        with ctx.engine.begin() as conn:
+            pipeline = add_pipeline(conn, code)
+            add_task(conn, pipeline, "T", "PYTHON")
+        response = client.post(
+            "/api/v1/projects/default/runs",
+            json={"pipeline_code": code},
+            headers=headers(creds[ApiRole.ADMIN]),
+        )
+        if policy == "STRICT":
+            assert response.status_code == 400, response.text
+            assert "non-empty reason" in response.json()["message"]
+            assert "STRICT" in response.json()["message"]
+            refused = client.post(
+                "/api/v1/projects/default/reconciliations",
+                json={"pipeline_code": code},
+                headers=headers(creds[ApiRole.ADMIN]),
+            )
+            assert refused.status_code == 400
+            assert "STRICT" in refused.json()["message"]
+        else:
+            assert response.status_code == 200, response.text
+            assert response.json()["run"]["pipeline_run_id"] is not None

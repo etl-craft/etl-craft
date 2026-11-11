@@ -9,6 +9,7 @@ from etl_craft.core.enums import AgentCommand, AgentReport, AgentStatus, Attempt
 from etl_craft.core.errors import UsageError
 from etl_craft.core.failures import Failure
 from etl_craft.core.items import ItemRecord
+from etl_craft.core.protection import ProtectionCandidates, ProtectionReport
 from etl_craft.engine.repository.offsets import StoredOffset
 from etl_craft.engine.task_store import RuleEnding, TargetPublication
 from etl_craft.engine.timestamp_windows import WindowDefinition
@@ -28,10 +29,13 @@ class AgentRegister(AgentRequest):
 
     pool: str
     resources: AgentResources
+    instance_id: str | None = None
 
     def __post_init__(self) -> None:
         """Keep pool names bounded and usable in notification routing."""
         require_text("pool", self.pool, limit=128)
+        if self.instance_id is not None:
+            require_text("instance_id", self.instance_id, limit=256)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -58,11 +62,20 @@ class AgentTask(AgentRequest):
     attempt_id: int
     bundle_path: str | None = None
     upload_id: int | None = None
+    wait_code: str | None = None
+    file_path: str | None = None
+    sha256: str | None = None
+    size_bytes: int | None = None
     operation: AgentReport
     item: ItemRecord | None = None
     item_keys: tuple[str, ...] = ()
     target: str | None = None
     publication: TargetPublication | None = None
+    protection: ProtectionReport | None = field(default=None, repr=False, metadata={"audit": False})
+    protection_candidates: ProtectionCandidates | None = field(
+        default=None, repr=False, metadata={"audit": False}
+    )
+    protection_cursor: int = 0
     watermark_from: str | None = None
     watermark_to: str | None = None
     window: WindowDefinition | None = None

@@ -1,0 +1,171 @@
+"""The built browser interface is served under /ui to a signed-in session only.
+
+The session rules (idle end, background refreshes) are the ones the command line follows too.
+"""
+
+import re
+from datetime import UTC, datetime, timedelta
+
+import pytest
+from fastapi.testclient import TestClient
+from sqlalchemy import text
+
+from etl_craft.api import ui_spa
+from etl_craft.api.app import create_app
+from etl_craft.core.actor import Actor, ActorKind
+from etl_craft.core.enums import ActionName, ApiRole
+from etl_craft.services.operations import OperationContext
+from fixtures.actions import act
+
+CSRF = "__Host-etl-craft-csrf"
+PASSWORD = "correct horse battery"
+
+
+@pytest.fixture
+def scene(engine_db):
+    from etl_craft.engine.migrations import mark_packaged_migrations_applied
+
+    with engine_db.engine.begin() as conn:
+        mark_packaged_migrations_applied(conn)
+    ctx = OperationContext(
+        engine_db.engine, engine_db.config, Actor("owner", ActorKind.USER), role=ApiRole.ADMIN
+    )
+    act(ctx, ActionName.ACCOUNT_ADD, name="alice", role=ApiRole.VIEWER, password=PASSWORD)
+    client = TestClient(create_app(ctx), base_url="https://testserver", follow_redirects=False)
+    client.engine = engine_db.engine
+    client.idle_minutes = engine_db.config.auth.session_idle_minutes
+    return client
+
+
+def sign_in(client):
+    page = client.get("/ui/signin")
+    token = re.search(r'name="csrf-token" content="([^"]+)"', page.text).group(1)
+    response = client.post(
+        "/api/v1/login/password",
+        headers={
+            "Accept": "application/json",
+            "X-CSRF-Token": token,
+            "Origin": "https://testserver",
+        },
+        json={"name": "alice", "password": PASSWORD, "_return_to": "/ui"},
+    )
+    assert response.status_code == 200, response.text
+
+
+def test_the_shell_sends_a_visitor_to_sign_in_and_back_to_the_same_page(scene):
+    response = scene.get("/ui/projects/default/runs", params={"status": "FAILED"})
+    assert response.status_code == 303
+    assert response.headers["location"] == (
+        "/ui/signin?return_to=%2Fui%2Fprojects%2Fdefault%2Fruns%3Fstatus%3DFAILED"
+    )
+
+
+def test_the_signed_in_shell_carries_the_session_challenge_and_no_inline_script(scene):
+    sign_in(scene)
+    for path in ("/ui", "/ui/projects/default/runs", "/ui/projects/default/runs/OPS/7"):
+        response = scene.get(path)
+        assert response.status_code == 200, path
+        token = re.search(r'name="csrf-token" content="([^"]+)"', response.text).group(1)
+        assert token == scene.cookies[CSRF] and ui_spa.CSRF_SLOT not in response.text
+        assert "<script>" not in response.text and 'type="module"' in response.text
+        assert "script-src 'self'" in response.headers["content-security-policy"]
+        assert "'unsafe-inline'" not in response.headers["content-security-policy"]
+
+
+def test_the_built_assets_are_served_to_the_shell(scene):
+    sign_in(scene)
+    shell = scene.get("/ui").text
+    asset = re.search(r'(?:src|href)="(/ui/assets/[^"]+\.js)"', shell).group(1)
+    served = scene.get(asset)
+    assert served.status_code == 200 and "javascript" in served.headers["content-type"]
+
+
+def test_a_missing_bundle_fails_with_the_remedy(scene, monkeypatch, tmp_path):
+    sign_in(scene)
+    monkeypatch.setattr(ui_spa, "BUNDLE", tmp_path / "spa")
+    response = scene.get("/ui")
+    assert response.status_code == 404
+    assert "bundle is missing" in response.text and "make ui-build" in response.text
+
+
+def set_last_use(client, when):
+    """Back-date the session; first wait for the touch the last request queued, or it overwrites."""
+    deadline = datetime.now(UTC) + timedelta(seconds=10)
+    while datetime.now(UTC) < deadline:
+        with client.engine.connect() as conn:
+            row = conn.execute(
+                text("SELECT LAST_USED_AT AS used FROM CFG_API_TOKENS WHERE TOKEN_KIND='ACCESS'")
+            ).one()
+        if row.used is not None:
+            break
+    with client.engine.begin() as conn:
+        conn.execute(
+            text("UPDATE CFG_API_TOKENS SET LAST_USED_AT=:when WHERE TOKEN_KIND='ACCESS'"),
+            {"when": when},
+        )
+
+
+def test_a_session_idle_for_too_long_is_refused_and_not_revived_by_the_refusal(scene):
+    sign_in(scene)
+    assert scene.get("/ui").status_code == 200
+    set_last_use(scene, datetime.now(UTC) - timedelta(minutes=scene.idle_minutes + 1))
+    for _ in range(2):  # the refused request must not touch the session
+        response = scene.get("/ui")
+        assert response.status_code == 303
+        assert response.headers["location"].startswith("/ui/signin?return_to=")
+
+
+def test_the_identity_reports_the_idle_deadline_when_it_comes_before_the_session_end(scene):
+    sign_in(scene)
+    last = datetime.now(UTC) - timedelta(minutes=scene.idle_minutes - 30)
+    set_last_use(scene, last)
+    answer = scene.get("/api/v1/whoami", headers={"Accept": "application/json"})
+    ends = datetime.fromisoformat(answer.json()["session_expires_at"])
+    # the request itself may touch the session, which only moves the deadline later
+    assert ends >= last + timedelta(minutes=scene.idle_minutes) - timedelta(seconds=5)
+    assert ends < datetime.now(UTC) + timedelta(minutes=scene.idle_minutes + 1)
+
+
+def test_a_background_refresh_does_not_extend_a_session_but_real_use_does(scene, monkeypatch):
+    from etl_craft.services.operations import tokens
+
+    touched = []
+    monkeypatch.setattr(tokens, "_record_use", lambda ctx, view: touched.append(view.token_id))
+    sign_in(scene)
+    touched.clear()
+    json = {"Accept": "application/json"}
+    assert scene.get("/api/v1/whoami", headers=json | {"X-ETL-Background": "1"}).status_code == 200
+    assert touched == []
+    assert scene.get("/api/v1/whoami", headers=json).status_code == 200
+    assert len(touched) == 1
+
+
+def test_the_command_line_follows_the_same_idle_rule_as_the_browser(scene):
+    login = scene.post(
+        "/api/v1/login/password",
+        headers={"Authorization": "Bearer none"},
+        json={"name": "alice", "password": PASSWORD},
+    )
+    assert login.status_code == 200, login.text
+    access, refresh = login.json()["access_token"], login.json()["refresh_token"]
+    bearer = {"Authorization": "Bearer " + access}
+    assert scene.get("/api/v1/whoami", headers=bearer).status_code == 200
+    set_last_use(scene, datetime.now(UTC) - timedelta(minutes=scene.idle_minutes + 1))
+    assert scene.get("/api/v1/whoami", headers=bearer).status_code == 401
+    renewed = scene.post("/api/v1/login/refresh", json={"token": refresh})
+    assert renewed.status_code == 400
+    assert "without activity; run `etl-craft login` again" in renewed.json()["message"]
+
+
+def test_a_forged_challenge_cookie_never_reaches_the_page(scene):
+    forged = '"><script>alert(1)</script>' + "a" * 20
+    scene.cookies.set(CSRF, forged, domain="testserver.local")
+    page = scene.get("/ui/signin", headers={"cookie": f"{CSRF}={forged}"})
+    shown = re.search(r'name="csrf-token" content="([^"]+)"', page.text).group(1)
+    assert "<script>" not in page.text and forged not in page.text
+    assert re.fullmatch(r"[A-Za-z0-9_-]{43}", shown)  # a fresh token, not the forged text
+
+
+def test_a_well_formed_challenge_cookie_is_kept(scene):
+    page = scene.get("/ui/signin", headers={"cookie": f"{CSRF}={'A' * 43}"})
+    assert re.search(r'name="csrf-token" content="A{43}"', page.text)

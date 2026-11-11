@@ -22,11 +22,14 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
+import tomllib
 from collections.abc import Sequence
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -49,6 +52,10 @@ class SuiteResult:
     def ok(self) -> bool:
         """Report whether the suite's evidence passed every check."""
         return not self.problems
+
+    def refuse(self, file: Path, field: str, found: object, expected: str, remedy: str) -> None:
+        """Record an evidence refusal with the offending field and its remedy."""
+        self.problems.append(f"{file}: {field} found {found!r}; expected {expected}; {remedy}")
 
 
 def git(repo: Path, *args: str) -> subprocess.CompletedProcess[str]:
@@ -263,12 +270,164 @@ def check_wheels(results: list[SuiteResult], wheel: Path | None) -> None:
             result.problems.append("wheel-bound suites tested different wheels")
 
 
+def check_example(version: str, repo: Path, wheel: Path | None) -> SuiteResult:
+    """Require complete demo evidence bound to the pinned commit and release wheel."""
+    result = SuiteResult("example-support-insights")
+    pin = repo / "release/example.toml"
+    path = evidence_dir(version, repo) / "example-support-insights.json"
+
+    documents = []
+    for file, parse in ((pin, tomllib.loads), (path, json.loads)):
+        try:
+            documents.append(parse(file.read_text(encoding="utf-8")))
+        except (OSError, ValueError) as error:
+            result.refuse(
+                file,
+                "document",
+                str(error),
+                "a readable manifest document",
+                "restore the pin or copy complete candidate evidence",
+            )
+            return result
+    config, manifest = documents
+    if not isinstance(manifest, dict):
+        result.refuse(
+            path, "document", manifest, "a JSON object", "copy a complete candidate manifest"
+        )
+        return result
+    commit = config.get("commit")
+    if not isinstance(commit, str) or re.fullmatch(r"[0-9a-f]{40}", commit) is None:
+        result.refuse(
+            pin, "commit", commit, "a lowercase 40-hex commit", "pin the tested demo commit"
+        )
+    if manifest.get("demo_commit") != commit:
+        result.refuse(
+            path,
+            "demo_commit",
+            manifest.get("demo_commit"),
+            str(commit),
+            "rerun the demo at the pinned commit",
+        )
+    if wheel is None or not wheel.is_file():
+        result.refuse(
+            path,
+            "wheel_sha256",
+            manifest.get("wheel_sha256"),
+            "the release wheel's SHA-256",
+            "pass the candidate file with --wheel",
+        )
+    else:
+        expected_hash = sha256_of(wheel)
+        if manifest.get("wheel_sha256") != expected_hash:
+            result.refuse(
+                path,
+                "wheel_sha256",
+                manifest.get("wheel_sha256"),
+                expected_hash,
+                "rerun the demo against the release wheel",
+            )
+        wheel_time = datetime.fromtimestamp(wheel.stat().st_mtime, UTC)
+        try:
+            start = datetime.fromisoformat(manifest["started_at"])
+            end = datetime.fromisoformat(manifest["ended_at"])
+            valid = start.utcoffset() == end.utcoffset() == UTC.utcoffset(
+                None
+            ) and wheel_time <= start <= end <= datetime.now(UTC)
+        except (KeyError, TypeError, ValueError):
+            valid = False
+        if not valid:
+            result.refuse(
+                path,
+                "started_at/ended_at",
+                [manifest.get("started_at"), manifest.get("ended_at")],
+                f"UTC times with {wheel_time.isoformat()} <= start <= end <= now",
+                "preserve the wheel build mtime and rerun the demo after building it",
+            )
+    check_example_inventory(config, manifest, (pin, path), result)
+    return result
+
+
+def check_example_inventory(
+    config: dict[str, Any], manifest: dict[str, Any], paths: tuple[Path, Path], result: SuiteResult
+) -> None:
+    """Check the exact inventory and the measurements and links of each result."""
+    pin, path = paths
+    for group in ("checks", "scenarios"):
+        expected = node_ids(config.get(group))
+        if expected is None:
+            result.refuse(
+                pin,
+                group,
+                config.get(group),
+                "nonempty unique ids",
+                "add the S8.F/S8.H ids alongside their producing checks before releasing",
+            )
+            continue
+        entries = manifest.get(group)
+        if not isinstance(entries, list) or any(not isinstance(entry, dict) for entry in entries):
+            result.refuse(
+                path, group, entries, "a list of result objects", "copy complete demo evidence"
+            )
+            continue
+        actual = node_ids([entry.get("id") for entry in entries])
+        if actual != expected:
+            result.refuse(
+                path,
+                group,
+                [entry.get("id") for entry in entries],
+                f"exactly {sorted(expected)!r} without duplicates",
+                "rerun the complete inventory",
+            )
+        for entry in entries:
+            field = f"{group}[{entry.get('id')!r}]"
+            counts = entry.get("counts")
+            links = entry.get("evidence")
+            if entry.get("outcome") != "passed":
+                result.refuse(
+                    path,
+                    field + ".outcome",
+                    entry.get("outcome"),
+                    "'passed'",
+                    "fix the check and rerun the demo",
+                )
+            if (
+                not isinstance(counts, dict)
+                or not counts
+                or any(
+                    not key or type(value) is not int or value < 0 for key, value in counts.items()
+                )
+            ):
+                result.refuse(
+                    path,
+                    field + ".counts",
+                    counts,
+                    "nonempty named nonnegative integer counts",
+                    "record the check's measured counts",
+                )
+            if (
+                not isinstance(links, list)
+                or not links
+                or any(
+                    not isinstance(link, str) or re.fullmatch(r"https://[^\s/]+/\S+", link) is None
+                    for link in links
+                )
+            ):
+                result.refuse(
+                    path,
+                    field + ".evidence",
+                    links,
+                    "nonempty HTTPS evidence links",
+                    "upload evidence and record its links",
+                )
+
+
 def check(
     version: str, repo: Path, suites: dict[str, Suite], wheel: Path | None = None
 ) -> list[SuiteResult]:
     """Check every suite's evidence for ``version`` and return one result per suite."""
     directory = evidence_dir(version, repo)
     results = [check_suite(suite, version, directory, repo) for suite in suites.values()]
+    results.append(check_example(version, repo, wheel))
     status = git(
         repo,
         "status",

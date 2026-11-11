@@ -1,9 +1,9 @@
 # Contributing
 
 The contribution workflow is in
-[CONTRIBUTING.md](https://github.com/venkatcg00/etl-craft/blob/main/CONTRIBUTING.md), and the
+[CONTRIBUTING.md](https://github.com/etl-craft/etl-craft/blob/main/CONTRIBUTING.md), and the
 rules every change follows (design rules, architecture, standards and the definition of done)
-are in [AGENTS.md](https://github.com/venkatcg00/etl-craft/blob/main/AGENTS.md).
+are in [AGENTS.md](https://github.com/etl-craft/etl-craft/blob/main/AGENTS.md).
 [Road to 1.0.0](development/road-to-1.0.0.md) is the build plan from 0.1.0 to 1.0.0: every
 release, work item, test and defect. The [rewrite plan](development/rewrite-plan.md) records how
 0.1.0 was built.

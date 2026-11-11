@@ -99,3 +99,6 @@ class RuleObservation:
             f"{self.task_code}: rule {self.business_rule_name} PASSED={self.passed!r} "
             f"OBSERVED={self.observed!r} DETAIL={self.detail!r}"
         )
+
+    run_label: str = ""
+    task_run_label: str = ""

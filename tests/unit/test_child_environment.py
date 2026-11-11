@@ -40,3 +40,23 @@ def test_children_never_receive_agent_token(monkeypatch):
     )
     for name in ("WAREHOUSE_SECRET", "PATH", "HOME", "LC_ALL"):
         assert environment[name] == "test-value"
+
+
+def test_privacy_secret_stays_on_the_host_not_in_agent_children(monkeypatch):
+    from dataclasses import replace
+
+    from etl_craft.config import ConnectionProfile
+    from fixtures.engine_db import engine_config
+
+    config = replace(
+        engine_config(ConnectionProfile("ENGINE", "dev", "jdbc:sqlite:engine.db", "", "NONE")),
+        privacy_hmac_secret="PROJECT_PRIVACY",
+    )
+    monkeypatch.setenv("PROJECT_PRIVACY", "host-only-secret")
+    assert child_environment(config, host=True)["PROJECT_PRIVACY"] == "host-only-secret"
+    assert "PROJECT_PRIVACY" not in child_environment(config)
+    config = replace(
+        config,
+        settings=(SettingSource("Warehouse.dev.Secret", "PROJECT_PRIVACY", "PROJECT_PRIVACY"),),
+    )
+    assert "PROJECT_PRIVACY" not in child_environment(config)

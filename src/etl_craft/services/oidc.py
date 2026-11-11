@@ -1,4 +1,4 @@
-"""OIDC device authorization using the issuer's authenticated TLS token endpoint."""
+"""Shared OIDC discovery and claims, and device authorization over authenticated TLS."""
 
 import base64
 import json
@@ -27,7 +27,8 @@ class _NoRedirects(HTTPRedirectHandler):
         return None
 
 
-def _endpoint(value: object) -> str:
+def https_endpoint(value: object) -> str:
+    """Require a credential-free HTTPS endpoint before contacting the provider."""
     if isinstance(value, str):
         try:
             parsed = urlsplit(value)
@@ -49,8 +50,11 @@ def _endpoint(value: object) -> str:
     )
 
 
-def _request(url: str, data: dict[str, str] | None = None) -> dict[str, object]:
-    url = _endpoint(url)
+def request_json(
+    url: str, data: dict[str, str] | None = None, *, error_statuses: tuple[int, ...] = (400,)
+) -> dict[str, object]:
+    """Read bounded provider JSON over authenticated TLS without following redirects."""
+    url = https_endpoint(url)
     location = url.partition("?")[0]
     request = Request(
         url,
@@ -61,7 +65,9 @@ def _request(url: str, data: dict[str, str] | None = None) -> dict[str, object]:
         try:
             response = build_opener(_NoRedirects()).open(request, timeout=15)
         except HTTPError as error:
-            if data is None or error.code != 400:
+            # RFC 8628 answers a pending or slowed poll with 400; Dex uses 401. The caller names
+            # which statuses carry an OAuth error in the body.
+            if data is None or error.code not in error_statuses:
                 raise ConfigurationError(
                     f"OIDC endpoint {location}: HTTP {error.code}; check provider configuration"
                 ) from error
@@ -112,7 +118,8 @@ class DeviceGrant:
     expires_in: int
 
 
-def _client(auth: AuthConfig) -> tuple[str, str, dict[str, object]]:
+def client_metadata(auth: AuthConfig) -> tuple[str, str, dict[str, object]]:
+    """Return the configured issuer, client and shared discovery document."""
     if not auth.oidc_issuer or not auth.oidc_client_id:
         raise ConfigurationError(
             "SSO requires Auth.Oidc_issuer and Auth.Oidc_client_id; configure both"
@@ -126,13 +133,13 @@ def _discovery(issuer: str) -> dict[str, object]:
         cached = _DISCOVERY.get(issuer)
         if cached is not None and time.monotonic() < cached[0]:
             return cached[1]
-    metadata = _request(issuer.rstrip("/") + "/.well-known/openid-configuration")
+    metadata = request_json(issuer.rstrip("/") + "/.well-known/openid-configuration")
     if metadata.get("issuer") != issuer:
         raise ConfigurationError(
             "OIDC discovery issuer differs from Auth.Oidc_issuer; correct the setting"
         )
     for key in ("token_endpoint", "device_authorization_endpoint"):
-        _endpoint(_text(metadata, key))
+        https_endpoint(_text(metadata, key))
     with _DISCOVERY_LOCK:
         _DISCOVERY[issuer] = (time.monotonic() + DISCOVERY_SECONDS, metadata)
     return metadata
@@ -140,15 +147,15 @@ def _discovery(issuer: str) -> dict[str, object]:
 
 def start_device(auth: AuthConfig) -> DeviceGrant:
     """Ask the issuer for a user code with a public registered client."""
-    _, client, metadata = _client(auth)
+    _, client, metadata = client_metadata(auth)
     nonce = secrets.token_urlsafe(32)
-    device = _request(
+    device = request_json(
         _text(metadata, "device_authorization_endpoint"),
-        {"client_id": client, "scope": "openid", "nonce": nonce},
+        {"client_id": client, "scope": "openid email profile", "nonce": nonce},
     )
     return DeviceGrant(
         user_code=_text(device, "user_code"),
-        verification_uri=_endpoint(_text(device, "verification_uri")),
+        verification_uri=https_endpoint(_text(device, "verification_uri")),
         device_code=_text(device, "device_code"),
         nonce=nonce,
         interval=_seconds(device, "interval", 5),
@@ -158,22 +165,28 @@ def start_device(auth: AuthConfig) -> DeviceGrant:
 
 @dataclass(frozen=True)
 class IdentityClaims:
-    """The subject and group names from the validated issuer response."""
+    """The subject, profile and group names from the validated issuer response."""
 
     subject: str
     groups: tuple[str, ...] = ()
+    email: str | None = None
+    email_verified: bool = False
+    first_name: str | None = None
+    last_name: str | None = None
 
 
 def poll_device(auth: AuthConfig, device_code: str, nonce: str) -> IdentityClaims | int:
     """Poll once: the validated subject, or the seconds to wait before polling again."""
-    issuer, client, metadata = _client(auth)
-    response = _request(
+    issuer, client, metadata = client_metadata(auth)
+    response = request_json(
         _text(metadata, "token_endpoint"),
         {
             "client_id": client,
             "device_code": device_code,
             "grant_type": "urn:ietf:params:oauth:grant-type:device_code",
         },
+        # Only a poll can be pending; any other 401 stays the plain HTTP failure.
+        error_statuses=(400, 401),
     )
     error = response.get("error")
     if error == "authorization_pending":
@@ -182,17 +195,47 @@ def poll_device(auth: AuthConfig, device_code: str, nonce: str) -> IdentityClaim
         return 5
     if error is not None:
         raise ConfigurationError("OIDC sign-in refused or expired; run `etl-craft login` again")
-    claims = _claims(_text(response, "id_token"), issuer, client, nonce)
+    claims = token_claims(_text(response, "id_token"), issuer, client, nonce)
+    return identity_claims(auth, claims)
+
+
+def identity_claims(auth: AuthConfig, claims: dict[str, object]) -> IdentityClaims:
+    """Map verified claims identically for browser and device sign-ins."""
     groups = claims.get(auth.oidc_groups_claim) if auth.oidc_groups_claim else []
     if not isinstance(groups, list) or any(not isinstance(g, str) or not g.strip() for g in groups):
         raise ConfigurationError(
             f"OIDC claim {auth.oidc_groups_claim!r}={groups!r}; expected a list of group names; "
             "correct the provider claim mapping"
         )
-    return IdentityClaims(_text(claims, "sub"), tuple(groups))
+    first, last = _person(claims)
+    email = claims.get("email")
+    return IdentityClaims(
+        _text(claims, "sub"),
+        tuple(groups),
+        email.strip() if isinstance(email, str) and email.strip() else None,
+        claims.get("email_verified") is True,
+        first,
+        last,
+    )
 
 
-def _claims(token: str, issuer: str, client: str, nonce: str) -> dict[str, object]:
+def _person(claims: dict[str, object]) -> tuple[str | None, str | None]:
+    """Return the given and family names, or the full name split at its last space."""
+
+    def clean(key: str) -> str | None:
+        value = claims.get(key)
+        return value.strip()[:128] if isinstance(value, str) and value.strip() else None
+
+    first, last = clean("given_name"), clean("family_name")
+    full = clean("name")
+    if first is None and last is None and full is not None:
+        head, _, tail = full.rpartition(" ")
+        return (head, tail) if head else (full, None)
+    return first, last
+
+
+def token_claims(token: str, issuer: str, client: str, nonce: str) -> dict[str, object]:
+    """Validate claims from an ID token obtained at the authenticated token endpoint."""
     # OIDC Core 3.1.3.7 permits TLS instead of signature verification only for ID tokens
     # obtained by our own direct token-endpoint call; never accept client-supplied ID tokens.
     try:
@@ -209,9 +252,14 @@ def _claims(token: str, issuer: str, client: str, nonce: str) -> dict[str, objec
         raise ConfigurationError(
             "OIDC ID token: expected a signed RS256 token; check client registration"
         )
-    for key, expected in (("iss", issuer), ("nonce", nonce), ("azp", client)):
+    for key, expected in (("iss", issuer), ("azp", client)):
         found = claims.get(key, client if key == "azp" else None)
         _check_claim(key, found, expected)
+    # The device flow (RFC 8628) has no nonce parameter, so an issuer such as Dex may leave the
+    # claim out; the token still came straight from the token endpoint for this device code. A
+    # nonce that is present must be ours.
+    if "nonce" in claims:
+        _check_claim("nonce", claims["nonce"], nonce)
     if claims.get("aud") not in (client, [client]):
         _check_claim("aud", claims.get("aud"), client)
     now = time.time()

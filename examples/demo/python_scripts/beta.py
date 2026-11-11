@@ -12,21 +12,20 @@ from sqlalchemy import text
 from etl_craft.scripting import Offset, ScriptResult, ScriptTask
 
 START = datetime(2026, 9, 1, 8, 0)
-AREAS = ("billing", "technical", "account")
 
 
 def run(task: ScriptTask) -> ScriptResult:
     """Land the events after the stored event time."""
     last = task.offset.value if task.offset else START - timedelta(hours=1)
     assert isinstance(last, datetime)
-    count = int(task.input_params.get("rows", 8))
+    count = int(task.input_params.get("rows", 1))
     table = task.table("lnd.client_beta")
     first = int((last - START) / timedelta(hours=1)) + 1
     events = [
         {
             "support_identifier": 5000 + n,
             "agent": f"A0{n % 4 + 1}",
-            "regarding": AREAS[n % 3],
+            "regarding": "billing",
             "event_time": START + timedelta(hours=n),
             "status": "closed" if n % 5 else "open",
             "handle_time": 45 * n % 700 + 60,

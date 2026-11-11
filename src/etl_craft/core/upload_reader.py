@@ -7,7 +7,7 @@ import csv
 import importlib
 import struct
 import zipfile
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from types import ModuleType
@@ -15,7 +15,7 @@ from xml.parsers import expat
 
 from etl_craft.core.enums_uploads import UploadFormat
 from etl_craft.core.errors import HandlerError
-from etl_craft.core.uploads import UploadFile
+from etl_craft.core.uploads import CheckedFile
 
 MAX_ENTRIES = 10000
 MAX_EXPANDED_BYTES = 200 * 1024 * 1024
@@ -25,13 +25,28 @@ MAX_EXPANDED_BYTES = 200 * 1024 * 1024
 class UploadReader:
     """Open a checked file incrementally using the pipeline's declared format."""
 
-    upload: UploadFile
+    upload: CheckedFile
     file_format: UploadFormat
     encoding: str = "utf-8"
     sheet_name: str = ""
 
-    def rows(self) -> Iterator[tuple[object, ...]]:
-        """Yield text fields or saved workbook values without loading a whole file."""
+    def rows(
+        self, schema: Mapping[str, type[object]] | None = None
+    ) -> Iterator[tuple[object, ...]]:
+        """Yield the header and rows, optionally checking ``schema={"LOCKED": bool}``.
+
+        CSV booleans are trimmed, case-insensitive true/false; empty means None.
+        XLSX requires native boolean cells or empty cells. Missing schema columns are
+        optional. Other values fail with the upload, row, column and remedy. Only bool
+        schemas are supported; without a schema, values retain their original types.
+        """
+        if schema is not None:
+            yield from self._typed_rows(schema)
+            return
+        yield from self._raw_rows()
+
+    def _raw_rows(self) -> Iterator[tuple[object, ...]]:
+        """Keep text fields and workbook values unchanged without an explicit schema."""
         if self.file_format == UploadFormat.XLSX:
             yield from self._workbook()
         else:
@@ -42,10 +57,51 @@ class UploadReader:
                         yield tuple(row)
             except (UnicodeError, LookupError, csv.Error) as error:
                 raise HandlerError(
-                    f"upload {self.upload.upload_id} {self.upload.file_name!r}: invalid "
+                    f"{self.upload.label}: invalid "
                     f"{self.encoding} pipe-delimited text ({error}); expected RFC 4180 "
                     "quoting with | separators; upload a corrected file"
                 ) from error
+
+    def _typed_rows(self, schema: Mapping[str, type[object]]) -> Iterator[tuple[object, ...]]:
+        if any(kind is not bool for kind in schema.values()):
+            raise HandlerError(
+                f"{self.upload.ref}: schema={schema!r}; expected bool fields only; "
+                "declare boolean columns with bool and validate other types in the script"
+            )
+        rows = self._raw_rows()
+        header = next(rows, None)
+        if header is None:
+            return
+        positions = {i: str(name) for i, name in enumerate(header) if name in schema}
+        yield header
+        for number, row in enumerate(rows, 2):
+            values = list(row)
+            for index, column in positions.items():
+                if self.file_format == UploadFormat.XLSX and index >= len(values):
+                    values.extend([None] * (index + 1 - len(values)))
+                if index < len(values):
+                    values[index] = self._boolean(values[index], number, column)
+            yield tuple(values)
+
+    def _boolean(self, value: object, number: int, column: str) -> bool | None:
+        if value is None or isinstance(value, bool):
+            return value
+        if self.file_format != UploadFormat.XLSX and isinstance(value, str):
+            text = value.strip().lower()
+            if text == "":
+                return None
+            if text in {"true", "false"}:
+                return text == "true"
+        allowed = (
+            "boolean cells or empty (NULL)"
+            if self.file_format == UploadFormat.XLSX
+            else "true, false (case-insensitive), or empty (NULL)"
+        )
+        raise HandlerError(
+            f"{self.upload.label}, row {number}, "
+            f"column {column}: value={value!r}; expected {allowed}; "
+            "correct the boolean value and upload a corrected file"
+        )
 
     def _workbook(self) -> Iterator[tuple[object, ...]]:
         excel = _excel(self.upload)
@@ -54,7 +110,7 @@ class UploadReader:
         try:
             if self.sheet_name and self.sheet_name not in workbook.sheetnames:
                 raise HandlerError(
-                    f"upload {self.upload.upload_id}: sheet={self.sheet_name!r}; expected "
+                    f"{self.upload.ref}: sheet={self.sheet_name!r}; expected "
                     f"one of {workbook.sheetnames}; choose SHEET_NAME or upload a corrected file"
                 )
             sheet = workbook[self.sheet_name] if self.sheet_name else workbook.worksheets[0]
@@ -65,7 +121,7 @@ class UploadReader:
                 for cell, expression in zip(row, expressions, strict=True):
                     if expression.data_type == "f" and cell.value is None:
                         raise HandlerError(
-                            f"upload {self.upload.upload_id}, sheet {sheet.title!r}, "
+                            f"{self.upload.ref}, sheet {sheet.title!r}, "
                             f"cell {expression.coordinate}: formula has no saved value; "
                             "expected a cached result; recalculate, save and upload "
                             "a corrected file"
@@ -77,12 +133,12 @@ class UploadReader:
 
 
 def check_file(
-    upload: UploadFile, file_format: str, limit_bytes: int, encoding: str = "utf-8"
+    upload: CheckedFile, file_format: str, limit_bytes: int, encoding: str = "utf-8"
 ) -> None:
     """Check declared size, extension and contents before any team script executes."""
     expected = "." + file_format.lower()
     suffix = Path(upload.file_name).suffix.lower()
-    where = f"upload {upload.upload_id} {upload.file_name!r}"
+    where = upload.label
     if upload.size_bytes > limit_bytes:
         raise HandlerError(
             f"{where}: size={upload.size_bytes} bytes; expected at most {limit_bytes}; "
@@ -114,9 +170,9 @@ def check_file(
         )
 
 
-def check_workbook(upload: UploadFile) -> None:
+def check_workbook(upload: CheckedFile) -> None:
     """Bound ZIP expansion and reject macros and unsaved formulas before openpyxl."""
-    where = f"upload {upload.upload_id} {upload.file_name!r}"
+    where = upload.label
     try:
         _zip_limits(upload)
         with zipfile.ZipFile(upload.path) as archive:
@@ -170,23 +226,23 @@ def _safe_xml(archive: zipfile.ZipFile, name: str, where: str) -> None:
         parser.Parse(b"", True)
 
 
-def _excel(upload: UploadFile) -> ModuleType:
+def _excel(upload: CheckedFile) -> ModuleType:
     """Check the optional reader before the team script runs."""
     try:
         return importlib.import_module("openpyxl")
     except ImportError as error:
         raise HandlerError(
-            f"upload {upload.upload_id}: XLSX reader is unavailable; expected the excel "
+            f"{upload.ref}: XLSX reader is unavailable; expected the excel "
             "extra; install it with pip install etl-craft[excel]"
         ) from error
 
 
-def _zip_limits(upload: UploadFile) -> None:
+def _zip_limits(upload: CheckedFile) -> None:
     """Count central-directory records without allocating a ZipInfo for every hostile entry."""
     with upload.path.open("rb") as stream:
         if stream.read(4) != b"PK\x03\x04":
             raise HandlerError(
-                f"upload {upload.upload_id}: contents are not XLSX ZIP data; expected "
+                f"{upload.ref}: contents are not XLSX ZIP data; expected "
                 "a macro-free workbook; upload a corrected file"
             )
         stream.seek(0, 2)
@@ -201,7 +257,7 @@ def _zip_limits(upload: UploadFile) -> None:
         )
         if disk or start_disk or on_disk != total or total > MAX_ENTRIES:
             raise HandlerError(
-                f"upload {upload.upload_id}: ZIP entries={total}, disk={disk}; expected "
+                f"{upload.ref}: ZIP entries={total}, disk={disk}; expected "
                 f"one disk and at most {MAX_ENTRIES} entries; upload a smaller corrected workbook"
             )
         end_position = size - len(tail) + end
@@ -218,7 +274,7 @@ def _zip_limits(upload: UploadFile) -> None:
             expanded += struct.unpack_from("<I", header, 24)[0]
             if count > MAX_ENTRIES or expanded > MAX_EXPANDED_BYTES:
                 raise HandlerError(
-                    f"upload {upload.upload_id}: ZIP entries={count}, expanded bytes={expanded}; "
+                    f"{upload.ref}: ZIP entries={count}, expanded bytes={expanded}; "
                     f"expected at most {MAX_ENTRIES} entries and {MAX_EXPANDED_BYTES} bytes; "
                     "upload a smaller corrected workbook"
                 )

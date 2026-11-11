@@ -49,6 +49,8 @@ class SearchHit:
     run_id: int | None = None
     catalog_path: str | None = None
 
+    run_label: str = ""
+
 
 @dataclass(frozen=True)
 class SearchView:

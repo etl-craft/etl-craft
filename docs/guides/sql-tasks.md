@@ -80,6 +80,31 @@ is literal text and does not require a substitution switch. Tokens inside dollar
 strings are also preserved; tagged delimiters such as `$literal$...$literal$` distinguish
 literal bodies from adjacent bare substitution tokens.
 
+## Recorded business-rule flags
+
+In a managed SELECT, use `$$rule_flags(rules_task, REJECT)` as a text-key subquery:
+
+```sql
+SELECT source_system_identifier, customer_id
+FROM pre_ods.customer_support_stage
+WHERE CAST(ROW_ID AS VARCHAR) NOT IN ($$rule_flags(check_rows, REJECT))
+```
+
+Name explicit unique row-rule types: `REJECT`, `INCOMPLETE`, `REPORT`. There is no default.
+The SQL task needs a direct same-pipeline SUCCESS dependency on that BUSINESS_RULES task.
+The selected ROW rules must share one active target table/key column. Validation and refresh
+refuse missing/incorrect edges and ambiguous contracts; execution also verifies the upstream
+is SUCCESS in this exact run. `ANY` does not bypass that requirement.
+
+Only active `AUD_BUSINESS_RULES_RESULTS` flags published by that task in the current pipeline
+run and matching the admitted target are included. Another run's flags are never used.
+The subquery returns typed text keys (cast the compared column to the warehouse's text type,
+`STRING` on Databricks). An empty set stays typed and excludes no rows. More than 10,000 distinct
+keys fails before a target write; split the source batch into smaller runs. No keys are truncated.
+Attempt statement logs record the named task, selected types and expanded key count. The
+ordinary task dependency appears in catalog and lineage. Cloned audit tables remain suitable
+for reporting; they are not used to gate this run's writes.
+
 ## SQL watermarks
 
 ### Scalar lower bounds
@@ -285,7 +310,7 @@ SCD1 and SCD2 must not share a target, even though their audit column sets match
 
 ### Human corrections
 
-Native PostgreSQL and DuckDB SCD targets can retain authorized human corrections across ETL
+SCD targets on every supported warehouse and format can retain authorized human corrections across ETL
 refreshes, with row/value locks and independent column provenance. See
 [Protecting human SCD edits](human-overrides.md) for the admin service/API, effective hashes,
 delete behavior and the atomicity/outside-writer contract. Ordinary non-SCD tables gain no locks.
@@ -313,12 +338,15 @@ etl-craft rehash --target sales.customers
 ```
 
 The command reads the active merge tasks for that qualified target; they must declare one
-common ordered `MERGE_COMPARE_COLUMNS` list. Dry-run validates the types and prints the UPDATE
-and row count without changing hashes or their version. Rehash updates every row in one warehouse
-statement, including inactive SCD2 history, and changes only `HASH_KEY`. It then records version 2
-in `AUD_TARGET_HASH_VERSION`. Target locks coordinate SQL writes and rehashing. The warehouse
-and Engine DB commit separately: if publication fails after the warehouse update, rerun rehash;
-merges stay refused until the version is recorded. Dropping or replacing a target clears its
+common ordered `MERGE_COMPARE_COLUMNS` list. Dry-run validates the types and prints the
+planned mutation and row count without changing hashes or their version. Rehash uses one
+target MERGE (a transactional UPDATE on PostgreSQL before 15), including inactive SCD2 history.
+It changes `HASH_KEY` and the engine-managed protection fingerprint/request stamp, preserving
+business values, ordinary audit columns and existing per-cell locks and writers. Hash-only
+PENDING intent precedes the warehouse commit; COMMITTED and version 2 in
+`AUD_TARGET_HASH_VERSION` are recorded together afterwards. If the process dies between
+commits, recovery reads the request stamp and publishes the version before another mutation.
+Target locks coordinate SQL writes and rehashing. Dropping or replacing a target clears its
 recorded hash version.
 
 ### Correcting an existing repeated compare column
@@ -344,13 +372,21 @@ is needed, and existing valid contracts require no rehash.
 
 ### Joined merge updates
 
-SCD1 updates read values directly from the deduplicated stage in one joined write. PostgreSQL,
-DuckDB and Snowflake use `UPDATE ... FROM`; Databricks and Trino use a matched `MERGE` update.
-SCD2 closes active versions by joining to the changed-key stage, then inserts their new versions.
+SCD1 updates and inserts use one target `MERGE`. SCD2 closes changed active versions and
+inserts their successors in one target `MERGE`, including on Iceberg and Delta, so a failed
+statement cannot publish only the closed versions. PostgreSQL before version 15 uses separate
+statements in one transaction instead. Staging, rejects and the later Engine DB outcome commit
+are separate from this target-statement guarantee; existing protection support is unchanged.
 Every merge-key column participates in the join. `PRESERVE_TARGET` still keeps target values
 where SCD1 source values are NULL and hashes the values actually stored; unchanged rows keep
 their audit fields. PostgreSQL indexes the stage's merge keys and runs `ANALYZE` before joined
 updates so the planner has current stage statistics.
+
+`DUPLICATE_COUNT` counts source rows removed by `MERGE_DEDUPE_ORDER` after load
+rejects. A measured batch with no removals reports zero. A merge without an order,
+and actions without merge dedupe, leave the count unknown. Unchanged target rows and
+older SCD2 versions do not contribute. Stewardship merges count within each file and sum
+those counts for the attempt. A later file winning the same key does not add a duplicate.
 
 ### Rows set aside
 

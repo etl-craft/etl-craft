@@ -66,6 +66,9 @@ def test_direct_and_tag_grants_filter_lists_and_elevate_only_members(scene, tag)
     assert {p.pipeline_code for p in act(reader, ActionName.PIPELINES).pipelines} == {"OPEN"}
     with pytest.raises(ResourceNotFoundError, match=r"PRIVATE.*missing or not permitted"):
         act(reader, ActionName.RUN_DETAIL, run_id=run_id)
+    for action in (ActionName.STATUS, ActionName.HISTORY):
+        with pytest.raises(ResourceNotFoundError):
+            act(reader, action, run_id=run_id)
     assert act(reader, ActionName.HISTORY, all=True).entries == ()
     assert act(reader, ActionName.STATUS).runs == ()
     api = TestClient(create_app(ctx))
@@ -77,6 +80,8 @@ def test_direct_and_tag_grants_filter_lists_and_elevate_only_members(scene, tag)
     ] == ["OPEN"]
     act(ctx, ActionName.GROUP_ADD_MEMBER, name="sales", account="reader")
     assert act(reader, ActionName.RUN_DETAIL, run_id=run_id).pipeline_run_id == run_id
+    assert act(reader, ActionName.STATUS, run_id=run_id).run.pipeline_run_id == run_id
+    assert act(reader, ActionName.HISTORY, run_id=run_id).entries[0].pipeline_run_id == run_id
     assert api.get(f"/api/v1/projects/default/runs/{run_id}", headers=headers).status_code == 200
     # A viewer can operate their own restricted pipeline, not deployment-wide controls.
     act(reader, ActionName.CONTROL, pipeline_code="PRIVATE", action="PAUSE", reason="test")
@@ -244,7 +249,9 @@ def test_run_admission_persists_sso_ids_after_session_revocation(metadata_projec
         )
     session = sessions.sign_in_subject(ctx, IdentityClaims("subject", ("sales",)))
     caller = authenticated_context(ctx, session.metadata)
-    result = act(caller, ActionName.RUN, pipeline_code=code, init_only=True)
+    result = act(
+        caller, ActionName.RUN, pipeline_code=code, init_only=True, reason="test requested run"
+    )
     act(ctx, ActionName.LOGOUT, token=session.access_token)
     with ctx.engine.connect() as conn:
         ids = conn.execute(
@@ -349,3 +356,15 @@ def test_lineage_paths_hide_restricted_task_labels_and_transformations(scene, mo
     document = json.dumps(to_json(result))
     assert "PRIVATE.secret" not in document and "private transformation" not in document
     assert "PRIVATE" in document and "OPEN.down" in document
+
+
+def test_run_label_refusal_does_not_disclose_hidden_pipeline_labels(scene):
+    ctx, reader, _, _, _, _, run_id, _ = scene
+    grant(ctx)
+    label = act(ctx, ActionName.RUN_DETAIL, run_id=run_id).run_label
+    for value in (label, "WRONG-" + label, label.lower()):
+        with pytest.raises(ResourceNotFoundError) as error:
+            act(reader, ActionName.RUN_DETAIL, run_id=value)
+        assert "expected 'PRIVATE-" not in str(error.value)
+    act(ctx, ActionName.GROUP_ADD_MEMBER, name="sales", account="reader")
+    assert act(reader, ActionName.RUN_DETAIL, run_id=label).pipeline_run_id == run_id

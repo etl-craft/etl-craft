@@ -1,0 +1,30 @@
+{
+  "demo_commit": "1234567890123456789012345678901234567890",
+  "wheel_sha256": "4621cb6e5453e192dd3fb7c1c105edb194f736175179db4b13734cd727246ada",
+  "started_at": "2026-01-02T00:00:00Z",
+  "ended_at": "2026-01-02T01:00:00Z",
+  "checks": [
+    {
+      "id": "fixture-check",
+      "outcome": "passed",
+      "counts": {
+        "rows": 3
+      },
+      "evidence": [
+        "https://example.com/check/log"
+      ]
+    }
+  ],
+  "scenarios": [
+    {
+      "id": "fixture-scenario",
+      "outcome": "passed",
+      "counts": {
+        "rows": 2
+      },
+      "evidence": [
+        "https://example.com/scenario/log"
+      ]
+    }
+  ]
+}

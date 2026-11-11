@@ -13,6 +13,7 @@ from sqlalchemy import inspect, text
 from sqlalchemy.exc import DBAPIError
 
 from etl_craft.core.actor import Actor, ActorKind, acting_as
+from etl_craft.core.counts import Counts
 from etl_craft.core.enums import (
     AccountKind,
     AgentCommand,
@@ -80,15 +81,19 @@ def test_attribution_and_immutable_command_requests(engine_db):
         register_engine(engine)
     with engine.connect() as conn:
         row = conn.execute(
-            text("SELECT ACTOR, ACTOR_KIND, OUTCOME, ARGUMENTS FROM AUD_ACTIONS")
-        ).one()
-        assert tuple(row)[:3] == ("alice", "USER", "REQUESTED")
-        assert "sensitive" not in str(row[3])
+            text(
+                "SELECT ACTOR AS actor, ACTOR_KIND AS kind, OUTCOME AS outcome, "
+                "ARGUMENTS AS arguments FROM AUD_ACTIONS ORDER BY ACTION_ID"
+            )
+        ).all()
+        assert all(item.actor == "alice" and item.kind == "USER" for item in row)
+        assert [item.outcome for item in row] == ["REQUESTED", "SUCCESS"]
+        assert "sensitive" not in str(row)
     for sql in ("UPDATE AUD_ACTIONS SET OUTCOME='SUCCESS'", "DELETE FROM AUD_ACTIONS"):
         with pytest.raises(DBAPIError, match=r"immutable|append-only"), engine.begin() as conn:
             conn.execute(text(sql))
     with engine.connect() as conn:
-        assert conn.execute(text("SELECT COUNT(*) FROM AUD_ACTIONS")).scalar_one() == 1
+        assert conn.execute(text("SELECT COUNT(*) FROM AUD_ACTIONS")).scalar_one() == 2
 
 
 def test_project_changes_record_before_after_actor_and_migration(engine_db, tmp_path):
@@ -175,12 +180,19 @@ def seeded_tables(db):
             lease_expires_at=datetime.now(UTC) + timedelta(seconds=60),
         )
         transitions.finish_attempt(
-            conn, attempt, AttemptStatus.SUCCESS, ALICE, owner="audit-fixture"
+            conn,
+            attempt,
+            AttemptStatus.SUCCESS,
+            ALICE,
+            owner="audit-fixture",
+            counts=Counts(duplicate_count=0),
         )
         values = {
+            "upload_id": 1,
             "bundle_id": "a" * 64,
             "manifest": "{}",
             "attempt_id": attempt,
+            "duplicate_count": 0,
             "kind": ControlAcknowledgement.PROCESS,
             "request_key": "audit-guard-fixture",
             "attempt_ids": "[]",
@@ -271,7 +283,11 @@ def seeded_tables(db):
                 if (
                     column.get("identity")
                     or column.get("autoincrement")
-                    or (column.get("primary_key") and lower not in values)
+                    or (
+                        column.get("primary_key")
+                        and lower not in values
+                        and table.upper() != "AUD_ERASURE_SUBJECTS"
+                    )
                 ):
                     continue
                 if (
@@ -297,8 +313,26 @@ def seeded_tables(db):
                     )
                 if table.upper() == "AUD_BUSINESS_RULES_RESULTS" and lower == "status":
                     value = "REPORT"
+                if table.upper() == "AUD_ERASURE_SUBJECTS":
+                    value = {"key_hmac": "a" * 64, "key_check": "c" * 64, "active_flag": "Y"}.get(
+                        lower, value
+                    )
+                if table.upper() == "AUD_PROTECTION_EVENTS":
+                    value = {
+                        "status": "COMMITTED",
+                        "kind": "WRITE",
+                        "key_check": "c" * 64,
+                        "column_names": "[]",
+                        "value_hashes": "[]",
+                    }.get(lower, value)
+                if table.upper() == "AUD_SEED_LOADS" and lower == "status":
+                    value = "LOADED"
                 if table.upper() == "AUD_UPLOADS" and lower == "status":
                     value = "QUEUED"
+                if table.upper() == "AUD_EVENT_FILE_DECISIONS":
+                    if lower == "reason":
+                        continue  # an ACCEPTED decision carries no reason
+                    value = "ACCEPTED" if lower == "status" else value
                 if table.upper() == "AUD_AGENTS" and lower == "status":
                     value = AgentStatus.ACTIVE
                 if table.upper() == "AUD_AGENT_COMMANDS" and lower == "command":
@@ -320,6 +354,16 @@ def seeded_tables(db):
                 payload[key] = conn.execute(
                     text("SELECT BUSINESS_RULE_RUN_ID FROM AUD_BUSINESS_RULES_RUN_LOG")
                 ).scalar_one()
+            if table.upper() == "AUD_UPLOADS":
+                seeded = {
+                    "stored_name": "1-audit.csv",
+                    "sha256": "a" * 64,
+                    "archive_location": "file:///archive/1-audit.csv",
+                    "archived_at": datetime.now(UTC),
+                }
+                for column in columns:
+                    if column["name"].lower() in seeded:
+                        payload[column["name"]] = seeded[column["name"].lower()]
             if table.upper() == "AUD_ATTEMPT_LOG_CHUNKS":
                 # Part of the composite key, which the loop above can leave out.
                 name = next(c["name"] for c in columns if c["name"].lower() == "sequence_number")
@@ -497,7 +541,7 @@ def test_postgres_extra_write_grant_is_reported(engine_db):
 
 @pytest.mark.parametrize("actor_name", ["alice", "alice@laptop"])
 def test_cli_actor_requests_and_read_only_audit(
-    engine_db, tmp_path, monkeypatch, capsys, actor_name
+    engine_db, tmp_path, monkeypatch, capsys, actor_name, cli_logging
 ):
     import yaml
 
@@ -541,7 +585,7 @@ def test_cli_actor_requests_and_read_only_audit(
         assert result == 0, capsys.readouterr()
 
     command("pipelines", "refresh", "--pipeline", "P")
-    command("run", "--pipeline-code", "P", "--init-only")
+    command("run", "--reason", "test requested run", "--pipeline-code", "P", "--init-only")
     with engine_db.engine.connect() as conn:
         run_id = conn.execute(
             text("SELECT PIPELINE_RUN_ID FROM AUD_PIPELINES_RUN_LOG")
@@ -563,7 +607,7 @@ def test_cli_actor_requests_and_read_only_audit(
     capsys.readouterr()
     command("audit", "--pipeline-code", "P", "--since", "2026-01-01")
     shown = capsys.readouterr().out
-    assert actor_name in shown and "SERVICE" in shown and "REQUESTED" in shown
+    assert actor_name in shown and "SERVICE" in shown and "SUCCESS" in shown
     assert "deleted_parameter_history" in shown
     assert "unrelated_parameter_history" not in shown
     command("setup", "--print-grants")
@@ -572,11 +616,37 @@ def test_cli_actor_requests_and_read_only_audit(
     assert "STARTED_BY" in capsys.readouterr().out
     with engine_db.engine.connect() as conn:
         actions = conn.execute(
-            text("SELECT COMMAND, ACTOR, ACTOR_KIND FROM AUD_ACTIONS ORDER BY ACTION_ID")
+            text(
+                "SELECT COMMAND AS command, ACTOR AS actor, ACTOR_KIND AS kind, "
+                "ARGUMENTS AS arguments FROM AUD_ACTIONS ORDER BY ACTION_ID"
+            )
         ).all()
-        assert [tuple(row) for row in actions] == [
+        assert all(row.actor == actor_name and row.kind == "SERVICE" for row in actions)
+        requests = [
+            row
+            for row in actions
+            if "_request_action_id"
+            not in (json.loads(row.arguments) if isinstance(row.arguments, str) else row.arguments)
+        ]
+        assert len(actions) == 2 * len(requests)
+        assert [(row.command, row.actor, row.kind) for row in requests] == [
             (name, actor_name, "SERVICE")
-            for name in ("pipelines refresh", "run", "control", "control", "control", "mark")
+            for name in (
+                "project list",
+                "pipelines refresh",
+                "project list",
+                "run",
+                "project list",
+                "control",
+                "project list",
+                "control",
+                "project list",
+                "control",
+                "project list",
+                "mark",
+                "project list",
+                "project list",
+            )
         ]
         row = conn.execute(
             text(
@@ -594,10 +664,24 @@ def test_cli_actor_requests_and_read_only_audit(
         ) == {"SERVICE"}
 
     monkeypatch.setenv("ETL_CRAFT_TOKEN", "invalid")
-    assert main(["--config", str(config), "run", "--pipeline-code", "P", "--init-only"]) == 3
+    assert (
+        main(
+            [
+                "--config",
+                str(config),
+                "run",
+                "--pipeline-code",
+                "P",
+                "--init-only",
+                "--reason",
+                "test requested run",
+            ]
+        )
+        == 3
+    )
     assert "no signed-in account" in capsys.readouterr().err
     with engine_db.engine.connect() as conn:
-        assert conn.execute(text("SELECT COUNT(*) FROM AUD_ACTIONS")).scalar_one() == 6
+        assert conn.execute(text("SELECT COUNT(*) FROM AUD_ACTIONS")).scalar_one() == len(actions)
 
 
 def test_terminal_attempts_and_append_only_rows_are_immutable(engine_db):
@@ -607,6 +691,7 @@ def test_terminal_attempts_and_append_only_rows_are_immutable(engine_db):
         "AUD_ATTEMPT_ACKNOWLEDGEMENTS",
         "AUD_TASK_EVENTS",
         "AUD_EVENT_FILES",
+        "AUD_EVENT_FILE_DECISIONS",
         "AUD_EVENT_KEYS",
         "AUD_TASK_ITEMS",
         "AUD_PROJECT_BUNDLES",
@@ -626,6 +711,30 @@ def test_terminal_attempts_and_append_only_rows_are_immutable(engine_db):
                 engine_db.engine.begin() as conn,
             ):
                 conn.exec_driver_sql(sql)
+
+
+def test_terminal_log_attachment_cannot_change_duplicate_count(engine_db):
+    seeded_tables(engine_db)
+    with (
+        pytest.raises(DBAPIError, match="immutable"),
+        engine_db.engine.begin() as conn,
+    ):
+        conn.execute(
+            text(
+                "UPDATE AUD_TASK_ATTEMPTS SET LOG_PATH='attempt.log', DUPLICATE_COUNT=1 "
+                "WHERE STATUS='SUCCESS'"
+            )
+        )
+    with engine_db.engine.begin() as conn:
+        conn.execute(
+            text("UPDATE AUD_TASK_ATTEMPTS SET LOG_PATH='attempt.log' WHERE STATUS='SUCCESS'")
+        )
+        assert (
+            conn.execute(
+                text("SELECT DUPLICATE_COUNT FROM AUD_TASK_ATTEMPTS WHERE STATUS='SUCCESS'")
+            ).scalar_one()
+            == 0
+        )
 
 
 def test_actor_stamps_survive_failed_insert(engine_db):
@@ -701,6 +810,7 @@ def test_nested_action_secrets_never_reach_audit_logs_cli_or_api(engine_db, log_
     secret = "nested-password-never-public"
     url_secret = "url-password-never-public"
     arguments = {
+        "AUD_ERASURE_SUBJECTS": [{"SUBJECT_KEY": secret, "KEY_HMAC": "a" * 64}],
         "connections": [
             {
                 "password": secret,
@@ -735,9 +845,11 @@ def test_nested_action_secrets_never_reach_audit_logs_cli_or_api(engine_db, log_
         )
     assert response.status_code == 200, response.text
     with db.engine.connect() as conn:
-        row = conn.execute(
-            text("SELECT ARGUMENTS AS arguments FROM AUD_ACTIONS WHERE COMMAND='run'")
-        ).scalar_one()
+        row = (
+            conn.execute(text("SELECT ARGUMENTS AS arguments FROM AUD_ACTIONS WHERE COMMAND='run'"))
+            .scalars()
+            .all()
+        )
         for table in inspect(conn).get_table_names():
             if table.lower().startswith("aud_"):
                 rows = conn.exec_driver_sql('SELECT * FROM "' + table + '"').all()
@@ -757,6 +869,6 @@ def test_direct_pipeline_requests_record_the_selected_project(engine_db):
     with engine_db.engine.connect() as conn:
         row = conn.execute(
             text("SELECT PROJECT_ID AS project_id,PIPELINE_ID AS pipeline_id FROM AUD_ACTIONS")
-        ).one()
-    assert row.project_id == 1
-    assert row.pipeline_id == pipeline
+        ).all()
+    assert len(row) == 2
+    assert all(item.project_id == 1 and item.pipeline_id == pipeline for item in row)

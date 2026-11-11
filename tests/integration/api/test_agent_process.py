@@ -37,7 +37,16 @@ def test_agent_runs_its_pinned_bundle_without_engine_or_store_credentials(
         )
     publish_project(p, agent_dir)
     controller = p.start("controller", "--no-ui")
-    code, output = p.run("run", "--pipeline-code", "P", "--init-only", "--run-key", "agent-test")
+    code, output = p.run(
+        "run",
+        "--reason",
+        "test requested run",
+        "--pipeline-code",
+        "P",
+        "--init-only",
+        "--run-key",
+        "agent-test",
+    )
     assert code == 0, output
     p.wait_for("SELECT STATUS FROM AUD_TASK_ATTEMPTS", expected="QUEUED")
     monkeypatch.setenv("ETL_CRAFT_TOKEN", token.token)
@@ -63,6 +72,8 @@ def test_agent_runs_its_pinned_bundle_without_engine_or_store_credentials(
                 assert [(r.key, r.rows) for r in items] == [("first", 4), ("second", 3)]
         assert row.owner_id == str(token.metadata.token_id)
         assert row.target_count == 7
+        code, output = p.run("agent", "health", "--project-dir", str(agent_dir))
+        assert code == 0, output
         assert "project copy ran" in "".join(r.content for r in logs)
         agent.signal(signal.SIGTERM)
         assert agent.wait(timeout=40) == 0, agent.output
@@ -102,7 +113,16 @@ def test_a_lost_agent_stops_its_writer_before_a_second_holder(cluster, monkeypat
     )
     publish_project(p, agent_dir)
     p.start("controller", "--no-ui")
-    code, output = p.run("run", "--pipeline-code", "P", "--init-only", "--run-key", failure)
+    code, output = p.run(
+        "run",
+        "--reason",
+        "test requested run",
+        "--pipeline-code",
+        "P",
+        "--init-only",
+        "--run-key",
+        failure,
+    )
     assert code == 0, output
     monkeypatch.setenv("ETL_CRAFT_TOKEN", token.token)
     agent = p.start("agent", "--api", url, "--project-dir", str(agent_dir), "--drain-seconds", "0")
@@ -177,7 +197,16 @@ def test_agent_cancel_is_acknowledged_by_notification_or_renewal(
     )
     publish_project(p, agent_dir)
     controller = p.start("controller", "--no-ui")
-    code, output = p.run("run", "--pipeline-code", "P", "--init-only", "--run-key", "cancel")
+    code, output = p.run(
+        "run",
+        "--reason",
+        "test requested run",
+        "--pipeline-code",
+        "P",
+        "--init-only",
+        "--run-key",
+        "cancel",
+    )
     assert code == 0, output
     monkeypatch.setenv("ETL_CRAFT_TOKEN", token.token)
     agent = p.start("agent", "--api", url, "--project-dir", str(agent_dir), "--drain-seconds", "0")
@@ -245,7 +274,16 @@ def test_agent_killed_after_upload_leaves_chunks_for_a_restarted_controller(clus
     controller_token = os.environ["ETL_CRAFT_TOKEN"]
     publish_project(p, agent_dir)
     controller = p.start("controller", "--no-ui")
-    code, output = p.run("run", "--pipeline-code", "P", "--init-only", "--run-key", "log-loss")
+    code, output = p.run(
+        "run",
+        "--reason",
+        "test requested run",
+        "--pipeline-code",
+        "P",
+        "--init-only",
+        "--run-key",
+        "log-loss",
+    )
     assert code == 0, output
     p.wait_for("SELECT STATUS FROM AUD_TASK_ATTEMPTS", expected="QUEUED")
     monkeypatch.setenv("ETL_CRAFT_TOKEN", token.token)
@@ -300,7 +338,10 @@ def test_children_never_receive_agent_token(cluster, monkeypatch):
         "User": "demo",
         "Secret": "PINNED_EMAIL_PASSWORD",
     }
+    raw["Privacy"] = {"Hmac_secret": "PINNED_PRIVACY_SECRET"}
     bootstrap.write_text(yaml.safe_dump(raw, sort_keys=False))
+    monkeypatch.setenv("PINNED_PRIVACY_SECRET", "pinned-host-only")
+    monkeypatch.setenv("CURRENT_PRIVACY_SECRET", "current-host-only")
     monkeypatch.setenv("PINNED_EMAIL_PASSWORD", "pinned-example-only")
     monkeypatch.setenv("CURRENT_EMAIL_PASSWORD", "current-example-only")
     _, url = start_ui(p)
@@ -313,6 +354,8 @@ def test_children_never_receive_agent_token(cluster, monkeypatch):
         "from etl_craft.scripting import ScriptResult\n"
         "def run(task):\n"
         "    assert 'ETL_CRAFT_TOKEN' not in os.environ\n"
+        "    assert 'PINNED_PRIVACY_SECRET' not in os.environ\n"
+        "    assert 'CURRENT_PRIVACY_SECRET' not in os.environ\n"
         "    assert 'ETL_CRAFT_REFRESH_TOKEN' not in os.environ\n"
         "    assert os.environ['PINNED_EMAIL_PASSWORD'] == 'pinned-example-only'\n"
         "    work = json.loads(Path(sys.argv[sys.argv.index('--work-file')+1]).read_text())\n"
@@ -334,10 +377,18 @@ def test_children_never_receive_agent_token(cluster, monkeypatch):
     )
     publish_project(p, agent_dir)
     raw["Orchestration"]["Email"]["Secret"] = "CURRENT_EMAIL_PASSWORD"
+    raw["Privacy"]["Hmac_secret"] = "CURRENT_PRIVACY_SECRET"
     bootstrap.write_text(yaml.safe_dump(raw, sort_keys=False))
     controller = p.start("controller", "--no-ui")
     code, output = p.run(
-        "run", "--pipeline-code", "P", "--init-only", "--run-key", "credential-test"
+        "run",
+        "--reason",
+        "test requested run",
+        "--pipeline-code",
+        "P",
+        "--init-only",
+        "--run-key",
+        "credential-test",
     )
     assert code == 0, output
     p.wait_for("SELECT STATUS FROM AUD_TASK_ATTEMPTS", expected="QUEUED")
@@ -453,3 +504,259 @@ def test_api_only_agent_runs_upload_validation_and_load(cluster, monkeypatch):
     finally:
         agent.signal(signal.SIGTERM)
         agent.wait(timeout=40)
+
+
+@pytest.mark.parametrize("killed", [False, True], ids=["empty", "sigkill"])
+def test_explicit_small_python_agent_records_success_or_memory_failure(
+    cluster, monkeypatch, killed
+):
+    from etl_craft.core.enums import AttemptStatus, FailureClass
+    from etl_craft.core.resources import MIB, discover
+
+    p, url, token, folder = cluster
+    memory_mb = 1024 if killed else 256
+    physical_mb = (discover().memory.value or 0) / MIB
+    body = (
+        "    import os, signal\n    os.kill(os.getpid(), signal.SIGKILL)\n"
+        if killed
+        else "    return ScriptResult(0)\n"
+    )
+    (folder / "python_scripts" / "load.py").write_text(
+        "from etl_craft.scripting import ScriptResult\ndef run(task):\n" + body
+    )
+    with p.engine.begin() as conn:
+        conn.execute(
+            text(
+                "INSERT INTO CFG_TASK_PARAMETERS (TASK_ID,PARAMETER_NAME,PARAMETER_VALUE) "
+                "VALUES (:task,'MEMORY_REQUEST_MB',:memory)"
+            ),
+            {"task": p.task_id, "memory": "128"},
+        )
+    publish_project(p, folder)
+    p.start("controller", "--no-ui")
+    assert (
+        p.run(
+            "run",
+            "--reason",
+            "test requested run",
+            "--pipeline-code",
+            "P",
+            "--init-only",
+            "--run-key",
+            "small-agent",
+        )[0]
+        == 0
+    )
+    monkeypatch.setenv("ETL_CRAFT_TOKEN", token.token)
+    agent = p.start(
+        "agent",
+        "--api",
+        url,
+        "--project-dir",
+        str(folder),
+        "--cpu",
+        "2",
+        "--memory-mb",
+        str(memory_mb),
+        "--python-slots",
+        "1",
+        "--warehouse-slots",
+        "0",
+        "--drain-seconds",
+        "0",
+    )
+    try:
+        status = AttemptStatus.FAILED if killed else AttemptStatus.SUCCESS
+        p.wait_for("SELECT STATUS FROM AUD_TASK_ATTEMPTS", expected=status, timeout=30)
+        assert "set explicitly to 1" in agent.output
+        assert f"estimate allowed {int(killed)}" in agent.output
+        if killed:
+            with p.engine.connect() as conn:
+                row = conn.execute(
+                    text(
+                        "SELECT ERROR_MESSAGE AS message, FAILURE_CLASS AS failure "
+                        "FROM AUD_TASK_ATTEMPTS"
+                    )
+                ).one()
+                logs = conn.execute(
+                    text("SELECT CONTENT AS content FROM AUD_ATTEMPT_LOG_CHUNKS")
+                ).all()
+                host = conn.execute(text("SELECT HOST AS host FROM AUD_AGENTS")).scalar_one()
+            assert row.failure == FailureClass.PERMANENT
+            for part in (
+                host,
+                "SIGKILL",
+                f"container memory limit {physical_mb:.0f} MB",
+                "--python-slots=1",
+                "lower",
+                "explicitly recovering",
+            ):
+                assert part in row.message
+                assert part in "".join(chunk.content for chunk in logs)
+        agent.signal(signal.SIGTERM)
+        assert agent.wait(timeout=30) == 0, agent.output
+    except AssertionError as error:
+        raise AssertionError(f"{error}\nagent:\n{agent.output}") from error
+
+
+@pytest.fixture(params=["ENVIRONMENT", "FILE"])
+def secret_cluster(empty_engine_db, cli_project, monkeypatch, request):
+    import os
+
+    import yaml
+
+    monkeypatch.setenv("SOURCE_TOKEN", "task-private-test-value")
+    p = cli_project
+    if request.param == "FILE":
+        path = p.config.project_dir / "provider.env"
+        path.write_text(
+            "SOURCE_TOKEN=task-private-test-value\n"
+            + p.config.engine.secret_var
+            + "="
+            + os.environ[p.config.engine.secret_var]
+            + "\n"
+        )
+        raw = yaml.safe_load(p.config.config_path.read_text())
+        raw["Secrets"] = {"Source_type": "FILE", "Path": str(path)}
+        p.config.config_path.write_text(yaml.safe_dump(raw, sort_keys=False))
+        p.config = load_config(p.config.config_path)
+    cluster = request.getfixturevalue("cluster")
+    agent_dir = cluster[3]
+    path = agent_dir / "craft-connector.yml"
+    raw = yaml.safe_load(path.read_text())
+    raw["Secrets"] = {"Source_type": "ENVIRONMENT"}
+    path.write_text(yaml.safe_dump(raw, sort_keys=False))
+    return cluster
+
+
+@pytest.mark.parametrize("fails", [False, True])
+def test_agent_receives_secrets_by_pipe_and_masks_all_output(secret_cluster, monkeypatch, fails):
+    p, url, token, agent_dir = secret_cluster
+    path = agent_dir / "python_scripts/load.py"
+    path.write_text(
+        "import os\nfrom etl_craft.scripting import ScriptResult, PermanentError\n"
+        "def run(task):\n"
+        "    assert 'SOURCE_TOKEN' not in os.environ\n"
+        "    value = task.secret('SOURCE_TOKEN')\n"
+        "    print(value)\n"
+        "    task.logger.warning('echo %s', value)\n"
+        + (
+            "    raise PermanentError(value)\n"
+            if fails
+            else "    return ScriptResult(1, variables={'echo': value, value: 'opaque'})\n"
+        )
+    )
+    with p.engine.begin() as conn:
+        conn.execute(
+            text(
+                "INSERT INTO CFG_TASK_PARAMETERS (TASK_ID,PARAMETER_NAME,PARAMETER_VALUE) "
+                "VALUES (:id,'SECRETS','SOURCE_TOKEN')"
+            ),
+            {"id": p.task_id},
+        )
+    publish_project(p, agent_dir)
+    controller = p.start("controller", "--no-ui")
+    code, output = p.run(
+        "run",
+        "--reason",
+        "test requested run",
+        "--pipeline-code",
+        "P",
+        "--init-only",
+        "--run-key",
+        "secret-test",
+    )
+    assert code == 0, output
+    monkeypatch.delenv("SOURCE_TOKEN")
+    monkeypatch.setenv("ETL_CRAFT_TOKEN", token.token)
+    agent = p.start("agent", "--api", url, "--project-dir", str(agent_dir), "--drain-seconds", "0")
+    try:
+        p.wait_for(
+            "SELECT STATUS FROM AUD_TASK_ATTEMPTS",
+            expected="FAILED" if fails else "SUCCESS",
+            timeout=40,
+        )
+        with p.engine.connect() as conn:
+            attempt = conn.execute(
+                text("SELECT ERROR_MESSAGE AS error,TASK_LOG AS log FROM AUD_TASK_ATTEMPTS")
+            ).one()
+            chunks = conn.execute(
+                text("SELECT CONTENT AS content FROM AUD_ATTEMPT_LOG_CHUNKS")
+            ).all()
+        assert "task-private-test-value" not in str(attempt)
+        assert "task-private-test-value" not in "".join(row.content for row in chunks)
+        assert "[REDACTED]" in "".join(row.content for row in chunks)
+        assert "task-private-test-value" not in agent.output
+        for path in agent_dir.rglob("*"):
+            if path.is_file():
+                assert b"task-private-test-value" not in path.read_bytes()
+    finally:
+        agent.close()
+        controller.close()
+
+
+@pytest.mark.chaos
+@pytest.mark.parametrize("outcome", ["FAILED", "TIMED_OUT"])
+def test_agent_terminal_exit_records_real_evidence(cluster, monkeypatch, outcome):
+    p, url, token, agent_dir = cluster
+    script = (
+        "from etl_craft.scripting import PermanentError\n"
+        "def run(task):\n    raise PermanentError('deliberate failed writer')\n"
+        if outcome == "FAILED"
+        else "import threading\ndef run(task):\n    threading.Event().wait(120)\n"
+    )
+    (agent_dir / "python_scripts/load.py").write_text(script)
+    with p.engine.begin() as conn:
+        for name, value in (
+            ("RETRY_ON", "NONE"),
+            ("TASK_TIMEOUT_SECONDS", "3" if outcome == "TIMED_OUT" else "30"),
+        ):
+            conn.execute(
+                text(
+                    "INSERT INTO CFG_TASK_PARAMETERS (TASK_ID,PARAMETER_NAME,PARAMETER_VALUE) "
+                    "VALUES (:task,:name,:value)"
+                ),
+                {"task": p.task_id, "name": name, "value": value},
+            )
+    publish_project(p, agent_dir)
+    controller = p.start("controller", "--no-ui")
+    code, output = p.run(
+        "run",
+        "--reason",
+        "test requested run",
+        "--pipeline-code",
+        "P",
+        "--init-only",
+        "--run-key",
+        "ending-evidence",
+    )
+    assert code == 0, output
+    monkeypatch.setenv("ETL_CRAFT_TOKEN", token.token)
+    agent = p.start("agent", "--api", url, "--project-dir", str(agent_dir), "--drain-seconds", "0")
+    p.wait_for("SELECT STATUS FROM AUD_TASK_ATTEMPTS", expected=outcome, timeout=30)
+    p.wait_for("SELECT count(*) FROM AUD_ATTEMPT_ACKNOWLEDGEMENTS", expected=2, timeout=10)
+    with p.engine.connect() as conn:
+        evidence = (
+            conn.execute(
+                text(
+                    "SELECT KIND AS kind,EVIDENCE_KIND AS evidence_kind "
+                    "FROM AUD_ATTEMPT_ACKNOWLEDGEMENTS"
+                )
+            )
+            .mappings()
+            .all()
+        )
+        attempt = conn.execute(
+            text(
+                "SELECT PID AS pid, PROCESS_START AS birth, AGENT_INSTANCE_ID AS instance "
+                "FROM AUD_TASK_ATTEMPTS"
+            )
+        ).one()
+        registered = conn.execute(
+            text("SELECT INSTANCE_ID AS instance FROM AUD_AGENTS")
+        ).scalar_one()
+    assert {r["kind"] for r in evidence} == {"PROCESS", "QUERIES"}
+    assert all(r["evidence_kind"] == "VERIFIED" for r in evidence)
+    assert attempt.pid and attempt.birth and attempt.instance == registered
+    agent.signal(signal.SIGTERM)
+    assert agent.wait(timeout=40) == 0, agent.output + controller.output

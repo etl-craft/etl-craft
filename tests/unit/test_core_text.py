@@ -507,3 +507,21 @@ def test_nested_argument_urls_keep_only_safe_connection_details(url, expected):
 def test_suggest_can_require_a_closest_name_without_changing_the_default():
     assert text.suggest("zzzz", ["tasks.csv"]) == []
     assert text.suggest("zzzz", ["tasks.csv"], cutoff=0, limit=1) == ["tasks.csv"]
+
+
+def test_erasure_register_values_are_private_but_hmacs_remain_visible():
+    from etl_craft.dialects.engine.metadata import CREDENTIAL_COLUMNS
+
+    document = text.mask_arguments(
+        {
+            "AUD_ERASURE_SUBJECTS": [
+                {
+                    "SUBJECT_KEY": "private-subject-value",
+                    "KEY_HMAC": "a" * 64,
+                }
+            ]
+        }
+    )
+    assert "private-subject-value" not in str(document)
+    assert "a" * 64 in str(document)
+    assert "SUBJECT_KEY" in CREDENTIAL_COLUMNS["AUD_ERASURE_SUBJECTS"]

@@ -26,9 +26,14 @@ def _run(args: argparse.Namespace, out: Output) -> int:
     if not versions:
         out.empty("no task has a DOCUMENTATION parameter")
         return ExitCode.SUCCESS
-    out.rows([("PIPELINE_CODE", "TASK_CODE", "VERSION", "CHANGED")])
     out.rows(
-        (v.pipeline_code, v.task_code, v.version, "yes" if v.changed else "no") for v in versions
+        [
+            ("PIPELINE_CODE", "TASK_CODE", "VERSION", "CHANGED"),
+            *(
+                (v.pipeline_code, v.task_code, v.version, "yes" if v.changed else "no")
+                for v in versions
+            ),
+        ]
     )
     return ExitCode.SUCCESS
 

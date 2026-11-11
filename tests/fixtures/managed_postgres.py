@@ -73,11 +73,22 @@ def managed_project(config, directory, monkeypatch, *, timeout=30):
 def run_and_recover(project, *, timeout=30):
     """A dead owner leaves history, and a committed child outcome survives process loss."""
     killed = project.start(
-        "run", "--pipeline-code", "P", fault="connections.after_reservation:kill"
+        "run",
+        "--reason",
+        "test requested run",
+        "--pipeline-code",
+        "P",
+        fault="connections.after_reservation:kill",
     )
     assert killed.wait() == 137, killed.output
     code, output = project.run(
-        "run", "--pipeline-code", "P", fault="child.after_outcome:kill", timeout=timeout
+        "run",
+        "--reason",
+        "test requested run",
+        "--pipeline-code",
+        "P",
+        fault="child.after_outcome:kill",
+        timeout=timeout,
     )
     assert code == 0, output
     with project.engine.connect() as conn:

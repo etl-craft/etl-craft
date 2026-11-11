@@ -99,3 +99,66 @@ status and output:
 ```
 email to ops@example.com was not sent: the relay smtp.example.com:587 failed at log in: SMTPAuthenticationError: (535, b'5.7.8 Authentication failed')
 ```
+
+## Environment and designed templates
+
+Every alert and SLA subject begins `[PRODUCTION]` for PROD or `[<TYPE>]` otherwise. The
+built-in HTML uses a 640px table layout, inline CSS, status symbols and colors, complete
+wrapped errors, and a recipient-reason footer. Start by copying
+`src/etl_craft/handlers/email_templates/default.html` (installed under
+`etl_craft/handlers/email_templates/default.html`) into your project's `email_templates/`.
+The companion `default.txt` supplies the multipart plain-text alternative.
+
+Set `EMAIL_TEMPLATE`=`email_templates/team.html` on an EMAIL_ALERT task, optionally
+`EMAIL_TEMPLATE_TEXT`=`email_templates/team.txt`. SLA uses `Orchestration.Email_template`.
+
+| Parameter | Value |
+|---|---|
+| `EMAIL_TEMPLATE` | Confined HTML file under email_templates/ |
+| `EMAIL_TEMPLATE_TEXT` | Optional confined .txt file under email_templates/ |
+Both default to built-ins when unset. Files ship with the immutable project bundle.
+EMAIL_SUBJECT*/EMAIL_BODY* retain their $$ tokens; their substituted strings become `subject`
+and `body`. Jinja variables are separate from SQL and $$ substitution.
+
+A copyable `email_templates/team.html`:
+
+```html+jinja
+<!doctype html><html lang="en"><body>
+<h1>{{ environment.label }} · {{ project.code }} · {{ pipeline.code }}</h1>
+<p>{{ subject }}</p><div style="white-space:pre-wrap">{% for line in body_lines %}{{ line }}<br>{% endfor %}</div>
+<p>Run {{ run.id }}: {{ run.status }} — {{ run.start }}</p>
+{% for error in errors %}<pre style="white-space:pre-wrap;word-break:break-word">{{ error }}</pre>{% endfor %}
+<p>etl-craft {{ version }} — {{ recipient_reason }}</p>
+</body></html>
+```
+
+### Template context
+
+| Field | Value |
+|---|---|
+| `environment.type`, `.name`, `.label` | Existing project type, optional name, display label (PRODUCTION for PROD) |
+| `project.code` | Project code |
+| `pipeline.code` | Pipeline code |
+| `run.id`, `.logical_date`, `.start`, `.end`, `.duration`, `.status` | Exact run; ISO dates, zoned UTC timestamps (end may be null), elapsed seconds and outcome |
+| `run.symbol`, `.color` | Status symbol and color |
+| `task` | Alert code, run_id, status and attempt; null for SLA |
+| `errors` | Complete task error strings, not HTML |
+| `watched_tasks` | Non-alert task rows in this run: code, status, error, attempts, symbol, color |
+| `pipelines` | EMAIL_PIPELINES rows: code, run_id, status, start, end, tasks (same task-row shape) |
+| `sla` | Null or hours, elapsed_hours, message |
+| `subject`, `body` | Existing subject/body after $$ substitution |
+| `body_lines` | Body split into lines for escaped text followed by literal HTML line breaks |
+| `version` | Installed package version |
+| `recipients`, `recipient_reason` | Addresses and why this recipient list was chosen |
+
+The default has no View run button: no public UI base URL setting exists.
+Docs_site.External_url serves the static catalog and is not a UI URL.
+
+### Template security and failures
+
+Templates use Jinja SandboxedEnvironment, StrictUndefined and automatic HTML escaping.
+Only primitive data is exposed, without Python attributes/calls, globals, includes/imports,
+network or file loaders. Keep autoescaping enabled; raw safe HTML is not supported. Absolute
+paths, traversal and symlinks leaving email_templates/ are refused. `validate` checks referenced
+files and reports file/line/remedy. A rendering error at send time fails before SMTP; it never
+sends partially rendered content or silently falls back. Review team templates as project code.

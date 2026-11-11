@@ -88,3 +88,11 @@ def test_subjects_are_one_safe_line(smtp, written, expected):
     mail.send_email(config(tls_mode="NONE"), ["ops@example.com"], written, "body")
     message = smtp.send_message.call_args.args[0]
     assert str(message["Subject"]) == expected
+
+
+def test_empty_custom_text_is_not_replaced_by_a_fallback(smtp):
+    mail.send_email(
+        config(tls_mode="NONE"), ["ops@example.com"], "subject", "<p>body</p>", body_text=""
+    )
+    message = smtp.send_message.call_args.args[0]
+    assert message.get_body(preferencelist=("plain",)).get_content().strip() == ""

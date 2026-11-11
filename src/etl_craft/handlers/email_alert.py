@@ -18,6 +18,8 @@ stakeholders on ``SUCCESS``) agree. The task's parameters:
   required; a body is required unless ``EMAIL_PIPELINES`` is set.
 - ``EMAIL_ON_STATUS``: the outcomes to send on, separated by ``|``; all when unset. On another
   outcome the task succeeds without sending, and its task log says why.
+- ``EMAIL_TEMPLATE`` and optional ``EMAIL_TEMPLATE_TEXT`` select confined project HTML/text
+  templates under ``email_templates/``; unset values use the built-ins.
 - ``EMAIL_PIPELINES``: ``ALL``, or pipeline codes separated by ``|``, adds a table of each
   one's latest run with a section per pipeline listing its tasks.
 
@@ -29,7 +31,6 @@ this one watches through a ``FAILURE`` dependency). Any other ``$$`` token fails
 
 from __future__ import annotations
 
-import html
 from collections.abc import Mapping, Sequence
 
 from sqlalchemy.engine import Engine
@@ -37,31 +38,14 @@ from sqlalchemy.engine import Engine
 from etl_craft.core.enums import EmailFlavour, Handler, RunStatus
 from etl_craft.core.errors import HandlerError
 from etl_craft.core.text import TOKEN
-from etl_craft.engine.alerts import PipelineDigest
 from etl_craft.engine.repository.runs import (
     TaskStatus,
 )
 from etl_craft.engine.task_store import TaskStore
-from etl_craft.handlers.mail import page, paragraph, parse_recipients, safe_subject, send_email
+from etl_craft.handlers.mail import parse_recipients, safe_subject, send_email
 from etl_craft.handlers.registry import HandlerResult, TaskContext, task_store
 
 OUTCOMES = tuple(member.value for member in EmailFlavour)
-
-OUTCOME_COLORS = {
-    EmailFlavour.SUCCESS: "#1a7f37",
-    EmailFlavour.COMPLETED_WITH_ERRORS: "#9a6700",
-    EmailFlavour.FAILED: "#cf222e",
-}
-
-STATUS_COLORS = {
-    RunStatus.SUCCESS: "#1a7f37",
-    RunStatus.FAILED: "#cf222e",
-    RunStatus.SKIPPED: "#6e7781",
-    RunStatus.IN_PROGRESS: "#0969da",
-    "PENDING": "#9a6700",
-    "NEVER_RUN": "#6e7781",
-    "UNKNOWN": "#6e7781",
-}
 
 TOKENS = (
     "status",
@@ -79,6 +63,8 @@ PARAMETERS = frozenset(
         "EMAIL_BODY",
         "EMAIL_ON_STATUS",
         "EMAIL_PIPELINES",
+        "EMAIL_TEMPLATE",
+        "EMAIL_TEMPLATE_TEXT",
         *(f"EMAIL_{part}_{outcome}" for part in ("SUBJECT", "BODY") for outcome in OUTCOMES),
     }
 )
@@ -131,17 +117,27 @@ def run(context: TaskContext, engine_db: Engine | TaskStore) -> HandlerResult:
         "error_message": "; ".join(m.error_message for m in watched if m.error_message),
     }
     subject = safe_subject(substitute(subject_template, values, "EMAIL_SUBJECT"))
-    parts = [
-        f'<p style="color:{OUTCOME_COLORS[EmailFlavour(outcome)]};font-weight:600">'
-        f"{html.escape(context.pipeline_code)}: {html.escape(outcome)}</p>"
-    ]
-    if sla is not None:
-        parts.append(f"<p><strong>{html.escape(sla.describe())}</strong></p>")
-    if body_template:
-        parts.append(paragraph(substitute(body_template, values, "EMAIL_BODY")))
-    if pipelines:
-        parts.append(digest_html(state.digests))
-    warning = send_email(context.config, recipients, subject, page("".join(parts)))
+    from etl_craft.handlers.email_context import email_context
+    from etl_craft.handlers.email_templates import render
+
+    data = email_context(state, pipeline=context.pipeline_code, status=outcome)
+    assert state.environment is not None
+    subject = safe_subject(f"[{state.environment.label.split(' · ')[0]}] {subject}")
+    data.update(
+        subject=subject,
+        body=substitute(body_template, values, "EMAIL_BODY") if body_template else "",
+        task={
+            "code": context.task_code,
+            "run_id": context.task_run_id,
+            "status": RunStatus.IN_PROGRESS,
+            "attempt": context.attempt,
+        },
+        recipients=recipients,
+        recipient_reason=f"EMAIL_TO on {context.pipeline_code}.{context.task_code}",
+    )
+    rendered = render(context.config, params.get("EMAIL_TEMPLATE"), data)
+    plain = render(context.config, params.get("EMAIL_TEMPLATE_TEXT"), data, text=True)
+    warning = send_email(context.config, recipients, subject, rendered, body_text=plain)
     variables: dict[str, object] = {
         "RUN_STATUS": outcome,
         "EMAIL_SENT": "true",
@@ -232,36 +228,3 @@ def _wanted_outcomes(value: str | None) -> set[str] | None:
 
 def _template(params: Mapping[str, str], part: str, outcome: str) -> str | None:
     return params.get(f"EMAIL_{part}_{outcome}") or params.get(f"EMAIL_{part}")
-
-
-def _status(status: str) -> str:
-    color = STATUS_COLORS.get(status, "#57606a")
-    return f'<span style="color:{color};font-weight:600">{html.escape(status)}</span>'
-
-
-def digest_html(entries: Sequence[PipelineDigest]) -> str:
-    """Render the pipelines' latest runs: a summary table, then a section per pipeline."""
-    rows = "".join(
-        f"<tr><td>{html.escape(e.pipeline_code)}</td><td>{_status(e.status)}</td>"
-        f"<td>{'' if e.pipeline_run_id is None else e.pipeline_run_id}</td>"
-        f"<td>{e.start_date or ''}</td><td>{e.end_date or ''}</td></tr>"
-        for e in entries
-    )
-    sections = "".join(
-        f"<details><summary>{html.escape(e.pipeline_code)}: {_status(e.status)}</summary>"
-        "<table><tr><th>Task</th><th>Status</th><th>Error</th></tr>"
-        + (
-            "".join(
-                f"<tr><td>{html.escape(t.task_code)}</td><td>{_status(t.status)}</td>"
-                f"<td>{html.escape(t.error_message or '')}</td></tr>"
-                for t in e.tasks
-            )
-            or "<tr><td colspan='3'>no active tasks</td></tr>"
-        )
-        + "</table></details>"
-        for e in entries
-    )
-    return (
-        "<h2>Pipeline status</h2><table><tr><th>Pipeline</th><th>Status</th><th>Run</th>"
-        f"<th>Started</th><th>Ended</th></tr>{rows}</table>{sections}"
-    )

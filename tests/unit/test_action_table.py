@@ -58,7 +58,13 @@ def test_roles_follow_the_approved_policy(name, role):
 
 
 def test_reads_record_only_explicit_admin_access_audits():
-    audited = {ActionName.PROJECT_LIST, ActionName.POOL_LIST, ActionName.ACCESS_LIST}
+    # A table preview reads business rows, so it is recorded like an administrator's access reads.
+    audited = {
+        ActionName.PROJECT_LIST,
+        ActionName.POOL_LIST,
+        ActionName.ACCESS_LIST,
+        ActionName.TABLE_PREVIEW,
+    }
     for action in ACTIONS.values():
         if action.method == HttpMethod.GET:
             expected = Audit.REQUEST if action.name in audited else Audit.NONE

@@ -35,7 +35,8 @@ pytestmark = pytest.mark.parametrize(
 
 
 @pytest.fixture
-def agent_scene(engine_db, tmp_path):
+def agent_scene(engine_db, tmp_path, monkeypatch):
+    monkeypatch.setenv("ETL_CRAFT_TEST_PRIVACY_SECRET", "test-only-project-privacy")
     warehouse = ConnectionProfile(
         "WAREHOUSE", "test", f"jdbc:duckdb:{tmp_path / 'w.duckdb'}", "", "NONE", schema="main"
     )
@@ -43,6 +44,7 @@ def agent_scene(engine_db, tmp_path):
         engine_db.config,
         config_path=tmp_path / "craft-connector.yml",
         deployment=DeploymentProfile.CONTROLLER_AGENTS,
+        privacy_hmac_secret="ETL_CRAFT_TEST_PRIVACY_SECRET",
         warehouse=warehouse,
         log_dir=tmp_path / "logs",
     )
@@ -71,10 +73,10 @@ def agent_scene(engine_db, tmp_path):
         )
 
 
-def queue(db, handler="SQL"):
+def queue(db, handler="SQL", **params):
     with db.engine.begin() as conn:
         pipeline = add_pipeline(conn, "P")
-        task = add_task(conn, pipeline, "T", handler)
+        task = add_task(conn, pipeline, "T", handler, **params)
         run = transitions.create_run(conn, pipeline, SYSTEM_ACTOR)
         summary = transitions.find_or_create_task_run(conn, task, run).task_run_id
         return transitions.queue_attempt(conn, summary, SYSTEM_ACTOR)
@@ -549,6 +551,15 @@ def test_cancellation_needs_warehouse_confirmation_from_the_pinned_owner(agent_s
 
     db, client, headers, _, _, config = agent_scene
     attempt = claim(agent_scene)
+    started = post(
+        agent_scene,
+        "report",
+        attempt_id=attempt,
+        operation="START",
+        pid=123,
+        process_start="cancelled-child-birth",
+    )
+    assert started.status_code == 200, started.text
     ctx = OperationContext(db.engine, config, SYSTEM_ACTOR, role=ApiRole.ADMIN)
     pending = invoke(
         ctx,
@@ -562,6 +573,8 @@ def test_cancellation_needs_warehouse_confirmation_from_the_pinned_owner(agent_s
             "version": __version__,
             "attempt_id": attempt,
             "operation": "CANCEL",
+            "pid": 123,
+            "process_start": "cancelled-child-birth",
             "queries_ended": confirmed,
             "error_message": "warehouse confirmation still pending",
         },
@@ -578,7 +591,7 @@ def test_cancellation_needs_warehouse_confirmation_from_the_pinned_owner(agent_s
         from etl_craft.engine.controls import get
 
         view = get(conn, pending.control_id)
-    assert row.status == AttemptStatus.CLAIMED
+    assert row.status == AttemptStatus.RUNNING
     assert row.requested is not None
     assert (row.acknowledged is not None) == confirmed
     assert view.status == ControlStatus.ACKNOWLEDGED
@@ -1220,6 +1233,7 @@ def test_agent_doctor_checks_static_imports_without_executing_project_code(agent
     discovery = client.post("/api/v1/projects/default/agent/doctor", headers=agent, json=payload)
     assert discovery.status_code == 200, discovery.text
     assert discovery.json()["imports"] == ["absent_bundle_dependency_xyz"]
+    assert discovery.json()["environment"] == {"type": "CUSTOM", "name": None}
     observations = payload | {
         "bundle_id": bundle.bundle_id,
         "missing": ["absent_bundle_dependency_xyz"],
@@ -1558,7 +1572,7 @@ def test_running_agent_refuses_api_upgrade_before_mutating_ownership(
 
     db, client, headers, _, _, _ = agent_scene
     attempt = queue(db)
-    monkeypatch.setattr(agents, "__version__", "next-version")
+    monkeypatch.setattr(agents, "__version__", "99.0.0")
     fields = {
         "register": {"pool": "default", "resources": encode(resources())},
         "claim": {"free_kinds": ["warehouse"]},
@@ -1568,7 +1582,13 @@ def test_running_agent_refuses_api_upgrade_before_mutating_ownership(
         f"/api/v1/agent/{route}", headers=headers, json={"version": __version__, **fields}
     )
     assert response.status_code == 409
-    for part in (f"agent version={__version__}", "API version=next-version", "install", "restart"):
+    for part in (
+        f"agent version={__version__}",
+        "local version=99.0.0",
+        ">=99.0.0,<100.0.0",
+        "upgrade",
+        "restart",
+    ):
         assert part in response.text
     with db.engine.connect() as conn:
         row = conn.execute(
@@ -1581,7 +1601,9 @@ def test_running_agent_refuses_api_upgrade_before_mutating_ownership(
         assert row.status == "QUEUED" and row.owner is None
 
 
-def test_registered_agent_stops_claiming_when_the_api_version_changes(agent_scene, monkeypatch):
+def test_registered_agent_stops_claiming_when_the_api_major_version_changes(
+    agent_scene, monkeypatch
+):
     import threading
 
     from etl_craft.agent.client import AgentClient
@@ -1597,7 +1619,7 @@ def test_registered_agent_stops_claiming_when_the_api_version_changes(agent_scen
     def exchange(self, action, request, **kwargs):
         calls.append(action)
         if action == ActionName.AGENT_REGISTER:
-            monkeypatch.setattr(agents, "__version__", "upgraded-api")
+            monkeypatch.setattr(agents, "__version__", "99.0.0")
             return AgentReply({"agent_id": owner, "lease_seconds": 60})
         route = "renew" if action == ActionName.AGENT_RENEW else "claim"
         response = client.post(f"/api/v1/agent/{route}", headers=headers, json=encode(request))
@@ -1608,7 +1630,10 @@ def test_registered_agent_stops_claiming_when_the_api_version_changes(agent_scen
     monkeypatch.setenv("ETL_CRAFT_TOKEN", "test-agent")
     monkeypatch.setattr(AgentClient, "call", exchange)
     stop = threading.Event()
-    with pytest.raises(ConfigurationError, match=r"upgraded-api.*install.*restart"):
+    with pytest.raises(
+        ConfigurationError,
+        match=r"local version=99\.0\.0.*>=99\.0\.0,<100\.0\.0.*upgrade agent.*restart",
+    ):
         AgentLoop(
             config, AgentOptions("http://127.0.0.1:1", "default", ceilings(config)), stop
         ).serve()
@@ -1829,6 +1854,8 @@ def test_agent_start_returns_the_exact_recorded_microsecond_clock(agent_scene):
         "user-token",
         "pool-token",
         "refused-downstream",
+        "hash-mismatch",
+        "stalled",
     ],
 )
 def test_upload_content_is_fenced_to_its_attempt_and_run(agent_scene, refusal):
@@ -1851,14 +1878,24 @@ def test_upload_content_is_fenced_to_its_attempt_and_run(agent_scene, refusal):
         if refusal == "other-run":
             other = add_pipeline(conn, "Other")
             upload_run = transitions.create_run(conn, other, SYSTEM_ACTOR)
+        upload_id = conn.execute(
+            text(
+                "INSERT INTO AUD_ACTIONS (ACTOR,ACTOR_KIND,HOST,COMMAND,ARGUMENTS,OUTCOME) "
+                "VALUES ('person','USER','test','upload','{\"pipeline_code\":\"P\"}','SUCCESS') "
+                "RETURNING ACTION_ID AS action_id"
+            )
+        ).scalar_one()
         conn.execute(
             text(
                 "INSERT INTO AUD_UPLOADS "
-                "(UPLOAD_ID,PIPELINE_ID,ACCOUNT,FILE_NAME,SHA256,SIZE_BYTES,"
-                "PIPELINE_RUN_ID,STATUS,UPLOADED_AT) VALUES (901,:pipeline,'person','data.csv',"
+                "(UPLOAD_ID,PIPELINE_ID,ACCOUNT,FILE_NAME,STORED_NAME,SHA256,SIZE_BYTES,"
+                "PIPELINE_RUN_ID,STATUS,UPLOADED_AT) VALUES "
+                "(:upload,:pipeline,'person','data.csv',:stored_name,"
                 ":sha,8,:run,:status,:now)"
             ),
             {
+                "upload": upload_id,
+                "stored_name": f"{upload_id}-data.csv",
                 "pipeline": pipeline,
                 "run": upload_run,
                 "sha": sha256_hex(b"id|name\n"),
@@ -1871,24 +1908,1076 @@ def test_upload_content_is_fenced_to_its_attempt_and_run(agent_scene, refusal):
                 text("UPDATE AUD_TASK_ATTEMPTS SET LEASE_EXPIRES_AT=:past"),
                 {"past": datetime.now(UTC) - timedelta(seconds=1)},
             )
-    folder = config.host_dir / "uploads" / "901"
+    folder = config.host_dir / "uploads" / "P"
     folder.mkdir(parents=True)
-    (folder / "content").write_bytes(b"id|name\n")
+    content = b"changed" if refusal == "hash-mismatch" else b"id|name\n"
+    (folder / f"{upload_id}-data.csv").write_bytes(content)
     if refusal == "wrong-attempt":
         attempt += 1
     if refusal == "user-token":
         headers = user
     if refusal == "pool-token":
         headers = pool
-    response = client.get(
-        f"/api/v1/agent/uploads/901/content?version={__version__}&attempt_id={attempt}",
-        headers=headers,
-    )
-    if refusal == "none":
+    url = f"/api/v1/agent/uploads/{upload_id}/content?version={__version__}&attempt_id={attempt}"
+    if refusal == "stalled":
+        import psutil
+
+        from etl_craft.engine import upload_files
+        from etl_craft.engine.upload_storage import storage_lock
+        from fixtures.races import paused_after
+
+        replies = []
+        path = str(folder / f"{upload_id}-data.csv")
+        with (
+            paused_after(
+                lambda: replies.append(client.get(url, headers=headers)),
+                owner=upload_files,
+                name="_require",
+                when=lambda *args, **kwargs: any(
+                    f.path == path for f in psutil.Process().open_files()
+                ),
+            ),
+            storage_lock(config, upload_id, wait_seconds=0.1),
+        ):
+            pass
+        response = replies[0]
+    else:
+        response = client.get(url, headers=headers)
+    if refusal == "hash-mismatch":
+        assert response.status_code == 409, response.text
+        for expected in [
+            str(upload_id),
+            "SHA-256",
+            sha256_hex(b"id|name\n"),
+            sha256_hex(content),
+            "upload the file again",
+        ]:
+            assert expected in response.text
+        assert str(config.host_dir) not in response.text
+    elif refusal in {"none", "stalled"}:
         assert response.status_code == 200, response.text
         assert response.content == b"id|name\n"
         assert str(config.host_dir) not in str(response.headers)
     else:
         assert response.status_code in {401, 403}, response.text
-        for expected in ["901", str(attempt), "run", "expected"]:
+        for expected in [str(upload_id), str(attempt), "run", "expected"]:
             assert expected in response.text
+
+
+def test_only_a_live_erasure_attempt_can_request_host_erasure(agent_scene, monkeypatch):
+    monkeypatch.delenv("ETL_CRAFT_TEST_PRIVACY_SECRET")
+    attempt = claim(agent_scene, handler="ERASURE")
+    answer = post(agent_scene, "report", attempt_id=attempt, operation="ERASURE")
+    # The missing secret reaches the shared preflight only for a live attempt.
+    assert answer.status_code != 200
+    assert "Hmac_secret" in answer.text
+    db, _, _, _, _, _ = agent_scene
+    with db.engine.begin() as conn:
+        conn.execute(
+            text("UPDATE AUD_TASK_ATTEMPTS SET LEASE_EXPIRES_AT=:past WHERE ATTEMPT_ID=:id"),
+            {"past": datetime.now(UTC) - timedelta(seconds=1), "id": attempt},
+        )
+    refused = post(agent_scene, "report", attempt_id=attempt, operation="ERASURE")
+    assert refused.status_code == 409
+
+
+def test_a_sql_attempt_cannot_invoke_the_erasure_handler(agent_scene):
+    attempt = claim(agent_scene, handler="SQL")
+    answer = post(agent_scene, "report", attempt_id=attempt, operation="ERASURE")
+    assert answer.status_code == 403
+    assert "expected ERASURE" in answer.text
+
+
+def test_host_erasure_binds_locks_and_sessions_to_the_fenced_attempt(agent_scene, monkeypatch):
+    from etl_craft.core.erasure import ErasureReport
+    from etl_craft.engine import resource_locks
+    from etl_craft.handlers import erasure
+
+    attempt = claim(agent_scene, handler="ERASURE")
+    seen = []
+
+    def applied(engine, config, entries, *, store):
+        holder = resource_locks.current_holder("fallback")
+        assert holder.attempt_id == attempt
+        assert holder.holder_id == store.identity.holder_id
+        assert holder.owner == store.identity.owner
+        assert resource_locks.holder_tag(holder.holder_id) == store.session_tag
+        holder_row = holder.parameters()
+        assert holder_row["attempt_id"] == attempt
+        store.state()
+        seen.append(holder.holder_id)
+        return ErasureReport()
+
+    monkeypatch.setattr(erasure, "apply_entries", applied)
+    answer = post(agent_scene, "report", attempt_id=attempt, operation="ERASURE")
+    assert answer.status_code == 200, answer.text
+    assert len(seen) == 1
+
+
+def test_host_erasure_reads_only_the_attempts_project_register(agent_scene, monkeypatch):
+    from etl_craft.core.erasure import ErasureReport
+    from etl_craft.engine.queries import statement
+    from etl_craft.engine.repository.pipelines import current_project_id, selected_project
+    from etl_craft.handlers import erasure
+
+    db, client, headers, _, _, _ = agent_scene
+    with db.engine.begin() as conn:
+        project = conn.execute(
+            text(
+                "INSERT INTO CFG_PROJECTS (PROJECT_CODE,PROJECT_NAME,DEFAULT_POOL) "
+                "VALUES ('tenant','Tenant','default') RETURNING PROJECT_ID AS project_id"
+            )
+        ).scalar_one()
+        for identity, digest in ((1, "a" * 64), (project, "b" * 64)):
+            conn.execute(
+                text(
+                    "INSERT INTO AUD_ERASURE_SUBJECTS "
+                    "(PROJECT_ID,TABLE_NAME,COLUMN_NAME,SUBJECT_KEY,KEY_HMAC,REASON,"
+                    "CREATED_BY,CREATED_AT,KEY_CHECK) VALUES "
+                    "(:project,'warehouse.ds.people','person',:key,:digest,'request','owner',:now,:check)"
+                ),
+                {
+                    "project": identity,
+                    "key": f"private-{identity}",
+                    "digest": digest,
+                    "check": "c" * 64,
+                    "now": datetime.now(UTC),
+                },
+            )
+    with selected_project(project), db.engine.begin() as conn:
+        pipeline = add_pipeline(conn, "TENANT_ERASURE", project_id=project)
+        task = add_task(conn, pipeline, "ERASE", handler="ERASURE")
+        run = transitions.create_run(conn, pipeline, SYSTEM_ACTOR)
+        summary = transitions.find_or_create_task_run(conn, task, run).task_run_id
+        attempt = transitions.queue_attempt(conn, summary, SYSTEM_ACTOR)
+    claimed = client.post(
+        "/api/v1/agent/claim",
+        headers=headers,
+        json={"version": __version__, "free_kinds": ["warehouse"]},
+    )
+    assert claimed.status_code == 200, claimed.text
+    assert claimed.json()["data"]["task"]["attempt_id"] == attempt
+
+    def applied(engine, config, entries, *, store):
+        assert current_project_id() == project
+        assert [entry.key_hmac for entry in entries] == ["b" * 64]
+        with engine.connect() as conn:
+            rows = (
+                conn.execute(statement(conn, "erasure_entries"), {"all_entries": False})
+                .mappings()
+                .all()
+            )
+        assert {row["key_hmac"] for row in rows} == {"b" * 64}
+        return ErasureReport()
+
+    monkeypatch.setattr(erasure, "apply_entries", applied)
+    answer = post(agent_scene, "report", attempt_id=attempt, operation="ERASURE")
+    assert answer.status_code == 200, answer.text
+    assert "private-" not in answer.text
+
+
+def protected_claim(scene, project_id=None, *, validation=None):
+    from etl_craft.config.targets import active_catalog
+    from etl_craft.engine import locks
+    from etl_craft.engine.repository.pipelines import selected_project
+
+    db, client, headers, _, _, config = scene
+    with selected_project(project_id), db.engine.begin() as conn:
+        pipeline = add_pipeline(conn, "PROTECTED", project_id=project_id)
+        task = add_task(conn, pipeline, "write", TARGET_OBJECT="main.people")
+        validator = (
+            add_task(conn, pipeline, "validate", "FILE_VALIDATION")
+            if validation is not None
+            else None
+        )
+        run = transitions.create_run(conn, pipeline, SYSTEM_ACTOR)
+        if validator is not None:
+            checked = transitions.find_or_create_task_run(conn, validator, run).task_run_id
+            if validation:
+                accepted = transitions.queue_attempt(conn, checked, SYSTEM_ACTOR)
+                transitions.claim_attempt(
+                    conn,
+                    accepted,
+                    SYSTEM_ACTOR,
+                    owner="validator",
+                    lease_expires_at=datetime.now(UTC) + timedelta(seconds=60),
+                )
+                transitions.finish_attempt(
+                    conn, accepted, AttemptStatus.SUCCESS, SYSTEM_ACTOR, owner="validator"
+                )
+            transitions.finish_task_run(conn, checked, status="SUCCESS")
+        summary = transitions.find_or_create_task_run(conn, task, run).task_run_id
+        attempt = transitions.queue_attempt(conn, summary, SYSTEM_ACTOR)
+    reply = client.post(
+        "/api/v1/agent/claim",
+        headers=headers,
+        json={"version": __version__, "free_kinds": ["warehouse"]},
+    )
+    assert reply.status_code == 200, reply.text
+    credential = reply.json()["data"]["credential"]
+    attempt_headers = {"Authorization": "Bearer " + credential}
+    scene = (db, client, attempt_headers, scene[3], scene[4], config)
+    key = locks.target("main.people", active_catalog(config)).key
+    return scene, attempt, key
+
+
+def protection_intent():
+    return {
+        "status": "PENDING",
+        "events": [
+            {
+                "kind": "WRITE",
+                "key_hash": "a" * 32,
+                "columns": ["name"],
+                "value_hashes": ["b" * 32],
+            }
+        ],
+    }
+
+
+def test_protection_reports_require_admitted_target_live_lock_and_fenced_credential(agent_scene):
+    scene, attempt, key = protected_claim(agent_scene)
+    fields = {"attempt_id": attempt, "operation": "PROTECTION_EVENT", "target": "main.people"}
+    refused = post(scene, "report", **fields, protection=protection_intent())
+    assert refused.status_code == 409 and "lock" in refused.text, refused.text
+    assert (
+        post(scene, "report", attempt_id=attempt, operation="LOCK", lock_key=key).status_code == 200
+    )
+    wrong = post(
+        scene, "report", **{**fields, "target": "main.other"}, protection=protection_intent()
+    )
+    assert wrong.status_code == 403 and "admitted" in wrong.text, wrong.text
+    pending = post(scene, "report", **fields, protection=protection_intent())
+    assert pending.status_code == 200, pending.text
+    request = pending.json()["data"]
+    cross_attempt = post(
+        scene,
+        "report",
+        **{**fields, "attempt_id": attempt + 1000},
+        protection={"status": "COMMITTED", "request_id": request},
+    )
+    assert cross_attempt.status_code in {401, 403, 409}, cross_attempt.text
+    quoted = post(
+        scene,
+        "report",
+        attempt_id=attempt,
+        operation="PROTECTION_READ",
+        target='"main"."people"',
+    )
+    assert quoted.status_code == 200, quoted.text
+    page = post(
+        scene, "report", attempt_id=attempt, operation="PROTECTION_READ", target="main.people"
+    )
+    assert page.status_code == 200, page.text
+    assert page.json()["data"]["records"][0]["request_id"] == request
+    final = {"status": "COMMITTED", "request_id": request}
+    assert post(scene, "report", **fields, protection=final).status_code == 200
+    assert post(scene, "report", **fields, protection=final).status_code == 200
+    db = scene[0]
+    with db.engine.begin() as conn:
+        conn.execute(
+            text("UPDATE AUD_TASK_ATTEMPTS SET LEASE_EXPIRES_AT=:past WHERE ATTEMPT_ID=:id"),
+            {"past": datetime.now(UTC) - timedelta(seconds=60), "id": attempt},
+        )
+    stale = post(scene, "report", **fields, protection=protection_intent())
+    assert stale.status_code in {401, 409}, stale.text
+
+
+@pytest.mark.parametrize("bad", ["raw_field", "raw_hash", "batch", "columns", "request"])
+@pytest.mark.parametrize("operation", ["PROTECTION_EVENT", "PROTECTION_READ"])
+def test_protection_report_schema_refuses_values_and_oversized_lists(
+    agent_scene, bad, operation, caplog
+):
+    from etl_craft.core.protection import MAX_PROTECTION_COLUMNS, MAX_PROTECTION_EVENTS
+
+    scene, attempt, key = protected_claim(agent_scene)
+    assert (
+        post(scene, "report", attempt_id=attempt, operation="LOCK", lock_key=key).status_code == 200
+    )
+    intent = protection_intent()
+    if bad == "raw_field":
+        intent["events"][0]["value"] = "private-business-value"
+    elif bad == "raw_hash":
+        intent["events"][0]["value_hashes"] = ["private-business-value"]
+    elif bad == "batch":
+        intent["events"] *= MAX_PROTECTION_EVENTS + 1
+    elif bad == "request":
+        intent["request_id"] = "a" * 32
+    else:
+        intent["events"][0]["columns"] = [f"c_{i}" for i in range(MAX_PROTECTION_COLUMNS + 1)]
+        intent["events"][0]["value_hashes"] = ["b" * 32] * (MAX_PROTECTION_COLUMNS + 1)
+    if operation == "PROTECTION_READ":
+        from uuid import uuid4
+
+        candidate = {
+            "request_id": str(uuid4()),
+            "columns": intent["events"][0]["columns"],
+            "hashes": ["a" * 32],
+            "cursor": 0,
+        }
+        if bad == "raw_field":
+            candidate["value"] = "private-business-value"
+        elif bad == "raw_hash":
+            candidate["hashes"] = ["private-business-value"]
+        elif bad == "batch":
+            candidate["hashes"] *= MAX_PROTECTION_EVENTS + 1
+        elif bad == "request":
+            candidate["request_id"] = "a" * 32
+        payload = {"protection_candidates": candidate}
+    else:
+        payload = {"protection": intent}
+    refused = post(
+        scene, "report", attempt_id=attempt, operation=operation, target="main.people", **payload
+    )
+    assert refused.status_code == 400, refused.text
+    assert "private-business-value" not in refused.text + caplog.text
+    assert "a" * 32 not in refused.text + caplog.text
+    with scene[0].engine.connect() as conn:
+        assert conn.execute(text("SELECT COUNT(*) FROM AUD_PROTECTION_EVENTS")).scalar_one() == 0
+
+
+def test_protection_reports_derive_project_from_the_admitted_run(agent_scene):
+    from etl_craft.core.enums_protection import ProtectionKind, ProtectionStatus
+    from etl_craft.core.protection import ProtectionEvent, ProtectionReport
+    from etl_craft.engine.protection_events import append as append_event
+    from etl_craft.engine.protection_events import target_identity
+
+    db = agent_scene[0]
+    with db.engine.begin() as conn:
+        project = conn.execute(
+            text(
+                "INSERT INTO CFG_PROJECTS (PROJECT_CODE,PROJECT_NAME,DEFAULT_POOL) "
+                "VALUES ('tenant','Tenant','default') RETURNING PROJECT_ID AS project_id"
+            )
+        ).scalar_one()
+        default_request = append_event(
+            conn,
+            target_identity(agent_scene[-1], "main.people")[0],
+            ProtectionReport(
+                ProtectionStatus.PENDING,
+                (ProtectionEvent(ProtectionKind.WRITE, "c" * 32, ("name",), ("d" * 32,)),),
+            ),
+            None,
+            privacy_key="test-only-project-privacy",
+        )
+    scene, attempt, key = protected_claim(agent_scene, project_id=project)
+    assert (
+        post(scene, "report", attempt_id=attempt, operation="LOCK", lock_key=key).status_code == 200
+    )
+    pending = post(
+        scene,
+        "report",
+        attempt_id=attempt,
+        operation="PROTECTION_EVENT",
+        target="main.people",
+        protection=protection_intent(),
+    )
+    assert pending.status_code == 200, pending.text
+    request = pending.json()["data"]
+    page = post(
+        scene, "report", attempt_id=attempt, operation="PROTECTION_READ", target="main.people"
+    )
+    assert page.status_code == 200, page.text
+    assert {r["request_id"] for r in page.json()["data"]["records"]} == {request}
+    final = post(
+        scene,
+        "report",
+        attempt_id=attempt,
+        operation="PROTECTION_EVENT",
+        target="main.people",
+        protection={"status": "COMMITTED", "request_id": request},
+    )
+    assert final.status_code == 200, final.text
+    with db.engine.connect() as conn:
+        rows = (
+            conn.execute(
+                text(
+                    "SELECT PROJECT_ID AS project_id,CREATED_BY AS created_by,"
+                    "REQUEST_ID AS request_id,"
+                    "STATUS AS status FROM AUD_PROTECTION_EVENTS ORDER BY EVENT_ID"
+                )
+            )
+            .mappings()
+            .all()
+        )
+    assert {r["project_id"] for r in rows if r["request_id"] == request} == {project}
+    assert {r["created_by"] for r in rows if r["request_id"] == request} == {SYSTEM_ACTOR.name}
+    assert [r["status"] for r in rows if r["request_id"] == default_request] == ["PENDING"]
+
+
+def test_protection_agent_cannot_invent_an_accepted_upload(agent_scene):
+    scene, attempt, key = protected_claim(agent_scene)
+    assert (
+        post(scene, "report", attempt_id=attempt, operation="LOCK", lock_key=key).status_code == 200
+    )
+    intent = protection_intent() | {"upload_id": 999999}
+    response = post(
+        scene,
+        "report",
+        attempt_id=attempt,
+        operation="PROTECTION_EVENT",
+        target="main.people",
+        protection=intent,
+    )
+    assert response.status_code == 403, response.text
+    for part in (str(attempt), "people", "999999", "verified accepted", "FILE_VALIDATION"):
+        assert part in response.text, response.text
+    with scene[0].engine.connect() as conn:
+        assert conn.execute(text("SELECT COUNT(*) FROM AUD_PROTECTION_EVENTS")).scalar_one() == 0
+
+
+@pytest.mark.parametrize("case", ["accepted", "refused", "foreign_run", "unvalidated"])
+def test_agent_upload_event_uses_only_its_verified_receipt_and_uploader(agent_scene, case):
+    scene, attempt, key = protected_claim(agent_scene, validation=case != "unvalidated")
+    db = scene[0]
+    with db.engine.begin() as conn:
+        identity = (
+            conn.execute(
+                text(
+                    "SELECT t.PIPELINE_RUN_ID AS run_id,p.PIPELINE_ID AS pipeline_id "
+                    "FROM AUD_TASK_ATTEMPTS a JOIN AUD_TASK_RUN_LOG t "
+                    "ON t.TASK_RUN_ID=a.TASK_RUN_ID "
+                    "JOIN AUD_PIPELINES_RUN_LOG p ON p.PIPELINE_RUN_ID=t.PIPELINE_RUN_ID "
+                    "WHERE a.ATTEMPT_ID=:attempt"
+                ),
+                {"attempt": attempt},
+            )
+            .mappings()
+            .one()
+        )
+        pipeline, run = identity["pipeline_id"], identity["run_id"]
+        if case == "foreign_run":
+            pipeline = add_pipeline(conn, "OTHER_RECEIPT")
+            run = transitions.create_run(conn, pipeline, SYSTEM_ACTOR)
+        upload = conn.execute(
+            text(
+                "INSERT INTO AUD_UPLOADS (PIPELINE_ID,ACCOUNT,FILE_NAME,STORED_NAME,SHA256,"
+                "SIZE_BYTES,PIPELINE_RUN_ID,STATUS,UPLOADED_AT) "
+                "VALUES (:pipeline,'person','data.csv','data.csv',:hash,1,:run,:status,:now) "
+                "RETURNING UPLOAD_ID AS upload_id"
+            ),
+            {
+                "pipeline": pipeline,
+                "run": run,
+                "status": "REFUSED" if case == "refused" else "QUEUED",
+                "hash": "a" * 64,
+                "now": datetime.now(UTC),
+            },
+        ).scalar_one()
+    locked = post(scene, "report", attempt_id=attempt, operation="LOCK", lock_key=key)
+    assert locked.status_code == 200, locked.text
+    response = post(
+        scene,
+        "report",
+        attempt_id=attempt,
+        operation="PROTECTION_EVENT",
+        target="main.people",
+        protection=protection_intent() | {"upload_id": upload},
+    )
+    if case == "accepted":
+        assert response.status_code == 200, response.text
+        request = response.json()["data"]
+        final = post(
+            scene,
+            "report",
+            attempt_id=attempt,
+            operation="PROTECTION_EVENT",
+            target="main.people",
+            protection={"status": "COMMITTED", "request_id": request},
+        )
+        assert final.status_code == 200, final.text
+        with db.engine.connect() as conn:
+            rows = (
+                conn.execute(
+                    text(
+                        "SELECT UPLOAD_ID AS upload_id,CREATED_BY AS actor "
+                        "FROM AUD_PROTECTION_EVENTS"
+                    )
+                )
+                .mappings()
+                .all()
+            )
+        assert len(rows) == 2
+        assert all(row["upload_id"] == upload and row["actor"] == "person" for row in rows)
+    else:
+        assert response.status_code == 403, response.text
+        assert "verified accepted upload" in response.text
+        with db.engine.connect() as conn:
+            assert (
+                conn.execute(text("SELECT COUNT(*) FROM AUD_PROTECTION_EVENTS")).scalar_one() == 0
+            )
+
+
+@pytest.mark.parametrize("kind", ["HARD_DELETE", "ERASURE"])
+@pytest.mark.parametrize("size", [1, 257])
+def test_pending_deletion_candidates_match_without_disclosing_fingerprints(
+    agent_scene, kind, caplog, size
+):
+    scene, attempt, lock = protected_claim(agent_scene)
+    assert (
+        post(scene, "report", attempt_id=attempt, operation="LOCK", lock_key=lock).status_code
+        == 200
+    )
+    import json
+
+    from etl_craft.core.enums_protection import ProtectionKind, ProtectionStatus
+    from etl_craft.core.protection import ProtectionEvent, ProtectionReport
+    from etl_craft.engine.protection_events import append, target_identity
+
+    event = ProtectionEvent(ProtectionKind(kind), "a" * 32, ("name",), (None,))
+    with scene[0].engine.begin() as conn:
+        target = target_identity(scene[-1], "main.people")[0]
+        request = append(
+            conn,
+            target,
+            ProtectionReport(ProtectionStatus.PENDING, (event,) * min(size, 256)),
+            None,
+            privacy_key="test-only-project-privacy",
+        )
+        if size > 256:
+            append(
+                conn,
+                target,
+                ProtectionReport(ProtectionStatus.PENDING, (event,), request),
+                None,
+                privacy_key="test-only-project-privacy",
+            )
+    query = {"request_id": request, "columns": ["name"], "hashes": ["a" * 32], "cursor": 0}
+    answer = post(
+        scene,
+        "report",
+        attempt_id=attempt,
+        operation="PROTECTION_READ",
+        target="main.people",
+        protection_candidates=query,
+    )
+    assert answer.status_code == 200, answer.text
+    assert len(answer.json()["data"]["matched"]) == min(size, 256)
+    if size > 256:
+        query["cursor"] = answer.json()["data"]["cursor"]
+        next_page = post(
+            scene,
+            "report",
+            attempt_id=attempt,
+            operation="PROTECTION_READ",
+            target="main.people",
+            protection_candidates=query,
+        )
+        assert next_page.status_code == 200, next_page.text
+        assert len(next_page.json()["data"]["matched"]) == 1
+        assert next_page.json()["data"]["cursor"] is None
+        assert "a" * 32 not in next_page.text
+        query["cursor"] = 0
+    assert "a" * 32 not in answer.text + caplog.text
+    query["hashes"] = ["c" * 32]
+    absent = post(
+        scene,
+        "report",
+        attempt_id=attempt,
+        operation="PROTECTION_READ",
+        target="main.people",
+        protection_candidates=query,
+    )
+    assert absent.status_code == 200
+    assert absent.json()["data"]["matched"] == []
+    wrong = post(
+        scene,
+        "report",
+        attempt_id=attempt,
+        operation="PROTECTION_READ",
+        target="main.other",
+        protection_candidates=query,
+    )
+    assert wrong.status_code == 403, wrong.text
+    assert "admitted-target" in wrong.text
+    agent_intent = post(
+        scene,
+        "report",
+        attempt_id=attempt,
+        operation="PROTECTION_EVENT",
+        target="main.people",
+        protection=protection_intent(),
+    )
+    assert agent_intent.status_code == 200, agent_intent.text
+    with scene[0].engine.connect() as conn:
+        rows = (
+            conn.execute(text("SELECT KEY_HASH AS key_hash FROM AUD_PROTECTION_EVENTS"))
+            .scalars()
+            .all()
+        )
+        values = (
+            conn.execute(text("SELECT VALUE_HASHES AS value_hashes FROM AUD_PROTECTION_EVENTS"))
+            .scalars()
+            .all()
+        )
+    assert "test-only-project-privacy" not in (
+        answer.text + agent_intent.text + caplog.text + str(rows) + str(values)
+    )
+    assert "b" * 32 not in str(values)
+    assert all(len(value) == 64 for row in values for value in json.loads(row) if value is not None)
+    assert len(rows) == size + 1 and len(set(rows)) == 1
+    assert all(len(value) == 64 for value in rows)
+    assert "a" * 32 not in str(rows)
+    with scene[0].engine.begin() as conn:
+        conn.execute(
+            text("UPDATE AUD_TASK_ATTEMPTS SET LEASE_EXPIRES_AT=:past WHERE ATTEMPT_ID=:attempt"),
+            {"past": datetime.now(UTC) - timedelta(seconds=60), "attempt": attempt},
+        )
+    stale = post(
+        scene,
+        "report",
+        attempt_id=attempt,
+        operation="PROTECTION_READ",
+        target="main.people",
+        protection_candidates=query,
+    )
+    assert stale.status_code in {401, 409}, stale.text
+
+
+def test_claim_delivers_only_declared_secrets_over_tls(agent_scene, monkeypatch):
+    db, client, headers, human, _, _ = agent_scene
+    monkeypatch.setenv("SOURCE_TOKEN", "private-claim-value")
+    monkeypatch.setenv("UNDECLARED_TOKEN", "unrelated-value")
+    attempt = queue(db, "PYTHON", SECRETS="SOURCE_TOKEN")
+    client.base_url = "https://testserver"
+    response = client.post(
+        "/api/v1/agent/claim",
+        headers=headers,
+        json={"version": __version__, "free_kinds": ["python"]},
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["data"]["task"]["attempt_id"] == attempt
+    assert response.json()["data"]["secret_values"] == {"SOURCE_TOKEN": "private-claim-value"}
+    assert "unrelated-value" not in response.text
+    state = client.get("/api/v1/projects/default/status", headers=human)
+    assert "private-claim-value" not in state.text
+
+
+@pytest.mark.parametrize("refusal", ["http", "expired", "fenced"])
+def test_task_secrets_are_not_resolved_for_refused_claims(agent_scene, monkeypatch, refusal):
+    from etl_craft.services.operations import agent_claims, task_secrets
+
+    db, client, headers, _, agent_id, _ = agent_scene
+    attempt = queue(db, "PYTHON", SECRETS="SOURCE_TOKEN")
+    called = []
+    monkeypatch.setattr(task_secrets, "resolve", lambda task: called.append(task) or {})
+    if refusal != "http":
+        client.base_url = "https://testserver"
+    if refusal == "expired":
+        with db.engine.begin() as conn:
+            conn.execute(
+                text("UPDATE CFG_API_TOKENS SET EXPIRES_AT=:past WHERE TOKEN_ID=:id"),
+                {"past": datetime(2000, 1, 1, tzinfo=UTC), "id": agent_id},
+            )
+    if refusal == "fenced":
+
+        def expire(point):
+            if point == "agent.after_claim":
+                with db.engine.begin() as conn:
+                    conn.execute(
+                        text(
+                            "UPDATE AUD_TASK_ATTEMPTS SET LEASE_EXPIRES_AT=:past "
+                            "WHERE ATTEMPT_ID=:id"
+                        ),
+                        {"past": datetime(2000, 1, 1, tzinfo=UTC), "id": attempt},
+                    )
+
+        monkeypatch.setattr(agent_claims, "fault_point", expire)
+    response = client.post(
+        "/api/v1/agent/claim",
+        headers=headers,
+        json={"version": __version__, "free_kinds": ["python"]},
+    )
+    assert response.status_code != 200, response.text
+    assert called == []
+    if refusal == "http":
+        assert "HTTPS" in response.text and "localhost" in response.text
+
+
+def test_project_two_agent_setup_and_merge_keep_contracts_isolated(agent_scene, monkeypatch):
+    from etl_craft.agent.task_store import RemoteTaskStore
+    from etl_craft.core.counts import Counts
+    from etl_craft.core.enums import AgentReport
+    from etl_craft.core.time import as_utc
+    from etl_craft.engine.repository.hash_versions import fetch_hash_version, save_hash_version
+    from etl_craft.engine.repository.pipelines import current_project_id, selected_project
+    from etl_craft.handlers import sql
+    from etl_craft.handlers.registry import TaskContext
+    from etl_craft.services.operations import agent_reports
+    from etl_craft.services.operations.agent_models import AgentReply
+    from etl_craft.services.operations.serialization import from_json
+    from etl_craft.warehouse.connection import build_warehouse_engine
+    from fixtures.actions import act
+
+    db, client, headers, _, _, config = agent_scene
+    admin = OperationContext(db.engine, config, SYSTEM_ACTOR, role=ApiRole.ADMIN)
+    act(admin, ActionName.PROJECT_ADD, project="second", reason="Agent isolation fixture")
+    with db.engine.begin() as conn:
+        project = conn.execute(
+            text("SELECT PROJECT_ID AS project_id FROM CFG_PROJECTS WHERE PROJECT_CODE='second'")
+        ).scalar_one()
+        with selected_project(project):
+            pipeline = add_pipeline(conn, "P", project_id=project)
+            setup = add_task(
+                conn,
+                pipeline,
+                "setup",
+                SQL_ACTION="SETUP_TABLE",
+                TARGET_OBJECT="main.people",
+                SETUP_FOR="SCD1_MERGE",
+                SELECT_QUERY="SELECT 1 AS id, 'Ann' AS name",
+            )
+            merge = add_task(
+                conn,
+                pipeline,
+                "merge",
+                SQL_ACTION="SCD1_MERGE",
+                TARGET_OBJECT="main.people",
+                MERGE_KEY="id",
+                MERGE_COMPARE_COLUMNS="name",
+                SELECT_QUERY="SELECT 1 AS id, 'Ann' AS name",
+            )
+            run = transitions.create_run(conn, pipeline, SYSTEM_ACTOR)
+        with selected_project(1):
+            save_hash_version(conn, "w.main.people", 1)
+    lock = agent_reports._lock
+
+    def scoped_lock(*args):
+        assert current_project_id() == project
+        return lock(*args)
+
+    monkeypatch.setattr(agent_reports, "_lock", scoped_lock)
+    denied_token = act(admin, ActionName.TOKEN_CREATE, name="ungranted", role=ApiRole.DEVELOPER)
+    refused = client.post(
+        "/api/v1/projects/second/rehash",
+        headers={"Authorization": "Bearer " + denied_token.token},
+        json={"target": "main.people"},
+    )
+    assert refused.status_code == 404, refused.text
+    assert "second" in refused.text
+    for task_id in (setup, merge):
+        with db.engine.begin() as conn:
+            task_run = transitions.find_or_create_task_run(conn, task_id, run).task_run_id
+            attempt = transitions.queue_attempt(conn, task_run, SYSTEM_ACTOR)
+        response = client.post(
+            "/api/v1/agent/claim",
+            headers=headers,
+            json={"version": __version__, "free_kinds": ["warehouse"]},
+        )
+        assert response.status_code == 200, response.text
+        claim = response.json()["data"]
+        assert claim["task"]["attempt_id"] == attempt
+        credential = {"Authorization": "Bearer " + claim["credential"]}
+
+        class Client:
+            def __init__(self, credential):
+                self.credential = credential
+
+            def call(self, action, request, timeout=None):
+                reply = client.post(
+                    "/api/v1/agent/report", headers=self.credential, json=encode(request)
+                )
+                assert reply.status_code == 200, reply.text
+                return AgentReply(reply.json()["data"])
+
+        store = RemoteTaskStore(Client(credential), attempt, lambda _: None, claim["holder_id"])
+        started = store.call(replace(store.request(AgentReport.START), pid=123))
+        context = from_json(TaskContext, claim["task"] | {"config": encode(config)})
+        context = replace(context, started_at=as_utc(started["started_at"]))
+        result = sql.run(context, store)
+        ended = client.post(
+            "/api/v1/agent/report",
+            headers=credential,
+            json=encode(
+                replace(
+                    store.request(AgentReport.END),
+                    status=AttemptStatus.SUCCESS,
+                    counts=Counts(**result.parameters()),
+                )
+            ),
+        )
+        assert ended.status_code == 200, ended.text
+    warehouse = build_warehouse_engine(config)
+    try:
+        with warehouse.connect() as conn:
+            row = conn.execute(
+                text("SELECT id AS id, name AS name, pipeline_id AS pipeline_id FROM main.people")
+            ).one()
+            assert row.id == 1 and row.name == "Ann" and row.pipeline_id == pipeline
+    finally:
+        warehouse.dispose()
+    with db.engine.connect() as conn:
+        with selected_project(project):
+            assert fetch_hash_version(conn, "w.main.people") == 2
+        with selected_project(1):
+            assert fetch_hash_version(conn, "w.main.people") == 1
+        rows = conn.execute(
+            text(
+                "SELECT PROJECT_ID AS project_id FROM AUD_TARGET_HASH_VERSION WHERE HASH_VERSION=2"
+            )
+        ).all()
+        assert rows and all(row.project_id == project for row in rows)
+        assert (
+            conn.execute(
+                text(
+                    "SELECT COUNT(*) AS n FROM AUD_TASK_RUN_LOG l "
+                    "JOIN CFG_TASKS t ON t.TASK_ID=l.TASK_ID "
+                    "JOIN CFG_PIPELINES p ON p.PIPELINE_ID=t.PIPELINE_ID "
+                    "WHERE l.PIPELINE_RUN_ID=:run AND p.PROJECT_ID<>:project"
+                ),
+                {"run": run, "project": project},
+            ).scalar_one()
+            == 0
+        )
+
+
+@pytest.mark.parametrize("status", ["SUCCESS", "FAILED", "TIMED_OUT", "CANCELLED"])
+@pytest.mark.parametrize("queries_ended", [False, True])
+def test_every_observed_agent_ending_records_only_verified_evidence(
+    agent_scene, status, queries_ended
+):
+    db, _, _, _, _, _ = agent_scene
+    attempt = claim(agent_scene)
+    started = post(
+        agent_scene,
+        "report",
+        attempt_id=attempt,
+        operation="START",
+        pid=123,
+        process_start="recorded-process-birth",
+    )
+    assert started.status_code == 200, started.text
+    ended = post(
+        agent_scene,
+        "report",
+        attempt_id=attempt,
+        operation="END",
+        status=status,
+        pid=123,
+        process_start="recorded-process-birth",
+        queries_ended=queries_ended,
+    )
+    assert ended.status_code == 200, ended.text
+    with db.engine.connect() as conn:
+        rows = (
+            conn.execute(
+                text(
+                    "SELECT KIND AS kind,EVIDENCE_KIND AS evidence_kind,ACTOR AS actor "
+                    "FROM AUD_ATTEMPT_ACKNOWLEDGEMENTS WHERE ATTEMPT_ID=:id"
+                ),
+                {"id": attempt},
+            )
+            .mappings()
+            .all()
+        )
+    assert {r["kind"] for r in rows} == ({"PROCESS", "QUERIES"} if queries_ended else {"PROCESS"})
+
+    assert all(row["evidence_kind"] == "VERIFIED" and row["actor"] for row in rows)
+    if status in ("SUCCESS", "FAILED", "TIMED_OUT", "CANCELLED"):
+        from etl_craft.core.enums import OffsetType
+        from etl_craft.core.time import as_utc
+        from etl_craft.engine.repository.offsets import StoredOffset
+        from etl_craft.engine.timestamp_windows import WindowDefinition, admit_window
+        from fixtures.metadata import start_run
+
+        with db.engine.begin() as conn:
+            pipeline = add_pipeline(conn, "DM")
+            task = add_task(conn, pipeline, "read")
+            run = start_run(conn, pipeline)
+            summary = transitions.find_or_create_task_run(conn, task, run).task_run_id
+            window = admit_window(
+                conn,
+                task,
+                summary,
+                datetime.now(UTC),
+                WindowDefinition(
+                    StoredOffset(OffsetType.TIMESTAMP, "2000-01-01T00:00:00+00:00"), ("P",)
+                ),
+            )
+        source_start = as_utc(started.json()["data"]["started_at"])
+        assert (
+            (window.high > source_start)
+            if queries_ended or status == "SUCCESS"
+            else (window.high == source_start)
+        )
+
+
+def test_agent_ending_refuses_a_foreign_process_identity(agent_scene):
+    db, *_ = agent_scene
+    attempt = claim(agent_scene)
+    assert (
+        post(
+            agent_scene,
+            "report",
+            attempt_id=attempt,
+            operation="START",
+            pid=123,
+            process_start="admitted-birth",
+        ).status_code
+        == 200
+    )
+    answer = post(
+        agent_scene,
+        "report",
+        attempt_id=attempt,
+        operation="END",
+        status="FAILED",
+        pid=124,
+        process_start="foreign-birth",
+        queries_ended=True,
+    )
+    assert answer.status_code == 403 and "PID/birth" in answer.text
+    with db.engine.connect() as conn:
+        assert (
+            conn.execute(
+                text("SELECT STATUS AS status FROM AUD_TASK_ATTEMPTS WHERE ATTEMPT_ID=:id"),
+                {"id": attempt},
+            ).scalar_one()
+            == "RUNNING"
+        )
+        assert (
+            conn.execute(
+                text("SELECT COUNT(*) AS n FROM AUD_ATTEMPT_ACKNOWLEDGEMENTS WHERE ATTEMPT_ID=:id"),
+                {"id": attempt},
+            ).scalar_one()
+            == 0
+        )
+
+
+@pytest.mark.parametrize("start_committed", [False, True])
+def test_start_response_loss_ends_the_claim_and_keeps_observed_identity(
+    agent_scene, tmp_path, monkeypatch, start_committed
+):
+    import sys
+    import tempfile
+    from types import SimpleNamespace
+
+    from etl_craft.agent import loop
+    from etl_craft.core.errors import ServerError
+    from etl_craft.execution.processes import ChildSpec, run_child
+
+    db, _, headers, _, _, config = agent_scene
+    attempt = claim(agent_scene, "PYTHON")
+    temporary = tempfile.TemporaryDirectory(dir=tmp_path)
+    task = loop.RunningTask(attempt, loop.SlotKind.PYTHON, tmp_path, temporary, 1000)
+    calls = 0
+
+    def exchange(action, request):
+        nonlocal calls
+        calls += 1
+        if calls == 1 and not start_committed:
+            raise ServerError("START response lost; restore the API")
+        response = post(agent_scene, "report", **encode(request))
+        assert response.status_code == 200, response.text
+        if calls == 1:
+            raise ServerError("START response lost after commit; restore the API")
+
+    client = SimpleNamespace(call=exchange, token=headers["Authorization"].removeprefix("Bearer "))
+    agent = SimpleNamespace(client=client, config=config)
+    agent._report_started = lambda task, pid, birth: loop.AgentLoop._report_started(
+        agent, task, pid, birth
+    )
+    outcome = run_child(
+        ChildSpec(
+            (sys.executable, "-c", "import threading; threading.Event().wait()"),
+            timeout_seconds=5,
+            log_path=tmp_path / "output",
+        ),
+        cancel=task.cancel,
+        on_started=lambda pid: loop.AgentLoop._started(agent, task, pid),
+    )
+    monkeypatch.setattr(loop, "process_local_queries", lambda config: False)
+    monkeypatch.setattr(loop, "confirm", lambda config, tag: None)
+    assert loop.AgentLoop._finish(agent, task, outcome)
+    with db.engine.connect() as conn:
+        row = conn.execute(
+            text(
+                "SELECT STATUS AS status,PID AS pid,PROCESS_START AS birth, "
+                "ERROR_MESSAGE AS message FROM AUD_TASK_ATTEMPTS WHERE ATTEMPT_ID=:id"
+            ),
+            {"id": attempt},
+        ).one()
+        kinds = (
+            conn.execute(
+                text("SELECT KIND AS kind FROM AUD_ATTEMPT_ACKNOWLEDGEMENTS WHERE ATTEMPT_ID=:id"),
+                {"id": attempt},
+            )
+            .scalars()
+            .all()
+        )
+    assert row.status == AttemptStatus.FAILED
+    assert row.pid == outcome.pid and row.birth == outcome.process_start
+    assert "START" in row.message
+    assert set(kinds) == {"PROCESS", "QUERIES"}
+    temporary.cleanup()
+
+
+def test_an_agent_reads_and_decides_only_the_files_its_named_wait_admitted(agent_scene, tmp_path):
+    db, client, headers, _, _owner, _config = agent_scene
+    inbox = tmp_path / "inbox"
+    inbox.mkdir()
+    admitted = str((inbox / "a.csv").resolve())
+    stranger = str((inbox / "b.csv").resolve())
+    with db.engine.begin() as conn:
+        pipeline = add_pipeline(conn, "P")
+        wait = add_task(conn, pipeline, "wait", "EVENT_WAIT", EVENT_FILE=str(inbox / "*.csv"))
+        validate = add_task(
+            conn,
+            pipeline,
+            "validate",
+            "FILE_VALIDATION",
+            SCRIPT_FILE="validation_scripts/check.py",
+            FILE_FORMAT="CSV",
+            SOURCE_EVENT="wait",
+        )
+        run = transitions.create_run(conn, pipeline, SYSTEM_ACTOR)
+        wait_run = transitions.find_or_create_task_run(conn, wait, run).task_run_id
+        transitions.finish_task_run(conn, wait_run, status="SUCCESS")
+        conn.execute(
+            text("INSERT INTO AUD_TASK_EVENTS (TASK_RUN_ID, EVIDENCE) VALUES (:r, '{}')"),
+            {"r": wait_run},
+        )
+        conn.execute(
+            text("INSERT INTO AUD_EVENT_FILES (TASK_ID, FILE_PATH, TASK_RUN_ID) VALUES (:t,:p,:r)"),
+            {"t": wait, "p": admitted, "r": wait_run},
+        )
+        summary = transitions.find_or_create_task_run(conn, validate, run).task_run_id
+        attempt = transitions.queue_attempt(conn, summary, SYSTEM_ACTOR)
+    claimed = client.post(
+        "/api/v1/agent/claim",
+        headers=headers,
+        json={"version": __version__, "free_kinds": ["python", "warehouse"]},
+    )
+    assert claimed.status_code == 200 and claimed.json()["data"]["task"]["attempt_id"] == attempt
+
+    def report(operation, **fields):
+        body = {"version": __version__, "attempt_id": attempt, "operation": operation} | fields
+        return client.post("/api/v1/agent/report", headers=headers, json=body)
+
+    listed = report("EVENT_FILES", wait_code="wait")
+    assert listed.status_code == 200, listed.text
+    assert [f["path"] for f in listed.json()["data"]] == [admitted]
+    assert report("EVENT_FILES", wait_code="validate").status_code != 200  # not the named wait
+    digest = {"sha256": "a" * 64, "size_bytes": 3}
+    assert (
+        report("EVENT_FILE_RESULT", wait_code="wait", file_path=stranger, **digest).status_code
+        != 200
+    )  # a file this run's wait did not admit
+    decided = report("EVENT_FILE_RESULT", wait_code="wait", file_path=admitted, **digest)
+    assert decided.status_code == 200, decided.text
+    refused = report(
+        "EVENT_FILE_RESULT",
+        wait_code="wait",
+        file_path=admitted,
+        error_message="header wrong",
+        **digest,
+    )
+    assert refused.status_code == 200, refused.text
+    with db.engine.connect() as conn:
+        rows = conn.execute(
+            text(
+                "SELECT STATUS AS status, REASON AS reason FROM AUD_EVENT_FILE_DECISIONS "
+                "ORDER BY DECISION_ID"
+            )
+        ).all()
+    assert [(r.status, r.reason) for r in rows] == [("ACCEPTED", None), ("REFUSED", "header wrong")]

@@ -231,6 +231,28 @@ def test_admin_project_pool_validation_and_disable(access_scene):
     assert result.projects[0].default_pool == "default"
 
 
+def test_a_project_names_what_may_start_its_runs_by_itself(access_scene):
+    ctx, _ = access_scene
+    result = act(ctx, ActionName.PROJECT_ADD, project="prod", reason="test")
+    assert result.projects[0].allowed_auto_restarts == "SCHEDULE|ALWAYS"
+    result = act(
+        ctx,
+        ActionName.PROJECT_SET,
+        project="prod",
+        reason="test",
+        allowed_auto_restarts="FAILURE|SCHEDULE",
+    )
+    assert result.projects[0].allowed_auto_restarts == "SCHEDULE|FAILURE"
+    with pytest.raises(UsageError, match=r"allowed-auto-restarts.*'BOGUS'.*NONE"):
+        act(
+            ctx,
+            ActionName.PROJECT_SET,
+            project="prod",
+            reason="test",
+            allowed_auto_restarts="BOGUS",
+        )
+
+
 @pytest.mark.parametrize("principal", ["account", "group", "role"])
 @pytest.mark.parametrize("level", list(Permission))
 @pytest.mark.parametrize("target", ["pipeline", "tag"])

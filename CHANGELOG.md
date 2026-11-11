@@ -6,13 +6,463 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+### Rolling compatibility checks (S7.G)
+
+- Agent admission accepts same-major package peers through one shared range rule; refusals name
+  both versions, the compatible range and the upgrade remedy. Wire schema generations stay exact.
+- From package 0.9.0, known Engine migration checksums stay immutable while later additive Engine
+  ledger entries are accepted. The additive SQL gate applies after the `v0.9.0` baseline tag;
+  unreleased pre-baseline migrations are unchanged. Actual old/new-binary acceptance awaits 0.9.0.
+- Settings, CSV columns, built-in parameters and CLI options have one installed introduction
+  registry. Unknown inputs name the installed version and upgrade remedy; known unsupported
+  inputs also name their required release. Built-in unknown task parameters now fail validation
+  and execution rather than warning and being ignored. Python scripts retain their own arguments.
+
+### Compatibility policy and pre-public inventory (S7.G)
+
+- Document the approved 0.9.0 compatibility baseline, retained 0.9.0 contracts through 1.x,
+  removal no earlier than 2.0.0 after one complete minor of warnings, and additive rolling-upgrade
+  obligations. The policy distinguishes those obligations from current exact-version checks.
+- Core runtime dependencies before and after: `jinja2>=3.1.6,<4`, `psutil>=6.0,<7`,
+  `psycopg[binary]>=3.3.6,<4`, `pyyaml>=6.0.3,<7`, `sqlalchemy>=2.0.54,<3`,
+  `sqlglot>=30.22,<30.23`, `watchdog>=6,<7`. All seven have direct runtime use; none moved or removed.
+- Deleted public names: none. Retain released-schema conversion/history readers, warehouse
+  upgrade commands, documented exports and active dialect fallbacks; deleting them changes
+  behavior and needs a contract-specific owner decision. No compatibility shim was added.
+
+- Browser/API sign-out revokes the local session, then returns an HTTPS provider logout URL
+  when discovery advertises one. Its return address is the configured public origin; foreign
+  addresses are refused. Providers without a logout endpoint retain local-only sign-out with
+  an explicit message. CLI sign-out remains local and ID tokens are not retained.
+
+- Browser SSO can use authorization code with PKCE and a required nonce. Configure the optional
+  `Auth.Browser_state_secret` variable reference (at least 32 secret bytes) and the existing public
+  URL; state is signed, expires after five minutes and cannot be replayed across server copies.
+  Without the setting, browser sign-in explains the device-flow fallback. CLI device login is unchanged.
+
+- A failed browser identity refresh no longer confirms expiry from cached session data.
+  The guard retries on its existing minute schedule; server authentication refusals still end
+  the session on screen.
+
+- Home loads the daily chart and sparkline renderers on demand, reserving their dimensions
+  while they load. Routes without those charts no longer download their rendering library.
+
+- Run requests and reconciliation require a reason under STRICT governance in every environment,
+  including DEV. RELAXED projects permit empty reasons. Browser run-action dialogs use the same
+  project governance value; production remains STRICT and retains typed confirmation.
+
+- Browser failure classifications, sources and codes appear only under Process details.
+  Empty tables and charts show caller-specific next steps. Dense statuses use a compact dot
+  and word, retaining failure and warning pills and the pills on detail pages.
+
+- Graph Fit view uses the same readable minimum zoom as automatic fits. Home shows one-to-four-day
+  windows as dated run totals and average durations, with zero-run days retained; longer windows
+  keep their daily chart and capped bar widths.
+
+- Run and task-run displays show the stored readable label beside the integer throughout the
+  CLI, browser and catalog histories. CLI text labels and the browser copy action include shell
+  quoting. Existing JSON identity fields and numeric link targets stay unchanged; run-bearing
+  API responses include display labels. Log download bytes stay unchanged, with CLI identities
+  printed to standard error.
+
+- `--run-id`, API `run_id` fields and run addresses accept either a positive integer or the
+  complete stored run label. Labels match exactly, including case; mismatches name the expected
+  label only when the run is visible in the selected project. Bare integers remain valid.
+  The browser validates the full address through the same operation resolver instead of using
+  its numeric suffix alone. Stored labels, numeric result IDs and run-key selection are unchanged.
+
+- The run grid puts the newest run beside task names with larger status squares. Sparse rankings show numbers, shared
+  form controls and disclosures keep page controls consistent, nested pages have breadcrumbs,
+  skipped task rows name their failed upstream, and catalog gaps include a next step.
+  Attempt IDs live under Process details. Catalog duration charts use the recorded start/end times.
+  Graph code and catalog pages load when opened. Run now reasons follow project governance.
+- Text log timestamps use UTC with `Z`. HTTP startup logs the bound web interface address.
+  Completed command requests show SUCCESS or FAILURE through linked append-only audit events;
+  the original request event remains immutable.
+- `status` and `history` accept an exact `--run-id` without a pipeline name, subject to the same
+  project and pipeline permissions. Implicit ended-run selection stays refused; candidates list
+  readable labels, statuses and exact selectors, newest first. Terminal tables align columns,
+  status durations and SLA budgets use readable units, and pipelines includes last/next run times.
+  Piped table columns and JSON shapes are preserved. Text audit lists show the newest 100 entries
+  in each section; JSON retains the complete result. Help groups commands, suggests typos and
+  lists global options once. `run` shows WARNING and above in the terminal by default, while
+  child attempt logs retain INFO detail; `--log-level INFO` restores terminal progress.
+- `account add --password-stdin` reads one temporary USER password line from a pipe without
+  putting the secret in arguments or audit records. Noninteractive password errors name this remedy.
+
+- Home's time presets match the height of its custom-range and pipeline filters on phones,
+  keeping wrapped date controls aligned.
+- The pipeline grid uses one adjustable divider. Task names automatically expand to the longest
+  name as space allows and narrow only when needed to keep the latest run visible; their own
+  boundary is not adjustable. Active-run graphs refresh task statuses, including skipped tasks,
+  with the shared status colours while the run remains in progress.
+- Home summaries, dashboard windows, time-labelled run grids and session warnings follow the
+  account's Time display and timezone settings. Search names task handlers in words, and System
+  health shows the schema number with the migration filename available on hover.
+- The UI names every status the server records in words, with its own symbol: Timed out is red, Lost and
+  an SLA breach are amber, Cancelled, Held and Stopped are slate; a failed run no longer shows its SLA as met,
+  and a finished run's untouched tasks show as not started (or skipped) instead of queued. In dense lists
+  only failures and warnings keep a coloured pill.
+- A failed run opens with its failed tasks and the first one's error. Recover run is the one primary action;
+  the run's other controls, its key and its logs are in one Actions menu, each control with what it does and,
+  when it is not possible, why. The Catalog has one primary action, Rebuild catalog, and a More menu.
+- Tables fit their pane from 640 px wide instead of scrolling sideways; account actions are in each row's
+  menu. Every time on screen follows the account's Time display setting, and durations have one format
+  (6.4s, 2m 06s). Engine codes are shown as words (Email alert, any upstream succeeds, Unknown), attempt
+  internals sit under Process details, and unmeasured counts are left out.
+- The run grid's runs sit beside the task names; a large graph opens at a readable zoom and pans; duration
+  charts with fewer than five runs are replaced by the numbers. Pages reached from the navigation have no
+  back arrow, empty lists say what fills them, catalog tasks are listed in run order, and production is
+  marked with a shield in the strip, its badge and every confirmation. On a phone the top bar has search
+  and a selected run's details come before the grid.
+- The session warning reads the account again before saying a session has ended.
+- Home is a dashboard that fits the window instead of one long page of tables: tabs for Overview (headline
+  tiles, runs per day, average duration per day, success rate by pipeline and the latest runs), Pipelines,
+  Data, Quality, Failures and Latest runs, with 24 h, 7 day and 30 day presets. Charts are drawn in the app
+  (no chart library) with a readout on hover or focus. Gaps are counted correctly (matched, undeclared and
+  expected checks are not open gaps), the Quality tab of a table lists only real gaps, destructive buttons are
+  outlined in red until confirmed, and wrap-text is one setting in Personal settings.
+- A table's catalog page has a Data tab: the first 100 rows, read from the warehouse, for developers and
+  above (`etl-craft catalog preview --table T`, `GET /api/v1/projects/{project}/table-preview`,
+  `etl-craft/table-preview/1`). Only catalog tables are read, and each request is audited.
+- The pipeline page has a back arrow, and Details now holds the task definitions; pipeline documentation
+  lives only in the catalog. The workspace and the catalog fill the window instead of a centred column, and
+  the table Lineage tab is split into a graph (with depth and direction) and Column lineage.
+- The UI's Catalog is a data explorer rendered by the app instead of the generated pages in a frame: a
+  resizable tree of pipelines, tasks and warehouse tables with search, and pages for a table (Overview with
+  its columns, Lineage, History, Quality), a pipeline, a task and the schema and lineage gaps.
+  `generate-docs` writes `catalog.json` beside the HTML site for it (`etl-craft/catalog/1`); the site is
+  unchanged and still what `publish-docs` publishes.
+- The pipeline page gains the rest of the Airflow DAG page: Calendar, Audit log and Code (each task's
+  definition) tabs, an Options menu on the grid (duration bars, column labels) and a minimap on large graphs.
+  The Pipelines list shows each pipeline's description.
+- The UI's pipeline page follows the Airflow DAG page: a facts row (schedule, latest run, next run), and
+  tabs for Overview (runs, failures, success rate and median duration over a window, the last ten
+  runs), the selected run, Runs (now filterable by state), Tasks, Details and Documentation (the
+  pipeline's `DESCRIPTION` and each task's `DOCUMENTATION`). The pipeline views
+  (`etl-craft/pipeline/1`, `etl-craft/pipeline-list/1`) gain `description`.
+- The pipeline workspace's panes resize (drag the divider, or focus it and use the arrow keys; Home resets;
+  the width is remembered in the browser). The Graph view fills its pane and keeps the whole graph in
+  view as it is resized, laid out top to bottom in a tall pane or left to right in a wide one, with
+  Horizontal and Vertical buttons to choose.
+- The UI's Runs page filters by pipeline tag, like the Pipelines page (`?tag=` repeats to require every
+  tag), and both always show the tag filter: with no tags declared it says where they come from
+  (`PIPELINE_PARAMETERS.TAGS`).
+- The UI shows a pipeline and its runs as one workspace: a grid of tasks against recent runs, each run
+  topped by its duration bar, beside a panel with the selected run and its tasks, which open in place.
+  A run's address is its pipeline's with `?run=ID`; the older run address redirects to it.
+- A token is its current row: the Engine DB keeps no `AUD_CFG_API_TOKENS_HISTORY` table, so a token's
+  last-use date no longer writes a history version. Create and revoke stay in `AUD_ACTIONS`. A
+  development Engine DB that applied the earlier migrations is recreated.
+- `etl-craft config plan --bundle latest|ID` and `config apply --bundle latest|ID` read a published
+  bundle's `config/`, so a CI runner with only a developer token (project CAN_MANAGE) can apply what it
+  published over `--api` (`GET /api/v1/projects/{project}/config/plan` and `POST .../config/apply`).
+  Bundles now include the project's `config/` folder (publish again to use an older project with
+  `--bundle`), the apply pins its pipelines to that bundle instead of freezing the host's folder
+  (`RefreshInput` gains `bundle`), and the API refuses a folder: `config apply` without `--bundle`
+  stays on the controller's host.
+- `etl-craft login --name NAME --password-stdin` signs in without a terminal, reading one password
+  line from a pipe (as `setup --password-stdin` does), so a CI job can bootstrap an ephemeral Engine DB.
+  A terminal on stdin, or `--name` without `--password-stdin`, is refused; the password never enters
+  arguments or the audit record.
+- A pipeline can validate the files an `EVENT_WAIT` with `EVENT_FILE` admitted in the same run: set the
+  `FILE_VALIDATION` task's new `SOURCE_EVENT=<wait task code>` (the task must depend on the wait with
+  `SUCCESS`; `validate` refuses a name that is not that pipeline's file wait). Each admitted file is
+  checked with the task's format, size and script exactly as an upload, and its decision, SHA-256 and
+  size are recorded in the new append-only `AUD_EVENT_FILE_DECISIONS` (migration 0086). Files then reach
+  later tasks (`task.event_files`, `$$event_files`) only once accepted, and a task refuses to start when
+  an accepted file changed since it was read; a retry keeps the first recorded digest. Without
+  `SOURCE_EVENT` nothing changes. The agent report action gains `EVENT_FILES` and `EVENT_FILE_RESULT`.
+- `etl-craft about` is now a banner: the product mark beside the package, Engine DB schema and server
+  versions, the signed-in account and role, live controllers and, with `--project`, the project and its
+  environment (PRODUCTION in red). It draws the mark and colour only on a terminal (none with `NO_COLOR` or
+  `TERM=dumb`, a narrow terminal, or `ETL_CRAFT_NO_BANNER=1`) and prints plain rows when piped; `--json` is unchanged. Running `etl-craft` with no command on
+  a terminal shows the mark and version above the usage (the exit code stays 2).
+- The new browser interface is now the only one, served at `/ui` (sign-in at `/ui/signin`). The
+  server-rendered pages, their scripts and styles (including htmx) and the `/app` preview address
+  are removed, as are the live-update stream (`/ui/projects/{project}/live`) and the pages' HTML
+  error and result pages: the sign-in actions answer `{"redirect": ...}` to the browser, and
+  every refusal under `/ui` is JSON. `/ui/projects/{project}/console` (POST),
+  `/ui/projects/{project}/console/commands` and the catalog frame's
+  `/ui/projects/{project}/catalog/files/...` remain as the interface's own routes. A run's page now offers
+  the run log and a zip of its logs for download and, for operators, Reconcile; the Pipelines page offers
+  Refresh all to developers (found missing by the capability-matrix test, which now reads `ui/src`). The
+  interface keeps the old one's keyboard shortcuts dialog (`?`), Copy run key and a live status line ("Live ·
+  updated N s ago", or that updates were lost); pages refresh by polling and pause while a dialog is open.
+- Signed-in sessions, from the command line and from the browser alike, now end after idle time as well as
+  at `Auth.Session_hours`: the new `Auth.Session_idle_minutes` (default 60, range 5 to 10080) sets how long a
+  session may go without a request, and `etl-craft login` is needed again once it has (renewal with a refresh
+  token follows the same rule). Activity extends it, never past `Session_hours` from sign-in; service and
+  agent tokens are not affected. A page's own refreshes carry `X-ETL-Background: 1` and do not count as use.
+  The new interface warns ten minutes before the end ("Stay signed in") and, when the server ends the
+  session, shows "Your session has ended" with a sign-in that returns to the same page. `GET /api/v1/whoami`
+  reports the earlier of the two ends as `session_expires_at`.
+- The new browser interface gains System health, Agents (drain, resume, stop), About, personal settings,
+  password change, search with recently viewed pages (press `/` or Ctrl+K), Administration (accounts,
+  groups, tokens, access, projects, pools, announcements, erasure), project Maintenance (purge, rehash,
+  audit-column upgrade, clone, each with a preview) and its own sign-in page at `/app/signin`, with SSO
+  where configured. `GET /api/v1/login/methods` now also returns the sign-in `contact` and `notice`, and
+  a client that asks only for JSON receives `{"redirect": ...}` from the sign-in actions. Lists in the new
+  interface no longer wrap values by default: hover shows the full value and "Wrap text" wraps them.
+  A refused request value keeps the case of the values it lists (`'BOTH', 'UPSTREAM'`).
+- The etl-craft mark is now a solid tile (layered chevrons under a plane, white on a blue gradient, dark on a
+  light blue one in the dark theme) in the new interface, the browser console, sign-in, the offline catalog and
+  the favicon. The new interface also now sets the project favicon.
+- The new browser interface gains Insights (summary, runs per day, pipelines, rows by task, failures, rules,
+  schema checks, latest runs, with CSV), the command console (tab completion, history, your recent requests)
+  and the Catalog page (validate, rebuild, refresh lineage, record versions, and the generated catalog in
+  place). "Refresh lineage" reports how many tasks were traced and names any task that could not be traced
+  with its reason. The console's commands for tab completion are served at
+  `/ui/projects/{project}/console/commands`, and a client that asks for JSON gets JSON errors from `/ui` paths.
+- The new browser interface gains Uploads (choose a pipeline, upload a file, see its receipt and recent
+  files), and on a task's page the offset or watermark reset (recorded against a chosen run) and the data
+  lookup of one business key with value edits and unlocks for administrators.
+- The new browser interface gains a task's history page (runs with row counts, definition, kept offset,
+  CSV), the attempt page (outcome, evidence, log), run items (rerun, cancel, mark), the pipeline run
+  matrix and run filters, why a task is in its state, and run and task controls (hold, release, stop,
+  abort, restart, mark) that show why an action is unavailable. All writes use one confirmation.
+- The new browser interface at `/app` gains Pipelines (tag filter, bulk pause and resume, CSV export),
+  a pipeline's page (run durations, runs, task graph with lineage, Run now, Pause and Resume),
+  Scheduled runs, and Held and paused (release holds, resume pipelines and tasks). Every write
+  goes through one confirmation naming the project and environment.
+- A new browser interface (React, built with Node at release time and shipped prebuilt in the
+  wheel and sdist; users need no Node) is served at `/app`: Home, a pipeline's runs, and one run
+  with its task graph, attempts and logs, plus a run-level "Recover run" action behind a
+  confirmation naming the project and environment. The existing pages remain until the
+  remaining pages are rebuilt.
+- Identity replies include the selected project environment; login and whoami remain available
+  while a temporary password requires replacement. The whoami API accepts an optional project.
+
+
+- Show existing project environment in CLI text/JSON and catalog headers; require typed project
+  confirmation for production CLI writes, or --yes for noninteractive execution.
+- Prefix alert/SLA subjects with environment and ship designed multipart email templates.
+  EMAIL_TEMPLATE/EMAIL_TEMPLATE_TEXT and Orchestration.Email_template select confined,
+  sandboxed project templates in bundled email_templates/. Jinja2 is now a core dependency.
+
+
+- Agents stop and record the real child ending when the parent START report encounters an
+  API outage. The failed attempt names the START exchange and remedy instead of renewing
+  a permanently CLAIMED reservation. Existing stuck attempts require draining/replacing the
+  owning agent, expired-lease reconciliation and explicit retry; no audit rows are backfilled.
+
+Warehouses are optional extras. Core bundles none. `all` is core plus the UI, for a single machine.
+
+### Added
+
+- The controller records the `Orchestration.Allowed_auto_restarts` it runs with on its `AUD_CONTROLLERS` row
+  (migration 0090), `etl-craft about` and `GET /api/v1/about` report it for each live controller, and the web
+  interface says so on Scheduled runs and Pipelines when schedules or automatic restarts are off, instead of
+  showing next-run times that never start.
+- A project has its own `ALLOWED_AUTO_RESTARTS` (migration 0091, `project add|set --allowed-auto-restarts`, the
+  Projects admin page): what may start its runs by itself, in the values `Orchestration.Allowed_auto_restarts`
+  takes. The narrower of the controller's setting and the project's applies, so one Engine DB can run a DEV
+  project on schedule and keep a PROD project to person-started runs.
+- `account add --no-password` invites a user by email for SSO binding. A name longer than 128 characters is refused
+  at registration, an SSO sign-in no longer overwrites a name an account may edit, and a project setting the controller
+  cannot read stops that project's automatic starts and is logged once instead of failing the controller tick.
+- A pipeline's recent runs (`GET /api/v1/pipelines`, `etl-craft status --json`) carry each run's `start_date` and
+  `end_date`, and the Pipelines list draws them as a duration spark line. Durations are written the same way
+  everywhere in the web interface, the session warning uses the chosen timezone, a pipeline address `?run=` takes a
+  run's readable label as well as its integer, and a Maintenance card's action sits in its own footer.
+- `Auth.Names_editable` (default `false`) lets each account edit its own first and last name in Personal settings
+  and with `account settings --first-name --last-name`; otherwise the change is refused with the setting named.
+  `whoami` reports `names_editable`.
+- SSO sign-in reads a pending or slowed device-flow poll from the response body when the issuer answers 401 as well
+  as 400, so Dex, which uses 401, no longer fails the sign-in while the person is still approving.
+- An SSO ID token without a `nonce` claim is accepted, because the device flow has no nonce parameter and
+  issuers such as Dex, Google and Keycloak do not echo one; a `nonce` that is present must still match. The security
+  guide warns about the trade-off.
+- Accounts have a first and last name (migration 0092, `account add --first-name --last-name`). SSO now asks
+  the issuer for `email` and `profile` and refreshes an account's names, and its email when the issuer verified
+  it, at each sign-in. `Auth.Oidc_bind_by_email` lets an account created with only an email take its provider
+  subject at the first sign-in whose verified email matches it alone; the bind is audited.
+- The Accounts page shows each account's email and name.
+- `etl-craft whoami` and `GET /api/v1/whoami` report the account's first name, last name and email, and the
+  account menu shows the name. Catalog coverage (documented, written, read, with rules, open gaps) is the Catalog
+  tab of Home, and the automatic-start banner says "everything" or "nothing" instead of the raw setting.
+- The web interface also gains a back arrow on every page, highlighted search matches with kind filters and
+  paging, keyboard navigation in the catalog tree, a catalog Insights page (coverage, open gaps, most read tables),
+  a status strip with its success count for each pipeline's recent runs, and filter boxes whose text is kept in the
+  address.
+- The web interface gains: a divider between a pipeline's task list and run matrix that resizes both together
+  (the newest run always stays in view), row menus for agent actions, a "Go to" list in the top search,
+  breadcrumbs and back buttons on task and attempt pages, a searchable log with a first-error jump, links from
+  a table's header facts to the writing run, rule results, gaps and the writing and reading tasks, filters on
+  the Accounts, Tokens, Groups, Access and Gaps tables, a table density setting (this browser), a file drop
+  zone for uploads and a Capacity tab on Home.
+- The web interface uses small corner radii (2 to 6 px), square solid status marks, narrower duration bars and edge-to-edge panes that meet at 1 px dividers instead of floating cards.
+
+- The controller restarts a pipeline when its last run ended in a status `AUTO_RESTART_CONDITION` names,
+  as a run with the new trigger kind `RESTART` and the key `restart:<previous run id>` (migration 0089
+  widens the trigger-kind check on both Engine DBs; on SQLite it rebuilds the run log). A restart is made
+  at least 15 seconds after the previous run ended, only when no run is active, the pipeline and its
+  project are active and the pipeline is not paused; a cancelled run never restarts; two controllers
+  cannot start two next runs. `Orchestration.Allowed_auto_restarts` suppresses the restarts and the
+  schedule ticks its environment does not allow.
+
+- A pipeline setting `AUTO_RESTART_CONDITION` (a `pipelines.csv` column and `CFG_PIPELINES` column;
+  migration 0088): `SCHEDULE` (default), `NONE`, or `SUCCESS`, `SKIPPED` and `FAILURE` (or `ALWAYS` for
+  all three) joined with `|`, for what may start the pipeline on its own. This release stores, validates,
+  exports and keeps it in the pipeline history; refused values name the value and the allowed ones. The
+  controller does not restart pipelines yet.
+- `Orchestration.Allowed_auto_restarts` replaces `Orchestration.Allow_schedule`: the same values, set per
+  environment, for what that environment's controller may start on its own (default everything;
+  `NONE` is the old `Allow_schedule: false`). The old key is refused as unknown.
+
+- Every pipeline run and task run has a readable label beside its integer id, set by the Engine DB
+  when the run is created and never changed: `<pipeline>-<UTC start>-<run id>` for a run (for example
+  `ORDERS-2026-11-07 02:27:37-4`) and `<pipeline>-<task>-<UTC start>-<task run id>` for a task run, to
+  which an attempt adds `-<attempt number>`. Migration 0087 adds the `RUN_LABEL` and `TASK_RUN_LABEL`
+  columns and labels existing runs. `status` prints `label=`, the run's JSON has `run_label`, and a
+  task run's JSON has `task_run_label`; `run` prints `run label: ...` on standard error.
+
+- `reconcile --attest-ended --reason REASON` recovers missing terminal process evidence only
+  after expiry/fencing, tagged-query absence and original-agent-instance checks. Process
+  attestations are recorded as ATTESTED with the operator, reason and verified checks;
+  independently confirmed query endings remain VERIFIED. Attempt JSON and UI show evidence.
+- Agent registration retains a pod/host instance identity and pins it to each claim. Kubernetes
+  manifests supply the pod UID through the downward API.
+
+- Python task `SECRETS` declares pipe-separated ENVIRONMENT/FILE provider names;
+  `task.secret(name)` refuses undeclared/missing names. Fenced TLS claims deliver only
+  declared task values, passed to children by pipe and masked before log persistence.
+  Provider credentials remain on controller/API hosts.
+
+- Seed data headers may omit declared non-key columns; the warehouse fills them with typed
+  NULLs. Missing keys and undeclared headers are refused; empty-cell semantics are unchanged.
+
+- FILE_VALIDATION `REQUIRE_UPLOADS=Y` refuses an upload-free run with a permanent, audited
+  failure and upload remedy. Default N preserves empty-run skipping; validation requires
+  STEWARDABLE_FLAG=Y when the setting is enabled.
+
+- Managed SQL `$$rule_flags(task, TYPE[, TYPE])` scopes consume active, committed row-rule
+  decisions for the exact pipeline run after a direct SUCCESS dependency, with explicit
+  types and a 10,000-key hard cap. Keys use dialect-rendered typed literals; attempt logs
+  record types and expanded counts.
+- `ScriptTask.replace_landing(rows, item_key=None)` streams declared column types into
+  bounded staging and atomically replaces only the task's or current fan-out item's batch,
+  stamping ownership and run provenance while preserving other items.
+
+- Release gate validates pinned demo evidence against the candidate wheel, complete check
+  and scenario inventories, and UTC execution times; empty inventories block release.
+
+- Publish exact-version headless and UI images to GHCR after tagged release validation.
+  The deployment guide includes Compose, Kubernetes and systemd layouts.
+- `etl-craft agent health` checks the local timestamp of the last successful API renewal
+  without credentials or a listening port. Headless controllers serve `/health` and
+  internal `/metrics` and return 404 for other paths.
+- Standalone UI startup and readiness verify the installed package against the Engine DB
+  migration ledger. Run project migrations from the project image before rolling the roles.
+
+- Report post-reject merge duplicates in task and attempt counts, inspection, metrics and audit mirrors.
+
 ### Fixed
+
+- Lineage no longer prints `'' contains unsupported syntax` once for every unmanaged-script
+  statement it cannot parse; such a statement is already reported as incomplete lineage.
+
+- Lineage resolves the columns the engine adds to a table it writes (`ROW_ID`, `PIPELINE_RUN_ID`,
+  the audit columns of the writing action) when a later SELECT names them, so reading `row_id`,
+  `active_flag` or `update_date` from a managed table is no longer reported as a lineage gap.
+  A column the project declares in `columns.csv` keeps its declared type. `SELECT *` still expands
+  to the business columns only.
+- Downloading a run log or the run's zip works for a pipeline outside the default project: both
+  failed after the download started (the browser showed "problem loading page"), because the
+  project was forgotten once the action returned.
+- The browser interface's confirmation messages close themselves after eight seconds; the close
+  button still dismisses one sooner.
+
+- A command run against a server (`--api`) rebuilds a result field that is one of a fixed set of
+  texts, such as the `operation` of each `config plan` change; it failed with "expected Literal".
+
+- Agent ending reports preserve observed PID/birth and query-ending evidence for every terminal
+  outcome. Both agent and local supervisors confirm server-side queries after ordinary exits,
+  failures and timeouts; task status alone never creates evidence. Migration 0085 leaves old
+  evidence unclassified and never backfills missing acknowledgements. Recover affected old
+  attempts through reconcile, with explicit operator attestation when a deleted pod prevents
+  verifying its process exit; no manual audit edits or watermark reset is needed. Verified
+  terminal local exits remain reconcilable before lease expiry; unknown exits refuse with
+  the attestation remedy instead of being treated as query evidence.
+
+- Agent report and log operations resolve their project from the authenticated attempt before
+  reading or publishing target contracts, registrations, checks, item state and offsets.
+  Rehash considers only the selected project's merge tasks.
+  Existing development Engine DBs may contain contracts attributed to the default project:
+  inspect affected targets and run `etl-craft --project PROJECT rehash --target TARGET` in
+  each intended project before resuming merges. Review the default project's contracts against
+  its own warehouse; no migration silently moves or deletes audit records.
+
+- Timestamp-window validation follows CTE lineage to physical source columns instead of
+  treating CTE names as warehouse tables; coarse source timestamps remain refused.
+
+- Snowflake publishes the atomic landing MERGE in autocommit mode so a lost task process
+  cannot leave its publication transaction open.
+- Managed SELECT guards honor warehouse string escaping when checking statement boundaries,
+  including keys containing backslashes and semicolons on Snowflake and Databricks.
+
+- Stop the singleton Kubernetes controller before replacing it, avoiding a rollout blocked
+  by the active controller guard.
+
+- Compile bytecode in role and project images so read-only agent health probes do not
+  recompile imports on every invocation.
+
+- Explicit Python slots may exceed the default memory estimate within CPU, total-slot and
+  measured process-base bounds. Dedicated agents reserve their supervisor's base memory;
+  startup and doctor show the explicit count and estimate. SIGKILL/OOM task endings record
+  the agent, memory limit and slot setting, and fail permanently rather than retrying silently.
+
+- Snowflake stewardship uploads use a set-based mutation check instead of an unsupported
+  projected correlated subquery. SCD2 successor selection uses an anti-join that Snowflake
+  supports. Lock-only writes keep their existing counts and one MERGE.
+- Protection audit identities now use host-side domain-separated HMAC-SHA-256, preventing
+  offline matching of erased subjects against warehouse MD5 fingerprints. Protection and erasure
+  share `Privacy.Hmac_secret`. Missing or changed secrets are refused. Recreate development
+  Engine DBs that applied earlier 0081/0082 migrations.
+- Provenance retains erasure history after the last protected target row disappears and
+  separates physical ROW_ID maintenance from business-key history. Doctor recognizes surviving
+  SCD2 rows when erasure removes only an older identifier.
+- Erasure resolves unquoted managed SQL targets using the warehouse identifier rules,
+  including Snowflake. PostgreSQL setup preserves array types outside merge compare columns.
+- Failed or refused edit, unlock and provenance requests omit private keys and values from
+  request audits and mask private input in error messages.
+- Registered private values no longer corrupt logging format specifiers; driver error
+  parameters and private fingerprint text are suppressed without losing safe error causes.
+
+- Trino target-lock handoff accepts its exact already-finished-query cancellation response,
+  while still requiring a separate check that no tagged warehouse statements remain running.
+
+- SCD1 updates/inserts and SCD2 closes/successor inserts now use one target MERGE on supported
+  warehouse formats, including DuckDB over Iceberg. This removes the visible close-before-insert
+  crash window on Iceberg and Delta; replay preserves unchanged versions and counts. PostgreSQL
+  before 15 retains its same-transaction fallback.
+- Snowflake lock cancellation omits completed query history while retaining running statements,
+  avoiding a slow history scan when releasing a failed task's target lock.
+
+- DuckDB over Iceberg loads lazy column metadata using the catalog's actual schema/table
+  spelling, preserving quoted mixed-case tables during native identifier lookup.
 
 - Large business-rule flag clears bind each key batch as one JSON value and use exact
   PostgreSQL active-key index probes even with fresh statistics and generic prepared plans.
   Batches retain the same size and atomic rollback.
 
 ### Security
+
+- The browser interface's page shell no longer puts the request's challenge cookie into the page
+  unescaped (a code-scanning reflected-XSS finding): the cookie was already accepted only in its
+  exact shape, and is now escaped as well. `oauthlib` 4.0.1 (a Databricks connector dependency) and
+  `minimatch` 11.0.1 (a UI build tool) replace versions with published advisories.
+
+- Admins can register, preview, list and lift standing personal-data erasures with `erase`
+  (`--project`, `--table`, `--column`, `--value`, `--reason`, `--dry-run`, `--list`, `--lift`)
+  and `/api/v1/projects/{project}/erasure`. The admin page previews coverage before confirmation.
+  The `ERASURE` handler reapplies active entries using pinned column lineage, including renames,
+  history and rejects; expressions and unmanaged targets are reported without deletion.
+- Migration 0081 adds guarded `AUD_ERASURE_SUBJECTS` in SQLite and PostgreSQL. The only update
+  is one lift; raw identifiers stay in that private register and bound warehouse parameters.
+  Configure the shared privacy secret with a Secrets variable name. Rotation is refused. Restore
+  the original secret for existing audit identities. Shared operation-scoped value masking
+  protects logs, errors and result documents; this is the common core for later S7.C secret registration.
 
 - Pending Engine migrations now refuse normal login and UI startup with applied/required
   migration identities. Only local `migrate` may verify an admin password against the original
@@ -42,6 +492,86 @@ All notable changes are recorded here. The format follows
   lookups by code should filter on `ETL_CRAFT_PROJECT`, as the updated examples do.
 
 ### Changed
+
+- A pipeline's `AUTO_RESTART_CONDITION` is shown in words wherever its schedule is: the pipeline views
+  (`restart_note`, with `auto_restart_condition`), the Pipelines list and a pipeline's page, and the catalog
+  ("Restarts after a success or a skipped run"; "Not started automatically" for `NONE`).
+- The run page is compact: one header with the run's string identifier (and a button to copy it), its facts on
+  one line, and its key and logs in a single menu. A task's details (state, controls, why it waits, each
+  attempt with its evidence and log) open in place under its row in the task list, not in a card below it.
+
+- The project's Runs page and a pipeline's Runs tab share one layout: a strip of the latest runs' durations,
+  a toolbar of filters, then the table. Each run shows its string identifier beside its number. A run opened
+  from the project's list leads to its pipeline's runs with that run highlighted.
+
+- The browser interface's navigation is regrouped: Overview (Home, Pipelines, Catalog), Operations (Runs,
+  Scheduled runs, Held and paused, Uploads, Console, Maintenance; the section formerly called Project) and
+  Platform (Projects, System health, Agents, Administration). Projects, the list of projects as cards, is a
+  Platform page. Insights is no longer a page of its own: its panels are the project's Home, and the old
+  address opens Home with its filters.
+
+- Long tables in the browser interface scroll inside a bounded box with their header kept in view,
+  and the runs list loads older runs as its end is scrolled into view instead of offering a
+  "Load older runs" button.
+- The browser interface stays in the project: Home and the logo open the project in use (the one
+  in the address, else the last one opened, else the account's default project, else the only
+  project), and System health, Agents and Administration keep it in the project menu and sidebar.
+  The project list shows only when several projects are active and none is chosen. A disabled
+  project is not offered, and opening its address says it is not available.
+
+- Upload-bound APPEND_TABLE and OVERWRITE_TABLE allow unprotected staging targets without
+  CREATED_BY/UPDATED_BY. Declared actors still receive per-upload account stamps; protected
+  and SCD targets retain full audit requirements. Every upload-bound managed write requires
+  UPLOAD_ID in both SELECT and target.
+- Python landing replacement retains declared UPLOAD_ID and optional LOCKED without creating
+  or stamping actor columns.
+- Ingestion fan-out items may return own-key PARTITIONS offsets, retained provisionally with
+  item success across retries. The task checkpoint commits only with successful attempt ending.
+  Wrong keys/types, backwards positions and script overrides fail permanently.
+
+- Keep the package Quick Start and installed-wheel tests on a small demo; the full
+  Support Insights project now starts in its own public repository. The installed
+  artifact and warehouse matrix is unchanged.
+- Remove the obsolete 0.4 soak runner and instructions. S7.I supplies the replacement
+  endurance runner for the S8 deployment.
+
+- Stewardship uploads accept optional BOOLEAN `LOCKED`: FALSE releases the key's row and value
+  locks while writing values; TRUE, NULL or absent locks as before. `UploadReader.rows(schema=...)`
+  validates boolean file columns. Protection events retain server-verified `UPLOAD_ID`, and
+  provenance reports upload attribution and derived unlock reasons. Managed merges reserve
+  `LOCKED`: validate/refresh refuse a target business column with that name or a nonboolean
+  staged control, naming the rename or CAST remedy.
+
+- Stewardable merge targets with a business type lacking a canonical scalar hash are refused
+  by validate, refresh and first protection activation, with the target/column/type and scalar
+  cast remedy. Ordinary nested-column merges remain supported with an inactive NULL row
+  fingerprint. Recovery adds one Engine DB lookup and no warehouse reads when no intent is
+  pending; ordinary merges keep their warehouse statement budgets.
+
+- SCD protection now keeps per-cell locks and writers in `ETL_PROTECTION`,
+  `ETL_ROW_FINGERPRINT` and `ETL_PROTECTION_REQUEST_ID` on the target, with one target MERGE
+  per mutation across supported warehouse formats and the transactional PostgreSQL-before-15
+  fallback.
+  Migration 0082 adds guarded hash-only `AUD_PROTECTION_EVENTS`; recovery resolves pending
+  mutations before writes, at controller startup and on provenance reads. Doctor reports
+  externally deleted locked keys. Old side-table targets require backup, recreation and
+  re-application of locks. The internal agent-report protocol adds bounded, fenced
+  `PROTECTION_READ` and `PROTECTION_EVENT`; no setting, CLI flag or route is added.
+  Merge-shaped seeds initialize their row fingerprints before stewardship handover.
+  `UPLOAD_ID` remains file provenance, retained rather than editable in human-value operations;
+  adding that nullable provenance column does not invalidate a protected business contract.
+  Unresolved intents pin creator history until recovery; finalized event identifiers survive
+  ordinary attempt-history expiry without blocking configured retention.
+
+- Stewardship uploads now commit their file and queue receipt atomically and recover orphan
+  files after crashes. Immutable `AUD_UPLOADS.STORED_NAME` appears beside the original name
+  in `uploads` text/JSON, the API and the Uploads page. Pending files use
+  `uploads/<PIPELINE_CODE>/`; ended runs move theirs to `processed_uploads/<PIPELINE_CODE>/`
+  and discard ended attempts' private input caches.
+- `Uploads.Archive_to` supports `file://` and explicit S5.F S3 Store/Profile destinations.
+  Existing `Retention.Run_history_days` archives ended files after verifying size and SHA-256;
+  reruns restore verified bytes through the shared local/agent reader. Archive location and
+  decision time remain in guarded `AUD_UPLOADS`; migration 0079 is corrected before release.
 
 - S7.A slice 1 adds the Jinja browser shell at `/ui`, profile, settings, About and authenticated
   project catalog, with shaded light/dark themes and a shared data-flow mark. `publish-docs`
@@ -261,6 +791,22 @@ All notable changes are recorded here. The format follows
 
 ### Added
 
+- `etl-craft seed apply [--project P]` and `POST /api/v1/projects/{project}/seeds` apply
+  declared, typed reference files from the pinned bundle, using managed replacement and target
+  locking without pipeline runs. Successful accepted-upload runs permanently hand their pinned
+  targets to stewardship; seed apply reports `LOCKED` without changing them. Migration 0080
+  adds append-only, actor-stamped `AUD_SEED_LOADS`, including checked, masked failure messages.
+  The Support Insights demo supplies five reference seeds and optional stewardship examples.
+
+- The browser catalog page has **Validate metadata**, **Rebuild catalog**, **Refresh lineage**
+  and (admins) **Record catalog versions**, and before the first build it says so instead of
+  failing. The Pipelines list has **Refresh all** for developers. A task page shows the task's
+  definition, and an SCD merge task's page has a **Data** panel: look up a business key's value
+  provenance and locks, and (admins) edit values or unlock them. `etl-craft task
+  --pipeline-code P --task-code T` and `GET /api/v1/projects/{project}/task` read a task's
+  handler, parameters and merge columns. Every action people can request now has a browser
+  place or is listed with the reason it stays in the CLI.
+
 - **Held and paused** page: holds still in force on queued and running runs (with Release),
   paused pipelines, and paused tasks with their standing outcome and end (with Resume task).
   `etl-craft holds` and `GET /api/v1/projects/{project}/holds` list the holds. A pipeline's Runs
@@ -285,9 +831,7 @@ All notable changes are recorded here. The format follows
   `SUCCESS` dependency on it and an upload pipeline without exactly one.
 - `Uploads.Max_file_mb` (`uploads.max_file_mb`, default 50) and the optional `excel` extra
   (`openpyxl>=3.1.5,<4`). Upload bytes and workbook expansion are bounded before scripts run.
-- Per-row upload attribution through managed SQL actions, later-upload-wins merge ordering,
-  and human SCD protection on native PostgreSQL/DuckDB. Iceberg/Trino refuse protected SCD
-  upload pipelines during validate and refresh; ordinary upload targets remain supported.
+- Per-row upload attribution through managed SQL actions, and later-upload-wins merge ordering.
 - Attempt-token-only `GET /api/v1/agent/uploads/{upload_id}/content` for API-only agents,
   with live-lease/run admission and SHA-256 verification shared with local execution.
 
@@ -585,14 +1129,11 @@ All notable changes are recorded here. The format follows
   audit, placement and HTTP route; `invoke(ctx, ActionName, request)` is the only way an
   interface reaches an operation. Operations take one request dataclass each and no longer
   check roles themselves. `docs/reference/actions.md` is generated from the table.
-- The HTTP API has one generated route per action, with run selection in the query or body:
-  `POST /api/v1/runs` (runs, task runs, reruns, skips and backfills), `POST /api/v1/marks`,
-  `POST /api/v1/controls` (scoped controls, and `PAUSE`/`RESUME` of a definition),
-  `GET /api/v1/status`, `/steps`, `/graph`, `/explanations`, `/history`, `/capabilities`,
-  `/audit`, `/lineage`, `/validation`, `/accounts` and more; see the actions reference. The
-  `/pipelines/{code}/...` and `/runs/{id}/tasks/...` variants are removed. A malformed or
-  unknown field answers 400 naming the field.
-- Every action that can run anywhere works with `--controller`, including `token`, `account`,
+- The HTTP API generates routes from the action table. Project actions use
+  `/api/v1/projects/{project}/` with run selection in the query or body. Deployment actions
+  use `/api/v1/`. See the actions reference for methods and scopes. Malformed or unknown
+  request fields return 400 naming the field.
+- Every action that can run anywhere works with `--api`, including `token`, `account`,
   `graph`, `steps`, `audit`, `lineage`, `validate`, `clone`, `rehash`, `upgrade-targets`,
   `generate-docs` and `docs-version`. Host-only actions (`config`, `migrate`, `init-db`,
   `setup`, `doctor`, `controller`, `publish-docs`) are refused there with where to run them.
@@ -634,7 +1175,7 @@ All notable changes are recorded here. The format follows
 - Remote mode: `Orchestration.Mode`, `Orchestration.Name`, the `etl-craft run --finalize-only`
   flag and the orchestrated finalization it reached. The controller always schedules;
   `--init-only` creates a run it picks up, and another scheduler starts work with
-  `etl-craft run --server` or `POST /api/v1/pipelines/{code}/runs`. The DAG-only settings
+  `etl-craft run --api` or `POST /api/v1/projects/{project}/runs`. The DAG-only settings
   `Global_dag`, `Tags`, `Retry_delay_minutes`, `Depends_on_past`, `Email_on_failure` and
   `Orchestration.Catchup` are removed; `Orchestration.Retries` and
   `Email_recipients` stay because runs and alerts read them. Each removed setting fails as an
@@ -713,14 +1254,14 @@ All notable changes are recorded here. The format follows
   and committed checkpoints; restart creates a new context retaining current offsets/watermarks
   and source history. Neither releases human locks or guesses process/query completion.
 - `run --allow-paused` grants one exact run permission while its definition remains paused;
-  `status --capabilities` shares scoped action availability and remedies with the HTTP API.
-  `run --controls-file` and `POST /api/v1/controls/bulk` apply an explicit bounded selection with
+  `capabilities` shares scoped action availability and remedies with the HTTP API.
+  `run --controls-file` and `POST /api/v1/projects/{project}/controls/bulk` apply an explicit bounded selection with
   independent durable outcomes. Migration `0039` extends control actions in both Engine DBs.
 
 - Scoped run/task controls: `hold`/`release` block and unblock dispatch, `stop` drains running
-  work and `abort` stops its task processes, each on the selected run or one `--task_code`. Controls
+  work and `abort` stops its task processes, each on the selected run or one `--task-code`. Controls
   return durable `etl-craft/control/1` requests, optional `--request-key` idempotency, and
-  `status --request-id` inspection locally or through `--server`. Shared HTTP routes expose
+  `control-request --control-id` inspection locally or through `--api`. Shared HTTP routes expose
   the same operator controls and viewer inspection. Migration `0038` adds control requests
   and append-only process/query acknowledgements on SQLite and PostgreSQL.
 - Stop and abort report acceptance separately from physical completion, preserving successful
@@ -729,7 +1270,7 @@ All notable changes are recorded here. The format follows
   refuse explicitly; graceful stop remains available for supported handlers. Server-side Python
   scripts need a query adapter for scoped stop; definition pause remains available. Lost leases never imply query termination.
 
-- `run --task_code TASK --standalone` starts an independent manual selection;
+- `run --task-code TASK --standalone` starts an independent manual selection;
   `--with-downstream` includes its continuation from metadata edges. Explicit run identities
   resume the same selection; manual results never satisfy or consume pipeline dependencies.
   Email-only selections may overlap whole-pipeline execution. SQL selections retain exclusive
@@ -738,29 +1279,14 @@ All notable changes are recorded here. The format follows
   Migration `0037` adds `AUD_PIPELINES_RUN_LOG.TASK_SELECTION` and `EXCLUSIVE_RUN` on both
   Engine DBs. Run JSON adds `selected_task_ids`, `ignore_dependencies` and `exclusive_run`.
 
-- Shared SCD value edit, provenance and unlock services and HTTP routes under
-  `/api/v1/pipelines/{code}/tasks/{task}/values`. Human admin inserts protect their row;
-  edits protect changed values. ETL and authenticated service integrations respect those
-  locks, with effective hashes/counts and independent column attribution. Only human admins
-  may unlock. Native PostgreSQL and DuckDB commit data and warehouse-side evidence together;
-  other warehouses refuse protected edits. Unobserved writes and replacement paths fail
-  explicitly. No Engine DB migration or new dependency is required.
 
-- A local installation operates a server: `--server https://<host>` (or `ETL_CRAFT_SERVER`)
-  sends `status`, `explain`, `history`, `logs`, `whoami`, `run` (a run, `--backfill` or
-  `--rerun`), `pause`, `resume`, `mark` and `cancel` to the server's API, within the account's
-  role, with the same text and JSON output and exit codes as on the server. Plain HTTP is
-  refused except to `localhost`. Commands that change metadata or the Engine DB are refused
-  against a server, naming the server-side way. CI keeps using `ETL_CRAFT_TOKEN`.
-- `etl-craft login --server` signs in with a password or, for SSO, the device flow the server
-  runs. It stores a one-hour access token and a refresh token, `Auth.Refresh_days` (default
-  30), and renews access automatically; `logout --server` revokes the refresh token and its
-  access tokens. Engine DB and warehouse credentials never reach the local installation.
+- CLI API calls preserve the same text and JSON output and exit codes as local calls.
+  Plain HTTP is refused except to `localhost`. Password and SSO device login store an
+  access token and a refresh token, and logout revokes the session. Engine DB and warehouse
+  credentials stay on the server.
 - `etl-craft logs --attempt-id N [--offset BYTES]` prints an attempt's log, locally or from a
-  server.
-- HTTP sign-in routes under `/api/v1/login/` (methods, password, SSO start and poll, refresh,
-  revoke), `GET /api/v1/whoami`, and pipeline-code routes for status, explain, cancel, mark and
-  rerun that select a run with `run_id`, `run_key` or the active run, as the CLI does.
+  server. The HTTP sign-in routes are under `/api/v1/login/`, and `GET /api/v1/whoami` reads
+  the caller's identity.
 - Engine DB migration `0036` adds `CFG_API_TOKENS.TOKEN_KIND` (`SERVICE`, `ACCESS`, `REFRESH`)
   and `REFRESH_TOKEN_ID`; existing user sessions become access tokens. Token JSON includes
   `token_kind`.
@@ -835,7 +1361,7 @@ All notable changes are recorded here. The format follows
   output coverage unavailable. Action parsing uses execution's normalization rules. Offline,
   unavailable and stale comparisons remain explicit; inferred names do not invent type contracts.
   Missing tables/views distinguish pending first deployment from missing referenced objects.
-  `gaps.json` and authenticated `GET /api/v1/catalog/gaps?compare=true` share a dated input-versioned
+  `gaps.json` and authenticated `GET /api/v1/projects/{project}/catalog/gaps?compare=true` share a dated input-versioned
   report. API comparisons read metadata only and never publish lineage history. No config,
   migration, dependency or warehouse business-data change is required.
 
@@ -905,7 +1431,7 @@ All notable changes are recorded here. The format follows
   query returning a row, without worker slots. Timeouts fail or skip, and evidence and file
   consumption commit with success. Downstream SQL reads `$$event_files`; Python scripts receive
   `task.event_files` and can use the token in `INPUT_PARAMS`. Single-task runs return `WAITING`;
-  remote mode refuses these local scheduling waits. Indefinite deadlines and native file
+  indefinite deadlines and native file
   notifications support long waits with configurable fallback scans and SQL probe intervals.
   Engine DB migration `0023_event_waits.sql` adds immutable evidence/consumption and separates
   event and dependency waits.
@@ -959,7 +1485,7 @@ All notable changes are recorded here. The format follows
   PostgreSQL.
 
 - Task processes run through a pool: whole-pipeline runs and the server admit each attempt and
-  submit it to the local pool, which runs it on this host; `run --task_code` runs its one attempt
+  submit it to the local pool, which runs it on this host; `run --task-code` runs its one attempt
   in the foreground the same way. New
   `Orchestration.Local_ingestion_slots` and `Local_warehouse_slots` cap how many Python ingestion
   tasks and how many SQL, business-rule and alert tasks run at once, within
@@ -967,15 +1493,11 @@ All notable changes are recorded here. The format follows
 
 ### Changed
 
-- `etl-craft cancel` is replaced by `etl-craft abort` (stop task processes now) and
-  `etl-craft stop` (let running attempts finish); both end the run `CANCELLED`. `runs.cancel_run`
-  and the `POST /api/v1/pipelines/{code}/cancel` and `/runs/{id}/cancel` routes are removed: use
-  `POST /api/v1/pipelines/{code}/controls` with `action` `ABORT` or `STOP`. `pause` and `resume`
-  act only on the pipeline definition; scoped holds are `hold` and `release`. Audit records name
-  the operation `stop`, `abort`, `hold` or `release` instead of `cancel`.
-- `GET /api/v1/pipelines/{code}/runs` returns the `etl-craft/history/1` document that
-  `etl-craft history` prints (`entries`, `changes`, and the next page's `before`) instead of
-  `etl-craft/runs/1`. Run and task history list the newest run id first.
+- Scoped `abort` stops task processes and `stop` lets running attempts finish. Both end
+  the run `CANCELLED`. Their shared API is `POST /api/v1/projects/{project}/controls`.
+  Definition controls are `pause` and `resume`. Scoped holds use `hold` and `release`.
+- `GET /api/v1/projects/{project}/history` returns the same `etl-craft/history/1` document
+  as `etl-craft history`. Run and task history list the newest run ID first.
 - Every action has one implementation in `services.operations`, which the CLI, the HTTP API
   and later the UI call. Python callers use `operations.maintenance` (`initialize`, `migrate`,
   `clone_tables`, `rehash_target`, `upgrade_audit_columns`, `setup_engine`, `grants`) and
@@ -1517,7 +2039,7 @@ evidence.
   to end, locally verifiable authentication modes, and the demo's warehouse work on Databricks
   and Snowflake. The evidence is in `release/evidence/0.1.0/`.
 
-[Unreleased]: https://github.com/venkatcg00/etl-craft/compare/v0.3.0...HEAD
-[0.3.0]: https://github.com/venkatcg00/etl-craft/releases/tag/v0.3.0
-[0.2.0]: https://github.com/venkatcg00/etl-craft/releases/tag/v0.2.0
-[0.1.0]: https://github.com/venkatcg00/etl-craft/releases/tag/v0.1.0
+[Unreleased]: https://github.com/etl-craft/etl-craft/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/etl-craft/etl-craft/releases/tag/v0.3.0
+[0.2.0]: https://github.com/etl-craft/etl-craft/releases/tag/v0.2.0
+[0.1.0]: https://github.com/etl-craft/etl-craft/releases/tag/v0.1.0

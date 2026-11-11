@@ -24,6 +24,12 @@ Retention:
   Config_history_days: 365  # value
   Daily_at: "03:00"  # value
 
+Uploads:
+  Max_file_mb: 50  # value
+  Archive_to: file:///srv/etl-archive/uploads  # value — archive ended upload files
+# S3 alternative: Archive_to: {Store: s3://team-archive/uploads, Profile: archive}
+# The named Object_stores profile must exist; no credentials are stored in audit rows.
+
 # Optional manual archive: create a dedicated warehouse schema first, then run
 # etl-craft purge --archive-to history --dry-run
 # etl-craft purge --archive-to history

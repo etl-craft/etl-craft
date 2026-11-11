@@ -6,6 +6,7 @@ import urllib.request
 import pytest
 from sqlalchemy import text
 
+from etl_craft.warehouse.connection import warehouse_dialect
 from fixtures.demo import PASSWORD_VAR, S3_VAR, SCHEMAS, Demo
 from fixtures.services import MINIO_PASSWORD, POSTGRES_PASSWORD, require
 
@@ -24,13 +25,21 @@ def test_building_and_closing_another_demo_cannot_remove_the_first_demos_rows(
         first.build()
         with first.warehouse() as engine, engine.begin() as conn:
             conn.execute(text(f"CREATE TABLE {first.table('lnd.probe')} AS SELECT 1 AS id"))
+            if warehouse_dialect(first.config).views:
+                conn.execute(text(f"CREATE VIEW {first.table('lnd.probe_view')} AS SELECT 1 AS id"))
         second.build()
         assert first.rows("SELECT id AS id FROM {c}.lnd.probe") == [(1,)]
         with second.warehouse() as engine, engine.begin() as conn:
             conn.execute(text(f"CREATE TABLE {second.table('lnd.probe')} AS SELECT 2 AS id"))
+            if warehouse_dialect(second.config).views:
+                conn.execute(
+                    text(f"CREATE VIEW {second.table('lnd.probe_view')} AS SELECT 2 AS id")
+                )
         assert second.rows("SELECT id AS id FROM {c}.lnd.probe") == [(2,)]
         second.close()
         assert first.rows("SELECT id AS id FROM {c}.lnd.probe") == [(1,)]
+        if warehouse_dialect(first.config).views:
+            assert first.rows("SELECT id AS id FROM {c}.lnd.probe_view") == [(1,)]
     finally:
         second.close()
         first.close()

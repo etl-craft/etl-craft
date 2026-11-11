@@ -1,5 +1,6 @@
 """Explain the resolved query catalog with non-NULL, typed representative bindings."""
 
+import json
 import re
 from contextlib import contextmanager, nullcontext
 from datetime import UTC, datetime
@@ -40,12 +41,35 @@ INTEGER_NAMES = frozenset(
 )
 MOMENT = datetime(2026, 1, 1, tzinfo=UTC)
 VALUES = {
+    "all_entries": False,
+    "offset_position": 1,
+    "rule_type": "REJECT",
+    "duplicate_count": 0,
+    "lock_owner": "plan-owner",
+    "continuation": False,
+    "events": json.dumps(
+        [{"kind": "WRITE", "key_hash": "a" * 64, "columns": '["id"]', "hashes": "[null]"}]
+    ),
+    "subject_key": "private-test-value",
+    "key_hmac": "a" * 64,
+    "key_hashes": json.dumps(["a" * 64]),
+    "key_check": "c" * 64,
+    "after_ended": datetime(1970, 1, 1, tzinfo=UTC),
+    "content_sha256": "a" * 64,
+    "seed_load_id": "00000000-0000-0000-0000-000000000001",
+    "error_message": "seed failure",
+    "stored_name": "1-plan.csv",
+    "location": "file:///archive/plan/1-plan.csv",
     "window_start": MOMENT,
     "locked": MOMENT,
     "window_end": MOMENT,
     "after_project": "",
     "project_limit": 25,
     "settings": "{}",
+    "ending_evidence": "VERIFIED",
+    "checks": "[]",
+    "instance_id": "query-plan-agent-instance",
+    "attest_ended": False,
     "lock_key": 8241012,
     "batch_id": "batch",
     "body": "{}",
@@ -189,6 +213,26 @@ def bindings(sql, name=""):
         "item_insert": {"key": "one", "number": 1, "report_id": "plan-report"},
         "event_consumed_keys": {"keys": ["key_1", "key_2"]},
     }.get(name, {})
+    if name.startswith("protection_"):
+        overrides |= {
+            "target": '"warehouse"."plan"."table_1"',
+            "cursor": 0,
+            "page_size": 257,
+            "request_id": "00000000-0000-0000-0000-000000000011",
+            "current_request": "00000000-0000-0000-0000-000000000011",
+            "key_hash": "a" * 64,
+            "columns": '["id"]',
+            "hashes": '["' + "b" * 64 + '"]',
+            "kind": "KEY",
+            "status": "PENDING",
+            "recovering_attempt": 1,
+            "upload_id": 1,
+            "validator_id": 1,
+            "pipeline_run_id": 1,
+            "recovery_actor": "plan",
+        }
+        if name == "protection_insert":
+            overrides |= {"status": "COMMITTED", "key_hash": None, "columns": "[]", "hashes": "[]"}
     parameters = text(sql).compile().params
     values = {}
     for name in parameters:
@@ -302,6 +346,7 @@ def full_scans(plan, partial_indexes=frozenset(), limited=False):
 
 REGISTRY = "Reads the agent registry: one row per agent token, bounded by the tokens issued."
 FULL_READS = {
+    ("rehash_tasks", "cfg_pipelines"): "Finds every active merge target in the selected project.",
     (
         "permission_effective",
         "cfg_pipelines",
@@ -434,10 +479,13 @@ FULL_READS = {
     ("catalog_lineage_cache", "cfg_pipelines"): "Builds complete active-pipeline lineage.",
     ("controller_active_runs", "cfg_pipelines"): "Finds active definitions for the working set.",
     ("controller_schedules", "cfg_pipelines"): "Checks the schedule of every active pipeline.",
+    (
+        "controller_restarts",
+        "cfg_pipelines",
+    ): "Checks the restart condition of every active pipeline.",
     ("metadata_codes", "cfg_pipelines"): "Loads the complete identifier-to-code map.",
     ("permission_pipelines", "cfg_pipelines"): "Lists all pipelines for permission evaluation.",
     ("sql_tasks", "cfg_pipelines"): "Validates SQL tasks across all active pipelines.",
-    ("rehash_tasks", "cfg_pipelines"): "Finds all merge targets across active pipelines.",
     ("catalog_lineage_cache", "aud_column_lineage"): "Loads the complete current lineage cache.",
     (
         "recorded_hash_version_names",

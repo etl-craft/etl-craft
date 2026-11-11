@@ -88,7 +88,6 @@ class DuckDBWarehouse(WarehouseDialect):
         return int(result.scalar_one())
 
     spec = warehouse_by_key("duckdb")
-    atomic_protection = True
     sqlglot_dialect = "duckdb"
     replace_strategy: ReplaceStrategy = "transactional"
     surrogate_key: SurrogateKey = "sequence"

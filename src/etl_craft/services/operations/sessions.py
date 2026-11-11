@@ -5,6 +5,7 @@ from datetime import UTC, datetime, timedelta
 from typing import ClassVar
 
 from sqlalchemy.engine import Row
+from sqlalchemy.exc import IntegrityError
 
 from etl_craft.core.actor import Actor, ActorKind, acting_as
 from etl_craft.core.enums import (
@@ -18,11 +19,13 @@ from etl_craft.core.enums import (
     YesNo,
 )
 from etl_craft.core.enums_access import Permission
+from etl_craft.core.environment import Environment
 from etl_craft.core.errors import EtlCraftError, UsageError
 from etl_craft.core.text import sha256_hex
 from etl_craft.core.time import as_utc
 from etl_craft.engine import locks
 from etl_craft.engine.audit import current_request
+from etl_craft.engine.environment import project_environment
 from etl_craft.engine.queries import statement
 from etl_craft.engine.repository.accounts import find_account, unlocked_admins
 from etl_craft.engine.repository.group_claims import token_groups
@@ -33,7 +36,13 @@ from etl_craft.services.operations.personal import Settings, settings_from
 from etl_craft.services.operations.recording import recorded
 from etl_craft.services.operations.requests import NoInput, Request
 from etl_craft.services.operations.schema_status import require_current_schema
-from etl_craft.services.operations.tokens import TokenGrant, TokenView, find_token, issue_token
+from etl_craft.services.operations.tokens import (
+    TokenGrant,
+    TokenView,
+    find_token,
+    idle_deadline,
+    issue_token,
+)
 from etl_craft.services.passwords import DECOY, verify_password
 
 ACCESS_LIFETIME = timedelta(hours=1)
@@ -63,6 +72,22 @@ class TokenInput(Request):
     token: str
 
 
+@dataclass(frozen=True, kw_only=True)
+class SignOutInput(TokenInput):
+    """A session to revoke and an optional assertion of the configured public origin."""
+
+    post_logout_redirect_uri: str | None = None
+
+
+@dataclass(frozen=True)
+class SignOutResult:
+    """Local sign-out confirmation and the optional provider logout address."""
+
+    SCHEMA: ClassVar[str] = "etl-craft/sign-out/1"
+    message: str
+    redirect: str | None = None
+
+
 @dataclass(frozen=True)
 class Session:
     """A signed-in user's access token, and the refresh token of a server session."""
@@ -82,6 +107,16 @@ class SignInMethods:
     SCHEMA: ClassVar[str] = "etl-craft/sign-in-methods/1"
     sso: bool
     local: bool = True
+    contact: str | None = None
+    notice: str | None = None
+    browser_sso: bool = False
+
+
+@dataclass(frozen=True, kw_only=True)
+class IdentityInput(Request):
+    """Select the project whose environment accompanies the caller's identity."""
+
+    project: str | None = None
 
 
 @dataclass(frozen=True)
@@ -100,6 +135,11 @@ class Identity:
     settings: Settings = field(default_factory=Settings)
     last_signin: datetime | None = None
     session_expires_at: datetime | None = None
+    environment: Environment | None = None
+    first_name: str | None = None
+    last_name: str | None = None
+    email: str | None = None
+    names_editable: bool = False
 
 
 @dataclass(frozen=True)
@@ -308,11 +348,95 @@ def sign_in_subject(ctx: OperationContext, claims: oidc.IdentityClaims) -> Sessi
             statement(conn, "account_subject"), {"subject": claims.subject}
         ).scalar_one_or_none()
     if name is None:
+        name = _bind_by_email(ctx, claims)
+    if name is None:
         with recorded(ctx, ActionName.LOGIN, {"oidc_subject": claims.subject}):
             raise UsageError(
                 "SSO subject has no active registered USER account; ask an administrator"
+                + (
+                    f" to register {claims.email!r}; Auth.Oidc_bind_by_email then links it"
+                    if claims.email and ctx.config.auth.oidc_bind_by_email
+                    else ""
+                )
             )
+    _refresh_profile(ctx, name, claims)
     return _sign_in(ctx, name, claims=claims)
+
+
+def _bind_by_email(ctx: OperationContext, claims: oidc.IdentityClaims) -> str | None:
+    """Link a first sign-in to the one passwordless account registered with its verified email.
+
+    Only with ``Auth.Oidc_bind_by_email``, only for an email the issuer verified, and only when
+    exactly one active USER account without a subject or password carries it: anything else is
+    left to an administrator. The link is recorded as a sign-in by the account it binds.
+    """
+    if not (ctx.config.auth.oidc_bind_by_email and claims.email and claims.email_verified):
+        return None
+    with ctx.engine.connect() as conn:
+        names = (
+            conn.execute(statement(conn, "account_by_email"), {"email": claims.email})
+            .scalars()
+            .all()
+        )
+    if len(names) != 1:
+        return None
+    name = names[0]
+    try:
+        done = _bind(ctx, name, claims)
+    except IntegrityError:
+        # A disabled account still holds this subject: the attempt is recorded as refused and
+        # left to an administrator.
+        return None
+    return name if done else None
+
+
+def _bind(ctx: OperationContext, name: str, claims: oidc.IdentityClaims) -> bool:
+    """Write the subject onto the account, recorded as a sign-in by that account."""
+    with locks.ACCOUNTS.hold(ctx.engine, wait_seconds=30):
+        caller = replace(ctx, actor=Actor(name, ActorKind.USER))
+        with (
+            recorded(
+                caller,
+                ActionName.LOGIN,
+                {"name": name, "bound_oidc_subject": claims.subject, "bound_by": "verified email"},
+                on_completion=True,
+            ),
+            acting_as(caller.actor),
+            ctx.engine.begin() as conn,
+        ):
+            found = conn.execute(
+                statement(conn, "account_bind_subject"),
+                {"name": name, "subject": claims.subject},
+            ).first()
+    return found is not None
+
+
+def _refresh_profile(ctx: OperationContext, name: str, claims: oidc.IdentityClaims) -> None:
+    """Keep the account's names, and its email when verified, as the issuer states them.
+
+    Where accounts may edit their own names (``Auth.Names_editable``) the issuer only fills a name
+    that is empty, so a person's own edit is not undone at the next sign-in.
+    """
+    with ctx.engine.connect() as conn:
+        row = find_account(conn, name)
+    if row is None:
+        return
+    email = claims.email if claims.email and claims.email_verified else None
+    new = {"email": email, "first_name": claims.first_name, "last_name": claims.last_name}
+    old = {"email": row.email, "first_name": row.first_name, "last_name": row.last_name}
+    keep_own = ctx.config.auth.names_editable
+    changed = {
+        k: v
+        for k, v in new.items()
+        if v is not None and v != old[k] and not (keep_own and k != "email" and old[k])
+    }
+    if not changed:
+        return
+    with acting_as(Actor(name, ActorKind.USER)), ctx.engine.begin() as conn:
+        conn.execute(
+            statement(conn, "account_profile"),
+            {"name": name, "email": None, "first_name": None, "last_name": None} | changed,
+        )
 
 
 def start_sso(ctx: OperationContext, request: NoInput) -> SsoStart:
@@ -356,6 +480,13 @@ def refresh(ctx: OperationContext, request: TokenInput) -> Session:
         )
     with ctx.engine.connect() as conn:
         retained_groups = token_groups(conn, found.token_id)
+        uses = conn.execute(statement(conn, "api_session_uses"), {"token_id": found.token_id}).all()
+    last = max((as_utc(u.last_used_at or u.created_at) for u in uses), default=found.created_at)
+    if idle_deadline(ctx, found.created_at, last) <= datetime.now(UTC):
+        raise UsageError(
+            f"the session ended after {ctx.config.auth.session_idle_minutes} minutes without "
+            "activity; run `etl-craft login` again"
+        )
     if retained_groups:
         absolute_end = found.created_at + timedelta(hours=ctx.config.auth.session_hours)
         found = replace(found, expires_at=min(found.expires_at, absolute_end))
@@ -388,11 +519,11 @@ def refresh(ctx: OperationContext, request: TokenInput) -> Session:
     return Session(access.token, access.metadata, refresh_expires_at=found.expires_at)
 
 
-def sign_out(ctx: OperationContext, request: TokenInput) -> None:
+def sign_out(ctx: OperationContext, request: SignOutInput) -> SignOutResult:
     """Revoke a session token, and a refresh token's access tokens, as the token's own account.
 
-    An expired or unknown token is revoked under the caller's actor, so signing out always
-    succeeds.
+    An expired or unknown token is revoked under the caller's actor. Provider logout is
+    resolved only after local revocation commits, so its failure cannot leave a live session.
     """
     token = request.token
     found = find_token(ctx, token)
@@ -406,14 +537,28 @@ def sign_out(ctx: OperationContext, request: TokenInput) -> None:
             },
         )
 
+    if ctx.transport != Transport.HTTP:
+        return SignOutResult("Signed out.")
+    from etl_craft.services.operations.provider_logout import provider_sign_out
+
+    return provider_sign_out(caller, request.post_logout_redirect_uri)
+
 
 def sign_in_methods(ctx: OperationContext, request: NoInput) -> SignInMethods:
     """Say whether SSO is configured, so a sign-in can offer it."""
-    return SignInMethods(sso=bool(ctx.config.auth.oidc_issuer))
+    auth = ctx.config.auth
+    return SignInMethods(
+        browser_sso=bool(ctx.config.auth.browser_state_secret),
+        sso=bool(auth.oidc_issuer),
+        contact=auth.admin_contact or None,
+        notice=auth.signin_notice or None,
+    )
 
 
-def whoami(ctx: OperationContext, request: NoInput) -> Identity:
+def whoami(ctx: OperationContext, request: IdentityInput) -> Identity:
     """Return the caller's account and its current role."""
+    if request.project is not None:
+        ctx = replace(ctx, project=request.project, project_id=None)
     with ctx.engine.connect() as conn:
         row = find_account(conn, ctx.actor.name)
         if row is None:
@@ -437,17 +582,25 @@ def whoami(ctx: OperationContext, request: NoInput) -> Identity:
                 replace(ctx, project=project.project_code, project_id=project.project_id),
             )
         )
+        environment = (
+            project_environment(conn, code=project.project_code)[1]
+            if project is not None and level is not None
+            else None
+        )
         signin = conn.execute(
             statement(conn, "account_last_signin"), {"name": ctx.actor.name}
         ).scalar_one_or_none()
-        expiry = (
+        used = (
             None
             if ctx.credential_token_id is None
             else conn.execute(
                 statement(conn, "account_session_expiry"),
                 {"token_id": ctx.credential_token_id},
-            ).scalar_one_or_none()
+            ).one_or_none()
         )
+    expiry = as_utc(used.expires_at) if used is not None and used.expires_at else None
+    if expiry is not None and used is not None and used.token_kind == TokenKind.ACCESS:
+        expiry = min(expiry, idle_deadline(ctx, used.created_at, used.last_used_at))
     return Identity(
         ctx.actor.name,
         str(ctx.role),
@@ -459,5 +612,10 @@ def whoami(ctx: OperationContext, request: NoInput) -> Identity:
         level,
         settings_from(row.ui_settings),
         None if signin is None else as_utc(signin),
-        None if expiry is None else as_utc(expiry),
+        expiry,
+        environment,
+        row.first_name,
+        row.last_name,
+        row.email,
+        ctx.config.auth.names_editable,
     )

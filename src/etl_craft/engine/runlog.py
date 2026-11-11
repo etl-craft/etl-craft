@@ -72,6 +72,7 @@ class RunIdentity:
     run_date: date
     status: str
     task_selection: str | None = None
+    run_label: str = ""
 
 
 def run_candidates(conn: Connection, pipeline_id: int) -> list[RunIdentity]:
@@ -84,6 +85,7 @@ def run_candidates(conn: Connection, pipeline_id: int) -> list[RunIdentity]:
             as_date(r.run_date),
             str(r.status),
             r.task_selection,
+            str(r.run_label),
         )
         for r in conn.execute(
             statement(conn, "pipeline_run_candidates"), {"pipeline_id": pipeline_id}
@@ -111,17 +113,16 @@ def select_run(
         return matches[0]
     listed = (
         "\n".join(
-            f"id={r.pipeline_run_id} key={r.run_key} kind={r.trigger_kind} "
-            f"run_date={r.run_date} status={r.status}"
-            for r in candidates
+            f"{r.run_label}: {r.status}; select with --run-id {r.pipeline_run_id}"
+            for r in candidates[:20]
         )
         or "(no runs)"
     )
     raise RunStateError(
-        f"pipeline_id={pipeline_id}: run selection matched {len(matches)} runs "
-        f"(`run_id`={selector.run_id!r}, `run_key`={selector.run_key!r}); expected exactly one. "
-        "Give `run_id` or `run_key` belonging to this pipeline, or start a new run with "
-        "`init_only`. Candidates:\n" + listed
+        f"run selection (`run_id`={selector.run_id!r}, `run_key`={selector.run_key!r}) "
+        f"matched {len(matches)} runs; expected one explicit `run_id` or "
+        "`run_key`, or the single non-terminal whole-pipeline run. "
+        "Ended runs require explicit selection. Candidates (newest first):\n" + listed
     )
 
 

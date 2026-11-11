@@ -19,6 +19,9 @@
   --node-header: light-dark(#eaeef2, #212830);
   --focus: light-dark(#fff8c5, #3b2f00);
   --external: light-dark(#f5f0ff, #231a38);
+  --mark-a: light-dark(#3a6cf7, #9dbaff);
+  --mark-b: light-dark(#1b44c4, #6d93f2);
+  --mark-glyph: light-dark(#ffffff, #0c1426);
 }
 :root[data-theme="light"] { color-scheme: light; }
 :root[data-theme="dark"] { color-scheme: dark; }
@@ -37,6 +40,8 @@ header.top {
   position: sticky; top: 0; z-index: 10;
 }
 header.top .brand { font-weight: 600; color: var(--text); }
+body.embedded header.top .environment, body.embedded header.top .brand,
+body.embedded header.top .theme-control { display: none; }
 header.top nav { display: flex; flex-wrap: wrap; gap: 4px; }
 header.top nav a { padding: 4px 10px; border-radius: 6px; color: var(--text); }
 header.top nav a.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
@@ -181,5 +186,9 @@ svg.lineage .edge.gap-edge:not(.on) { stroke: var(--warn); stroke-width: 2; }
 .theme-control { font: inherit; color: var(--text); background: var(--panel); border: 1px solid var(--border); border-radius: 6px; padding: .45rem .7rem; cursor: pointer; }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .001ms !important; transition-duration: .001ms !important; } }
 
-.product-mark{display:block;width:22px;height:22px;flex:none}
+.product-mark{display:block;width:24px;height:24px;flex:none}
+.product-mark .mark-a{stop-color:var(--mark-a)}
+.product-mark .mark-b{stop-color:var(--mark-b)}
+.product-mark .mark-glyph{stroke:var(--mark-glyph)}
+.product-mark .mark-fill{fill:var(--mark-glyph)}
 .product-lockup{color:var(--text);display:inline-flex;align-items:center;gap:8px;font-weight:600}

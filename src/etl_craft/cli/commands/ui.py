@@ -27,5 +27,8 @@ def _run(args: argparse.Namespace, out: Output) -> int:
 
 
 COMMAND = Command(
-    "ui", "Serve a stateless API copy against PostgreSQL.", _run, actions=(ActionName.UI,)
+    "ui",
+    "Serve the browser interface and API without starting a controller.",
+    _run,
+    actions=(ActionName.UI,),
 )

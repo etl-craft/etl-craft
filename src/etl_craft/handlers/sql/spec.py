@@ -56,15 +56,17 @@ from etl_craft.core.text import (
     is_safe_identifier,
     is_safe_object_ref,
     is_safe_order_term,
+    pipe_list,
     split_statements,
     sql_parts,
     substitute_task_tokens,
     suggest,
 )
-from etl_craft.dialects.query_analysis import read_only_problem
+from etl_craft.dialects.query_analysis import read_only_problem, read_query
 from etl_craft.dialects.warehouse.base import STORAGE_PARAMETERS
 from etl_craft.engine.repository.offsets import StoredOffset
-from etl_craft.handlers.registry import TaskContext
+from etl_craft.handlers.registry import TaskContext, require_event_files_unchanged
+from etl_craft.handlers.sql.upload_controls import check_keys as check_upload_keys
 from etl_craft.handlers.sql.watermarks import Watermark, read_watermark, source_pipelines
 from etl_craft.warehouse.connection import warehouse_dialect
 
@@ -168,6 +170,17 @@ class SqlTask:
 
 
 def read_sql_task(context: TaskContext, stored: StoredOffset | None = None) -> SqlTask:
+    """Name the exact consumer when a rule scope cannot be interpreted safely."""
+    require_event_files_unchanged(context)
+    try:
+        return _read_sql_task(context, stored)
+    except SqlGuardError as error:
+        if "$$rule_flags" in str(error):
+            raise SqlGuardError(f"{context.pipeline_code}.{context.task_code}: {error}") from error
+        raise
+
+
+def _read_sql_task(context: TaskContext, stored: StoredOffset | None = None) -> SqlTask:
     """Read and check the SQL task's parameters; ``SqlGuardError`` or ``MetadataError`` if wrong."""
     params = context.task_params
     action = read_action(params)
@@ -212,6 +225,7 @@ def read_sql_task(context: TaskContext, stored: StoredOffset | None = None) -> S
     dedupe_order = None
     if action in MERGES:
         compare = _columns(params, "MERGE_COMPARE_COLUMNS", action, context)
+        check_upload_keys(f"{context.pipeline_code}.{context.task_code}", merge_key, compare)
         dedupe_order = _dedupe_order(params.get("MERGE_DEDUPE_ORDER"))
     else:
         for name in ("MERGE_COMPARE_COLUMNS", "MERGE_DEDUPE_ORDER"):
@@ -221,7 +235,6 @@ def read_sql_task(context: TaskContext, stored: StoredOffset | None = None) -> S
                 )
     if action not in KEYED and params.get("MERGE_KEY"):
         raise SqlGuardError(f"MERGE_KEY does not apply to SQL_ACTION={action}")
-    setup_for = read_setup_for(params.get("SETUP_FOR"), action)
     reject_limit = _reject_limit(params.get("REJECT_LIMIT"), action)
     if flags["SKIP_REJECTS_OVER_LIMIT"] and reject_limit is None:
         raise SqlGuardError(
@@ -240,7 +253,7 @@ def read_sql_task(context: TaskContext, stored: StoredOffset | None = None) -> S
         allow_empty=flags["ALLOW_EMPTY"],
         preserve_target=flags["PRESERVE_TARGET"],
         hard_delete=flags["HARD_DELETE"],
-        setup_for=setup_for,
+        setup_for=read_setup_for(params.get("SETUP_FOR"), action),
         secure_view=flags["SECURE_VIEW"],
         reject_limit=reject_limit,
         skip_rejects_over_limit=flags["SKIP_REJECTS_OVER_LIMIT"],
@@ -319,6 +332,9 @@ def resolve_select(
     raw = upload_select(
         raw, len((event_values or {}).get("upload_ids", ())), validating=pipeline_run_id == 0
     )
+    from etl_craft.core.rule_flags import placeholder, replace_scopes
+
+    raw = replace_scopes(raw, placeholder)
     # Tokens first: a ``$$`` would otherwise read as a dollar-quoted string when splitting.
     watermark = read_watermark(params, stored)
     bounded = bounded_definition(config, params)
@@ -343,7 +359,13 @@ def resolve_select(
         if pipeline_run_id
         else None,
     )
-    statements = split_statements(substituted)
+    dialect = warehouse_dialect(config).sqlglot_dialect if config.warehouse is not None else None
+    reading = read_query(substituted, dialect)
+    statements = (
+        [substituted.strip().removesuffix(";")]
+        if reading.problem is None and reading.unparsed is None
+        else split_statements(substituted)
+    )
     if len(statements) != 1:
         raise SqlGuardError(
             f"{source} must hold exactly one SELECT; it holds {len(statements)} statements"
@@ -363,7 +385,7 @@ def _columns(
     params: Mapping[str, str], name: str, action: SqlAction, context: TaskContext
 ) -> tuple[str, ...]:
     value = params.get(name) or ""
-    columns = tuple(part.strip() for part in value.split("|") if part.strip())
+    columns = pipe_list(value)
     if not columns:
         raise SqlGuardError(f"{name} is required for SQL_ACTION={action}: '|'-separated columns")
     bad = [column for column in columns if not is_safe_identifier(column)]

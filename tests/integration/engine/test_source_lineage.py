@@ -90,7 +90,7 @@ def test_demo_traces_every_task_before_warehouse_exists(engine_db, tmp_path, mon
     )
     migrations = project / "migrations"
     migrations.mkdir()
-    shutil.copy(project / "metadata/support_insights.sql", migrations / "0001_demo.sql")
+    shutil.copy(project / "metadata/demo.sql", migrations / "0001_demo.sql")
     from etl_craft.engine.migrations import mark_packaged_migrations_applied
 
     with engine_db.engine.begin() as conn:
@@ -207,3 +207,51 @@ def test_catalog_reports_unavailable_warehouse_without_losing_definitions(engine
     assert not table.warehouse_checked
     assert table.columns["id"].declared_type == "INT"
     assert table.warehouse_findings == ["comparison unavailable: warehouse unavailable"]
+
+
+def test_columns_the_engine_adds_to_a_written_table_trace_for_its_readers(engine_db):
+    with engine_db.engine.begin() as conn:
+        pipeline = add_pipeline(conn, "P")
+        add_task(
+            conn,
+            pipeline,
+            "a_setup",
+            SQL_ACTION="SETUP_TABLE",
+            SETUP_FOR="SCD1_MERGE",
+            TARGET_OBJECT="ods.people",
+            SELECT_QUERY="SELECT id, name FROM raw.people",
+        )
+        add_task(
+            conn,
+            pipeline,
+            "b_merge",
+            SQL_ACTION="SCD1_MERGE",
+            TARGET_OBJECT="ods.people",
+            SELECT_QUERY="SELECT id, name FROM raw.people",
+        )
+        add_task(
+            conn,
+            pipeline,
+            "c_report",
+            SQL_ACTION="CREATE_TABLE",
+            TARGET_OBJECT="mart.people",
+            SELECT_QUERY=(
+                "SELECT id, row_id, pipeline_run_id, active_flag, update_date FROM ods.people"
+            ),
+        )
+        add_source_column(conn, "raw.people", "id", "INT", 1)
+        add_source_column(conn, "raw.people", "name", "VARCHAR", 2)
+    results = {result.task: result for result in collect(engine_db.engine, engine_db.config)}
+    assert results["P.c_report"].error is None, results["P.c_report"].error
+    assert {edge.target_column for edge in results["P.c_report"].edges} >= {"row_id", "active_flag"}
+
+
+def test_a_declared_engine_column_keeps_its_declared_type(engine_db):
+    from etl_craft.handlers.lineage_columns import with_named_engine_columns
+
+    used = {"ods.people": {"id": "INT", "row_id": "BIGINT"}}
+    owned = {"ods.people": ("PIPELINE_RUN_ID", "ROW_ID")}
+    found = with_named_engine_columns(
+        used, owned, "SELECT id, row_id, pipeline_run_id FROM ods.people", None
+    )
+    assert found["ods.people"] == {"pipeline_run_id": "UNKNOWN", "id": "INT", "row_id": "BIGINT"}

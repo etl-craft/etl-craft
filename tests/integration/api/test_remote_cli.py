@@ -15,6 +15,7 @@ from sqlalchemy import text
 from etl_craft.api.app import create_app
 from etl_craft.cli import main
 from etl_craft.cli.commands import login
+from etl_craft.config.object_models import Artifacts
 from etl_craft.core.actor import SYSTEM_ACTOR, Actor, ActorKind, acting_as
 from etl_craft.core.enums import ActionName, ApiRole, ControlAction, RunStatus
 from etl_craft.core.errors import ExitCode
@@ -126,6 +127,61 @@ def sign_in(monkeypatch, capsys, url, name="alice", *answers):
     monkeypatch.setattr(login, "password", lambda confirm=False: PASSWORD)
     monkeypatch.setattr(login, "interactive", lambda: None)
     return run(capsys, "login", "--api", url)
+
+
+def test_temporary_password_identity_uses_the_selected_project_environment(
+    server,
+    monkeypatch,
+    capsys,
+    tmp_path,
+):
+    from fixtures.actions import act
+
+    ctx = server["ctx"]
+    act(
+        ctx,
+        ActionName.PROJECT_ADD,
+        project="other",
+        name="Other",
+        environment_type="SIT",
+        reason="identity test",
+    )
+    act(ctx, ActionName.ACCOUNT_RESET_PASSWORD, name="alice", password=PASSWORD)
+    monkeypatch.setattr("builtins.input", lambda prompt="": "alice")
+    monkeypatch.setattr(login, "password", lambda confirm=False: PASSWORD)
+    monkeypatch.setattr(login, "interactive", lambda: None)
+    selected = tmp_path / "other.yml"
+    selected.write_text("Secrets:\n  Source_type: ENVIRONMENT\nOrchestration:\n  Project: other\n")
+    code, _, err = run(
+        capsys, "--config", str(selected), "--project", "other", "login", "--api", server["url"]
+    )
+    assert code == 0, err
+    # An ungranted project's environment is not exposed during sign-in.
+    assert "SIT" not in err
+    act(
+        ctx,
+        ActionName.ACCESS_GRANT,
+        project="other",
+        account="alice",
+        permission="CAN_VIEW",
+        reason="environment identity check",
+    )
+    code, out, _ = run(
+        capsys,
+        "--config",
+        str(selected),
+        "--project",
+        "other",
+        "whoami",
+        "--api",
+        server["url"],
+        "--format",
+        "json",
+    )
+    assert code == 0 and json.loads(out)["environment"] == {"type": "SIT", "name": None}
+    code, _, err = run(capsys, "--project", "default", "whoami", "--api", server["url"])
+    assert code == 0 and "default · CUSTOM" in err
+    assert run(capsys, "--project", "default", "pipelines", "--api", server["url"])[0] == 26
 
 
 def tokens_of(ctx, name):
@@ -245,7 +301,15 @@ def test_remote_reads_print_exactly_what_the_local_project_prints(server, monkey
         for output in ("text", "json"):
             local = run(capsys, *argv, "--format", output)
             remote = run(capsys, *argv, "--format", output, "--api", url)
-            assert remote == local and local[0] in (0, 1), argv
+            assert remote[:2] == local[:2] and local[0] in (0, 1), argv
+            if output == "text":
+                assert local[2].startswith("default · CUSTOM · local\n")
+                assert remote[2].startswith(f"default · CUSTOM · {url}\n")
+                assert local[2].removeprefix("default · CUSTOM · local\n") == remote[
+                    2
+                ].removeprefix(f"default · CUSTOM · {url}\n")
+            else:
+                assert remote[2] == local[2]
     monkeypatch.setenv("ETL_CRAFT_TOKEN", server["service"]["admin"])
     for argv in (("token", "list"), ("account", "list")):
         local = run(capsys, *argv, "--format", "json")
@@ -330,7 +394,6 @@ def test_host_only_actions_and_options_are_refused_against_a_server(server, monk
     url = server["url"]
     monkeypatch.setenv("ETL_CRAFT_TOKEN", server["service"]["operator"])
     for argv, expected in (
-        (("config", "apply"), "`etl-craft config apply` there"),
         (("migrate",), "`etl-craft migrate` there"),
         (("init-db",), "run it on the controller's host"),
         (("setup",), "run it on the controller's host"),
@@ -368,11 +431,24 @@ def test_attempt_logs_stream_from_the_server_within_the_role(server, monkeypatch
         )
     monkeypatch.setenv("ETL_CRAFT_TOKEN", server["service"]["viewer"])
     attempt = str(server["attempt"])
-    assert run(capsys, "logs", "--attempt-id", attempt, "--api", url) == (
-        0,
-        "first\nsecond é\n",
-        "",
-    )
+    code, content, context = run(capsys, "logs", "--attempt-id", attempt, "--api", url)
+    assert (code, content) == (0, "first\nsecond é\n")
+    assert context.startswith(f"default · CUSTOM · {url}\n")
+    with ctx.engine.connect() as conn:
+        detail = conn.execute(
+            text(
+                "SELECT pr.RUN_LABEL AS run_label, tr.TASK_RUN_ID AS task_run_id, "
+                "tr.TASK_RUN_LABEL AS task_run_label FROM AUD_TASK_ATTEMPTS a "
+                "JOIN AUD_TASK_RUN_LOG tr ON tr.TASK_RUN_ID=a.TASK_RUN_ID "
+                "JOIN AUD_PIPELINES_RUN_LOG pr ON pr.PIPELINE_RUN_ID=tr.PIPELINE_RUN_ID "
+                "WHERE a.ATTEMPT_ID=:id"
+            ),
+            {"id": server["attempt"]},
+        ).one()
+    import shlex
+
+    assert f"run_id={server['run']} {shlex.quote(detail.run_label)}\n" in context
+    assert f"task_run_id={detail.task_run_id} {shlex.quote(detail.task_run_label)}\n" in context
     assert run(capsys, "logs", "--attempt-id", attempt, "--offset", "6", "--api", url)[1] == (
         "second é\n"
     )
@@ -410,7 +486,17 @@ def test_remote_task_run_forwards_the_exact_selection(
 
     monkeypatch.setitem(ACTIONS, ActionName.RUN, replace(ACTIONS[ActionName.RUN], call=execute))
     monkeypatch.setenv("ETL_CRAFT_TOKEN", server["service"]["operator"])
-    args = ["run", "--pipeline-code", "P", "--task-code", "T", "--run-key", "manual:test"]
+    args = [
+        "run",
+        "--pipeline-code",
+        "P",
+        "--task-code",
+        "T",
+        "--run-key",
+        "manual:test",
+        "--reason",
+        "test requested run",
+    ]
     if standalone:
         args += [
             "--standalone",
@@ -579,3 +665,58 @@ def test_remote_cli_prepares_recovery_restart_and_selected_bulk(
     )
     assert code == 0, err
     assert json.loads(out)["outcomes"][0]["control"]["action"] == "HOLD"
+
+
+def test_a_runner_holding_only_a_token_publishes_and_applies_a_bundle(
+    server, monkeypatch, capsys, tmp_path
+):
+    from types import SimpleNamespace
+
+    from fixtures.actions import act
+
+    ctx = server["ctx"]
+    store = replace(ctx.config, artifacts=Artifacts(store=(tmp_path / "store").as_uri()))
+    served = replace(ctx, config=store)
+    act(
+        ctx,
+        ActionName.ACCESS_GRANT,
+        project="default",
+        account="ci-developer",
+        permission="CAN_MANAGE",
+        reason="ci deploys this project",
+    )
+    folder = tmp_path / "project"
+    (folder / "config").mkdir(parents=True)
+    _write_project(folder, SimpleNamespace(config=store))
+    (folder / "config" / "pipelines.csv").write_text(
+        "PIPELINE_CODE,PIPELINE_NAME,REFRESH_TYPE,ACTIVE_FLAG\nQ,Q,INCREMENTAL,Y\n"
+    )
+    (folder / "config" / "tasks.csv").write_text(  # the fixture's own task is not under test
+        "PIPELINE_CODE,TASK_CODE,TASK_TYPE,HANDLER,ACTIVE_FLAG\nP,T,ETL,PYTHON,N\n"
+    )
+    with Served(served) as url:
+        api = ("--api", url, "--project", "default")
+        monkeypatch.setenv("ETL_CRAFT_TOKEN", server["service"][ApiRole.ADMIN])
+        code, _, err = run(capsys, *api, "bundle", "publish", "--project-dir", str(folder))
+        assert code == 0, err  # an admin approves the project's connection contract once
+        monkeypatch.setenv("ETL_CRAFT_TOKEN", server["service"][ApiRole.DEVELOPER])
+        code, _, err = run(capsys, *api, "bundle", "publish", "--project-dir", str(folder))
+        assert code == 0, err  # the same contract: a developer publishes from then on
+        code, _, err = run(capsys, *api, "config", "apply")  # a folder is not accepted over HTTP
+        assert code == ExitCode.USAGE and "reads a published bundle" in err, err
+        code, out, err = run(capsys, *api, "config", "plan", "--bundle", "latest")
+        assert code == 0 and "insert" in out and "Q" in out, (out, err)
+        assert not _pipelines(served, "Q")
+        code, out, err = run(capsys, *api, "config", "apply", "--bundle", "latest")
+        assert code == 0 and "from bundle " in out, (out, err)
+        assert _pipelines(served, "Q")
+        monkeypatch.setenv("ETL_CRAFT_TOKEN", server["service"][ApiRole.VIEWER])
+        code, _, err = run(capsys, *api, "config", "plan", "--bundle", "latest")
+        assert code == ExitCode.PERMISSION_DENIED, err
+
+
+def _pipelines(ctx, code):
+    with ctx.engine.connect() as conn:
+        return conn.execute(
+            text("SELECT PIPELINE_ID AS id FROM CFG_PIPELINES WHERE PIPELINE_CODE=:c"), {"c": code}
+        ).all()

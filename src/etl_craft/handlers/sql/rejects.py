@@ -23,15 +23,13 @@ from __future__ import annotations
 from collections.abc import Mapping
 
 from etl_craft.core.errors import SqlGuardError
+from etl_craft.dialects.warehouse.base import REJECT_AUDIT as REJECT_AUDIT
 from etl_craft.handlers.sql.session import Session
 from etl_craft.handlers.sql.spec import SqlTask
 from etl_craft.handlers.sql.tables import require_target
 
 Check = tuple[str, str, str]
 """A condition that sets a row aside, the column it tests and the reason."""
-
-REJECT_AUDIT = ("PIPELINE_RUN_ID", "PIPELINE_ID", "TASK_RUN_ID", "CREATE_DATE", "CREATED_BY")
-"""The audit columns of ``<target>__rejects``, stamped as an append stamps its rows."""
 
 
 def screen(

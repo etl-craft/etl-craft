@@ -33,6 +33,7 @@ class LastRun:
     update_count: int | None = None
     delete_count: int | None = None
     reject_count: int | None = None
+    duplicate_count: int | None = None
     error_message: str | None = None
 
 
@@ -50,6 +51,7 @@ class PipelineRow:
     last_run: LastRun | None
     last_run_id: int | None = None
     tags: tuple[str, ...] = ()
+    auto_restart_condition: str = "SCHEDULE"
 
 
 @dataclass(frozen=True)
@@ -106,6 +108,7 @@ def fetch_catalog_pipelines(conn: Connection) -> list[PipelineRow]:
             else None,
             None if r.pipeline_run_id is None else int(r.pipeline_run_id),
             read_tags(r.pipeline_parameters, r.pipeline_code),
+            r.auto_restart_condition,
         )
         for r in conn.execute(statement(conn, "catalog_pipelines"))
     ]
@@ -131,6 +134,7 @@ def fetch_catalog_tasks(conn: Connection) -> list[TaskRow]:
                 update_count=r.update_count,
                 delete_count=r.delete_count,
                 reject_count=r.reject_count,
+                duplicate_count=r.duplicate_count,
                 error_message=r.error_message,
             )
             if r.run_status is not None
@@ -176,6 +180,7 @@ class RunSummary:
     metadata_version: str | None = None
     newer_metadata_available: bool = False
     first_status: str | None = None
+    run_label: str = ""
 
     @property
     def seconds(self) -> float | None:
@@ -198,6 +203,7 @@ class TaskRunSummary:
     update_count: int | None
     delete_count: int | None
     reject_count: int | None
+    duplicate_count: int | None
     error_message: str | None
     watermark_from: str | None = None
     watermark_to: str | None = None
@@ -205,6 +211,10 @@ class TaskRunSummary:
     failure_reasons: tuple[str, ...] = ()
     item_progress: str | None = None
     first_status: str | None = None
+    run_label: str = ""
+
+    task_run_id: int | None = None
+    task_run_label: str = ""
 
     @property
     def seconds(self) -> float | None:
@@ -268,7 +278,7 @@ def fetch_task_runs(conn: Connection, limit: int = RUN_HISTORY) -> dict[int, lis
     for row in rows:
         values = dict(row._mapping)
         task_id = values.pop("task_id")
-        task_run_id = values.pop("task_run_id")
+        task_run_id = values["task_run_id"]
         if values.pop("has_items", False):
             values["item_progress"] = str(item_progress[task_run_id])
         values["failure_reasons"] = tuple(failures.get(task_run_id, []))

@@ -14,6 +14,12 @@ from etl_craft.services.operations.requests import ReconcileInput
 
 def _configure(parser: argparse.ArgumentParser) -> None:
     configure_output(parser)
+    parser.add_argument(
+        "--attest-ended",
+        action="store_true",
+        help="Attest process ending after lease, warehouse and original-instance checks.",
+    )
+    parser.add_argument("--reason", help="Required reason for ending-evidence recovery.")
     parser.add_argument("--pipeline-code", help="Limit reconciliation to this pipeline.")
     parser.add_argument("--task-code", help="Limit reconciliation to this pipeline's task.")
 

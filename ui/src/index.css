@@ -1,0 +1,199 @@
+@import "tailwindcss";
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+:root {
+  color-scheme: light;
+  --bg: #f0f1f5;
+  --surface: #ffffff;
+  --surface-2: #f6f7fa;
+  --border: #e7e8ee;
+  --border-strong: #d5d7e0;
+  --fg: #14161d;
+  --muted: #646a7a;
+  --accent: #4a4de0;
+  --accent-fg: #ffffff;
+  --ring: #4a4de0;
+  --sidebar: #f0f1f5;
+  --sidebar-fg: #3d4250;
+  --sidebar-active: #ffffff;
+  --ok-fg: #0f7a4a; --ok-bg: #e3f6ec;
+  --bad-fg: #c4252b; --bad-bg: #fdecec;
+  --run-fg: #1c5fd6; --run-bg: #e6effe;
+  --warn-fg: #8f5200; --warn-bg: #fff1d1;
+  --idle-fg: #555b6b; --idle-bg: #eef0f4;
+  --ok-solid: #1fb26b; --bad-solid: #ec4a50; --run-solid: #3b82f6; --warn-solid: #f0a020; --idle-solid: #9aa1b1;
+  /* The symbol on a solid mark: dark where white would fall below 3:1 (green, amber). */
+  --ok-glyph: #06301b; --bad-glyph: #ffffff; --run-glyph: #ffffff; --warn-glyph: #2b1700; --idle-glyph: #14161d;
+  --env-prod: #c4252b; --env-prod-fg: #ffffff;
+  --env-other: #3f4a5a; --env-other-fg: #ffffff;
+  --mark-a: #6a74e6; --mark-b: #4651c4; --mark-glyph: #ffffff;
+  --shadow-sheet: 0 0 0 1px rgb(20 22 29 / 0.05), 0 1px 2px rgb(20 22 29 / 0.04), 0 12px 32px -16px rgb(20 22 29 / 0.12);
+  --shadow-raised: 0 0 0 1px rgb(20 22 29 / 0.06), 0 1px 2px rgb(20 22 29 / 0.06);
+  --shadow-pop: 0 0 0 1px rgb(20 22 29 / 0.06), 0 4px 8px -2px rgb(20 22 29 / 0.08), 0 16px 40px -8px rgb(20 22 29 / 0.18);
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0b0c10;
+  --surface: #13141a;
+  --surface-2: #191b22;
+  --border: #23252e;
+  --border-strong: #32353f;
+  --fg: #ecedf2;
+  --muted: #9a9fae;
+  --accent: #9296ff;
+  --accent-fg: #0b0c10;
+  --ring: #9296ff;
+  --sidebar: #0b0c10;
+  --sidebar-fg: #b4b8c5;
+  --sidebar-active: #1c1e27;
+  --ok-fg: #5fdd9d; --ok-bg: #0f2a1d;
+  --bad-fg: #ff9a96; --bad-bg: #3a1517;
+  --run-fg: #9dc0ff; --run-bg: #13264a;
+  --warn-fg: #f7c948; --warn-bg: #3a2a08;
+  --idle-fg: #aab1bf; --idle-bg: #22252e;
+  --ok-solid: #2fc97a; --bad-solid: #ff5d62; --run-solid: #5593ff; --warn-solid: #f5a524; --idle-solid: #5d6473;
+  --ok-glyph: #06180d; --bad-glyph: #1f0505; --run-glyph: #050d1f; --warn-glyph: #1f1300; --idle-glyph: #ffffff;
+  --env-prod: #c9372c; --env-prod-fg: #ffffff;
+  --env-other: #3a4553; --env-other-fg: #f1f4f8;
+  --mark-a: #a7aef7; --mark-b: #7c85e8; --mark-glyph: #0d0e22;
+  --shadow-sheet: 0 0 0 1px rgb(255 255 255 / 0.06), 0 12px 32px -16px rgb(0 0 0 / 0.6);
+  --shadow-raised: 0 0 0 1px rgb(255 255 255 / 0.08), 0 1px 2px rgb(0 0 0 / 0.4);
+  --shadow-pop: 0 0 0 1px rgb(255 255 255 / 0.08), 0 16px 40px -8px rgb(0 0 0 / 0.7);
+}
+
+@theme inline {
+  --radius-xs: 3px;
+  --radius-sm: 5px;
+  --radius-md: 7px;
+  --radius-lg: 10px;
+  --radius-xl: 12px;
+  --radius-2xl: 16px;
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-fg: var(--fg);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-accent-fg: var(--accent-fg);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-fg: var(--sidebar-fg);
+  --color-sidebar-active: var(--sidebar-active);
+  --color-ok: var(--ok-fg);
+  --color-ok-bg: var(--ok-bg);
+  --color-bad: var(--bad-fg);
+  --color-bad-bg: var(--bad-bg);
+  --color-run: var(--run-fg);
+  --color-run-bg: var(--run-bg);
+  --color-warn: var(--warn-fg);
+  --color-warn-bg: var(--warn-bg);
+  --color-idle: var(--idle-fg);
+  --color-idle-bg: var(--idle-bg);
+  --color-ok-solid: var(--ok-solid);
+  --color-bad-solid: var(--bad-solid);
+  --color-run-solid: var(--run-solid);
+  --color-warn-solid: var(--warn-solid);
+  --color-idle-solid: var(--idle-solid);
+  --color-ok-glyph: var(--ok-glyph);
+  --color-bad-glyph: var(--bad-glyph);
+  --color-run-glyph: var(--run-glyph);
+  --color-warn-glyph: var(--warn-glyph);
+  --color-idle-glyph: var(--idle-glyph);
+  --shadow-sheet: var(--shadow-sheet);
+  --shadow-raised: var(--shadow-raised);
+  --shadow-pop: var(--shadow-pop);
+  --font-sans: "Inter Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono Variable", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+
+html { background: var(--bg); --row: 36px; --row-wrap: 48px; }
+html[data-density="compact"] { --row: 26px; --row-wrap: 36px; }
+html[data-density="comfortable"] { --row: 40px; --row-wrap: 56px; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.5;
+  font-feature-settings: "cv11", "ss03";
+  letter-spacing: -0.006em;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.num { font-variant-numeric: tabular-nums; }
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
+
+h1, h2, h3 { letter-spacing: -0.02em; }
+code, pre, .font-mono { font-feature-settings: "calt"; letter-spacing: 0; }
+
+/* React Flow follows the app theme and avoids its inline-style defaults. */
+.react-flow {
+  --xy-background-color: transparent;
+  --xy-edge-stroke-default: var(--muted);
+  --xy-controls-button-background-color: var(--surface);
+  --xy-controls-button-background-color-hover: var(--surface-2);
+  --xy-controls-button-color: var(--fg);
+  --xy-controls-button-color-hover: var(--fg);
+  --xy-controls-button-border-color: var(--border);
+  --xy-edge-label-background-color: var(--surface);
+  --xy-edge-label-color: var(--fg);
+}
+.react-flow__attribution { display: none; }
+.react-flow__controls { box-shadow: none; border: 1px solid var(--border-strong); border-radius: 4px; overflow: hidden; }
+.react-flow__controls-button { background: var(--surface); color: var(--fg); border-bottom: 1px solid var(--border); }
+.react-flow__controls-button:hover { background: var(--surface-2); }
+.react-flow__controls-button svg { fill: currentColor; }
+.react-flow__edge-textbg { fill: var(--surface); }
+.react-flow__edge-text { fill: var(--fg); font-size: 11px; }
+
+/* Pages that fill the window are edge-to-edge: panes meet at 1px dividers instead of floating as separate cards. */
+[data-edge] > div { gap: 0 !important; }
+[data-edge] > header, [data-edge] > div > header { padding: 14px 16px 12px; border-bottom: 1px solid var(--border); background: var(--surface); }
+[data-edge] [data-card] { border-width: 0 0 1px; border-radius: 0; }
+[data-edge] :has(> [data-card]) { gap: 0 !important; }
+[data-edge] :has(> [data-card]) > [data-card]:not(:last-child) { border-right-width: 1px; }
+/* Pages that scroll keep their content off the window edge; cards and tables run edge to edge. */
+[data-edge]:not([data-fill]) > div > :not(header):not([data-card]):not([role=tablist]) { margin-inline: 16px; }
+[data-edge]:not([data-fill]) > div > :first-child:not(header) { margin-top: 8px; }
+[data-edge]:not([data-fill]) > div { gap: 0 !important; padding-bottom: 12px; }
+[data-edge]:not([data-fill]) > div > :not(header):not([data-card]) { margin-block: 8px; }
+[data-edge] > div > * { min-width: 0; }
+
+/* The page is one raised sheet on the canvas; the bar above and the navigation beside it sit on the canvas itself. */
+.sheet { background: var(--surface); box-shadow: var(--shadow-sheet); }
+@media (min-width: 1024px) { .sheet { border-radius: 12px; margin: 0 8px 8px 0; } }
+
+/* Controls answer the pointer: colour, border and shadow ease; a press settles half a pixel. */
+:where(a, button, summary, input, select, textarea, [role="tab"], [role="option"], [role="menuitem"]) {
+  transition: background-color 140ms var(--ease), border-color 140ms var(--ease), color 140ms var(--ease), box-shadow 140ms var(--ease), opacity 140ms var(--ease);
+}
+:where(button):active:not(:disabled) { transform: translateY(0.5px); }
+:where(input, select, textarea):focus-visible { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent); }
+::placeholder { color: color-mix(in srgb, var(--muted) 80%, transparent); }
+main table tbody tr:hover > td { background: color-mix(in srgb, var(--surface-2) 75%, transparent); }
+
+/* What opens, opens from where it came: dialogs rise, menus grow from their trigger, a new page fades in. */
+dialog { opacity: 0; transform: translateY(10px) scale(0.98); transition: opacity 180ms var(--ease), transform 180ms var(--ease), overlay 180ms allow-discrete, display 180ms allow-discrete; }
+dialog[open] { opacity: 1; transform: none; }
+@starting-style { dialog[open] { opacity: 0; transform: translateY(10px) scale(0.98); } }
+dialog::backdrop { background: rgb(10 11 16 / 0.42); backdrop-filter: blur(3px); }
+@keyframes pop-in { from { opacity: 0; transform: scale(0.97) translateY(-3px); } }
+[data-radix-popper-content-wrapper] > * { animation: pop-in 140ms var(--ease); transform-origin: var(--radix-dropdown-menu-content-transform-origin); }
+@keyframes page-in { from { opacity: 0; } }
+.page-in { animation: page-in 200ms var(--ease); }
+
+/* One disclosure everywhere: a chevron that turns when open, instead of each browser's own triangle. */
+details > summary { list-style: none; display: flex; align-items: center; gap: 6px; }
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before {
+  content: ""; flex: none; width: 6px; height: 6px; margin-inline: 2px 1px;
+  border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor;
+  transform: rotate(-45deg); transition: transform 150ms var(--ease);
+}
+details[open] > summary::before { transform: rotate(45deg); }

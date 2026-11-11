@@ -38,7 +38,7 @@ The demo provides the full migration as `metadata/event_waits.sql` and its scrip
 
 ```bash
 python prepare.py metadata metadata/event_waits.sql
-etl-craft run --pipeline-code FILE_DELIVERY
+etl-craft run --reason "requested data load" --pipeline-code FILE_DELIVERY
 # In another terminal, deliver a new filename:
 mkdir -p inbox
 printf 'id\n1\n' > inbox/batch-001.csv
@@ -46,14 +46,9 @@ printf 'id\n1\n' > inbox/batch-001.csv
 
 The run waits, records the settled file and lets the script read it. A later run ignores
 `batch-001.csv`; deliver `batch-002.csv` to trigger it. The scheduled version uses
-`etl-craft controller start` with the project's connector configuration.
+`etl-craft controller` with the project's connector configuration.
 
 For a table instead of a file, replace `EVENT_FILE` with `EVENT_SQL`, such as
 `SELECT delivery_id FROM source.deliveries WHERE ready=true`. Set `EVENT_KEY_COLUMN=delivery_id` to consume each delivery once. Without that parameter,
 each run checks the query anew and retains its first-row readiness behavior.
 See [Event waits](../guides/event-waits.md) for timeout and evidence behavior.
-
-The optional `examples/demo/metadata/signal_waits.sql` and `python_scripts/signals.py` show
-a keyed signal table. Create `lnd.external_signals` first using the
-[external signal guide](../guides/external-events.md), choose its bounded retention window,
-and narrow the example's `EVENT_SQL` to that window before deploying it.

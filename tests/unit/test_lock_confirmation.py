@@ -186,3 +186,82 @@ def test_attempt_credential_keeps_the_parent_warehouse_holder_identity():
     )
     assert child.holder_id == parent_holder
     assert child.session_tag == holder_tag(parent_holder)
+
+
+@pytest.mark.parametrize(
+    ("name", "message", "refused"),
+    [
+        ("NOT_SUPPORTED", "Target query is not running: query_1", False),
+        ("NOT_SUPPORTED", "Cannot kill this query", True),
+        ("PERMISSION_DENIED", "Target query is not running: query_1", True),
+    ],
+)
+def test_trino_accepts_only_the_exact_already_finished_cancellation_response(
+    name, message, refused
+):
+    from sqlalchemy.exc import ProgrammingError
+
+    from etl_craft.dialects.warehouse.trino_iceberg import TrinoIcebergWarehouse
+
+    class ProviderError(Exception):
+        error_name = name
+
+        def __init__(self):
+            super().__init__(message)
+            self.message = message
+
+    calls = []
+    error = ProgrammingError("CALL system.runtime.kill_query", {}, ProviderError())
+
+    def execute(statement, parameters=None):
+        sql = str(statement)
+        calls.append(sql)
+        if sql.startswith("CALL"):
+            raise error
+        if "count(*)" in sql:
+            return SimpleNamespace(scalar_one=lambda: 1)
+        return SimpleNamespace(all=lambda: [SimpleNamespace(query_id="query_1")])
+
+    dialect, conn = TrinoIcebergWarehouse(), SimpleNamespace(execute=execute)
+    if refused:
+        with pytest.raises(ProgrammingError):
+            dialect.stop_tagged(conn, "etl-craft/attempt:1")
+    else:
+        dialect.stop_tagged(conn, "etl-craft/attempt:1")
+        assert dialect.running_tagged(conn, "etl-craft/attempt:1") == 1
+    assert sum("kill_query" in sql for sql in calls) == 1
+
+
+@pytest.mark.parametrize("running", [0, 1])
+def test_trino_finished_cancellation_still_requires_zero_running_statements(monkeypatch, running):
+    from contextlib import nullcontext
+
+    from sqlalchemy.exc import ProgrammingError
+
+    from etl_craft.dialects.warehouse.trino_iceberg import TrinoIcebergWarehouse
+
+    class FinishedQueryError(Exception):
+        error_name = "NOT_SUPPORTED"
+        message = "Target query is not running: query_1"
+
+    def execute(statement, parameters=None):
+        sql = str(statement)
+        if sql.startswith("CALL"):
+            raise ProgrammingError(sql, {}, FinishedQueryError())
+        if "count(*)" in sql:
+            return SimpleNamespace(scalar_one=lambda: running)
+        return SimpleNamespace(all=lambda: [SimpleNamespace(query_id="query_1")])
+
+    conn, disposed = SimpleNamespace(execute=execute), []
+    engine = SimpleNamespace(begin=lambda: nullcontext(conn), dispose=lambda: disposed.append(True))
+    clock = iter((0, fencing.STOP_WAIT_SECONDS + 1))
+    monkeypatch.setattr(fencing, "warehouse_dialect", lambda config: TrinoIcebergWarehouse())
+    monkeypatch.setattr(fencing, "build_warehouse_engine", lambda config: engine)
+    monkeypatch.setattr(fencing, "time", SimpleNamespace(monotonic=lambda: next(clock)))
+    config = SimpleNamespace(warehouse=object())
+    if running:
+        with pytest.raises(LockTimeoutError, match=r"1 warehouse statement.*still run"):
+            fencing.confirm_stopped(config, "etl-craft/attempt:1")
+    else:
+        fencing.confirm_stopped(config, "etl-craft/attempt:1")
+    assert disposed == [True]

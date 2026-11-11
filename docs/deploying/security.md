@@ -11,7 +11,9 @@ that runs etl-craft.
 
 Secrets never appear in logs, in error messages, or in the connection URLs etl-craft logs. An
 Python script receives its own settings through `CFG_TASK_PARAMETERS`, which are not secret:
-a script that needs a credential reads it from its environment. Values in
+a Python task declares provider names in `SECRETS` and reads them with `task.secret(name)`.
+The controller/API resolves names from ENVIRONMENT or FILE; agent children receive only
+these values through a private pipe, never inherited environment variables. Values in
 `CFG_TASK_PARAMETERS` and anything a script prints or logs are the team's responsibility.
 
 Audit arguments and structured log fields mask secret-named keys recursively, including mappings
@@ -54,6 +56,9 @@ never raw credentials. Sessions and service token values never enter warehouse c
 
 Admins manage identities through `account add`, `list`, `set-role`, `disable` and
 `reset-password`; see the [account example](../examples/accounts/README.md).
+For unattended USER provisioning, `account add --password-stdin` reads one line from a local
+pipe. It refuses terminal input, web-console input, SERVICE accounts and passwordless/SSO invites.
+The normal password policy still applies; the temporary password is never a command-line argument.
 Roles are inherited from the account on each command/API request. Disabling revokes all
 credentials immediately; password reset revokes existing sessions. Accounts are never deleted.
 Password hashes use salted `hashlib.scrypt` and never enter metadata histories or mirrors.
@@ -153,6 +158,70 @@ The session stores **group IDs**, so a rename keeps the identity and reusing a n
 transfer an old session's access to another group. Explicit Engine DB memberships are checked
 on every request as well.
 
+### Browser single sign-on
+
+The browser uses authorization code with PKCE (S256) when `Auth.Browser_state_secret` is set.
+Its value is a **variable name**, resolved through the configured Secrets provider. Set that
+variable to a random secret of at least 32 bytes; absent or shorter values refuse browser sign-in
+without printing the secret. Omit the setting to retain the device-flow fallback; the browser
+explains how to enable redirect sign-in.
+
+Register an HTTPS redirect URI ending in `/ui/signin/callback` on the provider's public client.
+The public origin comes from `Docs_site.External_url` or `Docs_site.Domain`; the UI callback
+is always `/ui/signin/callback` (the catalog publication prefix does not change UI routes),
+never the request Host header. The provider must advertise HTTPS authorization, token and JWKS
+endpoints. Browser sign-in requires a cryptographically verified RS256 ID token and an exact
+nonce, together with the existing issuer, audience, authorized-party and lifetime checks.
+
+State, verifier, nonce and expiry are HMAC-SHA256 signed in a Secure, HTTP-only, SameSite=Lax
+cookie valid for five minutes. Only an issuance ID and a one-way flow digest reach the existing
+login audit. Consumption commits under the existing cross-process account lock before code
+exchange, so replicas, retries and a process restart cannot replay a state. After a refused
+exchange, start again. All replicas must share the configured signing secret and Engine DB.
+
+### Provider sign-out
+
+Browser and API sign-out revoke the local session first. If OIDC discovery advertises an
+HTTPS `end_session_endpoint`, the response includes its logout URL and the browser visits it.
+`post_logout_redirect_uri` is restricted to the existing public origin from
+`Docs_site.External_url`, else `Docs_site.Domain`; a catalog path prefix is not part of that
+origin. A supplied foreign address is refused, with no redirect, after local revocation.
+There is no additional setting. CLI sign-out remains local.
+
+If discovery has no endpoint, the response explicitly says provider sign-out stayed local;
+the browser returns to sign-in with that notice. The provider's session can still let a later
+SSO sign-in complete without entering credentials. ID tokens are discarded at sign-in, so
+logout does not send `id_token_hint` or introduce storage for it. Some providers may prompt
+for confirmation without a hint. If discovery is unavailable or advertises an insecure
+endpoint, sign-out reports that error; local revocation is already committed.
+
+!!! warning "The device flow's ID-token nonce is optional"
+    The device flow (RFC 8628) has no nonce parameter, and Dex, Google and Keycloak do not echo one,
+    so device sign-in accepts an ID token that has no `nonce` claim. Browser sign-in always requires it. A `nonce` that is present must match
+    the one sent, or the sign-in is refused. The token still has to name the configured issuer, the
+    client as audience and authorized party, and be current. It is read from the issuer's token
+    endpoint over TLS in answer to this sign-in's one-time device code, not from a browser redirect,
+    which is the case a nonce exists to protect. The trade-off is that nothing ties the token to
+    this particular request beyond that exchange, so use only an issuer you trust, over HTTPS, and
+    keep the device code private.
+
+Names are set by an administrator, or by SSO claims at sign-in. With `Auth.Names_editable: true` each
+account may also edit its own first and last name in Personal settings (or with
+`etl-craft account settings --first-name --last-name`); with the default `false` the change is
+refused and the page shows no fields.
+
+SSO reads the `email`, `email_verified`, `given_name`, `family_name` and `name` claims (the device
+request asks for `openid email profile`). A sign-in refreshes the account's first name, last name
+and, only when the issuer marks it verified, its email.
+
+To invite someone before their provider subject is known, create the account with only an email
+(`etl-craft account add --name ada --role viewer --email ada@example.com --no-password`; without
+`--no-password` the command asks for a password, and an account with a password is never bound) and set
+`Auth.Oidc_bind_by_email: true`. The first SSO sign-in whose verified email matches exactly one
+active account with no password and no subject binds that subject to the account; the bind is
+recorded as a sign-in by that account. An unverified email, no match, or two matches is refused and
+left to an administrator, who can still register a subject with `--oidc-subject`.
+
 Refresh tokens are not rotated: the same token works until it expires or its session is
 signed out. A stolen refresh token can be used for that entire time. Use a short
 `Auth.Refresh_days` lifetime and run `etl-craft logout` for a lost device.
@@ -188,8 +257,8 @@ for each project.
 Local first-admin/recovery, pre-account initialization/migration, diagnostic doctor, and
 login/logout remain the explicit credential/bootstrap entry points described above.
 
-OIDC uses RFC 8628 polling and the configured issuer's HTTPS discovery/token endpoints.
-Register a public device client with RS256 ID tokens and nonce support. Tokens are accepted
+CLI/device OIDC uses RFC 8628 polling and the configured issuer's HTTPS discovery/token endpoints.
+Register a public client with RS256 ID tokens and device-grant support. Tokens are accepted
 only directly from the authenticated TLS token endpoint, as permitted by
 [OIDC Core §3.1.3.7](https://openid.net/specs/openid-connect-core-1_0.html#IDTokenValidation),
 with issuer, client audience, nonce and lifetime validation; arbitrary supplied ID tokens
@@ -316,7 +385,8 @@ expires. It cannot claim work or address another attempt. Local and agent task i
 use the same environment allowlist: PATH, PYTHONPATH, HOME, LANG, LANGUAGE, LC_* locale variables, TZ,
 TMPDIR/TMP/TEMP, USER/LOGNAME, SYSTEMROOT and TLS certificate locations, plus variables
 explicitly named by the loaded connection configuration. Local tasks require their configured
-Engine DB connection as well as warehouse connections. Deployment tokens and refresh/session
+Engine DB connection as well as warehouse connections. Task-source credentials are declared
+separately in SECRETS and travel by stdin pipe, with output redaction before log persistence. Deployment tokens and refresh/session
 credentials are not inherited. The task's attempt credential is passed in its private work
 file, never as ETL_CRAFT_TOKEN. Projects still share the instance's executable-code trust
 boundary; this is credential scoping, not a sandbox.
@@ -325,8 +395,9 @@ SSO sessions, including refreshes, expire absolutely within Auth.Session_hours f
 sign-in. Refreshing never resets that boundary. Password-only local accounts retain
 Auth.Refresh_days for server refresh sessions. OIDC permits 120 seconds of clock skew and
 caches successful discovery per issuer for ten minutes. ID tokens are accepted only from our
-own direct, TLS-validated token-endpoint response, as permitted by OIDC Core 3.1.3.7. Any future
-path accepting an ID token from a client must verify its signature.
+own direct, TLS-validated token-endpoint response. The device flow uses the TLS exception
+permitted by OIDC Core 3.1.3.7; browser code exchange additionally verifies the RS256 signature
+against the issuer's HTTPS JWKS and always requires the nonce.
 
 Until S7.A.7, publish-docs has no account sign-in: its IP allow list is its only visitor access
 check. Run one process for one configured project's generated catalog; a catalog for a different

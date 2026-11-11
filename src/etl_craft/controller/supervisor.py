@@ -13,6 +13,7 @@ from datetime import UTC, datetime
 from sqlalchemy.exc import SQLAlchemyError
 
 from etl_craft.controller.leadership import leadership
+from etl_craft.controller.restarts import Restarts
 from etl_craft.controller.retention import RetentionSchedule
 from etl_craft.controller.schedules import Schedules
 from etl_craft.core.actor import ActorKind, acting_as
@@ -20,6 +21,7 @@ from etl_craft.core.definitions import Definition, using
 from etl_craft.core.enums import RunStatus, YesNo
 from etl_craft.core.errors import ConfigurationError, EngineDbError, EtlCraftError
 from etl_craft.core.outage import OutageBudget
+from etl_craft.core.restart import schedule_allowed
 from etl_craft.engine.metrics import install
 from etl_craft.engine.queries import statement
 from etl_craft.engine.repository import controllers
@@ -98,6 +100,7 @@ class _Supervisor:
     pool: LocalPool | QueuePool
     working: WorkingSet = field(default_factory=WorkingSet)
     schedules: Schedules = field(default_factory=Schedules)
+    restarts: Restarts = field(default_factory=Restarts)
     retention: RetentionSchedule = field(default_factory=RetentionSchedule)
     jobs: Jobs = field(default_factory=dict)
     next_heartbeat: float = 0.0
@@ -116,7 +119,7 @@ class _Supervisor:
             context.run(steps.close)
 
     def supervise_once(self, controller_id: int) -> None:
-        """Heartbeat, reconcile, admit due schedules, advance runs and adopt unowned ones."""
+        """Heartbeat, reconcile, admit due schedules and restarts, advance and adopt runs."""
         if time.monotonic() >= self.next_heartbeat:
             controllers.heartbeat(self.ctx.engine, controller_id)
             self.next_heartbeat = time.monotonic() + 15
@@ -124,6 +127,7 @@ class _Supervisor:
         cascade_children(self.ctx)
         settle_ended_parent_waits(self.ctx.engine, datetime.now(UTC))
         self.schedules.refresh(self.ctx, datetime.now(UTC), self.stop)
+        self.restarts.refresh(self.ctx, datetime.now(UTC), self.stop)
         self.retention.refresh(self.ctx, datetime.now(UTC), self.stop)
         for run_id in list(self.jobs):
             self.advance(run_id)
@@ -192,12 +196,19 @@ def serve(ctx: OperationContext, stop: threading.Event) -> None:
         with acting_as(ctx.actor), leadership(ctx.engine, ctx.config) as leader:
             from etl_craft.controller.refresh import initialize
 
+            reconcile(ctx.engine)
             initialize(ctx)
-            controller_id = controllers.start(ctx.engine)
+            from etl_craft.engine.upload_recovery import recover_uploads
+
+            recover_uploads(ctx.engine, ctx.config)
+            controller_id = controllers.start(ctx.engine, ctx.config.allowed_auto_restarts)
             metrics.leader = True
             logger.info("controller_id=%s: controller active", controller_id)
-            if not ctx.config.allow_schedule:
-                logger.info("Orchestration.Allow_schedule is false: no scheduled pipeline runs")
+            if not schedule_allowed(ctx.config.allowed_auto_restarts):
+                logger.info(
+                    "Orchestration.Allowed_auto_restarts=%s: no scheduled pipeline runs",
+                    ctx.config.allowed_auto_restarts,
+                )
             try:
                 while not stop.is_set():
                     try:

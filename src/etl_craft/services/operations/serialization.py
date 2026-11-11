@@ -9,7 +9,7 @@ from dataclasses import MISSING, fields, is_dataclass
 from datetime import date, datetime
 from enum import Enum
 from pathlib import Path, PurePath
-from typing import Any, TypeVar, Union, cast, get_args, get_origin, get_type_hints
+from typing import Any, Literal, TypeVar, Union, cast, get_args, get_origin, get_type_hints
 
 from etl_craft.core.errors import ServerError, UsageError
 
@@ -27,12 +27,16 @@ def to_json(obj: object) -> dict[str, Any]:
             f"cannot serialize {type(obj).__name__} as an operation document; "
             "pass a result returned by services.operations"
         )
-    return cast(dict[str, Any], _encode(obj))
+    from etl_craft.core.redaction import mask
+
+    return cast(dict[str, Any], mask(_encode(obj)))
 
 
 def encode(obj: object) -> object:
     """Return any request or result as JSON values, without requiring a document schema."""
-    return _encode(obj)
+    from etl_craft.core.redaction import mask
+
+    return mask(_encode(obj))
 
 
 def decode(hint: object, document: object) -> object:
@@ -82,6 +86,10 @@ def _decode(hint: object, value: object, where: str) -> object:
     origin = get_origin(hint)
     if origin in (Union, types.UnionType):
         return _decode_union(get_args(hint), value, where)
+    if origin is Literal:
+        if value in get_args(hint):
+            return value
+        raise _unexpected(where, value, f"one of {list(get_args(hint))}")
     if origin in (tuple, list, dict, Mapping):
         return _decode_collection(origin, get_args(hint), value, where)
     if isinstance(hint, type) and is_dataclass(hint):

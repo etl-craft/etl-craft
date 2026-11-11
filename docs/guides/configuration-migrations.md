@@ -8,7 +8,7 @@ the project's own tables. Config files merge only the keys they contain; rows ad
 migration remain unchanged unless a later file explicitly changes those keys.
 
 Each example below is a file in
-[`docs/examples/migrations/`](https://github.com/venkatcg00/etl-craft/tree/main/docs/examples/migrations),
+[`docs/examples/migrations/`](https://github.com/etl-craft/etl-craft/tree/main/docs/examples/migrations),
 and the test suite applies them in order on SQLite and PostgreSQL, running `validate` after each.
 
 ## Why a migration

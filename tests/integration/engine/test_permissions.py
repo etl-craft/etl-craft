@@ -60,7 +60,7 @@ def actions(engine):
 
 REQUESTS = {
     ActionName.PIPELINES: TagFilter(),
-    ActionName.RUN: RunRequest(pipeline_code="P"),
+    ActionName.RUN: RunRequest(pipeline_code="P", reason="test requested run action"),
     ActionName.CONFIG_APPLY: ConfigDirectory(),
     ActionName.ACCOUNT_LIST: NoInput(),
     ActionName.ACCOUNT_RESET_PASSWORD: accounts.AccountPassword(name="x", password="do-not-record"),
@@ -109,7 +109,7 @@ def test_role_inheritance_and_refusal_records(project, role, name, required):
     if allowed:
         with admitted(caller, name, REQUESTS[name]):
             pass
-        assert len(actions(p.engine)) == before + int(audited)
+        assert len(actions(p.engine)) == before + 2 * int(audited)
     else:
         with pytest.raises(PermissionDeniedError) as error, admitted(caller, name, REQUESTS[name]):
             pass
@@ -135,12 +135,21 @@ def test_cli_and_http_share_the_service_run_policy(project, role, monkeypatch, c
     p, ctx, creds = project
     token = creds[role].token
     monkeypatch.setenv("ETL_CRAFT_TOKEN", token)
-    args = ["run", "--pipeline-code", "P", "--init-only", "--run-key", "one"]
+    args = [
+        "run",
+        "--pipeline-code",
+        "P",
+        "--init-only",
+        "--run-key",
+        "one",
+        "--reason",
+        "test requested run",
+    ]
     code = main(args)
     output = capsys.readouterr()
     response = TestClient(create_app(ctx)).post(
         "/api/v1/projects/default/runs",
-        json={"pipeline_code": "P", "init_only": True},
+        json={"pipeline_code": "P", "init_only": True, "reason": "test shared run policy"},
         headers={"Authorization": "Bearer " + token},
     )
     # A viewer may not run a pipeline, and an agent token cannot invoke a person's action.
@@ -150,7 +159,11 @@ def test_cli_and_http_share_the_service_run_policy(project, role, monkeypatch, c
         assert response.json()["exit_code"] == code
         refused = [a for a in actions(p.engine) if a.outcome == "REFUSED"]
         assert len(refused) == 2
-        assert all(a.actor == f"policy-{role}" and a.command == "run" for a in refused)
+        assert all(a.actor == f"policy-{role}" for a in refused)
+        assert [a.command for a in refused] == [
+            "project list" if role == ApiRole.AGENT else "run",
+            "run",
+        ]
         with p.engine.connect() as conn:
             assert (
                 conn.execute(

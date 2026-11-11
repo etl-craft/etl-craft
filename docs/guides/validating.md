@@ -6,6 +6,10 @@ scripts under `python_scripts/`, and checks each task with the same code a run u
 definition that passes `validate` passes the same checks when the task runs. Scripts are parsed,
 not imported: none of their code runs.
 
+The configured warehouse driver must be installed even when no pipelines are active. A
+missing driver fails with the project, warehouse and required extra, for example
+`pip install etl-craft[duckdb]`. Doctor and attempts use the same missing-driver message.
+
 ```text
 $ etl-craft validate
 [FAIL] SALES.load: SQL_ACTION='SCD1_MERG' is not one of CREATE_TABLE, ... — did you mean: SCD1_MERGE

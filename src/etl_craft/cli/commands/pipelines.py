@@ -12,6 +12,7 @@ from etl_craft.cli.commands.common import (
     request_from,
 )
 from etl_craft.cli.output import Output
+from etl_craft.cli.rendering import hours
 from etl_craft.core.enums import ActionName
 from etl_craft.core.errors import ExitCode
 from etl_craft.services.operations.models import PipelineListView
@@ -44,25 +45,35 @@ def _run(args: argparse.Namespace, out: Output) -> int:
             "PIPELINE_NAME",
             "REFRESH_TYPE",
             "RUN_SCHEDULE",
-            "SLA_IN_HOURS",
-            "TAGS",
+            "SLA" if out.stdout.isatty() else "SLA_IN_HOURS",
         )
-        out.rows([(*header, "PAUSED")])
+        extra = ("LAST_RUN", "NEXT_RUN") if out.stdout.isatty() else ()
         out.rows(
-            (
-                p.pipeline_code,
-                p.pipeline_name,
-                p.refresh_type,
-                p.run_schedule,
-                p.sla_in_hours,
-                ", ".join(p.tags),
-                p.paused.describe() if p.paused else "",
-            )
-            for p in pipelines
+            [
+                (*header, "LAST_RUN_ID", *extra, "TAGS", "PAUSED"),
+                *(
+                    (
+                        p.pipeline_code,
+                        p.pipeline_name,
+                        p.refresh_type,
+                        p.run_schedule,
+                        hours(p.sla_in_hours) if out.stdout.isatty() else p.sla_in_hours,
+                        p.recent_runs[0].pipeline_run_id if p.recent_runs else None,
+                        *(
+                            (p.recent_runs[0].start_date if p.recent_runs else None, p.next_run)
+                            if extra
+                            else ()
+                        ),
+                        ", ".join(p.tags),
+                        p.paused.describe() if p.paused else "",
+                    )
+                    for p in pipelines
+                ),
+            ]
         )
         return
 
-    out.result(done, args.output_format, text=render_text)
+    out.result(done, args.output_format, text=render_text, include_key=False)
     return ExitCode.SUCCESS
 
 

@@ -841,16 +841,28 @@ def test_the_pause_and_skip_commands(config, pipeline, capsys, monkeypatch, engi
     capsys.readouterr()
     assert cli_main(["pause", "--pipeline-code", "P", "--reason", "hold"]) == ExitCode.SUCCESS
     assert capsys.readouterr().out.startswith("P: paused;")
-    assert cli_main(["run", "--pipeline-code", "P"]) == ExitCode.SUCCESS
+    assert (
+        cli_main(["run", "--pipeline-code", "P", "--reason", "test requested run"])
+        == ExitCode.SUCCESS
+    )
     assert "nothing started" in capsys.readouterr().out
     assert cli_main(["resume", "--pipeline-code", "P", "--reason", "go"]) == ExitCode.SUCCESS
     assert capsys.readouterr().out == "P: resumed\n"
     code = cli_main(["run", "--pipeline-code", "P", "--skip", "--reason", "holiday"])
     assert code == ExitCode.SUCCESS
     assert "SKIPPED on purpose: holiday" in capsys.readouterr().out
-    assert cli_main(["run", "--pipeline-code", "P", "--skip", "--task-code", "x"]) == (
-        ExitCode.USAGE
-    )
+    assert cli_main(
+        [
+            "run",
+            "--pipeline-code",
+            "P",
+            "--skip",
+            "--task-code",
+            "x",
+            "--reason",
+            "test requested run",
+        ]
+    ) == (ExitCode.USAGE)
 
 
 def runs(engine):
@@ -1024,7 +1036,20 @@ def test_the_run_date_and_backfill_options(config, engine_db, capsys, monkeypatc
     capsys.readouterr()
     assert cli_main(["run", "--pipeline-code", "P", *both_days, "--reason", "r"]) == 0
     assert "backfill of 2 date(s)" in capsys.readouterr().out
-    assert cli_main(["run", "--pipeline-code", "P", "--run-date", "2026-08-30"]) == 0
+    assert (
+        cli_main(
+            [
+                "run",
+                "--pipeline-code",
+                "P",
+                "--run-date",
+                "2026-08-30",
+                "--reason",
+                "test requested run",
+            ]
+        )
+        == 0
+    )
     capsys.readouterr()
     assert cli_main(["history", "--pipeline-code", "P", "--all"]) == ExitCode.SUCCESS
     history = list(DictReader(capsys.readouterr().out.splitlines(), delimiter="\t"))
@@ -1036,9 +1061,20 @@ def test_the_run_date_and_backfill_options(config, engine_db, capsys, monkeypatc
         (["--run-date", "01/09/2026"], "is not a date: write YYYY-MM-DD"),
     ):
         with pytest.raises(SystemExit):
-            cli_main(["run", "--pipeline-code", "P", *argv])
+            cli_main(["run", "--pipeline-code", "P", *argv, "--reason", "test requested run"])
         assert message in capsys.readouterr().err
-    code = cli_main(["run", "--pipeline-code", "P", *both_days, "--task-code", "x"])
+    code = cli_main(
+        [
+            "run",
+            "--pipeline-code",
+            "P",
+            *both_days,
+            "--task-code",
+            "x",
+            "--reason",
+            "test requested run",
+        ]
+    )
     assert code == ExitCode.USAGE
 
 

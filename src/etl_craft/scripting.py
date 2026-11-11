@@ -26,6 +26,14 @@ which the engine records as the task's source, target and insert counts, and, wh
 the new offset, which the engine stores for the next run. A script that needs neither the offset
 nor ``INPUT_PARAMS`` may define ``run()`` without a parameter. Everything it prints or logs goes
 to the task attempt's log.
+
+Stewardship validation and loading scripts use ``UploadReader.rows(schema={"LOCKED": bool})``
+to check an optional boolean file column. CSV accepts trimmed, case-insensitive true/false or
+empty NULL; XLSX accepts native boolean cells or empty NULL. Values become bool or None,
+while headers and other columns stay unchanged. Invalid cells name the upload, row, column,
+value, allowed values and remedy. Only bool schemas are supported; omitting schema keeps raw
+values. Carry LOCKED into a BOOLEAN landing column and select it explicitly beside UPLOAD_ID;
+it controls USER locks and is never stored as a merge target's business column.
 """
 
 from __future__ import annotations
@@ -56,10 +64,11 @@ from etl_craft.core.errors import (
     TransientError as TransientError,
 )
 from etl_craft.core.items import ItemStore
+from etl_craft.core.landing import LandingContract
 from etl_craft.core.ownership import ResourceLocker
 from etl_craft.core.text import qualify
 from etl_craft.core.upload_reader import UploadReader as UploadReader
-from etl_craft.core.uploads import UploadFile
+from etl_craft.core.uploads import CheckedFile, UploadFile
 from etl_craft.warehouse.connection import open_warehouse
 
 Partitions = Mapping[str, int]
@@ -233,7 +242,13 @@ class ScriptTask:
     uploads: tuple[UploadFile, ...] = ()
     _locks: ResourceLocker | None = field(default=None, repr=False)
 
+    _secret_provider: str | None = field(default=None, repr=False, compare=False)
+    _secret_values: Mapping[str, str] = field(default_factory=dict, repr=False, compare=False)
     _items: ItemStore | None = field(default=None, repr=False, compare=False)
+    _landing: Callable[[], LandingContract | None] | None = field(
+        default=None, repr=False, compare=False
+    )
+    _item_positions: dict[str, int] = field(default_factory=dict, repr=False, compare=False)
     _warehouse_mutex: RLock = field(default_factory=RLock, repr=False, compare=False)
 
     def fan_out(
@@ -263,6 +278,27 @@ class ScriptTask:
             )
         except HandlerError as error:
             raise HandlerError(f"{self.pipeline_code}.{self.task_code}: {error}") from error
+
+    def secret(self, name: str) -> str:
+        """Read one admitted credential; values never fall back to process variables."""
+        from etl_craft.core.task_secrets import declared, read
+
+        label = f"{self.pipeline_code}.{self.task_code}"
+        return read(
+            self._secret_values,
+            declared(self.task_params, label),
+            label,
+            self._secret_provider or str(self.config.source.type),
+            name,
+        )
+
+    def replace_landing(
+        self, rows: Iterable[Mapping[str, object]], *, item_key: str | None = None
+    ) -> int:
+        """Stream typed rows and atomically replace this task's or current item's batch."""
+        from etl_craft.landing import replace_landing
+
+        return replace_landing(self, rows, item_key=item_key)
 
     def table(self, name: str) -> str:
         """Return ``schema.table`` as its full name in the active warehouse database.
@@ -308,7 +344,7 @@ def _partitions(value: object) -> Partitions:
 class ValidationTask:
     """One file, its declared reader and parameters; no warehouse connection is supplied."""
 
-    upload: UploadFile
+    upload: CheckedFile
     reader: UploadReader
     task_params: Mapping[str, str]
     input_params: Mapping[str, Any]

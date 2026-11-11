@@ -8,6 +8,8 @@ from etl_craft.core.enums import RunStatus
 pytestmark = pytest.mark.unit
 
 EXPECTED = {
+    enums.InputKind: {"setting", "column", "parameter", "CLI option"},
+    enums.RuleFlagType: {"REJECT", "INCOMPLETE", "REPORT"},
     enums_ui.Theme: {"system", "light", "dark"},
     enums_ui.TimeDisplay: {"relative", "absolute"},
     enums_ui.SearchKind: {"PIPELINE", "TASK", "TABLE", "RUN"},
@@ -87,6 +89,7 @@ EXPECTED = {
         "Expected before first deployment",
     },
     enums.NonBusinessDay: {"SKIP", "NEXT_BUSINESS_DAY"},
+    enums.AutoRestartCondition: {"NONE", "SCHEDULE", "SUCCESS", "SKIPPED", "FAILURE", "ALWAYS"},
     enums.YesNo: {"Y", "N"},
     enums.RunStatus: {"QUEUED", "IN-PROGRESS", "SUCCESS", "FAILED", "SKIPPED", "CANCELLED"},
     enums.AttemptStatus: {
@@ -122,6 +125,7 @@ EXPECTED = {
     enums.LineageDirection: {"BOTH", "UPSTREAM", "DOWNSTREAM"},
     enums.ResumeChoice: {"run-now", "catch-up", "wait"},
     enums.ControlStatus: {"REQUESTED", "ACKNOWLEDGED", "COMPLETED"},
+    enums.EndingEvidenceKind: {"VERIFIED", "ATTESTED"},
     enums.ControlAcknowledgement: {"PROCESS", "QUERIES"},
     enums.TriggerKind: {
         "SCHEDULE",
@@ -130,8 +134,8 @@ EXPECTED = {
         "ORCHESTRATOR",
         "STAND_IN",
         "PIPELINE_TASK",
+        "RESTART",
     },
-    enums.ProtectionEvent: {"ENABLE", "BASELINE", "WRITE", "DELETE", "LOCK", "UNLOCK"},
     enums.ActorKind: {"USER", "SERVICE", "SYSTEM"},
     enums.TokenKind: {"SERVICE", "ACCESS", "REFRESH", "AGENT", "ATTEMPT"},
     enums.AccountKind: {"USER", "SERVICE"},
@@ -141,6 +145,7 @@ EXPECTED = {
     enums.RefreshType: {"FULL", "INCREMENTAL"},
     enums.DependencyType: {"SUCCESS", "FAILURE", "ALWAYS", "HAS_DATA"},
     enums.Handler: {
+        "ERASURE",
         "FILE_VALIDATION",
         "PYTHON",
         "SQL",
@@ -202,12 +207,17 @@ EXPECTED = {
         "FINISHED",
     },
     enums.AgentReport: {
+        "ERASURE",
         "UPLOADS",
         "UPLOAD_VALIDATION",
+        "EVENT_FILES",
+        "EVENT_FILE_RESULT",
         "BUNDLE",
         "ITEMS",
         "ITEM_EVENT",
         "ITEM_PREPARE",
+        "PROTECTION_READ",
+        "PROTECTION_EVENT",
         "CANCEL",
         "START",
         "END",

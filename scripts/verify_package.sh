@@ -42,32 +42,6 @@ required = [
     "etl_craft/core/static/mark.html",
     "etl_craft/core/static/favicon.svg",
     "etl_craft/core/static/theme.js",
-    "etl_craft/api/templates/base.html",
-    "etl_craft/api/templates/signin.html",
-    "etl_craft/api/static/shell.js",
-    "etl_craft/api/templates/monitor/run.html",
-    "etl_craft/api/templates/monitor/search.html",
-    "etl_craft/api/templates/monitor/_live_state.html",
-    "etl_craft/api/static/monitor.js",
-    "etl_craft/api/static/monitor.css",
-    "etl_craft/api/static/attempt.js",
-    "etl_craft/api/templates/monitor/attempt.html",
-    "etl_craft/api/templates/insights.html",
-    "etl_craft/api/templates/console.html",
-    "etl_craft/api/templates/admin.html",
-    "etl_craft/api/templates/uploads.html",
-    "etl_craft/api/templates/monitor/task.html",
-    "etl_craft/api/templates/operations/system.html",
-    "etl_craft/api/templates/operations/agents.html",
-    "etl_craft/api/templates/operations/scheduled.html",
-    "etl_craft/api/templates/operations/maintenance.html",
-    "etl_craft/api/templates/operations/held.html",
-    "etl_craft/api/templates/monitor/items.html",
-    "etl_craft/api/static/console.js",
-    "etl_craft/api/static/admin.js",
-    "etl_craft/api/static/uploads.js",
-    "etl_craft/api/static/htmx.min.js",
-    "etl_craft/api/static/htmx.LICENSE",
 ]
 missing = [name for name in required if name not in names]
 if not any(name.endswith("licenses/LICENSE") for name in names):
@@ -120,7 +94,7 @@ for bounds in lower caps; do
     uv venv --quiet --python "$python_bin" "$work/$bounds"
     constraints=()
     if [[ "$bounds" == lower ]]; then constraints=(--requirement "$work/lower.txt" --resolution lowest-direct); fi
-    uv pip install --quiet --python "$work/$bounds/bin/python" "${constraints[@]}" "$wheel[all,publish]"
+    uv pip install --quiet --python "$work/$bounds/bin/python" "${constraints[@]}" "$wheel[all,aws,databricks,duckdb,excel,publish,snowflake,trino]"
     uv pip check --python "$work/$bounds/bin/python"
     check_install "$work/$bounds" "all extras: $bounds"
 done

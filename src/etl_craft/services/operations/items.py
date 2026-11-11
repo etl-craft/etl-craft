@@ -16,25 +16,21 @@ from etl_craft.engine import controls, items
 from etl_craft.engine.queries import statement
 from etl_craft.engine.repository.intervention_rows import InterventionDetails, record_intervention
 from etl_craft.services.operations.context import OperationContext
-from etl_craft.services.operations.requests import Request, require_text
+from etl_craft.services.operations.requests import RunId, require_text
 
 
 @dataclass(frozen=True, kw_only=True)
-class ItemInput(Request):
+class ItemInput(RunId):
     """A task's items are always selected by an explicit run identity."""
 
     pipeline_code: str
     task_code: str
-    run_id: int
 
     def __post_init__(self) -> None:
         """Refuse incomplete scope before any state can change."""
+        super().__post_init__()
         require_text("pipeline_code", self.pipeline_code)
         require_text("task_code", self.task_code)
-        if self.run_id < 1:
-            raise UsageError(
-                f"run_id={self.run_id}; expected a positive run id; select the exact run"
-            )
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -99,6 +95,8 @@ class ItemView:
     records: tuple[ItemRecord, ...]
     progress: ItemProgress
 
+    task_run_label: str = ""
+
 
 def inspect(ctx: OperationContext, request: ItemInput) -> ItemView:
     """Read items only from the explicitly selected pipeline run and task."""
@@ -117,6 +115,7 @@ def control(ctx: OperationContext, request: ItemControl) -> ItemView:
     """Commit a mark or a truthful pending cancellation; reruns retain other successes."""
     check_reason(request.reason)
     with ctx.engine.begin() as conn:
+        assert isinstance(request.run_id, int), "run reference must be resolved"
         controls.lock_run(conn, request.run_id)
         task = conn.execute(statement(conn, "item_task"), vars(request)).one_or_none()
         if task is None or task.handler != Handler.PYTHON or task.attempt_id is None:

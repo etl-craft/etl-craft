@@ -8,7 +8,10 @@ alone. ``ExitCode`` lists them all.
 from __future__ import annotations
 
 from enum import IntEnum
-from typing import ClassVar
+from typing import TYPE_CHECKING, ClassVar
+
+if TYPE_CHECKING:
+    from etl_craft.core.failures import Failure
 
 
 class ExitCode(IntEnum):
@@ -51,6 +54,12 @@ class ExitCode(IntEnum):
 
 class EtlCraftError(Exception):
     """Base class of every error etl-craft raises; each subclass has its own exit status."""
+
+    def __str__(self) -> str:
+        """Keep registered values out of errors at every interface boundary."""
+        from etl_craft.core.redaction import mask_text
+
+        return mask_text(super().__str__())
 
     retryable: ClassVar[bool] = True
     exit_code: ClassVar[ExitCode] = ExitCode.UNEXPECTED
@@ -137,6 +146,7 @@ class HandlerError(EtlCraftError):
     """A task handler is missing or failed; the task is recorded as ``FAILED``."""
 
     exit_code = ExitCode.HANDLER
+    failure_evidence: Failure | None = None
 
 
 class CloningError(EtlCraftError):

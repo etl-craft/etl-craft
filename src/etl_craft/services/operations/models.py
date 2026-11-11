@@ -8,7 +8,14 @@ from datetime import date, datetime
 from typing import Any, ClassVar
 
 from etl_craft.core.business_rules import RuleObservation
-from etl_craft.core.enums import AttemptStatus, FailureClass, RunStatus, SlaStatus, TriggerKind
+from etl_craft.core.enums import (
+    AttemptStatus,
+    EndingEvidenceKind,
+    FailureClass,
+    RunStatus,
+    SlaStatus,
+    TriggerKind,
+)
 from etl_craft.engine.repository.intervention_rows import Intervention
 from etl_craft.engine.repository.pauses import Pause, Resume
 from etl_craft.engine.standing_pauses import TaskPause
@@ -42,9 +49,15 @@ class RunView:
     child_run_ids: tuple[int, ...] = ()
     bundle_id: str | None = None
     metadata_version: str | None = None
+    run_label: str = ""
+    """Pipeline, UTC start to the second and run id, fixed when the run is created."""
     newer_metadata_available: bool = False
     item_progress: str | None = None
     rules: tuple[RuleObservation, ...] = ()
+
+    triggered_by_task_run_label: str = ""
+    parent_run_label: str = ""
+    child_run_labels: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -77,6 +90,7 @@ class AttemptView:
     delete_count: int | None
     rows_written: int | None
     reject_count: int | None
+    duplicate_count: int | None
     watermark_from: str | None
     watermark_to: str | None
     error_message: str | None
@@ -91,6 +105,18 @@ class AttemptView:
     retry_on: str | None = None
     retry_reason: str | None = None
     item_progress: str | None = None
+
+    process_evidence_kind: EndingEvidenceKind | None = None
+    process_evidence_actor: str | None = None
+    process_evidence_reason: str | None = None
+    process_evidence_checks: str | None = None
+    query_evidence_kind: EndingEvidenceKind | None = None
+    query_evidence_actor: str | None = None
+    query_evidence_reason: str | None = None
+    query_evidence_checks: str | None = None
+
+    run_label: str = ""
+    task_run_label: str = ""
 
 
 @dataclass(frozen=True)
@@ -114,6 +140,7 @@ class TaskRunView:
     delete_count: int | None
     rows_written: int | None
     reject_count: int | None
+    duplicate_count: int | None
     watermark_from: str | None
     watermark_to: str | None
     error_message: str | None
@@ -123,6 +150,11 @@ class TaskRunView:
     rules: tuple[RuleObservation, ...] = ()
 
     standing_pause: TaskPause | None = None
+    task_run_label: str = ""
+    """Pipeline, task, UTC start to the second and task run id; an attempt adds its number."""
+
+    run_label: str = ""
+    child_run_labels: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -132,6 +164,10 @@ class RecentRun:
     pipeline_run_id: int
     status: RunStatus
     sla_status: SlaStatus | None
+    start_date: datetime | None = None
+    end_date: datetime | None = None
+
+    run_label: str = ""
 
 
 @dataclass(frozen=True)
@@ -156,6 +192,12 @@ class PipelineView:
     next_run: datetime | None = None
     schedule_problem: str | None = None
     recent_runs: tuple[RecentRun, ...] = ()
+    auto_restart_condition: str = "SCHEDULE"
+    """What may start the pipeline on its own: its schedule, or a run ending in a listed status."""
+    restart_note: str | None = None
+    """The condition in words when it adds to or replaces the schedule; ``None`` otherwise."""
+    description: str | None = None
+    """The pipeline's ``DESCRIPTION``: what it does, shown beside its tasks' documentation."""
 
 
 @dataclass(frozen=True)
@@ -232,6 +274,9 @@ class StepView:
     parameters: Mapping[str, str]
     status: RunStatus | None
 
+    run_label: str = ""
+    task_run_label: str = ""
+
 
 @dataclass(frozen=True)
 class StepsView:
@@ -241,6 +286,8 @@ class StepsView:
     pipeline_id: int
     pipeline_run_id: int
     steps: tuple[StepView, ...]
+
+    run_label: str = ""
 
 
 @dataclass(frozen=True)
@@ -266,6 +313,8 @@ class ReconciliationView:
     released_pipeline_run_ids: tuple[int, ...]
     message: str
 
+    released_pipeline_run_labels: tuple[str, ...] = ()
+
 
 @dataclass(frozen=True)
 class ActionView:
@@ -281,6 +330,8 @@ class ActionView:
     command: str
     outcome: str
     arguments: Mapping[str, Any]
+    pipeline_run_id: int | None = None
+    run_label: str = ""
 
 
 @dataclass(frozen=True)

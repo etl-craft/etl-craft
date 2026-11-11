@@ -185,6 +185,7 @@ def test_logging_masks_structured_secrets_without_losing_formatting_fields(fmt):
     with log.log_context(password="private-context", handler=url):
         logger.info("connect %(handler)s", {"handler": url}, extra={"api_key": "private-key"})
         logger.info("payload %s", payload, stack_info=True)
+        logger.info(payload)
     rendered = stream.getvalue()
     for secret in [
         "private-password",
@@ -197,3 +198,24 @@ def test_logging_masks_structured_secrets_without_losing_formatting_fields(fmt):
     assert "sslmode=require" in rendered
     assert "[REDACTED]" in rendered
     assert "connect postgresql://user:***@db/project?sslmode=require" in rendered
+
+
+def test_registered_value_cannot_corrupt_a_logging_format_specifier():
+    from etl_craft.core.redaction import registering
+
+    record = logging.LogRecord(
+        "etl_craft", logging.INFO, __file__, 1, "%s took %.2fs", ("subject 2", 0.25), None
+    )
+    with registering("2"):
+        assert log.ContextFilter().filter(record)
+    assert record.getMessage() == "subject [REDACTED] took 0.[REDACTED]5s"
+
+
+def test_text_timestamp_is_utc_with_an_explicit_zone():
+    stream = io.StringIO()
+    handler = log.configure("INFO", "text", stream)
+    record = logging.LogRecord("etl_craft.clock", logging.INFO, "", 0, "fixed instant", (), None)
+    record.created = 0
+    record.msecs = 0
+    handler.handle(record)
+    assert stream.getvalue().startswith("1970-01-01T00:00:00.000Z INFO")

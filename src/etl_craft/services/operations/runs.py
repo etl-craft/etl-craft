@@ -7,6 +7,7 @@ from dataclasses import replace
 
 from etl_craft.core.enums import ProcessRole, RunStatus, Transport
 from etl_craft.core.errors import UsageError
+from etl_craft.core.governance import check_reason
 from etl_craft.engine.repository.pipelines import resolve_pipeline_id
 from etl_craft.engine.repository.tasks import resolve_task_id
 from etl_craft.engine.runlog import RunSelector
@@ -25,6 +26,7 @@ from etl_craft.services.operations.results import prepare_execution, result, sel
 
 def reconcile_runs(ctx: OperationContext, request: ReconcileInput) -> ReconciliationView:
     """Fence expired owners, optionally within one pipeline or task."""
+    check_reason(request.reason)
     pipeline_code, task_code = request.pipeline_code, request.task_code
     with ctx.engine.connect() as conn:
         pipeline_id = None if pipeline_code is None else resolve_pipeline_id(conn, pipeline_code)
@@ -35,13 +37,27 @@ def reconcile_runs(ctx: OperationContext, request: ReconcileInput) -> Reconcilia
         )
     report = reconcile(ctx.engine, pipeline_id=pipeline_id, task_id=task_id)
     from etl_craft.execution import control_flow
+    from etl_craft.execution.ending_recovery import recover_endings
 
+    recovered = recover_endings(
+        ctx.engine,
+        ctx.config,
+        (pipeline_id, task_id),
+        attest_ended=request.attest_ended,
+        reason=request.reason or "operator requested verified ending reconciliation",
+    )
     control_flow.reconcile_endings(
-        ctx.engine, ctx.config, tuple(report.lost), pipeline_id=pipeline_id, task_id=task_id
+        ctx.engine,
+        ctx.config,
+        tuple(report.lost),
+        pipeline_id=pipeline_id,
+        task_id=task_id,
+        reason=request.reason or "operator requested verified ending reconciliation",
     )
     message = (
         f"reconcile: {len(report.lost)} attempt(s) LOST; "
-        f"{len(report.released)} run lease(s) released"
+        f"{len(report.released)} run lease(s) released; "
+        f"{len(recovered)} ending evidence record(s) recovered"
     )
     return ReconciliationView(tuple(report.lost), tuple(report.released), message)
 
@@ -58,11 +74,12 @@ def execute_run(ctx: OperationContext, request: RunRequest) -> OperationResult |
     """
     from etl_craft.services.operations.processes import connection_process
 
+    if ctx.transport == Transport.HTTP:
+        request = _over_http(request)
+    check_reason(request.reason)
     ctx = replace(ctx, child=guarded_children(ctx))
     local = ctx.transport == Transport.LOCAL and not request.init_only
     with connection_process(ctx, ProcessRole.RUN) if local else nullcontext(ctx) as scoped:
-        if ctx.transport == Transport.HTTP:
-            request = _over_http(request)
         if request.backfill is not None:
             from etl_craft.services.operations import backfills
 

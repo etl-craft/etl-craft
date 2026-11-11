@@ -29,6 +29,14 @@ from etl_craft.core.errors import EtlCraftError
 E = TypeVar("E", bound=StrEnum)
 
 
+class RuleFlagType(StrEnum):
+    """Row-rule classifications explicitly selected by a SQL scope."""
+
+    REJECT = "REJECT"
+    INCOMPLETE = "INCOMPLETE"
+    REPORT = "REPORT"
+
+
 class BusinessRuleLevel(StrEnum):
     """Whether a check flags target rows or records one table result."""
 
@@ -184,6 +192,7 @@ class TriggerKind(StrEnum):
     ORCHESTRATOR = "ORCHESTRATOR"
     STAND_IN = "STAND_IN"
     PIPELINE_TASK = "PIPELINE_TASK"
+    RESTART = "RESTART"
 
 
 class HttpScheme(StrEnum):
@@ -206,6 +215,9 @@ class ActionName(StrEnum):
 
     RENAME = "rename"
     BUNDLE_PUBLISH = "bundle publish"
+    SEED_APPLY = "seed apply"
+    ERASE = "erase"
+    ERASURE_LIST = "erase list"
     AGENT_DOCTOR = "agent doctor"
     AGENT_REGISTER = "agent register"
     AGENT_DEREGISTER = "agent deregister"
@@ -224,6 +236,8 @@ class ActionName(StrEnum):
 
     LOGIN = "login"
     LOGIN_METHODS = "login methods"
+    LOGIN_BROWSER_START = "login browser start"
+    LOGIN_BROWSER_CALLBACK = "login browser callback"
     LOGIN_SSO = "login sso"
     LOGIN_SSO_POLL = "login sso poll"
     REFRESH = "refresh"
@@ -250,6 +264,7 @@ class ActionName(StrEnum):
     SEARCH = "search"
     OFFSET = "offset"
     HOLDS = "holds"
+    TASK = "task"
     PIPELINE_REFRESH = "pipelines refresh"
     PIPELINE_REFRESH_HISTORY = "pipeline refresh history"
     PIPELINE = "pipeline"
@@ -287,6 +302,7 @@ class ActionName(StrEnum):
     PROJECT_HEALTH = "project-health"
     ABOUT = "about"
     CATALOG_PAGE = "catalog page"
+    TABLE_PREVIEW = "table preview"
     ACCOUNT_UNLOCK = "account unlock"
     ANNOUNCE_ADD = "announce add"
     ANNOUNCE_LIST = "announce list"
@@ -394,6 +410,7 @@ class Handler(StrEnum):
     PYTHON = "PYTHON"
     SQL = "SQL"
     FILE_VALIDATION = "FILE_VALIDATION"
+    ERASURE = "ERASURE"
     SQL_SCRIPT = "SQL_SCRIPT"
     BUSINESS_RULES = "BUSINESS_RULES"
     EMAIL_ALERT = "EMAIL_ALERT"
@@ -531,6 +548,21 @@ class TlsMode(StrEnum):
     SSL = "SSL"
 
 
+class AutoRestartCondition(StrEnum):
+    """What may start a pipeline on its own: its schedule, or a run ending in a chosen status.
+
+    ``NONE`` starts nothing automatically. ``ALWAYS`` is every ending an operator did not cause:
+    ``SUCCESS``, ``SKIPPED`` and ``FAILURE``; a cancelled run never restarts.
+    """
+
+    NONE = "NONE"
+    SCHEDULE = "SCHEDULE"
+    SUCCESS = "SUCCESS"
+    SKIPPED = "SKIPPED"
+    FAILURE = "FAILURE"
+    ALWAYS = "ALWAYS"
+
+
 class NonBusinessDay(StrEnum):
     """What a pipeline's schedule does with a tick on a day its calendar is closed."""
 
@@ -550,15 +582,11 @@ class YesNo(StrEnum):
         return cls.YES if value else cls.NO
 
 
-class ProtectionEvent(StrEnum):
-    """Warehouse evidence for protection and value attribution."""
+class EndingEvidenceKind(StrEnum):
+    """Whether an ending was verified or explicitly attested by an operator."""
 
-    ENABLE = "ENABLE"
-    BASELINE = "BASELINE"
-    WRITE = "WRITE"
-    DELETE = "DELETE"
-    LOCK = "LOCK"
-    UNLOCK = "UNLOCK"
+    VERIFIED = "VERIFIED"
+    ATTESTED = "ATTESTED"
 
 
 class ControlAcknowledgement(StrEnum):
@@ -710,9 +738,12 @@ class AgentReport(StrEnum):
     START = "START"
     END = "END"
     CANCEL = InterventionAction.CANCEL
+    ERASURE = "ERASURE"
     STATE = "STATE"
     TARGET = "TARGET"
     PUBLISH = "PUBLISH"
+    PROTECTION_READ = "PROTECTION_READ"
+    PROTECTION_EVENT = "PROTECTION_EVENT"
     WATERMARK = "WATERMARK"
     ITEMS = "ITEMS"
     ITEM_EVENT = "ITEM_EVENT"
@@ -720,9 +751,20 @@ class AgentReport(StrEnum):
     BUNDLE = "BUNDLE"
     UPLOADS = "UPLOADS"
     UPLOAD_VALIDATION = "UPLOAD_VALIDATION"
+    EVENT_FILES = "EVENT_FILES"
+    EVENT_FILE_RESULT = "EVENT_FILE_RESULT"
     RULE_BEGIN = "RULE_BEGIN"
     RULE_KEYS = "RULE_KEYS"
     RULE_END = "RULE_END"
     ALERT = "ALERT"
     LOCK = "LOCK"
     UNLOCK = "UNLOCK"
+
+
+class InputKind(StrEnum):
+    """Public input inventories governed by release compatibility."""
+
+    SETTING = "setting"
+    COLUMN = "column"
+    PARAMETER = "parameter"
+    CLI_OPTION = "CLI option"

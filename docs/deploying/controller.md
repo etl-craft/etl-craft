@@ -42,7 +42,8 @@ Another scheduler can [submit a run over HTTP](http-api.md#starting-runs-from-an
 With a [deployment profile](sizing.md), the controller sizes its pool, threads and Engine DB pool
 from the measured allocation. `CFG_PIPELINES.MAX_PARALLEL_TASKS` bounds each pipeline across
 its runs. The shared local pool keeps its measured machine-wide process cap;
-`Local_python_slots` and `Local_warehouse_slots` add ceilings by kind (see
+`Local_python_slots` sets the Python count within CPU, total and base-memory bounds;
+`Local_warehouse_slots` adds a ceiling (see
 [running pipelines](../guides/running-pipelines.md)). Cooperative pipeline supervision and
 pending gate checks do not use those slots. Runs still owned by another foreground process are left with that
 process. Paused or inactive pipelines receive no dispatch; resuming a pipeline allows its
@@ -68,10 +69,13 @@ and weekdays `SUN`–`SAT` are supported. Sunday is 0 or 7. The macros are `@hou
 following [cron's day-field rule](https://man7.org/linux/man-pages/man5/crontab.5.html).
 A NULL schedule creates no automatic runs.
 
-`Orchestration.Allow_schedule: false` in an environment's profile turns schedules off for that
-environment only: its controller creates no scheduled runs, while manual runs, `--init-only`
-runs and catalog builds continue. The same metadata keeps its schedules in other environments.
-When schedules are turned on again, each pipeline's `CATCHUP` and `MAX_CATCHUP_RUNS` decide
+`Orchestration.Allowed_auto_restarts` in an environment's profile says what its controller may start
+on its own: `SCHEDULE` for schedule ticks, run endings (`SUCCESS`, `SKIPPED`, `FAILURE`, or `ALWAYS`
+for all three) for restarts, joined with `|`. The default allows everything. `NONE`, for example in
+dev and test, turns every automatic start off for that environment only: its controller creates no
+scheduled runs, while manual runs, `--init-only` runs and catalog builds continue. The same metadata
+keeps its schedules and restart conditions, and still validates, in other environments. When
+automatic starts are turned on again, each pipeline's `CATCHUP` and `MAX_CATCHUP_RUNS` decide
 which ticks from the off period run, as after a controller outage.
 
 `SCHEDULE_TIMEZONE` is an IANA name. NULL uses `Orchestration.Timezone`, which defaults to
@@ -146,7 +150,12 @@ on a dedicated connection. SQLite holds an OS file lock beside its database file
 controllers must reach the same file. A second controller exits with the current controller's id and host.
 Leadership lasts until local agents have stopped and the lock is released.
 
-`AUD_CONTROLLERS` records the process id, host, version, start, heartbeat and clean stop times.
+A project's `ALLOWED_AUTO_RESTARTS` that excludes `SCHEDULE` stops its ticks without moving their
+cursor, so allowing schedules again replays the ticks missed meanwhile as `CATCHUP` says (one run, or up to
+`MAX_CATCHUP_RUNS`), as after a controller outage; pause the pipeline instead when no replay is wanted.
+
+`AUD_CONTROLLERS` records the process id, host, version, start, heartbeat and clean stop times, and the
+`Orchestration.Allowed_auto_restarts` the controller runs with (shown by `about` and in the web interface).
 The starting caller is recorded; background supervision and automatic shutdown use the system
 actor. Heartbeats are refreshed every 15 seconds. An unclosed history row after a crash does
 not constitute leadership and is not given an invented stop time.

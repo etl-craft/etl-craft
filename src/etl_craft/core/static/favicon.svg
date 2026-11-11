@@ -1,7 +1,12 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-<style>@media (prefers-color-scheme: dark){.m{stroke:#9198a1}.a{stroke:#4493f8}}</style>
-<path class="m" stroke="#59636e" d="M12 3 L20 7 L12 11 L4 7 Z"/>
-<path class="a" stroke="#0969da" d="M12 11 V23"/>
-<path class="a" stroke="#0969da" d="M6 14 L12 18 L18 14"/>
-<path class="a" stroke="#0969da" d="M6 19 L12 23 L18 19"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+<style>.t1{stop-color:#3a6cf7}.t2{stop-color:#1b44c4}.g{stroke:#ffffff}.f{fill:#ffffff;fill-opacity:.28}
+@media (prefers-color-scheme: dark){.t1{stop-color:#9dbaff}.t2{stop-color:#6d93f2}.g{stroke:#0c1426}.f{fill:#0c1426;fill-opacity:.22}}</style>
+<defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop class="t1" offset="0"/><stop class="t2" offset="1"/></linearGradient></defs>
+<rect width="32" height="32" rx="8" fill="url(#g)"/>
+<g class="g" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+<path class="f" d="M16 5.5 L24.5 9.75 L16 14 L7.5 9.75 Z"/>
+<path d="M16 14 V25.5"/>
+<path d="M9.5 17.5 L16 21 L22.5 17.5"/>
+<path d="M9.5 22 L16 25.5 L22.5 22"/>
+</g>
 </svg>

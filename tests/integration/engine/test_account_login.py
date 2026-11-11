@@ -1,5 +1,6 @@
 """Registered account lifecycle and credential-proven CLI actions on both Engine DBs."""
 
+import io
 import json
 import sys
 from dataclasses import replace
@@ -109,6 +110,142 @@ def test_sso_requires_a_registered_active_user(project):
         sessions.sign_in_subject(ctx, IdentityClaims("external-id"))
 
 
+def binding(ctx, *, allow=True):
+    auth = replace(ctx.config.auth, oidc_bind_by_email=allow)
+    return replace(ctx, config=replace(ctx.config, auth=auth))
+
+
+def invited(ctx, email="a@example.com"):
+    act(ctx, ActionName.ACCOUNT_ADD, name="alice", role=ApiRole.VIEWER, email=email)
+
+
+def row(ctx, name="alice"):
+    with ctx.engine.connect() as conn:
+        return conn.execute(
+            text(
+                "SELECT OIDC_SUBJECT AS subject, EMAIL AS email, FIRST_NAME AS first_name, "
+                "LAST_NAME AS last_name FROM CFG_ACCOUNTS WHERE ACCOUNT_NAME=:n"
+            ),
+            {"n": name},
+        ).one()
+
+
+def test_a_first_sso_sign_in_binds_the_account_registered_with_its_verified_email(project):
+    ctx = binding(project)
+    invited(ctx)
+    claims = IdentityClaims("sub-1", (), "A@Example.com", True, "Ada", "Lovelace")
+    session = sessions.sign_in_subject(ctx, claims)
+    assert tokens.authenticate(ctx, session.access_token).name == "alice"
+    found = row(ctx)
+    assert (found.subject, found.first_name, found.last_name) == ("sub-1", "Ada", "Lovelace")
+    assert sessions.sign_in_subject(ctx, claims)  # the next sign-in matches by subject
+
+
+def test_binding_by_email_refuses_what_it_cannot_trust(project):
+    ctx = binding(project)
+    invited(ctx)
+    refused = (
+        (ctx, IdentityClaims("s", (), "a@example.com", False)),  # the issuer did not verify it
+        (ctx, IdentityClaims("s", (), "other@example.com", True)),  # no account has it
+        (ctx, IdentityClaims("s")),  # no email at all
+        (binding(ctx, allow=False), IdentityClaims("s", (), "a@example.com", True)),  # switched off
+    )
+    for caller, claims in refused:
+        with pytest.raises(UsageError, match="no active registered"):
+            sessions.sign_in_subject(caller, claims)
+    assert row(ctx).subject is None
+    user(ctx, "bob", "bob-sub")
+    act(ctx, ActionName.ACCOUNT_ADD, name="carol", role=ApiRole.VIEWER, email="a@example.com")
+    with pytest.raises(UsageError, match="no active registered"):  # two accounts share the email
+        sessions.sign_in_subject(ctx, IdentityClaims("s2", (), "a@example.com", True))
+
+
+def test_an_sso_sign_in_refreshes_names_and_only_a_verified_email(project):
+    ctx = project
+    user(ctx, subject="sub-1")
+    sessions.sign_in_subject(ctx, IdentityClaims("sub-1", (), "x@example.com", False, "Al", "Ice"))
+    found = row(ctx)
+    assert (found.email, found.first_name, found.last_name) == (None, "Al", "Ice")
+    sessions.sign_in_subject(ctx, IdentityClaims("sub-1", (), "x@example.com", True))
+    assert row(ctx).email == "x@example.com"
+    alice = replace(ctx, actor=Actor("alice", ActorKind.USER), role=ApiRole.VIEWER)
+    who = act(alice, ActionName.WHOAMI, project=None)
+    assert (who.first_name, who.last_name, who.email) == ("Al", "Ice", "x@example.com")
+
+
+def test_an_account_edits_its_own_names_only_when_the_deployment_allows_it(project):
+    ctx = project
+    user(ctx)
+    alice = replace(ctx, actor=Actor("alice", ActorKind.USER), role=ApiRole.VIEWER)
+    with pytest.raises(UsageError, match=r"Auth\.Names_editable"):
+        act(alice, ActionName.ACCOUNT_SETTINGS, first_name="Al")
+    assert row(ctx).first_name is None
+    auth = replace(ctx.config.auth, names_editable=True)
+    allowed = replace(alice, config=replace(ctx.config, auth=auth))
+    act(allowed, ActionName.ACCOUNT_SETTINGS, first_name=" Al ", last_name="Ice")
+    found = row(ctx)
+    assert (found.first_name, found.last_name) == ("Al", "Ice")
+    who = act(allowed, ActionName.WHOAMI, project=None)
+    assert who.names_editable is True
+    assert act(alice, ActionName.WHOAMI, project=None).names_editable is False
+    with pytest.raises(UsageError, match="at most 128"):
+        act(allowed, ActionName.ACCOUNT_SETTINGS, first_name="x" * 129)
+
+
+def test_the_cli_invites_by_email_without_asking_for_a_password(project, monkeypatch, capsys):
+    ctx = project
+    service = act(ctx, ActionName.TOKEN_CREATE, name="automation", role=ApiRole.ADMIN)
+    monkeypatch.setenv("ETL_CRAFT_TOKEN", service.token)
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: False)  # a prompt would be refused
+    argv = ["account", "add", "--name", "ada", "--role", "viewer", "--email", "ada@example.com"]
+    assert main([*argv, "--no-password"]) == 0
+    capsys.readouterr()
+    found = row(ctx, "ada")
+    assert found.email == "ada@example.com" and found.subject is None
+    with ctx.engine.connect() as conn:
+        hash_ = conn.execute(
+            text("SELECT PASSWORD_HASH FROM CFG_ACCOUNTS WHERE ACCOUNT_NAME='ada'")
+        ).scalar_one()
+    assert hash_ is None
+
+
+def test_a_subject_held_by_a_disabled_account_is_refused_cleanly_not_as_a_server_error(project):
+    ctx = binding(project)
+    user(ctx, "old", "sub-1")
+    act(ctx, ActionName.ACCOUNT_DISABLE, name="old")
+    invited(ctx)
+    with pytest.raises(UsageError, match="no active registered"):
+        sessions.sign_in_subject(ctx, IdentityClaims("sub-1", (), "a@example.com", True))
+    assert row(ctx).subject is None
+
+
+def test_the_issuer_fills_an_empty_name_but_not_over_a_name_the_account_may_edit(project):
+    ctx = project
+    user(ctx, subject="sub-1")
+    sessions.sign_in_subject(ctx, IdentityClaims("sub-1", (), None, False, "Al", "Ice"))
+    editable = replace(
+        ctx, config=replace(ctx.config, auth=replace(ctx.config.auth, names_editable=True))
+    )
+    with acting_as(SYSTEM_ACTOR), ctx.engine.begin() as conn:
+        conn.execute(text("UPDATE CFG_ACCOUNTS SET FIRST_NAME='Alice' WHERE ACCOUNT_NAME='alice'"))
+    sessions.sign_in_subject(editable, IdentityClaims("sub-1", (), None, False, "Al", "Ice"))
+    assert row(ctx).first_name == "Alice"  # the account's own edit stands
+    sessions.sign_in_subject(ctx, IdentityClaims("sub-1", (), None, False, "Al", "Ice"))
+    assert row(ctx).first_name == "Al"  # where names are not editable the issuer decides
+
+
+def test_a_name_longer_than_a_column_is_refused_at_registration(project):
+    with pytest.raises(UsageError, match="first_name expected at most 128"):
+        act(
+            project,
+            ActionName.ACCOUNT_ADD,
+            name="bob",
+            role=ApiRole.VIEWER,
+            email="b@x.test",
+            first_name="x" * 129,
+        )
+
+
 def test_account_controls_require_a_proven_admin(project):
     ctx = project
     with pytest.raises(PermissionDeniedError, match="admin role is required"):
@@ -152,6 +289,36 @@ def test_cli_password_login_whoami_env_precedence_and_logout(project, monkeypatc
     capsys.readouterr()
     assert main(["whoami"]) == 3
     assert "run `etl-craft login`" in capsys.readouterr().err
+
+
+def test_cli_login_takes_its_password_from_a_pipe_without_a_terminal(project, monkeypatch, capsys):
+    import io
+
+    ctx = project
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: False)
+    monkeypatch.setattr("sys.stdin", io.StringIO(PASSWORD + "\n"))
+    assert main(["login", "--name", "owner", "--password-stdin"]) == 0
+    assert "Signed in as owner" in capsys.readouterr().out
+    key = credentials.database_key(ctx.engine, ctx.config.engine.schema)
+    value = credentials.read_session(key)
+    assert value and tokens.authenticate(ctx, value).name == "owner"
+    monkeypatch.setattr("sys.stdin", io.StringIO("wrong password\n"))
+    assert main(["login", "--name", "owner", "--password-stdin"]) == 2
+    assert "sign-in refused" in capsys.readouterr().err
+    with ctx.engine.connect() as conn:
+        audited = conn.execute(text("SELECT ARGUMENTS AS arguments FROM AUD_ACTIONS")).scalars()
+        assert not any(PASSWORD in str(arguments) for arguments in audited)
+
+
+def test_cli_login_refuses_a_terminal_and_a_lone_flag(project, monkeypatch, capsys):
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
+    assert main(["login", "--name", "owner", "--password-stdin"]) == 2
+    assert "requires piped stdin and --name" in capsys.readouterr().err
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: False)
+    assert main(["login", "--password-stdin"]) == 2
+    assert "requires piped stdin and --name" in capsys.readouterr().err
+    assert main(["login", "--name", "owner"]) == 2
+    assert "requires --password-stdin" in capsys.readouterr().err
 
 
 def test_session_expiry_is_enforced_on_the_next_command(project, capsys):
@@ -293,7 +460,7 @@ def test_cli_sso_against_the_local_tls_issuer(project, issuer, monkeypatch, caps
         after = conn.execute(
             text("SELECT COUNT(*) AS count FROM AUD_ACTIONS WHERE COMMAND='login'")
         ).scalar_one()
-    assert after == before + 1
+    assert after == before + 2
 
 
 def test_user_sessions_and_service_credentials_keep_their_boundaries(project):
@@ -433,6 +600,9 @@ def test_cli_lockout_unlock_forced_change_and_personal_settings(project, monkeyp
     assert main(["account", "reset-password", "--name", "alice"]) == 0
     monkeypatch.delenv("ETL_CRAFT_TOKEN")
     assert main(["login"]) == 0
+    assert "default · CUSTOM · local" in capsys.readouterr().err
+    assert main(["whoami", "--format", "json"]) == 0
+    assert json.loads(capsys.readouterr().out)["environment"] == {"type": "CUSTOM", "name": None}
     assert main(["about", "--json"]) == 26
     assert "temporary password" in capsys.readouterr().err
     answers = iter((PASSWORD, "replacement password", "replacement password"))
@@ -510,3 +680,54 @@ def test_successful_signin_audit_commits_with_session_and_supplies_last_signin(
 
     who = act(authenticated_context(ctx, session.metadata), ActionName.WHOAMI)
     assert who.last_signin is not None
+
+
+def test_account_add_accepts_a_piped_password_without_auditing_it(project, monkeypatch, capsys):
+    ctx = project
+    service = act(ctx, ActionName.TOKEN_CREATE, name="automation", role=ApiRole.ADMIN)
+    monkeypatch.setenv("ETL_CRAFT_TOKEN", service.token)
+    monkeypatch.setattr(sys, "stdin", io.StringIO(PASSWORD + "\n"))
+    assert main(["account", "add", "--name", "piped", "--role", "viewer", "--password-stdin"]) == 0
+    assert (
+        sessions.sign_in(ctx, sessions.SignIn(name="piped", password=PASSWORD)).metadata.name
+        == "piped"
+    )
+    with ctx.engine.connect() as conn:
+        evidence = (
+            conn.execute(text("SELECT ARGUMENTS AS arguments FROM AUD_ACTIONS")).scalars().all()
+        )
+    assert PASSWORD not in str(evidence) + str(capsys.readouterr())
+    assert (
+        main(
+            [
+                "account",
+                "add",
+                "--name",
+                "bad-pipe",
+                "--kind",
+                "SERVICE",
+                "--role",
+                "viewer",
+                "--password-stdin",
+            ]
+        )
+        == UsageError.exit_code
+    )
+    assert "requires a password USER account" in capsys.readouterr().err
+    with ctx.engine.connect() as conn:
+        assert (
+            conn.execute(
+                text("SELECT COUNT(*) AS n FROM CFG_ACCOUNTS WHERE ACCOUNT_NAME='bad-pipe'")
+            ).scalar_one()
+            == 0
+        )
+
+
+def test_account_add_without_terminal_names_the_password_stdin_remedy(project, monkeypatch, capsys):
+    service = act(project, ActionName.TOKEN_CREATE, name="automation", role=ApiRole.ADMIN)
+    monkeypatch.setenv("ETL_CRAFT_TOKEN", service.token)
+    monkeypatch.setattr(sys, "stdin", io.StringIO(""))
+    assert (
+        main(["account", "add", "--name", "unattended", "--role", "viewer"]) == UsageError.exit_code
+    )
+    assert "pipe a temporary password with --password-stdin" in capsys.readouterr().err

@@ -202,7 +202,7 @@ deletion scan. A run with `--force` judges the whole active table, clearing ever
 not find again, including deleted-row flags:
 
 ```bash
-etl-craft run --pipeline-code SALES_DAILY --task-code check_orders --run-id 419 --force
+etl-craft run --reason "requested data load" --pipeline-code SALES_DAILY --task-code check_orders --run-id 419 --force
 ```
 
 Use the exact pipeline/task and run identity for your project. Teams own scheduling through

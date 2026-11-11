@@ -8,9 +8,7 @@ description: Run etl-craft's validation before a pull request - make static docs
 Open the pull request only after every step that applies has finished green (`AGENTS.md`,
 "Validation"). CI then runs the complete suite once, explicit Python/platform compatibility subsets and the
 installed-wheel demos in under ten minutes, of execution time (longest `needs` chain), and is their authority: do not repeat that locally.
-Use `uv run python scripts/ci_shards.py timing <run-id>` to report execution, summed job queues,
-longest queue and wall time separately. Runner queue time is outside the gate. Keep logs in a
-scratch directory outside the repository:
+Agents do not measure or report CI time. The ten-minute limit is the owner's to watch; a required job that fails is read once from its log. Keep logs in a scratch directory outside the repository:
 
 ```bash
 SCRATCH="$(mktemp -d)"
@@ -119,6 +117,10 @@ the authority. `make test` uses automatic unit workers and four service workers;
 `PYTEST_WORKERS` to cap both. `make check` measures coverage in parallel. Keep TMPDIR on disk
 (the Make targets use `$HOME/.cache/etl-craft/tests/tmp`), because /tmp may be RAM-backed.
 
+For a new guarded Engine DB table or a change to its guards or CHECK columns, run
+`test_upgrade.py`, `test_actor_audit.py` and `test_query_plans.py`. Supply valid CHECK seeds
+and query-plan seed rows with typed parameters.
+
 ## 1b. Repeated races
 
 CI runs each test once; a race shows up on CI's slower runners long before a fast workstation
@@ -169,7 +171,7 @@ the SQL every warehouse runs:
 - warehouse authentication.
 
 Cloud compute has a usage budget: run them only when the owner has made it available, and
-otherwise treat the cloud as unable to run (below). Try each affected cloud once; never retry a
+otherwise treat the cloud as unable to run (below). Run Snowflake and Databricks at the same time, never one after the other. Try each affected cloud once; never retry a
 cloud run that failed on compute or credentials. Skip them for refactors whose paths the four local warehouses already
 run. For a pull request,
 run only the cloud tests that exercise the change, on the cloud whose code changed (or both for

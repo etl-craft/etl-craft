@@ -85,3 +85,10 @@ adjust the durations for the team's operational budget. Start with:
 
 Prometheus's normal stale-series handling applies when the HTTP listener itself disappears.
 The example contains no schedules, actions or automatic run repairs.
+
+## Duplicate rows
+
+Pipeline Insights reports duplicates removed by merge dedupe. Its totals use task summaries
+so retry attempts are not added together. Warehouse audit mirrors expose `DUPLICATE_COUNT`
+on `AUD_TASK_RUN_LOG` and `AUD_TASK_ATTEMPTS`. For a Data Metrics view, project the
+merge task’s `AUD_TASK_RUN_LOG.DUPLICATE_COUNT` and retain NULL when dedupe was not measured.

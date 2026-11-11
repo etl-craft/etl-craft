@@ -1,12 +1,7 @@
-"""``doctor``: check a configuration end to end, reporting every problem rather than the first.
+"""Check configuration, services, metadata, access and deployment resources end to end.
 
-Each check says what it looked at and what it found: ``OK``, ``WARN`` (it works, but look at
-this) or ``FAIL`` (this will stop runs). The checks cover the settings used as written that look
-like variables nobody set, each secret, auth modes not verified against a live service here, the
-Engine DB (its connection, schema, tables and pending migrations), the warehouse (its connection,
-schema and, on Trino, that its catalog is Iceberg), how email is sent, whether cloning can
-write where it is set to, the project folders, and the measured CPU and memory with the
-deployment profile's sizes and the Engine DB connection budget.
+Report each problem with its object and remedy, including Engine DB migrations/guards,
+warehouse access, secrets, mail, project files, retention, and connection budgets.
 """
 
 from __future__ import annotations
@@ -61,7 +56,9 @@ from etl_craft.execution.connections import probe_email_relay, probe_warehouse
 from etl_craft.handlers.mail import email_tls_problem
 from etl_craft.services.calendar_checks import DOCTOR_DAYS, holiday_lists_ending
 from etl_craft.services.cloning import cloning_problem
+from etl_craft.services.erasure import problems as erasure_problems
 from etl_craft.services.operations.accounts import has_admin
+from etl_craft.services.protection import problems as protection_problems
 from etl_craft.warehouse.connection import (
     build_warehouse_engine,
     is_in_memory,
@@ -496,6 +493,12 @@ def _engine_state(config: ConnectorConfig, engine: Engine) -> list[Check]:
                 f"{path} is writable by group or others; restrict access with chmod go-w",
             )
         )
+    from etl_craft.engine.privacy import problems as privacy_problems
+
+    with engine.connect() as conn:
+        checks.extend(fail("Privacy history", p) for p in privacy_problems(conn, config))
+    checks.extend(fail("Erasure coverage", p) for p in erasure_problems(engine, config))
+    checks.extend(fail("Protection membership", p) for p in protection_problems(engine, config))
     return checks
 
 

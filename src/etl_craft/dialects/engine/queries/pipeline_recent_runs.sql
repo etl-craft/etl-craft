@@ -1,6 +1,7 @@
 -- Each active pipeline's five newest runs, newest first; one index range per pipeline.
 SELECT r.PIPELINE_ID AS pipeline_id, r.PIPELINE_RUN_ID AS pipeline_run_id,
-       r.STATUS AS status, r.SLA_STATUS AS sla_status
+       r.STATUS AS status, r.SLA_STATUS AS sla_status,
+       r.START_DATE AS start_date, r.END_DATE AS end_date
 FROM CFG_PIPELINES p
 JOIN AUD_PIPELINES_RUN_LOG r ON r.PIPELINE_ID = p.PIPELINE_ID
 WHERE p.ACTIVE_FLAG = 'Y'

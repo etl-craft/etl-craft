@@ -48,10 +48,14 @@ def _run(args: argparse.Namespace, out: Output) -> int:
         if not done.announcements:
             out.empty("no announcements")
             return
-        out.rows([("ID", "LEVEL", "STARTS_AT", "ENDS_AT", "ENDED_AT", "MESSAGE")])
         out.rows(
-            (a.announcement_id, a.level, a.starts_at, a.ends_at, a.ended_at, a.message)
-            for a in done.announcements
+            [
+                ("ID", "LEVEL", "STARTS_AT", "ENDS_AT", "ENDED_AT", "MESSAGE"),
+                *(
+                    (a.announcement_id, a.level, a.starts_at, a.ends_at, a.ended_at, a.message)
+                    for a in done.announcements
+                ),
+            ]
         )
 
     out.result(done, args.output_format, text=render)

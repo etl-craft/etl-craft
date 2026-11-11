@@ -26,7 +26,8 @@ SLA. It queues behind an existing non-terminal run of its pipeline. A paused chi
 refuses admission with its pause reason; resume it or mark the trigger task.
 
 The child inherits the parent run's logical date and initiating actor. Its audit row records
-`TRIGGER_KIND=PIPELINE_TASK` and `TRIGGERED_BY_TASK_RUN_ID`. The child's key is
+`TRIGGER_KIND=PIPELINE_TASK` and `TRIGGERED_BY_TASK_RUN_ID`. A run the controller started because the
+previous run ended in a status the pipeline's `AUTO_RESTART_CONDITION` names has `TRIGGER_KIND=RESTART`. The child's key is
 `trigger:<task_run_id>:<generation>`: an automatic retry retains that generation, and an
 explicit `run --task-code ... --rerun --reason ...` increments it while retaining the task
 summary's identity. A crash before the atomic admission commits leaves no partial child;
@@ -68,6 +69,6 @@ Use the IDs assigned by your project's exported configuration. Apply through the
 etl-craft config plan
 etl-craft config apply
 etl-craft validate
-etl-craft run --pipeline-code PARENT --init-only
+etl-craft run --reason "requested data load" --pipeline-code PARENT --init-only
 etl-craft status --pipeline-code PARENT
 ```

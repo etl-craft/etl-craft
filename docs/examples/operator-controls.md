@@ -27,3 +27,7 @@ Use the returned `execution_run_id` with `run --run-id`; preparation completion 
 execution completion. Restart retains offsets/watermarks and can repeat handler writes. The
 [control guide](../guides/run-control.md#inspect-capabilities-and-apply-an-explicit-selection)
 includes the exact bulk JSON format and one-run permission under a definition pause.
+
+Run labels appear beside the integer in text output. Paste the complete quoted label, for example
+`etl-craft status --run-id 'SALES_DAILY-2026-11-10 06:28:20-42'`. Browser copy buttons include the
+shell quotes; links and existing JSON identity fields keep the integer.

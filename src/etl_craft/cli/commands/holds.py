@@ -19,17 +19,21 @@ def run(args: argparse.Namespace, out: Output) -> int:
         if not result.holds:
             out.empty("no run or task is held")
             return
-        out.rows([("PIPELINE", "RUN_ID", "TASK", "HELD_BY", "HELD_AT", "REASON")])
         out.rows(
-            (
-                h.pipeline_code,
-                h.pipeline_run_id,
-                h.task_code or "(whole run)",
-                h.requested_by,
-                h.requested_at.isoformat(),
-                h.reason or "",
-            )
-            for h in result.holds
+            [
+                ("PIPELINE", "RUN_ID", "TASK", "HELD_BY", "HELD_AT", "REASON"),
+                *(
+                    (
+                        h.pipeline_code,
+                        h.pipeline_run_id,
+                        h.task_code or "(whole run)",
+                        h.requested_by,
+                        h.requested_at.isoformat(),
+                        h.reason or "",
+                    )
+                    for h in result.holds
+                ),
+            ]
         )
 
     out.result(result, args.output_format, text=render_text)

@@ -55,10 +55,35 @@ class ActionContext:
         """Refuse missing or foreign file identities before any target mutation."""
         if not self.uploads:
             return
+        from etl_craft.core.enums import SqlAction
+
+        label = f"{self.context.pipeline_code}.{self.context.task_code}: {session.target}"
+        target_columns = {name.lower() for name, _ in session.target_columns()}
+        if "etl_protection" in target_columns and (
+            missing := {"created_by", "updated_by"} - target_columns
+        ):
+            raise SqlGuardError(
+                f"{label}: protected target lacks {sorted(missing)}; "
+                "restore the full audit columns before uploading"
+            )
+        if (
+            self.task.action
+            in {
+                SqlAction.APPEND_TABLE,
+                SqlAction.OVERWRITE_TABLE,
+                SqlAction.SCD1_MERGE,
+                SqlAction.SCD2_MERGE,
+            }
+            and "upload_id" not in target_columns
+        ):
+            raise SqlGuardError(
+                f"{label}: target UPLOAD_ID is missing; declare UPLOAD_ID in the target "
+                "and SELECT the accepted file id on every row"
+            )
         ids = tuple(upload.upload_id for upload in self.uploads)
         if "upload_id" not in {name.lower() for name, _ in session.columns(stage)}:
             raise SqlGuardError(
-                f"{session.target}: staged UPLOAD_ID is missing; expected run upload ids "
+                f"{label}: staged UPLOAD_ID is missing; expected run upload ids "
                 f"{ids}; SELECT the accepted file's UPLOAD_ID on every written row"
             )
         invalid = invalid_upload_rows(stage, self.uploads)
@@ -73,7 +98,7 @@ class ActionContext:
                 f"{invalid} LIMIT 1", parameters, step="sample an unowned upload row"
             ).scalar_one()
             raise SqlGuardError(
-                f"{session.target}: {count} staged rows have invalid UPLOAD_ID, "
+                f"{label}: {count} staged rows have invalid UPLOAD_ID, "
                 f"sample={sample!r}; expected run upload ids {ids}; correct the load "
                 "script to retain each accepted file's UPLOAD_ID and upload a corrected file"
             )

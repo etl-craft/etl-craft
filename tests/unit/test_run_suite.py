@@ -182,7 +182,9 @@ def test_parallel_evidence_refuses_incomplete_worker_collections(pytestconfig, t
             ]
         }
     )
-    node = SimpleNamespace(workeroutput=output, gateway=SimpleNamespace(id="gw0"))
+    node = SimpleNamespace(gateway=SimpleNamespace(id="gw0"))
+    if problem != "crashed":
+        node.workeroutput = output
     recorder.pytest_testnodedown(node, "crashed" if problem == "crashed" else None)
     assert set(recorder.outcomes.values()) == {"error"}
     assert recorder.collected == ["test_one.py::test_one"]

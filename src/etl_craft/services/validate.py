@@ -8,30 +8,37 @@ read and checked, Python scripts are parsed, not imported. Active source definit
 compared with existing warehouse tables by the standalone validate command.
 
 Each finding is a ``FAIL`` (a run would fail, hang or silently do something else) or a ``WARN``
-(it works, but look at this, such as a parameter no handler reads).
+(it works, but deserves attention, such as an unmanaged overlapping SQL write).
 """
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
 from typing import ClassVar
 
 from sqlalchemy.engine import Connection, Engine
 from sqlalchemy.exc import SQLAlchemyError
-from sqlglot import exp
 
 from etl_craft.config import ConnectorConfig
 from etl_craft.config.project import python_script
 from etl_craft.config.targets import active_catalog
+from etl_craft.core.compatibility import input_refusal
 from etl_craft.core.cron import parse, timezone
-from etl_craft.core.enums import BusinessRuleLevel, DependencyType, EmailFlavour, Handler, SqlAction
+from etl_craft.core.enums import (
+    BusinessRuleLevel,
+    DependencyType,
+    EmailFlavour,
+    Handler,
+    InputKind,
+    SqlAction,
+)
 from etl_craft.core.errors import EtlCraftError
 from etl_craft.core.graph import build_graph, cycles
 from etl_craft.core.placement import ResourceRequest, resource_request
 from etl_craft.core.script_kinds import script_kind
-from etl_craft.core.text import is_metadata_code, qualify, suggest
+from etl_craft.core.text import is_metadata_code, qualify
 from etl_craft.dialects.business_rules import expand_scope, output_key
 from etl_craft.dialects.engine import for_engine
 from etl_craft.dialects.query_analysis import managed_select_problem, output_columns, read_query
@@ -65,15 +72,14 @@ from etl_craft.handlers import (
     event_wait,
     file_validation,
     python_scripts,
-    run_pipeline,
     sql_script,
 )
 from etl_craft.handlers.business_rules import check_output, check_rule
-from etl_craft.handlers.registry import COMMON_PARAMETERS, TaskContext
+from etl_craft.handlers.parameters import parameter_problems
+from etl_craft.handlers.registry import TaskContext
 from etl_craft.handlers.resources import LocalLocker
 from etl_craft.handlers.sql import task_dialect
 from etl_craft.handlers.sql.creation import writer_action
-from etl_craft.handlers.sql.spec import PARAMETERS as SQL_PARAMETERS
 from etl_craft.handlers.sql.spec import WRITERS, SqlTask, read_sql_task
 from etl_craft.handlers.sql.tables import ENGINE_COLUMNS
 from etl_craft.handlers.sql.watermarks import source_pipelines
@@ -85,31 +91,22 @@ from etl_craft.services.calendar_checks import (
 from etl_craft.services.doctor import Status
 from etl_craft.services.lineage import (
     dialect_and_catalog,
+    extract,
     script_lineage,
     table_name,
 )
 from etl_craft.services.placement import Placement, placement
+from etl_craft.services.seeds import cast_rows, discover
 from etl_craft.services.source_columns import definition_problem, drift, warehouse_columns
-from etl_craft.services.stewardship_checks import graph_problems, sql_problems
+from etl_craft.services.stewardship_checks import graph_problems, sql_problems, validation_problems
 from etl_craft.services.trigger_validation import trigger_definition, trigger_graph_problems
-from etl_craft.warehouse.connection import open_warehouse
+from etl_craft.warehouse.connection import build_warehouse_engine, open_warehouse
 
 ROWS_REPORTED = frozenset(WRITERS)
 """The SQL actions that report the rows in their target, which a ``HAS_DATA`` edge needs."""
 
 FULL_REPLACE = frozenset({SqlAction.CREATE_TABLE, SqlAction.OVERWRITE_TABLE})
 """The SQL actions that rebuild every row of their target, and so every ``ROW_ID``."""
-
-KNOWN_PARAMETERS: dict[str, frozenset[str]] = {
-    Handler.FILE_VALIDATION: file_validation.PARAMETERS,
-    Handler.EVENT_WAIT: event_wait.PARAMETERS,
-    Handler.RUN_PIPELINE: run_pipeline.PARAMETERS,
-    Handler.SQL: SQL_PARAMETERS,
-    Handler.SQL_SCRIPT: sql_script.PARAMETERS,
-    Handler.BUSINESS_RULES: frozenset(),
-    Handler.EMAIL_ALERT: email_alert.PARAMETERS,
-}
-"""The parameters each handler reads. A PYTHON task's script may read any, so none is unknown."""
 
 
 @dataclass(frozen=True)
@@ -158,7 +155,9 @@ class _Metadata:
 
 
 def validate(engine: Engine, config: ConnectorConfig, pipeline_code: str | None = None) -> Report:
-    """Check every active pipeline, or only ``pipeline_code``; return every finding."""
+    """Check the warehouse driver and metadata without running tasks."""
+    if config.warehouse is not None:
+        build_warehouse_engine(config).dispose()
     with read_snapshot(engine) as conn:
         return validate_snapshot(conn, engine, config, pipeline_code)
 
@@ -178,10 +177,12 @@ def validate_snapshot(
         try:
             with (
                 open_warehouse(config, LocalLocker(engine, config)) as warehouse,
-                warehouse.connect() as conn,
+                warehouse.connect() as warehouse_conn,
             ):
                 for table, columns in grouped.items():
-                    for message in drift(columns, warehouse_columns(conn, config, table), dialect):
+                    for message in drift(
+                        columns, warehouse_columns(warehouse_conn, config, table), dialect
+                    ):
                         report.fail(f"source {table}", f"schema drift: {message}")
         except (EtlCraftError, SQLAlchemyError) as error:
             report.fail(
@@ -189,6 +190,28 @@ def validate_snapshot(
                 f"could not compare source definitions with the warehouse: {error}; restore "
                 f"the warehouse connection and run validate again",
             )
+    try:
+        seeds = discover(config)
+        if seeds:
+            with (
+                open_warehouse(config, LocalLocker(engine, config)) as warehouse,
+                warehouse.connect() as warehouse_conn,
+            ):
+                for seed in seeds:
+                    try:
+                        cast_rows(warehouse_conn, seed)
+                    except EtlCraftError as error:
+                        report.fail(f"seed {seed.target}", str(error))
+    except (EtlCraftError, OSError) as error:
+        report.fail("seeds", str(error))
+    from etl_craft.engine.privacy import problems as privacy_problems
+
+    for message in privacy_problems(conn, config):
+        report.fail("privacy", message)
+    from etl_craft.services.erasure import problems_on
+
+    for message in problems_on(conn, engine, config, check_coverage=False):
+        report.fail("erasure", message)
     return report
 
 
@@ -214,6 +237,10 @@ def validate_on(
         pipeline_codes=[code for code, _ in pipeline_parameters],
     )
     report = Report()
+    from etl_craft.handlers.email_templates import validate_templates
+
+    for template_problem in validate_templates(config, {}):
+        report.fail("Orchestration.Email_template", template_problem)
     dialect, catalog = dialect_and_catalog(config)
     if pipeline_code is None and not for_engine(conn).has_table(conn, "CFG_PROJECTS"):
         for readiness_problem in normalization_problems(conn, catalog=catalog, dialect=dialect):
@@ -289,7 +316,8 @@ def _pipelines(conn: Connection, config: ConnectorConfig, data: _Metadata, repor
                 code,
                 f"CFG_PIPELINES.PIPELINE_PARAMETERS contains unknown key {name!r}; "
                 f"allowed keys: {', '.join(PIPELINE_PARAMETER_KINDS)}; "
-                "remove the unknown key or replace it with an allowed key",
+                "remove the unknown key or replace it with an allowed key; "
+                + input_refusal(InputKind.PARAMETER, name),
             )
         try:
             pipeline_id = resolve_pipeline_id(
@@ -439,10 +467,8 @@ def _task(
         task_retry_policy(params, config, task.handler)
     except EtlCraftError as error:
         report.fail(where, str(error))
-    known = KNOWN_PARAMETERS.get(task.handler)
-    if known is not None:
-        for name in sorted(set(params) - known - COMMON_PARAMETERS):
-            report.warn(where, _unknown(f"{task.handler} task parameter", name, sorted(known)))
+    for problem in parameter_problems(task.handler, params):
+        report.fail(where, problem)
     context = _context(config, task, params)
     check = CHECKS.get(task.handler)
     if check is None:
@@ -538,6 +564,9 @@ def _target_formats(config: ConnectorConfig, data: _Metadata, report: Report) ->
 
 def _sql(conn: Connection, context: TaskContext, data: _Metadata) -> list[str]:
     spec = read_sql_task(context)
+    from etl_craft.services.rule_scopes import validate_scopes
+
+    validate_scopes(conn, context, spec)
     source_pipeline_ids(conn, source_pipelines(context.task_params))
     if context.config.warehouse is None:
         return ["a SQL task needs a Warehouse section in craft-connector.yml"]
@@ -634,13 +663,19 @@ def _python(conn: Connection, context: TaskContext, data: _Metadata) -> list[str
     if not name:
         return ["SCRIPT_FILE is required for HANDLER=PYTHON, such as python_scripts/load.py"]
     path = python_script(context.config, name)
+    from etl_craft.handlers.task_secrets import problems
+
+    problems(context, path)
     python_scripts.parse_input_params(params.get("INPUT_PARAMS"))
     problem = python_scripts.script_definition_problem(path, name)
     return [problem] if problem else []
 
 
 def _email_alert(conn: Connection, context: TaskContext, data: _Metadata) -> list[str]:
+    from etl_craft.handlers.email_templates import validate_templates
+
     problems = email_alert.alert_parameter_problems(context.task_params)
+    problems.extend(validate_templates(context.config, context.task_params))
     if context.config.email is None:
         problems.insert(0, "an EMAIL_ALERT task needs an Email section in craft-connector.yml")
     return problems
@@ -665,7 +700,7 @@ def _sql_script(conn: Connection, context: TaskContext, data: _Metadata) -> list
 
 def _file_validation(conn: Connection, context: TaskContext, data: _Metadata) -> list[str]:
     file_validation.settings(context)
-    return []
+    return validation_problems(conn, context)
 
 
 CHECKS: dict[str, Callable[[Connection, TaskContext, _Metadata], list[str]]] = {
@@ -686,21 +721,6 @@ def _code_problem(column: str, code: str) -> str:
         f"{column}={code!r} must start with an ASCII letter and contain only letters, digits "
         "and underscores, at most 128 characters; rename it before generating commands"
     )
-
-
-RENAMED_PARAMETERS = {
-    "SCRIPT_NAME": "SCRIPT_FILE",
-    "SOURCE_SQL": "SELECT_QUERY",
-    "SOURCE_SQL_FILE": "SCRIPT_FILE",
-}
-"""Task parameters renamed without aliases, and the names that replace them."""
-
-
-def _unknown(what: str, name: str, known: Sequence[str]) -> str:
-    renamed = RENAMED_PARAMETERS.get(name, "")
-    hints = [renamed] if renamed in known else suggest(name, list(known))
-    hint = f"; did you mean {', '.join(hints)}" if hints else ""
-    return f"{what} {name} is not read by etl-craft, so it has no effect{hint}"
 
 
 def _script_overlap(context: TaskContext, data: _Metadata, report: Report) -> None:
@@ -732,28 +752,18 @@ def _timestamp_definitions(conn: Connection, context: TaskContext, spec: SqlTask
     ):
         wanted.add((qualify(spec.target_object, catalog).lower(), "update_date"))
     if spec.bounded and spec.watermark is not None and spec.select_sql is not None:
-        reading = read_query(spec.select_sql, dialect.sqlglot_dialect)
-        if reading.root is not None:
-            for select in reading.root.find_all(exp.Select):
-                tables = {
-                    table.alias_or_name.lower(): qualify(
-                        ".".join(part.name for part in table.parts), catalog
-                    ).lower()
-                    for table in select.find_all(exp.Table)
-                }
-                for projection in select.expressions:
-                    column = projection.this if isinstance(projection, exp.Alias) else projection
-                    if (
-                        projection.alias_or_name.lower() == spec.watermark.column.lower()
-                        and isinstance(column, exp.Column)
-                    ):
-                        source = (
-                            tables.get(column.table.lower())
-                            if column.table
-                            else (next(iter(tables.values())) if len(tables) == 1 else None)
-                        )
-                        if source is not None:
-                            wanted.add((source, column.name.lower()))
+        wanted.update(
+            (qualify(edge.source_object, catalog).lower(), edge.source_column.lower())
+            for edge in extract(
+                spec.select_sql,
+                spec.target_object,
+                dialect=dialect.sqlglot_dialect,
+                catalog=catalog,
+            )
+            if edge.target_column.lower() == spec.watermark.column.lower()
+            and edge.source_object is not None
+            and edge.source_column is not None
+        )
     return [
         problem
         for column in fetch_source_columns(conn)

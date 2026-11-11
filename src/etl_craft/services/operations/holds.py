@@ -24,6 +24,8 @@ class Hold:
     reason: str | None
     requested_at: datetime
 
+    run_label: str = ""
+
 
 @dataclass(frozen=True)
 class Holds:

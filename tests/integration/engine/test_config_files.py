@@ -336,8 +336,8 @@ def test_the_command_plans_applies_and_exports(metadata_project, capsys, monkeyp
     )
     assert metadata_project.rows(
         "SELECT COMMAND AS command, OUTCOME AS outcome FROM AUD_ACTIONS "
-        "WHERE COMMAND = 'config apply'"
-    ) == [("config apply", "REQUESTED")]
+        "WHERE COMMAND = 'config apply' ORDER BY ACTION_ID"
+    ) == [("config apply", "REQUESTED"), ("config apply", "SUCCESS")]
 
 
 def flag(code, value):

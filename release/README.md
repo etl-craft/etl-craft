@@ -6,6 +6,11 @@ has passing evidence recorded on the commit being released.
 Run `make regressions` before recording evidence: every stabilization defect must have
 a named, collected test in `regressions.toml`.
 
+The installed-wheel suites and the Quick Start use the small package project in
+`examples/demo`, on both Engine DBs and all four local warehouses. Pip and uv
+installation and wheel/sdist checks remain required PR checks. S7.I supplies the
+72-hour endurance runner for the S8 deployment; the retired 0.4 soak is not reused.
+
 ## Recording evidence
 
 ```bash
@@ -109,33 +114,6 @@ committed work. It does not repeat a sustained benchmark in CI. See
 [Operations](../docs/deploying/operations.md) for schema/role/store backups, managed snapshots,
 restore order and the supported non-rolling upgrade procedure.
 
-## The soak
-
-Release 0.4's gate runs the demo for seven days under `etl-craft controller`, with no external scheduling, while the server is killed with SIGKILL at random times. `scripts/soak.py` prepares and
-runs it against a built wheel:
-
-```bash
-python scripts/soak.py setup ~/etl-craft-soak/0.4.0 --wheel dist/etl_craft-0.4.0-py3-none-any.whl
-~/etl-craft-soak/0.4.0/venv/bin/python scripts/soak.py run ~/etl-craft-soak/0.4.0 --days 7
-~/etl-craft-soak/0.4.0/venv/bin/python scripts/soak.py check ~/etl-craft-soak/0.4.0
-```
-
-Use the script from the same checkout as the wheel. For account-enabled wheels, `setup`
-requires an interactive terminal to create and sign in the first admin. Provision a SERVICE
-account token for that Engine DB and provide it as `ETL_CRAFT_TOKEN` for the long-running
-`run` and `check` commands; a person's default 12-hour session is too short for a multi-day soak.
-Existing frozen deployments continue using their pinned wheel and script.
-
-`setup` installs the wheel into its own environment, copies `examples/demo`, and schedules
-`CLIENT_ALPHA`, `CLIENT_BETA` and `SUPPORT_DM` every 15 minutes. `run` kills the server every 20
-to 180 minutes, starts it again, and appends a check to `report.jsonl` every half hour; started
-again after an interruption, it continues until the same end. Run it where it outlives your
-session, for example `systemd-run --user --unit etl-craft-soak -- systemd-inhibit --what=sleep
-...`. The final check, in `soak-result.json`, passes when every due tick has exactly one run, no
-run stays unfinished or fails unexpectedly, no task run succeeds twice, every append target holds
-exactly the rows each task run inserted, and `etl-craft explain` answers for every task state the
-soak reached. Mailpit (`make services-up`) receives the demo's alerts.
-
 ## Checking the gate
 
 ```bash
@@ -176,3 +154,60 @@ from skip reasons, paths, or the free-form platform description. Declared tests 
 own platform must appear in the fresh collection; skips still refuse the release.
 
 CI runs the gate on every `release/**` branch.
+
+## Tagged deployment images
+
+The Release gate workflow builds the base and UI images from the wheel on exact `v<version>`
+release and release-candidate tags. Its image job runs the published Compose template and
+applies the Kubernetes manifests to pinned k3d after server-side dry runs, with a disposable external PostgreSQL database.
+The smoke checks headless probes, sign-in on both UI copies, and successful API-only work
+on the Compose agent and both Kubernetes agents with distinct credentials.
+
+The publishing job requires the evidence gate, catalog scale, chaos, compatibility and
+image smoke jobs to succeed. It loads the tested images and pushes only the exact version
+and its `-ui` tag to GHCR. Branch and PR runs do not push images. PyPI publishing and
+announcements are separate.
+
+The first successful gated push creates the GHCR package. GitHub initially makes it private.
+In the organization package settings, set visibility to Public and verify anonymous pulls
+of both exact-version tags before announcing them.
+
+The release build enforces uncompressed image limits of 280 MB for core and 295 MB
+for UI. The current measured images are 262.4 MB and 278.0 MB. These limits include
+about five percent headroom, rounded up to the next 5 MB.
+
+## Support Insights evidence
+
+The package gate reads `release/example.toml` locally; it never checks out, installs or
+runs the external demo. `repository` identifies the public repository, `commit` pins one
+lowercase 40-hex demo commit, and `checks` and `scenarios` list the exact S8.F and S8.H
+IDs. Both lists must be nonempty and duplicate-free to release, including 0.9.0 candidates.
+They are initially empty: S8.F and S8.H add each ID alongside its producing check.
+
+S8.E's manual/pre-release workflow produces the JSON manifest. The release PR copies it to
+`release/evidence/<version>/example-support-insights.json`; feature PRs use fixtures only.
+The manifest is a JSON object with these fields:
+
+- `demo_commit`: the pinned lowercase 40-hex commit.
+- `wheel_sha256`: the candidate wheel's lowercase SHA-256.
+- `started_at`, `ended_at`: ISO 8601 UTC timestamps, with `Z` or `+00:00`.
+- `checks`, `scenarios`: arrays of objects, each containing `id`, `outcome`, `counts`,
+  and `evidence`. Each expected ID appears exactly once, with no extra IDs.
+  `outcome` must be `passed`; failed, skipped or unknown outcomes refuse release.
+  `counts` is a nonempty object of named, nonnegative integer measurements (for example,
+  rows reconciled). `evidence` is a nonempty array of absolute HTTPS links to uploaded
+  logs, reconciliation results, screenshots or catalog artifacts.
+
+Pass the actual release wheel to the gate:
+
+```bash
+python scripts/release_gate.py --wheel /path/to/etl_craft-<version>-py3-none-any.whl
+```
+
+The wheel's filesystem modification time is its build time for this contract. Preserve it
+when transferring the candidate (for example, archive it with its mtime before uploading).
+A download's new mtime is not a build timestamp. The gate requires wheel mtime <= manifest
+start <= manifest end <= current UTC time. Missing wheel, malformed data, missing evidence,
+empty inventories, identity mismatches and incomplete results all refuse release. Rebuilds
+require a new demo run against the new candidate. The gate validates links, not their remote
+contents; release reviewers must retain and review those artifacts.

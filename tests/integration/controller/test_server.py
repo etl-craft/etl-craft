@@ -24,7 +24,7 @@ from fixtures.metadata import add_pipeline, add_task, start_run
 def test_only_one_leader_and_session_release_not_history_controls_restart(engine_db):
     engine = engine_db.engine
     with leadership(engine):
-        first = controllers.start(engine)
+        first = controllers.start(engine, "SCHEDULE|ALWAYS")
         with (
             pytest.raises(RunRefusedError, match=f"controller {first} on .* is active"),
             leadership(engine),
@@ -32,7 +32,7 @@ def test_only_one_leader_and_session_release_not_history_controls_restart(engine
             pytest.fail("second leader entered")
     # An unclosed history row cannot prevent the replacement from owning the session lock.
     with leadership(engine):
-        second = controllers.start(engine)
+        second = controllers.start(engine, "SCHEDULE|ALWAYS")
         assert second > first
         controllers.heartbeat(engine, second, stopped=True)
     with engine.connect() as conn:
@@ -100,7 +100,16 @@ def test_server_picks_up_cli_run_and_second_server_is_refused(cli_project):
     p.wait_for("SELECT COUNT(*) FROM AUD_CONTROLLERS", expected=1)
     code, output = p.run("controller")
     assert code != 0 and "controller 1 on" in output and "is active" in output
-    code, output = p.run("run", "--pipeline-code", "P", "--init-only", "--run-key", "server:one")
+    code, output = p.run(
+        "run",
+        "--reason",
+        "test requested run",
+        "--pipeline-code",
+        "P",
+        "--init-only",
+        "--run-key",
+        "server:one",
+    )
     assert code == 0, output
     p.wait_for(
         "SELECT STATUS FROM AUD_PIPELINES_RUN_LOG WHERE RUN_KEY='server:one'", expected="SUCCESS"
@@ -111,9 +120,9 @@ def test_server_picks_up_cli_run_and_second_server_is_refused(cli_project):
     with p.engine.connect() as conn:
         assert (
             conn.execute(
-                text("SELECT COUNT(*) FROM AUD_ACTIONS WHERE COMMAND='controller'")
+                text("SELECT COUNT(*) AS count FROM AUD_ACTIONS WHERE COMMAND='controller'")
             ).scalar_one()
-            == 2
+            == 4
         )
         assert (
             conn.execute(
@@ -149,7 +158,16 @@ def wait_for_script(project):
 def test_shutdown_stops_tasks_and_leaves_exact_run_resumable(cli_project):
     p = cli_project
     blocking_script(p)
-    code, output = p.run("run", "--pipeline-code", "P", "--init-only", "--run-key", "shutdown")
+    code, output = p.run(
+        "run",
+        "--reason",
+        "test requested run",
+        "--pipeline-code",
+        "P",
+        "--init-only",
+        "--run-key",
+        "shutdown",
+    )
     assert code == 0, output
     server = p.start("controller")
     p.wait_for("SELECT COUNT(*) FROM AUD_TASK_ATTEMPTS WHERE STATUS='RUNNING'", expected=1)
@@ -173,7 +191,19 @@ def test_shutdown_stops_tasks_and_leaves_exact_run_resumable(cli_project):
 def test_killed_server_reconciles_before_retrying_exact_task_run(cli_project):
     p = cli_project
     blocking_script(p)
-    assert p.run("run", "--pipeline-code", "P", "--init-only", "--run-key", "recover")[0] == 0
+    assert (
+        p.run(
+            "run",
+            "--reason",
+            "test requested run",
+            "--pipeline-code",
+            "P",
+            "--init-only",
+            "--run-key",
+            "recover",
+        )[0]
+        == 0
+    )
     server = p.start("controller")
     p.wait_for("SELECT COUNT(*) FROM AUD_TASK_ATTEMPTS WHERE STATUS='RUNNING'", expected=1)
     wait_for_script(p)
@@ -238,7 +268,19 @@ def test_shutdown_interrupts_gate_wait_without_starting_a_task(cli_project):
         add_dependency(conn, p.pipeline_id, p.task_id, task, upstream_pipeline=upstream)
     assert p.run("pipelines", "refresh", "--pipeline", "P")[0] == 0
     assert p.run("pause", "--pipeline-code", "UPSTREAM", "--reason", "maintenance")[0] == 0
-    assert p.run("run", "--pipeline-code", "P", "--init-only", "--run-key", "gate")[0] == 0
+    assert (
+        p.run(
+            "run",
+            "--reason",
+            "test requested run",
+            "--pipeline-code",
+            "P",
+            "--init-only",
+            "--run-key",
+            "gate",
+        )[0]
+        == 0
+    )
     server = p.start("controller")
     p.wait_for("SELECT COUNT(*) FROM AUD_GATE_WAITS WHERE NEXT_CHECK_AT IS NOT NULL", expected=1)
     started = time.monotonic()
@@ -265,7 +307,19 @@ def test_operator_cancellation_takes_precedence_over_shutdown_resume(cli_project
             conn, p.pipeline_id, "after", "PYTHON", SCRIPT_FILE="python_scripts/load.py"
         )
         add_dependency(conn, p.pipeline_id, after, p.task_id)
-    assert p.run("run", "--pipeline-code", "P", "--init-only", "--run-key", "cancel")[0] == 0
+    assert (
+        p.run(
+            "run",
+            "--reason",
+            "test requested run",
+            "--pipeline-code",
+            "P",
+            "--init-only",
+            "--run-key",
+            "cancel",
+        )[0]
+        == 0
+    )
     server = p.start("controller")
     wait_for_script(p)
     code, output = p.run("abort", "--pipeline-code", "P", "--run-key", "cancel", "--reason", "stop")
@@ -311,7 +365,19 @@ def released_script(project):
 def test_server_and_its_attempt_ride_out_an_engine_db_outage(cli_project):
     p = cli_project
     released_script(p)
-    assert p.run("run", "--pipeline-code", "P", "--init-only", "--run-key", "outage")[0] == 0
+    assert (
+        p.run(
+            "run",
+            "--reason",
+            "test requested run",
+            "--pipeline-code",
+            "P",
+            "--init-only",
+            "--run-key",
+            "outage",
+        )[0]
+        == 0
+    )
     server = p.start("controller")
     started = p.config.project_dir / "started"
     deadline = time.monotonic() + 15
@@ -373,3 +439,16 @@ def test_a_leader_whose_lock_was_taken_meanwhile_stops(engine_db):
             pytest.raises(RunRefusedError, match="took over while this controller's Engine DB"),
         ):
             leader.wait(threading.Event())
+
+
+def test_a_controller_records_the_automatic_starts_it_allows(engine_db):
+    engine = engine_db.engine
+    with leadership(engine):
+        started = controllers.start(engine, "NONE")
+        with engine.connect() as conn:
+            allowed = conn.execute(
+                text("SELECT ALLOWED_AUTO_RESTARTS FROM AUD_CONTROLLERS WHERE CONTROLLER_ID=:id"),
+                {"id": started},
+            ).scalar_one()
+        controllers.heartbeat(engine, started, stopped=True)
+    assert allowed == "NONE"

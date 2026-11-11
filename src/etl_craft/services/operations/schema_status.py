@@ -11,11 +11,16 @@ from etl_craft.services.credentials import database_key
 from etl_craft.services.operations.context import OperationContext
 
 
-def require_current_schema(ctx: OperationContext, connection: Connection | None = None) -> None:
+def require_current_schema(
+    ctx: OperationContext, connection: Connection | None = None, *, package_only: bool = False
+) -> None:
     """Name applied and required Engine migrations before reading current account columns."""
     try:
         pending = pending_migrations(
-            ctx.engine, project_default=ctx.config.migrations_dir, connection=connection
+            ctx.engine,
+            project_default=ctx.config.migrations_dir,
+            connection=connection,
+            package_only=package_only,
         )
     except MigrationError as error:
         raise MigrationError(
