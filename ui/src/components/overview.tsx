@@ -1,6 +1,7 @@
+import { EmptyState } from "@/components/common";
 import { DailyRuns } from "@/components/charts";
 import { RunLabel } from "@/components/run-label";
-import { ArrowUpRight, CircleCheck, Timer } from "lucide-react";
+import { ArrowUpRight, Timer } from "lucide-react";
 import * as React from "react";
 import { Link } from "react-router-dom";
 import { Area, AreaChart, ResponsiveContainer } from "recharts";
@@ -73,12 +74,7 @@ function Attention({ code, d }: { code: string; d: Insights }) {
     <Tile aria-label="Needs attention" className="flex flex-col">
       <TileTitle>Needs attention</TileTitle>
       {quiet ? (
-        <div className="grid flex-1 place-items-center px-5 py-8 text-center">
-          <div className="grid justify-items-center gap-2">
-            <CircleCheck aria-hidden className="size-8 text-ok-solid" strokeWidth={1.5} />
-            <p className="m-0 text-sm font-medium">Nothing failed in this window</p>
-          </div>
-        </div>
+        <EmptyState title="Nothing failed in this window" nextStep="Choose a wider time range to inspect earlier failures, or open Runs for all outcomes." />
       ) : (
         <ul className="m-0 grid list-none content-start gap-0.5 p-2">
           {failed.map((r) => (
@@ -192,11 +188,11 @@ export function Overview({ code, d }: { code: string; d: Insights }) {
       <div className="grid gap-4 lg:grid-cols-2">
         <Tile aria-label="Success rate by pipeline">
           <TileTitle aside={<span className="text-xs text-muted">success · average</span>}>Pipelines, least healthy first</TileTitle>
-          {worst.length ? <ul className="m-0 grid list-none gap-0.5 p-2">{worst.slice(0, 8).map((p) => <PipelineRow key={p.pipeline_code} code={code} p={p} />)}</ul> : <p className="m-0 px-5 py-6 text-sm text-muted">No pipeline ran in this window.</p>}
+          {worst.length ? <ul className="m-0 grid list-none gap-0.5 p-2">{worst.slice(0, 8).map((p) => <PipelineRow key={p.pipeline_code} code={code} p={p} />)}</ul> : <EmptyState title="No pipeline ran in this window." nextStep="Choose a wider time range or run a pipeline from Pipelines." />}
         </Tile>
         <Tile aria-label="Latest runs">
           <TileTitle aside={<Link className="text-xs font-medium text-accent hover:underline" to={runsPath(code)}>All runs</Link>}>Latest runs</TileTitle>
-          {d.latest.length ? <ul className="m-0 grid list-none gap-0.5 p-2">{d.latest.slice(0, 8).map((r) => <RunRow key={r.pipeline_run_id} code={code} r={r} />)}</ul> : <p className="m-0 px-5 py-6 text-sm text-muted">No runs in this window.</p>}
+          {d.latest.length ? <ul className="m-0 grid list-none gap-0.5 p-2">{d.latest.slice(0, 8).map((r) => <RunRow key={r.pipeline_run_id} code={code} r={r} />)}</ul> : <EmptyState title="No runs in this window." nextStep="Choose a wider time range or run a pipeline from Pipelines." />}
         </Tile>
       </div>
     </div>

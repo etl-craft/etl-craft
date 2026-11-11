@@ -7,7 +7,7 @@ describe("the dashboard charts", () => {
   it("uses numbers for sparse series and keeps names linked", () => {
     render(
       <MemoryRouter>
-        <HBars label="Rows" empty="Nothing." rows={[{ label: "a", value: 10, to: "/a" }, { label: "b", value: 0 }]} />
+        <HBars nextStep="Run a pipeline, then refresh this page." label="Rows" empty="Nothing." rows={[{ label: "a", value: 10, to: "/a" }, { label: "b", value: 0 }]} />
       </MemoryRouter>,
     );
     expect(screen.getByRole("link", { name: "a" }).getAttribute("href")).toBe("/a");
@@ -17,7 +17,7 @@ describe("the dashboard charts", () => {
   });
 
   it("says why there is nothing to rank", () => {
-    render(<HBars label="Rows" empty="Nothing ran." rows={[]} />);
+    render(<HBars nextStep="Run a pipeline, then refresh this page." label="Rows" empty="Nothing ran." rows={[]} />);
     expect(screen.getByText("Nothing ran.")).toBeTruthy();
   });
 
@@ -42,4 +42,9 @@ it.each([1, 2, 3, 4])("shows a %i-day dashboard window as dated counts and durat
   expect(summary.textContent).toContain("Average duration 6.4s");
   expect(summary.querySelector(`time[datetime="${day}"]`)).toBeTruthy();
   expect(summary.textContent?.match(/No finished runs/g) ?? []).toHaveLength(length - 1);
+});
+
+it("shows the caller's next step when a chart has no rows", () => {
+  render(<HBars label="Tables" rows={[]} empty="No tables yet." nextStep="Declare tables, then rebuild the catalog." />);
+  expect(screen.getByRole("status")).toHaveTextContent("Declare tables, then rebuild the catalog.");
 });

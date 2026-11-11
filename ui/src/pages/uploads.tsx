@@ -73,7 +73,7 @@ export function Uploads() {
       {eligible.isError ? <Notice>{(eligible.error as Error).message}</Notice> : null}
       {eligible.isPending ? <Loading what="your pipelines" /> : null}
       {eligible.isSuccess && pipelines.length === 0 ? (
-        <Card className="p-4 text-muted">No pipeline takes uploads from you here. A developer marks a pipeline for uploads, and an administrator or the pipeline&apos;s manager grants CAN_UPLOAD on it.</Card>
+        <Card><EmptyState title="No pipeline takes uploads from you here." nextStep="Ask a developer to enable uploads for a pipeline, then ask its manager or an administrator for upload permission." /></Card>
       ) : null}
       {pipelines.length ? (
         <>
@@ -134,7 +134,7 @@ export function Uploads() {
             <DataTable find
               label="Recent files"
               data={files.data?.uploads ?? []}
-              empty={files.isSuccess ? <EmptyState title={`No files uploaded to ${chosen} yet`}>Choose a file above; each upload is listed here with what happened to it.</EmptyState> : undefined}
+              empty={files.isSuccess ? <EmptyState title={`No files uploaded to ${chosen} yet`} nextStep="Choose a file above; each upload is listed here with what happened to it." /> : undefined}
               columns={[
                 columns.accessor("upload_id", { header: "Upload", cell: (c) => <span className="num">{c.getValue()}</span> }),
                 columns.accessor("file_name", { header: "File", cell: (c) => <span className="break-all font-medium">{c.getValue()}</span> }),
@@ -142,7 +142,7 @@ export function Uploads() {
                 columns.accessor("stored_name", { header: "Stored name", cell: (c) => <span className="break-all text-muted">{c.getValue() ?? "—"}</span> }),
                 columns.accessor("account", { header: "Uploaded by" }),
                 columns.accessor("uploaded_at", { header: "Uploaded", cell: (c) => <When iso={c.getValue()} /> }),
-                columns.display({ id: "state", header: "State", cell: (c) => <StatusBadge {...stateOf(c.row.original)} /> }),
+                columns.display({ id: "state", header: "State", cell: (c) => <StatusBadge quiet {...stateOf(c.row.original)} /> }),
                 columns.display({
                   id: "run",
                   header: "Run",

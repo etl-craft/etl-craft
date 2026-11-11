@@ -1,3 +1,4 @@
+import { FailureDetails } from "@/components/attempt-details";
 import { Disclosure, DisclosureSummary } from "@/components/dropdown";
 import { useQuery } from "@tanstack/react-query";
 import { When } from "@/components/when";
@@ -65,8 +66,8 @@ function Capacity() {
         <KpiTile label="Pools" value={pools.length} />
       </div>
       <div className="grid md:grid-cols-2">
-        <Panel title="CPU in use by pool"><HBars label="CPU in use by pool" rows={cpu} empty="No pools yet. Add a pool in Administration to track resource use." /></Panel>
-        <Panel title="Memory in use by pool"><HBars label="Memory in use by pool" rows={memory} empty="No pools yet. Add a pool in Administration to track resource use." /></Panel>
+        <Panel title="CPU in use by pool"><HBars label="CPU in use by pool" rows={cpu} empty="No pools yet." nextStep="Add a pool in Administration to track resource use." /></Panel>
+        <Panel title="Memory in use by pool"><HBars label="Memory in use by pool" rows={memory} empty="No pools yet." nextStep="Add a pool in Administration to track resource use." /></Panel>
       </div>
     </div>
   );
@@ -219,7 +220,7 @@ export function Insights() {
                 <DataTable find
                   label="Pipelines"
                   data={d.per_pipeline}
-                  empty={<EmptyState title="No pipeline ran in this window.">Choose a wider time range or run a pipeline.</EmptyState>}
+                  empty={<EmptyState title="No pipeline ran in this window." nextStep="Choose a wider time range or run a pipeline." />}
                   columns={[
                     pipelineCol.accessor("pipeline_code", { header: "Pipeline", cell: (c) => <Link className="font-medium text-accent hover:underline" to={pipelinePath(code, c.getValue() ?? "")}>{c.getValue()}</Link> }),
                     pipelineCol.accessor("runs", { header: "Runs", cell: (c) => <span className="num">{c.getValue()}</span> }),
@@ -241,7 +242,8 @@ export function Insights() {
                 <Panel title="Most rows written, by task">
                   <HBars
                     label="Rows written by task"
-                    empty="No task reported rows written. Choose a wider time range; counts appear when a handler reports them."
+                    empty="No task reported rows written."
+                    nextStep="Choose a wider time range; counts appear when a handler reports them."
                     rows={d.tasks
                       .filter((t) => t.target_rows !== null)
                       .sort((a, b) => (b.target_rows ?? 0) - (a.target_rows ?? 0))
@@ -264,7 +266,7 @@ export function Insights() {
                   <DataTable find
                     label="Rows by task"
                     data={d.tasks}
-                    empty={<EmptyState title="No successful task runs in this window.">Choose a wider time range or inspect failed runs.</EmptyState>}
+                    empty={<EmptyState title="No successful task runs in this window." nextStep="Choose a wider time range or inspect failed runs." />}
                     columns={[
                       taskCol.accessor("pipeline_code", { header: "Pipeline" }),
                       taskCol.accessor("task_code", { header: "Task", cell: (c) => <span className="font-medium">{c.getValue()}</span> }),
@@ -286,12 +288,12 @@ export function Insights() {
                 <DataTable find
                   label="Failures"
                   data={d.failures}
-                  empty={<EmptyState title="No failed or lost attempts in this window.">Choose a wider time range to inspect earlier failures.</EmptyState>}
+                  empty={<EmptyState title="No failed or lost attempts in this window." nextStep="Choose a wider time range to inspect earlier failures." />}
                   columns={[
                     failureCol.accessor("pipeline_code", { header: "Pipeline", cell: (c) => <Link className="font-medium text-accent hover:underline" to={pipelinePath(code, c.getValue())}>{c.getValue()}</Link> }),
                     failureCol.accessor("task_code", { header: "Task" }),
-                    failureCol.accessor("status", { header: "Status", cell: (c) => <StatusBadge status={c.getValue()} /> }),
-                    failureCol.accessor("failure_class", { header: "Failure class", cell: (c) => c.getValue() ?? "Unknown" }),
+                    failureCol.accessor("status", { header: "Status", cell: (c) => <StatusBadge quiet status={c.getValue()} /> }),
+                    failureCol.accessor("failure_class", { header: "Details", cell: (c) => <FailureDetails failure={{ failure_class: c.getValue() }} /> }),
                     failureCol.accessor("attempts", { header: "Attempts", cell: (c) => <span className="num">{c.getValue()}</span> }),
                   ]}
                 />
@@ -315,7 +317,7 @@ function Quality({ code, d, developer }: { code: string; d: InsightsView; develo
         <DataTable find
           label="Data quality rules"
           data={d.rules}
-          empty={<EmptyState title="No business rules ran in this window.">Configure business rules for a data task, then run its pipeline.</EmptyState>}
+          empty={<EmptyState title="No business rules ran in this window." nextStep="Configure business rules for a data task, then run its pipeline." />}
           columns={[
             ruleCol.accessor("pipeline_code", { header: "Pipeline" }),
             ruleCol.accessor("rule_name", { header: "Rule", cell: (c) => <span className="font-medium">{c.getValue()}</span> }),
@@ -350,7 +352,7 @@ function Quality({ code, d, developer }: { code: string; d: InsightsView; develo
             "No open gaps."
           )}
         </p>
-        <HBars label="Checks by state" empty="No declared tables to check. Declare columns in config files, then rebuild the catalog." rows={[...byState.entries()].sort((a, b) => b[1] - a[1]).map(([state, checks]): BarRow => ({ label: state, value: checks, tone: ["Matched", "Unchecked", "Not declared", "Expected before first deployment"].includes(state) ? "accent" : "warn" }))} />
+        <HBars label="Checks by state" empty="No declared tables to check." nextStep="Declare columns in config files, then rebuild the catalog." rows={[...byState.entries()].sort((a, b) => b[1] - a[1]).map(([state, checks]): BarRow => ({ label: state, value: checks, tone: ["Matched", "Unchecked", "Not declared", "Expected before first deployment"].includes(state) ? "accent" : "warn" }))} />
         <p className="mb-0 mt-2 text-xs text-muted">
           Scheduled checks: {d.schema_check_schedule ? <code className="font-mono">{d.schema_check_schedule}</code> : "not scheduled"}. Unchecked and unavailable comparisons are never counted as matched.
         </p>

@@ -92,6 +92,19 @@ export function AttemptLog({ code, attempt, open = false }: { code: string; atte
   );
 }
 
+/** Raw failure diagnostics belong behind the same disclosure on lists and attempt pages. */
+export function FailureDetails({ failure, children }: { failure: { failure_class: string | null; failure_source?: string | null; failure_code?: string | null }; children?: React.ReactNode }) {
+  return <Disclosure className="text-[13px]">
+    <DisclosureSummary className="w-fit cursor-pointer text-xs font-medium text-muted hover:text-fg">Process details</DisclosureSummary>
+    <FactList className="mt-3 gap-3 sm:grid-cols-3">
+      <Fact label="Failure classification">{failure.failure_class ?? "Not recorded"}</Fact>
+      {failure.failure_source !== undefined ? <Fact label="Failure source">{failure.failure_source ?? "Not recorded"}</Fact> : null}
+      {failure.failure_code !== undefined ? <Fact label="Failure code">{failure.failure_code ?? "Not recorded"}</Fact> : null}
+    </FactList>
+    {children}
+  </Disclosure>;
+}
+
 /** Everything recorded about one attempt: who ran it, when, what it wrote, how it ended, and its log. */
 export function AttemptDetails({ code, attempt, heading, showLog = false }: { code: string; attempt: AttemptView; heading?: React.ReactNode; showLog?: boolean }) {
   return (
@@ -105,11 +118,6 @@ export function AttemptDetails({ code, attempt, heading, showLog = false }: { co
         <Fact label="Started"><When iso={attempt.started_at} empty="Not started" /></Fact>
         <Fact label="Ended"><When iso={attempt.ended_at} empty="Not yet" /></Fact>
         <Fact label="Duration">{formatDuration(attempt.started_at, attempt.ended_at)}</Fact>
-        {attempt.status === "FAILED" || attempt.status === "TIMED_OUT" || attempt.status === "LOST" ? (
-          <Fact label="Failure">
-            {[words(attempt.failure_class), attempt.failure_source, attempt.failure_code].filter(Boolean).join(" · ")}
-          </Fact>
-        ) : null}
         {/* Only what was measured: a count the handler does not report is left out, not shown as "Not measured". */}
         {ROWS.filter(([key]) => attempt[key] !== null).map(([key, label]) => (
           <Fact key={key} label={label}>{(attempt[key] as number).toLocaleString("en-GB")}</Fact>
@@ -120,8 +128,7 @@ export function AttemptDetails({ code, attempt, heading, showLog = false }: { co
           </Fact>
         ) : null}
       </FactList>
-      <Disclosure className="text-[13px]">
-        <DisclosureSummary className="w-fit cursor-pointer text-xs font-medium text-muted hover:text-fg">Process details</DisclosureSummary>
+      <FailureDetails failure={attempt}>
         <FactList className="mt-3 gap-3 sm:grid-cols-4 lg:grid-cols-4">
           <Fact label="Attempt id">{attempt.attempt_id}</Fact>
           <Fact label="Queued"><When iso={attempt.queued_at} /></Fact>
@@ -134,7 +141,7 @@ export function AttemptDetails({ code, attempt, heading, showLog = false }: { co
           <Fact label="How the process ended">{evidence(attempt.process_evidence_kind, attempt.process_evidence_actor, attempt.process_evidence_reason)}</Fact>
           <Fact label="How the query ended">{evidence(attempt.query_evidence_kind, attempt.query_evidence_actor, attempt.query_evidence_reason)}</Fact>
         </FactList>
-      </Disclosure>
+      </FailureDetails>
       {attempt.log_path ? <AttemptLog code={code} attempt={attempt} open={showLog} /> : <p className="m-0 text-[13px] text-muted">No log was recorded for this attempt.</p>}
     </section>
   );

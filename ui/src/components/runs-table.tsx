@@ -50,6 +50,7 @@ export function RunsTable({ code, pipeline, status, codes, filters = {}, highlig
           data={rows}
           highlight={highlight === undefined ? undefined : (run) => run.pipeline_run_id === highlight}
           initialSort={[{ id: "id", desc: true }]}
+          nextStep="Run a pipeline from Pipelines, or clear the filters to see recorded runs."
           empty={runs.isSuccess && !runs.hasNextPage ? (status || codes ? `None of the ${all.length} runs matches the filters. Clear a filter.` : "No runs yet.") : undefined}
           more={{ hasMore: Boolean(runs.hasNextPage), loading: runs.isFetchingNextPage, load: () => void runs.fetchNextPage() }}
           columns={[

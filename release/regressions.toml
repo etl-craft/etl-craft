@@ -308,6 +308,8 @@ agent-start-report-outage = [
 ]
 
 ui-audit-operability = [
+    "tests/browser/test_react_tasks.py::test_failure_diagnostics_stay_in_process_details",
+    "tests/browser/test_react_tasks.py::test_dense_run_statuses_use_dots_and_keep_failure_pills",
     "tests/browser/test_react_pipelines.py::test_fit_view_keeps_task_labels_readable_after_zooming_out",
     "tests/browser/test_react_insights.py::test_short_daily_windows_show_numbers_then_long_windows_keep_the_day_axis",
     "tests/browser/test_react_tasks.py::test_a_failed_task_explains_itself_and_leads_to_its_attempt_and_history",

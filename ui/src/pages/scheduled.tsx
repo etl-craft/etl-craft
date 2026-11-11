@@ -47,7 +47,7 @@ export function Scheduled() {
         <DataTable find
           label="Next runs"
           data={upcoming}
-          empty={list.isSuccess ? <EmptyState title="No scheduled pipeline has a next run">A pipeline is listed here once its RUN_SCHEDULE is set in the project's config files and automatic runs are on.</EmptyState> : undefined}
+          empty={list.isSuccess ? <EmptyState title="No scheduled pipeline has a next run" nextStep="A pipeline is listed here once its RUN_SCHEDULE is set in the project's config files and automatic runs are on." /> : undefined}
           columns={[
             columns.accessor("next_run", { header: "Next run", enableSorting: false, cell: (c) => <span className="num whitespace-nowrap"><span className="font-medium"><When iso={c.getValue()} now={now} /></span></span> }),
             link,

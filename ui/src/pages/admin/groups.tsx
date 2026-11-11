@@ -50,6 +50,7 @@ export function GroupsTab() {
           find
           label="Groups"
           data={groups}
+          nextStep="Add a group above, then assign its members and project grants."
           empty={list.isSuccess ? "No groups yet." : undefined}
           columns={[
             columns.accessor("name", { header: "Group", cell: (c) => <span className="font-medium">{c.getValue()}</span> }),
@@ -71,7 +72,7 @@ export function GroupsTab() {
                   <span className="text-muted">None</span>
                 ),
             }),
-            columns.display({ id: "state", header: "State", cell: (c) => <StatusBadge status={c.row.original.active_flag === "Y" ? "ACTIVE" : "DISABLED"} /> }),
+            columns.display({ id: "state", header: "State", cell: (c) => <StatusBadge quiet status={c.row.original.active_flag === "Y" ? "ACTIVE" : "DISABLED"} /> }),
             columns.display({
               id: "act",
               header: "Actions",

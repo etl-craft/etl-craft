@@ -38,10 +38,10 @@ export function CatalogInsights({ code, doc }: { code: string; doc: CatalogDoc }
         <KpiTile label="Open gaps" value={open.length} tone={open.length ? "warn" : "ok"} hint={doc.gaps.length ? `of ${doc.gaps.length} compared` : undefined} />
       </div>
       <div className="grid md:grid-cols-2">
-        <Panel title="Open gaps by state"><HBars label="Open gaps by state" rows={gapRows} empty="No open gaps." /></Panel>
-        <Panel title="Most read tables"><HBars label="Most read tables" rows={popular} empty="No table is read by a task yet." /></Panel>
-        <Panel title="Tables by schema"><HBars label="Tables by schema" rows={schemaRows} empty="No tables yet." /></Panel>
-        <Panel title="Tables no task writes"><HBars label="Tables no task writes" rows={orphans} empty="Every table has a writer." /></Panel>
+        <Panel title="Open gaps by state"><HBars label="Open gaps by state" rows={gapRows} empty="No open gaps." nextStep="Open the catalog to inspect tables and their recorded lineage." /></Panel>
+        <Panel title="Most read tables"><HBars label="Most read tables" rows={popular} empty="No table is read by a task yet." nextStep="Declare task sources in the project config files, then rebuild the catalog." /></Panel>
+        <Panel title="Tables by schema"><HBars label="Tables by schema" rows={schemaRows} empty="No tables yet." nextStep="Declare tables in the project config files, then rebuild the catalog." /></Panel>
+        <Panel title="Tables no task writes"><HBars label="Tables no task writes" rows={orphans} empty="Every table has a writer." nextStep="Open a table in the catalog to inspect its writing tasks." /></Panel>
       </div>
     </div>
   );

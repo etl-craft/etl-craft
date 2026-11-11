@@ -168,7 +168,7 @@ export function Console() {
                 <span className="text-muted"><When iso={a.at} /></span> · <span className="font-mono text-xs">{a.command}</span> · {a.outcome}
               </li>
             ))}
-            {recent.isSuccess && recent.data.actions.length === 0 ? <li><EmptyState title="No requests yet.">Run a change command above; completed requests appear here.</EmptyState></li> : null}
+            {recent.isSuccess && recent.data.actions.length === 0 ? <li><EmptyState title="No requests yet." nextStep="Run a change command above; completed requests appear here." /></li> : null}
             {recent.isError ? <li className="text-muted">Your requests could not be read.</li> : null}
           </ul>
         </Card>

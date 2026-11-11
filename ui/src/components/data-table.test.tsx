@@ -85,3 +85,8 @@ describe("the shared table", () => {
     expect(names()).toEqual(["adaada@example.com"]);
   });
 });
+
+it("forwards the caller's next step when a table is empty", () => {
+  render(<DataTable label="Things" data={[]} columns={columnsOf<Row>([{ id: "name", header: "Name", value: (row) => row.name }])} empty="No things yet." nextStep="Add a thing in Administration." />);
+  expect(screen.getByRole("status")).toHaveTextContent("Add a thing in Administration.");
+});

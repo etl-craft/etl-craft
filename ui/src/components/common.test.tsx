@@ -63,3 +63,9 @@ describe("Highlight and Pager", () => {
     expect(seen).toEqual([3, 1]);
   });
 });
+
+it("renders the caller's next step in the shared empty state", async () => {
+  const { EmptyState } = await import("@/components/common");
+  render(<EmptyState title="No scheduled runs" nextStep="Set a schedule in the project config files." />);
+  expect(screen.getByRole("status")).toHaveTextContent("Set a schedule in the project config files.");
+});

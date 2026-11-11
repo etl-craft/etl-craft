@@ -123,7 +123,7 @@ const Links = ({ code, labels, kind }: { code: string; labels: string[]; kind: "
 
 /** What a run row says: its state and when it ran. */
 function RunsTable({ code, pipeline, runs, task }: { code: string; pipeline: string; runs: CatalogRun[]; task?: boolean }) {
-  if (!runs.length) return <EmptyState title="No runs recorded in the last build.">Run the pipeline, then rebuild the catalog.</EmptyState>;
+  if (!runs.length) return <EmptyState title="No runs recorded in the last build." nextStep="Run the pipeline, then rebuild the catalog." />;
   return (
     <DataTable
       label="Recent runs"
@@ -131,7 +131,7 @@ function RunsTable({ code, pipeline, runs, task }: { code: string; pipeline: str
       initialSort={[{ id: "run", desc: true }]}
       columns={columnsOf<CatalogRun>([
         { id: "run", header: "Run", value: (r) => r.pipeline_run_id, size: 90, cell: (r) => <RunLabel id={r.pipeline_run_id} label={r.run_label} to={`${pipelinePath(code, pipeline)}?run=${r.pipeline_run_id}`} /> },
-        { id: "status", header: "Status", value: (r) => r.status, size: 130, cell: (r) => <StatusBadge status={r.status} /> },
+        { id: "status", header: "Status", value: (r) => r.status, size: 130, cell: (r) => <StatusBadge quiet status={r.status} /> },
         { id: "started", header: "Started", value: (r) => r.start, size: 190, cell: (r) => <When iso={r.start} /> },
         { id: "duration", header: "Duration", value: (r) => (r.start && r.end ? new Date(r.end).getTime() - new Date(r.start).getTime() : null), size: 110, cell: (r) => formatDuration(r.start, r.end) },
         ...(task ? [{ id: "task-run", header: "Task run", value: (r: CatalogRun) => r.task_run_id ?? null, cell: (r: CatalogRun) => r.task_run_id ? <RunLabel id={r.task_run_id} label={r.task_run_label} /> : "—" }, { id: "written", header: "Written", value: (r: CatalogRun) => (r.insert_count ?? 0) + (r.update_count ?? 0) + (r.delete_count ?? 0), size: 120, cell: (r: CatalogRun) => [["+", r.insert_count], ["~", r.update_count], ["−", r.delete_count]].filter(([, n]) => n).map(([sign, n]) => `${sign}${n}`).join(" ") || "—" }] : []),
@@ -219,6 +219,8 @@ export function PipelineObject({ code, doc, name, tab, onTab }: { code: string; 
             <Section title={`Tasks (${tasks.length})`}>
               <DataTable
                 label="Tasks"
+                empty="No tasks recorded."
+                nextStep="Add tasks in the project config files, then rebuild the catalog."
                 data={tasks}
                 columns={columnsOf<CatalogTask>([
                   { id: "task", header: "Task", value: (t) => t.code, size: 240, cell: (t) => <Link className={`font-medium ${link}`} to={catalogPath(code, "tasks", t.label)}>{t.code}</Link> },
@@ -273,7 +275,7 @@ export function PipelineObject({ code, doc, name, tab, onTab }: { code: string; 
 }
 
 function ColumnLineage({ code, edges }: { code: string; edges: CatalogEdge[] }) {
-  if (!edges.length) return <p className="m-0 text-muted">No column lineage was traced for this selection.</p>;
+  if (!edges.length) return <EmptyState title="No column lineage was traced for this selection." nextStep="Declare task sources and targets, refresh lineage, then rebuild the catalog." />;
   return (
     <DataTable
       label="Column lineage"
@@ -483,7 +485,7 @@ export function TableObject({ code, doc, name, tab, onTab }: { code: string; doc
                   {writers.length > 1 ? <p className="m-0 text-xs text-muted">Written by {writers.length} tasks; each is listed under About this table.</p> : null}
                 </div>
               ) : (
-                <p className="m-0 text-muted">No task writes this table, so nothing describes it.</p>
+                <EmptyState title="No task writes this table, so nothing describes it." nextStep="Declare a writing task and its documentation in the project config files, then rebuild the catalog." />
               )}
             </Section>
             <Section fill className="max-h-96 @3xl:max-h-none" title={`Columns (${table.columns.length})`} aside={<input type="search" aria-label="Filter columns" placeholder="Filter columns…" value={filter} onChange={(event) => setFilter(event.target.value)} className="h-8 w-48 rounded-md border border-border-strong bg-surface px-2 text-[13px]" />}>
@@ -501,7 +503,7 @@ export function TableObject({ code, doc, name, tab, onTab }: { code: string; doc
                   ])}
                 />
               ) : (
-                <p className="m-0 text-muted">{table.columns.length ? "No column matches." : "No columns are declared or reported for this table."}</p>
+                <EmptyState title={table.columns.length ? "No column matches." : "No columns are declared or reported for this table."} nextStep={table.columns.length ? "Clear the column filter to see the declared columns." : "Declare table columns in the project config files, then rebuild the catalog."} />
               )}
               {shown.length && (!hasType || !hasDeclared) ? (
                 <p className="m-0 mt-2 text-xs text-muted">
@@ -558,6 +560,7 @@ export function TableObject({ code, doc, name, tab, onTab }: { code: string; doc
               label="Upstream and downstream tables"
               data={impact(doc, table.name, Number(depth), direction)}
               empty="No table feeds this one or is fed by it."
+              nextStep="Declare task sources and targets in the project config files, then rebuild the catalog."
               columns={columnsOf<ImpactRow>([
                 { id: "direction", header: "Direction", value: (r) => r.direction, size: 130 },
                 { id: "table", header: "Table", value: (r) => r.table, size: 300, cell: (r) => <Link className={link} to={catalogPath(code, "tables", r.table)}>{r.table}</Link> },
@@ -597,14 +600,14 @@ export function TableObject({ code, doc, name, tab, onTab }: { code: string; doc
               columns={columnsOf<(typeof history)[number]>([
                 { id: "task", header: "Task", value: (r) => r.task, size: 280, cell: (r) => <Link className={link} to={catalogPath(code, "tasks", r.task)}>{r.task}</Link> },
                 { id: "run", header: "Run", value: (r) => r.pipeline_run_id, size: 90, cell: (r) => <RunLabel id={r.pipeline_run_id} label={r.run_label} to={`${pipelinePath(code, r.pipeline)}?run=${r.pipeline_run_id}`} /> },
-                { id: "status", header: "Status", value: (r) => r.status, size: 130, cell: (r) => <StatusBadge status={r.status} /> },
+                { id: "status", header: "Status", value: (r) => r.status, size: 130, cell: (r) => <StatusBadge quiet status={r.status} /> },
                 { id: "started", header: "Started", value: (r) => r.start, size: 190, cell: (r) => <When iso={r.start} /> },
                 { id: "duration", header: "Duration", value: (r) => (r.start && r.end ? new Date(r.end).getTime() - new Date(r.start).getTime() : null), size: 110, cell: (r) => formatDuration(r.start, r.end) },
                 { id: "rows", header: "Rows", value: (r) => (r.insert_count ?? 0) + (r.update_count ?? 0) + (r.delete_count ?? 0), size: 120, cell: (r) => [["+", r.insert_count], ["~", r.update_count], ["−", r.delete_count]].filter(([, n]) => n).map(([sign, n]) => `${sign}${n}`).join(" ") || "—" },
               ])}
             />
           ) : (
-            <p className="m-0 text-muted">No task that writes this table has a recorded run.</p>
+            <EmptyState title="No task that writes this table has a recorded run." nextStep="Run a task that writes this table, then rebuild the catalog." />
           )}
         </Section>
       ) : (
@@ -624,7 +627,7 @@ export function TableObject({ code, doc, name, tab, onTab }: { code: string; doc
                 })}
               </ul>
             ) : (
-              <p className="m-0 text-muted">No business rule checks this table.</p>
+              <EmptyState title="No business rule checks this table." nextStep="Configure business rules on a task for this table, then rebuild the catalog." />
             )}
           </Section>
           <Section
@@ -636,7 +639,7 @@ export function TableObject({ code, doc, name, tab, onTab }: { code: string; doc
               </label>
             }
           >
-            {gaps.length ? <GapRows code={code} gaps={gaps} /> : <p className="m-0 text-muted">{table.warehouse_checked ? "No gaps: every checked attribute matches or is not declared." : "The warehouse was not compared in this build."}</p>}
+            {gaps.length ? <GapRows code={code} gaps={gaps} /> : <EmptyState title={table.warehouse_checked ? "No gaps: every checked attribute matches or is not declared." : "The warehouse was not compared in this build."} nextStep="Use Check now on Home’s Quality tab to compare declared tables with the warehouse." />}
           </Section>
         </div>
       )}
@@ -650,6 +653,8 @@ function GapRows({ code, gaps }: { code: string; gaps: CatalogDoc["gaps"] }) {
   return (
     <DataTable find
       label="Gaps"
+      empty="No gaps recorded."
+      nextStep="Compare declared tables with the warehouse, then rebuild the catalog."
       data={gaps}
       columns={columnsOf<CatalogDoc["gaps"][number]>([
         { id: "object", header: "Object", value: (g) => `${g.table}${g.column ? `.${g.column}` : ""}`, size: 300, cell: (g) => <span className="font-mono text-xs"><Link className={link} to={catalogPath(code, "tables", g.table)}>{g.table}</Link>{g.column ? `.${g.column}` : ""}</span> },
@@ -687,7 +692,7 @@ export function GapsObject({ code, doc }: { code: string; doc: CatalogDoc }) {
       </SelectField>
       </>
     }>
-      <Card className="overflow-x-auto">{shown.length ? <GapRows code={code} gaps={shown.slice(0, 500)} /> : <p className="m-0 p-4 text-muted">Nothing to show for this selection.</p>}</Card>
+      <Card className="overflow-x-auto">{shown.length ? <GapRows code={code} gaps={shown.slice(0, 500)} /> : <EmptyState title="Nothing to show for this selection." nextStep="Clear the state filter, or compare declared tables with the warehouse and rebuild the catalog." />}</Card>
       {shown.length > 500 ? <p className="m-0 text-xs text-muted">The first 500 of {shown.length} are shown; narrow it by state.</p> : null}
     </ObjectPage>
   );
@@ -730,6 +735,7 @@ export function TablesList({ code, doc }: { code: string; doc: CatalogDoc }) {
           label="All tables"
           data={rows}
           empty="No table matches."
+          nextStep="Clear the filters, or declare tables in the project config files and rebuild the catalog."
           initialSort={[{ id: "table", desc: false }]}
           columns={columnsOf<(typeof rows)[number]>([
             { id: "table", header: "Table", value: (r) => r.table.name, size: 300, cell: (r) => <Link className={`font-medium ${link}`} to={catalogPath(code, "tables", r.table.name)}>{r.table.name}</Link> },

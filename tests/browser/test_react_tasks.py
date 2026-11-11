@@ -1,6 +1,7 @@
 """The task history, attempt, items and matrix pages, and run and task controls, in a browser."""
 
 import os
+import re
 from pathlib import Path
 
 import pytest
@@ -228,4 +229,38 @@ def test_attempt_addresses_validate_the_parent_run_label(scene):
         expect(page.get_by_role("alert")).to_contain_text("stored label differs")
         expect(page.get_by_role("alert")).to_contain_text(label)
         expect(page.get_by_role("region", name="Attempt 1", exact=True)).to_have_count(0)
+        browser.close()
+
+
+def test_failure_diagnostics_stay_in_process_details(scene):
+    _, url, _, bad, failed = scene
+    with sync_playwright() as pw:
+        browser, page, problems = open_page(pw)
+        sign_in(page, url, f"/ui/projects/default/runs/ORDERS/{bad}/tasks/LOAD/attempts/{failed}")
+        details = page.locator("details").filter(
+            has=page.get_by_text("Process details", exact=True)
+        )
+        expect(details.get_by_text("Failure classification", exact=True)).to_be_hidden()
+        expect(page.get_by_text("Failure", exact=True)).to_have_count(0)
+        details.locator("summary").click()
+        expect(details.get_by_text("Failure classification", exact=True)).to_be_visible()
+        expect(details.get_by_text("UNKNOWN", exact=True)).to_be_visible()
+        expect(details.get_by_text("Failure source", exact=True)).to_be_visible()
+        expect(details.get_by_text("Failure code", exact=True)).to_be_visible()
+        assert problems == []
+        browser.close()
+
+
+def test_dense_run_statuses_use_dots_and_keep_failure_pills(scene):
+    _, url, _, _, _ = scene
+    with sync_playwright() as pw:
+        browser, page, problems = open_page(pw)
+        sign_in(page, url, "/ui/projects/default/runs")
+        table = page.get_by_role("table", name="Pipeline runs")
+        success = table.get_by_text("Success", exact=True).first
+        expect(success).to_be_visible()
+        assert success.locator("svg").count() == 0
+        assert success.locator('[aria-hidden="true"]').count() == 1
+        expect(table.get_by_text("Failed", exact=True).first).to_have_class(re.compile("bg-bad-bg"))
+        assert problems == []
         browser.close()

@@ -24,3 +24,16 @@ describe("status", () => {
     expect(statusMeta("SOME_NEW_STATE")).toMatchObject({ label: "Some new state", tone: "idle" });
   });
 });
+
+it("uses a dot and word in dense lists while retaining failure, warning and detail pills", () => {
+  const { container } = render(<><StatusBadge quiet status="SUCCESS" /><StatusBadge quiet status="FAILED" /><StatusBadge quiet status="LOST" /><StatusBadge status="SUCCESS" /></>);
+  const [dense, failure, warning, detail] = Array.from(container.children);
+  expect(dense!.textContent).toBe("Success");
+  expect(dense!.querySelector("svg")).toBeNull();
+  expect(dense!.querySelector('[aria-hidden="true"]')).toHaveClass("bg-current");
+  expect(dense).not.toHaveClass("rounded-full");
+  expect(failure).toHaveClass("bg-bad-bg", "rounded-full");
+  expect(warning).toHaveClass("bg-warn-bg", "rounded-full");
+  expect(detail).toHaveClass("bg-ok-bg", "rounded-full");
+  expect(detail!.querySelector("svg")).not.toBeNull();
+});
