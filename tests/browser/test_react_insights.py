@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 from playwright.sync_api import expect, sync_playwright
+from sqlalchemy import text
 from test_react_ui import open_page, sign_in
 
 from etl_craft.core.actor import Actor, ActorKind, acting_as
@@ -348,4 +349,59 @@ def test_short_daily_windows_show_numbers_then_long_windows_keep_the_day_axis(sc
         expect(panel.get_by_text("1 Jan", exact=True)).to_be_visible()
         expect(panel.get_by_text("7 Jan", exact=True)).to_be_visible()
         assert not problems
+        browser.close()
+
+
+def test_chart_renderers_load_on_home_without_changing_run_or_catalog_charts(scene):
+    ctx, url = scene
+    with acting_as(Actor("owner", ActorKind.USER)), ctx.engine.begin() as conn:
+        for _ in range(2):
+            pipeline = conn.execute(
+                text("SELECT PIPELINE_ID AS id FROM CFG_PIPELINES WHERE PIPELINE_CODE='ORDERS'")
+            ).scalar_one()
+            run = start_run(conn, pipeline)
+            finish_run(conn, run)
+    act(ctx, ActionName.GENERATE_DOCS)
+    with sync_playwright() as pw:
+        browser, page, problems = open_page(pw, viewport={"width": 1280, "height": 1000})
+        pending = []
+        page.route("**/chart-renderers-*.js", lambda route: pending.append(route))
+        sign_in(page, url, "/ui/projects/default/runs")
+        durations = page.get_by_role("list", name="Run durations, newest on the right")
+        expect(durations.get_by_role("link")).to_have_count(6)
+        assert not pending
+        page.evaluate("() => document.fonts.ready.then(() => true)")
+        page.goto(url + "/ui/projects/default/catalog/pipelines/ORDERS?tab=runs")
+        expect(
+            page.get_by_role("list", name="Run durations, newest on the right").get_by_role("link")
+        ).to_have_count(6)
+        assert not pending
+        page.goto(url + "/ui/projects/default")
+        panel = page.get_by_role("region", name="Runs per day", exact=True)
+        placeholder = panel.get_by_role("status")
+        expect(placeholder).to_have_text("Loading chart…")
+        slot = placeholder.locator("..")
+        before = slot.bounding_box()
+        assert before is not None and before["height"] == 256
+        spark_slot = page.get_by_role("region", name="Runs", exact=True).locator(".h-10")
+        expect(spark_slot).to_be_visible()
+        spark_before = spark_slot.bounding_box()
+        assert spark_before is not None and spark_before["height"] == 40
+        expect(spark_slot.locator("svg")).to_have_count(0)
+        shoot(page, "lazy-chart-placeholder")
+        assert pending
+        for route in pending:
+            route.continue_()
+        expect(placeholder).to_have_count(0)
+        chart = panel.locator(".recharts-wrapper")
+        expect(chart).to_be_visible()
+        after = panel.locator(".h-64").bounding_box()
+        assert after is not None and after["height"] == before["height"]
+        expect(
+            page.get_by_role("region", name="Runs", exact=True).locator(".recharts-area")
+        ).to_be_visible()
+        spark_after = spark_slot.bounding_box()
+        assert spark_after is not None and spark_after["height"] == spark_before["height"]
+        shoot(page, "lazy-home-charts")
+        assert problems == []
         browser.close()

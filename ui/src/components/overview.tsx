@@ -1,10 +1,9 @@
 import { EmptyState } from "@/components/common";
-import { DailyRuns } from "@/components/charts";
+import { DailyRuns, Spark } from "@/components/charts";
 import { RunLabel } from "@/components/run-label";
 import { ArrowUpRight, Timer } from "lucide-react";
 import * as React from "react";
 import { Link } from "react-router-dom";
-import { Area, AreaChart, ResponsiveContainer } from "recharts";
 import { StatusMark } from "@/components/status";
 import { When } from "@/components/when";
 import { formatDuration, formatSeconds, percent, seconds } from "@/lib/format";
@@ -98,26 +97,6 @@ function Attention({ code, d }: { code: string; d: Insights }) {
         </ul>
       )}
     </Tile>
-  );
-}
-
-function Spark({ data, color }: { data: { v: number | null }[]; color: string }) {
-  const id = React.useId();
-  if (data.filter((p) => p.v !== null).length < 5) return null;
-  return (
-    <div aria-hidden className="h-10 overflow-hidden rounded-b-xl">
-      <ResponsiveContainer width="100%" height="100%">
-        <AreaChart data={data} margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
-          <defs>
-            <linearGradient id={id} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor={color} stopOpacity={0.28} />
-              <stop offset="100%" stopColor={color} stopOpacity={0} />
-            </linearGradient>
-          </defs>
-          <Area type="monotone" dataKey="v" stroke={color} strokeWidth={1.75} fill={`url(#${id})`} connectNulls isAnimationActive={false} />
-        </AreaChart>
-      </ResponsiveContainer>
-    </div>
   );
 }
 

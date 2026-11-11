@@ -6,6 +6,9 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+- Home loads the daily chart and sparkline renderers on demand, reserving their dimensions
+  while they load. Routes without those charts no longer download their rendering library.
+
 - Run requests and reconciliation require a reason under STRICT governance in every environment,
   including DEV. RELAXED projects permit empty reasons. Browser run-action dialogs use the same
   project governance value; production remains STRICT and retains typed confirmation.

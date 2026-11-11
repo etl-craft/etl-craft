@@ -1,10 +1,12 @@
 import * as React from "react";
-import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { formatSeconds, measured } from "@/lib/format";
+import { dayLabel, formatSeconds, measured } from "@/lib/format";
 import type { DayInsight } from "@/lib/types";
 import { EmptyState } from "@/components/common";
 import { Link } from "react-router-dom";
 import { cn } from "@/lib/utils";
+
+const DailyChart = React.lazy(() => import("@/components/chart-renderers").then((module) => ({ default: module.DailyChart })));
+const SparkChart = React.lazy(() => import("@/components/chart-renderers").then((module) => ({ default: module.SparkChart })));
 
 /** A headline number with a line of context: the form for one value, not a chart. */
 export function KpiTile({ label, value, hint, tone }: { label: string; value: React.ReactNode; hint?: React.ReactNode; tone?: "bad" | "warn" | "ok" }) {
@@ -71,21 +73,6 @@ export function HBars({ rows, empty, nextStep, label }: { rows: BarRow[]; empty:
   );
 }
 
-const dayLabel = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
-
-function Readout({ active, payload, label }: { active?: boolean; payload?: { payload: DayInsight }[]; label?: string }) {
-  const day = payload?.[0]?.payload;
-  if (!active || !day) return null;
-  return (
-    <div className="grid gap-1 rounded-lg bg-surface px-3 py-2 text-xs shadow-pop">
-      <span className="font-medium">{dayLabel(label ?? day.day)}</span>
-      <span className="flex items-center gap-2"><i aria-hidden className="size-2 rounded-full bg-ok-solid" />{day.succeeded} succeeded</span>
-      <span className="flex items-center gap-2"><i aria-hidden className="size-2 rounded-full bg-bad-solid" />{day.failed} failed</span>
-      {day.runs - day.succeeded - day.failed > 0 ? <span className="flex items-center gap-2"><i aria-hidden className="size-2 rounded-full bg-idle-solid" />{day.runs - day.succeeded - day.failed} other</span> : null}
-    </div>
-  );
-}
-
 /** Short daily windows are dated numbers; larger windows retain a slot for every day. */
 export function DailyRuns({ days }: { days: DayInsight[] }) {
   if (days.length < 5) return (
@@ -101,20 +88,11 @@ export function DailyRuns({ days }: { days: DayInsight[] }) {
       ))}
     </dl>
   );
-  const rows = days.map((day) => ({ ...day, other: day.runs - day.succeeded - day.failed }));
-  return (
-      <div className="h-64 px-3 pb-3 pt-4">
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={rows} margin={{ top: 4, right: 8, bottom: 0, left: -18 }} barCategoryGap="28%">
-            <CartesianGrid vertical={false} stroke="var(--border)" strokeDasharray="3 4" />
-            <XAxis dataKey="day" tickFormatter={dayLabel} tickLine={false} axisLine={false} tick={{ fill: "var(--muted)", fontSize: 11 }} tickMargin={8} minTickGap={16} />
-            <YAxis allowDecimals={false} tickLine={false} axisLine={false} tick={{ fill: "var(--muted)", fontSize: 11 }} width={44} />
-            <Tooltip cursor={{ fill: "var(--surface-2)" }} content={<Readout />} />
-            <Bar dataKey="succeeded" stackId="runs" fill="var(--ok-solid)" maxBarSize={36} radius={[0, 0, 3, 3]} />
-            <Bar dataKey="failed" stackId="runs" fill="var(--bad-solid)" maxBarSize={36} />
-            <Bar dataKey="other" stackId="runs" fill="var(--idle-solid)" maxBarSize={36} radius={[3, 3, 0, 0]} />
-          </BarChart>
-        </ResponsiveContainer>
-      </div>
-  );
+  return <div className="h-64 px-3 pb-3 pt-4"><React.Suspense fallback={<span role="status" className="text-xs text-muted">Loading chart…</span>}><DailyChart days={days} /></React.Suspense></div>;
+}
+
+/** A sparse series keeps its numeric headline; a longer one loads its renderer on demand. */
+export function Spark({ data, color }: { data: { v: number | null }[]; color: string }) {
+  if (data.filter((p) => p.v !== null).length < 5) return null;
+  return <div aria-hidden className="h-10 overflow-hidden rounded-b-xl"><React.Suspense fallback={<span className="sr-only">Loading chart…</span>}><SparkChart data={data} color={color} /></React.Suspense></div>;
 }

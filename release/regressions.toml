@@ -308,6 +308,7 @@ agent-start-report-outage = [
 ]
 
 ui-audit-operability = [
+    "tests/browser/test_react_insights.py::test_chart_renderers_load_on_home_without_changing_run_or_catalog_charts",
     "tests/unit/test_operations.py::test_run_reason_follows_project_governance_in_every_environment",
     "tests/integration/api/test_api.py::test_run_api_requires_reasons_by_governance_not_environment",
     "tests/browser/test_react_pipelines.py::test_run_dialog_follows_governance_and_keeps_production_confirmation",
