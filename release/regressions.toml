@@ -344,3 +344,7 @@ exact-run-label-selection = [
     "tests/integration/engine/test_pipeline_permissions.py::test_run_label_refusal_does_not_disclose_hidden_pipeline_labels",
     "tests/browser/test_react_ui.py::test_run_addresses_validate_the_complete_stored_label",
 ]
+
+session-refresh-unavailable = [
+    "tests/browser/test_react_platform.py::test_failed_identity_refresh_does_not_end_a_live_session",
+]

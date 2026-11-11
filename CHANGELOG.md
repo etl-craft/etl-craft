@@ -6,6 +6,10 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+- A failed browser identity refresh no longer confirms expiry from cached session data.
+  The guard retries on its existing minute schedule; server authentication refusals still end
+  the session on screen.
+
 - Home loads the daily chart and sparkline renderers on demand, reserving their dimensions
   while they load. Routes without those charts no longer download their rendering library.
 

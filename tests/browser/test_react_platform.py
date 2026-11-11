@@ -232,6 +232,26 @@ def test_the_pages_render_cleanly_in_both_themes_and_on_a_phone(scene, scheme, w
         browser.close()
 
 
+def test_failed_identity_refresh_does_not_end_a_live_session(scene):
+    _, url, _ = scene
+    with sync_playwright() as pw:
+        browser, page, _problems = open_page(pw)
+        page.clock.install()
+        sign_in(page, url, "/ui/projects/default/pipelines/ORDERS")
+        expect(page.get_by_role("heading", name="ORDERS")).to_be_visible()
+        page.evaluate("() => document.fonts.ready")
+        page.route("**/api/v1/whoami*", lambda route: route.abort("failed"))
+        with page.expect_event(
+            "requestfailed", predicate=lambda request: "/api/v1/whoami" in request.url
+        ):
+            page.clock.fast_forward(13 * 60 * 60_000)
+        page.clock.run_for(10_000)
+        expect(page.get_by_role("dialog")).not_to_be_visible()
+        expect(page.get_by_role("heading", name="ORDERS")).to_be_visible()
+        shoot(page, "session-refresh-unavailable")
+        browser.close()
+
+
 def test_a_session_that_ended_says_so_and_signing_in_returns_to_the_page(scene):
     ctx, url, _ = scene
     with sync_playwright() as pw:

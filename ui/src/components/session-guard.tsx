@@ -33,10 +33,11 @@ export function SessionGuard() {
     if (!(warning || lapsed) || Date.now() - asked.current < 60_000) return;
     asked.current = Date.now();
     void refetch().then((read) => {
+      if (!read.isSuccess) return;
       const until = read.data?.session_expires_at;
       setConfirmed(Boolean(until) && Date.parse(until!) <= Date.now());
     });
-  }, [warning, lapsed, refetch]);
+  }, [warning, lapsed, refetch, now]);
   const over = ended || (lapsed && confirmed);
   const renew = React.useCallback(() => void client.invalidateQueries({ queryKey: ["whoami"] }), [client]);
 

@@ -20,7 +20,8 @@ The page warns ten minutes before the end ("Stay signed in" renews it), and when
 ends the session it says so in a dialog and offers sign-in, which returns to the same
 same-site page; external return addresses are refused. The page's own refreshes are marked
 as background (`X-ETL-Background: 1`) and do not extend a session. Signing out revokes the
-session in every tab. Every browser change needs its CSRF challenge. Browser pages refuse
+session in every tab. A failed identity refresh keeps the current session state and retries;
+cached expiry alone does not confirm a sign-out. Every browser change needs its CSRF challenge. Browser pages refuse
 framing by other sites and ship a content security policy.
 
 After `Auth.Lockout_after` consecutive wrong passwords (default 5; 0 disables lockout), a
