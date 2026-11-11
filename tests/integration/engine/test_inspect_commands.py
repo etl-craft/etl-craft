@@ -2,6 +2,7 @@
 
 import csv
 import logging
+import shlex
 
 import pytest
 import yaml
@@ -78,6 +79,17 @@ def project(engine_db, tmp_path, monkeypatch):
         ids["second"] = start_run(conn, ids["SALES"])
         failed = task_run(conn, ids["extract"], ids["second"], "IN-PROGRESS")
         transitions.finish_task_run(conn, failed, status="FAILED", error_message="source down")
+        labels = conn.execute(
+            text(
+                "SELECT pr.RUN_LABEL AS run_label, tr.TASK_RUN_LABEL AS task_run_label "
+                "FROM AUD_TASK_RUN_LOG tr JOIN AUD_PIPELINES_RUN_LOG pr "
+                "ON pr.PIPELINE_RUN_ID=tr.PIPELINE_RUN_ID WHERE tr.TASK_RUN_ID=:id"
+            ),
+            {"id": failed},
+        ).one()
+        ids.update(
+            second_label=labels.run_label, failed_run=failed, failed_label=labels.task_run_label
+        )
     return ids
 
 
@@ -89,18 +101,26 @@ def run(capsys, *args):
 def test_list(project, capsys):
     code, out = run(capsys, "pipelines")
     assert code == ExitCode.SUCCESS
-    assert out.splitlines() == [
-        "PIPELINE_CODE\tPIPELINE_NAME\tREFRESH_TYPE\tRUN_SCHEDULE\tSLA_IN_HOURS\tTAGS\tPAUSED",
-        "SALES\tSALES\tINCREMENTAL\t\t2.0\t\t",
-        "UP\tUP\tFULL\t\t\t\t",
-    ]
+    reader = csv.DictReader(out.splitlines(), delimiter="\t")
+    assert reader.fieldnames[0] == "PIPELINE_CODE"
+    pipelines = {row["PIPELINE_CODE"]: row for row in reader}
+    assert set(pipelines) == {"SALES", "UP"}
+    for name, refresh, sla in (("SALES", "INCREMENTAL", "2.0"), ("UP", "FULL", "")):
+        row = pipelines[name]
+        assert row["PIPELINE_NAME"] == name
+        assert row["REFRESH_TYPE"] == refresh
+        assert row["SLA_IN_HOURS"] == sla
+        assert row["RUN_SCHEDULE"] == row["TAGS"] == row["PAUSED"] == ""
+    assert pipelines["SALES"]["LAST_RUN_ID"] == str(project["second"])
+    assert shlex.split(pipelines["SALES"]["RUN_LABEL"]) == [project["second_label"]]
+    assert pipelines["UP"]["LAST_RUN_ID"] == pipelines["UP"]["RUN_LABEL"] == ""
     assert run(capsys, "pause", "--pipeline-code", "UP", "--reason", "source down")[0] == 0
     code, out = run(capsys, "pipelines")
     pipelines = {
         row["PIPELINE_CODE"]: row for row in csv.DictReader(out.splitlines(), delimiter="\t")
     }
     assert pipelines["UP"]["PAUSED"].startswith("paused since ")
-    assert out.splitlines()[2].endswith(": source down")
+    assert pipelines["UP"]["PAUSED"].endswith(": source down")
 
 
 def test_graph(project, capsys):
@@ -137,11 +157,24 @@ def test_history(project, capsys):
     code, out = run(capsys, "history", "--pipeline-code", "SALES", "--all")
     lines = out.splitlines()
     assert code == ExitCode.SUCCESS
-    assert lines[0] == (
-        "PIPELINE_CODE\tPIPELINE_RUN_ID\tSTATUS\tRUN_DATE\tSTART_DATE\tEND_DATE\tSLA_STATUS"
-        "\tSTARTED_BY\tSTARTED_BY_KIND\tENDED_BY\tENDED_BY_KIND"
-    )
-    history = list(csv.DictReader(lines, delimiter="\t"))
+    reader = csv.DictReader(lines, delimiter="\t")
+    assert reader.fieldnames[0] == "PIPELINE_CODE"
+    assert {
+        "PIPELINE_CODE",
+        "PIPELINE_RUN_ID",
+        "STATUS",
+        "RUN_DATE",
+        "START_DATE",
+        "END_DATE",
+        "SLA_STATUS",
+        "STARTED_BY",
+        "STARTED_BY_KIND",
+        "ENDED_BY",
+        "ENDED_BY_KIND",
+    } <= set(reader.fieldnames)
+    history = list(reader)
+    assert history[0]["PIPELINE_RUN_ID"] == str(project["second"])
+    assert shlex.split(history[0]["RUN_LABEL"]) == [project["second_label"]]
     assert [row["STATUS"] for row in history] == ["IN-PROGRESS", "SUCCESS"]
     assert history[1]["SLA_STATUS"] == "MET"
 
@@ -150,13 +183,16 @@ def test_history(project, capsys):
     )
     lines = out.splitlines()
     assert len(lines) == 2
-    fields = lines[1].split("\t")
-    assert (fields[0], fields[1], fields[2], fields[-1]) == (
-        str(project["second"]),
-        "FAILED",
-        "1",
-        "source down",
-    )
+    reader = csv.DictReader(lines, delimiter="\t")
+    assert reader.fieldnames[0] == "PIPELINE_RUN_ID"
+    entry = next(reader)
+    assert entry["PIPELINE_RUN_ID"] == str(project["second"])
+    assert shlex.split(entry["RUN_LABEL"]) == [project["second_label"]]
+    assert entry["TASK_RUN_ID"] == str(project["failed_run"])
+    assert shlex.split(entry["TASK_RUN_LABEL"]) == [project["failed_label"]]
+    assert entry["STATUS"] == "FAILED"
+    assert entry["ATTEMPTS"] == "1"
+    assert entry["ERROR_MESSAGE"] == "source down"
     assert run(capsys, "history", "--pipeline-code", "UP", "--all") == (
         ExitCode.SUCCESS,
         "(no runs yet)\n",
