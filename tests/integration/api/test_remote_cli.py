@@ -486,7 +486,17 @@ def test_remote_task_run_forwards_the_exact_selection(
 
     monkeypatch.setitem(ACTIONS, ActionName.RUN, replace(ACTIONS[ActionName.RUN], call=execute))
     monkeypatch.setenv("ETL_CRAFT_TOKEN", server["service"]["operator"])
-    args = ["run", "--pipeline-code", "P", "--task-code", "T", "--run-key", "manual:test"]
+    args = [
+        "run",
+        "--pipeline-code",
+        "P",
+        "--task-code",
+        "T",
+        "--run-key",
+        "manual:test",
+        "--reason",
+        "test requested run",
+    ]
     if standalone:
         args += [
             "--standalone",

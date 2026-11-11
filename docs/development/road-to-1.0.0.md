@@ -194,7 +194,7 @@ item's text, or work done early under another item.
 | S7.AL Pre-demo package gaps | In progress | #314, #315 | Slices 1–3 ship duplicate counts, current references and guarded-table validation guidance. Slice 4 (event-file validation) is in review; slices 5–6 remain. |
 | S7.AM Protection on every warehouse | Done | #311, #312, #313 | Atomic SCD merges, in-row protection and recovery, private audit identities and provider acceptance |
 | S7.AN Always show the environment | Done | #328 | CLI context and production confirmation; designed, sandboxed alert/SLA templates and catalog environment |
-| S7.AO UI rebuild | Done | #329–#335, #368, #371, #372 | Seven slices: shell, Home, runs, pipelines, tasks, uploads, insights, console, catalog, system, agents, administration, maintenance, settings, search, sign-in; the new interface is the only one, served at `/ui`, and the old pages are deleted; audit follow-ups align time preferences, human labels, automatic grid sizing and phone date controls; remaining audit closes sparse summaries, controls, lazy loading and CLI operability |
+| S7.AO UI rebuild | Done | #329–#335, #368, #371, #372, #373 | Seven slices: shell, Home, runs, pipelines, tasks, uploads, insights, console, catalog, system, agents, administration, maintenance, settings, search, sign-in; the new interface is the only one, served at `/ui`, and the old pages are deleted; audit follow-ups align time preferences, human labels, automatic grid sizing and phone date controls; remaining audit closes sparse summaries, controls, lazy loading and CLI operability |
 | S7.AP Native catalog | In progress | | The catalog moves into the app from a JSON read action, built from the app's own components; the generated static site stays only for `publish-docs` |
 | S7.AQ Readable run identifiers | Done | #347, #369, #370 | A label beside every run and task run id, stored by the Engine DB; accepted wherever the integer is, and shown beside it |
 | S7.AR Restarting pipelines | In progress | slice 1 PR | A pipeline setting, `RESTART_CONDITION`, starts the next run when the last one ends in a chosen status, so a file watcher runs continuously without a schedule |
@@ -1419,6 +1419,17 @@ empty-history-page handling defect, which was corrected and verified. No cloud w
   not echo a nonce and Dex answers a pending poll with 401; the security guide warns about the first. Not
   done: `--run-id` and the HTTP API accepting a run label (S7.AQ slice 2), which needs one resolver in the
   operations layer.
+
+- **S7.AO B15 governance decision (option 1).** Choices that differ from the item text:
+  Run now and reconciliation validate reasons through the existing project governance policy;
+  STRICT requires a reason in every environment, RELAXED permits omission. Other run controls
+  retain the same policy. Browser confirmations read the existing project governance value
+  instead of using environment-only optionality. PROD remains STRICT, RELAXED production stays
+  refused, and typed production confirmation is unchanged. CLI/API callers in STRICT projects
+  must supply a reason. C6 keeps schema and Swagger for the docs generator and deployment smoke
+  check. A14 chart loading follows in a separate pull request after this one merges; A11 is separate.
+  Acceptance availability: unit, API and browser validation run locally on the existing services;
+  no warehouse SQL or database schema changes, so cloud acceptance is not applicable.
 
 - **S7.AO audit batch 4 (A9, B10, B11, B12).** Choices that differ from the item text:
   acceptance is the owner's presentation follow-up. Shared failure details hide the unchanged

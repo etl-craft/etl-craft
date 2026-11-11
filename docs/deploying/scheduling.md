@@ -14,9 +14,9 @@ and catch-up policies. You can also use any scheduler that runs a command. Run t
 
 ```cron
 # crontab: the clients at 05:00, the data mart after them, the catalog at 02:00
-0 5 * * *  cd /srv/etl-craft && .venv/bin/etl-craft run --pipeline-code SOURCE_A
-0 5 * * *  cd /srv/etl-craft && .venv/bin/etl-craft run --pipeline-code SOURCE_B
-30 5 * * * cd /srv/etl-craft && .venv/bin/etl-craft run --pipeline-code DEMO
+0 5 * * *  cd /srv/etl-craft && .venv/bin/etl-craft run --reason "requested data load" --pipeline-code SOURCE_A
+0 5 * * *  cd /srv/etl-craft && .venv/bin/etl-craft run --reason "requested data load" --pipeline-code SOURCE_B
+30 5 * * * cd /srv/etl-craft && .venv/bin/etl-craft run --reason "requested data load" --pipeline-code DEMO
 0 2 * * *  cd /srv/etl-craft && .venv/bin/etl-craft generate-docs
 ```
 

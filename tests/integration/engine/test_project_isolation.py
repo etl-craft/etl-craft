@@ -688,7 +688,9 @@ def test_run_label_cannot_select_another_projects_run(isolation):
     finance = replace(
         admin, project="finance", project_id=None, config=replace(admin.config, project="finance")
     )
-    created = act(finance, ActionName.RUN, pipeline_code="OPEN", init_only=True)
+    created = act(
+        finance, ActionName.RUN, pipeline_code="OPEN", init_only=True, reason="test requested run"
+    )
     label = created.run.run_label
     for value in (label, "WRONG-" + label):
         with pytest.raises(ResourceNotFoundError) as error:

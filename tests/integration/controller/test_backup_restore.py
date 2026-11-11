@@ -65,7 +65,19 @@ def test_dump_restore_recovers_exact_interrupted_run(cli_project, restored_datab
         "    return ScriptResult(1)\n"
     )
     assert p.run("pipelines", "refresh")[0] == 0
-    assert p.run("run", "--pipeline-code", "P", "--init-only", "--run-key", "restore")[0] == 0
+    assert (
+        p.run(
+            "run",
+            "--reason",
+            "test requested run",
+            "--pipeline-code",
+            "P",
+            "--init-only",
+            "--run-key",
+            "restore",
+        )[0]
+        == 0
+    )
     controller = p.start("controller", "--no-ui")
     p.wait_for("SELECT COUNT(*) FROM AUD_TASK_ATTEMPTS WHERE STATUS='RUNNING'", expected=1)
     # Poll a committed process boundary, then kill the controller and its observed descendants.
@@ -122,7 +134,8 @@ def test_dump_restore_recovers_exact_interrupted_run(cli_project, restored_datab
     p.config = load_config(p.config.config_path)
     p.engine = restored_database.engine
     for command in ("doctor", "reconcile"):
-        code, output = p.run(command)
+        arguments = ["--reason", "restore interrupted run"] if command == "reconcile" else []
+        code, output = p.run(command, *arguments)
         assert code == 0, output
     replacement = p.start("controller", "--no-ui")
     p.wait_for("SELECT STATUS FROM AUD_PIPELINES_RUN_LOG", expected="SUCCESS", timeout=20)

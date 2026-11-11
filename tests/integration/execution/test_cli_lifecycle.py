@@ -16,14 +16,30 @@ from sqlalchemy import text
 @pytest.mark.chaos
 def test_a_fault_after_binding_records_failure_and_allows_retry(cli_project, point):
     project = cli_project
-    assert project.run("run", "--pipeline-code", "P", "--init-only")[0] == 0
-    code, output = project.run("run", "--pipeline-code", "P", "--task-code", "load", fault=point)
+    assert (
+        project.run("run", "--reason", "test requested run", "--pipeline-code", "P", "--init-only")[
+            0
+        ]
+        == 0
+    )
+    code, output = project.run(
+        "run",
+        "--reason",
+        "test requested run",
+        "--pipeline-code",
+        "P",
+        "--task-code",
+        "load",
+        fault=point,
+    )
     assert code != 0, output
     project.wait_for("SELECT STATUS FROM AUD_TASK_RUN_LOG", expected="FAILED")
     with project.engine.connect() as conn:
         error = conn.execute(text("SELECT ERROR_MESSAGE FROM AUD_TASK_RUN_LOG")).scalar_one()
         assert point in error
-    code, output = project.run("run", "--pipeline-code", "P", "--task-code", "load")
+    code, output = project.run(
+        "run", "--reason", "test requested run", "--pipeline-code", "P", "--task-code", "load"
+    )
     assert code == 0, output
     project.wait_for("SELECT STATUS FROM AUD_TASK_RUN_LOG", expected="SUCCESS")
     with project.engine.connect() as conn:
@@ -32,9 +48,21 @@ def test_a_fault_after_binding_records_failure_and_allows_retry(cli_project, poi
 
 def test_a_timeout_parse_fault_leaves_no_bound_attempt(cli_project):
     project = cli_project
-    assert project.run("run", "--pipeline-code", "P", "--init-only")[0] == 0
+    assert (
+        project.run("run", "--reason", "test requested run", "--pipeline-code", "P", "--init-only")[
+            0
+        ]
+        == 0
+    )
     code, output = project.run(
-        "run", "--pipeline-code", "P", "--task-code", "load", fault="runner.after_timeout"
+        "run",
+        "--reason",
+        "test requested run",
+        "--pipeline-code",
+        "P",
+        "--task-code",
+        "load",
+        fault="runner.after_timeout",
     )
     assert code != 0, output
     with project.engine.connect() as conn:
@@ -45,7 +73,14 @@ def test_a_timeout_parse_fault_leaves_no_bound_attempt(cli_project):
 @pytest.mark.chaos
 def test_a_child_failure_after_recording_success_keeps_the_recorded_outcome(cli_project, mode):
     project = cli_project
-    code, output = project.run("run", "--pipeline-code", "P", fault="child.after_outcome" + mode)
+    code, output = project.run(
+        "run",
+        "--reason",
+        "test requested run",
+        "--pipeline-code",
+        "P",
+        fault="child.after_outcome" + mode,
+    )
     assert code == 0, output
     project.wait_for("SELECT STATUS FROM AUD_TASK_RUN_LOG", expected="SUCCESS")
     project.wait_for("SELECT STATUS FROM AUD_PIPELINES_RUN_LOG", expected="SUCCESS")
@@ -53,9 +88,21 @@ def test_a_child_failure_after_recording_success_keeps_the_recorded_outcome(cli_
 
 def test_a_hard_exit_after_binding_does_not_fabricate_cancellation_acknowledgement(cli_project):
     project = cli_project
-    assert project.run("run", "--pipeline-code", "P", "--init-only")[0] == 0
+    assert (
+        project.run("run", "--reason", "test requested run", "--pipeline-code", "P", "--init-only")[
+            0
+        ]
+        == 0
+    )
     code, _ = project.run(
-        "run", "--pipeline-code", "P", "--task-code", "load", fault="runner.after_bind:kill"
+        "run",
+        "--reason",
+        "test requested run",
+        "--pipeline-code",
+        "P",
+        "--task-code",
+        "load",
+        fault="runner.after_bind:kill",
     )
     assert code == 137
     project.wait_for("SELECT STATUS FROM AUD_TASK_RUN_LOG", expected="IN-PROGRESS")
@@ -85,8 +132,15 @@ def test_signal_stops_the_real_cli_child_and_grandchild(cli_project, sig):
     )
     code, output = project.run("pipelines", "refresh")
     assert code == 0, output
-    assert project.run("run", "--pipeline-code", "P", "--init-only")[0] == 0
-    parent = project.start("run", "--pipeline-code", "P", "--task-code", "load")
+    assert (
+        project.run("run", "--reason", "test requested run", "--pipeline-code", "P", "--init-only")[
+            0
+        ]
+        == 0
+    )
+    parent = project.start(
+        "run", "--reason", "test requested run", "--pipeline-code", "P", "--task-code", "load"
+    )
     try:
         deadline = time.monotonic() + 10
         children = []
@@ -140,7 +194,7 @@ def test_local_attempt_keeps_full_file_and_configured_tail(cli_project):
     )
     code, output = p.run("pipelines", "refresh")
     assert code == 0, output
-    code, output = p.run("run", "--pipeline-code", "P")
+    code, output = p.run("run", "--reason", "test requested run", "--pipeline-code", "P")
     assert code == 0, output
     with p.engine.connect() as conn:
         row = conn.execute(

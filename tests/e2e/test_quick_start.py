@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import os
 import re
+import shlex
 import shutil
 import sqlite3
 import subprocess
@@ -76,7 +77,7 @@ def test_the_quick_start_runs_as_written(tmp_path):
     printed = []
     for line in commands():
         command, _, comment = line.partition("#")
-        argv = command.split()
+        argv = shlex.split(command)
         program = cli if argv[0] == "etl-craft" else python
         if argv[:2] in (["etl-craft", "setup"], ["etl-craft", "login"]):
             done = terminal_run(

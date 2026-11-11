@@ -19,7 +19,7 @@ export function ConfirmDialog({
   onConfirm,
   onClose,
   askReason = true,
-  reasonOptional = false,
+  governance = "STRICT",
   canSubmit = true,
   children,
 }: {
@@ -36,7 +36,7 @@ export function ConfirmDialog({
   onClose: () => void;
   /** False for requests that take no reason; the field is then not shown. */
   askReason?: boolean;
-  reasonOptional?: boolean;
+  governance?: string;
   /** False while the form fields in `children` are incomplete. */
   canSubmit?: boolean;
   children?: React.ReactNode;
@@ -44,7 +44,8 @@ export function ConfirmDialog({
   const [reason, setReason] = React.useState("");
   const [typed, setTyped] = React.useState("");
   const production = !!env && !!projectCode && isProduction(env);
-  const ready = canSubmit && (!askReason || (reasonOptional && !production) || reason.trim().length > 0) && (!production || typed === projectCode);
+  const reasonRequired = governance !== "RELAXED";
+  const ready = canSubmit && (!askReason || !reasonRequired || reason.trim().length > 0) && (!production || typed === projectCode);
   return (
     <Dialog open={open} onClose={onClose} labelledBy="confirm-title" className={production ? "border-2 border-[var(--env-prod)]" : undefined}>
       {production ? (
@@ -74,12 +75,12 @@ export function ConfirmDialog({
         {children}
         {askReason ? (
           <label className="grid gap-1 text-sm">
-            <span className="font-medium">Reason (kept in the audit trail){reasonOptional && !production ? " (optional)" : ""}</span>
+            <span className="font-medium">Reason (kept in the audit trail){!reasonRequired ? " (optional)" : ""}</span>
             <textarea
               value={reason}
               onChange={(event) => setReason(event.target.value)}
               rows={3}
-              required={!reasonOptional || production}
+              required={reasonRequired}
               className="rounded-md border border-border-strong bg-surface p-2 text-sm"
             />
           </label>

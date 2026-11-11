@@ -34,10 +34,12 @@ def test_sql_run_uses_admitted_files_and_the_next_publication_uses_edits(cli_pro
     assert code == 0, output
     code, output = project.run("pipelines", "refresh")
     assert code == 0, output
-    code, output = project.run("run", "--pipeline-code", "P", "--init-only")
+    code, output = project.run(
+        "run", "--reason", "test requested run", "--pipeline-code", "P", "--init-only"
+    )
     assert code == 0, output
     script.unlink()
-    code, output = project.run("run", "--pipeline-code", "P")
+    code, output = project.run("run", "--reason", "test requested run", "--pipeline-code", "P")
     assert code == 0, output
     with duckdb.connect(str(project.config.project_dir / "warehouse.duckdb")) as conn:
         assert conn.execute("SELECT id FROM bundle_output").to_arrow_table().to_pylist() == [
@@ -48,7 +50,7 @@ def test_sql_run_uses_admitted_files_and_the_next_publication_uses_edits(cli_pro
     assert code == 0, output
     code, output = project.run("pipelines", "refresh")
     assert code == 0, output
-    code, output = project.run("run", "--pipeline-code", "P")
+    code, output = project.run("run", "--reason", "test requested run", "--pipeline-code", "P")
     assert code == 0, output
     with duckdb.connect(str(project.config.project_dir / "warehouse.duckdb")) as conn:
         assert conn.execute("SELECT id FROM bundle_output").to_arrow_table().to_pylist() == [
@@ -106,7 +108,7 @@ def test_recovery_keeps_successes_and_admitted_files_after_definition_edits(cli_
     assert code == 0, output
     code, output = project.run("pipelines", "refresh")
     assert code == 0, output
-    code, output = project.run("run", "--pipeline-code", "P")
+    code, output = project.run("run", "--reason", "test requested run", "--pipeline-code", "P")
     assert code != 0, output
     assert completed.read_text() == "once"
     completed.write_text("must not rerun")
@@ -127,7 +129,9 @@ def test_recovery_keeps_successes_and_admitted_files_after_definition_edits(cli_
         "run", "--pipeline-code", "P", "--run-id", str(run), "--recover", "--reason", "repair"
     )
     assert code == 0, output
-    code, output = project.run("run", "--pipeline-code", "P", "--run-id", str(run))
+    code, output = project.run(
+        "run", "--reason", "test requested run", "--pipeline-code", "P", "--run-id", str(run)
+    )
     assert code == 0, output
     assert completed.read_text() == "must not rerun"
     assert attempts.read_text().splitlines() == ["admitted", "admitted"]

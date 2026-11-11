@@ -585,7 +585,7 @@ def test_cli_actor_requests_and_read_only_audit(
         assert result == 0, capsys.readouterr()
 
     command("pipelines", "refresh", "--pipeline", "P")
-    command("run", "--pipeline-code", "P", "--init-only")
+    command("run", "--reason", "test requested run", "--pipeline-code", "P", "--init-only")
     with engine_db.engine.connect() as conn:
         run_id = conn.execute(
             text("SELECT PIPELINE_RUN_ID FROM AUD_PIPELINES_RUN_LOG")
@@ -664,7 +664,21 @@ def test_cli_actor_requests_and_read_only_audit(
         ) == {"SERVICE"}
 
     monkeypatch.setenv("ETL_CRAFT_TOKEN", "invalid")
-    assert main(["--config", str(config), "run", "--pipeline-code", "P", "--init-only"]) == 3
+    assert (
+        main(
+            [
+                "--config",
+                str(config),
+                "run",
+                "--pipeline-code",
+                "P",
+                "--init-only",
+                "--reason",
+                "test requested run",
+            ]
+        )
+        == 3
+    )
     assert "no signed-in account" in capsys.readouterr().err
     with engine_db.engine.connect() as conn:
         assert conn.execute(text("SELECT COUNT(*) FROM AUD_ACTIONS")).scalar_one() == len(actions)

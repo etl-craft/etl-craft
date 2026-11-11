@@ -3,7 +3,7 @@
 ## Running one task
 
 ```bash
-etl-craft run --pipeline-code SALES_DAILY --task-code load_orders
+etl-craft run --reason "requested data load" --pipeline-code SALES_DAILY --task-code load_orders
 ```
 
 The task receives its run from its caller. Pass `--run-id` or `--run-key` to select it;
@@ -29,8 +29,8 @@ when it ends `FAILED`; every other status is listed under [Exit codes](../refere
 ## Independent manual selections
 
 ```bash
-etl-craft run --pipeline-code SALES_DAILY --task-code load_orders --standalone
-etl-craft run --pipeline-code SALES_DAILY --task-code load_orders --standalone --with-downstream
+etl-craft run --reason "requested data load" --pipeline-code SALES_DAILY --task-code load_orders --standalone
+etl-craft run --reason "requested data load" --pipeline-code SALES_DAILY --task-code load_orders --standalone --with-downstream
 ```
 
 The first command runs only the selected task. The second includes every active descendant

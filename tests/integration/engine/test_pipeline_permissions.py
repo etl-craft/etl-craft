@@ -249,7 +249,9 @@ def test_run_admission_persists_sso_ids_after_session_revocation(metadata_projec
         )
     session = sessions.sign_in_subject(ctx, IdentityClaims("subject", ("sales",)))
     caller = authenticated_context(ctx, session.metadata)
-    result = act(caller, ActionName.RUN, pipeline_code=code, init_only=True)
+    result = act(
+        caller, ActionName.RUN, pipeline_code=code, init_only=True, reason="test requested run"
+    )
     act(ctx, ActionName.LOGOUT, token=session.access_token)
     with ctx.engine.connect() as conn:
         ids = conn.execute(

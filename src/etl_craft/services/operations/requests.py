@@ -350,7 +350,7 @@ class LineageRefreshInput(LineageInput):
 class RunRequest(RunSelection):
     """One pipeline, task, lifecycle step or backfill request.
 
-    ``reason`` is recorded with every request; overrides, reruns, skips and backfills need one.
+    ``reason`` is recorded with every request and required by STRICT project governance.
     """
 
     task_code: str | None = None

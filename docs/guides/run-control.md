@@ -70,7 +70,7 @@ If an explicitly selected run has ended, it is reopened (`IN-PROGRESS` again), a
 without running are reset, so running the pipeline again resumes it from there:
 
 ```bash
-etl-craft run --pipeline-code SALES_DAILY
+etl-craft run --reason "requested data load" --pipeline-code SALES_DAILY
 ```
 
 Mark a failed task `SUCCESS` and the tasks waiting on it run; the rest of the run is not repeated.
@@ -399,7 +399,7 @@ For an existing exact execution, authorize a one-run exception with a reason:
 ```bash
 etl-craft run --pipeline-code SALES_DAILY --run-id 43 --allow-paused \
     --request-key manual-43 --reason "approved maintenance run"
-etl-craft run --pipeline-code SALES_DAILY --run-id 43
+etl-craft run --reason "requested data load" --pipeline-code SALES_DAILY --run-id 43
 ```
 
 This permission lasts for that run. The definition pause stays open and blocks automatic starts

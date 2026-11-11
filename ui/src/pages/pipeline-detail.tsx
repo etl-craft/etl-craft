@@ -147,7 +147,6 @@ export function PipelineDetail() {
               <ActionButton<{ message?: string }>
                 code={code}
                 label="Run now"
-                reasonOptional
                 title={`Run ${pipeline} now`}
                 effect="Admits one manual run of the whole pipeline for the controller; scheduled runs are unaffected."
                 endpoint="/runs"

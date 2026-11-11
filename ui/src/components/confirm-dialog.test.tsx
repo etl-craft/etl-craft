@@ -12,11 +12,11 @@ beforeAll(() => {
   };
 });
 
-function show(type: string, onConfirm = vi.fn(), reasonOptional = false) {
+function show(type: string, onConfirm = vi.fn(), governance = "STRICT") {
   render(
     <ConfirmDialog
       open
-      reasonOptional={reasonOptional}
+      governance={governance}
       title="Recover run #7"
       action="Recover run"
       effect="Reopens OPS run #7."
@@ -58,20 +58,6 @@ describe("ConfirmDialog", () => {
     expect(screen.getByText("PRODUCTION")).toBeInTheDocument();
   });
 
-  it("allows an empty reason only outside production when requested", () => {
-    const confirm = show("DEV", vi.fn(), true);
-    const submit = screen.getByRole("button", { name: "Recover run" });
-    expect(submit).toBeEnabled();
-    expect(screen.getByLabelText(/Reason/)).not.toBeRequired();
-    fireEvent.click(submit);
-    expect(confirm).toHaveBeenCalledWith("");
-    cleanup();
-    show("PROD", vi.fn(), true);
-    fireEvent.change(screen.getByLabelText(/Type/), { target: { value: "sales" } });
-    expect(screen.getByRole("button", { name: "Recover run" })).toBeDisabled();
-    expect(screen.getByLabelText(/Reason/)).toBeRequired();
-  });
-
   it("shows the server's refusal verbatim", () => {
     render(
       <ConfirmDialog
@@ -89,4 +75,26 @@ describe("ConfirmDialog", () => {
     );
     expect(screen.getByRole("alert")).toHaveTextContent("run_id=7: RECOVER needs ended ownership");
   });
+});
+
+it("matches STRICT and RELAXED governance independently of environment", () => {
+  for (const [type, governance] of [["DEV", "RELAXED"], ["DEV", "STRICT"], ["PROD", "STRICT"]]) {
+    const confirm = vi.fn();
+    render(<ConfirmDialog open governance={governance} title="Run now" action="Run" effect="Starts this pipeline." projectCode="sales" env={{ type: type!, name: null }} error={null} busy={false} onConfirm={confirm} onClose={() => undefined} />);
+    const reason = screen.getByLabelText(/Reason/);
+    const submit = screen.getByRole("button", { name: "Run" });
+    if (type === "PROD") fireEvent.change(screen.getByLabelText(/Type/), { target: { value: "sales" } });
+    if (governance === "RELAXED") {
+      expect(reason).not.toBeRequired();
+      expect(submit).toBeEnabled();
+      fireEvent.click(submit);
+      expect(confirm).toHaveBeenCalledWith("");
+    } else {
+      expect(reason).toBeRequired();
+      expect(submit).toBeDisabled();
+      fireEvent.change(reason, { target: { value: "run the approved data load" } });
+      expect(submit).toBeEnabled();
+    }
+    cleanup();
+  }
 });

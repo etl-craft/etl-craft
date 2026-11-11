@@ -133,7 +133,14 @@ def test_controller_restart_preserves_the_run_and_does_not_duplicate_live_work(p
         provider.submit(spec)
     else:
         code, output = provider.project.run(
-            "run", "--pipeline-code", "P", "--init-only", "--run-key", "contract"
+            "run",
+            "--reason",
+            "test requested run",
+            "--pipeline-code",
+            "P",
+            "--init-only",
+            "--run-key",
+            "contract",
         )
         assert code == 0, output
     controller = provider.project.start("controller", "--no-ui")

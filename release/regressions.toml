@@ -308,6 +308,9 @@ agent-start-report-outage = [
 ]
 
 ui-audit-operability = [
+    "tests/unit/test_operations.py::test_run_reason_follows_project_governance_in_every_environment",
+    "tests/integration/api/test_api.py::test_run_api_requires_reasons_by_governance_not_environment",
+    "tests/browser/test_react_pipelines.py::test_run_dialog_follows_governance_and_keeps_production_confirmation",
     "tests/browser/test_react_tasks.py::test_failure_diagnostics_stay_in_process_details",
     "tests/browser/test_react_tasks.py::test_dense_run_statuses_use_dots_and_keep_failure_pills",
     "tests/browser/test_react_pipelines.py::test_fit_view_keeps_task_labels_readable_after_zooming_out",

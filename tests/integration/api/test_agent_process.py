@@ -37,7 +37,16 @@ def test_agent_runs_its_pinned_bundle_without_engine_or_store_credentials(
         )
     publish_project(p, agent_dir)
     controller = p.start("controller", "--no-ui")
-    code, output = p.run("run", "--pipeline-code", "P", "--init-only", "--run-key", "agent-test")
+    code, output = p.run(
+        "run",
+        "--reason",
+        "test requested run",
+        "--pipeline-code",
+        "P",
+        "--init-only",
+        "--run-key",
+        "agent-test",
+    )
     assert code == 0, output
     p.wait_for("SELECT STATUS FROM AUD_TASK_ATTEMPTS", expected="QUEUED")
     monkeypatch.setenv("ETL_CRAFT_TOKEN", token.token)
@@ -104,7 +113,16 @@ def test_a_lost_agent_stops_its_writer_before_a_second_holder(cluster, monkeypat
     )
     publish_project(p, agent_dir)
     p.start("controller", "--no-ui")
-    code, output = p.run("run", "--pipeline-code", "P", "--init-only", "--run-key", failure)
+    code, output = p.run(
+        "run",
+        "--reason",
+        "test requested run",
+        "--pipeline-code",
+        "P",
+        "--init-only",
+        "--run-key",
+        failure,
+    )
     assert code == 0, output
     monkeypatch.setenv("ETL_CRAFT_TOKEN", token.token)
     agent = p.start("agent", "--api", url, "--project-dir", str(agent_dir), "--drain-seconds", "0")
@@ -179,7 +197,16 @@ def test_agent_cancel_is_acknowledged_by_notification_or_renewal(
     )
     publish_project(p, agent_dir)
     controller = p.start("controller", "--no-ui")
-    code, output = p.run("run", "--pipeline-code", "P", "--init-only", "--run-key", "cancel")
+    code, output = p.run(
+        "run",
+        "--reason",
+        "test requested run",
+        "--pipeline-code",
+        "P",
+        "--init-only",
+        "--run-key",
+        "cancel",
+    )
     assert code == 0, output
     monkeypatch.setenv("ETL_CRAFT_TOKEN", token.token)
     agent = p.start("agent", "--api", url, "--project-dir", str(agent_dir), "--drain-seconds", "0")
@@ -247,7 +274,16 @@ def test_agent_killed_after_upload_leaves_chunks_for_a_restarted_controller(clus
     controller_token = os.environ["ETL_CRAFT_TOKEN"]
     publish_project(p, agent_dir)
     controller = p.start("controller", "--no-ui")
-    code, output = p.run("run", "--pipeline-code", "P", "--init-only", "--run-key", "log-loss")
+    code, output = p.run(
+        "run",
+        "--reason",
+        "test requested run",
+        "--pipeline-code",
+        "P",
+        "--init-only",
+        "--run-key",
+        "log-loss",
+    )
     assert code == 0, output
     p.wait_for("SELECT STATUS FROM AUD_TASK_ATTEMPTS", expected="QUEUED")
     monkeypatch.setenv("ETL_CRAFT_TOKEN", token.token)
@@ -345,7 +381,14 @@ def test_children_never_receive_agent_token(cluster, monkeypatch):
     bootstrap.write_text(yaml.safe_dump(raw, sort_keys=False))
     controller = p.start("controller", "--no-ui")
     code, output = p.run(
-        "run", "--pipeline-code", "P", "--init-only", "--run-key", "credential-test"
+        "run",
+        "--reason",
+        "test requested run",
+        "--pipeline-code",
+        "P",
+        "--init-only",
+        "--run-key",
+        "credential-test",
     )
     assert code == 0, output
     p.wait_for("SELECT STATUS FROM AUD_TASK_ATTEMPTS", expected="QUEUED")
@@ -491,7 +534,19 @@ def test_explicit_small_python_agent_records_success_or_memory_failure(
         )
     publish_project(p, folder)
     p.start("controller", "--no-ui")
-    assert p.run("run", "--pipeline-code", "P", "--init-only", "--run-key", "small-agent")[0] == 0
+    assert (
+        p.run(
+            "run",
+            "--reason",
+            "test requested run",
+            "--pipeline-code",
+            "P",
+            "--init-only",
+            "--run-key",
+            "small-agent",
+        )[0]
+        == 0
+    )
     monkeypatch.setenv("ETL_CRAFT_TOKEN", token.token)
     agent = p.start(
         "agent",
@@ -601,7 +656,16 @@ def test_agent_receives_secrets_by_pipe_and_masks_all_output(secret_cluster, mon
         )
     publish_project(p, agent_dir)
     controller = p.start("controller", "--no-ui")
-    code, output = p.run("run", "--pipeline-code", "P", "--init-only", "--run-key", "secret-test")
+    code, output = p.run(
+        "run",
+        "--reason",
+        "test requested run",
+        "--pipeline-code",
+        "P",
+        "--init-only",
+        "--run-key",
+        "secret-test",
+    )
     assert code == 0, output
     monkeypatch.delenv("SOURCE_TOKEN")
     monkeypatch.setenv("ETL_CRAFT_TOKEN", token.token)
@@ -657,7 +721,14 @@ def test_agent_terminal_exit_records_real_evidence(cluster, monkeypatch, outcome
     publish_project(p, agent_dir)
     controller = p.start("controller", "--no-ui")
     code, output = p.run(
-        "run", "--pipeline-code", "P", "--init-only", "--run-key", "ending-evidence"
+        "run",
+        "--reason",
+        "test requested run",
+        "--pipeline-code",
+        "P",
+        "--init-only",
+        "--run-key",
+        "ending-evidence",
     )
     assert code == 0, output
     monkeypatch.setenv("ETL_CRAFT_TOKEN", token.token)

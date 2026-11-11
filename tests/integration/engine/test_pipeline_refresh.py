@@ -124,7 +124,7 @@ def test_pinned_tasks_write_relative_files_in_the_project_directory_not_the_bund
         add_dependency(conn, pipeline, second, first)
     bundle = act(ctx, ActionName.PIPELINE_REFRESH).refreshes[0].bundle_id
     ctx.engine.update_execution_options(refresh_required=True)
-    outcome = act(ctx, ActionName.RUN, pipeline_code="P")
+    outcome = act(ctx, ActionName.RUN, pipeline_code="P", reason="test requested run")
     assert outcome.status == RunStatus.SUCCESS, outcome
     assert (ctx.config.project_dir / "scratch.txt").read_text() == "first"
     with ctx.engine.connect() as conn:
@@ -319,7 +319,7 @@ def test_upgrade_seeds_the_last_complete_successful_run_and_preserves_it(
     with db.engine.connect() as conn:
         assert admitted(conn, pipeline)[2] == publication.bundle_id
     db.engine.update_execution_options(refresh_required=True)
-    outcome = act(ctx, ActionName.RUN, pipeline_code="SEEDED")
+    outcome = act(ctx, ActionName.RUN, pipeline_code="SEEDED", reason="test requested run")
     assert outcome.status == RunStatus.SUCCESS, outcome
 
 
@@ -553,7 +553,7 @@ def test_sqlite_default_artifacts_survive_restart_and_execute_the_passing_bundle
     script.unlink()
     ctx.engine.dispose()
     ctx.engine.update_execution_options(refresh_required=True)
-    outcome = act(ctx, ActionName.RUN, pipeline_code="P")
+    outcome = act(ctx, ActionName.RUN, pipeline_code="P", reason="test requested run")
     assert outcome.status == RunStatus.SUCCESS, outcome
     with ctx.engine.connect() as conn:
         assert (
@@ -599,7 +599,7 @@ def test_broken_sql_refresh_records_the_file_and_keeps_the_pipeline_listed(cli_p
         assert any(required in finding.message for finding in result.findings)
         assert any(required in finding.message for finding in report.findings)
     ctx.engine.update_execution_options(refresh_required=True)
-    outcome = act(ctx, ActionName.RUN, pipeline_code="P")
+    outcome = act(ctx, ActionName.RUN, pipeline_code="P", reason="test requested run")
     assert outcome.status == RunStatus.SUCCESS, outcome
 
 
@@ -785,7 +785,16 @@ def test_manual_selection_uses_the_last_passing_refresh_before_creating_a_run(cl
     project = cli_project
     with project.engine.begin() as conn:
         add_task(conn, project.pipeline_id, "NEW", "EMAIL_ALERT")
-    code, output = project.run("run", "--pipeline-code", "P", "--task-code", "NEW", "--standalone")
+    code, output = project.run(
+        "run",
+        "--reason",
+        "test requested run",
+        "--pipeline-code",
+        "P",
+        "--task-code",
+        "NEW",
+        "--standalone",
+    )
     assert code != 0, output
     assert "NEW" in output
     with project.engine.connect() as conn:

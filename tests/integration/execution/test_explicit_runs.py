@@ -36,8 +36,8 @@ def test_an_id_from_another_pipeline_is_refused(cli_project):
         other = add_pipeline(conn, "OTHER")
         foreign = transitions.create_run(conn, other, SYSTEM_ACTOR, run_key="foreign")
     for command, arguments in [
-        ("run", ["--task-code", "load"]),
-        ("run", ["--init-only"]),
+        ("run", ["--task-code", "load", "--reason", "test foreign selection"]),
+        ("run", ["--init-only", "--reason", "test foreign selection"]),
         ("mark", ["--status", "FAILED", "--reason", "repair"]),
         ("abort", ["--reason", "repair"]),
         ("history", []),
@@ -79,12 +79,30 @@ def test_a_mismatched_logical_date_refuses_before_reopening(cli_project):
     project = cli_project
     for step in [()]:
         code, output = project.run(
-            "run", "--pipeline-code", "P", *step, "--run-key", "dated", "--run-date", "2026-09-01"
+            "run",
+            "--reason",
+            "test requested run",
+            "--pipeline-code",
+            "P",
+            *step,
+            "--run-key",
+            "dated",
+            "--run-date",
+            "2026-09-01",
         )
         assert code == 0, output
     for step in [("--init-only",), ("--task-code", "load"), ()]:
         code, output = project.run(
-            "run", "--pipeline-code", "P", *step, "--run-key", "dated", "--run-date", "2026-09-02"
+            "run",
+            "--reason",
+            "test requested run",
+            "--pipeline-code",
+            "P",
+            *step,
+            "--run-key",
+            "dated",
+            "--run-date",
+            "2026-09-02",
         )
         assert code != 0 and "date cannot change" in output
     with project.engine.connect() as conn:

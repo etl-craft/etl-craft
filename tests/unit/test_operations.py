@@ -68,9 +68,9 @@ def ctx(tmp_path, monkeypatch, engine_actor):
         db.engine.dispose()
 
 
-def run(ctx, **request):
+def run(ctx, *, reason="test requested run", **request):
     """Request a run the way every interface does."""
-    return invoke(ctx, ActionName.RUN, RunRequest(pipeline_code=P, **request))
+    return invoke(ctx, ActionName.RUN, RunRequest(pipeline_code=P, reason=reason, **request))
 
 
 def mark(ctx, **request):
@@ -169,7 +169,7 @@ def test_trigger_skip_and_stand_in_use_their_returned_run_ids(ctx):
     doc = to_json(audit(ctx))
     assert all(action["actor"] == "api-user" for action in doc["actions"])
     assert {action["arguments"]["reason"] for action in doc["actions"]} == {
-        None,
+        "test requested run",
         "planned maintenance",
         "source verified",
     }
@@ -219,7 +219,11 @@ def test_cancel_pause_resume_and_reconcile_do_not_invent_executions(ctx):
     assert resumed.pipeline.paused is None
     cancelled = control(ctx, ControlAction.ABORT, "stop", run_id=run_id)
     assert cancelled.status == "COMPLETED" and cancelled.run_status == "CANCELLED"
-    report = invoke(ctx, ActionName.RECONCILE, ReconcileInput(pipeline_code=P))
+    report = invoke(
+        ctx,
+        ActionName.RECONCILE,
+        ReconcileInput(pipeline_code=P, reason="test requested run action"),
+    )
     assert report.lost_attempt_ids == () and report.released_pipeline_run_ids == ()
 
 
@@ -308,7 +312,11 @@ def test_wrong_pipeline_and_wrong_date_are_refused_without_changing_history(ctx)
 def test_refused_api_request_keeps_its_actor_and_does_not_leak_scope(ctx):
     parent = current_actor()
     with pytest.raises(MetadataError):
-        invoke(ctx, ActionName.RUN, RunRequest(pipeline_code="MISSING", init_only=True))
+        invoke(
+            ctx,
+            ActionName.RUN,
+            RunRequest(pipeline_code="MISSING", init_only=True, reason="test missing pipeline"),
+        )
     assert current_actor() == parent
     with ctx.engine.connect() as conn:
         events = (
@@ -373,6 +381,8 @@ def test_cli_json_adds_environment_after_one_context_read(ctx, capsys, monkeypat
     arguments = ["--config", str(ctx.config.config_path), command, "--format", "json"]
     if command != "pipelines":
         arguments.extend(["--pipeline-code", "P"])
+    if command in {"run", "reconcile"}:
+        arguments.extend(["--reason", "test requested run action"])
     code = main([*arguments, *extra])
     output = capsys.readouterr()
     assert code == 0, output.err
@@ -413,7 +423,7 @@ def test_cli_json_adds_environment_after_one_context_read(ctx, capsys, monkeypat
 )
 def test_invalid_requests_are_rejected_before_opening_resources(kwargs):
     with pytest.raises(UsageError):
-        RunRequest(pipeline_code=P, **kwargs)
+        RunRequest(pipeline_code=P, **kwargs, reason="test requested run action")
 
 
 def test_serializer_returns_fresh_mappings_and_refuses_nondocuments():
@@ -452,7 +462,7 @@ def test_missing_override_reason_is_refused_before_a_task_runs(ctx):
     seed(ctx, active=True, task=True)
     before = to_json(history(ctx, task_code="load"))
     with pytest.raises(UsageError, match=r"default.*CUSTOM.*STRICT.*--reason"):
-        run(ctx, task_code="load", ignore_dependencies=True)
+        run(ctx, task_code="load", ignore_dependencies=True, reason="")
     assert to_json(history(ctx, task_code="load")) == before
     assert action_count(ctx) == 1
 
@@ -699,7 +709,11 @@ def test_status_tasks_follow_metadata_dependencies_instead_of_the_alphabet(ctx):
         source = add_task(conn, pipeline, "Z_SOURCE")
         load = add_task(conn, pipeline, "A_LOAD")
         add_dependency(conn, pipeline, load, source)
-    created = invoke(ctx, ActionName.RUN, RunRequest(pipeline_code="ORDERED", init_only=True))
+    created = invoke(
+        ctx,
+        ActionName.RUN,
+        RunRequest(pipeline_code="ORDERED", init_only=True, reason="test requested run action"),
+    )
     selected = invoke(ctx, ActionName.STATUS, RunFilter(run_id=created.run.pipeline_run_id))
     names = [task.task_code for task in selected.tasks]
     assert names.index("Z_SOURCE") < names.index("A_LOAD")
@@ -751,3 +765,41 @@ def test_mismatched_run_labels_name_the_exact_expected_label(ctx, alter):
     actions = invoke(ctx, ActionName.AUDIT, AuditInput()).actions
     assert actions[-1].outcome == "REFUSED"
     assert actions[-1].arguments["run_id"] == wrong
+
+
+def test_run_reason_follows_project_governance_in_every_environment(ctx):
+    from fixtures.actions import act
+
+    for environment, policy in (("DEV", "STRICT"), ("DEV", "RELAXED"), ("PROD", "STRICT")):
+        act(
+            ctx,
+            ActionName.PROJECT_SET,
+            project="default",
+            environment_type=environment,
+            governance=policy,
+            reason="set test policy",
+        )
+        code = f"REASON_{environment}_{policy}"
+        with ctx.engine.begin() as conn:
+            pipeline = add_pipeline(conn, code)
+            add_task(conn, pipeline, "T", "PYTHON")
+        request = RunRequest(pipeline_code=code, init_only=True)
+        if policy == "STRICT":
+            with pytest.raises(UsageError) as refused:
+                invoke(ctx, ActionName.RUN, request)
+            assert (
+                invoke(ctx, ActionName.AUDIT, AuditInput(pipeline_code=code)).actions[-1].outcome
+                == ActionOutcome.FAILURE
+            )
+            with pytest.raises(UsageError, match="non-empty reason"):
+                invoke(ctx, ActionName.RECONCILE, ReconcileInput(pipeline_code=code))
+            for part in ("default", environment, "STRICT", "non-empty reason", "--reason"):
+                assert part in str(refused.value)
+            assert not invoke(
+                ctx, ActionName.HISTORY, HistoryInput(pipeline_code=code, all=True)
+            ).entries
+            invoke(ctx, ActionName.RUN, replace(request, reason="start the selected pipeline"))
+        else:
+            done = invoke(ctx, ActionName.RUN, request)
+            assert done.run.pipeline_run_id is not None
+            invoke(ctx, ActionName.RECONCILE, ReconcileInput(pipeline_code=code))

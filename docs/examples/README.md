@@ -174,7 +174,7 @@ for the upgrade procedure when old token names collide.
 After applying your metadata, use a non-watermarked SQL task with no outside dependencies:
 
 ```bash
-etl-craft run --pipeline-code SALES_DAILY --task-code load_orders --standalone
+etl-craft run --reason "requested data load" --pipeline-code SALES_DAILY --task-code load_orders --standalone
 ```
 
 Add `--with-downstream` for its selected continuation, or explicitly justify current inputs

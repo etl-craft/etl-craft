@@ -75,7 +75,9 @@ def test_million_attempts_purge_within_five_minutes_while_a_real_run_finishes(
             )
             try:
                 assert deleting.wait(30), "purge never reached an attempt batch"
-                code, output = p.run("run", "--pipeline-code", "P")
+                code, output = p.run(
+                    "run", "--reason", "test requested run", "--pipeline-code", "P"
+                )
                 assert code == 0, output
             finally:
                 run_finished.set()

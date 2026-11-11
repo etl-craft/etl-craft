@@ -74,10 +74,10 @@ etl-craft validate
 ## 4. Run the pipelines
 
 ```bash
-etl-craft run --pipeline-code SOURCE_A
-etl-craft run --pipeline-code SOURCE_B
-etl-craft run --pipeline-code DEMO      # fails at flaky_feed, on purpose
-etl-craft run --pipeline-code DEMO
+etl-craft run --reason "requested data load" --pipeline-code SOURCE_A
+etl-craft run --reason "requested data load" --pipeline-code SOURCE_B
+etl-craft run --reason "requested data load" --pipeline-code DEMO      # fails at flaky_feed, on purpose
+etl-craft run --reason "requested data load" --pipeline-code DEMO
 ```
 
 Each run prints its tasks in dependency waves, each in a process of its own, then a summary:

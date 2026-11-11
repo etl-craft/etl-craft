@@ -6,6 +6,10 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+- Run requests and reconciliation require a reason under STRICT governance in every environment,
+  including DEV. RELAXED projects permit empty reasons. Browser run-action dialogs use the same
+  project governance value; production remains STRICT and retains typed confirmation.
+
 - Browser failure classifications, sources and codes appear only under Process details.
   Empty tables and charts show caller-specific next steps. Dense statuses use a compact dot
   and word, retaining failure and warning pills and the pills on detail pages.
@@ -30,7 +34,7 @@ All notable changes are recorded here. The format follows
   form controls and disclosures keep page controls consistent, nested pages have breadcrumbs,
   skipped task rows name their failed upstream, and catalog gaps include a next step.
   Attempt IDs live under Process details. Catalog duration charts use the recorded start/end times.
-  Graph code and catalog pages load when opened. Run now reasons are optional outside PROD.
+  Graph code and catalog pages load when opened. Run now reasons follow project governance.
 - Text log timestamps use UTC with `Z`. HTTP startup logs the bound web interface address.
   Completed command requests show SUCCESS or FAILURE through linked append-only audit events;
   the original request event remains immutable.

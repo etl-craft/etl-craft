@@ -427,15 +427,45 @@ def test_the_command_line(config, pipeline, capsys, monkeypatch, engine_db):
         )
     assert cli_main(["pipelines", "refresh"]) == ExitCode.SUCCESS
     capsys.readouterr()
-    assert cli_main(["run", "--pipeline-code", "P", "--init-only"]) == ExitCode.SUCCESS
+    assert (
+        cli_main(["run", "--pipeline-code", "P", "--init-only", "--reason", "test requested run"])
+        == ExitCode.SUCCESS
+    )
     assert capsys.readouterr().out.endswith("IN-PROGRESS\n")
     # Real task processes execute the checked script, so every runnable task fails.
-    assert cli_main(["run", "--pipeline-code", "P"]) == ExitCode.FAILURE
+    assert (
+        cli_main(["run", "--pipeline-code", "P", "--reason", "test requested run"])
+        == ExitCode.FAILURE
+    )
     # alert runs because extract failed; transform and after_broken never can.
     out = capsys.readouterr().out
     assert "FAILED — 3 task(s) did not succeed" in out
     assert "skipped because of the failure: transform, after_broken" in out
-    assert cli_main(["run", "--pipeline-code", "P", "--init-only", "--force"]) == ExitCode.USAGE
+    assert (
+        cli_main(
+            [
+                "run",
+                "--pipeline-code",
+                "P",
+                "--init-only",
+                "--force",
+                "--reason",
+                "test requested run",
+            ]
+        )
+        == ExitCode.USAGE
+    )
     with pytest.raises(SystemExit) as usage:
-        cli_main(["run", "--pipeline-code", "P", "--init-only", "--task-code", "extract"])
+        cli_main(
+            [
+                "run",
+                "--pipeline-code",
+                "P",
+                "--init-only",
+                "--task-code",
+                "extract",
+                "--reason",
+                "test requested run",
+            ]
+        )
     assert usage.value.code == ExitCode.USAGE

@@ -65,7 +65,10 @@ def test_installed_event_pipeline_records_rows_and_consumes_delivery(tmp_path):
     for verb, answers in (("setup", setup_answers()), ("login", login_answers())):
         done = terminal_run([str(cli), verb], cwd=project, env=environment, answers=answers)
         assert done.returncode == 0, done.stdout
-    for args in (("migrate",), ("run", "--pipeline-code", "FILE_DELIVERY")):
+    for args in (
+        ("migrate",),
+        ("run", "--reason", "test requested run", "--pipeline-code", "FILE_DELIVERY"),
+    ):
         done = subprocess.run(
             [str(cli), *args],
             cwd=project,

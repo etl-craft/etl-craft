@@ -168,7 +168,7 @@ done
 
 submit() {
     kubectl exec deploy/etl-craft-ui -- etl-craft run --pipeline-code SMOKE \
-        --init-only --run-key "$1"
+        --init-only --run-key "$1" --reason "deployment smoke check"
     kubectl exec -i deploy/etl-craft-controller -- python - "$1" "$2" \
         < "$root/scripts/deployment/check-attempt.py"
 }

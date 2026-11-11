@@ -24,7 +24,7 @@ python -m venv .venv && . .venv/bin/activate
 pip install ".[duckdb]"
 cd examples/demo
 python prepare.py warehouse && etl-craft setup && etl-craft login && python prepare.py metadata
-etl-craft run --pipeline-code SOURCE_A
+etl-craft run --pipeline-code SOURCE_A --reason "requested data load"
 ```
 
 Requires Python 3.11 or newer. `uv build` builds the wheel and sdist into `dist/`.

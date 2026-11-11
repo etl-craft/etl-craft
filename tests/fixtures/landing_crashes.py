@@ -21,7 +21,9 @@ def check_landing_exit(w, monkeypatch, point):
     try:
         code, output = run_writer(w, project, "pipelines", "refresh", timeout=90)
         assert code == 0, output
-        code, output = run_writer(w, project, "run", "--pipeline-code", "P", timeout=120)
+        code, output = run_writer(
+            w, project, "run", "--reason", "test requested run", "--pipeline-code", "P", timeout=120
+        )
         assert code == 0, output
         before = w.rows(f"SELECT id,name,task_run_id FROM {w.name(target)} WHERE item_key='1'")
         assert len(before) == 1
@@ -35,7 +37,15 @@ def check_landing_exit(w, monkeypatch, point):
             )
         assert run_writer(w, project, "pipelines", "refresh", timeout=90)[0] == 0
         code, output = run_writer(
-            w, project, "run", "--pipeline-code", "P", fault=point + ":kill", timeout=120
+            w,
+            project,
+            "run",
+            "--reason",
+            "test requested run",
+            "--pipeline-code",
+            "P",
+            fault=point + ":kill",
+            timeout=120,
         )
         assert code != 0, output
         with w.engine_db.connect() as conn:
@@ -91,7 +101,9 @@ def check_landing_inflight(w, monkeypatch):
     monkeypatch.setenv("ETL_CRAFT_TOKEN", token)
     try:
         assert run_writer(w, project, "pipelines", "refresh", timeout=90)[0] == 0
-        code, output = run_writer(w, project, "run", "--pipeline-code", "P", timeout=120)
+        code, output = run_writer(
+            w, project, "run", "--reason", "test requested run", "--pipeline-code", "P", timeout=120
+        )
         assert code == 0, output
         before = w.rows(f"SELECT id,name,task_run_id FROM {w.name(target)} WHERE item_key='1'")
         marker = install_inflight_barrier(w, project)
@@ -108,7 +120,7 @@ def check_landing_inflight(w, monkeypatch):
             )
         assert run_writer(w, project, "pipelines", "refresh", timeout=90)[0] == 0
         w.warehouse.dispose()
-        command = project.start("run", "--pipeline-code", "P")
+        command = project.start("run", "--reason", "test requested run", "--pipeline-code", "P")
         kill_inflight(w, project, marker)
         assert command.wait(timeout=120) != 0
         with w.engine_db.connect() as conn:
