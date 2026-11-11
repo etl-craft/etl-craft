@@ -6,6 +6,11 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+- Browser SSO can use authorization code with PKCE and a required nonce. Configure the optional
+  `Auth.Browser_state_secret` variable reference (at least 32 secret bytes) and the existing public
+  URL; state is signed, expires after five minutes and cannot be replayed across server copies.
+  Without the setting, browser sign-in explains the device-flow fallback. CLI device login is unchanged.
+
 - A failed browser identity refresh no longer confirms expiry from cached session data.
   The guard retries on its existing minute schedule; server authentication refusals still end
   the session on screen.

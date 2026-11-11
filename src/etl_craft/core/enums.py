@@ -236,6 +236,8 @@ class ActionName(StrEnum):
 
     LOGIN = "login"
     LOGIN_METHODS = "login methods"
+    LOGIN_BROWSER_START = "login browser start"
+    LOGIN_BROWSER_CALLBACK = "login browser callback"
     LOGIN_SSO = "login sso"
     LOGIN_SSO_POLL = "login sso poll"
     REFRESH = "refresh"

@@ -5,15 +5,17 @@ import re
 import secrets
 from dataclasses import replace
 from datetime import UTC, datetime
-from urllib.parse import unquote, urlsplit
+from urllib.parse import urlsplit
 
 from fastapi import HTTPException, Request
 from fastapi.responses import JSONResponse, Response
 
 from etl_craft.core.enums import ActionName, Transport
-from etl_craft.core.errors import PermissionDeniedError, UsageError
+from etl_craft.core.errors import PermissionDeniedError
 from etl_craft.core.text import sha256_hex
 from etl_craft.core.time import as_utc
+from etl_craft.services.operations.browser_paths import return_path as return_path
+from etl_craft.services.operations.browser_sso import LIFETIME, BrowserFinish, BrowserStart
 from etl_craft.services.operations.context import OperationContext
 from etl_craft.services.operations.identity import authenticated_context
 from etl_craft.services.operations.recording import record_refusal
@@ -22,6 +24,7 @@ from etl_craft.services.operations.tokens import authenticate
 
 SESSION = "__Host-etl-craft-session"
 CSRF = "__Host-etl-craft-csrf"
+SSO_COOKIE = "__Host-etl-craft-sso"
 BACKGROUND = "X-ETL-Background"
 
 
@@ -30,27 +33,6 @@ def browser_request(request: Request) -> bool:
     return not request.headers.get("authorization") and (
         request.cookies.get(SESSION, "") != "" or request.headers.get("X-CSRF-Token") is not None
     )
-
-
-def return_path(value: str) -> str:
-    """Accept a same-site absolute path, refusing host, scheme and encoded authority tricks."""
-    decoded = unquote(value)
-    try:
-        parts = urlsplit(decoded)
-    except ValueError as error:
-        raise UsageError("return_to is malformed; expected a same-site path; open /ui") from error
-    if (
-        len(value) > 4096
-        or not decoded.startswith("/")
-        or decoded.startswith("//")
-        or "\\" in decoded
-        or parts.scheme
-        or parts.netloc
-        or unquote(decoded) != decoded
-        or any(ord(char) < 32 or ord(char) == 127 for char in decoded)
-    ):
-        raise UsageError(f"return_to={value!r}; expected a same-site path such as /ui; open /ui")
-    return value
 
 
 def has_challenge(request: Request) -> bool:
@@ -127,11 +109,26 @@ def browser_answer(
     destination: str,
 ) -> Response | None:
     """Render cookie sessions without placing token values in HTML or JSON."""
+    if isinstance(result, BrowserStart):
+        response = JSONResponse({"authorization_url": result.authorization_url})
+        response.set_cookie(
+            SSO_COOKIE,
+            result.cookie,
+            max_age=LIFETIME,
+            secure=True,
+            httponly=True,
+            samesite="lax",
+            path="/",
+        )
+        response.headers["Cache-Control"] = "no-store"
+        return response
+    if isinstance(result, BrowserFinish):
+        destination, result = result.destination, result.session
     if isinstance(result, SsoPoll) and result.session is not None:
         result = result.session
     if isinstance(result, Session):
         target = "/ui/password" if result.must_change_password else return_path(destination)
-        response: Response = JSONResponse({"redirect": target})
+        response = JSONResponse({"redirect": target})
         assert result.metadata.expires_at is not None
         end = as_utc(result.metadata.expires_at)
         response.set_cookie(
@@ -145,6 +142,8 @@ def browser_answer(
             path="/",
         )
         challenge(response, secrets.token_urlsafe(32), ctx.config.auth.session_hours)
+        response.delete_cookie(SSO_COOKIE, secure=True, httponly=True, samesite="lax", path="/")
+        response.headers["Cache-Control"] = "no-store"
         response.headers["X-ETL-Session"] = "signed-in"
         return response
     if isinstance(result, SsoPoll):

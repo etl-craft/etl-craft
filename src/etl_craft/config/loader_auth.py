@@ -21,6 +21,7 @@ AUTH_KEYS = frozenset(
         "Lockout_after",
         "Admin_contact",
         "Signin_notice",
+        "Browser_state_secret",
     }
 )
 
@@ -29,7 +30,9 @@ def parse_auth(
     raw: dict[str, object], profile: str | None, path: Path, resolver: Resolver
 ) -> AuthConfig:
     """Validate login lifetimes and the optional registered OIDC client."""
-    settings = profiled_settings("Auth", raw, profile, path, resolver, nested=frozenset())
+    settings = profiled_settings(
+        "Auth", raw, profile, path, resolver, nested=frozenset({"Browser_state_secret"})
+    )
     reject_unknown(settings.settings, AUTH_KEYS, "Auth", path)
     hours = whole_number(settings, "Session_hours", 12, path, minimum=1, maximum=8760)
     idle = whole_number(settings, "Session_idle_minutes", 60, path, minimum=5, maximum=10080)
@@ -78,4 +81,7 @@ def parse_auth(
         session_idle_minutes=idle,
         admin_contact=settings.text("Admin_contact") or "your administrator",
         signin_notice=settings.text("Signin_notice"),
+        browser_state_secret=resolver.secret_reference(
+            settings.settings.get("Browser_state_secret"), "Auth.Browser_state_secret"
+        ),
     )

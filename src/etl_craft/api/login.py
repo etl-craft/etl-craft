@@ -9,6 +9,8 @@ from etl_craft.services.operations import OperationContext
 SIGN_IN = frozenset(
     {
         ActionName.LOGIN_METHODS,
+        ActionName.LOGIN_BROWSER_START,
+        ActionName.LOGIN_BROWSER_CALLBACK,
         ActionName.LOGIN,
         ActionName.LOGIN_SSO,
         ActionName.LOGIN_SSO_POLL,

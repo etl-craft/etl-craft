@@ -232,6 +232,7 @@ class AuthConfig:
     admin_contact: str = "your administrator"
     signin_notice: str | None = None
     session_idle_minutes: int = 60
+    browser_state_secret: str | None = None
 
 
 @dataclass(frozen=True)

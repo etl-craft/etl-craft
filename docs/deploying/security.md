@@ -158,9 +158,30 @@ The session stores **group IDs**, so a rename keeps the identity and reusing a n
 transfer an old session's access to another group. Explicit Engine DB memberships are checked
 on every request as well.
 
-!!! warning "The ID token's nonce is optional"
+### Browser single sign-on
+
+The browser uses authorization code with PKCE (S256) when `Auth.Browser_state_secret` is set.
+Its value is a **variable name**, resolved through the configured Secrets provider. Set that
+variable to a random secret of at least 32 bytes; absent or shorter values refuse browser sign-in
+without printing the secret. Omit the setting to retain the device-flow fallback; the browser
+explains how to enable redirect sign-in.
+
+Register an HTTPS redirect URI ending in `/ui/signin/callback` on the provider's public client.
+The public origin comes from `Docs_site.External_url` or `Docs_site.Domain`; the UI callback
+is always `/ui/signin/callback` (the catalog publication prefix does not change UI routes),
+never the request Host header. The provider must advertise HTTPS authorization, token and JWKS
+endpoints. Browser sign-in requires a cryptographically verified RS256 ID token and an exact
+nonce, together with the existing issuer, audience, authorized-party and lifetime checks.
+
+State, verifier, nonce and expiry are HMAC-SHA256 signed in a Secure, HTTP-only, SameSite=Lax
+cookie valid for five minutes. Only an issuance ID and a one-way flow digest reach the existing
+login audit. Consumption commits under the existing cross-process account lock before code
+exchange, so replicas, retries and a process restart cannot replay a state. After a refused
+exchange, start again. All replicas must share the configured signing secret and Engine DB.
+
+!!! warning "The device flow's ID-token nonce is optional"
     The device flow (RFC 8628) has no nonce parameter, and Dex, Google and Keycloak do not echo one,
-    so etl-craft accepts an ID token that has no `nonce` claim. A `nonce` that is present must match
+    so device sign-in accepts an ID token that has no `nonce` claim. Browser sign-in always requires it. A `nonce` that is present must match
     the one sent, or the sign-in is refused. The token still has to name the configured issuer, the
     client as audience and authorized party, and be current. It is read from the issuer's token
     endpoint over TLS in answer to this sign-in's one-time device code, not from a browser redirect,
@@ -220,8 +241,8 @@ for each project.
 Local first-admin/recovery, pre-account initialization/migration, diagnostic doctor, and
 login/logout remain the explicit credential/bootstrap entry points described above.
 
-OIDC uses RFC 8628 polling and the configured issuer's HTTPS discovery/token endpoints.
-Register a public device client with RS256 ID tokens and nonce support. Tokens are accepted
+CLI/device OIDC uses RFC 8628 polling and the configured issuer's HTTPS discovery/token endpoints.
+Register a public client with RS256 ID tokens and device-grant support. Tokens are accepted
 only directly from the authenticated TLS token endpoint, as permitted by
 [OIDC Core §3.1.3.7](https://openid.net/specs/openid-connect-core-1_0.html#IDTokenValidation),
 with issuer, client audience, nonce and lifetime validation; arbitrary supplied ID tokens
@@ -358,8 +379,9 @@ SSO sessions, including refreshes, expire absolutely within Auth.Session_hours f
 sign-in. Refreshing never resets that boundary. Password-only local accounts retain
 Auth.Refresh_days for server refresh sessions. OIDC permits 120 seconds of clock skew and
 caches successful discovery per issuer for ten minutes. ID tokens are accepted only from our
-own direct, TLS-validated token-endpoint response, as permitted by OIDC Core 3.1.3.7. Any future
-path accepting an ID token from a client must verify its signature.
+own direct, TLS-validated token-endpoint response. The device flow uses the TLS exception
+permitted by OIDC Core 3.1.3.7; browser code exchange additionally verifies the RS256 signature
+against the issuer's HTTPS JWKS and always requires the nonce.
 
 Until S7.A.7, publish-docs has no account sign-in: its IP allow list is its only visitor access
 check. Run one process for one configured project's generated catalog; a catalog for a different
