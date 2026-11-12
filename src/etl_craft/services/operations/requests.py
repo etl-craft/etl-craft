@@ -6,7 +6,7 @@ HTTP API returns it as it is.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, fields
+from dataclasses import dataclass, field, fields
 from datetime import date, datetime
 from typing import TYPE_CHECKING, Any, ClassVar
 
@@ -353,6 +353,8 @@ class RunRequest(RunSelection):
     ``reason`` is recorded with every request and required by STRICT project governance.
     """
 
+    params: tuple[str, ...] = field(default=(), metadata={"audit": False})
+    request_key: str | None = None
     task_code: str | None = None
     standalone: bool = False
     init_only: bool = False

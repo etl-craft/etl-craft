@@ -384,6 +384,12 @@ SEEDS = [
         f"{TASK_RUN_ID},0,'plan','text',0,4,{DAY}",
         RUNS + " CROSS JOIN generate_series(1,1) t",
     ),
+    (
+        "AUD_RUN_PARAMETER_OVERRIDES",
+        "PIPELINE_RUN_ID,PROJECT_ID,REQUEST_KEY,REQUEST_DIGEST,OVERRIDES,CREATED_BY,CREATED_BY_KIND,CREATED_AT",
+        f"{RUN_ID},1,'plan-'||{RUN_ID},repeat('a',64),'{{}}','plan','SYSTEM',{DAY}",
+        RUNS,
+    ),
 ]
 
 

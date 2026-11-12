@@ -2981,3 +2981,42 @@ def test_an_agent_reads_and_decides_only_the_files_its_named_wait_admitted(agent
             )
         ).all()
     assert [(r.status, r.reason) for r in rows] == [("ACCEPTED", None), ("REFUSED", "header wrong")]
+
+
+def test_agent_claim_replays_recorded_run_inputs_after_config_changes(agent_scene):
+    from etl_craft.services.operations.requests import RunRequest
+    from etl_craft.services.operations.run_parameters import admit
+
+    db, client, headers, _, _, config = agent_scene
+    with db.engine.begin() as conn:
+        pipeline = add_pipeline(conn, "INPUTS")
+        task = add_task(conn, pipeline, "load", "PYTHON", INPUT_PARAMS='{"day":1}')
+    ctx = OperationContext(db.engine, config, SYSTEM_ACTOR, role=ApiRole.ADMIN)
+    _, run, _ = admit(
+        ctx,
+        RunRequest(
+            pipeline_code="INPUTS",
+            params=('load.INPUT_PARAMS={"day":2}',),
+            request_key="agent-inputs",
+        ),
+    )
+    with db.engine.begin() as conn:
+        transitions.admit_run(conn, run, SYSTEM_ACTOR)
+        summary = transitions.find_or_create_task_run(conn, task, run).task_run_id
+        attempt = transitions.queue_attempt(conn, summary, SYSTEM_ACTOR)
+        conn.execute(
+            text(
+                "UPDATE CFG_TASK_PARAMETERS SET PARAMETER_VALUE='current' "
+                "WHERE TASK_ID=:task AND PARAMETER_NAME='INPUT_PARAMS'"
+            ),
+            {"task": task},
+        )
+    response = client.post(
+        "/api/v1/agent/claim",
+        headers=headers,
+        json={"version": __version__, "free_kinds": ["python"]},
+    )
+    assert response.status_code == 200, response.text
+    metadata = response.json()["data"]["task"]
+    assert metadata["attempt_id"] == attempt
+    assert metadata["task_params"]["INPUT_PARAMS"] == '{"day":2}'

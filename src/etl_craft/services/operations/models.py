@@ -58,6 +58,7 @@ class RunView:
     triggered_by_task_run_label: str = ""
     parent_run_label: str = ""
     child_run_labels: tuple[str, ...] = ()
+    parameter_overrides: dict[str, dict[str, str]] | None = None
 
 
 @dataclass(frozen=True)

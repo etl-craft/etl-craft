@@ -126,6 +126,8 @@ export function PipelineDetail() {
   };
   const [focused, setFocused] = React.useState<string | null>(null);
   const [runDate, setRunDate] = React.useState("");
+  const [runParams, setRunParams] = React.useState("");
+  const [requestKey, setRequestKey] = React.useState("");
   const [then, setThen] = React.useState("wait");
   const p = found.data;
 
@@ -150,14 +152,23 @@ export function PipelineDetail() {
                 title={`Run ${pipeline} now`}
                 effect="Admits one manual run of the whole pipeline for the controller; scheduled runs are unaffected."
                 endpoint="/runs"
-                body={(reason) => ({ pipeline_code: pipeline, reason, ...(runDate ? { run_date: runDate } : {}) })}
+                body={(reason) => ({ pipeline_code: pipeline, reason, ...(runDate ? { run_date: runDate } : {}), ...(runParams.trim() ? { params: runParams.split("\n").filter((value) => value.trim()), request_key: requestKey } : {}) })}
                 describe={(r) => r.message ?? "Run requested."}
                 icon={<PlayCircle className="size-4" aria-hidden />}
                 variant="primary"
                 fields={
-                  <Field label="Logical date (optional)">
-                    <input type="date" value={runDate} onChange={(event) => setRunDate(event.target.value)} className={inputClass} />
-                  </Field>
+                  <div className="space-y-3">
+                    <Field label="Logical date (optional)">
+                      <input type="date" value={runDate} onChange={(event) => setRunDate(event.target.value)} className={inputClass} />
+                    </Field>
+                    <Field label="Task input overrides (optional)">
+                      <textarea name="params" autoComplete="off" spellCheck={false} value={runParams} onChange={(event) => setRunParams(event.target.value)} className={`${inputClass} h-auto py-2`} rows={3} aria-describedby="run-overrides-help" />
+                    </Field>
+                    <p id="run-overrides-help" className="text-xs text-muted">One TASK.PARAM=VALUE per line. Existing data inputs only; configuration stays unchanged.</p>
+                    {runParams.trim() && <Field label="Submission key">
+                      <input name="request_key" autoComplete="off" spellCheck={false} value={requestKey} onChange={(event) => setRequestKey(event.target.value)} className={inputClass} required maxLength={128} />
+                    </Field>}
+                  </div>
                 }
               />
               {p.paused ? (

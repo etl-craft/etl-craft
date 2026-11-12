@@ -27,6 +27,7 @@ HISTORYLESS_TABLES = frozenset({"CFG_API_TOKENS"})
 
 AUDIT_TABLES = frozenset(
     {
+        "AUD_RUN_PARAMETER_OVERRIDES",
         "AUD_UPLOADS",
         "AUD_SEED_LOADS",
         "AUD_PROTECTION_EVENTS",

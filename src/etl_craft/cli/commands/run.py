@@ -81,20 +81,32 @@ def _configure(parser: argparse.ArgumentParser) -> None:
         help="Run the pipeline once for each date from FROM to TO (YYYY-MM-DD), as backfill "
         "runs; with --reason.",
     )
+    parser.add_argument(
+        "--param",
+        dest="params",
+        action="append",
+        default=[],
+        metavar="TASK.PARAM=VALUE",
+        help="Override an existing task data input for one new run; requires --request-key.",
+    )
     item_requests.configure(parser)
 
 
 def _run(args: argparse.Namespace, out: Output) -> int:
+    if args.params and (item_requests.selected(args) or control_requests.selected(args)):
+        raise UsageError("--param applies to a new run; omit item/control flags")
     if item_requests.selected(args):
         return item_requests.execute(args, out)
     if control_requests.selected(args):
         return control_requests.execute(args, out)
     if args.pipeline_code is None:
         raise UsageError("run needs `pipeline_code` or `controls_file`")
-    if args.request_key is not None:
+    if args.request_key is not None and not args.params:
         raise UsageError("`request_key` goes with `recover`, `restart` or `allow_paused`")
     first, last = args.backfill or (None, None)
-    request = request_from(args, RunRequest, backfill_from=first, backfill_to=last)
+    request = request_from(
+        args, RunRequest, params=tuple(args.params), backfill_from=first, backfill_to=last
+    )
     # Ctrl-C, SIGTERM and SIGHUP stop the run at its next safe point: its task processes are
     # stopped and their attempts recorded. SIGKILL cannot be caught: its task processes are left
     # running, their rows IN-PROGRESS until their leases expire and reconciliation releases them.

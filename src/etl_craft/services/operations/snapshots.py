@@ -75,10 +75,13 @@ def run_view(conn: Connection, pipeline_id: int, pipeline_run_id: int) -> RunVie
             f"pipeline_id={pipeline_id}: no pipeline_run_id={pipeline_run_id}; "
             "select a run belonging to this pipeline"
         )
+    from etl_craft.engine.run_overrides import recorded
+
     links = fetch_trigger_links(conn, [pipeline_run_id])
     parent = next((link for link in links if link.child_run_id == pipeline_run_id), None)
     return replace(
         run_document(row._mapping),
+        parameter_overrides=recorded(conn, pipeline_run_id),
         rules=fetch_rule_observations(conn, pipeline_id, pipeline_run_id),
         triggered_by_task_run_id=None if parent is None else parent.task_run_id,
         parent_run_id=None if parent is None else parent.parent_run_id,

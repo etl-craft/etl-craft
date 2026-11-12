@@ -41,6 +41,8 @@ INTEGER_NAMES = frozenset(
 )
 MOMENT = datetime(2026, 1, 1, tzinfo=UTC)
 VALUES = {
+    "request_digest": "a" * 64,
+    "overrides": '{"load":{"INPUT_PARAMS":"{}"}}',
     "all_entries": False,
     "offset_position": 1,
     "rule_type": "REJECT",

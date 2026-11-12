@@ -557,3 +557,45 @@ def test_run_dialog_follows_governance_and_keeps_production_confirmation(site):
             dialog.get_by_role("button", name="Cancel").click()
         assert problems == []
         browser.close()
+
+
+@pytest.mark.parametrize(
+    "appearance,width", [("light", 1280), ("dark", 1280), ("light", 390), ("dark", 390)]
+)
+def test_run_now_records_task_inputs_through_the_shared_operation(scene, appearance, width):
+    ctx, url, _ = scene
+    with acting_as(ctx.actor), ctx.engine.begin() as conn:
+        pipeline = add_pipeline(conn, "PARAMETERS")
+        add_task(conn, pipeline, "load", "PYTHON", INPUT_PARAMS='{"day":1}')
+    with sync_playwright() as pw:
+        browser, page, problems = open_page(pw, viewport={"width": width, "height": 900})
+        page.emulate_media(color_scheme=appearance)
+        sign_in(page, url, "/ui/projects/default/pipelines/PARAMETERS")
+        page.get_by_role("button", name="Run now", exact=True).click()
+        dialog = page.get_by_role("dialog")
+        dialog.get_by_label("Task input overrides (optional)").fill('load.INPUT_PARAMS={"day":2}')
+        dialog.get_by_label("Submission key").fill("browser-inputs")
+        dialog.get_by_label(re.compile("Reason")).fill("one-off input")
+        shoot(page, f"run-overrides-{appearance}-{width}")
+        with page.expect_response(
+            lambda response: response.url.endswith("/runs") and response.request.method == "POST"
+        ) as response:
+            dialog.get_by_role("button", name="Run now", exact=True).click()
+        assert response.value.ok, response.value.text()
+        run = response.value.json()["run"]
+        assert run["parameter_overrides"] == {"load": {"INPUT_PARAMS": '{"day":2}'}}
+        with ctx.engine.connect() as conn:
+            row = conn.execute(
+                text(
+                    "SELECT REQUEST_KEY AS key,CREATED_BY AS actor FROM "
+                    "AUD_RUN_PARAMETER_OVERRIDES WHERE PIPELINE_RUN_ID=:run"
+                ),
+                {"run": run["pipeline_run_id"]},
+            ).one()
+            assert row.key == "browser-inputs" and row.actor == "owner"
+        page.goto(f"{url}/ui/projects/default/runs/PARAMETERS/{run['pipeline_run_id']}")
+        expect(page.get_by_role("region", name="Recorded task inputs")).to_be_visible()
+        expect(page.get_by_text("load.INPUT_PARAMS", exact=True)).to_be_visible()
+        shoot(page, f"run-input-values-{appearance}-{width}")
+        assert problems == []
+        browser.close()
