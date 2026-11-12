@@ -88,7 +88,25 @@ def task_values(engine: Engine, config: ConnectorConfig, task_run_id: int) -> di
     from etl_craft.execution.context import build_task_context
     from etl_craft.handlers.task_secrets import resolve
 
-    return resolve(build_task_context(engine, config, task_run_id))
+    task = build_task_context(engine, config, task_run_id)
+    from etl_craft.core.enums import Handler
+    from etl_craft.engine.queries import statement
+
+    if task.handler == Handler.EMAIL_ALERT and task.task_params.get("ALERT_CHANNEL"):
+        with engine.connect() as conn:
+            channel = conn.execute(
+                statement(conn, "alert_local_secrets"), {"task_run_id": task_run_id}
+            ).one_or_none()
+        if channel is None:
+            return {}
+        task = replace(
+            task,
+            task_params={
+                **task.task_params,
+                "SECRETS": "|".join(dict.fromkeys((channel.url_secret, channel.signing_secret))),
+            },
+        )
+    return resolve(task)
 
 
 def with_values(spec: ChildSpec, values: dict[str, str]) -> ChildSpec:

@@ -14,6 +14,7 @@ from etl_craft.core.restart import EVERYTHING, parse_auto_restart
 from etl_craft.core.text import is_metadata_code
 from etl_craft.engine import locks
 from etl_craft.engine.queries import statement
+from etl_craft.services.operations.alert_history import AlertDelivery, history
 from etl_craft.services.operations.context import OperationContext
 from etl_craft.services.operations.permissions import project_permission
 from etl_craft.services.operations.requests import Request
@@ -102,6 +103,8 @@ class Project:
     schema_check_on_demand: str = YesNo.YES
     allowed_auto_restarts: str = EVERYTHING
 
+    alert_deliveries: tuple[AlertDelivery, ...] = ()
+
 
 @dataclass(frozen=True)
 class Pool:
@@ -178,6 +181,7 @@ def list_projects(ctx: OperationContext, request: ProjectIdentity) -> Projects:
                     r.schema_check_schedule,
                     r.schema_check_on_demand,
                     r.allowed_auto_restarts,
+                    _project_alerts(conn, ctx, r.project_id, r.project_code),
                 )
                 for r in rows
                 if (request.project is None or r.project_code == request.project)
@@ -422,3 +426,14 @@ def environment_values(
             "PROD requires STRICT; set --governance STRICT"
         )
     return effective
+
+
+def _project_alerts(
+    conn: Connection, ctx: OperationContext, project_id: int, code: str
+) -> tuple[AlertDelivery, ...]:
+    from etl_craft.services.operations.permissions import pipeline_access
+
+    access = pipeline_access(conn, replace(ctx, project_id=project_id, project=code))
+    return history(
+        conn, project_id, tuple(name for name, role in access.roles.items() if role is not None)
+    )

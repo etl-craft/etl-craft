@@ -700,3 +700,88 @@ def test_pipeline_manager_delegates_only_here_and_revokes_with_audit(scene, sche
         expect(dialog.get_by_text("All projects", exact=True)).to_be_visible()
         shoot(page, f"admin-grant-dialog-{scheme}-{width}")
         browser.close()
+
+
+@pytest.mark.parametrize(
+    "appearance,width", [("light", 1280), ("dark", 1280), ("light", 390), ("dark", 390)]
+)
+def test_alert_history_on_pipeline_and_project_has_status_time_and_no_secrets(
+    site, appearance, width
+):
+    from fixtures.alerts import failed_delivery
+
+    ctx, url = site
+    with acting_as(ctx.actor), ctx.engine.begin() as conn:
+        pipeline = add_pipeline(conn, "ALERTED")
+        add_task(conn, pipeline, "load", "PYTHON", SCRIPT_FILE="load.py")
+        source = start_run(conn, pipeline)
+    failed_delivery(ctx, pipeline, source)
+    with sync_playwright() as pw:
+        browser, page, problems = open_page(pw, viewport={"width": width, "height": 900})
+        page.emulate_media(color_scheme=appearance)
+        sign_in(page, url, "/ui/projects/default/pipelines/ALERTED")
+        page.get_by_role("tab", name="Overview", exact=True).click()
+        history = page.get_by_role("region", name="Alert delivery history")
+        expect(history.get_by_text("ops", exact=True).first).to_be_visible()
+        expect(history.get_by_text("Failed", exact=True)).to_be_visible()
+        expect(history.get_by_text("503", exact=True)).to_be_visible()
+        assert "ALERT_URL" not in history.inner_text() and "ALERT_KEY" not in history.inner_text()
+        shoot(page, f"alert-history-pipeline-{appearance}-{width}")
+        page.goto(url + "/ui/admin?tab=projects")
+        expect(
+            page.get_by_role("region", name="Alert delivery history").get_by_text("503", exact=True)
+        ).to_be_visible()
+        shoot(page, f"alert-history-project-{appearance}-{width}")
+        held = []
+        page.route("**/api/v1/project-health", lambda route: held.append(route))
+        with page.expect_request("**/api/v1/project-health"):
+            page.goto(url + "/ui/admin?tab=alert-channels")
+        expect(page.get_by_role("heading", name="Administration", exact=True)).to_be_visible()
+        expect(page.get_by_role("button", name="Set channel", exact=True)).to_have_count(0)
+        assert held
+        for route in held:
+            route.continue_()
+        page.unroute("**/api/v1/project-health")
+        page.get_by_role("button", name="Set channel", exact=True).click()
+        dialog = page.locator("dialog[open]")
+        dialog.get_by_label("Channel name", exact=True).fill("team")
+        dialog.get_by_label("URL variable name", exact=False).fill("TEAM_URL")
+        dialog.get_by_label("Signing key variable name", exact=False).fill("TEAM_KEY")
+        dialog.get_by_label("Reason (kept in the audit trail)").fill("Approve team receiver")
+        shoot(page, f"alert-channel-dialog-{appearance}-{width}")
+        page.route(
+            "**/dialog-transition.css",
+            lambda route: route.fulfill(
+                content_type="text/css",
+                body="dialog:not([open]) { transition-duration: 60s; }",
+            ),
+        )
+        page.add_style_tag(url=url + "/dialog-transition.css")
+        refreshes = []
+        page.route("**/api/v1/project-health", lambda route: refreshes.append(route))
+        with page.expect_request("**/api/v1/project-health"):
+            dialog.get_by_role("button", name="Set channel", exact=True).click()
+        channels = page.get_by_role("table", name="Alert channels")
+        team = channels.get_by_role("row").filter(has_text="TEAM_URL")
+        expect(team).to_contain_text("TEAM_KEY")
+        shoot(page, f"alert-channel-admin-{appearance}-{width}")
+        team.get_by_role("button", name="Disable", exact=True).click()
+        dialog.get_by_label("Reason (kept in the audit trail)").fill("Retire team route")
+        assert refreshes
+        with page.expect_response("**/api/v1/project-health"):
+            for route in refreshes:
+                response = route.fetch()
+                payload = response.json()
+                payload["projects"].append({**payload["projects"][0], "project": "secondary"})
+                route.fulfill(response=response, json=payload)
+        page.unroute("**/api/v1/project-health")
+        expect(page.locator("main select option").filter(has_text="secondary")).to_have_count(1)
+        expect(dialog).to_be_visible()
+        expect(dialog.get_by_label("Reason (kept in the audit trail)")).to_have_value(
+            "Retire team route"
+        )
+        dialog.get_by_role("button", name="Disable", exact=True).click()
+        expect(team).to_contain_text("Disabled")
+        assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+        assert problems == []
+        browser.close()

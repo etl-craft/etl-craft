@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable, Generator
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date
 
 from sqlalchemy.engine import Connection, Engine
@@ -171,6 +171,12 @@ def prepare(
         from etl_craft.execution.bundle_files import run_config
 
         config = run_config(engine, config, run_id)
+    from etl_craft.engine.alert_deliveries import event
+
+    if run_id is not None:
+        with engine.connect() as conn:
+            if event(conn, run_id) is not None:
+                return pipeline_id, replace(detail, sla_in_hours=None), config
     sends_sla_email = config.limits.enforce_sla and detail.sla_in_hours is not None
     check_run_connections(engine, config, pipeline_code, handlers, sends_sla_email=sends_sla_email)
     return pipeline_id, detail, config
@@ -216,7 +222,7 @@ def start_steps(
     reason = None
     decisions: tuple[trackers.GateDecision, ...] = ()
     bypassed: tuple[str, ...] = ()
-    if options.check_gate:
+    if options.check_gate and not _event_run(engine, queued):
         if queued is None:
             with engine.begin() as conn:
                 queued = transitions.create_run(
@@ -482,3 +488,12 @@ def _refuse_admission(
         )
     logger.error("pipeline_run_id=%s: %s", queued, refusal)
     return True
+
+
+def _event_run(engine: Engine, run_id: int | None) -> bool:
+    if run_id is None:
+        return False
+    from etl_craft.engine.alert_deliveries import event
+
+    with engine.connect() as conn:
+        return event(conn, run_id) is not None

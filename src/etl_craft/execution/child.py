@@ -34,7 +34,7 @@ from etl_craft.core import log
 from etl_craft.core.actor import SYSTEM_ACTOR, acting_as, current_actor
 from etl_craft.core.definitions import using
 from etl_craft.core.enums import AttemptStatus, ControlAcknowledgement, Handler, RunStatus
-from etl_craft.core.errors import EtlCraftError, ExitCode
+from etl_craft.core.errors import EtlCraftError, ExitCode, HandlerError
 from etl_craft.core.faults import fault_point
 from etl_craft.core.ownership import attempt_holder
 from etl_craft.engine import attempt_starts, controls, transitions
@@ -47,7 +47,7 @@ from etl_craft.execution.context import build_task_context
 from etl_craft.execution.control_flow import process_local_queries
 from etl_craft.execution.leases import process_start
 from etl_craft.handlers.parameters import require_task_parameters
-from etl_craft.handlers.registry import TaskContext, format_task_log, resolve_handler
+from etl_craft.handlers.registry import HandlerResult, TaskContext, format_task_log, resolve_handler
 from etl_craft.warehouse.fencing import cancellation_scope, stop_current_queries
 
 logger = logging.getLogger(__name__)
@@ -77,6 +77,7 @@ def main(
     argv: Sequence[str] | None = None,
     *,
     trigger: Callable[[Engine, TaskContext], int] | None = None,
+    alert: Callable[[Engine, TaskContext], HandlerResult] | None = None,
 ) -> int:
     """Run one task attempt; return 0 on success, else the exit status of what failed."""
     args = parse_args(argv)
@@ -89,7 +90,7 @@ def main(
     token = _identity.set(identity)
     try:
         with acting_as(SYSTEM_ACTOR):
-            return _run_bound(engine, config, args, trigger=trigger)
+            return _run_bound(engine, config, args, trigger=trigger, alert=alert)
     finally:
         _identity.reset(token)
         engine.dispose()
@@ -101,6 +102,7 @@ def _run_bound(
     args: argparse.Namespace,
     *,
     trigger: Callable[[Engine, TaskContext], int] | None = None,
+    alert: Callable[[Engine, TaskContext], HandlerResult] | None = None,
 ) -> int:
     with log.log_context(task_run_id=args.task_run_id):
         identity = _identity.get()
@@ -156,7 +158,7 @@ def _run_bound(
             attempt=context.attempt,
         ):
             try:
-                return run_handler(engine, context, trigger=trigger)
+                return run_handler(engine, context, trigger=trigger, alert=alert)
             except EtlCraftError as error:
                 logger.error("attempt outcome refused: %s", error)
                 return error.exit_code
@@ -167,6 +169,7 @@ def run_handler(
     context: TaskContext,
     *,
     trigger: Callable[[Engine, TaskContext], int] | None = None,
+    alert: Callable[[Engine, TaskContext], HandlerResult] | None = None,
 ) -> int:
     """Run ``context``'s handler and record its outcome on the task's row."""
     identity = _identity.get()
@@ -183,14 +186,14 @@ def run_handler(
         if context.handler == Handler.RUN_PIPELINE and trigger is not None:
             return trigger(engine, context)
         if identity is None:
-            result = resolve_handler(context.handler)(context, engine)
+            result = _invoke_handler(engine, context, alert)
         else:
             with (
                 using(context._definition),
                 attempt_scope(*identity),
                 cancellation_scope(context.config, holder_tag(attempt_holder(*identity))),
             ):
-                result = resolve_handler(context.handler)(context, engine)
+                result = _invoke_handler(engine, context, alert)
     except EtlCraftError as error:
         logger.error("task failed: %s", error)
         if context.handler != Handler.SQL_SCRIPT:
@@ -230,6 +233,11 @@ def run_handler(
         ):
             controls.acknowledge(conn, identity[0], ControlAcknowledgement.QUERIES)
     fault_point("child.after_outcome")
+    _log_success(result)
+    return ExitCode.SUCCESS
+
+
+def _log_success(result: HandlerResult) -> None:
     logger.info(
         "task succeeded: source %s, target %s, inserted %s, updated %s, deleted %s, "
         "rejected %s, duplicates %s",
@@ -241,7 +249,6 @@ def run_handler(
         result.reject_count,
         result.duplicate_count,
     )
-    return ExitCode.SUCCESS
 
 
 def _record_failure(
@@ -280,10 +287,11 @@ def run_as_process(
     argv: Sequence[str] | None = None,
     *,
     trigger: Callable[[Engine, TaskContext], int] | None = None,
+    alert: Callable[[Engine, TaskContext], HandlerResult] | None = None,
 ) -> NoReturn:
     """Run ``main`` as the task process and exit with its status as soon as it returns."""
     signal.signal(signal.SIGTERM, _interrupt)
-    exit_now(main(argv, trigger=trigger))
+    exit_now(main(argv, trigger=trigger, alert=alert))
 
 
 def exit_now(code: int) -> NoReturn:
@@ -318,6 +326,18 @@ def _flush() -> None:
     for stream in (sys.stdout, sys.stderr):
         with suppress(OSError, ValueError):
             stream.flush()
+
+
+def _invoke_handler(
+    engine: Engine,
+    context: TaskContext,
+    alert: Callable[[Engine, TaskContext], HandlerResult] | None,
+) -> HandlerResult:
+    if context.handler == Handler.EMAIL_ALERT and context.task_params.get("ALERT_CHANNEL"):
+        if alert is None:
+            raise HandlerError("alert task: missing service adapter; start it with etl-craft run")
+        return alert(engine, context)
+    return resolve_handler(context.handler)(context, engine)
 
 
 if __name__ == "__main__":  # pragma: no cover - run as a separate process

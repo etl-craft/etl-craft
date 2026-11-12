@@ -247,6 +247,7 @@ export interface RecentRun {
 }
 
 export interface Pipeline {
+  alert_deliveries?: AlertDelivery[];
   pipeline_code: string;
   pipeline_name: string;
   refresh_type: string;
@@ -547,6 +548,7 @@ export interface Grant {
 }
 
 export interface ProjectRow {
+  alert_deliveries?: AlertDelivery[];
   project: string;
   name: string;
   timezone: string;
@@ -628,4 +630,20 @@ export interface TablePreview {
   rows: (string | null)[][];
   limit: number;
   more: boolean;
+}
+
+export interface AlertDelivery {
+  delivery_id: number;
+  channel: string;
+  pipeline_code: string;
+  source_run_id: number;
+  source_run_label: string;
+  alert_run_id: number;
+  alert_run_label: string;
+  trigger: string;
+  attempt_number: number;
+  status: string;
+  status_code: number | null;
+  error_class: string | null;
+  created_at: string;
 }

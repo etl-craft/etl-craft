@@ -41,6 +41,21 @@ INTEGER_NAMES = frozenset(
 )
 MOMENT = datetime(2026, 1, 1, tzinfo=UTC)
 VALUES = {
+    "url_secret": "PLAN_URL",
+    "signing_secret": "PLAN_KEY",
+    "body_format": "JSON",
+    "default_alert_on": "FAILURE",
+    "channel_name": "channel_1",
+    "selector": "FAILURE",
+    "event_prefix": "task:1:channel:1:FAILURE:",
+    "gate_before": MOMENT,
+    "event_id": "plan-1",
+    "trigger": "FAILURE",
+    "attempt_number": 1,
+    "status_code": 200,
+    "error_class": "HTTPError",
+    "source_task_id": 1,
+    "source_attempt_id": 1,
     "request_digest": "a" * 64,
     "overrides": '{"load":{"INPUT_PARAMS":"{}"}}',
     "all_entries": False,
@@ -184,6 +199,10 @@ VALUES = {
 def bindings(sql, name=""):
     overrides = {
         "access_list": {"project": "default"},
+        "alert_channel_add": {"kind": "WEBHOOK"},
+        "alert_channel_set": {"kind": "WEBHOOK"},
+        "alert_delivery_insert": {"status": "STARTED", "actor_kind": "SYSTEM"},
+        "alert_delivery_history": {"pipeline_codes": ["PLAN_1"]},
         "window_reserve": {"high": MOMENT},
         "connection_reservation_insert": {
             "pool": 10,

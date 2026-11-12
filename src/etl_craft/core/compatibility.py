@@ -278,6 +278,8 @@ INTRODUCED: dict[InputKind, dict[str, str]] = {
     InputKind.PARAMETER: dict.fromkeys(
         [
             "ALLOW_EMPTY",
+            "ALERT_CHANNEL",
+            "ALERT_ON",
             "BASE_LOCATION",
             "CATALOG",
             "CPU_REQUEST",
@@ -382,6 +384,9 @@ INTRODUCED: dict[InputKind, dict[str, str]] = {
             "--controls-file",
             "--cpu",
             "--declared-capacity",
+            "--default-alert-on",
+            "--url-secret",
+            "--signing-secret",
             "--default-pool",
             "--default-project",
             "--depth",

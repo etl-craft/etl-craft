@@ -3020,3 +3020,59 @@ def test_agent_claim_replays_recorded_run_inputs_after_config_changes(agent_scen
     metadata = response.json()["data"]["task"]
     assert metadata["attempt_id"] == attempt
     assert metadata["task_params"]["INPUT_PARAMS"] == '{"day":2}'
+
+
+def test_agent_alert_delivery_uses_scoped_attempt_and_server_credentials(agent_scene, monkeypatch):
+    from etl_craft.core.enums import RunStatus
+    from etl_craft.services.operations import alert_delivery
+    from etl_craft.services.operations.alert_admission import admit_pending
+
+    db, client, headers, _, _, config = agent_scene
+    monkeypatch.setenv("ALERT_URL", "https://receiver.invalid/private-url-token")
+    monkeypatch.setenv("ALERT_KEY", "private-signing-key-" + "x" * 32)
+    with db.engine.begin() as conn:
+        pipeline = add_pipeline(conn, "ALERTED")
+        task = add_task(
+            conn,
+            pipeline,
+            "notify",
+            "EMAIL_ALERT",
+            ALERT_CHANNEL="ops",
+        )
+        conn.execute(
+            text(
+                "INSERT INTO CFG_ALERT_CHANNELS(PROJECT_ID,CHANNEL_NAME,KIND,URL_SECRET,"
+                "SIGNING_SECRET,BODY_FORMAT,DEFAULT_ALERT_ON) VALUES"
+                "(1,'ops','WEBHOOK','ALERT_URL','ALERT_KEY','JSON','FAILURE')"
+            )
+        )
+        source = transitions.create_run(conn, pipeline, SYSTEM_ACTOR)
+        transitions.finalize_pipeline_run(conn, source, RunStatus.FAILED)
+    ctx = OperationContext(
+        db.engine, config, SYSTEM_ACTOR, role=ApiRole.ADMIN, project_id=1, project="default"
+    )
+    (run,) = admit_pending(ctx)
+    with db.engine.begin() as conn:
+        summary = transitions.find_or_create_task_run(conn, task, run).task_run_id
+        attempt = transitions.queue_attempt(conn, summary, SYSTEM_ACTOR)
+    claimed = client.post(
+        "/api/v1/agent/claim",
+        headers=headers,
+        json={"version": __version__, "free_kinds": ["warehouse"]},
+    )
+    assert claimed.status_code == 200, claimed.text
+    data = claimed.json()["data"]
+    assert data["secret_values"] == {}
+    credential = {"Authorization": "Bearer " + data["credential"]}
+    sent = []
+    monkeypatch.setattr(
+        alert_delivery, "post", lambda url, body, headers: sent.append(body) or (204, None)
+    )
+    response = client.post(
+        "/api/v1/agent/report",
+        headers=credential,
+        json={"version": __version__, "attempt_id": attempt, "operation": "ALERT"},
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["data"]["variables"]["ALERT_SENT"] is True and len(sent) == 1
+    assert "private-url-token" not in response.text and "private-signing-key" not in response.text

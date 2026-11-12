@@ -647,7 +647,6 @@ def _start_and_record(
     assert config.config_path is not None
     owner, log_path = claim
     argv = _child_argv(config, spec, child, owner)
-    values = task_values(engine, config, spec.task_run_id) if spec.handler == Handler.PYTHON else {}
     logger.info(
         "starting %s attempt %d (task_run_id=%d), time limit %s, log %s",
         spec.task_code,
@@ -676,7 +675,7 @@ def _start_and_record(
                         "ETL_CRAFT_ATTEMPT_OWNER": owner,
                     },
                 ),
-                values,
+                _task_values(engine, config, spec),
             ),
             tail_bytes=config.logs.tail_bytes,
             kill_grace_seconds=child.kill_grace_seconds,
@@ -724,7 +723,8 @@ def _child_argv(
     argv = [
         "-m",
         "etl_craft.services.operations.task_process"
-        if spec.handler == Handler.RUN_PIPELINE and child.module == CHILD_MODULE
+        if spec.handler in {Handler.RUN_PIPELINE, Handler.EMAIL_ALERT}
+        and child.module == CHILD_MODULE
         else child.module,
         "--config",
         str(config._host_config_path or config.config_path),
@@ -770,3 +770,9 @@ def _standing_outcome(
     standing_pauses.apply(conn, pause, run_id)
     assert pause.outcome is not None
     return TaskOutcome(pause.outcome, pause.describe())
+
+
+def _task_values(engine: Engine, config: ConnectorConfig, spec: AttemptSpec) -> dict[str, str]:
+    if spec.handler in {Handler.PYTHON, Handler.EMAIL_ALERT}:
+        return task_values(engine, config, spec.task_run_id)
+    return {}

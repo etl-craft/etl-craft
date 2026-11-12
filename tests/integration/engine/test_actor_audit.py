@@ -187,6 +187,23 @@ def seeded_tables(db):
             owner="audit-fixture",
             counts=Counts(duplicate_count=0),
         )
+        channel = conn.execute(
+            text(
+                "INSERT INTO CFG_ALERT_CHANNELS(PROJECT_ID,CHANNEL_NAME,KIND,URL_SECRET,"
+                "SIGNING_SECRET,BODY_FORMAT,DEFAULT_ALERT_ON) VALUES "
+                "(1,'actor_guard','WEBHOOK','ACTOR_URL','ACTOR_KEY','JSON','FAILURE') "
+                "RETURNING CHANNEL_ID AS channel_id"
+            )
+        ).scalar_one()
+        from etl_craft.core.alerts import AlertStatus, AlertTrigger
+        from etl_craft.engine.alert_deliveries import AlertEvent, append
+
+        append(
+            conn,
+            r1,
+            AlertEvent(r2, channel, "actor-guard-event", AlertTrigger.FAILURE),
+            AlertStatus.SENT,
+        )
         values = {
             "upload_id": 1,
             "bundle_id": "a" * 64,
@@ -896,6 +913,41 @@ def test_run_parameter_overrides_are_attributed_and_immutable(engine_db):
         with (
             acting_as(ALICE),
             pytest.raises(DBAPIError, match="immutable"),
+            engine_db.engine.begin() as conn,
+        ):
+            conn.execute(text(sql))
+
+
+def test_alert_channel_changes_have_typed_history_and_delivery_facts_are_immutable(engine_db):
+    from etl_craft.core.alerts import AlertStatus
+    from etl_craft.engine.alert_deliveries import AlertEvent, append
+
+    with acting_as(ALICE), engine_db.engine.begin() as conn:
+        channel = conn.execute(
+            text(
+                "INSERT INTO CFG_ALERT_CHANNELS(PROJECT_ID,CHANNEL_NAME,KIND,URL_SECRET,"
+                "SIGNING_SECRET,BODY_FORMAT) VALUES(1,'ops','WEBHOOK','ALERT_URL',"
+                "'ALERT_KEY','JSON') RETURNING CHANNEL_ID"
+            )
+        ).scalar_one()
+        pipeline = add_pipeline(conn, "ALERTED")
+        run = transitions.create_run(conn, pipeline, ALICE)
+        append(conn, run, AlertEvent(run, channel, "actor-event", "FAILURE"), AlertStatus.ADMITTED)
+        actor = conn.execute(
+            text("SELECT ACTOR AS actor FROM AUD_CFG_ALERT_CHANNELS_HISTORY WHERE CURRENT_FLAG='Y'")
+        ).scalar_one()
+        assert actor == "alice"
+        row = conn.execute(
+            text("SELECT CREATED_BY AS actor,CREATED_BY_KIND AS kind FROM AUD_ALERT_DELIVERIES")
+        ).one()
+        assert row.actor == "alice" and row.kind == ActorKind.USER
+    for sql in (
+        "UPDATE AUD_ALERT_DELIVERIES SET STATUS='SENT'",
+        "DELETE FROM AUD_ALERT_DELIVERIES",
+    ):
+        with (
+            pytest.raises(DBAPIError, match=r"append-only|written only"),
+            acting_as(ALICE),
             engine_db.engine.begin() as conn,
         ):
             conn.execute(text(sql))

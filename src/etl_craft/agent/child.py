@@ -17,8 +17,9 @@ from etl_craft.agent.client import AgentClient
 from etl_craft.agent.task_store import RemoteTaskStore
 from etl_craft.config import load_config
 from etl_craft.core import log
+from etl_craft.core.alerts import HTTP_TIMEOUT, RETRY_DELAYS
 from etl_craft.core.counts import Counts
-from etl_craft.core.enums import AgentReport, AttemptStatus, Handler
+from etl_craft.core.enums import ActionName, AgentReport, AttemptStatus, Handler
 from etl_craft.core.errors import ConfigurationError, EtlCraftError, ExitCode
 from etl_craft.core.text import mask_arguments
 from etl_craft.core.time import as_utc
@@ -28,7 +29,7 @@ from etl_craft.execution.classify import classify_failure
 from etl_craft.execution.leases import process_start
 from etl_craft.execution.secret_pipe import read_values
 from etl_craft.handlers.parameters import require_task_parameters
-from etl_craft.handlers.registry import TaskContext, format_task_log, resolve_handler
+from etl_craft.handlers.registry import HandlerResult, TaskContext, format_task_log, resolve_handler
 from etl_craft.services.operations.agent_models import AgentTask
 from etl_craft.services.operations.serialization import encode, from_json
 from etl_craft.warehouse.fencing import cancellation_scope, confirm_stopped, stop_current_queries
@@ -123,7 +124,7 @@ def main() -> int:
         os.chdir(config.project_dir)
         with cancellation_scope(config, store.session_tag):
             require_task_parameters(context.handler, context.task_params)
-            counts = resolve_handler(context.handler)(context, store)
+            counts = _handler(context, store)
         result = replace(
             result,
             status=AttemptStatus.SUCCESS,
@@ -165,6 +166,17 @@ def started_context(context: TaskContext, started: object) -> TaskContext:
             f"and agent to etl-craft {__version__} together"
         )
     return replace(context, started_at=as_utc(started["started_at"]))
+
+
+def _handler(context: TaskContext, store: RemoteTaskStore) -> HandlerResult:
+    if context.handler == Handler.EMAIL_ALERT and context.task_params.get("ALERT_CHANNEL"):
+        reply = store.client.call(
+            ActionName.AGENT_REPORT,
+            store.request(AgentReport.ALERT),
+            timeout=4 * HTTP_TIMEOUT + sum(RETRY_DELAYS) + 5,
+        )
+        return from_json(HandlerResult, reply.data)
+    return resolve_handler(context.handler)(context, store)
 
 
 if __name__ == "__main__":

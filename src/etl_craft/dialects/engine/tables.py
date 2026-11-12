@@ -18,6 +18,7 @@ CONFIG_TABLES = frozenset(
         "CFG_TABLES",
         "CFG_COLUMNS",
         "CFG_CALENDARS",
+        "CFG_ALERT_CHANNELS",
         "CFG_CALENDAR_HOLIDAYS",
     }
 )
@@ -28,6 +29,8 @@ HISTORYLESS_TABLES = frozenset({"CFG_API_TOKENS"})
 AUDIT_TABLES = frozenset(
     {
         "AUD_RUN_PARAMETER_OVERRIDES",
+        "AUD_ALERT_DELIVERIES",
+        "AUD_CFG_ALERT_CHANNELS_HISTORY",
         "AUD_UPLOADS",
         "AUD_SEED_LOADS",
         "AUD_PROTECTION_EVENTS",

@@ -4,6 +4,7 @@ import { Tabs } from "@/components/tabs";
 import { useHealth, useRoleAtLeast } from "@/hooks";
 import { adminPath } from "@/lib/routes";
 import { useDocumentTitle } from "@/title";
+import { AlertChannelsTab } from "./admin/alert-channels";
 import { AccessTab } from "./admin/access";
 import { AccountsTab } from "./admin/accounts";
 import { AnnouncementsTab } from "./admin/announcements";
@@ -12,7 +13,7 @@ import { GroupsTab } from "./admin/groups";
 import { PoolsTab, ProjectsTab } from "./admin/projects";
 import { TokensTab } from "./admin/tokens";
 
-const TABS = ["accounts", "groups", "tokens", "access", "projects", "pools", "announcements", "erasure"];
+const TABS = ["accounts", "groups", "tokens", "access", "alert-channels", "projects", "pools", "announcements", "erasure"];
 
 export function Admin() {
   const admin = useRoleAtLeast("admin");
@@ -27,8 +28,8 @@ export function Admin() {
   return (
     <div className="grid grid-cols-1 gap-5">
       <PageHeader title="Administration" subtitle="Accounts, access, projects and platform settings" />
-      <Tabs tabs={TABS.map((t) => ({ id: t, label: t.charAt(0).toUpperCase() + t.slice(1) }))} value={tab} onChange={(t) => navigate(adminPath(t, project))} />
-      {tab === "access" || tab === "erasure" ? (
+      <Tabs tabs={TABS.map((t) => ({ id: t, label: t === "alert-channels" ? "Alert channels" : t.charAt(0).toUpperCase() + t.slice(1) }))} value={tab} onChange={(t) => navigate(adminPath(t, project))} />
+      {tab === "access" || tab === "alert-channels" || tab === "erasure" ? (
         <SelectField label="Project" compact value={project} onChange={(p) => navigate(adminPath(tab, p))}>
           {codes.map((c) => (
             <option key={c}>{c}</option>
@@ -39,6 +40,7 @@ export function Admin() {
         {tab === "accounts" ? <AccountsTab /> : null}
         {tab === "groups" ? <GroupsTab /> : null}
         {tab === "tokens" ? <TokensTab /> : null}
+        {tab === "alert-channels" && project ? <AlertChannelsTab key={project} project={project} /> : null}
         {tab === "access" ? <AccessTab project={project} projects={codes} /> : null}
         {tab === "projects" ? <ProjectsTab /> : null}
         {tab === "pools" ? <PoolsTab /> : null}

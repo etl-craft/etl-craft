@@ -329,6 +329,12 @@ def get_pipeline(ctx: OperationContext, request: PipelineInput) -> PipelineView:
     """Read one active definition without duplicating pipeline assembly."""
     with read_snapshot(ctx.engine) as conn:
         view = pipeline_view(conn, resolve_pipeline_id(conn, request.pipeline_code))
+        from etl_craft.engine.repository.pipelines import current_project_id
+        from etl_craft.services.operations.alert_history import history
+
+        view = replace(
+            view, alert_deliveries=history(conn, current_project_id(), (request.pipeline_code,))
+        )
         return summarize(conn, (view,), datetime.now(UTC), _pinned(ctx))[0]
 
 

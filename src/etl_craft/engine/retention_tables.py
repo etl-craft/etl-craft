@@ -13,6 +13,12 @@ class HistoryTable:
 
 
 TABLES = (
+    HistoryTable("AUD_ALERT_DELIVERIES", "retention_aud_alert_deliveries", "run_history_days"),
+    HistoryTable(
+        "AUD_CFG_ALERT_CHANNELS_HISTORY",
+        "retention_aud_cfg_alert_channels_history",
+        "config_history_days",
+    ),
     HistoryTable(
         "AUD_PIPELINE_REFRESHES", "retention_aud_pipeline_refreshes", "config_history_days"
     ),

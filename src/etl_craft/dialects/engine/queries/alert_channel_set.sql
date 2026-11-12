@@ -1,0 +1,1 @@
+UPDATE CFG_ALERT_CHANNELS SET KIND=:kind,URL_SECRET=:url_secret,SIGNING_SECRET=:signing_secret,BODY_FORMAT=:body_format,DEFAULT_ALERT_ON=:default_alert_on,ACTIVE_FLAG='Y' WHERE PROJECT_ID=:project_id AND CHANNEL_NAME=:name

@@ -251,6 +251,12 @@ class Scheduler:
         """Apply pinned outcomes and retain holds without occupying a worker slot."""
         if not ready:
             return ready, waiting
+        from etl_craft.engine.alert_deliveries import event
+
+        with self.engine.connect() as conn:
+            alert = event(conn, self.pipeline_run_id)
+        if alert is not None:
+            return ready, waiting
         dispatch = []
         with self.engine.begin() as conn:
             standing_pauses.lock(conn, self.pipeline_id)

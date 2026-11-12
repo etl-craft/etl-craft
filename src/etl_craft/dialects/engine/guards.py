@@ -20,6 +20,7 @@ ADMIN_TABLES = frozenset(
     {
         "CFG_PROJECTS",
         "CFG_POOLS",
+        "CFG_ALERT_CHANNELS",
         "CFG_ACCOUNTS",
         "CFG_GROUPS",
         "CFG_GROUP_MEMBERS",

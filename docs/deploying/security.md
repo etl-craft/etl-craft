@@ -458,3 +458,29 @@ expiry, forced password replacement and account settings. New `Auth` settings:
 are never locked by password failures. `etl-craft account unlock --name ACCOUNT` requires an
 admin. Password resets require the local user to choose a replacement at next sign-in;
 `etl-craft account change-password` prompts for current and new passwords and revokes sessions.
+
+## Webhook and Slack alert channels
+
+[Alert channels](../guides/alert-channels.md) keep the endpoint and signing key in the existing
+secrets provider. Only deployment admins manage channel routing, defaults and secret variable references.
+Developer config selects approved channel names; no task `SECRETS` declaration is used.
+Missing variables refuse naming the channel and variable,
+never the value. Credentials stay on the server, including for agent-dispatched alert tasks.
+Use trusted channel administrators: the configured receiver is an intentional outbound destination
+and may be an internal HTTPS service. HTTPS verifies certificates; redirects are refused.
+
+The generic receiver verifies `X-ETL-Craft-Signature` as HMAC-SHA256 over timestamp + `.` + exact
+body bytes, rejects timestamps outside five minutes, and deduplicates the stable event ID within
+its sender's namespace. Receivers aggregating instances use distinct sender routes/signing keys.
+Delivery is at least once: a crash after remote acceptance can repeat a POST. Timestamp checking
+alone does not prevent replay. Slack can show duplicate messages and does not verify these HMAC
+headers; protect its webhook URL as a credential.
+
+Delivery history, errors, API documents and UI pages never include the URL, signing key, receiver
+response body or raw network exceptions. An alert has its own isolated run and cannot generate
+another channel alert. Pausing the source pipeline does not suppress notifications or mutate its
+source run's admission and dependencies.
+
+This administration boundary does not isolate credentials from executable project Python code.
+Projects on one instance trust each other’s executable code and the host access it runs with;
+use separate instances and secret sources for mutually untrusted projects.

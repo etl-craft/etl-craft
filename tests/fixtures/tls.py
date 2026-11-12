@@ -41,5 +41,6 @@ def localhost_tls(tmp_path):
         capture_output=True,
     )
     context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    context.minimum_version = ssl.TLSVersion.TLSv1_2
     context.load_cert_chain(certificate, key)
     return context, certificate

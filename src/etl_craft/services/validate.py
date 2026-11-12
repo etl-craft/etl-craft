@@ -33,6 +33,7 @@ from etl_craft.core.enums import (
     Handler,
     InputKind,
     SqlAction,
+    YesNo,
 )
 from etl_craft.core.errors import EtlCraftError
 from etl_craft.core.graph import build_graph, cycles
@@ -674,6 +675,25 @@ def _python(conn: Connection, context: TaskContext, data: _Metadata) -> list[str
 def _email_alert(conn: Connection, context: TaskContext, data: _Metadata) -> list[str]:
     from etl_craft.handlers.email_templates import validate_templates
 
+    if context.task_params.get("ALERT_CHANNEL"):
+        from etl_craft.core.alerts import triggers
+        from etl_craft.engine.queries import statement
+        from etl_craft.engine.repository.pipelines import current_project_id
+
+        channel = conn.execute(
+            statement(conn, "alert_channel"),
+            {
+                "project_id": current_project_id(),
+                "channel_name": context.task_params["ALERT_CHANNEL"],
+            },
+        ).one_or_none()
+        if channel is None or channel.active_flag != YesNo.YES:
+            return [
+                f"ALERT_CHANNEL={context.task_params['ALERT_CHANNEL']!r}: missing or inactive; "
+                "ask an administrator to configure the project channel"
+            ]
+        triggers(context.task_params.get("ALERT_ON", channel.default_alert_on))
+        return []
     problems = email_alert.alert_parameter_problems(context.task_params)
     problems.extend(validate_templates(context.config, context.task_params))
     if context.config.email is None:

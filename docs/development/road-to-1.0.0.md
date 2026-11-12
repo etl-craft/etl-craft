@@ -183,7 +183,7 @@ item's text, or work done early under another item.
 | S7.AK Schema checker | Done | S7.AK PR | Optional per-project schedule plus an on-demand check that compare declared tables with the warehouse; Insights and the catalog show the last check |
 | S7.B Users, roles and identities | In progress | #203–#207, #231, #261, #263, #264, #277, #386 | Accounts, fixed roles, scoped grants, delegated pipeline grant UI, pool-bound agents and browser sign-in exist; custom roles, bindings and access explain remain |
 | S7.C Redaction | In progress | #228, #309 | Recursive name masking and shared operation-scoped value masking exist; resolved-secret registration and Sensitive_patterns remain |
-| S7.D Alert channels | Planned |  | Signed webhooks, Slack-shaped bodies and channel delivery evidence remain; email is already supported |
+| S7.D Alert channels | Done | #387 | Admin-owned webhook/Slack routing, isolated event-admitted alert runs, bounded signed delivery and sanitized pipeline/project history |
 | S7.E Secrets providers | In progress | #84, #120, #323 | ENVIRONMENT/FILE task declarations, fenced TLS delivery and private child pipe; secret managers and Cache_seconds remain |
 | S7.F Packaging and deployment | Done | #227, #231, #316 | Wheel-built role images, tagged release smoke and publishing, Compose/Kubernetes manifests and systemd units |
 | S7.G Compatibility policy | In progress | #379; rolling checks | Policy, shared same-major admission, additive SQL/ledger checks and installed input registry implemented; actual mixed-version certification waits for the 0.9.0 release gate |
@@ -272,6 +272,24 @@ item's text, or work done early under another item.
   Acceptance availability: SQLite and PostgreSQL upgrade, actor-audit, query-plan and touched
   execution suites passed, with the unit/API/browser suites and repeated admission races.
   No warehouse SQL is changed by reusing the handler's existing rejection-limit parser.
+
+- **S7.D alert channels (#387).** Choices that differ from the item text: the owner approved project
+  CFG_ALERT_CHANNELS defaults, ALERT_CHANNEL/ALERT_ON on existing alert tasks, and append-only
+  AUD_ALERT_DELIVERIES. Source events admit isolated ordinary runs selecting only the configured
+  alert task; event admission satisfies that task's source dependencies without changing the
+  source run. The controller supervises those selections, and a paused source does not suppress
+  alerts. Alert runs never generate channel alerts. Delivery is at least once with stable event
+  IDs and four logical attempts; generic receivers deduplicate, while Slack can show duplicates.
+  Admins own channel routing, defaults and secret references through Administration and shared
+  operations, not developer CSV files. Developers select approved ALERT_CHANNEL names; no
+  alert-task SECRETS declaration is used. Agents never receive the credential values.
+  Channel changes use the existing metadata-rebuild marker and typed-history machinery. Gate
+  selectors observe active recorded wait episodes; newly enabled subscriptions catch up retained
+  events in batches of at most one hundred admissions per controller cycle. Payload facts are read from the recorded source at delivery time.
+  Acceptance availability: local unit/API/browser and touched execution tests, SQLite/PostgreSQL
+  upgrades and actor guards, query plans and repeated admission races pass. The TLS receiver
+  fixture verifies delivery; Slack body shape is checked locally, not against a live Slack URL.
+  No warehouse SQL is changed.
 
 What a person picking up the work needs that the code and the item texts do not say.
 
