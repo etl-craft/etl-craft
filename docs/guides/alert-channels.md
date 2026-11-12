@@ -48,6 +48,8 @@ uses the server-owned delivery operation instead of SMTP:
 | `ALERT_ON` | Pipe-separated selectors; absent means the channel's `DEFAULT_ALERT_ON` |
 
 No `SECRETS` task declaration is used: the administrator-owned channel authorizes its references.
+The local launcher resolves those names directly into its private credential pipe; agents never
+receive channel values. Python scripts still require their own `SECRETS` declarations.
 Supported selectors are
 `FAILURE`, `SLA_BREACH`, `LOST` and `GATE_WAIT_OVER_<positive integer minutes>`. An explicitly empty
 selector list disables that task's subscriptions. Unknown or duplicate selectors refuse.

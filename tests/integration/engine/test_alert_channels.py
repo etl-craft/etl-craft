@@ -474,3 +474,30 @@ def test_retention_keeps_admission_receipt_until_source_history_is_removed(alert
                 )
     finally:
         purpose.reset(token)
+
+
+def test_local_channel_delivery_never_reads_task_secret_declaration(alerts, monkeypatch, caplog):
+    from etl_craft.execution.secret_pipe import task_values
+    from etl_craft.handlers import task_secrets
+    from etl_craft.services.operations import alert_delivery
+    from etl_craft.services.operations.alert_admission import admit_pending
+
+    ctx, _source, task = failed_source(alerts)
+    with acting_as(SYSTEM_ACTOR):
+        (run,) = admit_pending(ctx)
+        context = task_for(ctx, run, task)
+    assert "SECRETS" not in context.task_params
+
+    def refuse_declaration(*args):
+        pytest.fail("a channel alert must not read a task SECRETS declaration")
+
+    monkeypatch.setattr(task_secrets, "declared", refuse_declaration)
+    values = task_values(ctx.engine, ctx.config, context.task_run_id)
+    assert set(values) == {"ALERT_URL", "ALERT_KEY"}
+    monkeypatch.setattr(alert_delivery, "post", lambda *args: (204, None))
+    result = alert_delivery.deliver(ctx, replace(context, _secret_values=values))
+    assert result.variables["ALERT_SENT"] is True
+    with ctx.engine.connect() as conn:
+        facts = str(conn.execute(text("SELECT * FROM AUD_ALERT_DELIVERIES")).all())
+    for value in values.values():
+        assert value not in facts and value not in caplog.text and value not in str(result)

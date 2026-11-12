@@ -15,8 +15,10 @@ from etl_craft.services.operations.context import OperationContext
 
 def for_claim(ctx: OperationContext, task: TaskContext) -> dict[str, str]:
     """Refuse stale claims and insecure peers before resolving any provider value."""
+    if task.handler == Handler.EMAIL_ALERT and task.task_params.get("ALERT_CHANNEL"):
+        return {}
     names = declared(task.task_params, f"{task.pipeline_code}.{task.task_code}")
-    if not names or (task.handler == Handler.EMAIL_ALERT and task.task_params.get("ALERT_CHANNEL")):
+    if not names:
         return {}
     if (
         ctx.transport == Transport.HTTP

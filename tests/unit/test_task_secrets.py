@@ -71,3 +71,16 @@ def test_provider_payload_is_bounded_without_echoing_values(monkeypatch):
     with pytest.raises(PermanentError, match=r"P.load.*ENVIRONMENT.*1 MiB.*reduce") as error:
         resolve(task)
     assert "xxxxx" not in str(error.value)
+
+
+def test_channel_agent_claim_never_reads_task_secret_declaration():
+    from etl_craft.core.enums import Handler
+    from etl_craft.services.operations.task_secrets import for_claim
+
+    task = SimpleNamespace(
+        handler=Handler.EMAIL_ALERT,
+        pipeline_code="P",
+        task_code="notify",
+        task_params={"ALERT_CHANNEL": "ops", "SECRETS": "not a variable declaration"},
+    )
+    assert for_claim(SimpleNamespace(), task) == {}

@@ -86,7 +86,7 @@ def read_values(stream: IO[str]) -> dict[str, str]:
 def task_values(engine: Engine, config: ConnectorConfig, task_run_id: int) -> dict[str, str]:
     """Resolve local task names on the parent host before its environment is reduced."""
     from etl_craft.execution.context import build_task_context
-    from etl_craft.handlers.task_secrets import resolve
+    from etl_craft.handlers.task_secrets import resolve, resolve_names
 
     task = build_task_context(engine, config, task_run_id)
     from etl_craft.core.enums import Handler
@@ -99,13 +99,8 @@ def task_values(engine: Engine, config: ConnectorConfig, task_run_id: int) -> di
             ).one_or_none()
         if channel is None:
             return {}
-        task = replace(
-            task,
-            task_params={
-                **task.task_params,
-                "SECRETS": "|".join(dict.fromkeys((channel.url_secret, channel.signing_secret))),
-            },
-        )
+        names = tuple(dict.fromkeys((channel.url_secret, channel.signing_secret)))
+        return resolve_names(config, names, f"channel {task.task_params['ALERT_CHANNEL']}")
     return resolve(task)
 
 
