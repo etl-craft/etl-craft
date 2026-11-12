@@ -743,12 +743,20 @@ def test_alert_history_on_pipeline_and_project_has_status_time_and_no_secrets(
             route.continue_()
         page.unroute("**/api/v1/project-health")
         page.get_by_role("button", name="Set channel", exact=True).click()
-        dialog = page.get_by_role("dialog")
+        dialog = page.locator("dialog[open]")
         dialog.get_by_label("Channel name", exact=True).fill("team")
         dialog.get_by_label("URL variable name", exact=False).fill("TEAM_URL")
         dialog.get_by_label("Signing key variable name", exact=False).fill("TEAM_KEY")
         dialog.get_by_label("Reason (kept in the audit trail)").fill("Approve team receiver")
         shoot(page, f"alert-channel-dialog-{appearance}-{width}")
+        page.route(
+            "**/dialog-transition.css",
+            lambda route: route.fulfill(
+                content_type="text/css",
+                body="dialog:not([open]) { transition-duration: 60s; }",
+            ),
+        )
+        page.add_style_tag(url=url + "/dialog-transition.css")
         refreshes = []
         page.route("**/api/v1/project-health", lambda route: refreshes.append(route))
         with page.expect_request("**/api/v1/project-health"):
