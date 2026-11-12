@@ -1,0 +1,30 @@
+name: Docker service images
+description: Load the images docker-compose.yml names from the cache, or pull them and save them to the cache.
+runs:
+  using: composite
+  steps:
+    - name: List the images the compose file names
+      shell: bash
+      run: docker compose config --images | sort -u > "$RUNNER_TEMP/images.txt"
+    - name: Restore the image archive
+      id: restore
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ runner.temp }}/docker-images.tar
+        key: docker-images-${{ runner.os }}-${{ hashFiles('docker-compose.yml') }}
+    - name: Load the cached images
+      if: steps.restore.outputs.cache-hit == 'true'
+      shell: bash
+      run: docker load -i "$RUNNER_TEMP/docker-images.tar"
+    - name: Pull and save the images on a cache miss
+      if: steps.restore.outputs.cache-hit != 'true'
+      shell: bash
+      run: |
+        xargs -a "$RUNNER_TEMP/images.txt" -n1 docker pull
+        docker save -o "$RUNNER_TEMP/docker-images.tar" $(cat "$RUNNER_TEMP/images.txt")
+    - name: Save the image archive
+      if: steps.restore.outputs.cache-hit != 'true'
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ runner.temp }}/docker-images.tar
+        key: docker-images-${{ runner.os }}-${{ hashFiles('docker-compose.yml') }}
