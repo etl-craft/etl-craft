@@ -181,7 +181,7 @@ item's text, or work done early under another item.
 | S7.AH Renames keep identity | Done | #273 | Atomic attributed renames retain IDs, offsets, events and grants; stale config inserts refuse |
 | S7.AI Fixes from the 2026-10-27 audit | Done | #264 | Pool/attempt credentials, bounded SSO, publishing, sign-in, dependency bounds, setup and first-ending metrics. |
 | S7.AK Schema checker | Done | S7.AK PR | Optional per-project schedule plus an on-demand check that compare declared tables with the warehouse; Insights and the catalog show the last check |
-| S7.B Users, roles and identities | In progress | #203–#207, #231, #261, #263, #264, #277 | Accounts, fixed roles, scoped grants, pool-bound agents and browser sign-in exist; custom roles, bindings and access explain remain |
+| S7.B Users, roles and identities | In progress | #203–#207, #231, #261, #263, #264, #277, #386 | Accounts, fixed roles, scoped grants, delegated pipeline grant UI, pool-bound agents and browser sign-in exist; custom roles, bindings and access explain remain |
 | S7.C Redaction | In progress | #228, #309 | Recursive name masking and shared operation-scoped value masking exist; resolved-secret registration and Sensitive_patterns remain |
 | S7.D Alert channels | Planned |  | Signed webhooks, Slack-shaped bodies and channel delivery evidence remain; email is already supported |
 | S7.E Secrets providers | In progress | #84, #120, #323 | ENVIRONMENT/FILE task declarations, fenced TLS delivery and private child pipe; secret managers and Cache_seconds remain |
@@ -220,6 +220,14 @@ item's text, or work done early under another item.
 | S8.H Support Insights scenario coverage | Planned | | Deterministic mixed-quality generators, every-feature demonstrations, business-rule and stewardship cases, and runnable README coverage |
 
 ### Handover notes
+
+- **S7.B delegated pipeline grants (#386).** Choices that differ from the item text: this
+  owner-requested slice exposes existing scoped grants on each pipeline, without introducing
+  custom roles or replacing existing grant storage. Pipeline targets are fixed in the form;
+  existing operations remain the sole delegation authority. Administration remains unchanged
+  for project and tag grants. Acceptance availability: unit/access/permission and pipeline
+  browser suites, static/strict docs and rebuilt UI checks are validated locally. Custom roles,
+  bindings and access explain remain open.
 
 - **S7.G policy and inventory (#379).** Choices that differ from the item text: the owner
   confirmed the recorded 0.9.0 compatibility decision supersedes the unchanged 1.0.0 bullets;

@@ -59,7 +59,7 @@ def shoot(page, name):
     shots = os.environ.get("ETL_CRAFT_UI_SCREENSHOTS")
     if shots:
         Path(shots).mkdir(parents=True, exist_ok=True)
-        page.screenshot(path=f"{shots}/{name}.png")
+        page.screenshot(path=f"{shots}/{name}.png", animations="disabled")
 
 
 def test_filter_by_tag_select_pause_and_export(scene):
@@ -598,4 +598,105 @@ def test_run_now_records_task_inputs_through_the_shared_operation(scene, appeara
         expect(page.get_by_text("load.INPUT_PARAMS", exact=True)).to_be_visible()
         shoot(page, f"run-input-values-{appearance}-{width}")
         assert problems == []
+        browser.close()
+
+
+@pytest.mark.parametrize("scheme", ["light", "dark"])
+@pytest.mark.parametrize("width", [1280, 390])
+def test_pipeline_manager_delegates_only_here_and_revokes_with_audit(scene, scheme, width):
+    ctx, url, _ = scene
+    baseline = act(ctx, ActionName.ACCESS_LIST, project="default").grants
+    for target, permission in ((None, "CAN_VIEW"), ("OPS", "CAN_MANAGE")):
+        act(
+            ctx,
+            ActionName.ACCESS_GRANT,
+            project="default",
+            account="alice",
+            pipeline=target,
+            permission=permission,
+            reason="Delegate pipeline management",
+        )
+    with sync_playwright() as pw:
+        browser, page, _ = open_page(
+            pw, color_scheme=scheme, viewport={"width": width, "height": 900}
+        )
+        sign_in(page, url, "/ui/projects/default/pipelines/OPS?tab=access", name="alice")
+        expect(page.get_by_role("tab", name="Access", exact=True)).to_be_visible()
+        page.get_by_role("button", name="Grant access", exact=True).click()
+        dialog = page.get_by_role("dialog")
+        expect(dialog.get_by_text("default", exact=True)).to_be_visible()
+        expect(dialog.get_by_text("All projects", exact=True)).to_have_count(0)
+        expect(dialog.get_by_label("Pipeline", exact=True)).to_have_count(0)
+        expect(dialog.get_by_label("Tag", exact=True)).to_have_count(0)
+        dialog.get_by_label("Role", exact=False).select_option("operator")
+        dialog.get_by_label("Permission", exact=False).select_option("CAN_RUN")
+        dialog.get_by_label("Reason (kept in the audit trail)").fill("Operations team")
+        shoot(page, f"pipeline-grant-dialog-{scheme}-{width}")
+        dialog.get_by_role("button", name="Grant access", exact=True).click()
+        table = page.get_by_role("table", name="Access grants")
+        row = table.get_by_role("row").filter(has_text="role operator")
+        expect(row).to_contain_text("Can run")
+        expect(row).to_contain_text("pipeline OPS")
+        shoot(page, f"pipeline-grants-{scheme}-{width}")
+        assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+        heading = page.get_by_role("heading", name=re.compile("Access to OPS"))
+        assert heading.bounding_box()["x"] >= 0
+
+        # A forged target still goes to the real operation; its refusal stays in the dialog.
+        for target in ("SALES", None):
+
+            def forge(route, request, selected=target):
+                payload = request.post_data_json
+                payload.pop("pipeline", None)
+                if selected is not None:
+                    payload["pipeline"] = selected
+                route.continue_(post_data=json.dumps(payload))
+
+            page.route("**/api/v1/access/grants", forge)
+            page.get_by_role("button", name="Grant access", exact=True).click()
+            dialog.get_by_label("Role", exact=False).select_option("operator")
+            dialog.get_by_label("Reason (kept in the audit trail)").fill("Forged target")
+            dialog.get_by_role("button", name="Grant access", exact=True).click()
+            expect(dialog.get_by_role("alert")).to_contain_text(target or "default")
+            expect(dialog.get_by_role("alert")).to_contain_text("CAN_MANAGE")
+            expect(dialog.get_by_role("alert")).to_contain_text("administrator")
+            dialog.get_by_role("button", name="Cancel", exact=True).click()
+            page.unroute("**/api/v1/access/grants", forge)
+
+        row.get_by_role("button", name="Revoke", exact=True).click()
+        dialog.get_by_label("Reason (kept in the audit trail)").fill("Handover ended")
+        dialog.get_by_role("button", name="Revoke", exact=True).click()
+        expect(row).to_have_count(0)
+        with ctx.engine.connect() as conn:
+            audit = conn.execute(
+                text(
+                    "SELECT ACTOR AS actor, ACTIVE_FLAG AS active_flag "
+                    "FROM AUD_CFG_PIPELINE_GRANTS_HISTORY "
+                    "WHERE GRANTEE_ROLE='operator' AND PIPELINE_CODE='OPS' "
+                    "AND CURRENT_FLAG='Y'"
+                )
+            ).one()
+            assert audit.actor == "alice" and audit.active_flag == "N"
+        untouched = act(ctx, ActionName.ACCESS_LIST, project="default").grants
+        assert [g for g in untouched if g.role == "operator" and g.pipeline != "OPS"] == [
+            g for g in baseline if g.role == "operator" and g.pipeline != "OPS"
+        ]
+        page.goto(url + "/ui/projects/default/pipelines/SALES?tab=access")
+        expect(page.get_by_role("heading", name=re.compile("Access to SALES"))).to_be_visible()
+        expect(page.get_by_role("button", name="Grant access", exact=True)).to_have_count(0)
+        expect(page.get_by_role("button", name="Revoke", exact=True)).to_have_count(0)
+        page.context.clear_cookies()
+        sign_in(page, url, "/ui/admin?tab=access")
+        expect(page.get_by_role("heading", name=re.compile("Access to default"))).to_be_visible()
+        expect(
+            page.get_by_role("table", name="Access grants")
+            .get_by_role("row")
+            .filter(has_text="role viewer")
+        ).to_be_visible()
+        shoot(page, f"admin-grants-{scheme}-{width}")
+        page.get_by_role("button", name="Grant access", exact=True).click()
+        expect(dialog.get_by_label("Pipeline (optional)", exact=True)).to_be_visible()
+        expect(dialog.get_by_label("Tag (optional)", exact=True)).to_be_visible()
+        expect(dialog.get_by_text("All projects", exact=True)).to_be_visible()
+        shoot(page, f"admin-grant-dialog-{scheme}-{width}")
         browser.close()

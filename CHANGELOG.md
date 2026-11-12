@@ -6,6 +6,10 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+- Pipeline Access tabs let delegated managers grant and revoke group, account or role
+  permissions on that pipeline, using the existing server authorization and audit.
+  Administration retains project and tag grant management.
+
 - `run --param TASK.PARAM=VALUE --request-key KEY` records immutable per-run data-input
   overrides through the shared RUN operation, API and Run now dialog. Duplicate keys and
   invalid inputs refuse; matching submissions return the recorded run without new dispatch.

@@ -1,3 +1,4 @@
+import { AccessTab } from "@/pages/admin/access";
 import { RunLabel } from "@/components/run-label";
 import { useQuery } from "@tanstack/react-query";
 import { When } from "@/components/when";
@@ -28,7 +29,7 @@ import { cn } from "@/lib/utils";
 import type { Graph, Pipeline, RunView, Steps } from "@/lib/types";
 import { useDocumentTitle } from "@/title";
 
-const TAB_IDS = ["overview", "run", "runs", "tasks", "calendar", "audit", "details"];
+const TAB_IDS = ["overview", "run", "runs", "tasks", "calendar", "audit", "details", "access"];
 
 export function PipelineDetail() {
   const { project: code = "", pipeline = "" } = useParams();
@@ -99,6 +100,7 @@ export function PipelineDetail() {
     { id: "calendar", label: "Calendar" },
     { id: "audit", label: "Audit log" },
     { id: "details", label: "Details" },
+    { id: "access", label: "Access" },
   ];
   const state = params.get("status") ?? "";
   const select = (runId: number, taskCode?: string) => {
@@ -373,6 +375,8 @@ export function PipelineDetail() {
               <CalendarTab runs={runs} />
             ) : tab === "audit" ? (
               <AuditTab code={code} pipeline={pipeline} />
+            ) : tab === "access" ? (
+              <AccessTab key={`${code}:${pipeline}`} project={code} projects={[code]} pipeline={pipeline} />
             ) : tab === "details" ? (
               <DetailsTab code={code} pipeline={p} graph={graph.data} />
             ) : (

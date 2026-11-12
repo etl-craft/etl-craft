@@ -111,6 +111,14 @@ including restricted pipelines, and can deploy that project's configuration. A p
 manager cannot edit the project or reach another project. Only deployment admins manage
 accounts, groups, pools and project creation/settings/disable.
 
+In the web interface, open a pipeline’s **Access** tab to inspect its pipeline-specific grants.
+A holder of `CAN_MANAGE` on that pipeline can grant or revoke access there, choosing exactly
+one group, account or role and a permission. The pipeline target is fixed; the server checks
+the submitted request and displays a refusal if the manager lacks the required rights.
+Viewers can inspect grants but have no grant or revoke controls. Administration keeps the
+project-wide and tag grant form for deployment admins. Changes require a reason and retain
+the actor-attributed audit history.
+
 Bulk input is admin-only, with columns `PROJECT,GROUP_NAME,ROLE,PIPELINE_CODE,TAG,PERMISSION,ACTION`.
 Choose exactly one group or role; leave both pipeline and tag empty for a project grant,
 or select one pipeline or tag; `ACTION` is `GRANT` or `REVOKE`.
