@@ -283,6 +283,8 @@ item's text, or work done early under another item.
   Admins own channel routing, defaults and secret references through Administration and shared
   operations, not developer CSV files. Developers select approved ALERT_CHANNEL names; no
   alert-task SECRETS declaration is used. Agents never receive the credential values.
+  Follow-up #388 removes the internal synthesized declaration too: local launch resolves
+  channel-authorized names directly, and agent claims skip task secret parsing for channel alerts.
   Channel changes use the existing metadata-rebuild marker and typed-history machinery. Gate
   selectors observe active recorded wait episodes; newly enabled subscriptions catch up retained
   events in batches of at most one hundred admissions per controller cycle. Payload facts are read from the recorded source at delivery time.

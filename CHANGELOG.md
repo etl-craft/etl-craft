@@ -6,6 +6,10 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+- Channel alerts resolve only administrator-approved references directly, without synthesizing
+  or parsing task-level `SECRETS`. Agent claims skip script declarations for channel alerts;
+  Python scripts retain their explicit `SECRETS` admission.
+
 - Pipeline Access tabs let delegated managers grant and revoke group, account or role
   permissions on that pipeline, using the existing server authorization and audit.
   Administration retains project and tag grant management.
