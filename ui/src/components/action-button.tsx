@@ -11,6 +11,7 @@ import { project } from "@/lib/api";
  */
 export function ActionButton<TResult>({
   code,
+  projectCode,
   canSubmit,
   label,
   title,
@@ -28,6 +29,8 @@ export function ActionButton<TResult>({
 }: {
   /** The project the action changes; absent for platform actions such as agents and accounts. */
   code?: string;
+  /** Project named in confirmation when a project-scoped body uses a platform endpoint. */
+  projectCode?: string;
   canSubmit?: boolean;
   label: string;
   title: string;
@@ -78,7 +81,7 @@ export function ActionButton<TResult>({
         title={title}
         action={label}
         effect={effect}
-        projectCode={code}
+        projectCode={code ?? projectCode}
         env={info ? { type: info.environment_type, name: info.environment_name } : undefined}
         canSubmit={canSubmit}
         error={failureText(write.error)}

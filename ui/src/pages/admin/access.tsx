@@ -12,38 +12,39 @@ const PERMISSIONS = ["CAN_VIEW", "CAN_RUN", "CAN_MANAGE"];
 const who = (g: Grant) => (g.group ? `group ${g.group}` : g.account ? `account ${g.account}` : `role ${g.role}`);
 const on = (g: Grant) => (g.pipeline ? `pipeline ${g.pipeline}` : g.tag ? `tag ${g.tag}` : "the whole project");
 
-export function AccessTab({ project, projects }: { project: string; projects: string[] }) {
-  const list = useAdminList<{ grants: Grant[] }>("/api/v1/access/grants", { project }, !!project);
+export function AccessTab({ project, projects, pipeline }: { project: string; projects: string[]; pipeline?: string }) {
+  const list = useAdminList<{ grants: Grant[]; effective: [string, string | null, string[]][] }>("/api/v1/access/grants", { project, pipeline }, !!project);
   const grants = (list.data?.grants ?? []).filter((g) => g.active_flag === "Y");
+  const canManage = !pipeline || list.data?.effective.some(([code, permission]) => code === pipeline && permission === "CAN_MANAGE");
   return (
-    <div className="grid gap-5">
+    <div className="grid min-w-0 grid-cols-1 gap-5">
       <ListState query={list} what="grants" />
-      <Card>
+      <Card className="min-w-0">
         <CardHeader>
-          <CardTitle>Access to {project || "a project"} · {grants.length}</CardTitle>
-          <FormAction
+          <CardTitle>Access to {pipeline || project || "a project"} · {grants.length}</CardTitle>
+          {canManage ? <FormAction
+            projectCode={pipeline ? project : undefined}
             label="Grant access"
             title="Grant access"
-            effect="Choose one of group, account or role; and one pipeline or tag, or neither for the whole project."
+            effect={pipeline ? `Grant access to pipeline ${pipeline} in project ${project}. Choose exactly one group, account or role.` : "Choose one of group, account or role; and one pipeline or tag, or neither for the whole project."}
             endpoint="/access/grants"
             variant="primary"
             describe={done("Access granted.")}
-            extra={{ project }}
+            extra={{ project, ...(pipeline ? { pipeline } : {}) }}
             fields={[
               { name: "group", label: "Group" },
               { name: "account", label: "Account" },
               { name: "role", label: "Role", kind: "select", options: ROLES, blank: "None" },
-              { name: "pipeline", label: "Pipeline" },
-              { name: "tag", label: "Tag" },
+              ...(!pipeline ? [{ name: "pipeline", label: "Pipeline" }, { name: "tag", label: "Tag" }] : []),
               { name: "permission", label: "Permission", kind: "select", options: PERMISSIONS, required: true },
             ]}
-          />
+          /> : null}
         </CardHeader>
         <DataTable
           find
           label="Access grants"
           data={grants}
-          nextStep="Register a project in Administration, then grant an account access here."
+          nextStep={pipeline ? "Ask a pipeline manager to grant access here; project and tag grants are managed in Administration." : "Register a project in Administration, then grant an account access here."}
           empty={list.isSuccess ? "No grants yet." : projects.length ? undefined : "No projects."}
           columns={[
             columns.display({ id: "who", header: "Who", cell: (c) => <span className="font-medium">{who(c.row.original)}</span> }),
@@ -54,8 +55,9 @@ export function AccessTab({ project, projects }: { project: string; projects: st
               header: "Actions",
               cell: (c) => {
                 const g = c.row.original;
-                return (
+                return canManage ? (
                   <ActionButton<unknown>
+                    projectCode={pipeline ? project : undefined}
                     label="Revoke"
                     title={`Revoke ${who(g)}`}
                     effect={`Removes this grant on ${on(g)}; access from other grants stays.`}
@@ -65,7 +67,7 @@ export function AccessTab({ project, projects }: { project: string; projects: st
                     variant="danger"
                     size="sm"
                   />
-                );
+                ) : null;
               },
             }),
           ]}
