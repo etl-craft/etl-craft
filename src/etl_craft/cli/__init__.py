@@ -62,6 +62,7 @@ class CommandHelp(argparse.HelpFormatter):
                     "token",
                     "group",
                     "access",
+                    "alert-channel",
                     "project",
                     "pool",
                 }

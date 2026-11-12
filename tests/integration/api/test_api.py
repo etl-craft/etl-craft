@@ -959,3 +959,27 @@ def test_run_overrides_share_admission_replay_and_authorization(api):
         json={**payload, "params": ['load.INPUT_PARAMS={"day":3}']},
     )
     assert conflict.status_code >= 400 and "payload differs" in conflict.text
+
+
+def test_alert_delivery_history_is_visible_without_secret_values(api, monkeypatch):
+    from fixtures.alerts import failed_delivery
+
+    ctx, client, creds, run, _attempt = api
+    monkeypatch.setenv("ALERT_URL", "https://receiver.invalid/private-url-token")
+    monkeypatch.setenv("ALERT_KEY", "private-signing-key-" + "x" * 32)
+    with ctx.engine.connect() as conn:
+        pipeline = conn.execute(
+            text("SELECT PIPELINE_ID FROM CFG_PIPELINES WHERE PIPELINE_CODE='P'")
+        ).scalar_one()
+    failed_delivery(ctx, pipeline, run)
+    response = client.get(
+        "/api/v1/projects/default/pipelines/P", headers=headers(creds[ApiRole.ADMIN])
+    )
+    assert response.status_code == 200, response.text
+    records = response.json()["alert_deliveries"]
+    assert records[-1]["status"] == "ADMITTED" and records[0]["status_code"] == 503
+    assert "private-url-token" not in response.text and "private-signing-key" not in response.text
+    projects = client.get("/api/v1/projects?reason=inspect", headers=headers(creds[ApiRole.ADMIN]))
+    assert projects.status_code == 200, projects.text
+    assert projects.json()["projects"][0]["alert_deliveries"]
+    assert "private-url-token" not in projects.text and "private-signing-key" not in projects.text

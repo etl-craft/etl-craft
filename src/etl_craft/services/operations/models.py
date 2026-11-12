@@ -19,6 +19,7 @@ from etl_craft.core.enums import (
 from etl_craft.engine.repository.intervention_rows import Intervention
 from etl_craft.engine.repository.pauses import Pause, Resume
 from etl_craft.engine.standing_pauses import TaskPause
+from etl_craft.services.operations.alert_history import AlertDelivery
 
 
 @dataclass(frozen=True)
@@ -199,6 +200,8 @@ class PipelineView:
     """The condition in words when it adds to or replaces the schedule; ``None`` otherwise."""
     description: str | None = None
     """The pipeline's ``DESCRIPTION``: what it does, shown beside its tasks' documentation."""
+
+    alert_deliveries: tuple[AlertDelivery, ...] = ()
 
 
 @dataclass(frozen=True)

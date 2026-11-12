@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 
 from etl_craft.config.resolve import resolve_named_secret
+from etl_craft.core.enums import Handler
 from etl_craft.core.errors import EtlCraftError, PermanentError
 from etl_craft.core.task_secrets import declared, read
 from etl_craft.handlers.registry import TaskContext
@@ -12,7 +13,11 @@ from etl_craft.handlers.registry import TaskContext
 
 def resolve(task: TaskContext) -> dict[str, str]:
     """Keep provider values out of metadata and missing-value error details."""
-    label = f"{task.pipeline_code}.{task.task_code}"
+    label = (
+        f"channel {task.task_params['ALERT_CHANNEL']}"
+        if task.task_params.get("ALERT_CHANNEL") and task.handler == Handler.EMAIL_ALERT
+        else f"{task.pipeline_code}.{task.task_code}"
+    )
     result = {}
     for name in declared(task.task_params, label):
         try:

@@ -1,0 +1,1 @@
+SELECT CHANNEL_ID AS channel_id,CHANNEL_NAME AS channel_name,KIND AS kind,URL_SECRET AS url_secret,SIGNING_SECRET AS signing_secret,ACTIVE_FLAG AS active_flag,DEFAULT_ALERT_ON AS default_alert_on FROM CFG_ALERT_CHANNELS WHERE PROJECT_ID=:project_id AND CHANNEL_NAME=:channel_name

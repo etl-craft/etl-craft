@@ -15,6 +15,12 @@ DAY = f"({STAMP}+(d-1)*INTERVAL '1 day')"
 # Every run has its own task/attempt identity; completed days dominate the live working set.
 SEEDS = [
     (
+        "CFG_ALERT_CHANNELS",
+        "CHANNEL_ID,PROJECT_ID,CHANNEL_NAME,KIND,URL_SECRET,SIGNING_SECRET,BODY_FORMAT,DEFAULT_ALERT_ON",
+        "p,1,'channel_'||p,'WEBHOOK','WEBHOOK_URL','WEBHOOK_KEY','JSON','FAILURE'",
+        "generate_series(1,:pipelines) p",
+    ),
+    (
         "AUD_ERASURE_SUBJECTS",
         "PROJECT_ID,TABLE_NAME,COLUMN_NAME,SUBJECT_KEY,KEY_HMAC,ACTIVE_FLAG,REASON,"
         "CREATED_BY,CREATED_AT,LIFTED_BY,LIFTED_AT,LIFT_REASON,KEY_CHECK",
@@ -388,6 +394,12 @@ SEEDS = [
         "AUD_RUN_PARAMETER_OVERRIDES",
         "PIPELINE_RUN_ID,PROJECT_ID,REQUEST_KEY,REQUEST_DIGEST,OVERRIDES,CREATED_BY,CREATED_BY_KIND,CREATED_AT",
         f"{RUN_ID},1,'plan-'||{RUN_ID},repeat('a',64),'{{}}','plan','SYSTEM',{DAY}",
+        RUNS,
+    ),
+    (
+        "AUD_ALERT_DELIVERIES",
+        "CHANNEL_ID,PIPELINE_RUN_ID,SOURCE_RUN_ID,EVENT_ID,TRIGGER,ATTEMPT_NUMBER,STATUS,CREATED_BY,CREATED_BY_KIND,CREATED_AT",
+        f"p,{RUN_ID},{RUN_ID},'plan-'||{RUN_ID},'FAILURE',1,'SENT','plan','SYSTEM',{STAMP}",
         RUNS,
     ),
 ]

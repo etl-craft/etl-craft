@@ -59,6 +59,8 @@ TOKENS = (
 PARAMETERS = frozenset(
     {
         "EMAIL_TO",
+        "ALERT_CHANNEL",
+        "ALERT_ON",
         "EMAIL_SUBJECT",
         "EMAIL_BODY",
         "EMAIL_ON_STATUS",

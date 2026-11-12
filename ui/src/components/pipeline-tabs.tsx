@@ -1,3 +1,4 @@
+import { AlertDeliveries } from "@/components/alert-deliveries";
 import { RunLabel } from "@/components/run-label";
 import { Disclosure, DisclosureSummary } from "@/components/dropdown";
 import { useQueries, useQuery } from "@tanstack/react-query";
@@ -58,6 +59,7 @@ export function OverviewTab({ code, pipeline, runs }: { code: string; pipeline: 
         <Tile label="Success rate" value={rate === null ? "—" : `${rate}%`} />
         <Tile label="Median duration" value={median === null ? "—" : formatSeconds(median)} />
       </div>
+      <AlertDeliveries code={code} rows={pipeline.alert_deliveries} />
       <section className="grid gap-2" aria-label="Latest run durations">
         <h3 className="m-0 text-sm font-semibold">{runs.length === 1 ? "The only run" : `Last ${Math.min(10, runs.length)} runs`}</h3>
         {runs.length >= 5 ? (

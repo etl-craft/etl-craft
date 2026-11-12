@@ -116,6 +116,7 @@ nav:
       - Python scripts: guides/python-scripts.md
       - Reading from streams: guides/streams.md
       - Email alerts: guides/email-alerts.md
+      - Webhook and Slack alerts: guides/alert-channels.md
       - Validating pipelines: guides/validating.md
       - Inspecting pipelines: guides/inspecting.md
       - Service operations and JSON: guides/service-operations.md

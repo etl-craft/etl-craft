@@ -1,3 +1,4 @@
+import { AlertDeliveries } from "@/components/alert-deliveries";
 import { words } from "@/lib/labels";
 import { createColumnHelper } from "@tanstack/react-table";
 import { ActionButton } from "@/components/action-button";
@@ -31,7 +32,7 @@ export function ProjectsTab() {
   const list = useAdminList<{ projects: ProjectRow[] }>("/api/v1/projects", { reason: LISTING });
   const rows = list.data?.projects ?? [];
   return (
-    <div className="grid gap-5">
+    <div className="grid min-w-0 grid-cols-1 gap-5">
       <ListState query={list} what="projects" />
       <Card>
         <CardHeader>
@@ -67,6 +68,7 @@ export function ProjectsTab() {
           ]}
         />
       </Card>
+      {rows.map(row => <div key={row.project}><h2 className="text-base font-semibold">{row.name || row.project}</h2><AlertDeliveries code={row.project} rows={row.alert_deliveries} /></div>)}
     </div>
   );
 }
@@ -79,7 +81,7 @@ export function PoolsTab() {
     { name: "description", label: "Description" },
   ];
   return (
-    <div className="grid gap-5">
+    <div className="grid min-w-0 grid-cols-1 gap-5">
       <ListState query={list} what="pools" />
       <p className="m-0 max-w-3xl text-[13px] text-muted">
         A pool is a group of agents that share a kind of work, such as ingestion or warehouse tasks. A task runs in the pool named by its POOL parameter, or in its project&apos;s default pool, and only an agent registered in that pool claims it. A pool you add does nothing until a task or project names it and an agent registers in it; disabling one is refused while a project or task still names it.

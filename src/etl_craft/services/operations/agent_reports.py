@@ -268,6 +268,12 @@ def report(ctx: OperationContext, request: AgentTask) -> AgentReply | Awaitable[
     if request.operation in direct:
         return direct[request.operation](ctx, request)
     task = _context(ctx, request)
+    if (
+        request.operation == AgentReport.ALERT
+        and task.handler == Handler.EMAIL_ALERT
+        and task.task_params.get("ALERT_CHANNEL")
+    ):
+        return _alert_delivery(ctx, task)
     if request.operation == AgentReport.ERASURE:
         return _erasure(ctx, task)
     store = _store(ctx, task)
@@ -545,3 +551,10 @@ def _erasure(ctx: OperationContext, task: TaskContext) -> AgentReply:
                 for r in conn.execute(statement(conn, "erasure_entries"), {"all_entries": False})
             )
         return AgentReply(apply_entries(ctx.engine, task.config, entries, store=store))
+
+
+async def _alert_delivery(ctx: OperationContext, task: TaskContext) -> AgentReply:
+    """Keep long backoffs out of the HTTP request pool used by lease renewals."""
+    from etl_craft.services.operations.alert_delivery import deliver
+
+    return AgentReply(await asyncio.to_thread(deliver, ctx, task))

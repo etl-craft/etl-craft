@@ -4,6 +4,10 @@ A pipeline reports how a run went with one email, sent by a task with
 `HANDLER = 'EMAIL_ALERT'` at the end of the pipeline. With `Orchestration.Enforce_sla: true`, the
 engine also emails when a run misses its pipeline's SLA.
 
+For HTTPS webhooks and Slack, select an administrator-approved `ALERT_CHANNEL` and optionally
+choose event selectors through `ALERT_ON`; see [alert channels](alert-channels.md). These tasks
+use server-owned delivery instead of SMTP and do not declare `SECRETS`.
+
 ## How email is sent
 
 The `Email` block of the active `Orchestration` profile says how, in one of two ways:

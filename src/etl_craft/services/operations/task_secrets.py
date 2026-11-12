@@ -3,7 +3,7 @@
 from sqlalchemy.engine import Connection
 
 from etl_craft.config.remote import LOCAL_HOSTS
-from etl_craft.core.enums import HttpScheme, Transport
+from etl_craft.core.enums import Handler, HttpScheme, Transport
 from etl_craft.core.errors import PermissionDeniedError
 from etl_craft.core.task_secrets import declared
 from etl_craft.engine.agent_state import fence
@@ -16,7 +16,7 @@ from etl_craft.services.operations.context import OperationContext
 def for_claim(ctx: OperationContext, task: TaskContext) -> dict[str, str]:
     """Refuse stale claims and insecure peers before resolving any provider value."""
     names = declared(task.task_params, f"{task.pipeline_code}.{task.task_code}")
-    if not names:
+    if not names or (task.handler == Handler.EMAIL_ALERT and task.task_params.get("ALERT_CHANNEL")):
         return {}
     if (
         ctx.transport == Transport.HTTP
@@ -30,14 +30,15 @@ def for_claim(ctx: OperationContext, task: TaskContext) -> dict[str, str]:
     assert task.attempt_id is not None
     with ctx.engine.begin() as conn:
         fence(conn, task.attempt_id, str(ctx.credential_token_id))
-        _live(conn, ctx)
+        require_live(conn, ctx)
         values = resolve(task)
         fence(conn, task.attempt_id, str(ctx.credential_token_id))
-        _live(conn, ctx)
+        require_live(conn, ctx)
         return values
 
 
-def _live(conn: Connection, ctx: OperationContext) -> None:
+def require_live(conn: Connection, ctx: OperationContext) -> None:
+    """Refuse a revoked agent before resolving or using server-owned credentials."""
     agent = conn.execute(
         statement(conn, "agent_get"), {"agent_id": ctx.credential_token_id}
     ).one_or_none()

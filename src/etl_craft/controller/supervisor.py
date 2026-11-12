@@ -124,6 +124,9 @@ class _Supervisor:
             controllers.heartbeat(self.ctx.engine, controller_id)
             self.next_heartbeat = time.monotonic() + 15
         reconcile(self.ctx.engine)
+        from etl_craft.services.operations.alert_admission import admit_pending
+
+        admit_pending(self.ctx)
         cascade_children(self.ctx)
         settle_ended_parent_waits(self.ctx.engine, datetime.now(UTC))
         self.schedules.refresh(self.ctx, datetime.now(UTC), self.stop)

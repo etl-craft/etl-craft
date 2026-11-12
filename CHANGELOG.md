@@ -9,6 +9,13 @@ All notable changes are recorded here. The format follows
 - Pipeline Access tabs let delegated managers grant and revoke group, account or role
   permissions on that pipeline, using the existing server authorization and audit.
   Administration retains project and tag grant management.
+- Administrators manage webhook and Slack routing through `alert-channel set|list|disable`,
+  the API and Administration. Developers choose approved `ALERT_CHANNEL` names and `ALERT_ON`
+  selectors on ordinary alert tasks, without `SECRETS` declarations. Recorded failure, SLA, LOST and prolonged-wait events admit isolated
+  alert runs even when the source pipeline is paused. Migration 0094 adds channel metadata
+  and append-only delivery evidence in both Engine DBs. Signed HTTPS delivery uses bounded
+  retries and at-least-once recovery; source runs are unchanged and alerts cannot loop.
+  Pipeline and project documents and pages show sanitized delivery history.
 
 - `run --param TASK.PARAM=VALUE --request-key KEY` records immutable per-run data-input
   overrides through the shared RUN operation, API and Run now dialog. Duplicate keys and

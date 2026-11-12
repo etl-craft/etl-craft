@@ -6,7 +6,7 @@ from etl_craft.core.actor import Actor
 from etl_craft.core.enums import ActionName, ActorKind
 from etl_craft.engine.queries import statement
 from etl_craft.execution.child import run_as_process
-from etl_craft.handlers.registry import TaskContext
+from etl_craft.handlers.registry import HandlerResult, TaskContext
 from etl_craft.services.operations.actions import invoke
 from etl_craft.services.operations.child_admission import initiating_context
 from etl_craft.services.operations.context import OperationContext
@@ -34,5 +34,28 @@ def execute_trigger(engine: Engine, task: TaskContext) -> int:
     return 0
 
 
+def execute_alert(engine: Engine, task: TaskContext) -> HandlerResult:
+    """Call one delivery operation from the local process and agent API."""
+    from etl_craft.core.actor import SYSTEM_ACTOR
+    from etl_craft.core.enums import ApiRole
+    from etl_craft.services.operations.alert_delivery import deliver
+
+    with engine.connect() as conn:
+        row = conn.execute(
+            statement(conn, "alert_task_project"), {"task_run_id": task.task_run_id}
+        ).one()
+    return deliver(
+        OperationContext(
+            engine,
+            task.config,
+            SYSTEM_ACTOR,
+            role=ApiRole.ADMIN,
+            project_id=row.project_id,
+            project=row.project_code,
+        ),
+        task,
+    )
+
+
 if __name__ == "__main__":
-    run_as_process(trigger=execute_trigger)
+    run_as_process(trigger=execute_trigger, alert=execute_alert)
