@@ -1,15 +1,18 @@
 """A complete bounded candidate scan is required before finalizing atomic deletions."""
 
+from dataclasses import replace
+
 import pytest
 from sqlalchemy import event, text
 from sqlalchemy.engine import Engine
 
-from etl_craft.core.enums import ActionName, RunStatus
+from etl_craft.core.actor import Actor
+from etl_craft.core.enums import ActionName, ActorKind
 from etl_craft.core.errors import InjectedFaultError
 from etl_craft.core.protection import MAX_PROTECTION_EVENTS
 from etl_craft.engine.task_store import LocalTaskStore
 from fixtures.actions import act
-from fixtures.stewardship import configure_upload_world, drive_upload, submit
+from fixtures.stewardship import configure_upload_world
 
 
 def test_interrupted_paged_deletion_scan_restarts_without_recording_an_outcome(
@@ -17,11 +20,28 @@ def test_interrupted_paged_deletion_scan_restarts_without_recording_an_outcome(
 ):
     w = sql_world
     w, owner = configure_upload_world(w, "SCD1_MERGE")
-    payload = "id|name|LOCKED\n" + "".join(
-        f"{i}|person-{i}|false\n" for i in range(MAX_PROTECTION_EVENTS + 1)
+    owner = replace(owner, actor=Actor("alice", ActorKind.USER))
+    rows = ",".join(
+        f"({i},'person-{i}',CAST(NULL AS BIGINT))" for i in range(MAX_PROTECTION_EVENTS + 1)
     )
-    receipt = submit(owner, "alice", payload.encode())
-    assert drive_upload(w, receipt["pipeline_run_id"]).status == RunStatus.SUCCESS
+    seeded = w.run(
+        "seed_candidates",
+        SQL_ACTION="SCD1_MERGE",
+        TARGET_OBJECT="uploaded",
+        SELECT_QUERY=f"SELECT * FROM (VALUES {rows}) AS candidates(id,name,UPLOAD_ID)",
+        MERGE_KEY="id",
+        MERGE_COMPARE_COLUMNS="name",
+    )
+    assert seeded.insert_count == MAX_PROTECTION_EVENTS + 1
+    fields = {"pipeline_code": "P", "task_code": "apply", "key": {"id": 0}}
+    act(
+        owner,
+        ActionName.DATA_EDIT,
+        **fields,
+        values={"name": "person-0"},
+        reason="enable protection",
+    )
+    act(owner, ActionName.DATA_UNLOCK, **fields, columns=("name",), reason="allow deletion")
     monkeypatch.setenv("ETL_CRAFT_FAULT", "protection.after_pending")
     with pytest.raises(InjectedFaultError):
         w.run(
@@ -55,7 +75,6 @@ def test_interrupted_paged_deletion_scan_restarts_without_recording_an_outcome(
         if "AS key_hash" in statement and "ETL_PROTECTION IS NOT NULL" in statement:
             statements.append(statement)
 
-    fields = {"pipeline_code": "P", "task_code": "apply", "key": {"id": 0}}
     monkeypatch.setattr(LocalTaskStore, "protection_match", interrupt)
     event.listen(Engine, "before_cursor_execute", observe)
     try:

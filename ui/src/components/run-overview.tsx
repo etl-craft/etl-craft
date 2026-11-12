@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { ChevronDown, ChevronRight, CircleX, Copy, Download, LifeBuoy } from "lucide-react";
 import * as React from "react";
 import { Link } from "react-router-dom";
-import { Fact, FactList, Loading, Notice } from "@/components/common";
+import { Fact, FactList, Loading, Notice, ParamList } from "@/components/common";
 import { DropdownContent, DropdownItem, DropdownLabel, DropdownMenu, DropdownSeparator, DropdownTrigger } from "@/components/dropdown";
 import { ActionButton } from "@/components/action-button";
 import { AttemptDetails } from "@/components/attempt-details";
@@ -326,6 +326,10 @@ export function RunOverview({ code, pipeline, runId, task, onTask }: { code: str
           </Button>
         </p>
       ) : null}
+      {r.parameter_overrides && Object.keys(r.parameter_overrides).length > 0 && <section aria-label="Recorded task inputs" className="space-y-2">
+        <h3 className="text-sm font-medium">Recorded task inputs</h3>
+        <ParamList entries={Object.entries(r.parameter_overrides).flatMap(([task, values]) => Object.entries(values).map(([name, value]): [string, string] => [`${task}.${name}`, value]))} />
+      </section>}
       <FailedTasks code={code} pipeline={pipeline} runId={runId} steps={ordered} open={(name) => onTask(name)} />
       <FactList inline>
         <Fact inline label="Started"><When iso={r.start_date} /></Fact>

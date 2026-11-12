@@ -194,7 +194,7 @@ def _read_sql_task(context: TaskContext, stored: StoredOffset | None = None) -> 
             "letters, digits and underscores only; without a database, the active Warehouse "
             "profile's is used"
         )
-    flags = {name: _flag(params, name, action, applies) for name, applies in FLAGS.items()}
+    flags = {name: read_flag(params, name, action, applies) for name, applies in FLAGS.items()}
     if action == SqlAction.CREATE_VIEW:
         _refuse_view_storage(params)
 
@@ -235,11 +235,7 @@ def _read_sql_task(context: TaskContext, stored: StoredOffset | None = None) -> 
                 )
     if action not in KEYED and params.get("MERGE_KEY"):
         raise SqlGuardError(f"MERGE_KEY does not apply to SQL_ACTION={action}")
-    reject_limit = _reject_limit(params.get("REJECT_LIMIT"), action)
-    if flags["SKIP_REJECTS_OVER_LIMIT"] and reject_limit is None:
-        raise SqlGuardError(
-            "SKIP_REJECTS_OVER_LIMIT applies only with REJECT_LIMIT: set the limit, or remove it"
-        )
+    reject_limit = read_reject_limit(params, action)
 
     return SqlTask(
         action=action,
@@ -288,9 +284,10 @@ def parse_flag(params: Mapping[str, str], name: str) -> bool:
     return lowered == "true"
 
 
-def _flag(
+def read_flag(
     params: Mapping[str, str], name: str, action: SqlAction, applies: frozenset[SqlAction]
 ) -> bool:
+    """Read a flag with the action applicability and default used by SQL execution."""
     enabled = parse_flag(params, name)
     if name in params and action not in applies:
         names = ", ".join(sorted(applies))
@@ -432,7 +429,21 @@ def _dedupe_order(value: str | None) -> str | None:
     return ", ".join(terms)
 
 
+def read_reject_limit(params: Mapping[str, str], action: SqlAction) -> RejectLimit | None:
+    """Validate the budget and its relationship to rejection-limit skipping."""
+    limit = _reject_limit(params.get("REJECT_LIMIT"), action)
+    if (
+        read_flag(params, "SKIP_REJECTS_OVER_LIMIT", action, FLAGS["SKIP_REJECTS_OVER_LIMIT"])
+        and limit is None
+    ):
+        raise SqlGuardError(
+            "SKIP_REJECTS_OVER_LIMIT applies only with REJECT_LIMIT: set the limit, or remove it"
+        )
+    return limit
+
+
 def _reject_limit(value: str | None, action: SqlAction) -> RejectLimit | None:
+    """Validate the handler's screened-row rejection budget."""
     if value is None or not value.strip():
         return None
     if action not in SCREENED:

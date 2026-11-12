@@ -39,7 +39,8 @@ def configure(parser: argparse.ArgumentParser) -> None:
         help="JSON list of explicit scoped controls with per-object request keys; prepare only.",
     )
     parser.add_argument(
-        "--request-key", help="Idempotency key for recovery/restart/one-run permission."
+        "--request-key",
+        help="Idempotency key for run overrides or recovery/restart/one-run permission.",
     )
 
 

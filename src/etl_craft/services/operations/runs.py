@@ -74,6 +74,30 @@ def execute_run(ctx: OperationContext, request: RunRequest) -> OperationResult |
     """
     from etl_craft.services.operations.processes import connection_process
 
+    if request.params:
+        from etl_craft.services.operations import run_parameters
+
+        check_reason(request.reason)
+        selected, run_id, duplicate = run_parameters.admit(ctx, request)
+        if duplicate:
+            from etl_craft.engine.runlog import select_run
+
+            with ctx.engine.connect() as conn:
+                pipeline_id = resolve_pipeline_id(conn, request.pipeline_code)
+                recorded = select_run(conn, pipeline_id, RunSelector(run_id=run_id))
+            return result(
+                ctx,
+                request.pipeline_code,
+                RunStatus(recorded.status),
+                "Recorded override submission; no new dispatch.",
+                pipeline_run_id=run_id,
+            )
+        request = selected
+    elif request.request_key is not None:
+        raise UsageError(
+            "request_key without overrides: expected params; "
+            "use a control request or supply --param"
+        )
     if ctx.transport == Transport.HTTP:
         request = _over_http(request)
     check_reason(request.reason)

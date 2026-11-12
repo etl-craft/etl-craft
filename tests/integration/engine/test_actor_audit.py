@@ -872,3 +872,30 @@ def test_direct_pipeline_requests_record_the_selected_project(engine_db):
         ).all()
     assert len(row) == 2
     assert all(item.project_id == 1 and item.pipeline_id == pipeline for item in row)
+
+
+def test_run_parameter_overrides_are_attributed_and_immutable(engine_db):
+    from etl_craft.engine.run_overrides import store
+
+    with acting_as(ALICE), engine_db.engine.begin() as conn:
+        pipeline = add_pipeline(conn, "OVERRIDES")
+        run = transitions.create_run(conn, pipeline, ALICE)
+        store(conn, run, 1, "submission", "a" * 64, {"load": {"INPUT_PARAMS": "{}"}})
+        row = conn.execute(
+            text(
+                "SELECT CREATED_BY AS actor,CREATED_BY_KIND AS kind FROM "
+                "AUD_RUN_PARAMETER_OVERRIDES WHERE PIPELINE_RUN_ID=:run"
+            ),
+            {"run": run},
+        ).one()
+        assert row.actor == ALICE.name and row.kind == ALICE.kind
+    for sql in (
+        "UPDATE AUD_RUN_PARAMETER_OVERRIDES SET OVERRIDES='{}'",
+        "DELETE FROM AUD_RUN_PARAMETER_OVERRIDES",
+    ):
+        with (
+            acting_as(ALICE),
+            pytest.raises(DBAPIError, match="immutable"),
+            engine_db.engine.begin() as conn,
+        ):
+            conn.execute(text(sql))

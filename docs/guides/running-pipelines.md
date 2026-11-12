@@ -32,6 +32,51 @@ SALES_DAILY: pipeline_run_id=97 FAILED — 2 task(s) did not succeed: load_order
 A task whose dependencies can never be met under the run is recorded `SKIPPED`, and stays
 `SKIPPED`: see [Dependencies and run conditions](dependencies.md).
 
+## One-run task input overrides
+
+Use a repeated `--param TASK.PARAM=VALUE` and a stable `--request-key` to change existing
+inputs for one new run, without editing the pipeline's configuration:
+
+```bash
+etl-craft run --pipeline-code SALES_DAILY --init-only --reason "reprocess one day" \
+  --request-key sales-2026-11-10 \
+  --param 'extract_orders.INPUT_PARAMS={"day":"2026-11-10"}'
+```
+
+The task must already have that active parameter. The initial supported data inputs are Python
+`INPUT_PARAMS` (a JSON object), and SQL `ALLOW_EMPTY` (`true`/`false`), `REJECT_LIMIT` (the handler's row
+count/percentage budget) and `WATERMARK_START` (the configured watermark type). Code, targets,
+credentials and execution controls cannot be overridden. `WATERMARK_START` remains a seed:
+a retained checkpoint still takes precedence; an override never resets it. Malformed assignments, duplicate
+keys, unknown tasks/names and invalid values refuse before a run is accepted. Split at the
+first equals sign; later equals signs are part of the value. Quote a value for your shell
+when it contains spaces or JSON punctuation.
+
+Overrides apply to a new whole-pipeline or `--init-only` run, or a new `--standalone` task
+selection. Backfill, skip, force, rerun and mutation of an existing run are refused. The shared
+RUN operation enforces the usual operator role, project/pipeline grants, governance reason
+and production confirmation. The HTTP RUN request accepts the same strings as `params` and
+`request_key`; the Run now dialog sends that same request.
+
+The run and its actor-attributed `AUD_RUN_PARAMETER_OVERRIDES` row commit together.
+Raw assignment strings are omitted from the general action-request audit; accepted values
+live in the guarded override record. Credential assignments are refused without echoing
+the supplied value. The base
+metadata snapshot remains unchanged; one effective-definition reader overlays the recorded
+values on it. Retries, recovery and agent dispatch read those values even after configuration
+changes. The run document's `parameter_overrides` and its Recorded task inputs panel explain
+which values differ from the base. Unlisted values retain their pinned defaults.
+
+Reusing a submission key in the same project with the same canonical inputs returns the
+recorded run without dispatching it again. Reordering assignments does not change identity;
+changing task, pipeline, logical date, selection or values refuses. Use a new key for new
+work. The submission record is retained with the run; after run retention removes it,
+there is no replay record. Use a unique key for each logical submission. An accepted override run remains recorded if a later connection preflight fails;
+reusing its key returns its current state. Resume that exact run without new overrides after
+repairing the connection. An explicit restart copies overrides to its newly pinned base, refusing incompatible
+task/name/type changes before creation. Replay of an accepted restart retains that exact
+replacement and its recorded values.
+
 ## Before the run starts
 
 The engine first tests the connections the run uses. A warehouse failure stops with exit status

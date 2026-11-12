@@ -20,7 +20,7 @@ def for_run(bind: Engine | Connection, run_id: int | None) -> Iterator[None]:
         yield
         return
     with bind.connect() if isinstance(bind, Engine) else nullcontext(bind) as conn:
-        definition, project_id = _read(conn, run_id)
+        definition, project_id = read(conn, run_id)
     with using(definition), selected_project(project_id):
         yield
 
@@ -30,19 +30,24 @@ def for_selection(engine: Engine, pipeline_id: int, selector: RunSelector) -> It
     """Select an exact existing run before resolving its admitted task codes."""
     with engine.connect() as conn:
         selected = select_run(conn, pipeline_id, selector)
-        definition, project_id = _read(conn, selected.pipeline_run_id)
+        definition, project_id = read(conn, selected.pipeline_run_id)
     with using(definition), selected_project(project_id):
         yield
 
 
-def _read(conn: Connection, run_id: int) -> tuple[Definition, int]:
+def read(conn: Connection, run_id: int) -> tuple[Definition, int]:
+    """Read the exact pinned image and its immutable effective input overlay."""
     row = conn.execute(statement(conn, "run_definition"), {"run_id": run_id}).one_or_none()
     if row is None or row.snapshot is None:
         raise RunStateError(
             f"run {run_id}: no admitted metadata snapshot; expected a pinned definition; "
             "start a new run instead of reopening a pre-bundle completed run"
         )
-    return Definition.read(row.snapshot, run_id, row.bundle_id), int(row.project_id)
+    from etl_craft.engine.run_overrides import from_snapshot
+
+    return from_snapshot(
+        row.snapshot, run_id, row.bundle_id, row.parameter_overrides, row.pipeline_id
+    ), int(row.project_id)
 
 
 @contextmanager

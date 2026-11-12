@@ -931,3 +931,31 @@ def test_run_api_requires_reasons_by_governance_not_environment(api):
         else:
             assert response.status_code == 200, response.text
             assert response.json()["run"]["pipeline_run_id"] is not None
+
+
+def test_run_overrides_share_admission_replay_and_authorization(api):
+    ctx, client, creds, _, _ = api
+    with ctx.engine.begin() as conn:
+        pipeline = add_pipeline(conn, "OVERRIDE_INPUTS")
+        add_task(conn, pipeline, "load", "PYTHON", INPUT_PARAMS='{"day":1}')
+    payload = {
+        "pipeline_code": "OVERRIDE_INPUTS",
+        "params": ['load.INPUT_PARAMS={"day":2}'],
+        "request_key": "api-inputs",
+        "reason": "one-off input",
+    }
+    path = "/api/v1/projects/default/runs"
+    denied = client.post(path, headers=headers(creds[ApiRole.VIEWER]), json=payload)
+    assert denied.status_code == 403
+    first = client.post(path, headers=headers(creds[ApiRole.OPERATOR]), json=payload)
+    assert first.status_code == 200, first.text
+    replay = client.post(path, headers=headers(creds[ApiRole.OPERATOR]), json=payload)
+    assert replay.status_code == 200, replay.text
+    assert replay.json()["run"]["pipeline_run_id"] == first.json()["run"]["pipeline_run_id"]
+    assert replay.json()["run"]["parameter_overrides"] == {"load": {"INPUT_PARAMS": '{"day":2}'}}
+    conflict = client.post(
+        path,
+        headers=headers(creds[ApiRole.OPERATOR]),
+        json={**payload, "params": ['load.INPUT_PARAMS={"day":3}']},
+    )
+    assert conflict.status_code >= 400 and "payload differs" in conflict.text

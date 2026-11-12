@@ -436,6 +436,7 @@ INTRODUCED: dict[InputKind, dict[str, str]] = {
             "--path",
             "--permission",
             "--pipeline",
+            "--param",
             "--pipeline-code",
             "--pipeline_code",
             "--pool",

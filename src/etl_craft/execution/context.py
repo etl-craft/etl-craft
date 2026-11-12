@@ -13,6 +13,7 @@ from etl_craft.engine import event_files, run_scopes
 from etl_craft.engine.queries import statement
 from etl_craft.engine.repository.events import run_event_data
 from etl_craft.engine.repository.tasks import TaskExecutionDetail, fetch_task_parameters
+from etl_craft.engine.run_overrides import from_snapshot
 from etl_craft.engine.runlog import as_date
 from etl_craft.engine.uploads import run_uploads
 from etl_craft.handlers.registry import TaskContext
@@ -37,17 +38,15 @@ def build_task_context(
         ).one_or_none()
         if row is None:
             raise RunStateError(f"no task run with task_run_id={task_run_id}")
-        definition = Definition.read(row.metadata_snapshot, row.pipeline_run_id, row.bundle_id)
+        definition = from_snapshot(
+            row.metadata_snapshot,
+            row.pipeline_run_id,
+            row.bundle_id,
+            row.parameter_overrides,
+            row.pipeline_id,
+        )
         with using(definition):
-            task = definition.row("CFG_TASKS", "task_id", row.task_id)
-            pipeline = definition.row("CFG_PIPELINES", "pipeline_id", row.pipeline_id)
-            detail = TaskExecutionDetail(
-                str(task["handler"]),
-                str(task["task_code"]),
-                row.pipeline_id,
-                str(pipeline["pipeline_code"]),
-                str(pipeline["refresh_type"]),
-            )
+            detail = _detail(definition, row.pipeline_id, row.task_id)
             params = fetch_task_parameters(conn, row.task_id)
             selected = (
                 None
@@ -93,4 +92,16 @@ def build_task_context(
         uploads=uploads,
         upload_inputs=uploads,
         started_at=as_utc(row.started_at),
+    )
+
+
+def _detail(definition: Definition, pipeline_id: int, task_id: int) -> TaskExecutionDetail:
+    task = definition.row("CFG_TASKS", "task_id", task_id)
+    pipeline = definition.row("CFG_PIPELINES", "pipeline_id", pipeline_id)
+    return TaskExecutionDetail(
+        str(task["handler"]),
+        str(task["task_code"]),
+        pipeline_id,
+        str(pipeline["pipeline_code"]),
+        str(pipeline["refresh_type"]),
     )

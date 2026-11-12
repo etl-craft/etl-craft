@@ -131,7 +131,7 @@ item's text, or work done early under another item.
 | S5.S Accounts, login and roles | Done | #203, #204, #205, #206, #207, #376, #377 | Account identities, local and server sign-in with refresh tokens, one service-role policy, explicit actors with an `etl-craft` writer on every run, and a local installation operating a server over HTTPS; every action has one implementation that the CLI, the API and later the UI call |
 | S5.O.3 SCD human override protection | Done | #208 | Native PostgreSQL/DuckDB protection, admin edits/unlocks and column provenance; cloud acceptance unavailable on its try |
 | S5.Q Scoped operator controls | Done | #209, #210, #211 | Isolated manual selections, scoped holds/stop/abort, durable recovery/restart preparation, one-run pause permission, selected bulk outcomes and shared capabilities |
-| S5.Q.4 Recorded run-parameter overrides | Planned | | Separate engine follow-up retained from S7.A: immutable per-run overrides, CLI first, then shared API/UI |
+| S5.Q.4 Recorded run-parameter overrides | Done | #385 | Shared CLI/API/UI admission, immutable records, idempotent submissions and pinned retry/agent/restart replay |
 | S5.T Resource discovery and deployment profiles | Done | #212 | `core/resources.py` measures affinity, cgroup v1/v2 quotas and memory limits; `Deployment.Profile` sizes `run` and `server` slots, server threads and the Engine DB pool within written ceilings; doctor/setup report measurements, sizes, fallbacks and the PostgreSQL connection budget |
 | S5.V Team-owned config tables | Done | #213 | Fixed package ownership, unrestricted team config, retained read-only team history and collision preflight; Databricks acceptance unavailable on its try |
 | S5.U Robustness before the cluster | Done | #176, #182, #183, #184 | Engine DB restarts ridden out; SLA breach writes retried; no single-writer guess; timing tests verified under load; subprocess code measured by coverage |
@@ -248,6 +248,22 @@ item's text, or work done early under another item.
   Acceptance availability: rolling coverage is unit-level because no released 0.9.x binary
   exists; certify actual mixed-version roles and previous binaries on upgraded databases when
   0.9.0 is cut. The progress row remains in progress for that release-gate certification.
+
+- **S5.Q.4 recorded run inputs.** Choices that differ from the item text: the approved initial
+  scope is a single new pipeline/init/standalone run, with a required submission key; backfill,
+  skip, force, rerun and existing-run mutation are refused. CLI `--param TASK.PARAM=VALUE`,
+  API `params` and Run now share parsing and admission. Existing Python `INPUT_PARAMS` and SQL
+  `ALLOW_EMPTY`, `REJECT_LIMIT`, `WATERMARK_START` are the supported data-input keys; code,
+  targets, secrets and controls stay pinned. Keys are project-scoped; canonical maps preserve
+  exact string values. The guarded immutable AUD_RUN_PARAMETER_OVERRIDES row is committed
+  with its pinned run; the base snapshot stays unchanged. Effective-definition reads serve
+  retry scopes, task contexts, agent dispatch and recovery. A new explicit restart copies
+  overrides only after checking its new base; accepted restart replay keeps its replacement.
+  Accepted overrides remain recorded if subsequent preflight fails; retrying the key returns
+  the run without dispatch, and an explicit run selector can resume it after repair.
+  Acceptance availability: SQLite and PostgreSQL upgrade, actor-audit, query-plan and touched
+  execution suites passed, with the unit/API/browser suites and repeated admission races.
+  No warehouse SQL is changed by reusing the handler's existing rejection-limit parser.
 
 What a person picking up the work needs that the code and the item texts do not say.
 

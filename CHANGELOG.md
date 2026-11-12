@@ -6,6 +6,14 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+- `run --param TASK.PARAM=VALUE --request-key KEY` records immutable per-run data-input
+  overrides through the shared RUN operation, API and Run now dialog. Duplicate keys and
+  invalid inputs refuse; matching submissions return the recorded run without new dispatch.
+  Retries, recovery and agents use the pinned base plus recorded values; explicit restart
+  copies them only when its new definition is compatible. Migration 0093 adds the guarded
+  `AUD_RUN_PARAMETER_OVERRIDES` table in both Engine DB dialects. Run documents and details
+  show `parameter_overrides`; existing configuration is untouched.
+
 ### Rolling compatibility checks (S7.G)
 
 - Agent admission accepts same-major package peers through one shared range rule; refusals name

@@ -139,9 +139,17 @@ def prepare_recovery(
         if request.task_code is None
         else resolve_task_id(conn, row.pipeline_id, request.task_code),
     )
+    import json
+
+    from etl_craft.core.text import sha256_hex
+    from etl_craft.engine.repository.pipelines import current_project_id
+    from etl_craft.engine.run_overrides import store
+    from etl_craft.services.operations.run_parameters import copy_for_restart
+
+    values = copy_for_restart(conn, selected.pipeline_run_id, row.pipeline_id)
     key = f"control-restart:{control_id}"
     if scope is None:
-        transitions.create_run(
+        replacement = transitions.create_run(
             conn,
             row.pipeline_id,
             ctx.actor,
@@ -150,8 +158,17 @@ def prepare_recovery(
             status=RunStatus.QUEUED,
         )
     else:
-        run_scopes.create_manual_run(
+        replacement = run_scopes.create_manual_run(
             conn, row.pipeline_id, ctx.actor, scope, key, selected.run_date
+        )
+    if values:
+        store(
+            conn,
+            replacement,
+            current_project_id(),
+            None,
+            sha256_hex(json.dumps(values, sort_keys=True).encode()),
+            values,
         )
 
 
