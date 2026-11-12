@@ -201,7 +201,9 @@ def _column_records(catalog: Catalog, table: TableAsset, column: Column) -> list
     unknown = [
         name
         for name in table.writers
-        if infers_output_columns(catalog.tasks[name]) and catalog.tasks[name].lineage_error
+        if infers_output_columns(catalog.tasks[name])
+        and catalog.tasks[name].lineage_error
+        and not catalog.tasks[name].column_edges
     ]
     if unknown and not column.declared:
         return [
@@ -323,13 +325,24 @@ def lineage_records(catalog: Catalog, table: TableAsset) -> list[GapRecord]:
     for name in table.writers:
         task = catalog.tasks[name]
         reason = task.lineage_error
-        if task.row.handler == Handler.PYTHON:
-            reason = "Script column lineage is unknown; a target name does not declare its sources."
-        if reason:
+        if task.row.handler != Handler.SQL:
+            continue
+        affected = (
+            {
+                edge.target_column
+                for edge in task.column_edges
+                if edge.source_object in task.missing_sources
+            }
+            if task.missing_sources
+            else {None}
+        ) or {None}
+        if not reason:
+            continue
+        for column in affected:
             records.append(
                 GapRecord(
                     table.name,
-                    None,
+                    column,
                     GapAttribute.LINEAGE,
                     GapState.LINEAGE_GAP,
                     None,

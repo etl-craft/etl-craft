@@ -9,21 +9,50 @@ from __future__ import annotations
 
 from typing import Any
 
+from etl_craft.core.enums import Handler
+from etl_craft.core.enums_lineage import DefinitionKind, LineageState
+from etl_craft.core.task_secrets import declared
 from etl_craft.services.catalog.collect import Catalog, PipelineAsset, TableAsset, TaskAsset
 from etl_craft.services.catalog.gaps import gap_snapshot
+from etl_craft.services.catalog.mapping import lineage, mapping
 from etl_craft.services.operations.serialization import encode
 
-SCHEMA = "etl-craft/catalog/1"
+SCHEMA = "etl-craft/catalog/2"
 """The document's schema name, as the operation documents carry theirs."""
 
 RUNS = 10
 """How many of a pipeline's newest runs the document carries."""
 
 
-def _pipeline(asset: PipelineAsset) -> dict[str, Any]:
+def _pipeline(catalog: Catalog, asset: PipelineAsset) -> dict[str, Any]:
     row = asset.row
     return {
         "code": row.pipeline_code,
+        "upstream": [
+            edge
+            for edge in catalog.definition_edges
+            if edge["kind"] == DefinitionKind.PIPELINE and edge["target"] == row.pipeline_code
+        ],
+        "downstream": [
+            edge
+            for edge in catalog.definition_edges
+            if edge["kind"] == DefinitionKind.PIPELINE and edge["source"] == row.pipeline_code
+        ],
+        "gates": [
+            {**edge, "wait_minutes": catalog.gate_wait_minutes}
+            for edge in catalog.definition_edges
+            if edge["kind"] == DefinitionKind.PIPELINE and edge["target"] == row.pipeline_code
+        ],
+        "triggers": [
+            {
+                "task": task.label,
+                "pipeline": task.row.pipeline_code,
+                "mode": task.params.get("TRIGGER_MODE"),
+                "timeout_minutes": task.params.get("TRIGGER_TIMEOUT_MINUTES"),
+            }
+            for task in catalog.tasks.values()
+            if task.params.get("TRIGGER_PIPELINE_CODE") == row.pipeline_code
+        ],
         "name": row.pipeline_name,
         "description": row.description,
         "schedule": row.run_schedule,
@@ -39,7 +68,7 @@ def _pipeline(asset: PipelineAsset) -> dict[str, Any]:
     }
 
 
-def _task(label: str, asset: TaskAsset) -> dict[str, Any]:
+def _task(catalog: Catalog, label: str, asset: TaskAsset) -> dict[str, Any]:
     row = asset.row
     return {
         "label": label,
@@ -52,9 +81,29 @@ def _task(label: str, asset: TaskAsset) -> dict[str, Any]:
         "target": asset.target,
         "sources": list(asset.sources),
         "script": asset.script,
-        "lineage_error": asset.lineage_error,
-        "upstream": [list(pair) for pair in asset.upstream],
-        "downstream": [list(pair) for pair in asset.downstream],
+        "lineage": lineage(asset),
+        "mapping": mapping(asset),
+        "script_kind": asset.params.get("SCRIPT_KIND"),
+        "gate": {
+            key: asset.params[key]
+            for key in ("EVENT_TIMEOUT_MINUTES", "EVENT_POLL_SECONDS")
+            if key in asset.params
+        },
+        "run_condition_count": row.run_condition_count,
+        "active_flag": row.active_flag,
+        "target_active_flag": row.target_active_flag,
+        **asset.execution,
+        "secrets": list(declared(asset.params, label)) if row.handler == Handler.PYTHON else [],
+        "upstream": [
+            [edge["source"], edge["dependency_type"], edge["consume_repairs"]]
+            for edge in catalog.definition_edges
+            if edge["kind"] == DefinitionKind.TASK and edge["target"] == label
+        ],
+        "downstream": [
+            [edge["target"], edge["dependency_type"], edge["consume_repairs"]]
+            for edge in catalog.definition_edges
+            if edge["kind"] == DefinitionKind.TASK and edge["source"] == label
+        ],
         "rules": list(asset.rules),
         "runs": [encode(run) for run in asset.runs[:RUNS]],
     }
@@ -93,13 +142,14 @@ def catalog_document(catalog: Catalog) -> dict[str, Any]:
         "sql_dialect": catalog.sql_dialect,
         "warehouse": catalog.warehouse_identity,
         "contract_version": catalog.contract_version,
-        "pipelines": [_pipeline(p) for p in catalog.pipelines.values()],
-        "tasks": [_task(label, t) for label, t in catalog.tasks.items()],
+        "pipelines": [_pipeline(catalog, p) for p in catalog.pipelines.values()],
+        "tasks": [_task(catalog, label, t) for label, t in catalog.tasks.items()],
         "tables": [_table(catalog, name, t) for name, t in catalog.tables.items()],
         "rules": [
             {
                 "id": rule_id,
                 "name": rule.row.name,
+                "sql": rule.row.sql,
                 "type": rule.row.rule_type,
                 "level": rule.row.business_rule_level,
                 "table": rule.table,
@@ -114,7 +164,14 @@ def catalog_document(catalog: Catalog) -> dict[str, Any]:
             for name, s in catalog.scripts.items()
         ],
         "table_edges": [encode(edge) for edge in catalog.table_edges],
-        "column_edges": [encode(edge) for edge in catalog.column_edges],
+        "column_edges": [
+            encode(edge)
+            for edge in catalog.column_edges
+            if edge.task in catalog.tasks
+            and lineage(catalog.tasks[edge.task])["state"] != LineageState.UNAVAILABLE
+        ],
+        "definition_edges": catalog.definition_edges,
+        "gate_wait_minutes": catalog.gate_wait_minutes,
         "triggers": [encode(link) for link in catalog.trigger_links],
         "gaps": [encode(record) for record in gap_snapshot(catalog).records],
     }

@@ -13,9 +13,7 @@ Tables are joined by name as lineage names them: lower case, without the active 
 database. Two kinds of edge connect them: column edges, one per target column and source
 column, and table edges, one per source table and target table of a task. A SQL task whose
 columns cannot be traced keeps its table edges, from the tables its SELECT reads, and its reason
-is listed. A Python script appears at table level: a ``PYTHON`` task may name the table it
-writes in ``TARGET_OBJECT`` and where it reads from in ``SOURCE_OBJECT``, shown as an external
-source.
+is listed. Python ingestion lineage is explicitly declared with LINEAGE_SOURCE and LINEAGE_COLUMNS.
 
 With ``with_warehouse``, each table that exists in the warehouse gets its column types, and
 comments where the warehouse's information schema has them.
@@ -38,11 +36,12 @@ from etl_craft.config import ConnectorConfig
 from etl_craft.config.project import python_script, sql_script
 from etl_craft.config.targets import active_catalog, parse_warehouse_url
 from etl_craft.core.business_rules import RuleObservation
-from etl_craft.core.enums import GapState, Handler, SqlAction
+from etl_craft.core.enums import GapState, Handler, ScriptKind, SqlAction
 from etl_craft.core.errors import EtlCraftError, MetadataError
 from etl_craft.core.text import is_safe_identifier
 from etl_craft.core.time import as_utc
 from etl_craft.engine.environment import project_environment
+from etl_craft.engine.queries import statement
 from etl_craft.engine.repository.business_rules import fetch_rule_observations
 from etl_craft.engine.repository.catalog import (
     Consumption,
@@ -71,17 +70,19 @@ from etl_craft.engine.repository.lineage import (
 from etl_craft.engine.repository.normalization import ObjectIdentity
 from etl_craft.engine.repository.pauses import Pause, fetch_open_pauses
 from etl_craft.engine.repository.source_columns import fetch_source_columns
-from etl_craft.engine.repository.tasks import TargetTask, fetch_all_task_parameters
+from etl_craft.engine.repository.tasks import TargetTask
 from etl_craft.engine.repository.triggers import TriggerLink, fetch_trigger_links
 from etl_craft.engine.repository.validation import (
     fetch_pipeline_edges,
     fetch_task_dependency_edges,
 )
+from etl_craft.handlers.lineage_mapping import MappingStep
 from etl_craft.handlers.resources import LocalLocker
 from etl_craft.handlers.sql.creation import writer_action
 from etl_craft.handlers.sql.spec import read_action, read_setup_for
 from etl_craft.handlers.sql.tables import AUDIT_COLUMNS
 from etl_craft.services.catalog.gaps import infers_output_columns, table_records
+from etl_craft.services.catalog.mapping import definition_parameters
 from etl_craft.services.catalog.metrics import RunKpis as RunKpis
 from etl_craft.services.catalog.metrics import run_kpis as run_kpis
 from etl_craft.services.insights import Insights, measure, window
@@ -156,10 +157,9 @@ class TableEdge:
 
 @dataclass
 class TaskAsset:
-    """An active task: its definition, lineage, dependencies and latest run.
+    """A task definition, including inactive tasks, with lineage and recent run history.
 
-    ``upstream`` and ``downstream`` are the tasks it waits for and that wait for it, each with
-    the dependency type, as ``PIPELINE_CODE.TASK_CODE``; ``rules`` are its business rules.
+    Dependency pairs name tasks as PIPELINE_CODE.TASK_CODE and retain their dependency type.
     """
 
     row: TaskRow
@@ -169,7 +169,10 @@ class TaskAsset:
     target: str | None = None
     sources: tuple[str, ...] = ()
     lineage_error: str | None = None
+    missing_sources: tuple[str, ...] = ()
     column_edges: list[Edge] = field(default_factory=list)
+    mapping: tuple[MappingStep, ...] = ()
+    execution: dict[str, object] = field(default_factory=dict)
     upstream: list[tuple[str, str]] = field(default_factory=list)
     downstream: list[tuple[str, str]] = field(default_factory=list)
     rules: list[int] = field(default_factory=list)
@@ -260,6 +263,8 @@ class Catalog:
     sql_dialect: str | None = None
     trigger_links: list[TriggerLink] = field(default_factory=list)
     insights: Insights | None = None
+    definition_edges: list[dict[str, str]] = field(default_factory=list)
+    gate_wait_minutes: int = 0
     environment_label: str = ""
     project_code: str = ""
 
@@ -305,7 +310,7 @@ def collect_catalog(
         task_rows = fetch_catalog_tasks(conn)
         rule_rows = fetch_catalog_rules(conn)
         versions = fetch_documentation_versions(conn)
-        params = fetch_all_task_parameters(conn)
+        params = definition_parameters(conn)
         pipeline_edges = fetch_pipeline_edges(conn, project_only=True)
         task_edges = fetch_task_dependency_edges(conn)
         paused = fetch_open_pauses(conn)
@@ -391,18 +396,29 @@ def collect_catalog(
             continue
         waiting.upstream.append((upstream.label, dependency.dependency_type))
         upstream.downstream.append((waiting.label, dependency.dependency_type))
-    _finish(catalog, engine, rule_rows, name_of)
+    _finish(catalog, engine, rule_rows, name_of, config)
     _compare_catalog(catalog, engine, config, with_warehouse)
     return catalog
 
 
 def _finish(
-    catalog: Catalog, engine: Engine, rule_rows: Sequence[RuleRow], name_of: Callable[[str], str]
+    catalog: Catalog,
+    engine: Engine,
+    rule_rows: Sequence[RuleRow],
+    name_of: Callable[[str], str],
+    config: ConnectorConfig,
 ) -> None:
     """Attach the rules with their observations and the default-window Insights snapshot."""
+    from etl_craft.services.catalog.mapping import complete_definitions
+
+    complete_definitions(catalog, config)
     pipelines = {asset.row.pipeline_id: code for code, asset in catalog.pipelines.items()}
     with engine.connect() as conn:
         _rules(catalog, rule_rows, fetch_rule_observations(conn), name_of)
+        catalog.definition_edges = [
+            dict(r._mapping)
+            for r in conn.execute(statement(conn, "catalog_definition_dependencies"))
+        ]
         catalog.insights = measure(conn, pipelines, *window())
 
 
@@ -470,14 +486,22 @@ def _connect_task(
         action = (params.get("SQL_ACTION") or "").strip().upper()
         if lineage is not None:
             task.sources = lineage.sources
-            task.lineage_error = lineage.error
+            task.lineage_error = lineage.error if handler == Handler.SQL else None
+            task.mapping = lineage.mapping
             if action != SqlAction.DELETE_ROWS:
                 task.column_edges = list(lineage.edges)
     elif handler == Handler.PYTHON:
         written = (params.get("TARGET_OBJECT") or "").strip()
         task.target = name_of(written) if written else None
-        source = (params.get("SOURCE_OBJECT") or "").strip()
-        task.sources = (f"{EXTERNAL_PREFIX}{source.lower()}",) if source else ()
+        source = (
+            (params.get("LINEAGE_SOURCE") or "").strip()
+            if params.get("SCRIPT_KIND") == ScriptKind.INGESTION
+            else ""
+        )
+        task.sources = (f"{EXTERNAL_PREFIX}{source}",) if source else ()
+        from etl_craft.services.catalog.mapping import declare_columns
+
+        declare_columns(task)
         if task.script is not None:
             script = catalog.scripts.setdefault(task.script, ScriptAsset(task.script))
             script.tasks.append(task.label)

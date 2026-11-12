@@ -26,6 +26,14 @@ def chain(site):
     """INGEST stages raw orders, SALES converts them to dollars, MART sums them."""
     ctx, url = site
     with acting_as(Actor("owner", ActorKind.USER)), ctx.engine.begin() as conn:
+        from fixtures.metadata import add_source_column
+
+        for table, columns in [
+            ("raw.orders", [("id", "BIGINT"), ("amt", "BIGINT"), ("currency", "VARCHAR")]),
+            ("ref.rates", [("currency", "VARCHAR"), ("rate", "BIGINT")]),
+        ]:
+            for position, (name, data_type) in enumerate(columns, 1):
+                add_source_column(conn, table, name, data_type, position)
         ingest = add_pipeline(conn, "INGEST")
         add_task(
             conn,
@@ -200,4 +208,169 @@ def test_all_tables_lists_every_table_and_filters_by_name(chain):
             )
         ).to_be_visible()
         assert [p for p in problems if "status of 404" not in p] == []
+        browser.close()
+
+
+@pytest.fixture
+def mappings(site):
+    from etl_craft.services.catalog.collect import build_catalog
+    from etl_craft.services.catalog.site import write_site
+    from etl_craft.services.operations.documents import docs_folder
+    from fixtures.metadata import add_dependency, add_pipeline_dependency, add_source_column
+
+    ctx, url = site
+    with acting_as(ctx.actor), ctx.engine.begin() as conn:
+        upstream = add_pipeline(conn, "EXTRACT")
+        pipeline = add_pipeline(conn, "ORDERS")
+        from sqlalchemy import text
+
+        conn.execute(
+            text("UPDATE CFG_PIPELINES SET RUN_SCHEDULE='0 6 * * *' WHERE PIPELINE_ID=:pipeline"),
+            {"pipeline": pipeline},
+        )
+        downstream = add_pipeline(conn, "REPORT")
+        add_pipeline_dependency(conn, pipeline, upstream, "HAS_DATA")
+        add_pipeline_dependency(conn, downstream, pipeline)
+        for table, names in [
+            ("raw.orders", ["id", "amount"]),
+            ("mart.orders", ["id", "amount"]),
+            ("raw.accounts", ["id"]),
+            ("ref.rates", ["id", "factor"]),
+        ]:
+            for position, name in enumerate(names, 1):
+                add_source_column(conn, table, name, "BIGINT", position)
+        for position in range(3, 13):
+            add_source_column(conn, "raw.orders", f"extra_{position}", "BIGINT", position)
+        extract = add_task(
+            conn,
+            pipeline,
+            "extract",
+            "PYTHON",
+            TARGET_OBJECT="raw.accounts",
+            SCRIPT_FILE="extract.py",
+            LINEAGE_SOURCE="salesforce.Account",
+            LINEAGE_COLUMNS="Id:id",
+        )
+        load = add_task(
+            conn,
+            pipeline,
+            "load",
+            SQL_ACTION="SCD2_MERGE",
+            TARGET_OBJECT="mart.orders",
+            SELECT_QUERY=(
+                "SELECT o.id, o.amount * r.factor AS amount FROM raw.orders o "
+                "JOIN ref.rates r ON o.id=r.id WHERE o.amount > 0"
+            ),
+            MERGE_KEY="id",
+            MERGE_COMPARE_COLUMNS="amount",
+            RETRIES="3",
+            TASK_TIMEOUT_SECONDS="1800",
+        )
+        add_task(
+            conn,
+            pipeline,
+            "cleanup",
+            "PYTHON",
+            SCRIPT_KIND="UTILITY",
+            SCRIPT_FILE="cleanup.py",
+            TARGET_OBJECT="mart.orders",
+        )
+        add_dependency(conn, pipeline, load, extract, "HAS_DATA")
+        disabled = add_task(
+            conn, pipeline, "disabled", "PYTHON", SCRIPT_KIND="UTILITY", SCRIPT_FILE="disabled.py"
+        )
+        conn.execute(
+            text("UPDATE CFG_TASKS SET ACTIVE_FLAG='N' WHERE TASK_ID=:task"), {"task": disabled}
+        )
+        from etl_craft.core.enums import RunStatus
+        from etl_craft.engine import transitions
+        from fixtures.metadata import start_run
+
+        run = start_run(conn, pipeline)
+        conn.execute(
+            text(
+                "INSERT INTO AUD_TASK_RUN_LOG(PIPELINE_RUN_ID,TASK_ID,STATUS,START_DATE,END_DATE) "
+                "VALUES(:run,:task,'SUCCESS',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)"
+            ),
+            {"run": run, "task": load},
+        )
+        transitions.finalize_pipeline_run(conn, run, RunStatus.SUCCESS)
+    with acting_as(ctx.actor):
+        write_site(build_catalog(ctx.engine, ctx.config), ctx.config, docs_folder(ctx.config))
+    return ctx, url
+
+
+@pytest.mark.parametrize(
+    "appearance,width", [("light", 1280), ("dark", 1280), ("light", 390), ("dark", 390)]
+)
+def test_native_flow_mapping_provenance_and_keyboard(mappings, appearance, width):
+    _, url = mappings
+    with sync_playwright() as pw:
+        browser, page, problems = open_page(pw, viewport={"width": width, "height": 1000})
+        page.emulate_media(color_scheme=appearance)
+        sign_in(page, url, "/ui/projects/default/catalog/pipelines/ORDERS?tab=lineage")
+        expect(page.get_by_role("group", name="Task graph")).to_be_visible()
+        expect(page.get_by_text("SUCCESS — solid", exact=False)).to_be_visible()
+        expect(page.get_by_role("button", name="Open load details")).to_be_visible()
+        expect(page.locator('[data-id="disabled"] [data-focus]')).to_have_css("opacity", "0.4")
+        page.get_by_role("button", name="Show last-run status", exact=True).click()
+        expect(page.locator('[data-id="load"]')).to_contain_text("Success")
+        page.get_by_role("button", name="Open load details").focus()
+        expect(page.get_by_role("button", name="Open load details")).to_be_focused()
+        assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+        shoot(page, f"catalog-flow-{appearance}-{width}")
+        page.get_by_role("button", name="Open load details").press("Enter")
+        page.get_by_role("tab", name="Mapping", exact=True).click()
+        if width == 390:
+            expect(page.get_by_role("table", name="Task mapping")).to_be_visible()
+            page.get_by_role("button", name="Diagram", exact=True).click()
+        diagram = page.get_by_label("Task mapping diagram")
+        expect(diagram).to_be_visible()
+        diagram.get_by_role("button", name="Fit View", exact=True).click()
+        expect(diagram.locator(".react-flow__viewport")).to_have_css(
+            "transform", re.compile(r"matrix\(0\.[7-9]|matrix\(1")
+        )
+        page.get_by_role("button", name="Show all columns", exact=True).click()
+        page.wait_for_function("""() => {
+            const first = document.querySelector('[data-id="source:raw.orders"]');
+            const second = document.querySelector('[data-id="source:ref.rates"]');
+            return first && second
+                && first.getBoundingClientRect().bottom <= second.getBoundingClientRect().top;
+        }""")
+        page.get_by_role("button", name="Used columns", exact=True).click()
+        diagram.get_by_role("button", name="Fit View", exact=True).click()
+        target = diagram.locator('[data-id="target:mart.orders"]').get_by_role(
+            "button", name="amount", exact=False
+        )
+        target.click()
+        expect(
+            diagram.locator('[data-id="source:raw.orders"]').get_by_role(
+                "button", name="amount", exact=False
+            )
+        ).to_have_class(re.compile("ring-2"))
+        assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+        shoot(page, f"catalog-mapping-derived-{appearance}-{width}")
+        page.get_by_role("textbox", name="Find column", exact=True).fill("factor")
+        expect(
+            diagram.locator('[data-id="source:ref.rates"]').get_by_role(
+                "button", name="factor", exact=False
+            )
+        ).to_be_visible()
+        expect(target).to_be_visible()
+        page.get_by_role("textbox", name="Find column", exact=True).fill("")
+        page.goto(url + "/ui/projects/default/catalog/tasks/ORDERS.extract?tab=mapping")
+        expect(page.get_by_role("note")).to_contain_text("does not verify")
+        if width == 390:
+            page.get_by_role("button", name="Diagram", exact=True).click()
+        expect(
+            page.get_by_label("Task mapping diagram").get_by_text("declared", exact=False).first
+        ).to_be_visible()
+        assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+        shoot(page, f"catalog-mapping-declared-{appearance}-{width}")
+        page.goto(url + "/ui/projects/default/catalog/tasks/ORDERS.cleanup?tab=mapping")
+        expect(page.get_by_role("note")).to_contain_text("arbitrary code")
+        expect(page.get_by_role("alert")).to_have_count(0)
+        shoot(page, f"catalog-mapping-unavailable-{appearance}-{width}")
+        assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+        assert problems == []
         browser.close()

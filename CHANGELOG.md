@@ -6,6 +6,13 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+- Native catalog shape `etl-craft/catalog/2` replaces shape 1 with definition-level dependency
+  facts, three lineage states and task mapping operators. Rebuild existing catalog folders.
+  Pipeline Graph and task Mapping views share the app's controls and offer text/table alternatives.
+  Python ingestion tasks may document external sources with owner-approved `LINEAGE_SOURCE` and
+  `LINEAGE_COLUMNS`; validation checks their target columns, but execution never reads them.
+  Dependency edges use neutral patterns and badges; colours remain reserved for run status.
+
 - Channel alerts resolve only administrator-approved references directly, without synthesizing
   or parsing task-level `SECRETS`. Agent claims skip script declarations for channel alerts;
   Python scripts retain their explicit `SECRETS` admission.

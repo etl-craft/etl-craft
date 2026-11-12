@@ -27,6 +27,7 @@ export interface CatalogPipeline {
   name: string;
   description: string | null;
   schedule: string | null;
+  triggers: { task: string; pipeline: string; mode: string | null; timeout_minutes: string | null }[];
   auto_restart_condition: string;
   refresh_type: string;
   sla_in_hours: number | null;
@@ -48,9 +49,18 @@ export interface CatalogTask {
   target: string | null;
   sources: string[];
   script: string | null;
-  lineage_error: string | null;
-  upstream: [string, string][];
-  downstream: [string, string][];
+  lineage: { state: "derived" | "declared" | "unavailable"; reason: string | null };
+  mapping: { steps: { kind: string; expression: string; name: string }[]; edges: CatalogEdge[]; source: string | null; write: { action: string | null; managed_columns: string[]; keys: Record<string, string> } };
+  script_kind: string | null;
+  run_condition_count: number | null;
+  active_flag: string;
+  target_active_flag: string;
+  retries: number | null;
+  timeout_seconds: number | null;
+  retry_on: string | null;
+  secrets: string[];
+  upstream: [string, string, string][];
+  downstream: [string, string, string][];
   rules: number[];
   runs: CatalogRun[];
 }
@@ -84,6 +94,7 @@ export interface CatalogTable {
   columns: CatalogColumn[];
 }
 export interface CatalogRule {
+  sql: string;
   id: number;
   name: string;
   type: string;
@@ -113,6 +124,8 @@ export interface CatalogGap {
 }
 export interface CatalogDoc {
   schema: string;
+  definition_edges: DefinitionEdge[];
+  gate_wait_minutes: number;
   generated_at: string;
   compared_at: string | null;
   project: string;
@@ -133,7 +146,11 @@ export interface CatalogDoc {
 export function useCatalog(code: string) {
   return useQuery({
     queryKey: ["catalog-doc", code],
-    queryFn: async () => JSON.parse(await getText(`${project(code)}/catalog/page`, { path: "catalog.json" })) as CatalogDoc,
+    queryFn: async () => {
+      const doc = JSON.parse(await getText(`${project(code)}/catalog/page`, { path: "catalog.json" })) as CatalogDoc;
+      if (doc.schema !== "etl-craft/catalog/2") throw new Error(`Catalog schema ${doc.schema}: expected etl-craft/catalog/2; rebuild the catalog after upgrading.`);
+      return doc;
+    },
     retry: false,
     staleTime: 60_000,
   });
@@ -200,7 +217,7 @@ export function pipelineGraph(doc: CatalogDoc, pipeline: CatalogPipeline): Graph
   const byLabel = new Map(doc.tasks.filter((t) => t.pipeline === pipeline.code).map((t) => [t.label, t]));
   const dependsOn: Record<string, [string, string][]> = {};
   for (const task of byLabel.values()) {
-    const inside = task.upstream.filter(([label]) => byLabel.has(label)).map(([label, type]) => [byLabel.get(label)!.code, type] as [string, string]);
+    const inside = doc.definition_edges.filter(e => e.kind === "task" && e.target === task.label && byLabel.has(e.source)).map(e => [byLabel.get(e.source)!.code, e.dependency_type] as [string, string]);
     if (inside.length) dependsOn[task.code] = inside;
   }
   return { waves: waves([...byLabel.values()].map((t) => t.code), dependsOn), conditional: [], depends_on: dependsOn };
@@ -243,3 +260,5 @@ export function gapRemedy(gap: CatalogGap): string {
   if (/unchecked/i.test(gap.state)) return "Rebuild the catalog with the warehouse comparison enabled.";
   return "Align the declared metadata and warehouse schema using config files or project migrations, then rebuild the catalog.";
 }
+
+export interface DefinitionEdge { kind: "task" | "pipeline"; target: string; source: string; dependency_type: string; consume_repairs: string }

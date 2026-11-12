@@ -1,3 +1,4 @@
+import { flowGraph, flowLocation, runsWhen } from "@/lib/catalog-flow";
 import { RunLabel } from "@/components/run-label";
 import { gapRemedy } from "@/lib/catalog";
 import { useQuery } from "@tanstack/react-query";
@@ -22,7 +23,9 @@ import { handlerLabel } from "@/lib/labels";
 import { catalogPath, pipelinePath, taskPath } from "@/lib/routes";
 import type { TablePreview } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import { DropdownContent, DropdownItem, DropdownMenu, DropdownTrigger } from "@/components/dropdown";
+import { Disclosure, DisclosureSummary, DropdownContent, DropdownItem, DropdownMenu, DropdownTrigger } from "@/components/dropdown";
+
+const TaskMapping = React.lazy(() => import("@/components/task-mapping").then(module => ({default: module.TaskMapping})));
 
 const link = "text-accent hover:underline";
 
@@ -190,13 +193,14 @@ export function PipelineObject({ code, doc, name, tab, onTab }: { code: string; 
   const navigate = useNavigate();
   const pipeline = doc.pipelines.find((p) => p.code === name);
   const [focused, setFocused] = React.useState<string | null>(null);
+  const [overlay, setOverlay] = React.useState(false);
   if (!pipeline) return <Notice className="m-4">No pipeline {name} in this catalog build.</Notice>;
-  const graph = pipelineGraph(doc, pipeline);
+  const graph = flowGraph(doc, pipeline, pipelineGraph(doc, pipeline));
   // Tasks in the order they run, as the grid lists them, not alphabetically.
   const order = new Map(graph.waves.flat().map((label, i) => [label, i]));
   const at = (t: CatalogTask) => order.get(t.label) ?? order.get(t.code) ?? Number.MAX_SAFE_INTEGER;
   const tasks = doc.tasks.filter((t) => t.pipeline === pipeline.code).sort((a, b) => at(a) - at(b) || a.code.localeCompare(b.code));
-  const tabs = [{ id: "overview", label: "Overview" }, { id: "lineage", label: "Task graph" }, { id: "runs", label: "Runs" }];
+  const tabs = [{ id: "overview", label: "Overview" }, { id: "lineage", label: "Graph" }, { id: "runs", label: "Runs" }];
   const on = tabs.some((t) => t.id === tab) ? tab : "overview";
   return (
     <ObjectPage header={
@@ -262,8 +266,11 @@ export function PipelineObject({ code, doc, name, tab, onTab }: { code: string; 
           </aside>
         </div>
       ) : on === "lineage" ? (
-        <div data-card className="h-[28rem] overflow-hidden rounded-sm border border-border">
-          <RunGraph fill plain graph={graph} statuses={{}} focused={focused} onFocus={setFocused} onOpen={(task) => navigate(catalogPath(code, "tasks", `${pipeline.code}.${task}`))} />
+        <div data-card className="grid gap-3 rounded-sm border border-border">
+          <Button onClick={() => setOverlay(!overlay)}>{overlay ? "Hide last-run status" : "Show last-run status"}</Button>
+          <div className="h-[28rem] overflow-hidden"><RunGraph definition={{ tasks, edges: doc.definition_edges }} fill plain={!overlay} graph={graph} statuses={overlay ? Object.fromEntries(tasks.map(t => [t.code, t.runs.find(run => run.pipeline_run_id === pipeline.runs[0]?.pipeline_run_id)?.status ?? ""])) : {}} focused={focused} onFocus={setFocused} onOpen={(task) => { const destination = flowLocation(code, pipeline.code, task); if (destination) navigate(catalogPath(destination.project,destination.kind,destination.name)); else setFocused(task); }} /></div>
+          <Disclosure><DisclosureSummary>Flow as text</DisclosureSummary><ul>{tasks.map(task => <li key={task.label}>{runsWhen(task)} Target: {task.target ?? "none"}. {task.lineage.state}.</li>)}</ul></Disclosure>
+          {focused ? <aside aria-label="Task definition" className="border border-border bg-surface p-3 text-sm">{focused.startsWith("Schedule: ") ? <p>{focused}. Auto-restart: {pipeline.auto_restart_condition}. SLA: {pipeline.sla_in_hours ? `${pipeline.sla_in_hours} hours` : "not set"}.</p> : null}{tasks.filter(t => t.code === focused || t.label === focused).map(t => <div key={t.label}><p>{runsWhen(t)}</p><p>{t.target}{t.target_active_flag === "N" ? " · target inactive" : ""} · {t.lineage.state}</p><Link to={catalogPath(code, "tasks", t.label) + "?tab=mapping"}>Open mapping</Link></div>)}</aside> : null}
         </div>
       ) : (
         <Section title="Recent runs" aside={<RunBars project={code} runs={pipeline.runs.map((run) => ({ ...run, pipeline_code: pipeline.code, start_date: run.start, end_date: run.end }))} />}>
@@ -296,7 +303,7 @@ export function TaskObject({ code, doc, name, tab, onTab }: { code: string; doc:
   if (!task) return <Notice className="m-4">No task {name} in this catalog build.</Notice>;
   const rules = doc.rules.filter((r) => r.task === task.label);
   const edges = doc.column_edges.filter((e) => e.task === task.label);
-  const tabs = [{ id: "overview", label: "Overview" }, { id: "lineage", label: "Column lineage" }, { id: "runs", label: "Runs" }];
+  const tabs = [{ id: "overview", label: "Overview" }, { id: "mapping", label: "Mapping" }, { id: "lineage", label: "Column lineage" }, { id: "runs", label: "Runs" }];
   const on = tabs.some((t) => t.id === tab) ? tab : "overview";
   return (
     <ObjectPage header={
@@ -331,7 +338,7 @@ export function TaskObject({ code, doc, name, tab, onTab }: { code: string; doc:
                   <Links code={code} labels={task.downstream.map(([label]) => label)} kind="tasks" />
                 </Fact>
               </FactList>
-              {task.lineage_error ? <Notice className="mt-3">{task.lineage_error}</Notice> : null}
+              {task.lineage.reason ? <p role="note" className="mt-3 text-sm text-muted">ⓘ {task.lineage.reason}</p> : null}
             </Section>
             {rules.length ? (
               <Section title="Rules">
@@ -356,7 +363,7 @@ export function TaskObject({ code, doc, name, tab, onTab }: { code: string; doc:
             </FactList>
           </aside>
         </div>
-      ) : on === "lineage" ? (
+      ) : on === "mapping" ? <React.Suspense fallback={<div className="min-h-[36rem]"><Loading what="task mapping" /></div>}><TaskMapping key={task.label} doc={doc} task={task} /></React.Suspense> : on === "lineage" ? (
         <Section title="Column lineage" aside={<span className="text-xs text-muted">{edges.length} traced</span>}>
           <ColumnLineage code={code} edges={edges} />
         </Section>

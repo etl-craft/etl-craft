@@ -40,3 +40,5 @@ rebuild the catalog) at each tick in the project's timezone; `none` stops it. Mi
 not replayed. `--schema-check-on-demand N` refuses `generate-docs --with-warehouse` and the
 Insights page's **Check now** for that project, so its warehouse is compared only on schedule;
 the default is `Y`. Insights shows the newest stored check and its time to whole-project viewers.
+
+The native catalog JSON is documented in [catalog document shape 2](catalog-document.md).

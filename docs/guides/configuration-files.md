@@ -372,3 +372,12 @@ update the file or choose a different code. Typed metadata history supplies this
 its preceding version so the reservation survives history cleanup.
 A retire-plus-insert plan with the same task definition warns about a likely rename and names
 the safe command; that warning does not block an intentional replacement.
+
+## Declared Python lineage
+
+Python INGESTION tasks may set `LINEAGE_SOURCE=system.object` and optional pipe-separated
+`LINEAGE_COLUMNS=source_column:target_column` in `task_parameters.csv`. These document the
+catalog only. Every target must be an active column of the task's active declared target in
+`columns.csv`; malformed pairs, repeated targets and use on other task kinds are refused.
+See the [complete ingestion declaration example](../examples/python-lineage.md). Neither
+parameter is a secret field; keep credentials in the configured secret provider.

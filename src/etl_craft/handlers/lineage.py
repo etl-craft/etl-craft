@@ -65,6 +65,7 @@ from etl_craft.engine.repository.source_columns import (
 from etl_craft.engine.repository.tasks import fetch_all_task_parameters
 from etl_craft.engine.repository.validation import fetch_active_tasks, fetch_task_dependency_edges
 from etl_craft.handlers.lineage_columns import engine_columns, with_named_engine_columns
+from etl_craft.handlers.lineage_mapping import MappingStep, parse_select, steps
 from etl_craft.handlers.sql.spec import resolve_select
 from etl_craft.warehouse.connection import warehouse_dialect
 
@@ -101,6 +102,7 @@ class TaskLineage:
     cached: bool = False
     sources: tuple[str, ...] = ()
     targets: tuple[str, ...] = ()
+    mapping: tuple[MappingStep, ...] = ()
 
 
 def table_name(parts: Iterable[str], catalog: str | None) -> str:
@@ -112,7 +114,7 @@ def table_name(parts: Iterable[str], catalog: str | None) -> str:
 
 
 def extract(
-    select_sql: str,
+    select_sql: str | exp.Query,
     target_object: str,
     *,
     dialect: str | None,
@@ -121,7 +123,11 @@ def extract(
 ) -> list[Edge]:
     """Trace each column of ``select_sql`` to its sources; ``MetadataError`` when it cannot."""
     try:
-        tree = sqlglot.parse_one(select_sql, read=dialect)
+        tree = (
+            select_sql.copy()
+            if isinstance(select_sql, exp.Query)
+            else parse_select(select_sql, dialect)
+        )
     except SqlglotError as error:
         raise MetadataError(f"the SELECT could not be parsed: {error}") from error
     if not isinstance(tree, exp.Query):
@@ -229,11 +235,15 @@ def _edges(
 
 
 def referenced_tables(
-    select_sql: str, *, dialect: str | None, catalog: str | None = None
+    select_sql: str | exp.Query, *, dialect: str | None, catalog: str | None = None
 ) -> tuple[str, ...]:
     """Return every table ``select_sql`` reads, CTEs left out; empty when it does not parse."""
     try:
-        tree = sqlglot.parse_one(select_sql, read=dialect)
+        tree = (
+            select_sql
+            if isinstance(select_sql, exp.Query)
+            else sqlglot.parse_one(select_sql, read=dialect)
+        )
     except SqlglotError:
         return ()
     ctes = {cte.alias_or_name.lower() for cte in tree.find_all(exp.CTE)}
@@ -387,7 +397,8 @@ def _collect(
             select_sql, _ = resolve_select(
                 config, params, pipeline_run_id=0, refresh_type=RefreshType.FULL
             )
-            sources = referenced_tables(select_sql, dialect=dialect, catalog=catalog)
+            tree = parse_select(select_sql, dialect)
+            sources = referenced_tables(tree, dialect=dialect, catalog=catalog)
             if not target:
                 raise MetadataError("the task has no TARGET_OBJECT")
             if ref.task_id not in processed:
@@ -412,7 +423,7 @@ def _collect(
                 else [
                     replace(e, task=name)
                     for e in extract(
-                        select_sql, target, dialect=dialect, catalog=catalog, schemas=used_schemas
+                        tree, target, dialect=dialect, catalog=catalog, schemas=used_schemas
                     )
                 ]
             )
@@ -428,7 +439,8 @@ def _collect(
             with engine.begin() as conn:
                 store_task_lineage(conn, ref.task_id, key, [cache_edge(e, catalog) for e in edges])
         keys[ref.task_id] = key
-        results.append(TaskLineage(name, target, edges, cached=bool(stored), sources=sources))
+        result = TaskLineage(name, target, edges, cached=bool(stored), sources=sources)
+        results.append(replace(result, mapping=steps(tree, dialect)))
     return sorted(results, key=lambda result: result.task)
 
 

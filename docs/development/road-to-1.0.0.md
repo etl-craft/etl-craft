@@ -195,7 +195,7 @@ item's text, or work done early under another item.
 | S7.AM Protection on every warehouse | Done | #311, #312, #313 | Atomic SCD merges, in-row protection and recovery, private audit identities and provider acceptance |
 | S7.AN Always show the environment | Done | #328 | CLI context and production confirmation; designed, sandboxed alert/SLA templates and catalog environment |
 | S7.AO UI rebuild | Done | #329–#335, #368, #371, #372, #373, #374, #375 | Seven slices: shell, Home, runs, pipelines, tasks, uploads, insights, console, catalog, system, agents, administration, maintenance, settings, search, sign-in; the new interface is the only one, served at `/ui`, and the old pages are deleted; audit follow-ups align time preferences, human labels, automatic grid sizing and phone date controls; remaining audit closes sparse summaries, controls, lazy loading and CLI operability |
-| S7.AP Native catalog | In progress | | The catalog moves into the app from a JSON read action, built from the app's own components; the generated static site stays only for `publish-docs` |
+| S7.AP Native catalog | In progress | #389 | All six slices, shape 2, definition flow and task mappings implemented; owner screenshot approval pending |
 | S7.AQ Readable run identifiers | Done | #347, #369, #370 | A label beside every run and task run id, stored by the Engine DB; accepted wherever the integer is, and shown beside it |
 | S7.AR Restarting pipelines | In progress | slice 1 PR | A pipeline setting, `RESTART_CONDITION`, starts the next run when the last one ends in a chosen status, so a file watcher runs continuously without a schedule |
 | S7.AS Project dashboard and navigation | In progress | | Home becomes a project dashboard with tabs and charts; a pipeline and its runs are one split workspace; Projects moves into Platform; the section Project is renamed Operations |
@@ -1488,6 +1488,30 @@ empty-history-page handling defect, which was corrected and verified. No cloud w
   migration 0044) so a restart is visible and queryable; the run key `restart:<previous run id>` makes
   two controllers start one next run. Acceptance availability: no warehouse SQL changed, so cloud
   acceptance was not needed.
+
+- **S7.AP pipeline flow and task mapping (#389).** Choices that differ from the item text:
+  the owner approved definition-level pipeline flow, per-task source-to-target mapping, and
+  three lineage states. Catalog shape 2 replaces shape 1 before 0.9.0, through the existing
+  CATALOG_PAGE file read. LINEAGE_SOURCE and LINEAGE_COLUMNS document Python INGESTION only;
+  target columns are validated against active metadata, never verified against script code.
+  Intentional unavailable lineage is neutral information; managed SELECT parse/source-contract
+  failures remain gaps. The same sqlglot tree feeds lineage and mapping, and existing React Flow
+  uses a simple column layout without a new dependency. Definition edges use neutral patterns
+  and icon badges (SUCCESS solid, HAS_DATA solid/database, FAILURE dashed/X, ALWAYS dotted),
+  with words, hover explanations and no-repairs markers; colour belongs to the run-status overlay.
+  All six native catalog slices are implemented; Insights remains on Home under the settled
+  S7.AP/S7.AS decision. Static catalog files stay for offline sharing and publish-docs, not embedding.
+  Acceptance availability: screenshots cover light, dark and 390 px; owner visual approval is
+  still required by the item's Done when. DuckDB/PostgreSQL lineage and catalog checks passed.
+  Cloud acceptance at HEAD 9178aedd7c772b94e747d7c9cb9ec9b1f889d21f with the catalog working tree:
+  Snowflake recorded 13 passes, plus an existing protection ARRAY mismatch outside catalog code
+  (`test_protected_edits_reload_unlock_and_per_cell_writers`, SCD1_MERGE/NATIVE); no warehouse
+  type-mapping or protection path changed. Its separate fix belongs on
+  `fix/snowflake-protection-array-type`; no further Snowflake runs are authorized here.
+  Managed-engine acceptance was unavailable without ETL_CRAFT_TEST_SNOWFLAKE_ENGINE_CONFIG
+  and ETL_CRAFT_TEST_DATABRICKS_ENGINE_CONFIG. Databricks was unavailable on this try after
+  14 pass reports and the 1,800-second deadline, without a final suite summary. No dedicated
+  cloud lineage pass is claimed. Exact error and scope evidence are in the pull request.
 
 - **S7.AP native catalog and S7.AS workspace (owner, 2026-11-07).** Choices that differ from the item
   text: the catalog's "JSON read action" is `catalog.json`, written by `generate-docs` beside the HTML

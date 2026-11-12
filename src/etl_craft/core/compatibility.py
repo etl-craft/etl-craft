@@ -332,6 +332,8 @@ INTRODUCED: dict[InputKind, dict[str, str]] = {
             "SCHEMA_EVOLUTION",
             "SCRIPT_FILE",
             "SCRIPT_KIND",
+            "LINEAGE_SOURCE",
+            "LINEAGE_COLUMNS",
             "SECRETS",
             "SECURE_VIEW",
             "SELECT_QUERY",

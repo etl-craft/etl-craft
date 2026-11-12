@@ -483,6 +483,14 @@ FULL_READS = {
     ("catalog_interventions", "cfg_pipelines"): "Builds bounded history for every active pipeline.",
     ("catalog_tasks", "cfg_pipelines"): "Builds the catalog for every active pipeline.",
     (
+        "catalog_definition_dependencies",
+        "cfg_pipelines",
+    ): "Enumerates the complete selected-project definition graph, including inactive tasks.",
+    (
+        "catalog_definition_parameters",
+        "cfg_pipelines",
+    ): "Reads every selected-project catalog definition, including inactive tasks and targets.",
+    (
         "catalog_task_runs",
         "cfg_pipelines",
     ): "Builds bounded task history for every active pipeline.",

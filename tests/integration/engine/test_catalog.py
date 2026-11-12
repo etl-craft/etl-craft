@@ -78,7 +78,7 @@ def project(engine_db, tmp_path, monkeypatch):
             "PYTHON",
             SCRIPT_FILE="python_scripts/crm/orders.py",
             TARGET_OBJECT="raw.orders",
-            SOURCE_OBJECT="CRM API",
+            LINEAGE_SOURCE="crm.api",
         )
         stage = add_task(
             conn,
@@ -156,7 +156,7 @@ def test_the_catalog_joins_tasks_tables_and_rules(project):
     assert catalog.pipelines["SALES"].depended_on_by == ["MART"]
     tables = catalog.tables
     assert sorted(tables) == [
-        "external:crm api",
+        "external:crm.api",
         "mart.daily",
         "mart.everything",
         "raw.orders",
@@ -171,7 +171,7 @@ def test_the_catalog_joins_tasks_tables_and_rules(project):
         "amount_usd",
     ]
     assert tables["raw.orders"].writers == ["INGEST.pull"]
-    assert tables["external:crm api"].external
+    assert tables["external:crm.api"].external
     (rule,) = catalog.rules.values()
     assert rule.table == "sales.orders" and tables["sales.orders"].rules == [
         rule.row.business_rule_id
@@ -182,11 +182,12 @@ def test_the_catalog_joins_tasks_tables_and_rules(project):
     assert catalog.tasks["INGEST.pull"].row.last_run is None
     assert catalog.tasks["INGEST.stage"].row.has_successful_run
     # The SELECT * task keeps its table edge and says why its columns are unknown.
-    (untraced,) = catalog.untraced
-    assert untraced.label == "MART.copy_all" and "SELECT *" in untraced.lineage_error
+    untraced = {task.label: task.lineage_error for task in catalog.untraced}
+    assert "SELECT *" in untraced["MART.copy_all"]
+    assert "source ref.rates: schema missing" in untraced["SALES.convert"]
     edges = {(e.source, e.target, e.task) for e in catalog.table_edges}
     assert ("sales.orders", "mart.everything", "MART.copy_all") in edges
-    assert ("external:crm api", "raw.orders", "INGEST.pull") in edges
+    assert ("external:crm.api", "raw.orders", "INGEST.pull") in edges
     assert catalog.scripts["python_scripts/crm/orders.py"].exists
 
 
@@ -195,7 +196,7 @@ def test_a_tables_graph_runs_to_the_first_source_and_the_last_consumer(project):
     drawing = lineage_drawing(build_catalog(engine, config), "sales.orders")
     levels = {name: node.level for name, node in drawing.nodes.items()}
     assert levels == {
-        "external:crm api": -3,
+        "external:crm.api": -3,
         "raw.orders": -2,
         "staging.orders": -1,
         "ref.rates": -1,
@@ -213,7 +214,7 @@ def test_a_tables_graph_runs_to_the_first_source_and_the_last_consumer(project):
     assert ("raw.orders.amt", "staging.orders.amount") in column_pairs
     # Table level only: the script, and the task whose columns cannot be traced.
     assert {(s, t) for s, t, _ in drawing.table_edges} == {
-        ("external:crm api", "raw.orders"),
+        ("external:crm.api", "raw.orders"),
         ("sales.orders", "mart.everything"),
         ("ref.rates", "mart.everything"),
     }
@@ -273,15 +274,18 @@ def test_the_site_has_a_page_per_asset_and_a_search_index(project, tmp_path):
     for page in folder.rglob("*.html"):
         assert not re.search(r"(src|href)=\"(https?:)?//", page.read_text("utf-8")), page
     document = json.loads((folder / "catalog.json").read_text("utf-8"))
-    assert document["schema"] == "etl-craft/catalog/1"
+    assert document["schema"] == "etl-craft/catalog/2"
     orders = next(t for t in document["tables"] if t["name"] == "sales.orders")
     assert (orders["schema"], orders["table"]) == ("sales", "orders")
     assert "SALES.convert" in orders["writers"]
     assert {c["name"] for c in orders["columns"]} >= {"amount_usd"}
     convert = next(t for t in document["tasks"] if t["label"] == "SALES.convert")
-    assert convert["target"] == "sales.orders" and "JOIN ref.rates" not in str(convert)
+    assert convert["target"] == "sales.orders"
+    assert convert["lineage"]["state"] == "unavailable"
+    assert "source ref.rates: schema missing" in convert["lineage"]["reason"]
+
     assert {p["code"] for p in document["pipelines"]} >= {"SALES", "MART"}
-    assert any(e["target_object"] == "sales.orders" for e in document["column_edges"])
+    assert not any(e["target_object"] == "sales.orders" for e in document["column_edges"])
     index_js = (folder / "search-index.js").read_text("utf-8")
     entries = json.loads(index_js.removeprefix("window.CATALOG_INDEX = ").rstrip(";\n"))
     kinds = {kind for kind, *_ in entries}
@@ -324,7 +328,7 @@ def test_the_command(project, capsys):
     assert out[0].startswith(
         "column lineage unavailable: MART.copy_all: history not updated: SELECT * cannot"
     )
-    assert out[-1] == "generate-docs: nothing written; 1 task(s) not traced"
+    assert out[-1] == "generate-docs: nothing written; 2 task(s) not traced"
     assert not (root / "catalog").exists()
     assert main(["generate-docs", "--with-warehouse"]) == ExitCode.SUCCESS
     assert capsys.readouterr().out.splitlines()[-1] == (
@@ -374,7 +378,7 @@ def test_gap_snapshot_and_rows_show_both_directions_and_types(project, tmp_path)
     assert 'class="gap-red"' in html and "Config only" in html and "amt" in html
     assert 'class="gap-purple"' in html and "Type mismatch" in html
     assert "⚠" in html and 'aria-hidden="true"' in html
-    assert "Script column lineage is unknown" in html
+    assert "Script column lineage is unknown" not in html
     snapshot = json.loads((folder / "gaps.json").read_text())
     outcomes = {
         (r["column"], r["attribute"]): r for r in snapshot["records"] if r["table"] == "raw.orders"
@@ -442,7 +446,7 @@ def test_lineage_warning_graph_has_reason_and_keyboard_controls(project, tmp_pat
     assert "edge table gap-edge" in html and 'role="group"' in html
     assert 'role="button"' in html and 'tabindex="0"' in html and "aria-label=" in html
     assert 'href="../tasks/MART.copy_all.html"' in html
-    assert (folder / "tables/mart.daily.html").read_text().count("Lineage gap") >= 1
+    assert "source ref.rates: schema missing" in (folder / "tables/mart.daily.html").read_text()
 
 
 def test_missing_objects_distinguish_expected_creations_and_existing_targets(project, tmp_path):

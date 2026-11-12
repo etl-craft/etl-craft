@@ -95,8 +95,12 @@ older-to-older history is omitted. Each task also shows its latest 30 runs.
 ## A pipeline's DAG
 
 Each pipeline page draws its tasks left to right, each after the tasks it waits for. Tasks of
-other pipelines it waits for sit on the left. Lines show the dependency type: `SUCCESS` plain,
-`FAILURE` red and dashed, `ALWAYS` dotted, `HAS_DATA` green. Each task box lists the table it
+other pipelines it waits for sit on the left. Lines show the dependency type:
+`SUCCESS` solid without a badge, `HAS_DATA` solid with a database icon and “has data”,
+`FAILURE` dashed with an X icon and “on failure”, and `ALWAYS` dotted with “always”.
+All dependency edges use the neutral edge colour in both themes; colour is reserved for run
+status. A “no repairs” marker means `CONSUME_REPAIRS=N`. Each type has a legend entry and
+hovering an edge explains its condition in a sentence. Each task box lists the table it
 writes (→), the tables it reads (←) and the tables its business rules check (✓); click a task or
 a table to open it. The DAG pans and zooms like the lineage graphs.
 
@@ -155,7 +159,8 @@ A script's code is not read, so a `PYTHON` task says what it moves in two option
 | Parameter | Value |
 |---|---|
 | `TARGET_OBJECT` | derived from the task's active table reference, configured through the target components in `tasks.csv` |
-| `SOURCE_OBJECT` | where it reads from, in words: `CRM API`, `s3://landing/orders/` |
+| `LINEAGE_SOURCE` | declared external source as `system.object`, for example `salesforce.Account` or `s3.orders/*.csv` |
+| `LINEAGE_COLUMNS` | optional `source_column:target_column` pairs separated by `|`; targets must be active declared columns |
 
 The source appears on the graph as an external box, linked to the table.
 
@@ -399,3 +404,47 @@ Success rates count each logical run's first ending. One clean success, one fail
 failure later repaired mean 1 of 3 succeeded (33%), 2 failed, and 1 repaired. Repair does not
 turn the initial failure into a success. Error messages appear only beside a failed or
 cancelled status, not beside a later successful repair.
+
+## Pipeline flow and task mapping
+
+In the native catalog, a pipeline's **Graph** tab shows definition-level tasks, dependency
+patterns, upstream gates and downstream pipelines. The entry names its schedule and triggers.
+Inactive tasks remain visible and faint. Select a task to read when it runs, its effective
+retry/timeout policy, target and lineage state. **Show last-run status** adds status colours
+without changing the neutral dependency styles. **Flow as text** is the keyboard-readable alternative.
+
+A task's **Mapping** tab uses a left-to-right column layout with pan and zoom. Sources show
+used columns first; **Show all columns** includes the catalog's other columns, and **Find column**
+keeps matching names and their connected column paths. Joins, filters, grouping, aggregates and set operations use sqlglot's warehouse
+rendering from the same parsed SELECT as column lineage. Computed columns show expressions;
+reject rules and the engine write action follow, including merge keys. Target columns show their
+declared type and nullability. Select a source or target column to highlight the columns it feeds
+or depends on. **Table view** exposes the same column edges and is the default on narrow phones.
+
+Lineage has three states: **derived** for parsed managed SQL; **declared** for Python ingestion
+with `LINEAGE_SOURCE`; and **unavailable** with a neutral explanation for arbitrary scripts and
+other non-derived tasks. Declared boxes and lines are labelled and dashed: the engine does not
+verify them against Python code. With no `LINEAGE_COLUMNS`, the declaration is table level only.
+An unavailable limitation is not a gap. A managed SELECT that fails to parse or resolve source
+columns remains a real lineage gap, with the reason and remedy. No guessed mapping is drawn.
+
+The native document is [catalog shape 2](../reference/catalog-document.md). Rebuild the catalog
+after upgrading; shape 1 has no pre-0.9 compatibility shim.
+
+### Screenshots
+
+Pipeline flow, light and dark:
+
+![Pipeline definition flow in light mode](../assets/catalog/catalog-flow-light-1280.png)
+![Pipeline definition flow in dark mode](../assets/catalog/catalog-flow-dark-1280.png)
+
+Derived and declared task mappings:
+
+![Derived SQL task mapping](../assets/catalog/catalog-mapping-derived-light-1280.png)
+![Declared ingestion task mapping](../assets/catalog/catalog-mapping-declared-dark-1280.png)
+
+On a phone, the mapping opens as an accessible table; the diagram remains available.
+The [390 px flow](../assets/catalog/catalog-flow-light-390.png),
+[declared mapping](../assets/catalog/catalog-mapping-declared-light-390.png), and
+[neutral unavailable notice](../assets/catalog/catalog-mapping-unavailable-dark-390.png)
+show the same definitions without page overflow.
