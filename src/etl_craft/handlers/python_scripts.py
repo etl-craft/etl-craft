@@ -100,7 +100,9 @@ def _run(context: TaskContext, engine_db: Engine | TaskStore) -> HandlerResult:
     stored = store.state().offset if kind == ScriptKind.INGESTION else None
     offset = (
         Offset.from_stored(stored.offset_type, stored.offset_value)
-        if stored is not None and stored.offset_value is not None and not context.backfill
+        if stored is not None
+        and stored.offset_value is not None
+        and not (context.backfill or context.full_refresh)
         else None
     )
     entry = load_script(path, name)
@@ -110,6 +112,8 @@ def _run(context: TaskContext, engine_db: Engine | TaskStore) -> HandlerResult:
         name,
         "none (UTILITY)"
         if kind == ScriptKind.UTILITY
+        else "none (full refresh)"
+        if context.full_refresh
         else "none (first run)"
         if offset is None
         else f"{offset.stored()} ({offset.datatype})",

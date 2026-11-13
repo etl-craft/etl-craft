@@ -408,6 +408,7 @@ INTRODUCED: dict[InputKind, dict[str, str]] = {
             "--force",
             "--format",
             "--from",
+            "--full-refresh",
             "--governance",
             "--group",
             "--help",

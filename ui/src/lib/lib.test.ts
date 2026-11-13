@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { ApiError, postJson } from "@/lib/api";
 import { impact, isOpenGap, type CatalogDoc, type CatalogGap } from "@/lib/catalog";
 import { describeCron, formatSeconds, relative } from "@/lib/format";
 
@@ -58,3 +59,23 @@ it("encodes complete run labels in workspace and nested run addresses", async ()
   expect(pipelineRunPath("default", "SALES", label)).toContain("?run=" + encodeURIComponent(label));
   expect(runBase("default", "SALES", label)).toContain("/" + encodeURIComponent(label));
 });
+
+describe("a refusal that asks for confirmation", () => {
+  afterEach(() => vi.unstubAllGlobals());
+  const answer = (status: number, body: unknown) => vi.stubGlobal("fetch", async () => new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } }));
+
+  it("carries the targets the server asks to be confirmed", async () => {
+    answer(428, { error: "ConfirmationRequiredError", message: "These targets would be emptied.", exit_code: 31, targets: ["mart.orders", 7, "mart.facts"] });
+    const error = await postJson("/runs", {}).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(ApiError);
+    expect((error as ApiError).status).toBe(428);
+    expect((error as ApiError).targets).toEqual(["mart.orders", "mart.facts"]);
+  });
+
+  it("has no targets on any other failure", async () => {
+    answer(409, { error: "RunStateError", message: "Another run is active." });
+    const error = (await postJson("/runs", {}).catch((e: unknown) => e)) as ApiError;
+    expect(error.targets).toEqual([]);
+  });
+});
+

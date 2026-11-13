@@ -98,6 +98,11 @@ def execute_run(ctx: OperationContext, request: RunRequest) -> OperationResult |
             "request_key without overrides: expected params; "
             "use a control request or supply --param"
         )
+    if request.full_refresh:
+        from etl_craft.services.operations import full_refresh
+
+        check_reason(request.reason)
+        request = full_refresh.admit(ctx, request)
     if ctx.transport == Transport.HTTP:
         request = _over_http(request)
     check_reason(request.reason)

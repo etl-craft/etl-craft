@@ -8,6 +8,7 @@ import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { ActionButton } from "@/components/action-button";
 import { DropdownContent, DropdownItem, DropdownLabel, DropdownMenu, DropdownTrigger } from "@/components/dropdown";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/switch";
 import { Breadcrumbs, Fact, FactList, Field, inputClass, Loading, Notice, PageHeader, SelectField } from "@/components/common";
 import { AuditTab, CalendarTab, DetailsTab, OverviewTab, TasksTab } from "@/components/pipeline-tabs";
 import { StatusBadge, taskStatus } from "@/components/status";
@@ -23,7 +24,7 @@ import { Card } from "@/components/ui/card";
 import { autoStarts } from "@/lib/auto-starts";
 import { useAutoStarts, useCanRun, useProjectInfo, useRunReference } from "@/hooks";
 import { describeCron, formatDuration } from "@/lib/format";
-import { getJson, project } from "@/lib/api";
+import { ApiError, getJson, project } from "@/lib/api";
 import { pipelinesPath, projectHomePath, taskPath } from "@/lib/routes";
 import { cn } from "@/lib/utils";
 import type { Graph, Pipeline, RunView, Steps } from "@/lib/types";
@@ -130,6 +131,17 @@ export function PipelineDetail() {
   const [runDate, setRunDate] = React.useState("");
   const [runParams, setRunParams] = React.useState("");
   const [requestKey, setRequestKey] = React.useState("");
+  const [fullRefresh, setFullRefresh] = React.useState(false);
+  const [refreshTask, setRefreshTask] = React.useState("");
+  const [refreshDownstream, setRefreshDownstream] = React.useState(false);
+  /** The append targets the server asked to confirm emptying, and whether the person accepted. */
+  const [toEmpty, setToEmpty] = React.useState<string[]>([]);
+  const [emptyOk, setEmptyOk] = React.useState(false);
+  const rescope = (change: () => void) => {
+    change();
+    setToEmpty([]);
+    setEmptyOk(false);
+  };
   const [then, setThen] = React.useState("wait");
   const p = found.data;
 
@@ -154,7 +166,14 @@ export function PipelineDetail() {
                 title={`Run ${pipeline} now`}
                 effect="Admits one manual run of the whole pipeline for the controller; scheduled runs are unaffected."
                 endpoint="/runs"
-                body={(reason) => ({ pipeline_code: pipeline, reason, ...(runDate ? { run_date: runDate } : {}), ...(runParams.trim() ? { params: runParams.split("\n").filter((value) => value.trim()), request_key: requestKey } : {}) })}
+                canSubmit={!(fullRefresh && toEmpty.length > 0 && !emptyOk)}
+                onError={(error) => {
+                  if (error instanceof ApiError && error.status === 428) {
+                    setToEmpty(error.targets);
+                    setEmptyOk(false);
+                  }
+                }}
+                body={(reason) => ({ pipeline_code: pipeline, reason, ...(fullRefresh ? { full_refresh: true, ...(refreshTask.trim() ? { task_code: refreshTask.trim(), with_downstream: refreshDownstream } : {}), ...(toEmpty.length > 0 && emptyOk ? { empty_targets: toEmpty } : {}) } : {}), ...(runDate ? { run_date: runDate } : {}), ...(runParams.trim() ? { params: runParams.split("\n").filter((value) => value.trim()), request_key: requestKey } : {}) })}
                 describe={(r) => r.message ?? "Run requested."}
                 icon={<PlayCircle className="size-4" aria-hidden />}
                 variant="primary"
@@ -167,6 +186,24 @@ export function PipelineDetail() {
                       <textarea name="params" autoComplete="off" spellCheck={false} value={runParams} onChange={(event) => setRunParams(event.target.value)} className={`${inputClass} h-auto py-2`} rows={3} aria-describedby="run-overrides-help" />
                     </Field>
                     <p id="run-overrides-help" className="text-xs text-muted">One TASK.PARAM=VALUE per line. Existing data inputs only; configuration stays unchanged.</p>
+                    <Switch checked={fullRefresh} onChange={() => rescope(() => setFullRefresh(!fullRefresh))} label="Full refresh, once" />
+                    {fullRefresh && (
+                      <div className="space-y-3 rounded-md border border-border p-3">
+                        <p className="m-0 text-xs text-muted">Incremental tasks read everything again and keep the position they reach, so the next run is incremental. A reason is required.</p>
+                        <Field label="Only this task (optional)">
+                          <input name="refresh_task" autoComplete="off" spellCheck={false} value={refreshTask} onChange={(event) => rescope(() => setRefreshTask(event.target.value))} className={inputClass} placeholder="Task code; empty refreshes every task" />
+                        </Field>
+                        {refreshTask.trim() && <Switch checked={refreshDownstream} onChange={() => rescope(() => setRefreshDownstream(!refreshDownstream))} label="Include the tasks that read it" />}
+                        {toEmpty.length > 0 && (
+                          <>
+                            <Notice warn>
+                              Every source row is read again, so these append targets are emptied just before they load. etl-craft cannot restore them: <strong>{toEmpty.join(", ")}</strong>
+                            </Notice>
+                            <Switch checked={emptyOk} onChange={() => setEmptyOk(!emptyOk)} label={`Empty ${toEmpty.join(", ")} first, then load it again`} />
+                          </>
+                        )}
+                      </div>
+                    )}
                     {runParams.trim() && <Field label="Submission key">
                       <input name="request_key" autoComplete="off" spellCheck={false} value={requestKey} onChange={(event) => setRequestKey(event.target.value)} className={inputClass} required maxLength={128} />
                     </Field>}

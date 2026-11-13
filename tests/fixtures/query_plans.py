@@ -140,6 +140,8 @@ VALUES = {
     "active": "Y",
     "active_flag": "Y",
     "backfill": "N",
+    "full_refresh": "N",
+    "full_refresh_plan": None,
     "exclusive": "Y",
     "kind": "SYSTEM",
     "actor_kind": "SYSTEM",

@@ -2,10 +2,13 @@
 export class ApiError extends Error {
   status: number;
   kind: string | null;
-  constructor(message: string, status: number, kind: string | null = null) {
+  /** The targets a refusal asks to be confirmed (HTTP 428), as the server lists them. */
+  targets: string[];
+  constructor(message: string, status: number, kind: string | null = null, targets: string[] = []) {
     super(message);
     this.status = status;
     this.kind = kind;
+    this.targets = targets;
   }
 }
 
@@ -57,14 +60,15 @@ async function send(path: string, init: RequestInit): Promise<Response> {
     throw new ApiError("Your session has ended; sign in again.", 401);
   }
   if (!response.ok) {
-    let detail: { message?: string; detail?: string; error?: string } = {};
+    let detail: { message?: string; detail?: string; error?: string; targets?: unknown } = {};
     try {
       detail = await response.json();
     } catch {
       /* the body was not JSON; the status line below names the failure */
     }
     const message = detail.message ?? detail.detail ?? `Request failed with status ${response.status}.`;
-    throw new ApiError(message, response.status, detail.error ?? null);
+    const targets = Array.isArray(detail.targets) ? detail.targets.filter((t): t is string => typeof t === "string") : [];
+    throw new ApiError(message, response.status, detail.error ?? null, targets);
   }
   return response;
 }

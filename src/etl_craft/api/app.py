@@ -18,6 +18,7 @@ from etl_craft.api.ui_console import add_console_routes
 from etl_craft.api.ui_headers import BrowserHeaders, protect
 from etl_craft.api.ui_spa import add_spa_pages
 from etl_craft.core.errors import (
+    ConfirmationRequiredError,
     EtlCraftError,
     MetadataError,
     MigrationError,
@@ -94,16 +95,18 @@ def _add_error_handlers(app: FastAPI) -> None:
             if isinstance(error, UsageError)
             else 404
             if isinstance(error, (MetadataError, ResourceNotFoundError))
+            else 428
+            if isinstance(error, ConfirmationRequiredError)
             else 409
         )
-        return JSONResponse(
-            {
-                "error": type(error).__name__,
-                "message": str(error),
-                "exit_code": int(error.exit_code),
-            },
-            status_code=status,
-        )
+        body: dict[str, object] = {
+            "error": type(error).__name__,
+            "message": str(error),
+            "exit_code": int(error.exit_code),
+        }
+        if isinstance(error, ConfirmationRequiredError):
+            body["targets"] = list(error.targets)
+        return JSONResponse(body, status_code=status)
 
     @app.exception_handler(SQLAlchemyError)
     async def storage_error(request: Request, error: SQLAlchemyError) -> Response:

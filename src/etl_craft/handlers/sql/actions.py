@@ -188,11 +188,38 @@ def _overwrite_ddl(
     return ddl
 
 
+def _empties_target(session: Session, action: ActionContext) -> bool:
+    """Whether a full refresh empties this append target first; refuse before any delete if not.
+
+    A full refresh reads every source row again, so an append would duplicate the rows already
+    loaded. The operator confirms the targets to empty when the run is requested; the run records
+    them, and only a confirmed, unprotected target is emptied.
+    """
+    context = action.context
+    if not context.full_refresh:
+        return False
+    listed = context.task_params.get("TARGET_OBJECT", "")
+    if listed not in context.empty_targets:
+        raise SqlGuardError(
+            f"{session.target_object}: this run is a full refresh, which appends every source row "
+            "again, but emptying this target was not confirmed when it was requested; repeat "
+            f"`etl-craft run --full-refresh` and confirm emptying {listed or session.target_object}"
+        )
+    if session.protection is not None:
+        raise SqlGuardError(
+            f"{session.target_object}: has human-protected rows (ETL_PROTECTION), which emptying "
+            "would destroy; change the target's action to a merge or remove the protection first"
+        )
+    return True
+
+
 def append_table(session: Session, action: ActionContext) -> HandlerResult:
     """Replace this task run's appended batch, retaining rows from other loads.
 
     TASK_RUN_ID makes retries converge after an insert committed without its task outcome, so a
     target without it is refused before anything is staged, naming the command that adds it.
+    In a full refresh whose target the operator confirmed, the whole target is emptied instead,
+    after the SELECT staged, and the load repeats cleanly when retried.
     """
     present = {name.lower() for name, _ in require_target(session)}
     if "task_run_id" not in present:
@@ -213,11 +240,14 @@ def append_table(session: Session, action: ActionContext) -> HandlerResult:
         if source is not None
         else (stage, None)
     )
-    session.run(
-        f"DELETE FROM {session.target} WHERE TASK_RUN_ID = :task_run_id",
-        {"task_run_id": action.context.task_run_id},
-        step="clear this task run's previous append",
-    )
+    if _empties_target(session, action):
+        session.run(f"DELETE FROM {session.target}", {}, step="empty the target for a full refresh")
+    else:
+        session.run(
+            f"DELETE FROM {session.target} WHERE TASK_RUN_ID = :task_run_id",
+            {"task_run_id": action.context.task_run_id},
+            step="clear this task run's previous append",
+        )
     fault_point("sql.append.after_delete")
     columns = ", ".join(name for name, _ in session.columns(stage))
     row_id_columns, row_id_values = session.row_id_insert_parts()

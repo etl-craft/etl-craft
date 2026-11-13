@@ -98,6 +98,7 @@ def run_document(row: RowMapping) -> RunView:
     values["start_date"] = timestamp(values["start_date"])
     values["end_date"] = timestamp(values["end_date"])
     values["backfill"] = values["backfill"] == YesNo.YES
+    values["full_refresh"] = values.get("full_refresh", YesNo.NO) == YesNo.YES
     values["trigger_kind"] = TriggerKind(values["trigger_kind"])
     values["status"] = RunStatus(values["status"])
     sla = values["sla_status"]

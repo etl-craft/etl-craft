@@ -367,6 +367,8 @@ class RunRequest(RunSelection):
     backfill_from: date | None = None
     backfill_to: date | None = None
     reason: str | None = None
+    full_refresh: bool = False
+    empty_targets: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         """Refuse incompatible requests before any resources are opened."""
@@ -389,11 +391,41 @@ class RunRequest(RunSelection):
         if self.force and (self.ignore_dependencies or self.rerun):
             option = "rerun" if self.rerun else "ignore_dependencies"
             raise UsageError(f"`{option}` and `force` are different overrides: choose one")
-        if self.with_downstream and not (self.rerun or self.standalone):
-            raise UsageError("`with_downstream` goes with `rerun` or `standalone`")
+        if self.with_downstream and not (self.rerun or self.standalone or self.full_refresh):
+            raise UsageError("`with_downstream` goes with `rerun`, `standalone` or `full_refresh`")
+        if self.with_downstream and self.full_refresh and not self.task_code:
+            raise UsageError("`with_downstream` needs the `task_code` a full refresh starts from")
         if self.skip and (self.task_code or self.init_only or self.force):
             raise UsageError("`skip` records a whole run SKIPPED; it takes only `reason`")
         self._check_backfill()
+        self._check_full_refresh()
+
+    def _check_full_refresh(self) -> None:
+        if not self.full_refresh:
+            if self.empty_targets:
+                raise UsageError("`empty_targets` confirms a full refresh; add `full_refresh`")
+            return
+        clash = [
+            name
+            for name, given in (
+                ("backfill", self.backfill),
+                ("skip", self.skip),
+                ("rerun", self.rerun),
+                ("force", self.force),
+                ("params", self.params),
+                ("run_id", self.run_id is not None),
+                ("run_key", self.run_key is not None),
+                ("standalone", self.standalone),
+            )
+            if given
+        ]
+        if clash:
+            raise UsageError(
+                f"`full_refresh` starts its own run and cannot go with `{clash[0]}`; "
+                "run the full refresh by itself, then run the others as usual"
+            )
+        if self.reason is None or not self.reason.strip():
+            raise UsageError("`full_refresh` rewrites history and needs a `reason`; give one")
 
     def _check_backfill(self) -> None:
         if (self.backfill_from is None) != (self.backfill_to is None):

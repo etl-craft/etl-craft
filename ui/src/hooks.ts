@@ -55,10 +55,11 @@ export function useCanRun(code: string): boolean {
 }
 
 /** One POST to the API as the session; every cached read is refreshed after it succeeds. */
-export function useWrite<TResult>(path: string, onDone?: (result: TResult) => void) {
+export function useWrite<TResult>(path: string, onDone?: (result: TResult) => void, onError?: (error: unknown) => void) {
   const client = useQueryClient();
   return useMutation({
     mutationFn: (body: unknown) => postJson<TResult>(path, body),
+    onError: (error) => onError?.(error),
     onSuccess: (result) => {
       onDone?.(result);
       void client.invalidateQueries();

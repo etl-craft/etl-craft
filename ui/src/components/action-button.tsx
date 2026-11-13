@@ -3,7 +3,7 @@ import { ConfirmDialog } from "@/components/confirm-dialog";
 import { useToast } from "@/components/toast";
 import { Button, type ButtonProps } from "@/components/ui/button";
 import { failureText, useProjectInfo, useWrite } from "@/hooks";
-import { project } from "@/lib/api";
+import { ApiError, project } from "@/lib/api";
 
 /**
  * Every write action in the interface: a button, one confirmation naming the project and its
@@ -20,6 +20,7 @@ export function ActionButton<TResult>({
   body,
   describe,
   onDone,
+  onError,
   askReason = true,
   fields,
   icon,
@@ -41,6 +42,8 @@ export function ActionButton<TResult>({
   describe: (result: TResult) => string;
   /** Called with the server's answer once the action has succeeded, for example to reload what it changed. */
   onDone?: (result: TResult) => void;
+  /** Called with the failure, for example to read the targets a refusal asks to be confirmed. */
+  onError?: (error: unknown) => void;
   fields?: React.ReactNode;
   /** False for requests that take no reason. */
   askReason?: boolean;
@@ -55,11 +58,15 @@ export function ActionButton<TResult>({
   const open = menu ? menu.open : own;
   const setOpen = menu ? menu.setOpen : setOwn;
   const toast = useToast();
-  const write = useWrite<TResult>((code ? project(code) : "/api/v1") + endpoint, (result) => {
-    toast(describe(result));
-    onDone?.(result);
-    setOpen(false);
-  });
+  const write = useWrite<TResult>(
+    (code ? project(code) : "/api/v1") + endpoint,
+    (result) => {
+      toast(describe(result));
+      onDone?.(result);
+      setOpen(false);
+    },
+    onError,
+  );
   if (code && !info) return null;
   return (
     <div className="grid justify-items-end gap-2">
@@ -84,7 +91,8 @@ export function ActionButton<TResult>({
         projectCode={code ?? projectCode}
         env={info ? { type: info.environment_type, name: info.environment_name } : undefined}
         canSubmit={canSubmit}
-        error={failureText(write.error)}
+        // A 428 asks for a confirmation the caller shows itself; it is not a failure.
+        error={write.error instanceof ApiError && write.error.status === 428 ? null : failureText(write.error)}
         busy={write.isPending}
         onConfirm={(reason) => write.mutate(body(reason))}
         onClose={() => setOpen(false)}

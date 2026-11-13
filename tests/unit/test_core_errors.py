@@ -8,6 +8,7 @@ pytestmark = pytest.mark.unit
 
 EXIT_CODES = {
     errors.ArchiveError: ExitCode.ARCHIVE,
+    errors.ConfirmationRequiredError: ExitCode.CONFIRMATION_REQUIRED,
     errors.TransientError: ExitCode.TRANSIENT,
     errors.PermanentError: ExitCode.PERMANENT,
     errors.ResourceNotFoundError: ExitCode.RESOURCE_NOT_FOUND,

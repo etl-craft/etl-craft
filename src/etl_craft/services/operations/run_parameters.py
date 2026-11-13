@@ -139,7 +139,7 @@ def admit(ctx: OperationContext, request: RunRequest) -> tuple[RunRequest, int, 
                 )
             return request, int(existing.run_id), True
         standing_pauses.lock(conn, pipeline_id)
-        with _base(conn, pipeline_id) as base:
+        with base_definition(conn, pipeline_id) as base:
             validate(base, values, pipeline_id)
             key = f"override:{request.request_key}"
             if request.standalone:
@@ -179,7 +179,7 @@ def copy_for_restart(conn: Connection, source: int, pipeline_id: int) -> dict[st
     """Refuse incompatible new definitions before a replacement run is written."""
     values = run_overrides.recorded(conn, source)
     if values:
-        with _base(conn, pipeline_id) as base:
+        with base_definition(conn, pipeline_id) as base:
             validate(base, values, pipeline_id)
     return values
 
@@ -203,7 +203,8 @@ def _digest(request: RunRequest, values: dict[str, dict[str, str]]) -> str:
 
 
 @contextmanager
-def _base(conn: Connection, pipeline_id: int) -> Iterator[Definition]:
+def base_definition(conn: Connection, pipeline_id: int) -> Iterator[Definition]:
+    """Yield the definition a new run would pin, in force for reads inside the block."""
     with for_admission(conn, pipeline_id) as base:
         if base is None:
             base = Definition.read(

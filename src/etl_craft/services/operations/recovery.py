@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 from sqlalchemy.engine import Connection
 
 from etl_craft.core.enums import AttemptStatus, ControlAction, RunStatus
-from etl_craft.core.errors import RunRefusedError
+from etl_craft.core.errors import RunRefusedError, RunStateError
 from etl_craft.engine import controls, run_scopes, runlog, transitions
 from etl_craft.engine.queries import statement
 from etl_craft.engine.repository.dependencies import (
@@ -129,6 +129,13 @@ def prepare_recovery(
         if selected.status != RunStatus.IN_PROGRESS:
             transitions.reopen_run(conn, selected.pipeline_run_id, ctx.actor, reason=request.reason)
         return
+    if runlog.fetch_run_kind(conn, selected.pipeline_run_id).full_refresh:
+        raise RunStateError(
+            f"pipeline_run_id={selected.pipeline_run_id} is a full refresh: a restart would start "
+            "an ordinary incremental run and lose its scope, and its append targets would not be "
+            "confirmed again. Recover the same run to continue it, or repeat "
+            "`etl-craft run --full-refresh` for a new one"
+        )
     row = conn.execute(
         statement(conn, "transition_row_run"), {"row_id": selected.pipeline_run_id}
     ).one()

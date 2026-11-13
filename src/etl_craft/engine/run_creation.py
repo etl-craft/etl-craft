@@ -7,10 +7,12 @@ from uuid import uuid4
 
 from sqlalchemy.engine import Connection
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.sql.elements import TextClause
 
 from etl_craft.core.actor import Actor, sso_groups
 from etl_craft.core.enums import RunStatus, TriggerKind, YesNo
 from etl_craft.core.errors import ConfigurationError, RunStateError, StaleTransitionError
+from etl_craft.core.full_refresh import FullRefresh
 from etl_craft.engine import runlog, standing_pauses
 from etl_craft.engine.metrics import lifecycle
 from etl_craft.engine.queries import statement
@@ -26,6 +28,7 @@ class RunCreation:
     run_key: str | None = None
     status: str = RunStatus.IN_PROGRESS
     upload_ids: tuple[int, ...] = ()
+    full_refresh: FullRefresh | None = None
 
 
 def create(conn: Connection, pipeline_id: int, actor: Actor, options: RunCreation) -> int:
@@ -50,8 +53,9 @@ def create(conn: Connection, pipeline_id: int, actor: Actor, options: RunCreatio
     key = run_key or f"{trigger_kind.lower().replace('_', '-')}:{uuid4()}"
     try:
         with conn.begin_nested():
+            query, plan_values = _creation_statement(conn, options.full_refresh)
             result = conn.execute(
-                statement(conn, "transition_create_run"),
+                query,
                 {
                     **actor_parameters(actor),
                     "pipeline_id": pipeline_id,
@@ -69,6 +73,7 @@ def create(conn: Connection, pipeline_id: int, actor: Actor, options: RunCreatio
                     "ended_by": actor.name if status == RunStatus.SKIPPED else None,
                     "ended_by_kind": actor.kind.value if status == RunStatus.SKIPPED else None,
                     "backfill": YesNo.of(trigger_kind == TriggerKind.BACKFILL),
+                    **plan_values,
                     "trigger_kind": trigger_kind,
                     "run_key": key,
                 },
@@ -104,6 +109,22 @@ def create(conn: Connection, pipeline_id: int, actor: Actor, options: RunCreatio
             f"pipeline_id={pipeline_id}, run_key={key!r}: expected no active run and a new key, "
             f"owner=None; found {state}. Check run history before retrying."
         ) from error
+
+
+def _creation_statement(
+    conn: Connection, plan: FullRefresh | None
+) -> tuple[TextClause, dict[str, str]]:
+    """Choose the creation statement and the values only a full refresh needs.
+
+    A normal run keeps the statement that names no full-refresh column, so it still works on an
+    Engine DB that has not applied that migration yet.
+    """
+    if plan is None:
+        return statement(conn, "transition_create_run"), {}
+    return (
+        statement(conn, "transition_create_full_refresh_run"),
+        {"full_refresh": YesNo.YES, "full_refresh_plan": plan.serialize()},
+    )
 
 
 def _upload_admission(conn: Connection, pipeline_id: int, options: RunCreation) -> None:

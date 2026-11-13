@@ -165,6 +165,67 @@ def test_run_now_allows_an_optional_reason_and_names_the_project(scene):
         browser.close()
 
 
+@pytest.mark.parametrize("scheme", ["light", "dark"])
+@pytest.mark.parametrize("width", [1280, 390])
+def test_a_full_refresh_warns_before_emptying_a_target_and_waits_for_acceptance(
+    scene, scheme, width
+):
+    ctx, url, _ = scene
+    with acting_as(Actor("owner", ActorKind.USER)), ctx.engine.begin() as conn:
+        pipeline = add_pipeline(conn, "REFRESHED")
+        add_task(
+            conn,
+            pipeline,
+            "load",
+            "SQL",
+            TARGET_OBJECT="mart.orders",
+            SQL_ACTION="APPEND_TABLE",
+            WATERMARK_COLUMN="id",
+            WATERMARK_TYPE="NUMBER",
+            WATERMARK_START="0",
+            SELECT_QUERY="SELECT 1 AS id",
+        )
+    act(ctx, ActionName.PROJECT_SET, project="default", governance="RELAXED", reason="test")
+    with sync_playwright() as pw:
+        browser, page, _ = open_page(
+            pw, color_scheme=scheme, viewport={"width": width, "height": 1000}
+        )
+        page.context.set_default_timeout(8000)
+        sign_in(page, url, "/ui/projects/default/pipelines/REFRESHED")
+        page.get_by_role("button", name="Run now").click()
+        dialog = page.get_by_role("dialog")
+        dialog.get_by_role("switch", name="Full refresh, once").click()
+        dialog.get_by_label("Reason (kept in the audit trail) (optional)").fill("profile fixed")
+        submit = dialog.get_by_role("button", name="Run now")
+        submit.click()
+        # The server names what would be emptied; nothing was run, and the switch is now needed.
+        warning = dialog.get_by_role("alert")
+        expect(warning).to_contain_text("mart.orders")
+        expect(warning).to_contain_text("cannot restore")
+        expect(warning).not_to_contain_text("--yes")  # the CLI's wording stays out of the page
+        accept = dialog.get_by_role("switch", name="Empty mart.orders first, then load it again")
+        expect(submit).to_be_disabled()
+        shoot(page, f"full-refresh-warning-{scheme}-{width}")
+        accept.click()
+        expect(submit).to_be_enabled()
+        with page.expect_request(lambda r: r.method == "POST" and r.url.endswith("/runs")) as sent:
+            submit.click()
+        body = sent.value.post_data_json
+        assert body["full_refresh"] is True and body["empty_targets"] == ["mart.orders"]
+        assert body["reason"] == "profile fixed" and "task_code" not in body
+        browser.close()
+    with ctx.engine.connect() as conn:
+        plan = conn.execute(
+            text(
+                "SELECT l.FULL_REFRESH_PLAN AS plan FROM AUD_PIPELINES_RUN_LOG l "
+                "JOIN CFG_PIPELINES p ON p.PIPELINE_ID=l.PIPELINE_ID "
+                "WHERE p.PIPELINE_CODE='REFRESHED'"
+            )
+        ).scalar_one_or_none()
+    # Whatever happened to execution, the confirmed plan is what was recorded.
+    assert plan is not None and json.loads(plan)["empty_targets"] == ["mart.orders"]
+
+
 def test_scheduled_and_held_pages_list_work_and_release_a_hold(scene):
     ctx, url, active = scene
     act(

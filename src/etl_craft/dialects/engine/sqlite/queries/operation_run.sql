@@ -7,7 +7,7 @@ SELECT p.PIPELINE_ID AS pipeline_id, p.PIPELINE_CODE AS pipeline_code,
        r.TASK_SELECTION AS task_selection, r.EXCLUSIVE_RUN AS exclusive_run,
        r.TRIGGER_KIND AS trigger_kind, r.RUN_DATE AS run_date, r.STATUS AS status,
        r.START_DATE AS start_date, r.END_DATE AS end_date, r.SLA_STATUS AS sla_status,
-       r.BACKFILL AS backfill, r.STARTED_BY AS started_by, r.STARTED_BY_KIND AS started_by_kind,
+       r.BACKFILL AS backfill, r.FULL_REFRESH AS full_refresh, r.STARTED_BY AS started_by, r.STARTED_BY_KIND AS started_by_kind,
        r.ENDED_BY AS ended_by, r.ENDED_BY_KIND AS ended_by_kind
 FROM AUD_PIPELINES_RUN_LOG r
 JOIN CFG_PIPELINES p ON p.PIPELINE_ID = r.PIPELINE_ID

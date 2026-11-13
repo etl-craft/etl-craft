@@ -96,6 +96,27 @@ class Output:
                 )
         self.confirmed = True
 
+    def confirm_emptying(self, warning: str, *, yes: bool) -> bool:
+        """Show the targets a command would empty and wait for acceptance, like an install prompt.
+
+        Returns whether to go on: ``--yes`` accepts without asking, and at a terminal ``y``
+        accepts. Without a terminal (or in CI) and without ``--yes`` it returns ``False``, so the
+        caller raises the refusal that names the remedy; any other answer ends the command.
+        """
+        print(warning, file=self.stderr)
+        if yes:
+            return True
+        if not can_prompt() or os.environ.get("CI"):
+            return False
+        print("Continue? [y/N] ", end="", file=self.stderr, flush=True)
+        try:
+            answer = input()
+        except EOFError:
+            return False
+        if answer.strip().lower() not in {"y", "yes"}:
+            raise UsageError("emptying the listed targets was not confirmed; nothing was run")
+        return True
+
     @property
     def stdout(self) -> TextIO:
         """The stream results are written to."""

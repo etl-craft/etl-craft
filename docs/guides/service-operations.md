@@ -59,7 +59,7 @@ for the pipeline's single non-terminal run.
 
 | Request | Actions |
 | --- | --- |
-| `RunRequest` | `run`: a whole run, one task, a standalone selection, a rerun, a skip or a backfill (`backfill_from`, `backfill_to`) |
+| `RunRequest` | `run`: a whole run, one task, a standalone selection, a rerun, a skip, a backfill (`backfill_from`, `backfill_to`) or a one-time full refresh (`full_refresh`, `empty_targets`); a refresh that would empty append targets answers HTTP `428` with `targets` until `empty_targets` names exactly them |
 | `MarkRequest` | `mark`: a run, a task, a stand-in run (`new_run`) or a watermark reset |
 | `ControlRequest` | `control`: `STOP`, `ABORT`, `HOLD`, `RELEASE`, `RECOVER`, `RESTART`, `RUN_PAUSED`, and `PAUSE`/`RESUME` of a definition |
 | `BulkControlRequest` | `control bulk`: up to 100 keyed controls, each invoked and recorded on its own |

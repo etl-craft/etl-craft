@@ -6,6 +6,16 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+- `etl-craft run --full-refresh`, a one-time full refresh of a pipeline, or with `--task-code` (and
+  `--with-downstream`) of a task and what reads it. The incremental tasks in scope read from the
+  start for that run only, store the position they reach when they succeed, and the next run is
+  incremental. `APPEND_TABLE` targets are emptied first, after a confirmation: a terminal prompt or
+  `--yes`, HTTP `428` with `empty_targets` over the API, and a switch in the **Run now** dialog;
+  the new exit code `31` (`CONFIRMATION_REQUIRED`) means a confirmation is missing. Needs a
+  `--reason` and refuses a target with human-protected rows or another writer. Engine DB migration
+  `0095` adds `AUD_PIPELINES_RUN_LOG.FULL_REFRESH` and `FULL_REFRESH_PLAN`; runs show `full_refresh`
+  in their JSON and as "full refresh" in run lists, and a full-refresh run cannot be restarted.
+
 - Snowflake: a structured `ARRAY(NUMBER(38,0))` (or `OBJECT`) result column is no longer created as a plain
   `ARRAY`, which Snowflake refused on the merge. The driver reports both alike, so `OBJECT` and `ARRAY`
   result types are read from the materialized catalog metadata instead of guessed.
