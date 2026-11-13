@@ -10,18 +10,15 @@ from dataclasses import dataclass
 from typing import TextIO
 
 MARK = (
-    "     /\\     ",
-    "    /  \\    ",
-    "    \\  /    ",
-    "     \\/     ",
     "   \\  |  /   ",
     "    \\ | /    ",
-    "   \\  |  /   ",
-    "    \\ | /    ",
+    "  >-- + --<  ",
+    "    / | \\    ",
+    "   /  |  \\   ",
 )
-"""The mark: a plane over a stem and two chevrons, as the interface and the catalog draw it."""
+"""The mark: arrows converging on a core, as the interface and the catalog draw it."""
 
-BLUE, BOLD, RED, RESET = "\033[38;5;75m", "\033[1m", "\033[1;31m", "\033[0m"
+TEAL, BOLD, RED, RESET = "\033[38;5;37m", "\033[1m", "\033[1;31m", "\033[0m"
 
 
 @dataclass(frozen=True)
@@ -103,7 +100,7 @@ def render(facts: Facts, *, art: bool, colour: bool) -> str:
         return "\n".join(body)
     out = []
     for index in range(max(len(MARK), len(body))):
-        left = paint(MARK[index], BLUE) if index < len(MARK) else " " * len(MARK[0])
+        left = paint(MARK[index], TEAL) if index < len(MARK) else " " * len(MARK[0])
         right = body[index] if index < len(body) else ""
         out.append(f"{left}  {right}".rstrip())
     return "\n".join(out)

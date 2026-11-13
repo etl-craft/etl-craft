@@ -6,6 +6,8 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+- A new product mark: three lines converge on a hexagonal core and leave as one arrow, in one accent stroke with no tile. It replaces the old mark in the interface, the favicon, the catalog pages and the terminal banner, which is now teal.
+
 - Browser interface: a standard application frame (header, flush navigation with a divider and a
   bar on the selected item, footer with the etl-craft and schema versions) replaces the floating
   rounded page; the project and environment are one segmented control; neutrals are slate; the

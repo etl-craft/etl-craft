@@ -1,25 +1,15 @@
-import * as React from "react";
+import { cn } from "@/lib/utils";
 
 /**
- * The etl-craft mark: layered chevrons under a plane, on an accent tile. The tile and glyph
- * colours come from the theme (index.css), the same pair the catalog and the favicon use.
+ * The etl-craft mark: three lines converge on a hexagonal core and leave as one arrow, data from several
+ * sources transformed and written. One stroke in the accent colour, no tile, so it reads at 16 px on any surface.
  */
 export function Logo({ className }: { className?: string }) {
-  const id = React.useId();
   return (
-    <svg viewBox="0 0 32 32" aria-hidden focusable="false" className={className}>
-      <defs>
-        <linearGradient id={id} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" className="[stop-color:var(--mark-a)]" />
-          <stop offset="1" className="[stop-color:var(--mark-b)]" />
-        </linearGradient>
-      </defs>
-      <rect width="32" height="32" rx="8" fill={`url(#${id})`} />
-      <g fill="none" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="[stroke:var(--mark-glyph)]">
-        <path d="M16 5.5 L24.5 9.75 L16 14 L7.5 9.75 Z" className="[fill:var(--mark-glyph)] [fill-opacity:0.26]" />
-        <path d="M16 14 V25.5" />
-        <path d="M9.5 17.5 L16 21 L22.5 17.5" />
-        <path d="M9.5 22 L16 25.5 L22.5 22" />
+    <svg viewBox="0 0 64 64" aria-hidden focusable="false" className={cn("text-accent", className)}>
+      <g fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M6 13 L22 26 M6 32 H21 M6 51 L22 38 M52 32 H59 M55 27 L60 32 L55 37" />
+        <path d="M51.00 32.00 L45.00 42.39 L33.00 42.39 L27.00 32.00 L33.00 21.61 L45.00 21.61 Z" />
       </g>
     </svg>
   );
