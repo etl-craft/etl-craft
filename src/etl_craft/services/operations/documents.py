@@ -119,7 +119,7 @@ def generate_docs(ctx: OperationContext, request: DocsInput) -> DocsBuild:
             for code, pipeline in catalog.pipelines.items():
                 pipeline.depended_on_by.extend(visible_dependents(conn, ctx, code))
         untraced = tuple(
-            UntracedTask(task.label, task.lineage_error or "") for task in catalog.untraced
+            UntracedTask(task.label, task.lineage["reason"] or "") for task in catalog.untraced
         )
         if request.strict and untraced:
             completion.outcome, completion.exit_code = ActionOutcome.FAILURE, ExitCode.FAILURE

@@ -210,7 +210,16 @@ def test_validate_overlap_and_unmanaged_catalog_and_lineage(project):
         for edge in lineage.edges
     )
     catalog = build_catalog(engine, config)
-    assert catalog.tasks["P.custom"].lineage_error == "unmanaged"
+    from etl_craft.services.catalog.document import catalog_document
+    from etl_craft.services.catalog.gaps import lineage_records
+
+    task = next(task for task in catalog_document(catalog)["tasks"] if task["label"] == "P.custom")
+    assert task["lineage"]["state"] == "unavailable"
+    assert "SQL scripts run unmanaged statements" in task["lineage"]["reason"]
+    assert all(
+        "P.custom" not in gap.tasks
+        for gap in lineage_records(catalog, catalog.tables["main.target"])
+    )
     assert "P.custom" in catalog.tables["main.target"].writers
     assert "P.custom" in catalog.tables["main.other"].writers
 

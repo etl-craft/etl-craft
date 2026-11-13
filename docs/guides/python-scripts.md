@@ -59,6 +59,8 @@ and managed SQL keep `Orchestration.Retry_on`. `explain` shows the effective pol
 | Parameter | Value |
 |---|---|
 | `SCRIPT_KIND` | required: `INGESTION` or `UTILITY` |
+| `LINEAGE_SOURCE` | optional for INGESTION only: documentation-only external `system.object`; never verified against Python code |
+| `LINEAGE_COLUMNS` | optional with LINEAGE_SOURCE: pipe-separated `source_column:target_column` pairs; each target must be an active column of the task target |
 | `SCRIPT_FILE` | the script's path from the project directory, inside `python_scripts/`, such as `python_scripts/crm/customers.py` |
 | `SECRETS` | optional: pipe-separated provider names, for example `SOURCE_USER|SOURCE_PASSWORD`; values stay outside metadata |
 | `INPUT_PARAMS` | optional: a JSON object the script receives as a dictionary, such as `{"region": "eu", "days": 30}` |
@@ -414,3 +416,5 @@ Only bool schemas are supported. Without `schema`, the reader returns its origin
 Carry the typed control into a BOOLEAN landing column and explicitly SELECT it beside UPLOAD_ID.
 See the [reference loader](../examples/python_scripts/reference_upload.py) and
 [validator](../examples/validation_scripts/reference.py), and the [stewardship guide](stewardship.md).
+
+See [declaring an ingestion mapping](../examples/python-lineage.md) for table-level and column-level catalog declarations.

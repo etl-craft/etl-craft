@@ -2,6 +2,7 @@
 
 import hashlib
 import os
+from dataclasses import replace
 
 import pytest
 from sqlalchemy import text
@@ -56,7 +57,7 @@ def test_cloud_hash_matches_the_canonical_golden_digest(tmp_path, vendor):
         pytest.param("SNOWFLAKE", marks=pytest.mark.cloud_snowflake),
     ],
 )
-def test_cloud_typed_target_rehash_and_unchanged_merge(tmp_path, vendor):
+def test_cloud_typed_target_rehash_and_unchanged_merge(tmp_path, vendor, monkeypatch):
     import uuid
 
     from etl_craft.engine import transitions
@@ -72,6 +73,8 @@ def test_cloud_typed_target_rehash_and_unchanged_merge(tmp_path, vendor):
     project = tmp_path / "etl-craft"
     project.mkdir()
     config = write_config(project, vendor.title(), fields, TableFormat.NATIVE)
+    monkeypatch.setenv("CLOUD_PRIVACY_HMAC", "cloud-hash-contract-test-only-key")
+    config = replace(config, privacy_hmac_secret="CLOUD_PRIVACY_HMAC")
     db = sqlite_engine_db(project).engine
     apply_schema(db)
     with db.begin() as conn:

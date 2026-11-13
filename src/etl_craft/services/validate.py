@@ -458,6 +458,9 @@ def _task(
     if not is_metadata_code(task.task_code):
         report.fail(where, _code_problem("TASK_CODE", task.task_code))
     try:
+        from etl_craft.handlers.declared_lineage import validate as validate_lineage
+
+        validate_lineage(conn, task.task_id, params, task.handler, where)
         request = resource_request(task.handler, params, where)
         data.placement.check(
             where,

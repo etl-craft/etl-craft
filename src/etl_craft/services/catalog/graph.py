@@ -536,9 +536,9 @@ def render_dag_svg(
 def lineage_history(table: TableAsset, catalog: Catalog) -> str:
     """Render the current version and the column-source changes in table history."""
     warnings = "".join(
-        f'<p class="note">{escape(task)}: {escape(catalog.tasks[task].lineage_error)}</p>'
+        f'<p class="note">{escape(task)}: {escape(catalog.tasks[task].lineage["reason"])}</p>'
         for task in table.writers
-        if catalog.tasks[task].lineage_error
+        if catalog.tasks[task].lineage["reason"]
     )
     heading = "<h2>Lineage history</h2>" + warnings
     if not table.lineage_history:

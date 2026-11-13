@@ -1,24 +1,10 @@
-"""Column lineage: which columns each SQL task's target is made from, traced across tasks.
+"""Managed SELECT column lineage, its qualified tree and the recorded cache.
 
-Every active SQL task's SELECT (inline or from its file, with the pipeline-id tokens replaced) is
-parsed in the warehouse's SQL dialect. Each column of the SELECT is traced back through CTEs,
-subqueries and joins to the source columns it is made from, and recorded against the task's
-``TARGET_OBJECT``:
-
-- a column copied as it is: ``copy``;
-- a column computed from others, such as ``o.amount * c.rate``: the expression, one edge per
-  source column;
-- a column made from none, such as ``COUNT(*)`` or a constant: the expression, with no source.
-
-Tables are named as the SQL names them, lower case, with the active warehouse database left off,
-so a task's target and a later task's source meet. Because one task's target is the next one's
-source, the edges join into one graph, which ``LineageGraph`` walks upstream to the first sources
-and downstream to the last consumers, across pipelines.
-
-Lineage is stored per task in ``AUD_COLUMN_LINEAGE`` with a hash of the SELECT, target and
-dialect and source schemas, and worked out again only when they change. SQL that cannot be
-traced, such as
-``SELECT *`` over a table whose columns are not known, is reported with the reason.
+Each trace parses and qualifies its SELECT once. Column tracing and catalog mapping inspect
+that same tree. Direct copies use ``copy``; computed columns retain their expression, and constants
+or COUNT(*) have no source column. Table identities are lower case without the active catalog.
+AUD_COLUMN_LINEAGE caches edges by SELECT, target, dialect and source schemas. An untraceable
+SELECT keeps its reason instead of publishing guessed edges.
 """
 
 from __future__ import annotations
@@ -38,6 +24,7 @@ from sqlglot.errors import SqlglotError
 from sqlglot.lineage import lineage as sqlglot_lineage
 from sqlglot.optimizer.qualify import qualify as qualify_columns
 from sqlglot.optimizer.qualify_tables import qualify_tables
+from sqlglot.optimizer.scope import build_scope
 from sqlglot.schema import MappingSchema
 
 from etl_craft.config import ConnectorConfig
@@ -65,6 +52,13 @@ from etl_craft.engine.repository.source_columns import (
 from etl_craft.engine.repository.tasks import fetch_all_task_parameters
 from etl_craft.engine.repository.validation import fetch_active_tasks, fetch_task_dependency_edges
 from etl_craft.handlers.lineage_columns import engine_columns, with_named_engine_columns
+from etl_craft.handlers.lineage_mapping import (
+    MappingStep,
+    SelectTrace,
+    TraceContext,
+    parse_select,
+    steps,
+)
 from etl_craft.handlers.sql.spec import resolve_select
 from etl_craft.warehouse.connection import warehouse_dialect
 
@@ -101,6 +95,7 @@ class TaskLineage:
     cached: bool = False
     sources: tuple[str, ...] = ()
     targets: tuple[str, ...] = ()
+    mapping: tuple[MappingStep, ...] = ()
 
 
 def table_name(parts: Iterable[str], catalog: str | None) -> str:
@@ -112,7 +107,7 @@ def table_name(parts: Iterable[str], catalog: str | None) -> str:
 
 
 def extract(
-    select_sql: str,
+    select_sql: str | exp.Query,
     target_object: str,
     *,
     dialect: str | None,
@@ -120,8 +115,17 @@ def extract(
     schemas: Mapping[str, Mapping[str, str]] | None = None,
 ) -> list[Edge]:
     """Trace each column of ``select_sql`` to its sources; ``MetadataError`` when it cannot."""
+    return trace(select_sql, TraceContext(target_object, dialect, catalog, schemas)).edges
+
+
+def trace(select_sql: str | exp.Query, context: TraceContext) -> SelectTrace:
+    """Qualify once; mapping consumers receive precisely the tree used by column tracing."""
+    dialect, catalog, schemas = context.dialect, context.catalog, context.schemas
+    target_object = context.target
     try:
-        tree = sqlglot.parse_one(select_sql, read=dialect)
+        tree = (
+            select_sql if isinstance(select_sql, exp.Query) else parse_select(select_sql, dialect)
+        )
     except SqlglotError as error:
         raise MetadataError(f"the SELECT could not be parsed: {error}") from error
     if not isinstance(tree, exp.Query):
@@ -139,24 +143,29 @@ def extract(
                 [catalog or "__etl_craft", "__unqualified", *parts] if len(parts) == 1 else parts
             )
             schema.add_table(".".join(parts), dict(columns))
-    if schemas:
-        try:
-            tree = qualify_columns(
-                tree,
-                dialect=dialect,
-                schema=schema,
-                catalog=catalog or "__etl_craft",
-                db="__unqualified",
-                quote_identifiers=False,
-                identify=False,
-            )
-        except (SqlglotError, KeyError, ValueError) as error:
-            tables = ", ".join(referenced_tables(select_sql, dialect=dialect, catalog=catalog))
-            raise MetadataError(
-                f"columns from {tables} could not be resolved: {error}; define missing source "
-                f"columns in columns.csv"
-            ) from error
-    return _edges(tree, originals, schema, target, dialect, catalog)
+    try:
+        tree = qualify_columns(
+            tree,
+            dialect=dialect,
+            schema=schema,
+            catalog=catalog or "__etl_craft",
+            db="__unqualified",
+            quote_identifiers=False,
+            identify=False,
+            validate_qualify_columns=bool(schemas),
+        )
+    except (SqlglotError, KeyError, ValueError) as error:
+        tables = ", ".join(referenced_tables(tree, dialect=dialect, catalog=catalog))
+        raise MetadataError(
+            f"columns from {tables} could not be resolved: {error}; define missing source "
+            f"columns in columns.csv"
+        ) from error
+    return SelectTrace(
+        tree,
+        list(context.cached_edges)
+        if context.cached_edges
+        else _edges(tree, originals, schema, target, dialect, catalog),
+    )
 
 
 def _edges(
@@ -167,10 +176,9 @@ def _edges(
     dialect: str | None,
     catalog: str | None,
 ) -> list[Edge]:
-    source_names = ", ".join(
-        referenced_tables(tree.sql(dialect=dialect), dialect=dialect, catalog=catalog)
-    )
+    source_names = ", ".join(referenced_tables(tree, dialect=dialect, catalog=catalog))
     edges: list[Edge] = []
+    scope = build_scope(tree)
     for projection in tree.selects:
         column = projection.alias_or_name
         if not column or isinstance(projection, exp.Star) or column == "*":
@@ -181,7 +189,7 @@ def _edges(
         inner = originals.get(column.lower(), projection.unalias())
         transformation = COPY if isinstance(inner, exp.Column) else inner.sql(dialect=dialect)
         try:
-            node = sqlglot_lineage(column, tree, schema, dialect=dialect)
+            node = sqlglot_lineage(column, tree, schema, dialect=dialect, scope=scope, copy=False)
         except (SqlglotError, KeyError, ValueError) as error:
             raise MetadataError(f"column {column!r} could not be traced: {error}") from error
         if any(
@@ -229,16 +237,27 @@ def _edges(
 
 
 def referenced_tables(
-    select_sql: str, *, dialect: str | None, catalog: str | None = None
+    select_sql: str | exp.Query, *, dialect: str | None, catalog: str | None = None
 ) -> tuple[str, ...]:
     """Return every table ``select_sql`` reads, CTEs left out; empty when it does not parse."""
     try:
-        tree = sqlglot.parse_one(select_sql, read=dialect)
+        tree = (
+            select_sql
+            if isinstance(select_sql, exp.Query)
+            else sqlglot.parse_one(select_sql, read=dialect)
+        )
     except SqlglotError:
         return ()
     ctes = {cte.alias_or_name.lower() for cte in tree.find_all(exp.CTE)}
     found = {
-        table_name((t.catalog, t.db, t.name), catalog)
+        table_name(
+            (
+                "" if t.catalog == "__etl_craft" else t.catalog,
+                "" if t.db == "__unqualified" else t.db,
+                t.name,
+            ),
+            catalog,
+        )
         for t in tree.find_all(exp.Table)
         if t.name and not (not t.db and t.name.lower() in ctes)
     }
@@ -387,7 +406,8 @@ def _collect(
             select_sql, _ = resolve_select(
                 config, params, pipeline_run_id=0, refresh_type=RefreshType.FULL
             )
-            sources = referenced_tables(select_sql, dialect=dialect, catalog=catalog)
+            tree = parse_select(select_sql, dialect)
+            sources = referenced_tables(tree, dialect=dialect, catalog=catalog)
             if not target:
                 raise MetadataError("the task has no TARGET_OBJECT")
             if ref.task_id not in processed:
@@ -401,21 +421,22 @@ def _collect(
             used_schemas = with_named_engine_columns(
                 {source: schemas[source] for source in sources if source in schemas},
                 owned,
-                select_sql,
-                dialect,
+                tree,
             )
             key = _lineage_cache_key(select_sql, target, defined, used_schemas, dialect, catalog)
             stored = cache.get((ref.task_id, key), [])
-            edges = (
-                [stored_edge(e, name, catalog) for e in stored]
-                if stored
-                else [
-                    replace(e, task=name)
-                    for e in extract(
-                        select_sql, target, dialect=dialect, catalog=catalog, schemas=used_schemas
-                    )
-                ]
+            traced = trace(
+                tree,
+                TraceContext(
+                    target,
+                    dialect,
+                    catalog,
+                    used_schemas,
+                    tuple(stored_edge(edge, name, catalog) for edge in stored),
+                ),
             )
+            edges = [replace(edge, task=name) for edge in traced.edges]
+
         except EtlCraftError as error:
             reason = f"history not updated: {error}" if record else str(error)
             results.append(TaskLineage(name, target or None, [], error=reason, sources=sources))
@@ -428,7 +449,8 @@ def _collect(
             with engine.begin() as conn:
                 store_task_lineage(conn, ref.task_id, key, [cache_edge(e, catalog) for e in edges])
         keys[ref.task_id] = key
-        results.append(TaskLineage(name, target, edges, cached=bool(stored), sources=sources))
+        result = TaskLineage(name, target, edges, cached=bool(stored), sources=sources)
+        results.append(replace(result, mapping=steps(traced.tree, dialect)))
     return sorted(results, key=lambda result: result.task)
 
 

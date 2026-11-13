@@ -421,7 +421,7 @@ class _Writer(Pages):
         )
         untraced = _table(
             ["Task", "Why its columns cannot be traced"],
-            ([self._task_link(t.label, ""), _e(t.lineage_error)] for t in c.untraced),
+            ([self._task_link(t.label, ""), _e(t.lineage["reason"])] for t in c.untraced),
             "Every SQL task's columns are traced.",
         )
         labels = sorted({tag for p in c.pipelines.values() for tag in p.row.tags})

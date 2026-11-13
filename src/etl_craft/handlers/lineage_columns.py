@@ -6,9 +6,7 @@ columns of its writing action and ``ROW_ID``. Lineage knows them only when a SEL
 
 from collections.abc import Iterable, Mapping
 
-import sqlglot
 from sqlglot import exp
-from sqlglot.errors import SqlglotError
 
 from etl_craft.core.enums import SqlAction
 from etl_craft.handlers.sql.session import ROW_ID_COLUMN
@@ -46,8 +44,7 @@ def engine_columns(
 def with_named_engine_columns(
     used: Mapping[str, Mapping[str, str]],
     owned: Mapping[str, tuple[str, ...]],
-    select_sql: str,
-    dialect: str | None,
+    tree: exp.Query,
 ) -> dict[str, dict[str, str]]:
     """Return the source schemas plus the engine columns the SELECT names.
 
@@ -55,12 +52,7 @@ def with_named_engine_columns(
 
     A ``*`` still expands to the business columns only, so existing lineage is unchanged.
     """
-    try:
-        named = {
-            c.name.lower() for c in sqlglot.parse_one(select_sql, read=dialect).find_all(exp.Column)
-        }
-    except SqlglotError:
-        named = set()
+    named = {column.name.lower() for column in tree.find_all(exp.Column)}
     return {
         table: {
             **{c.lower(): "UNKNOWN" for c in owned.get(table, ()) if c.lower() in named},

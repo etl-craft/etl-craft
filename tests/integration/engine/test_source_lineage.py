@@ -248,10 +248,11 @@ def test_columns_the_engine_adds_to_a_written_table_trace_for_its_readers(engine
 
 def test_a_declared_engine_column_keeps_its_declared_type(engine_db):
     from etl_craft.handlers.lineage_columns import with_named_engine_columns
+    from etl_craft.handlers.lineage_mapping import parse_select
 
     used = {"ods.people": {"id": "INT", "row_id": "BIGINT"}}
     owned = {"ods.people": ("PIPELINE_RUN_ID", "ROW_ID")}
     found = with_named_engine_columns(
-        used, owned, "SELECT id, row_id, pipeline_run_id FROM ods.people", None
+        used, owned, parse_select("SELECT id, row_id, pipeline_run_id FROM ods.people", None)
     )
     assert found["ods.people"] == {"pipeline_run_id": "UNKNOWN", "id": "INT", "row_id": "BIGINT"}

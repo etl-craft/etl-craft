@@ -229,3 +229,5 @@ Register at the earliest managed warehouse table; external sources are outside e
 Use the [browser guide](../guides/browser-ui.md) to inspect an example project's runs. Home
 shows dated numbers for one-to-four-day windows and daily charts for longer windows. Graph
 **Fit view** keeps labels readable; drag to pan through a large pipeline or catalog lineage.
+
+[Declaring an ingestion mapping](python-lineage.md) shows both documentation-only lineage parameters and their target-column contract.

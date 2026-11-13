@@ -3,10 +3,10 @@ SALES_DAILY,alert,EMAIL_BODY,Run $$pipeline_run_id ended $$status.,Y
 SALES_DAILY,alert,EMAIL_SUBJECT,$$pipeline_code: $$status,Y
 SALES_DAILY,alert,EMAIL_TO,sales-data@example.com|sales-leads@example.com,Y
 SALES_DAILY,fetch_orders,INPUT_PARAMS,"{""region"": ""uk"", ""days"": 1}",Y
+SALES_DAILY,fetch_orders,LINEAGE_SOURCE,orders.api,Y
 SALES_DAILY,fetch_orders,RETRIES,2,Y
 SALES_DAILY,fetch_orders,SCRIPT_FILE,python_scripts/sales/fetch_orders.py,Y
 SALES_DAILY,fetch_orders,SCRIPT_KIND,INGESTION,Y
-SALES_DAILY,fetch_orders,SOURCE_OBJECT,Order service API,Y
 SALES_DAILY,fetch_orders,TASK_TIMEOUT_SECONDS,1800,Y
 SALES_DAILY,load_orders,DOCUMENTATION,Appends the day's orders to the region's table.,Y
 SALES_DAILY,load_orders,RETRIES,1,Y
@@ -25,11 +25,11 @@ SALES_DAILY_EU,alert,EMAIL_BODY,Run $$pipeline_run_id ended $$status.,Y
 SALES_DAILY_EU,alert,EMAIL_SUBJECT,$$pipeline_code: $$status,Y
 SALES_DAILY_EU,alert,EMAIL_TO,sales-data@example.com|sales-leads@example.com,Y
 SALES_DAILY_EU,fetch_orders,INPUT_PARAMS,"{""region"": ""eu"", ""days"": 1}",Y
+SALES_DAILY_EU,fetch_orders,LINEAGE_SOURCE,orders.api,Y
 SALES_DAILY_EU,fetch_orders,RETRIES,2,Y
 SALES_DAILY_EU,fetch_orders,RETRY_DELAY_SECONDS,300,Y
 SALES_DAILY_EU,fetch_orders,SCRIPT_FILE,python_scripts/sales/fetch_orders.py,Y
 SALES_DAILY_EU,fetch_orders,SCRIPT_KIND,INGESTION,Y
-SALES_DAILY_EU,fetch_orders,SOURCE_OBJECT,Order service API,Y
 SALES_DAILY_EU,fetch_orders,TASK_TIMEOUT_SECONDS,1800,Y
 SALES_DAILY_EU,load_orders,DOCUMENTATION,Appends the day's orders to the region's table.,Y
 SALES_DAILY_EU,load_orders,SCRIPT_FILE,sql_scripts/sales/orders_eu.sql,Y

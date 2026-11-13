@@ -501,10 +501,10 @@ class Pages:
         row = task.row
         run = row.last_run
         lineage = ""
-        if task.lineage_error:
+        if task.lineage["reason"]:
             lineage = (
                 '<p><span class="badge warn">column lineage unavailable</span> '
-                f"{_e(task.lineage_error)}</p>"
+                f"{_e(task.lineage['reason'])}</p>"
             )
         facts = _facts(
             [

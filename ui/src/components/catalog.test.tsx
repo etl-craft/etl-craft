@@ -8,14 +8,14 @@ import { CatalogTree } from "@/components/catalog-tree";
 import { pipelineGraph, tableLineage, type CatalogDoc } from "@/lib/catalog";
 
 const column = (name: string, over: object = {}) => ({ name, data_type: "bigint", comment: null, declared_type: null, warehouse_type: "bigint", declared_nullable: null, warehouse_nullable: "Y", declared: true, warehouse_present: true, engine_managed: false, ...over });
-const task = (pipeline: string, code: string, over: object = {}) => ({ label: `${pipeline}.${code}`, pipeline, code, handler: "SQL", run_condition: null, documentation: `${code} does its work.`, documentation_version: 1, target: null, sources: [], script: null, lineage_error: null, upstream: [], downstream: [], rules: [], runs: [], ...over });
+const task = (pipeline: string, code: string, over: object = {}) => ({ label: `${pipeline}.${code}`, pipeline, code, handler: "SQL", run_condition: null, documentation: `${code} does its work.`, documentation_version: 1, target: null, sources: [], script: null, lineage: { state: "derived", reason: null }, mapping: { steps: [], edges: [], source: null, write: { action: "CREATE_TABLE", managed_columns: [], keys: {} } }, script_kind: null, run_condition_count: null, active_flag: "Y", target_active_flag: "Y", retries: 0, retry_on: "TRANSIENT", timeout_seconds: 0, secrets: [], upstream: [], downstream: [], rules: [], runs: [], ...over });
 const table = (name: string, over: object = {}) => {
   const [schema, short] = name.split(".");
   return { name, database: "w", schema, table: short, external: false, label: name, declared_kind: null, warehouse_kind: "TABLE", in_warehouse: true, warehouse_checked: true, findings: [], writers: [], readers: [], rules: [], columns: [column("id")], ...over };
 };
 const doc = {
-  schema: "etl-craft/catalog/1", generated_at: "2026-11-07T10:00:00+00:00", compared_at: null, project: "demo", environment: "TEST", database: null, warehouse: "trino", sql_dialect: null,
-  pipelines: [{ code: "LOAD", name: "LOAD", description: "Loads orders.", schedule: null, auto_restart_condition: "SCHEDULE", refresh_type: "FULL", sla_in_hours: null, tags: [], paused: null, tasks: ["LOAD.a", "LOAD.b"], depends_on: [], depended_on_by: [], runs: [] }],
+  schema: "etl-craft/catalog/2", gate_wait_minutes: 60, definition_edges: [{kind:"task",source:"LOAD.a",target:"LOAD.b",dependency_type:"SUCCESS",consume_repairs:"Y"}], generated_at: "2026-11-07T10:00:00+00:00", compared_at: null, project: "demo", environment: "TEST", database: null, warehouse: "trino", sql_dialect: null,
+  pipelines: [{ code: "LOAD", name: "LOAD", description: "Loads orders.", schedule: null, triggers: [], auto_restart_condition: "SCHEDULE", refresh_type: "FULL", sla_in_hours: null, tags: [], paused: null, tasks: ["LOAD.a", "LOAD.b"], depends_on: [], depended_on_by: [], runs: [] }],
   tasks: [task("LOAD", "a", { target: "stg.orders" }), task("LOAD", "b", { target: "ods.orders", sources: ["stg.orders"], upstream: [["LOAD.a", "SUCCESS"]] })],
   tables: [table("stg.orders", { writers: ["LOAD.a"], readers: ["LOAD.b"], columns: [column("id"), column("amount", { comment: "In cents" })] }), table("ods.orders", { writers: ["LOAD.b"] })],
   rules: [], scripts: [], table_edges: [{ source: "stg.orders", target: "ods.orders", task: "LOAD.b" }], column_edges: [], triggers: [], gaps: [],

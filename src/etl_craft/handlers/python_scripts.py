@@ -50,7 +50,9 @@ from etl_craft.warehouse.connection import warehouse_task
 
 logger = logging.getLogger(__name__)
 
-PARAMETERS = frozenset({"SCRIPT_FILE", "INPUT_PARAMS", "SCRIPT_KIND", "SECRETS"})
+PARAMETERS = frozenset(
+    {"SCRIPT_FILE", "INPUT_PARAMS", "SCRIPT_KIND", "SECRETS", "LINEAGE_SOURCE", "LINEAGE_COLUMNS"}
+)
 """The task parameters a Python-script task reads."""
 
 SCRIPT_LOGGER = "etl_craft_script"

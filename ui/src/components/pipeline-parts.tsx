@@ -1,3 +1,4 @@
+import {LegendView,statusEntries} from "@/components/legend";
 import { CirclePause, X } from "lucide-react";
 import { When } from "@/components/when";
 import * as React from "react";
@@ -112,7 +113,7 @@ export function RunBars({ project, runs }: { project: string; runs: Pick<RunView
   const longest = Math.max(1, ...ordered.map(seconds));
   return (
     // Bars start at the left and keep their width, so a few runs read as a short strip, not a corner of an empty panel.
-    <ul className="m-0 flex h-20 list-none items-end justify-start gap-0.5 p-0" aria-label="Run durations, newest on the right">
+    <LegendView entries={statusEntries(ordered.map(run=>run.status))}><ul className="m-0 flex h-20 list-none items-end justify-start gap-0.5 p-0" aria-label="Run durations, newest on the right">
       {ordered.map((run) => (
         <li key={run.pipeline_run_id} className="flex h-full w-3 min-w-1.5 shrink items-end">
           <Link
@@ -124,6 +125,6 @@ export function RunBars({ project, runs }: { project: string; runs: Pick<RunView
           />
         </li>
       ))}
-    </ul>
+    </ul></LegendView>
   );
 }
