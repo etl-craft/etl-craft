@@ -343,7 +343,7 @@ def _watermarked_task(
     """Freeze the run cursor before executing or staging its managed SELECT."""
     if task.watermark is not None:
         assert state is not None
-        stored = None if context.backfill else state.offset
+        stored = None if context.backfill or context.full_refresh else state.offset
         if task.bounded:
             mark = task.watermark.start
             window = store.window(
@@ -351,6 +351,7 @@ def _watermarked_task(
                     StoredOffset(mark.datatype, mark.stored()),
                     source_pipelines(context.task_params),
                     context.backfill,
+                    context.full_refresh,
                 )
             )
             stored = StoredOffset(

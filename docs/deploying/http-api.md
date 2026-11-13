@@ -120,7 +120,7 @@ committed work; inspect its exact run before retrying.
 | GET | `/runs/{run_id}`, `/attempts/{attempt_id}`, `/attempts/{attempt_id}/log?offset=0` | Exact run, attempt and log bytes |
 | GET | `/run-log` | `pipeline_code`; `run_id` or `run_key`: the pipeline run log as text, one line per audited event |
 | GET | `/run-zip` | `pipeline_code`; `run_id` or `run_key`: a zip of the run log, each attempt's log, the status, history and explain documents and `manifest.json`, streamed as an attachment |
-| POST | `/runs` | A `RunRequest`: `pipeline_code` and `task_code`, `standalone`, `rerun`, `with_downstream`, `run_date`, `backfill_from`/`backfill_to`, `reason` |
+| POST | `/runs` | A `RunRequest`: `pipeline_code` and `task_code`, `standalone`, `rerun`, `with_downstream`, `run_date`, `backfill_from`/`backfill_to`, `full_refresh` with `empty_targets`, `reason` |
 | POST | `/marks` | `pipeline_code`, `reason`, and `status` or `watermark`; optional `task_code`, `rows`, `stale`, `new_run` |
 | POST | `/controls` | `pipeline_code`, `action` (`HOLD`, `RELEASE`, `STOP`, `ABORT`, `RECOVER`, `RESTART`, `RUN_PAUSED`, `PAUSE`, `RESUME`), `reason`; optional `task_code`, `request_key` |
 | POST | `/controls/bulk` | `requests`: 1 to 100 controls, each with an explicit `run_id` or `run_key` and a unique `request_key` |

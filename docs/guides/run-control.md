@@ -281,6 +281,74 @@ at most 366 dates, and not while the pipeline has a run in progress or is paused
 A single run can be given its date too: `etl-craft run --pipeline-code SALES_DAILY --run-date
 2026-09-01`. `etl-craft history --all` shows each run's date, and which were backfill runs.
 
+## Full refresh once
+
+```bash
+etl-craft run --pipeline-code TRANSACTIONS --full-refresh \
+    --reason "profile history corrected"
+```
+
+Use it when something a task reads changed for its whole history: profile attributes that are
+joined into transactions, a corrected source, a new business rule. The run re-reads everything
+the incremental tasks normally skip, then the pipeline is incremental again. Nothing in the
+configuration changes, so there is nothing to switch back.
+
+In a full refresh run:
+
+- A SQL task with `WATERMARK_COLUMN` reads from its `WATERMARK_START`, and
+  [`$$pipeline_run_id_filter`](sql-tasks.md#the-pipeline-id-tokens) is `1=1`, as if the pipeline's
+  `REFRESH_TYPE` were `FULL`, for this run only.
+- A Python `INGESTION` task gets `task.offset` as `None` and `task.refresh_type` as `FULL`.
+- Every task stores the position it reaches **only when it succeeds**. A failed, lost or
+  cancelled task leaves the stored position as it was, and a retry or `recover` continues the
+  same refresh. The next run after a successful one is an ordinary incremental run.
+
+`--task-code TASK` refreshes that task only, and `--with-downstream` adds the tasks that read it.
+The run is still a run of the whole pipeline, so the other tasks run as they always do, in
+dependency order. Refresh a pipeline that another pipeline feeds by running the upstream pipeline
+first and then the full refresh: consumption and gates work as for any run. A full refresh needs a
+`--reason`, starts its own run, and is refused while the pipeline has another run active or
+queued. It cannot be combined with `--backfill`, `--skip`, `--rerun`, `--force`, `--standalone`,
+`--param`, `--run-id` or `--run-key`.
+
+What a replay does to the target depends on the task's action:
+
+| `SQL_ACTION` | Replaying every source row |
+|---|---|
+| `OVERWRITE_TABLE` | Replaced with the current result. |
+| `SCD1_MERGE` | Changed rows are updated; unchanged rows are not touched. |
+| `SCD2_MERGE` | A key whose compared columns changed gets one new version, carrying the refresh's time, and its previous version is closed; unchanged keys are untouched. |
+| `APPEND_TABLE` | Would write every row a second time, so the engine empties the target first (below). |
+
+Tasks that read everything on every run anyway, such as an `OVERWRITE_TABLE` without a watermark,
+are not changed by a refresh. A refresh that covers no incremental task is refused.
+
+### Emptying append targets
+
+The engine cannot know whether an append target was emptied, so it asks, like an installer:
+
+```text
+a full refresh reads every source row again, and these APPEND_TABLE tasks would write them a
+second time, so the engine empties their targets (DELETE of all rows) just before each load.
+etl-craft cannot restore them:
+  load: mart.orders
+Continue? [y/N]
+```
+
+`y` continues. Without a terminal, or in CI, the command stops with exit code `31` until you
+repeat it with `--yes`. A request over the API gets HTTP `428` listing the targets, and is
+repeated with `empty_targets` naming exactly those; the browser's **Run now** dialog shows the
+same warning and a switch to accept. The accepted targets are stored with the run and recorded
+with the request in `AUD_ACTIONS`.
+
+The target is emptied only after the task's SELECT has been staged successfully, and in the same
+statement sequence as the load, so a failed SELECT deletes nothing and a retry converges. A task
+refuses, before deleting anything, when its target was not among the confirmed ones, when it has
+human-protected rows (`ETL_PROTECTION`), or when another task of the pipeline also writes the
+same target (that request is refused before it asks). A run that was a full refresh cannot be
+restarted, because the restart would be an ordinary run that no longer asks; recover the same
+run, or repeat the command.
+
 ## Run a task without its dependencies
 
 ```bash

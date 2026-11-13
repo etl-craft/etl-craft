@@ -6,8 +6,9 @@ from sqlalchemy.engine import Engine
 
 from etl_craft.config import ConnectorConfig
 from etl_craft.core.definitions import Definition, using
-from etl_craft.core.enums import YesNo
+from etl_craft.core.enums import RefreshType, YesNo
 from etl_craft.core.errors import RunStateError
+from etl_craft.core.full_refresh import FullRefresh
 from etl_craft.core.time import as_utc
 from etl_craft.engine import event_files, run_scopes
 from etl_craft.engine.queries import statement
@@ -65,6 +66,8 @@ def build_task_context(
             conn, definition, row.pipeline_run_id, detail.pipeline_id, event_data.files
         )
         uploads = run_uploads(conn, row.pipeline_run_id, detail.handler) if row.has_uploads else ()
+    plan = None if row.full_refresh_plan is None else FullRefresh.deserialize(row.full_refresh_plan)
+    full_refresh = plan is not None and plan.covers(detail.task_code)
     return TaskContext(
         config=config,
         bundle_id=row.bundle_id,
@@ -78,12 +81,14 @@ def build_task_context(
         task_run_id=task_run_id,
         attempt=row.attempt_count,
         handler=detail.handler,
-        refresh_type=detail.refresh_type,
+        refresh_type=RefreshType.FULL if full_refresh else detail.refresh_type,
         task_params=params,
         force=force,
         rerun=rerun,
         run_date=as_date(row.run_date),
         backfill=row.backfill == YesNo.YES,
+        full_refresh=full_refresh,
+        empty_targets=() if plan is None else plan.empty_targets,
         event_files=shown,
         event_digests=tuple((p, sha, size) for p, (sha, size) in digests.items()),
         event_keys=event_data.keys,

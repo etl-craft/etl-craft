@@ -102,7 +102,7 @@ def run(task: ScriptTask) -> ScriptResult:
 | `pipeline_id` | the pipeline definition's id; stamp it on every row you write |
 | `pipeline_run_id` | the pipeline execution's id; stamp it on every row you write |
 | `task_run_id` | this task execution's id, shared by its retries; stamp it on every row you write |
-| `refresh_type` | the pipeline's `FULL` or `INCREMENTAL` |
+| `refresh_type` | the pipeline's `FULL` or `INCREMENTAL`; `FULL` in a run that is a [full refresh](run-control.md#full-refresh-once), where `offset` is also `None` and the offset you return is stored |
 | `force` | true when the task was run with `--force` |
 | `run_date` | the date the run runs as of: the day it started (UTC), the `--run-date` it was given, or the date of a backfill run |
 | `backfill` | true in a [backfill](run-control.md#backfill-over-dates) run: `offset` is then `None`, and an offset the script returns is not stored, so read the source for `run_date` |

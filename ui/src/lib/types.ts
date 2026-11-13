@@ -48,6 +48,7 @@ export interface RunView {
   end_date: string | null;
   sla_status: string | null;
   backfill: boolean;
+  full_refresh: boolean;
   started_by: string | null;
   ended_by: string | null;
   parent_run_id: number | null;

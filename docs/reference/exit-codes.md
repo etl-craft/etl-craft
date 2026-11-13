@@ -38,3 +38,4 @@ error class has its own status; every error etl-craft raises on purpose belongs 
 | `28` | `TRANSIENT` | A script explicitly raised `etl_craft.scripting.TransientError`; retries follow its recorded policy and budget. |
 | `29` | `PERMANENT` | A script explicitly raised `etl_craft.scripting.PermanentError`; correct its input or configuration before retrying, or explicitly select `RETRY_ON=ANY`. |
 | `30` | `ARCHIVE` | The archive destination or stored snapshot cannot be verified; restore the named schema or values, then retry the original archive destination. Source rows are retained. |
+| `31` | `CONFIRMATION_REQUIRED` | A request would empty data and needs those exact targets confirmed first (`ConfirmationRequiredError`). Review the listed targets, then repeat the request confirming them: `--yes` unattended, or answer the prompt. |

@@ -961,6 +961,57 @@ def test_run_overrides_share_admission_replay_and_authorization(api):
     assert conflict.status_code >= 400 and "payload differs" in conflict.text
 
 
+def test_full_refresh_asks_for_confirmation_over_http_then_records_the_confirmed_plan(api):
+    ctx, client, creds, _, _ = api
+    sql = {
+        "SQL_ACTION": "APPEND_TABLE",
+        "WATERMARK_COLUMN": "id",
+        "WATERMARK_TYPE": "NUMBER",
+        "WATERMARK_START": "0",
+        "SELECT_QUERY": "SELECT 1 AS id",
+    }
+    with ctx.engine.begin() as conn:
+        pipeline = add_pipeline(conn, "REFRESHED")
+        add_task(conn, pipeline, "load", "SQL", TARGET_OBJECT="mart.orders", **sql)
+        python = add_pipeline(conn, "INGESTED")
+        add_task(conn, python, "pull", "PYTHON", SCRIPT_FILE="pull.py")
+    path = "/api/v1/projects/default/runs"
+    ask = {"pipeline_code": "REFRESHED", "full_refresh": True, "reason": "profile corrected"}
+    refused = client.post(path, headers=headers(creds[ApiRole.OPERATOR]), json=ask)
+    assert refused.status_code == 428, refused.text
+    assert refused.json()["targets"] == ["mart.orders"] and refused.json()["exit_code"] == 31
+    assert "load: mart.orders" in refused.json()["message"]
+    wrong = client.post(
+        path, headers=headers(creds[ApiRole.OPERATOR]), json={**ask, "empty_targets": ["mart.x"]}
+    )
+    assert wrong.status_code == 428 and wrong.json()["targets"] == ["mart.orders"]
+    with ctx.engine.connect() as conn:  # nothing was created by either refusal
+        runs = conn.execute(
+            text("SELECT COUNT(*) FROM AUD_PIPELINES_RUN_LOG WHERE PIPELINE_ID=:p"),
+            {"p": pipeline},
+        ).scalar_one()
+    assert runs == 0
+    viewer = client.post(path, headers=headers(creds[ApiRole.VIEWER]), json=ask)
+    assert viewer.status_code == 403
+    # A refresh with nothing to confirm is admitted for the controller, with its plan recorded.
+    plain = {"pipeline_code": "INGESTED", "full_refresh": True, "reason": "source corrected"}
+    started = client.post(path, headers=headers(creds[ApiRole.OPERATOR]), json=plain)
+    assert started.status_code == 200, started.text
+    run_id = started.json()["run"]["pipeline_run_id"]
+    assert started.json()["run"]["full_refresh"] is True
+    with ctx.engine.connect() as conn:
+        plan = conn.execute(
+            text(
+                "SELECT FULL_REFRESH_PLAN AS plan FROM AUD_PIPELINES_RUN_LOG "
+                "WHERE PIPELINE_RUN_ID=:r"
+            ),
+            {"r": run_id},
+        ).scalar_one()
+    assert json.loads(plan) == {"empty_targets": [], "tasks": None}
+    again = client.post(path, headers=headers(creds[ApiRole.OPERATOR]), json=plain)
+    assert again.status_code == 409 and "own run" in again.text
+
+
 def test_alert_delivery_history_is_visible_without_secret_values(api, monkeypatch):
     from fixtures.alerts import failed_delivery
 

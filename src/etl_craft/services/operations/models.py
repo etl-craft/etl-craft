@@ -53,6 +53,8 @@ class RunView:
     run_label: str = ""
     """Pipeline, UTC start to the second and run id, fixed when the run is created."""
     newer_metadata_available: bool = False
+    full_refresh: bool = False
+    """A one-time full refresh: its incremental tasks read everything again."""
     item_progress: str | None = None
     rules: tuple[RuleObservation, ...] = ()
 

@@ -29,6 +29,8 @@ class WindowDefinition:
     initial: StoredOffset
     source_codes: tuple[str, ...] = ()
     backfill: bool = False
+    full_refresh: bool = False
+    """Read from ``initial`` whatever the committed cursor; the cursor still advances on success."""
 
 
 def checked_clock(conn: Connection) -> datetime:
@@ -84,7 +86,7 @@ def admit_window(
         return TimestampWindow(
             as_utc(previous.watermark_from or before.offset_value), before.pending_upper_bound
         )
-    low = as_utc((before or initial).offset_value)
+    low = as_utc((initial if definition.full_refresh else before or initial).offset_value)
     high = min(started_at, now)
     if source_codes:
         ids = source_pipeline_ids(conn, source_codes)

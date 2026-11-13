@@ -128,10 +128,11 @@ def select_run(
 
 @dataclass(frozen=True)
 class RunKind:
-    """The date a run runs as of, and whether it is part of a backfill."""
+    """The date a run runs as of, and whether it is a backfill or a one-time full refresh."""
 
     run_date: date
     backfill: bool
+    full_refresh: bool = False
 
 
 def fetch_run_kind(conn: Connection, pipeline_run_id: int) -> RunKind:
@@ -139,7 +140,7 @@ def fetch_run_kind(conn: Connection, pipeline_run_id: int) -> RunKind:
     row = conn.execute(
         statement(conn, "pipeline_run_kind"), {"pipeline_run_id": pipeline_run_id}
     ).one()
-    return RunKind(as_date(row.run_date), row.backfill == YesNo.YES)
+    return RunKind(as_date(row.run_date), row.backfill == YesNo.YES, row.full_refresh == YesNo.YES)
 
 
 def as_date(value: object) -> date:

@@ -125,7 +125,7 @@ A pipeline's page has a **Runs** tab (run durations as bars, then one page of ru
 first, with **Older runs** to page back), a **Matrix** tab (tasks as rows and the same runs as
 columns, each cell a task run's status and duration that opens that task in its run) and a
 **Tasks** tab (each task, its wave and what it waits for). **Run now** admits one manual run of
-the whole pipeline for the controller, optionally for a run date. The details panel shows the schedule, refresh type, SLA, tags, upstream pipelines
+the whole pipeline for the controller, optionally for a run date, or as a one-time **Full refresh** (optionally of one task and the tasks that read it); when a refresh would empty append targets the dialog names them and asks for a switch to accept before it runs. The details panel shows the schedule, refresh type, SLA, tags, upstream pipelines
 and paused tasks. **Pause** and **Resume** act on automatic runs of this pipeline only.
 
 The pipeline grid has one adjustable divider beside the details panel. Task names automatically

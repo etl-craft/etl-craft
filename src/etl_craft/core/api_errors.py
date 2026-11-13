@@ -3,7 +3,7 @@
 import json
 from collections.abc import Iterator
 
-from etl_craft.core.errors import EtlCraftError, ServerError, UsageError
+from etl_craft.core.errors import ConfirmationRequiredError, EtlCraftError, ServerError, UsageError
 
 
 def response_error(status: int, body: bytes, url: str) -> EtlCraftError:
@@ -16,6 +16,12 @@ def response_error(status: int, body: bytes, url: str) -> EtlCraftError:
         code = document.get("exit_code")
         classes = {int(cls.exit_code): cls for cls in _subclasses(EtlCraftError)}
         cls = classes.get(code, ServerError) if isinstance(code, int) else ServerError
+        if cls is ConfirmationRequiredError:
+            targets = document.get("targets")
+            listed = (
+                tuple(t for t in targets if isinstance(t, str)) if isinstance(targets, list) else ()
+            )
+            return ConfirmationRequiredError(document["message"], listed)
         return cls(document["message"])
     if isinstance(document, dict) and "detail" in document:
         return UsageError(f"{url} refused the request (HTTP {status}): {document['detail']}")

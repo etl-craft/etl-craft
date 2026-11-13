@@ -50,6 +50,7 @@ class ExitCode(IntEnum):
     TRANSIENT = 28
     PERMANENT = 29
     ARCHIVE = 30
+    CONFIRMATION_REQUIRED = 31
 
 
 class EtlCraftError(Exception):
@@ -215,3 +216,18 @@ class ArchiveError(EtlCraftError):
     """An archive could not be verified; its source data remains authoritative."""
 
     exit_code = ExitCode.ARCHIVE
+
+
+class ConfirmationRequiredError(EtlCraftError):
+    """A request would empty data and names the exact targets it needs confirmed first.
+
+    The caller repeats the request with ``empty_targets`` listing exactly ``targets``.
+    """
+
+    retryable = False
+    exit_code = ExitCode.CONFIRMATION_REQUIRED
+
+    def __init__(self, message: str, targets: tuple[str, ...] = ()) -> None:
+        """Keep the targets the caller must confirm beside the message."""
+        super().__init__(message)
+        self.targets = targets

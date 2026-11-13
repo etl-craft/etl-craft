@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import signal
+from dataclasses import replace
 from datetime import date
 
 from etl_craft.cli.commands import control_requests, item_requests
@@ -17,7 +18,7 @@ from etl_craft.cli.commands.common import (
 from etl_craft.cli.output import Output
 from etl_craft.core import interrupts
 from etl_craft.core.enums import ActionName, RunStatus
-from etl_craft.core.errors import ExitCode, UsageError
+from etl_craft.core.errors import ConfirmationRequiredError, ExitCode, UsageError
 from etl_craft.services.operations.models import BackfillView, OperationResult
 from etl_craft.services.operations.requests import RunRequest
 
@@ -61,12 +62,20 @@ def _configure(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--with-downstream",
         action="store_true",
-        help="With --rerun or --standalone: include downstream tasks in dependency order.",
+        help="With --rerun, --standalone or --full-refresh: include downstream tasks.",
     )
     parser.add_argument(
         "--skip",
         action="store_true",
         help="Record a run SKIPPED on purpose, running nothing; with --reason.",
+    )
+    parser.add_argument(
+        "--full-refresh",
+        action="store_true",
+        help="Run the pipeline once with its incremental tasks reading everything again "
+        "(with --task-code only that task, and with --with-downstream what reads it), keeping "
+        "the positions they reach and emptying confirmed APPEND_TABLE targets first; "
+        "with --reason.",
     )
     parser.add_argument(
         "--run-date",
@@ -112,11 +121,23 @@ def _run(args: argparse.Namespace, out: Output) -> int:
     # running, their rows IN-PROGRESS until their leases expire and reconciliation releases them.
     stopping = (signal.SIGINT, signal.SIGTERM, signal.SIGHUP)
     with interrupts.deferred(*stopping):
-        done = call(args, ActionName.RUN, request, role="run")
+        done = _call_run(args, out, request)
     assert isinstance(done, (OperationResult, BackfillView))
     out.result(done, args.output_format)
-    started_only = args.init_only or (args.api and not (args.task_code or args.backfill))
+    one_task = args.task_code and not args.full_refresh  # a refresh's task only narrows its scope
+    started_only = args.init_only or (args.api and not (one_task or args.backfill))
     return _exit_code(done, started_only=bool(started_only))
+
+
+def _call_run(args: argparse.Namespace, out: Output, request: RunRequest) -> object:
+    """Run the request; when it would empty targets, show them, ask once and repeat it."""
+    try:
+        return call(args, ActionName.RUN, request, role="run")
+    except ConfirmationRequiredError as asked:
+        if not out.confirm_emptying(str(asked), yes=args.yes):
+            raise
+        confirmed = replace(request, empty_targets=asked.targets)
+        return call(args, ActionName.RUN, confirmed, role="run")
 
 
 def _exit_code(done: OperationResult | BackfillView, *, started_only: bool) -> int:

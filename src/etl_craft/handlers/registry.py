@@ -36,7 +36,9 @@ class TaskContext:
     ``force`` is set by ``run --force``. ``rerun`` is set when the task already ended ``SUCCESS``
     or ``SKIPPED`` under the run and is run again, so nothing it did before is skipped.
     ``run_date`` is the date the run runs as of (SQL's ``$$run_date``), and ``backfill`` says the
-    run is part of a backfill.
+    run is part of a backfill. ``full_refresh`` says the run is a one-time full refresh: its tasks
+    read from the start and still store the position they reach, and ``empty_targets`` lists the
+    append targets the operator confirmed may be emptied before their load.
     """
 
     config: ConnectorConfig
@@ -54,6 +56,8 @@ class TaskContext:
     rerun: bool = False
     run_date: date = field(default_factory=lambda: datetime.now(UTC).date())
     backfill: bool = False
+    full_refresh: bool = False
+    empty_targets: tuple[str, ...] = ()
     attempt_id: int | None = None
     owner: str | None = None
     started_at: datetime | None = None

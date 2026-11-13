@@ -64,7 +64,7 @@ export function RunsTable({ code, pipeline, status, codes, filters = {}, highlig
             // Status sits beside the run number, so it is in view at phone width and read first when scanning.
             columns.accessor("status", { header: "Status", cell: (c) => <StatusBadge quiet status={c.getValue()} /> }),
             ...(pipeline ? [] : [columns.accessor("pipeline_code", { id: "pipeline", header: "Pipeline", cell: (c) => <span className="font-medium">{c.getValue()}</span> })]),
-            columns.accessor("trigger_kind", { header: "Trigger", cell: (c) => <span className="text-muted">{words(c.getValue()).toLowerCase()}{c.row.original.backfill ? " · backfill" : ""}</span> }),
+            columns.accessor("trigger_kind", { header: "Trigger", cell: (c) => <span className="text-muted">{words(c.getValue()).toLowerCase()}{c.row.original.backfill ? " · backfill" : ""}{c.row.original.full_refresh ? " · full refresh" : ""}</span> }),
             columns.accessor("run_date", { header: "Logical date", cell: (c) => <span className="num">{c.getValue() ?? "—"}</span> }),
             columns.accessor("start_date", { header: "Started", cell: (c) => <When iso={c.getValue()} /> }),
             columns.display({ id: "duration", header: "Duration", cell: (c) => <span className="num">{formatDuration(c.row.original.start_date, c.row.original.end_date)}</span> }),

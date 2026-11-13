@@ -55,7 +55,7 @@ the current pipeline definition, pipeline execution and task execution:
 | `$$pipeline_id` | `PIPELINE_ID_SUBSTITUTION = true` | the pipeline definition's `pipeline_id` |
 | `$$pipeline_run_id` | `PIPELINE_RUN_ID_SUBSTITUTION = true` | the run's `pipeline_run_id`, such as `97` |
 | `$$task_run_id` | `TASK_RUN_ID_SUBSTITUTION = true` | this task execution's `task_run_id`, shared by its retries |
-| `$$pipeline_run_id_filter` | `PIPELINE_RUN_ID_FILTER = true` | `pipeline_run_id = 97`, or `1=1` when the pipeline's `REFRESH_TYPE` is `FULL` |
+| `$$pipeline_run_id_filter` | `PIPELINE_RUN_ID_FILTER = true` | `pipeline_run_id = 97`, or `1=1` when the pipeline's `REFRESH_TYPE` is `FULL` or the run is a [full refresh](run-control.md#full-refresh-once) |
 | `$$run_date` | `RUN_DATE_SUBSTITUTION = true` | the date the run runs as of, as `DATE '2026-09-01'`: the day it started (UTC), the `--run-date` it was given, or the date of a [backfill](run-control.md#backfill-over-dates) run |
 
 A task that reads by date follows the run's date, so a backfill of a past day reads that day:
@@ -106,6 +106,9 @@ ordinary task dependency appears in catalog and lineage. Cloned audit tables rem
 for reporting; they are not used to gate this run's writes.
 
 ## SQL watermarks
+
+A [full refresh](run-control.md#full-refresh-once) reads every watermarked task from its `WATERMARK_START`
+for one run and stores the position it reaches, so the next run is incremental again.
 
 ### Scalar lower bounds
 
