@@ -469,6 +469,19 @@ Use Tab or the arrow keys to move through nodes and Enter to open one. Escape cl
 mapping selection or closes the task panel; `/` focuses Find a column. Controls keep visible
 focus rings. Highlight and expansion feedback respects reduced motion.
 
+### Key, zoom and full width
+
+Node text never renders below 12 px. A diagram too wide for its pane opens at 100% from its first
+column and pans; **Fit view** applies the same rule. **Full width** hides the catalog tree while a
+diagram is open, and Escape or **Restore tree** brings it back.
+
+**Key** opens a floating table over the canvas (or `?` while the canvas has focus). It lists only
+what the view shows: dependency types, task kinds, mapping stages, lineage provenance, markers and
+run statuses, drawn by the same code as the diagram. Status names and symbols come from the shared
+status table, so the key cannot disagree with the marks. The key is open on a first visit on a
+wide screen, closed on a phone, and remembers how it was left in this browser. The pipeline run
+graph, the run grid and the run history strips use the same key.
+
 ### Screenshots
 
 Pipeline flow, light and dark:

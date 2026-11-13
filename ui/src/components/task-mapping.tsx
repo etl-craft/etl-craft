@@ -1,3 +1,7 @@
+import {useLegend} from "@/components/legend";
+import {mappingStageEntry,highlightedEntry} from "@/components/diagram-key";
+import {CatalogWidthButton} from "@/components/catalog-width";
+import {fitDiagram,readableFit} from "@/lib/diagram-viewport";
 import * as React from "react";
 import { Background, Handle, MarkerType, useReactFlow, useUpdateNodeInternals, Position, ReactFlow, type Node, type NodeProps, type Edge, type EdgeProps } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
@@ -24,7 +28,7 @@ function MappingBox({ id, data }: NodeProps<Node<BoxData>>) {
   React.useLayoutEffect(() => { updateNodeInternals(id); }, [id, expanded, data.columns, updateNodeInternals]);
   const objectPorts = data.tableLevel ? <>{!id.startsWith("source:") ? <Handle type="target" position={Position.Left} id="object" style={{top:expanded ? 48 : 64}}/> : null}{!id.startsWith("target:") && id!=="expression" ? <Handle type="source" position={Position.Right} id="object" style={{top:expanded ? 48 : 64}}/> : null}</> : null;
   const collapsedPorts = <>{data.columns.map(column => <React.Fragment key={column.name}>{column.input !== false ? <Handle type="target" position={Position.Left} id={column.name}/> : null}{column.output !== false ? <Handle type="source" position={Position.Right} id={column.name}/> : null}</React.Fragment>)}{objectPorts}</>;
-  return <DiagramNode title={data.title} width={data.declared?256:160} color={kindColor(data.kind)} chip={data.declared ? <DiagramChip>Declared</DiagramChip> : undefined} description={data.conditions?.length ? <span title={data.conditions.join("; ")}>{data.conditions.length} condition{data.conditions.length===1 ? "" : "s"} across columns</span> : undefined} icon={data.icon} expanded={expanded} onExpanded={data.onExpanded} headingClassName="h-10" collapsedPorts={collapsedPorts} className={cn(data.declared && "border-dashed",data.selected.has(`${id}:object`) && "ring-2 ring-accent")}>
+  return <DiagramNode title={data.title} width={data.declared?(id.startsWith("source:")?320:256):160} color={kindColor(data.kind)} chip={data.declared ? <DiagramChip>Declared</DiagramChip> : undefined} description={data.conditions?.length ? <span title={data.conditions.join("; ")}>{data.conditions.length} condition{data.conditions.length===1 ? "" : "s"} across columns</span> : undefined} icon={data.icon} expanded={expanded} onExpanded={data.onExpanded} headingClassName="h-10" collapsedPorts={collapsedPorts} className={cn(data.declared && "border-dashed",data.selected.has(`${id}:object`) && "ring-2 ring-accent")}>
     {objectPorts}
     <div className="relative px-2 pb-2">
       {data.columns.map(column => <div key={column.name} className="relative flex h-8 items-center" style={{opacity:data.selected.size&&!data.selected.has(column.selection??`${data.selection}:${column.name}`)?0.3:1}} data-port={column.name}>
@@ -41,7 +45,7 @@ function MappingLink(props: EdgeProps<MappingEdge>) {
   const flow = useReactFlow<Node<BoxData>,MappingEdge>();
   const obstacles = (props.data?.obstacles ?? []).flatMap(id => {
     const node = flow.getNode(id);
-    return node ? [{x:node.position.x,y:node.position.y,width:node.measured?.width ?? (node.data.declared?256:160),height:node.measured?.height ?? (node.data.expanded ? 40+node.data.columns.length*32 : 128)}] : [];
+    return node ? [{x:node.position.x,y:node.position.y,width:node.measured?.width ?? (node.data.declared?(node.id.startsWith("source:")?320:256):160),height:node.measured?.height ?? (node.data.expanded ? 40+node.data.columns.length*32 : 128)}] : [];
   });
   const points = mappingRoute({...props,lane:props.data?.lane ?? 0.5,obstacles});
   const first = points[1]!, last = points.at(-2)!;
@@ -50,7 +54,7 @@ function MappingLink(props: EdgeProps<MappingEdge>) {
 }
 const edgeTypes = {mapping:MappingLink};
 const nodeTypes = { mapping: MappingBox };
-const fitOptions = { padding: 0.04, minZoom: 0.01, maxZoom: 1 };
+const fitOptions = readableFit;
 
 export function mappingLine(state: string) {
   return { label: state === "declared" ? "Declared" : undefined, style: { stroke: state === "declared" ? "var(--kind-mauve)" : "var(--accent)", strokeDasharray: state === "declared" ? "5 4" : undefined } };
@@ -69,7 +73,7 @@ export function TaskMapping({ doc, task }: { doc: CatalogDoc; task: CatalogTask 
   const frame = React.useRef<HTMLDivElement>(null);
   const input = React.useRef<HTMLInputElement>(null);
   const flow=React.useRef<import("@xyflow/react").ReactFlowInstance<Node<BoxData>,Edge>|null>(null);
-  React.useEffect(()=>{const element=frame.current;if(!element)return;const observer=new ResizeObserver(()=>requestAnimationFrame(()=>void flow.current?.fitView(fitOptions)));observer.observe(element);return()=>observer.disconnect();},[]);
+  React.useEffect(()=>{const element=frame.current;if(!element)return;const observer=new ResizeObserver(()=>requestAnimationFrame(()=>fitDiagram(flow.current,frame.current)));observer.observe(element);return()=>observer.disconnect();},[]);
   const [table, setTable] = React.useState(() => window.matchMedia("(max-width: 480px)").matches);
   const expansion = useDiagramExpansion(true);
   const [all, setAll] = React.useState(false);
@@ -125,7 +129,7 @@ export function TaskMapping({ doc, task }: { doc: CatalogDoc; task: CatalogTask 
     add(`source:${source}`,source.replace(/^external:/,""),0,sourceY,shown.map(name => ({name,detail:columns.find(column => column.name === name)?.declared_type ?? "",input:false})),Database);
     sourceY += expansion.isExpanded(`source:${source}`) ? Math.max(160,shown.length * 32 + 80) : 160;
   });
-  let x = sources.length ? declared ? 328 : 208 : 0;
+  let x = sources.length ? declared ? 392 : 208 : 0;
   const relational: string[] = [];
   task.mapping.steps.filter(step=>step.kind!=="source").forEach((step,index)=>{
     const id=`step:${index}`;relational.push(id);
@@ -225,15 +229,16 @@ export function TaskMapping({ doc, task }: { doc: CatalogDoc; task: CatalogTask 
     line.data = {lane:(index+1)/(group.length+1),obstacles:nodes.filter(node => node.id!==source.id && node.id!==target.id).map(node => node.id),sentence:`${source.data.title}.${line.sourceHandle} → ${target.data.title}.${line.targetHandle}`};
     line.markerEnd = {type:MarkerType.ArrowClosed,color:line.style?.stroke ?? "var(--muted)",width:10,height:10,markerUnits:"userSpaceOnUse"};
   }));
+  const key=useLegend(unavailable?[]:[...nodes.map(node=>mappingStageEntry(node.data.kind,kindColor(node.data.kind),node.data.icon)),{id:declared?"declared":"derived",group:"Lineage",name:declared?"Declared":"Derived",meaning:declared?"Documented by the developer; not verified":"Traced from the managed SELECT",sample:<svg width="36" height="12"><path d="M 0 6 H 36" style={mappingLine(task.lineage.state).style}/></svg>},highlightedEntry,...(task.mapping.write.keys.MERGE_KEY?[{id:"key",group:"Markers",name:"Key column",meaning:"Matches target rows when merging",sample:<span>Key</span>}]:[]),...(task.mapping.steps.some(step=>step.kind==="aggregate")?[{id:"group",group:"Markers",name:"Group by",meaning:"Grouping column",sample:<span>Group by</span>}]:[]),...["Y","N"].filter(value=>targetTable?.columns.some(column=>column.declared_nullable===value)).map(value=>({id:`nullable:${value}`,group:"Markers",name:value==="Y"?"Nullable":"Not null",meaning:value==="Y"?"The target accepts NULL":"The target requires a value",sample:<span>{value==="Y"?"Nullable":"Not null"}</span>}))]);
   if(unavailable)return <div><p role="note" className="py-4 text-sm text-muted">{task.lineage.reason}</p>{task.target ? <Link className="text-sm text-accent" to={catalogPath(doc.project,"tables",task.target)}>Open {task.target}</Link> : null}</div>;
-  const logicRows=task.mapping.steps.flatMap(step=>(step.logic??[]).map(row=>({target:row.columns.join(", ")||"Across columns",source:stageLabel(step.kind),logic:row.expression,provenance:"Derived"})));
-  return <div ref={frame} onKeyDown={event=>diagramKeys(event,()=>setSelected(null))} className="grid min-w-0 gap-2">
+  const logicRows=task.mapping.steps.flatMap(step=>(step.logic??[]).map(row=>({target:row.label==="Output"?row.columns[0]??"":"",source:stageLabel(step.kind),logic:row.expression,provenance:"Derived"})));
+  return <div ref={frame} onKeyDown={event=>{key.onKeyDown(event);if(!event.defaultPrevented)diagramKeys(event,()=>setSelected(null));}} className="grid min-w-0 gap-2">
     {declared ? <p role="note" className="py-1 text-sm text-muted">The engine doesn't verify declared lineage against the script.</p> : null}
-    <DiagramToolbar zoomIn={!table?()=>void flow.current?.zoomIn():undefined} zoomOut={()=>void flow.current?.zoomOut()} fit={()=>void flow.current?.fitView(fitOptions)} reset={()=>void flow.current?.zoomTo(1)}><label className="flex min-w-0 items-center gap-2 text-xs"><span className="sr-only">Find a column</span><input ref={input} aria-label="Find a column" placeholder="Find a column" value={search} onChange={event=>setSearch(event.target.value)} className="h-8 w-40 min-w-0 rounded-sm border border-border bg-surface px-2 focus-visible:outline-2 focus-visible:outline-ring"/></label><Button onClick={()=>setTable(!table)}>{table ? "Diagram" : "Table view"}</Button>{!table ? <><Button onClick={()=>setAll(!all)}>{all ? "Used columns" : "Show all columns"}</Button><Button onClick={expansion.toggleAll}>{expansion.expanded ? "Collapse all" : "Expand all"}</Button></> : null}</DiagramToolbar>
-    {table ? <DataTable label="Task mapping" data={[
+    <DiagramToolbar zoomIn={!table?()=>void flow.current?.zoomIn():undefined} zoomOut={()=>void flow.current?.zoomOut()} fit={()=>fitDiagram(flow.current,frame.current)} reset={()=>void flow.current?.zoomTo(1)}><label className="flex min-w-0 items-center gap-2 text-xs"><span className="sr-only">Find a column</span><input ref={input} aria-label="Find a column" placeholder="Find a column" value={search} onChange={event=>setSearch(event.target.value)} className="h-8 w-40 min-w-0 rounded-sm border border-border bg-surface px-2 focus-visible:outline-2 focus-visible:outline-ring"/></label><Button onClick={()=>setTable(!table)}>{table ? "Diagram" : "Table view"}</Button>{!table ? <><Button onClick={()=>setAll(!all)}>{all ? "Used columns" : "Show all columns"}</Button><Button onClick={expansion.toggleAll}>{expansion.expanded ? "Collapse all" : "Expand all"}</Button></> : null}<CatalogWidthButton/>{!table?key.button:null}</DiagramToolbar>
+    {table ? <div className="mapping-table" aria-label="Scrollable mapping table" tabIndex={0}><DataTable label="Task mapping" data={[
       ...(edges.length ? activeEdges.map(({edge})=>edge) : tableRows).map(edge=>({target:edge.target_column,source:edge.source_object ? `${edge.source_object.replace(/^external:/,"")}.${edge.source_column??""}` : "No direct source column",logic:edge.transformation==="copy" ? "Copy" : edge.transformation==="declared" ? "Declared" : edge.transformation,provenance:declared ? "Declared" : "Derived"})),
-      ...logicRows,...rules.flatMap(rule=>(rule.logic??[{expression:rule.sql,columns:[],label:""}]).map(row=>({target:row.columns.join(", ")||"Across columns",source:"Rules",logic:row.expression,provenance:"Derived"}))),
-    ]} nextStep="Select a column in the diagram to follow its path." columns={columnsOf<{target:string;source:string;logic:string;provenance:string}>([{id:"target",header:"Target",size:64,value:row=>row.target},{id:"source",header:"Source",size:96,value:row=>row.source},{id:"logic",header:"Logic",size:100,value:row=>row.logic},{id:"provenance",header:"Provenance",size:96,value:row=>row.provenance}])}/>
- : nodes.length ? <div style={{height:`min(70vh, ${layoutHeight}px)`}} className="min-h-80 min-w-0 overflow-hidden rounded-sm border border-border" aria-label="Task mapping diagram"><ReactFlow nodes={nodes} edges={lines} edgeTypes={edgeTypes} nodeTypes={nodeTypes} onInit={instance=>{flow.current=instance;}} onPaneClick={()=>setSelected(null)} fitView fitViewOptions={fitOptions} minZoom={0.01} maxZoom={2} nodesDraggable={false} nodesConnectable={false} onNodesChange={changes=>{if(changes.some(change=>change.type==="dimensions"))requestAnimationFrame(()=>void flow.current?.fitView(fitOptions));}} proOptions={{ hideAttribution: true }}><Background /></ReactFlow></div> : null}
+      ...logicRows,...rules.flatMap(rule=>(rule.logic??[{expression:rule.sql,columns:[],label:""}]).map(row=>({target:"",source:"Rules",logic:row.expression,provenance:"Derived"}))),
+    ]} nextStep="Select a column in the diagram to follow its path." columns={columnsOf<{target:string;source:string;logic:string;provenance:string}>([{id:"target",header:"Target",size:160,value:row=>row.target},{id:"source",header:"Source",size:200,value:row=>row.source},{id:"logic",header:"Logic",size:240,value:row=>row.logic},{id:"provenance",header:"Provenance",size:120,value:row=>row.provenance}])}/></div>
+ : nodes.length ? <div style={{height:`min(70vh, ${layoutHeight}px)`}} className="relative min-h-80 min-w-0 overflow-hidden rounded-sm border border-border" aria-label="Task mapping diagram" tabIndex={0}><ReactFlow nodes={nodes} edges={lines} edgeTypes={edgeTypes} nodeTypes={nodeTypes} onInit={instance=>{flow.current=instance;requestAnimationFrame(()=>fitDiagram(instance,frame.current));}} onPaneClick={()=>setSelected(null)} fitView={false} fitViewOptions={fitOptions} minZoom={0.15} maxZoom={2} nodesDraggable={false} nodesConnectable={false} onNodesChange={changes=>{if(changes.some(change=>change.type==="dimensions"))requestAnimationFrame(()=>fitDiagram(flow.current,frame.current));}} proOptions={{ hideAttribution: true }}><Background /></ReactFlow>{key.panel}</div> : null}
   </div>;
 }

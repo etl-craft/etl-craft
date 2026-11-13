@@ -1,3 +1,4 @@
+import {LegendView,statusEntries} from "@/components/legend";
 import * as React from "react";
 import { dayLabel, formatSeconds, measured } from "@/lib/format";
 import type { DayInsight } from "@/lib/types";
@@ -48,7 +49,7 @@ export function HBars({ rows, empty, nextStep, label }: { rows: BarRow[]; empty:
   if (rows.length === 0) return <EmptyState title={empty} nextStep={nextStep} />;
   if (rows.length < 5) return <dl aria-label={label} className="m-0 grid content-start gap-2 text-[13px]">{rows.map((row) => <div key={row.label} className="flex justify-between gap-4"><dt>{row.to ? <Link className="hover:underline" to={row.to}>{row.label}</Link> : row.label}</dt><dd className="num m-0">{row.text ?? row.value}</dd></div>)}</dl>;
   return (
-    <ul aria-label={label} className="m-0 grid min-h-0 flex-1 list-none content-start gap-1.5 overflow-auto p-0">
+    <LegendView entries={[...new Set(rows.map(row=>row.tone??"accent"))].map(tone=>({id:tone,group:"Measures",name:({ok:"Success",bad:"Failure",warn:"Warning",accent:"Value"})[tone],meaning:"Bar length shows the labelled value",sample:<span className={cn("block h-2 w-8 rounded-sm",FILL[tone])}/>}))}><ul aria-label={label} className="m-0 grid min-h-0 flex-1 list-none content-start gap-1.5 overflow-auto p-0">
       {rows.map((r) => {
         const name = r.to ? (
           <Link to={r.to} className="truncate text-accent hover:underline" title={r.label}>
@@ -69,7 +70,7 @@ export function HBars({ rows, empty, nextStep, label }: { rows: BarRow[]; empty:
           </li>
         );
       })}
-    </ul>
+    </ul></LegendView>
   );
 }
 
@@ -88,7 +89,7 @@ export function DailyRuns({ days }: { days: DayInsight[] }) {
       ))}
     </dl>
   );
-  return <div className="h-64 px-3 pb-3 pt-4"><React.Suspense fallback={<span role="status" className="text-xs text-muted">Loading chart…</span>}><DailyChart days={days} /></React.Suspense></div>;
+  return <LegendView entries={statusEntries([...(days.some(day=>day.succeeded>0)?["SUCCESS"]:[]),...(days.some(day=>day.failed>0)?["FAILED"]:[]),...(days.some(day=>day.runs>day.succeeded+day.failed)?["OTHER"]:[])])}><div className="h-64 px-3 pb-3 pt-4"><React.Suspense fallback={<span role="status" className="text-xs text-muted">Loading chart…</span>}><DailyChart days={days} /></React.Suspense></div></LegendView>;
 }
 
 /** A sparse series keeps its numeric headline; a longer one loads its renderer on demand. */

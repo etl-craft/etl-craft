@@ -508,9 +508,12 @@ def test_fit_view_keeps_task_labels_readable_after_zooming_out(site):
             "document.querySelector('.react-flow__viewport')).transform).a"
         )
         page.wait_for_function(f"{zoom} >= 0.699")
-        graph.get_by_role("button", name="Zoom Out", exact=True).click()
+        for _ in range(
+            2
+        ):  # the readable fit starts at 100%, so one 1.2x step stays above the floor
+            graph.get_by_role("button", name="Zoom out", exact=True).click()
         page.wait_for_function(f"{zoom} < 0.699")
-        graph.get_by_role("button", name="Fit View", exact=True).click()
+        graph.get_by_role("button", name="Fit view", exact=True).click()
         page.wait_for_function(f"{zoom} >= 0.699")
         shoot(page, "graph-readable-fit")
         assert not problems
@@ -783,5 +786,41 @@ def test_alert_history_on_pipeline_and_project_has_status_time_and_no_secrets(
         dialog.get_by_role("button", name="Disable", exact=True).click()
         expect(team).to_contain_text("Disabled")
         assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+        assert problems == []
+        browser.close()
+
+
+@pytest.mark.parametrize("scheme", ["light", "dark"])
+@pytest.mark.parametrize("width", [1280, 390])
+def test_the_run_grid_and_the_run_graph_float_a_key_that_names_their_marks(scene, scheme, width):
+    _, url, _ = scene
+    with sync_playwright() as pw:
+        browser, page, problems = open_page(
+            pw, color_scheme=scheme, viewport={"width": width, "height": 900}
+        )
+        page.context.set_default_timeout(8000)
+        sign_in(page, url, "/ui/projects/default/pipelines/OPS")
+        grid = page.get_by_role("table", name="Run grid")
+        expect(grid).to_be_visible()
+        view = page.locator("div[tabindex='0']").filter(has=grid).last
+        for place, scope in (("grid", view), ("graph", page)):
+            if place == "graph":
+                page.get_by_role("button", name="Graph", exact=True).click()
+                expect(page.get_by_role("group", name="Task graph")).to_be_visible()
+            shoot(page, f"pipeline-{place}-{scheme}-{width}")
+            toggle = scope.get_by_role("button", name="Key", exact=True)
+            panel = scope.get_by_role("region", name="View key", exact=True)
+            if toggle.get_attribute("aria-expanded") == "true":
+                toggle.click()
+            expect(panel).not_to_be_visible()
+            toggle.click()
+            expect(panel).to_be_visible()
+            # The key names the marks on screen with the same words the status badges use.
+            expect(panel.get_by_role("rowheader", name="Success", exact=True)).to_be_visible()
+            expect(panel).to_contain_text("Finished without an error")
+            shoot(page, f"pipeline-{place}-key-{scheme}-{width}")
+            panel.press("Escape")
+            expect(panel).not_to_be_visible()
+            expect(toggle).to_be_focused()
         assert problems == []
         browser.close()

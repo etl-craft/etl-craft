@@ -1,3 +1,4 @@
+import {RunGraph} from "@/components/run-graph";
 import { useState } from "react";
 import { Database, Download, Code, History, GitMerge, Eye, Trash2, ListPlus, ListMinus, Plus, Replace, Table2, Terminal, Bell, Hourglass, Network, ShieldCheck, FileCheck2, Eraser } from "lucide-react";
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
@@ -66,7 +67,7 @@ it("uses the diagram edges in the accessible mapping table", () => {
 });
 
 it("renders dependency icons, neutral badges and the no-repairs marker", async () => {
-  const { DependencyBadge } = await import("@/components/run-graph");
+  const { DependencyBadge } = await import("@/components/dependency-mark");
   const {container,rerender} = render(<DependencyBadge edge={{dependency_type:"HAS_DATA",consume_repairs:"Y"}} />);
   expect(container.querySelector(".lucide-database")).not.toBeNull();
   expect(screen.getByText("Has data")).toBeVisible();
@@ -107,7 +108,7 @@ it("keeps named column ports through joins, filters, expressions and the write",
   const stages=["step:0","step:1","expression","write","target:mart.orders"].map(id=>captured.nodes.find(node=>node.id===id)!);
   expect(stages.every(node=>node.position.y===0)).toBe(true);
   expect(stages.every((node,index)=>index===0||node.position.x>stages[index-1]!.position.x)).toBe(true);
-  expect(captured.fit.minZoom).toBeLessThan(0.1);
+  expect(captured.fit.minZoom).toBe(1);
   expect(screen.getByRole("button",{name:"Reset zoom"})).toBeTruthy();
   expect(captured.edges.every(edge => edge.type === "mapping")).toBe(true);
   expect(captured.edges.every(edge => typeof edge.markerEnd === "object" && edge.markerEnd?.type === MarkerType.ArrowClosed)).toBe(true);
@@ -247,8 +248,8 @@ it("uses sentence-case stage and dependency labels instead of raw enum values",a
  const {container}=render(<RunGraph graph={{waves:[["load"]],depends_on:{load:[]},conditional:[]}} statuses={{}} focused={null} onFocus={()=>undefined} onOpen={()=>undefined} definition={{tasks:[task],edges:[]}} plain/>);
  const enums=new Set(["SUCCESS","HAS_DATA","FAILURE","ALWAYS","SCD2_MERGE","ALL","ANY"]);
  [...container.querySelectorAll("span,button")].forEach(element=>expect(enums.has(element.textContent??"")).toBe(false));
- expect(screen.getByText("Succeeded",{exact:true})).toBeVisible();
- expect(screen.getByText("Has data",{exact:true})).toBeVisible();
+ expect(screen.queryByText("Succeeded",{exact:true})).toBeNull();
+ expect(screen.queryByText("Has data",{exact:true})).toBeNull();
  expect(screen.getByText("SCD2 merge",{exact:true})).toBeVisible();
 });
 
@@ -260,4 +261,22 @@ it("leaves a wire gutter between declared source and target boxes",()=>{
  const target=captured.nodes.find(node=>node.id==="target:mart.orders")!;
  expect(target.position.y).toBe(source.position.y);
  expect(target.position.x-source.position.x).toBeGreaterThanOrEqual(256+48);
+});
+
+it("keeps join and filter predicates out of the Target column",()=>{
+ vi.stubGlobal("matchMedia",()=>({matches:true}));
+ const task=taskForMapping("derived");task.mapping.steps=[{kind:"join",name:"",expression:"",logic:[{expression:"o.id = r.id",columns:["o.id","r.id"],label:""}]},{kind:"filter",name:"",expression:"",logic:[{expression:"o.amount > 0",columns:["o.amount"],label:""}]}];
+ render(<TaskMapping doc={{tables:[],rules:[]} as unknown as CatalogDoc} task={task}/>);
+ for(const logic of ["o.id = r.id","o.amount > 0"]){const row=screen.getByText(logic).closest("tr")!;expect(row.querySelector("td")?.textContent).toBe("");}
+});
+it("sizes entry and exit boxes to their names, without the kind prefix, before truncating",()=>{
+ vi.stubGlobal("ResizeObserver",class{observe(){}disconnect(){}});
+ const task=taskForMapping("derived");
+ render(<RunGraph graph={{waves:[["Schedule: Daily at 06:00","Upstream: EXTRACT"],["load"],["Downstream: REPORT"]],depends_on:{load:[["Upstream: EXTRACT","SUCCESS"]]},conditional:[]}} statuses={{}} focused={null} onFocus={()=>undefined} onOpen={()=>undefined} definition={{tasks:[task],edges:[],schedule:"0 6 * * *"}} plain/>);
+ for(const node of captured.nodes.filter(node=>node.id!=="load")){
+  const name=node.id.replace(/^(Schedule|Upstream|Downstream): /,"");
+  expect(node.data.width).toBeGreaterThanOrEqual(176);
+  expect(node.data.width).toBeLessThanOrEqual(232);
+  expect(node.data.width).toBeGreaterThanOrEqual(Math.min(232,name.length*7+104));
+}
 });

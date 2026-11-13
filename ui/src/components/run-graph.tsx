@@ -1,6 +1,12 @@
-import { ArrowUpRight, Box, Database, X, CalendarClock, Play, Network, Hourglass, type LucideIcon } from "lucide-react";
+import {useLegend,statusEntries} from "@/components/legend";
+import {dependencyEntries,taskEntries,highlightedEntry} from "@/components/diagram-key";
+import {DependencyBadge} from "@/components/dependency-mark";
+import {CatalogWidthButton} from "@/components/catalog-width";
+import {Switch} from "@/components/switch";
+import {fitDiagram,readableFit} from "@/lib/diagram-viewport";
+import { ArrowUpRight, Box, CalendarClock, Play, Network, Hourglass, type LucideIcon } from "lucide-react";
 import * as React from "react";
-import { Background, Controls, Handle, MarkerType, Position, ReactFlow, getBezierPath, type EdgeProps, type Edge, type Node, type NodeProps, type ReactFlowInstance } from "@xyflow/react";
+import { Background, Handle, MarkerType, Position, ReactFlow, getBezierPath, type EdgeProps, type Edge, type Node, type NodeProps, type ReactFlowInstance } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { edgeClass, solidClass, statusMeta, StatusBadge } from "@/components/status";
 import { runCondition, dependencyStyle, definitionLabel, dependencySentence } from "@/lib/catalog-flow";
@@ -41,10 +47,10 @@ const MAX_ROWS = 4;
 const MAX_COLS = 3;
 const GAP_ROW = 56;
 const GAP_COL = 40;
-/** Fitting a large graph never shrinks it below this zoom (13 px text stays about 9 px): the rest is reached by panning. */
-const READABLE = 0.7;
+/** Fitting a large graph never shrinks it below this zoom (12 px text stays readable): the rest is reached by panning. */
+const READABLE = 1;
 const FILL_FIT = { padding: 0.08, minZoom: READABLE, maxZoom: 1.3 };
-const DEFINITION_FIT = { padding: 0.08, minZoom: 0.01, maxZoom: 1 };
+const DEFINITION_FIT = readableFit;
 const CARD_FIT = { padding: 0.12, minZoom: 0.8, maxZoom: 1 };
 
 const NODE_TONE: Record<Focus, string> = {
@@ -53,6 +59,11 @@ const NODE_TONE: Record<Focus, string> = {
   lineage: "border-accent",
   dim: "border-border opacity-40",
 };
+
+/** The kind prefix of an entry or exit box repeats its icon and subtitle, so the title is the name alone. */
+function shownTitle(label: string, isTask: boolean): string {
+  return isTask ? label : label.replace(/^(Schedule|Upstream|Downstream|Task gate): /, "");
+}
 
 function Task({ data }: NodeProps<TaskNode>) {
   const plain = data.status === "";
@@ -65,7 +76,7 @@ function Task({ data }: NodeProps<TaskNode>) {
     const summary = <>{task?.active_flag==="N" ? <DiagramChip>Inactive</DiagramChip> : null}<span className="flex min-w-0 items-center justify-center gap-1"><span className="truncate" title={symbol.label}>{symbol.label}</span>{task ? <span className="shrink-0 rounded-sm border border-border px-1">{runCondition(task)}</span> : null}</span>{status}</>;
     return <div data-focus={data.focus} className="relative" style={task?.active_flag === "N" ? {opacity:0.4} : undefined}>
       <Handle type="target" position={data.vertical ? Position.Top : Position.Left} className="!size-1.5 !border-0 !bg-border-strong"/>
-      <DiagramNode title={data.label} tooltip={data.tooltip} width={data.width} icon={symbol.icon}  collapsedDescription={summary} expanded={data.expanded ?? false} onExpanded={() => data.onExpanded?.()} action={task ? undefined : open} description={<>{task?.active_flag==="N" ? <DiagramChip>Inactive</DiagramChip> : null}{symbol.label}{status}</>} className={cn("",NODE_TONE[data.focus],plain ? "border-l-border-strong" : edgeClass(data.status))}>
+      <DiagramNode title={shownTitle(data.label,Boolean(task))} tooltip={data.tooltip ?? data.label} width={data.width} color={task?kindColor(task.script_kind??task.handler):"var(--kind-slate)"} icon={symbol.icon}  collapsedDescription={summary} expanded={data.expanded ?? false} onExpanded={() => data.onExpanded?.()} action={task ? undefined : open} description={<>{task?.active_flag==="N" ? <DiagramChip>Inactive</DiagramChip> : null}{symbol.label}{status}</>} className={cn("",NODE_TONE[data.focus],plain ? "border-l-border-strong" : edgeClass(data.status))}>
         <div className="grid gap-1 px-2 pb-2 text-xs">{task ? <><span className="line-clamp-2 break-all" title={task.target ?? undefined}>{task.target ?? "No target"}</span><span>Runs when: <span className="rounded-sm bg-surface-2 px-1 text-xs">{runCondition(task)}</span></span></> : <span>{data.label.startsWith("Schedule:") ? "Schedules and triggers admit this pipeline." : data.label.startsWith("Downstream:") ? "Open the downstream pipeline to inspect its tasks." : "This gate waits for its upstream dependency."}</span>}</div>
       </DiagramNode>
       <Handle type="source" position={data.vertical ? Position.Bottom : Position.Right} className="!size-1.5 !border-0 !bg-border-strong"/>
@@ -79,10 +90,6 @@ function Task({ data }: NodeProps<TaskNode>) {
   </div>;
 }
 
-export function DependencyBadge({ edge }: { edge: Pick<DefinitionEdge, "dependency_type" | "consume_repairs"> }) {
-  const label = definitionLabel({kind:"task",source:"",target:"",...edge});
-  return label ? <span className="inline-flex items-center gap-1 rounded-sm bg-surface px-1 text-xs">{edge.dependency_type === "HAS_DATA" ? <Database aria-hidden className="size-3" /> : edge.dependency_type === "FAILURE" ? <X aria-hidden className="size-3" /> : null}{label}</span> : null;
-}
 
 const nodeTypes = { task: Task };
 function DefinitionLink(props: EdgeProps) {
@@ -214,28 +221,29 @@ export function RunGraph({
   const { nodes, edges, height, columns } = layout(graph, statuses, focused, onOpen, plain, shown);
   let definitionHeight=280;
   if (definition) {
-    nodes.forEach(node => { node.data.definition = definition.tasks.find(task => task.code === node.id || task.label === node.id); node.position.y *= 1.5; node.data.expanded = expansion.isExpanded(node.id); node.data.width=160; node.data.onExpanded = () => expansion.toggle(node.id); if (!node.data.definition) { node.data.status = ""; node.data.tooltip=node.id.startsWith("Schedule: ") ? definition.schedule??"Manual" : node.id; node.data.symbol = node.id.startsWith("Schedule: ") ? {icon:node.id.startsWith("Schedule: manual") ? Play : CalendarClock,label:"Entry"} : node.id.startsWith("Downstream: ") ? {icon:Network,label:"Pipeline"} : {icon:Hourglass,label:"Dependency gate"}; } });
+    nodes.forEach(node => { node.data.definition = definition.tasks.find(task => task.code === node.id || task.label === node.id); node.position.y *= 1.5; node.data.expanded = expansion.isExpanded(node.id); node.data.width=node.data.definition?176:Math.min(232,Math.max(176,shownTitle(node.data.label,false).length*7+104)); node.data.onExpanded = () => expansion.toggle(node.id); if (!node.data.definition) { node.data.status = ""; node.data.tooltip=node.id.startsWith("Schedule: ") ? definition.schedule??"Manual" : node.id; node.data.symbol = node.id.startsWith("Schedule: ") ? {icon:node.id.startsWith("Schedule: manual") ? Play : CalendarClock,label:"Schedule"} : node.id.startsWith("Downstream: ") ? {icon:Network,label:"Downstream pipeline"} : {icon:Hourglass,label:"Upstream gate"}; } });
     if (shown === "LR") {
       let x = 0;
       const groups = new Map<number,TaskNode[]>();
       nodes.forEach(node => { const group = groups.get(node.position.x) ?? []; group.push(node); groups.set(node.position.x,group); });
       [...groups.entries()].sort(([a],[b]) => a-b).forEach(([,group]) => {
-        const width = 160;
+        const width = Math.max(...group.map(node=>node.data.width??176));
         let y=0;
         group.sort((a,b)=>a.position.y-b.position.y).forEach(node=>{node.position.x=x;node.position.y=y;y+=(node.data.expanded?112:88)+8;});
-        x += width + 72;
+        x += width + 56;
       });
     }
     definitionHeight=Math.max(280,...nodes.map(node=>node.position.y+(node.data.expanded?118:92)+32));
     edges.forEach(edge => {
       const item = definition.edges.find(item => (item.source.endsWith(`.${edge.source}`) && item.target.endsWith(`.${edge.target}`)) || (item.kind === "task" && edge.source.startsWith(`Task gate: ${item.source} ·`) && item.target.endsWith(`.${edge.target}`)) || (item.kind === "pipeline" && ((item.target === definition.tasks[0]?.pipeline && edge.source.startsWith(`Upstream: ${item.source} ·`)) || (item.source === definition.tasks[0]?.pipeline && edge.target === `Downstream: ${item.target}`)))) ?? { kind: "task" as const, source: edge.source, target: edge.target, dependency_type: graph.depends_on[edge.target]?.find(([source]) => source === edge.source)?.[1] ?? "SUCCESS", consume_repairs: "Y" };
       edge.type = "definition";
-      edge.data = { sentence: dependencySentence(item.source, item.target, item.dependency_type) };
+      edge.data = { definition:item, sentence: dependencySentence(item.source, item.target, item.dependency_type) };
       edge.style = { ...edge.style, ...dependencyStyle(item.dependency_type) };
       edge.label = definitionLabel(item) ? <DependencyBadge edge={item} /> : undefined;
       edge.markerEnd = { type: MarkerType.ArrowClosed, color: "var(--muted)",width:10,height:10,markerUnits:"userSpaceOnUse" };
     });
   }
+  const key=useLegend([...dependencyEntries(plain&&!definition?[]:definition ? edges.map(edge=>edge.data?.definition as DefinitionEdge) : Object.values(graph.depends_on).flatMap(deps=>deps.map(([,kind])=>({dependency_type:kind})))),...(definition?taskEntries(definition.tasks):[]),...(!plain?statusEntries(Object.values(statuses)):[]),...(plain&&!definition?[{id:"lineage",group:"Lineage",name:"Table dependency",meaning:"The source table feeds the target table",sample:<svg width="36" height="12"><path d="M 0 6 H 36" stroke="var(--muted)"/></svg>},highlightedEntry]:[])]);
   const wide = !definition && !fill && width > 0 && (definition ? Math.max(...nodes.map(node => node.position.x + (176))) + 48 : columns * (WIDTH + GAP_X) - GAP_X + 48) > width;
   // Bring a focused task into view when it is off-screen; leave the view alone when it is visible.
   React.useEffect(() => {
@@ -252,17 +260,17 @@ export function RunGraph({
   React.useEffect(() => {
     if ((definition || fill) && width > 0 && frameHeight > 0) {
       if (wide) void flow.current?.setViewport({x:24,y:40,zoom:0.9});
-      else void flow.current?.fitView(fitOptions);
+      else fitDiagram(flow.current,frame.current);
     }
   }, [definition, fill, width, frameHeight, shown, fitOptions, wide]);
   // A graph wider than its card keeps readable boxes starting at the left; a small one is fitted whole.
   return (
-    <div style={definition ? {height:`min(70vh, ${definitionHeight+(width<480?180:100)}px)`} : fill ? undefined : { height }} role="group" aria-label="Task graph" className={cn("flex w-full flex-col", fill && "h-full min-h-64")}>
+    <div style={definition ? {height:`min(70vh, ${definitionHeight+(width<480?180:100)}px)`} : fill ? undefined : { height }} role="group" aria-label="Task graph" tabIndex={0} onKeyDown={key.onKeyDown} className={cn("flex w-full flex-col", fill && "h-full min-h-64")}>
       {/* The hint sits above the canvas, so a graph shown at a readable size never runs under it. */}
       <p className="m-0 shrink-0 px-3 py-1.5 text-xs text-muted">
         {edges.length === 0 ? "No dependencies between these tasks: they can run at the same time." : focused ? `Showing everything upstream and downstream of ${focused}. Click the background to clear.` : "Click a task to highlight its lineage; drag to pan."}
       </p>
-      {definition ? <><DiagramToolbar zoomIn={()=>void flow.current?.zoomIn()} zoomOut={()=>void flow.current?.zoomOut()} fit={()=>void flow.current?.fitView(fitOptions)} reset={()=>void flow.current?.zoomTo(1)}><label className="flex items-center gap-2 text-xs"><input type="checkbox" role="switch" checked={definition.overlay??false} onChange={definition.onOverlay} />Show last-run status</label><Button size="sm" onClick={expansion.toggleAll}>{expansion.expanded ? "Collapse all" : "Expand all"}</Button></DiagramToolbar><div className="flex flex-wrap gap-3 py-1 text-xs text-muted" aria-label="Dependency legend">{["SUCCESS","HAS_DATA","FAILURE","ALWAYS"].map(kind=><span key={kind} className="inline-flex items-center gap-1"><svg width="24" height="12" aria-hidden><path d="M 0 6 H 24" style={dependencyStyle(kind)}/></svg>{kind==="SUCCESS" ? "Succeeded" : <DependencyBadge edge={{dependency_type:kind,consume_repairs:"Y"}}/>}</span>)}<DependencyBadge edge={{dependency_type:"SUCCESS",consume_repairs:"N"}}/>{[...new Map(definition.tasks.map(task=>{const symbol=taskSymbol(task);return [symbol.label,{...symbol,color:kindColor(task.script_kind??task.handler)}] as const;})).values()].map(({icon:Icon,label,color})=><span key={label} className="inline-flex items-center gap-1"><Icon aria-hidden className="size-4" style={{color}}/>{label}</span>)}</div></> : null}
+      <DiagramToolbar className="px-3" zoomIn={()=>void flow.current?.zoomIn()} zoomOut={()=>void flow.current?.zoomOut()} fit={()=>fitDiagram(flow.current,frame.current)} reset={()=>void flow.current?.zoomTo(1)}>{definition ? <><Switch checked={definition.overlay??false} onChange={()=>definition.onOverlay?.()} label="Show last-run status"/><Button onClick={expansion.toggleAll}>{expansion.expanded?"Collapse all":"Expand all"}</Button></>:null}<CatalogWidthButton/>{key.button}</DiagramToolbar>
       <div ref={frame} className="relative min-h-0 flex-1">
       <ReactFlow
         key={`${wide ? "wide" : "fit"}:${shown}:${nodes.map((n) => n.id).join("|")}`}
@@ -270,14 +278,14 @@ export function RunGraph({
         edges={edges}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
-        fitView={!wide}
+        fitView={false}
         fitViewOptions={fitOptions}
         defaultViewport={wide ? { x: 24, y: 40, zoom: 0.9 } : undefined}
-        minZoom={definition ? 0.01 : fill ? 0.15 : 0.5}
+        minZoom={0.15}
         maxZoom={1.5}
         nodesDraggable={false}
         nodesConnectable={false}
-        onNodesChange={changes=>{if(definition&&changes.some(change=>change.type==="dimensions"))requestAnimationFrame(()=>void flow.current?.fitView(fitOptions));}}
+        onNodesChange={changes=>{if(changes.some(change=>change.type==="dimensions"))requestAnimationFrame(()=>fitDiagram(flow.current,frame.current));}}
         elementsSelectable
         onNodeClick={(_, node) => onFocus(node.id === focused ? null : node.id)}
         onKeyDown={event=>{
@@ -289,14 +297,15 @@ export function RunGraph({
         }}
         onInit={(instance) => {
           flow.current = instance as unknown as ReactFlowInstance;
+          requestAnimationFrame(()=>fitDiagram(flow.current,frame.current));
         }}
         onPaneClick={() => onFocus(null)}
         proOptions={{ hideAttribution: true }}
       >
         <Background gap={20} color="var(--border)" />
-        {!definition ? <Controls fitViewOptions={fitOptions} showInteractive={false} position="bottom-right" /> : null}
+
       </ReactFlow>
-      </div>
+      {key.panel}</div>
     </div>
   );
 }

@@ -290,7 +290,7 @@ export function PipelineDetail() {
               </div>
             )}
           </div>
-          <div className="relative min-h-0 flex-1 overflow-hidden">
+          <div className={cn("relative min-h-0 flex-1 overflow-hidden", view !== "grid" && "max-lg:min-h-96")}>
             {!graph.isSuccess ? (
               graph.isError ? <Notice className="m-3">{(graph.error as Error).message}</Notice> : <Loading what="tasks" className="p-3" />
             ) : view === "grid" ? (

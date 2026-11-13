@@ -1,3 +1,4 @@
+import {LegendViewer} from "@/components/legend";
 import { ChevronDown, LogOut, Menu, Moon, Search, Sun, X } from "lucide-react";
 import { words } from "@/lib/labels";
 import * as React from "react";
@@ -43,6 +44,7 @@ export function AppShell() {
   React.useEffect(() => {
     const focusSearch = (event: KeyboardEvent) => {
       const typing = event.target instanceof HTMLElement && /^(INPUT|TEXTAREA|SELECT)$/.test(event.target.tagName);
+      if (event.defaultPrevented) return;
       if (event.key === "?" && !typing && !event.ctrlKey && !event.metaKey && !event.altKey) {
         event.preventDefault();
         setShortcuts(true);
@@ -190,7 +192,7 @@ export function AppShell() {
                 Project {addressed} is not available: it is disabled, or this account cannot see it. Choose another project from the menu above.
               </Notice>
             ) : (
-              <Outlet />
+              <LegendViewer value={identity.data?.name ?? "local"}><Outlet /></LegendViewer>
             )}
           </div>
         </main>

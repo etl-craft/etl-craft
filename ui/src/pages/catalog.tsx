@@ -1,3 +1,4 @@
+import {CatalogWidth} from "@/components/catalog-width";
 import { useMutation } from "@tanstack/react-query";
 import * as React from "react";
 import { ActionButton } from "@/components/action-button";
@@ -75,6 +76,8 @@ export function Catalog() {
   const kind = (KINDS as string[]).includes(first) ? (first as CatalogKind) : undefined;
   const name = others.join("/") || undefined;
   useDocumentTitle(kind === "gaps" ? "Catalog gaps" : name ? `${name} · Catalog` : "Catalog", code, info.project && { type: info.project.environment_type, name: info.project.environment_name });
+  const [wide,setWide]=React.useState(false);
+  const diagram=!!kind&&["graph","mapping","lineage"].includes(params.get("tab")??"");
   const tab = params.get("tab") ?? "overview";
   const onTab = (next: string) => {
     const copy = new URLSearchParams(params);
@@ -99,7 +102,7 @@ export function Catalog() {
   );
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-2">
+    <CatalogWidth value={{wide,toggle:()=>setWide(value=>!value)}}><div onKeyDownCapture={event=>{if(event.key==="Escape")setWide(false);}} className="flex min-h-0 flex-1 flex-col gap-2">
       <PageHeader
         compact
         title="Catalog"
@@ -188,6 +191,7 @@ export function Catalog() {
       {doc ? (
         <SplitPane
           id="catalog"
+          collapsedLeft={wide&&diagram}
           initial={0.26}
           className="lg:min-h-0 lg:flex-1"
           left={
@@ -207,6 +211,6 @@ export function Catalog() {
           }
         />
       ) : null}
-    </div>
+    </div></CatalogWidth>
   );
 }

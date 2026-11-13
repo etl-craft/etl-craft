@@ -1,3 +1,4 @@
+import {useLegend,statusEntries} from "@/components/legend";
 import { RunLabel } from "@/components/run-label";
 import { When } from "@/components/when";
 import { useQueries } from "@tanstack/react-query";
@@ -77,6 +78,7 @@ export function RunGrid({ code, pipeline, graph, runs, extra, selected, onSelect
   const [now] = React.useState(() => Date.now());
   const seconds = (run: RunView) => (run.start_date ? Math.max(0, ((run.end_date ? new Date(run.end_date).getTime() : now) - new Date(run.start_date).getTime()) / 1000) : 0);
   const longest = Math.max(1, ...shown.map(seconds));
+  const key=useLegend(statusEntries([...shown.map(run=>run.status),...[...cells,...aside].flatMap(read=>read.data?.entries.map(entry=>entry.status)??[])]));
   if (shown.length === 0) return <p className="m-0 p-4 text-muted">No runs yet.</p>;
   const failed = cells.find((c) => c.isError);
   const sync = () => {
@@ -91,7 +93,7 @@ export function RunGrid({ code, pipeline, graph, runs, extra, selected, onSelect
     onSelect(run.pipeline_run_id);
   };
   return (
-    <div ref={outer} className="flex h-full min-h-0 w-full flex-col">
+    <div ref={outer} tabIndex={0} onKeyDown={key.onKeyDown} className="relative flex h-full min-h-0 w-full flex-col"><div className="flex justify-end px-2 py-1">{key.button}</div>{key.panel}
       {failed?.error ? <Notice className="m-3">{(failed.error as Error).message}</Notice> : null}
       {cells.some((c) => c.isPending) ? <Loading what="the grid" className="p-3" /> : null}
       <div className="flex min-h-0 flex-1">

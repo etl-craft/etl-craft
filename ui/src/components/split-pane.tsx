@@ -19,7 +19,7 @@ function stored(id: string, fallback: number): number {
  * Two panes side by side with a divider to drag (or focus and use the arrow keys; double-click or Home resets).
  * The width is remembered in this browser. Below the `lg` breakpoint the panes stack and the divider is gone.
  */
-export function SplitPane({ id, left, right, initial = 0.42, className, narrowFirst = "left", minimumLeft = 0 }: { id: string; left: React.ReactNode; right: React.ReactNode; initial?: number; className?: string; /** Which pane comes first once they stack below `lg`. */ narrowFirst?: "left" | "right"; minimumLeft?: number }) {
+export function SplitPane({ id, left, right, initial = 0.42, className, narrowFirst = "left", minimumLeft = 0, collapsedLeft=false }: { id: string; left: React.ReactNode; right: React.ReactNode; initial?: number; className?: string; /** Which pane comes first once they stack below `lg`. */ narrowFirst?: "left" | "right"; minimumLeft?: number; collapsedLeft?:boolean }) {
   const [ratio, setRatio] = React.useState(() => stored(id, initial));
   const frame = React.useRef<HTMLDivElement>(null);
   const [width, setWidth] = React.useState(0);
@@ -56,8 +56,8 @@ export function SplitPane({ id, left, right, initial = 0.42, className, narrowFi
     event.preventDefault();
   };
   return (
-    <div ref={frame} style={{ "--split": `${shown * 100}%` } as React.CSSProperties} className={cn("grid min-h-0 gap-3 lg:grid-cols-[var(--split)_7px_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)] lg:gap-0", className)}>
-      <div data-pane className="flex min-h-0 min-w-0 flex-col">{left}</div>
+    <div ref={frame} style={{ "--split": collapsedLeft ? "0%" : `${shown * 100}%` } as React.CSSProperties} className={cn("grid min-h-0 gap-3 lg:grid-cols-[var(--split)_7px_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)] lg:gap-0", collapsedLeft && "!grid-cols-[minmax(0,1fr)]", className)}>
+      <div data-pane className={cn("flex min-h-0 min-w-0 flex-col",collapsedLeft&&"hidden")}>{left}</div>
       <div
         role="separator"
         aria-orientation="vertical"
@@ -70,7 +70,7 @@ export function SplitPane({ id, left, right, initial = 0.42, className, narrowFi
         onPointerMove={drag}
         onDoubleClick={() => set(initial)}
         onKeyDown={key}
-        className="group hidden cursor-col-resize touch-none items-center justify-center outline-none lg:flex"
+        className={cn("group hidden cursor-col-resize touch-none items-center justify-center outline-none lg:flex",collapsedLeft&&"!hidden")}
       >
         <span className="h-full w-px bg-border-strong group-hover:w-0.5 group-hover:bg-accent group-focus-visible:bg-accent group-active:bg-accent" />
       </div>

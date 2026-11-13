@@ -1,3 +1,4 @@
+import {LegendView,statusEntries} from "@/components/legend";
 import { useQuery } from "@tanstack/react-query";
 import { createColumnHelper } from "@tanstack/react-table";
 import * as React from "react";
@@ -44,7 +45,7 @@ export function Scheduled() {
         <CardHeader>
           <CardTitle>Next runs · {upcoming.length}</CardTitle>
         </CardHeader>
-        <DataTable find
+        <LegendView entries={statusEntries(upcoming.flatMap(pipeline=>pipeline.recent_runs.map(run=>run.status)))}><DataTable find
           label="Next runs"
           data={upcoming}
           empty={list.isSuccess ? <EmptyState title="No scheduled pipeline has a next run" nextStep="A pipeline is listed here once its RUN_SCHEDULE is set in the project's config files and automatic runs are on." /> : undefined}
@@ -54,7 +55,7 @@ export function Scheduled() {
             schedule,
             columns.display({ id: "recent", header: "Recent runs", cell: (c) => <RecentRuns project={code} pipeline={c.row.original} /> }),
           ]}
-        />
+        /></LegendView>
       </Card>
       {stalled.length ? (
         <Card>

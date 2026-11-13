@@ -1,3 +1,4 @@
+import {LegendView,statusEntries} from "@/components/legend";
 import { AutoStartNotice } from "@/components/auto-start-notice";
 import { TagFilter } from "@/components/tag-filter";
 import { useQuery } from "@tanstack/react-query";
@@ -114,7 +115,7 @@ export function Pipelines() {
             {bulk("RESUME", "Resume")}
           </div>
         ) : null}
-        <DataTable
+        <LegendView entries={statusEntries(shown.flatMap(pipeline=>pipeline.recent_runs.map(run=>run.status)))}><DataTable
           label="Pipelines"
           data={shown}
           empty={list.isSuccess ? (tags.length ? <EmptyState title="No pipeline carries every selected tag." nextStep="Clear a tag to broaden the list." /> : <EmptyState title="This project has no active pipeline." nextStep="Add a pipeline in the project config files, apply them, then refresh the pipeline definitions." />) : undefined}
@@ -162,7 +163,7 @@ export function Pipelines() {
             ] : []),
             columns.display({ id: "auto", header: "Automatic runs", cell: (c) => <PauseState pipeline={c.row.original} /> }),
           ]}
-        />
+        /></LegendView>
         {list.isPending ? <Loading what="pipelines" className="p-4" /> : null}
       </Card>
     </div>

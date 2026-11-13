@@ -18,7 +18,7 @@ pytestmark = pytest.mark.browser
 def shoot(page, name):
     shots = os.environ.get("ETL_CRAFT_UI_SCREENSHOTS")
     if shots:
-        page.wait_for_function("""() => [...document.querySelectorAll('.diagram-body')]
+        page.wait_for_function("""() => [...document.querySelectorAll('.diagram-body, .view-key')]
             .every(element=>element.getAnimations().every(animation=>animation.playState==='finished'))
         """)
         Path(shots).mkdir(parents=True, exist_ok=True)
@@ -309,21 +309,38 @@ def mappings(site):
     return ctx, url
 
 
-def uniform_graph_nodes(page, expanded=False):
+# Text stays readable, so a wide diagram pans: its first column must always be whole.
+FIRST_COLUMN_WHOLE = """label => {
+    const canvas=document.querySelector(`[aria-label="${label}"] .react-flow`);
+    const pane=canvas.getBoundingClientRect();
+    const nodes=[...canvas.querySelectorAll('.react-flow__node')];
+    const boxes=nodes.map(node=>node.getBoundingClientRect());
+    const first=Math.min(...boxes.map(box=>box.left));
+    return boxes.length>0 && boxes.filter(box=>box.left<=first+1).every(box=>
+        box.left>=pane.left-1 && box.right<=pane.right+1
+        && box.top>=pane.top-1 && box.bottom<=pane.bottom+1);
+}"""
+
+
+def uniform_graph_nodes(page):
+    """Text stays readable: the whole flow fits without the tree; a phone keeps column one whole."""
+    phone = page.viewport_size["width"] < 640
+    full = page.get_by_role("button", name="Full width", exact=True)
+    hid = not phone and full.is_visible()
+    if hid:
+        full.click()
+    check = """arg => {
+        const canvas=document.querySelector('[aria-label="Task graph"] .react-flow');
+        const nodes=[...canvas.querySelectorAll('.react-flow__node')];
+        const pane=canvas.getBoundingClientRect();
+        const boxes=nodes.map(node=>node.getBoundingClientRect());
+        const first=Math.min(...boxes.map(box=>box.left));
+        return nodes.length>1 && boxes.every(box=>
+            (arg.phone ? box.left>first+1 || box.right<=pane.right+1 : box.right<=pane.right+1)
+            && box.left>=pane.left-1 && box.top>=pane.top-1 && box.bottom<=pane.bottom+1);
+    }"""
     try:
-        page.wait_for_function(
-            """expanded => {
-            const canvas=document.querySelector('[aria-label="Task graph"] .react-flow');
-            const nodes=[...canvas.querySelectorAll('.react-flow__node')];
-            const pane=canvas.getBoundingClientRect();
-            return nodes.length>1 && nodes.every(node=>{
-                const box=node.getBoundingClientRect();
-                return box.left>=pane.left-1 && box.right<=pane.right+1
-                    && box.top>=pane.top-1 && box.bottom<=pane.bottom+1;
-            });
-        }""",
-            arg=expanded,
-        )
+        page.wait_for_function(check, arg={"phone": phone})
     except BrowserTimeout:
         page.screenshot(path="/tmp/catalog-flow/fit-failure.png")
         pytest.fail(
@@ -336,6 +353,8 @@ def uniform_graph_nodes(page, expanded=False):
         }""")
             )
         )
+    if hid:
+        page.get_by_role("button", name="Restore tree", exact=True).click()
 
 
 @pytest.mark.parametrize(
@@ -348,7 +367,12 @@ def test_native_flow_mapping_provenance_and_keyboard(mappings, appearance, width
         page.emulate_media(color_scheme=appearance)
         sign_in(page, url, "/ui/projects/default/catalog/pipelines/ORDERS?tab=lineage")
         expect(page.get_by_role("group", name="Task graph")).to_be_visible()
-        expect(page.get_by_text("Succeeded", exact=True)).to_be_visible()
+        key = page.get_by_role("button", name="Key", exact=True)
+        if key.get_attribute("aria-expanded") != "true":
+            key.click()  # a phone starts with the key closed
+        panel = page.get_by_role("region", name="View key", exact=True)
+        expect(panel.get_by_role("rowheader", name="Succeeded", exact=True)).to_be_visible()
+        panel.get_by_role("button", name="Close key", exact=True).click()
         expect(page.locator('[data-id="load"]')).to_be_visible()
         expect(page.locator('[data-id="disabled"] [data-focus]')).to_have_css("opacity", "0.4")
         uniform_graph_nodes(page)
@@ -358,6 +382,8 @@ def test_native_flow_mapping_provenance_and_keyboard(mappings, appearance, width
         expect(page.locator('[data-id^="Schedule:"] strong')).to_have_attribute(
             "title", "0 6 * * *"
         )
+        expect(page.locator('[data-id^="Schedule:"] strong')).to_have_text("Daily at 06:00")
+        expect(page.locator('[data-id^="Upstream:"] strong')).not_to_contain_text("Upstream:")
         page.get_by_role("button", name="Expand cleanup", exact=True).click()
         page.wait_for_function("""() => {
             const graph=document.querySelector('[aria-label="Task graph"]');
@@ -369,7 +395,7 @@ def test_native_flow_mapping_provenance_and_keyboard(mappings, appearance, width
         }""")
         page.get_by_role("button", name="Collapse cleanup", exact=True).click()
         page.get_by_role("button", name="Expand all", exact=True).click()
-        uniform_graph_nodes(page, expanded=True)
+        uniform_graph_nodes(page)
         expect(
             page.locator('[data-id="disabled"]').get_by_text("Inactive", exact=True)
         ).to_be_visible()
@@ -415,15 +441,7 @@ def test_native_flow_mapping_provenance_and_keyboard(mappings, appearance, width
         expect(diagram.locator('[data-id="target:mart.orders"] [data-port]')).to_have_count(0)
         page.get_by_role("button", name="Expand all", exact=True).click()
         page.get_by_role("button", name="Fit view", exact=True).click()
-        page.wait_for_function("""() => {
-            const canvas=document.querySelector('[aria-label="Task mapping diagram"] .react-flow');
-            const pane=canvas.getBoundingClientRect();
-            return [...canvas.querySelectorAll('.react-flow__node')].every(node=>{
-                const box=node.getBoundingClientRect();
-                return box.left>=pane.left-1 && box.right<=pane.right+1
-                    && box.top>=pane.top-1 && box.bottom<=pane.bottom+1;
-            });
-        }""")
+        page.wait_for_function(FIRST_COLUMN_WHOLE, arg="Task mapping diagram")
         page.get_by_role("button", name="Reset zoom", exact=True).click()
         expect(diagram.locator(".react-flow__viewport")).to_have_css(
             "transform", re.compile(r"matrix\(1, 0, 0, 1,")
@@ -442,15 +460,7 @@ def test_native_flow_mapping_provenance_and_keyboard(mappings, appearance, width
             "button", name="amount", exact=False
         )
         target.click()
-        page.wait_for_function("""() => {
-            const canvas=document.querySelector('[aria-label="Task mapping diagram"] .react-flow');
-            const pane=canvas.getBoundingClientRect();
-            return [...canvas.querySelectorAll('.react-flow__node')].every(node=>{
-                const box=node.getBoundingClientRect();
-                return box.left>=pane.left-1 && box.right<=pane.right+1
-                    && box.top>=pane.top-1 && box.bottom<=pane.bottom+1;
-            });
-        }""")
+        page.wait_for_function(FIRST_COLUMN_WHOLE, arg="Task mapping diagram")
         expect(
             diagram.locator('[data-id="source:raw.orders"]').get_by_role(
                 "button", name="amount", exact=False
@@ -491,5 +501,82 @@ def test_native_flow_mapping_provenance_and_keyboard(mappings, appearance, width
         expect(page.get_by_role("alert")).to_have_count(0)
         shoot(page, f"catalog-mapping-unavailable-{appearance}-{width}")
         assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+        assert problems == []
+        browser.close()
+
+
+@pytest.mark.parametrize("appearance", ["light", "dark"])
+@pytest.mark.parametrize("width", [1280, 1024, 390])
+def test_catalog_readability_floating_key_and_full_width(mappings, appearance, width):
+    _, url = mappings
+    with sync_playwright() as pw:
+        browser, page, problems = open_page(pw, viewport={"width": width, "height": 1000})
+        page.emulate_media(color_scheme=appearance)
+        sign_in(page, url, "/ui/projects/default/catalog/pipelines/ORDERS?tab=lineage")
+        for path, label in [
+            ("pipelines/ORDERS?tab=lineage", "Task graph"),
+            ("tasks/ORDERS.load?tab=mapping", "Task mapping diagram"),
+        ]:
+            page.goto(f"{url}/ui/projects/default/catalog/{path}")
+            if width == 390 and label == "Task mapping diagram":
+                table = page.get_by_role("table", name="Task mapping", exact=True)
+                expect(table).to_be_visible()
+                scroller = table.locator("..")
+                assert scroller.evaluate("el=>el.scrollWidth>el.clientWidth")
+                scroller.evaluate(
+                    "el=>{el.scrollLeft=el.scrollWidth;el.scrollTop=el.scrollHeight;}"
+                )
+                last = table.locator("tbody tr").last
+                last.scroll_into_view_if_needed()
+                expect(last).to_be_visible()
+                assert (
+                    last.locator("td").first.evaluate("el=>getComputedStyle(el).wordBreak")
+                    == "normal"
+                )
+                page.get_by_role("button", name="Diagram", exact=True).click()
+            canvas = (
+                page.get_by_role("group", name=label, exact=True)
+                if label == "Task graph"
+                else page.get_by_label(label, exact=True)
+            )
+            expect(canvas).to_be_visible()
+            page.get_by_role("button", name="Fit view", exact=True).click()
+            page.wait_for_function(
+                """label=>{
+                const canvas=document.querySelector(`[aria-label="${label}"]`);
+                const viewport=canvas.querySelector('.react-flow__viewport');
+                if(!viewport)return false;
+                const zoom=new DOMMatrix(getComputedStyle(viewport).transform).a;
+                const selector='.react-flow__node strong, .react-flow__node [data-port] button';
+                const labels=[...canvas.querySelectorAll(selector)];
+                const size=el=>parseFloat(getComputedStyle(el).fontSize)*zoom;
+                return labels.length>0&&labels.every(el=>size(el)>=11.99);
+            }""",
+                arg=label,
+            )
+            toggle = page.get_by_role("button", name="Key", exact=True)
+            if toggle.get_attribute("aria-expanded") == "true":
+                toggle.click()
+            canvas.focus()
+            canvas.press("?")
+            panel = page.get_by_role("region", name="View key", exact=True)
+            expect(panel).to_be_visible()
+            kind = "flow" if label == "Task graph" else "mapping"
+            shoot(page, f"catalog-{kind}-key-{appearance}-{width}")
+            if width == 390:
+                expect(panel).to_have_css("position", "fixed")
+                assert abs(panel.bounding_box()["y"] + panel.bounding_box()["height"] - 1000) <= 1
+            else:
+                key_box = panel.bounding_box()
+                zoom_box = page.get_by_role("button", name="Zoom in", exact=True).bounding_box()
+                assert key_box["y"] >= zoom_box["y"] + zoom_box["height"]
+            panel.press("Escape")
+            expect(panel).not_to_be_visible()
+            expect(toggle).to_be_focused()
+            page.get_by_role("button", name="Full width", exact=True).click()
+            expect(page.get_by_role("tree", name="Catalog objects")).not_to_be_visible()
+            page.get_by_role("button", name="Restore tree", exact=True).press("Escape")
+            if width >= 1024:
+                expect(page.get_by_role("tree", name="Catalog objects")).to_be_visible()
         assert problems == []
         browser.close()

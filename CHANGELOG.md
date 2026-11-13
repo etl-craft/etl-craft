@@ -11,7 +11,12 @@ All notable changes are recorded here. The format follows
   Pipeline Graph and task Mapping share collapsible symbol nodes and text/table alternatives.
   Expanded mappings trace each named column port through transformations to its target; compact
   views retain the same paths, and task-type symbols stay visible under the status overlay.
-  Diagrams retain left-to-right stage order and fit by zooming; Reset zoom returns to 100%.
+  Diagrams retain left-to-right stage order, never render node text below 12 px (a wide diagram
+  opens at 100% from its first column and pans), and offer Full width to hide the catalog tree.
+  One floating Key lists what each diagram, run graph, run grid and run history strip shows;
+  status entries come from the shared status table. Entry and exit boxes show names without a
+  kind prefix. The pipeline Graph tab keeps a minimum height on a phone, and fit no longer
+  centres and clips a graph wider than its pane.
   Python ingestion tasks may document external sources with owner-approved `LINEAGE_SOURCE` and
   `LINEAGE_COLUMNS`; validation checks their target columns, but execution never reads them.
   Replace pre-0.9 `SOURCE_OBJECT` catalog hints with `LINEAGE_SOURCE=system.object`.
