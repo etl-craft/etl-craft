@@ -30,8 +30,8 @@ import { Uploads } from "@/pages/uploads";
 import { Runs } from "@/pages/runs";
 import { applyDensity, applyTheme, initialTheme, storedDensity } from "@/lib/theme";
 import "@fontsource-variable/inter";
-import "@fontsource/ibm-plex-mono/400.css";
-import "@fontsource/ibm-plex-mono/500.css";
+import "@fontsource/ibm-plex-mono/latin-400.css";
+import "@fontsource/ibm-plex-mono/latin-500.css";
 import "./index.css";
 
 applyTheme(initialTheme());
