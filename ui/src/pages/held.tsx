@@ -83,7 +83,7 @@ export function Held() {
           data={paused}
           empty={list.isSuccess ? <EmptyState title="No pipeline is paused." nextStep="Pause a pipeline from Pipelines to prevent new automatic runs." /> : undefined}
           columns={[
-            pauses.accessor("pipeline_code", { header: "Pipeline", cell: (c) => <Link className="font-medium text-accent hover:underline" to={pipelinePath(code, c.getValue())}>{c.getValue()}</Link> }),
+            pauses.accessor("pipeline_code", { header: "Pipeline", cell: (c) => <Link className="font-medium text-fg hover:text-accent hover:underline" to={pipelinePath(code, c.getValue())}>{c.getValue()}</Link> }),
             pauses.display({ id: "by", header: "By", cell: (c) => c.row.original.paused?.paused_by }),
             pauses.display({ id: "since", header: "Since", cell: (c) => <When iso={c.row.original.paused?.paused_at} /> }),
             pauses.display({ id: "reason", header: "Reason", cell: (c) => c.row.original.paused?.reason }),
@@ -120,7 +120,7 @@ export function Held() {
           data={tasks}
           empty={list.isSuccess ? <EmptyState title="No task is paused." nextStep="Pause a task from its history page when future starts must wait." /> : undefined}
           columns={[
-            standing.accessor("pipeline_code", { header: "Pipeline", cell: (c) => <Link className="font-medium text-accent hover:underline" to={pipelinePath(code, c.getValue())}>{c.getValue()}</Link> }),
+            standing.accessor("pipeline_code", { header: "Pipeline", cell: (c) => <Link className="font-medium text-fg hover:text-accent hover:underline" to={pipelinePath(code, c.getValue())}>{c.getValue()}</Link> }),
             standing.accessor("task_code", { header: "Task" }),
             standing.accessor("outcome", { header: "Downstream sees", cell: (c) => c.getValue() ?? "Waiting" }),
             standing.accessor("expires_at", { header: "Ends", cell: (c) => <When iso={c.getValue()} empty="Until resumed" /> }),

@@ -238,7 +238,7 @@ export function DataTable<T>({
     <div ref={frame} className="w-full min-w-0">
     {find ? (
       <div className="flex items-center gap-3 border-b border-border px-3 py-1.5">
-        <input type="search" aria-label={`Filter ${label}`} placeholder="Filter" value={query} onChange={(event) => change(event.target.value)} className="h-7 w-56 rounded-sm border border-border-strong bg-surface px-2 text-xs" />
+        <input type="search" aria-label={`Filter ${label}`} placeholder="Filter" value={query} onChange={(event) => change(event.target.value)} className="h-control w-56 rounded-md border border-border-strong bg-surface px-2 text-xs" />
         {query ? <span className="text-xs text-muted">{table.getRowModel().rows.length} of {data.length}</span> : null}
       </div>
     ) : null}

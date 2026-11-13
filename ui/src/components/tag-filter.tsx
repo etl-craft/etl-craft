@@ -35,7 +35,7 @@ export function TagFilter({ known, selected, onToggle, onClear }: { known: strin
       </Button>
       {open ? (
         <div className="absolute left-0 top-full z-30 mt-1 grid w-80 max-w-[85vw] gap-2 rounded-md border border-border bg-surface p-2 shadow-lg">
-          <input autoFocus type="search" value={query} onChange={(event) => setQuery(event.target.value)} aria-label="Search tags" placeholder={`Search ${known.length} tags`} className="h-8 rounded-md border border-border-strong bg-surface px-2 text-sm" />
+          <input autoFocus type="search" value={query} onChange={(event) => setQuery(event.target.value)} aria-label="Search tags" placeholder={`Search ${known.length} tags`} className="h-control rounded-md border border-border-strong bg-surface px-2 text-sm" />
           <ul className="m-0 grid max-h-64 list-none gap-0.5 overflow-auto p-0">
             {matches.slice(0, LISTED).map((tag) => (
               <li key={tag}>

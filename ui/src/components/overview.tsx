@@ -170,7 +170,7 @@ export function Overview({ code, d }: { code: string; d: Insights }) {
           {worst.length ? <ul className="m-0 grid list-none gap-0.5 p-2">{worst.slice(0, 8).map((p) => <PipelineRow key={p.pipeline_code} code={code} p={p} />)}</ul> : <EmptyState title="No pipeline ran in this window." nextStep="Choose a wider time range or run a pipeline from Pipelines." />}
         </Tile>
         <Tile aria-label="Latest runs">
-          <TileTitle aside={<Link className="text-xs font-medium text-accent hover:underline" to={runsPath(code)}>All runs</Link>}>Latest runs</TileTitle>
+          <TileTitle aside={<Link className="text-xs font-medium text-fg hover:text-accent hover:underline" to={runsPath(code)}>All runs</Link>}>Latest runs</TileTitle>
           {d.latest.length ? <ul className="m-0 grid list-none gap-0.5 p-2">{d.latest.slice(0, 8).map((r) => <RunRow key={r.pipeline_run_id} code={code} r={r} />)}</ul> : <EmptyState title="No runs in this window." nextStep="Choose a wider time range or run a pipeline from Pipelines." />}
         </Tile>
       </div>

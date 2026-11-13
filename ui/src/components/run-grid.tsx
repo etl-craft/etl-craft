@@ -132,7 +132,7 @@ export function RunGrid({ code, pipeline, graph, runs, extra, selected, onSelect
                 {showBars ? (
                   <tr>
                     {shown.map((run) => (
-                      <td key={run.pipeline_run_id} className={cn("sticky top-0 z-10 px-0 align-bottom", tall, apart(run) && "border-l-2 border-dashed border-border-strong", run.pipeline_run_id === selected ? "bg-accent/10" : "bg-surface")}>
+                      <td key={run.pipeline_run_id} className={cn("sticky top-0 z-10 px-0 align-bottom", tall, apart(run) && "border-l-2 border-dashed border-border-strong", run.pipeline_run_id === selected ? "bg-fg/10" : "bg-surface")}>
                         <div className="flex h-full items-end justify-center pb-0.5">
                           <Link
                             to={runPath(code, pipeline, run.pipeline_run_id)}
@@ -149,7 +149,7 @@ export function RunGrid({ code, pipeline, graph, runs, extra, selected, onSelect
                 ) : null}
                 <tr>
                   {shown.map((run) => (
-                    <th key={run.pipeline_run_id} scope="col" className={cn("sticky z-10 px-0 text-center text-xs font-medium", labels === "time" ? "h-10" : "h-7", showBars ? "top-20" : "top-0", apart(run) && "border-l-2 border-dashed border-border-strong", run.pipeline_run_id === selected ? "bg-accent/15 text-fg" : "bg-surface-2 text-muted")}>
+                    <th key={run.pipeline_run_id} scope="col" className={cn("sticky z-10 px-0 text-center text-xs font-medium", labels === "time" ? "h-10" : "h-7", showBars ? "top-20" : "top-0", apart(run) && "border-l-2 border-dashed border-border-strong", run.pipeline_run_id === selected ? "bg-fg/10 text-fg" : "bg-surface-2 text-muted")}>
                       <Link className="num hover:text-accent hover:underline" to={runPath(code, pipeline, run.pipeline_run_id)} onClick={open(run)} aria-current={run.pipeline_run_id === selected ? "true" : undefined}>
                         <RunLabel id={run.pipeline_run_id} label={run.run_label} compact />
                         {labels === "time" && run.start_date ? <span className="block truncate text-[9px]"><When iso={run.start_date} /></span> : null}
@@ -165,7 +165,7 @@ export function RunGrid({ code, pipeline, graph, runs, extra, selected, onSelect
                       const entry = (apart(run) ? aside[row] : cells[row])?.data?.entries.find((e) => e.pipeline_run_id === run.pipeline_run_id);
                       const chosen = run.pipeline_run_id === selected;
                       return (
-                        <td key={run.pipeline_run_id} className={cn("h-8 border-l border-t border-border px-0 py-0 text-center align-middle", apart(run) && "border-l-2 border-dashed border-l-border-strong", chosen && "bg-accent/10")}>
+                        <td key={run.pipeline_run_id} className={cn("h-8 border-l border-t border-border px-0 py-0 text-center align-middle", apart(run) && "border-l-2 border-dashed border-l-border-strong", chosen && "bg-fg/10")}>
                           {entry ? (
                             <button type="button" title={`${run.run_label ?? ""} · ${entry.task_run_label ?? ""}`} className="inline-grid cursor-pointer rounded-sm hover:ring-2 hover:ring-accent" onClick={() => onSelect(run.pipeline_run_id, task)}>
                               <StatusMark solid className="size-6" status={entry.status} label={`${task} in run ${run.pipeline_run_id}: ${entry.status.toLowerCase()}`} />

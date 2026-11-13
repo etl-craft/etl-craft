@@ -115,7 +115,7 @@ export function Settings() {
         {identity.data?.local_password === false ? (
           <span className="text-sm text-muted">Managed by your identity provider.</span>
         ) : (
-          <Link to={passwordPath} className="inline-flex h-9 items-center rounded-sm border border-border-strong px-3 text-sm hover:bg-surface-2">
+          <Link to={passwordPath} className="inline-flex h-control items-center rounded-md border border-border-strong px-3 text-sm hover:bg-surface-2">
             Change password
           </Link>
         )}

@@ -2,82 +2,79 @@
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
 :root {
-  --kind-plum: #75429b;
-  --kind-violet: #604aaa;
-  --kind-magenta: #944775;
-  --kind-rose: #924c78;
-  --kind-slate: #625e65;
-  --kind-graphite: #666163;
-  --kind-mauve: #77546f;
-  --kind-taupe: #75605d;
+  /* Kinds by role, for diagram icons and borders only: where data comes in, what changes it, where it lands. */
+  --kind-in: #4d6a87;
+  --kind-mid: #3f7a82;
+  --kind-out: #8a6a3d;
 
   color-scheme: light;
-  --bg: #f0f1f5;
+  --bg: #f3f5f7;
   --surface: #ffffff;
-  --surface-2: #f6f7fa;
-  --border: #e7e8ee;
-  --border-strong: #d5d7e0;
-  --fg: #14161d;
-  --muted: #646a7a;
+  --surface-2: #f7f9fa;
+  --border: #e2e6ea;
+  --border-strong: #cdd3da;
+  --fg: #18212a;
+  --muted: #5a6672;
   --accent: #1b7694;
   --accent-fg: #ffffff;
   --ring: #1b7694;
-  --sidebar: #f0f1f5;
-  --sidebar-fg: #3d4250;
-  --sidebar-active: #ffffff;
+  --sidebar: #f7f9fa;
+  --sidebar-fg: #36424e;
+  --sidebar-active: #e9eef2;
   --ok-fg: #0f7a4a; --ok-bg: #e3f6ec;
   --bad-fg: #c4252b; --bad-bg: #fdecec;
   --run-fg: #1c5fd6; --run-bg: #e6effe;
   --warn-fg: #8f5200; --warn-bg: #fff1d1;
-  --idle-fg: #555b6b; --idle-bg: #eef0f4;
-  --ok-solid: #1fb26b; --bad-solid: #ec4a50; --run-solid: #3b82f6; --warn-solid: #f0a020; --idle-solid: #9aa1b1;
+  --idle-fg: #4d5965; --idle-bg: #edf0f3;
+  --ok-solid: #1fb26b; --bad-solid: #ec4a50; --run-solid: #3b82f6; --warn-solid: #f0a020; --idle-solid: #98a2ad;
   /* The symbol on a solid mark: dark where white would fall below 3:1 (green, amber). */
-  --ok-glyph: #06301b; --bad-glyph: #ffffff; --run-glyph: #ffffff; --warn-glyph: #2b1700; --idle-glyph: #14161d;
+  --ok-glyph: #06301b; --bad-glyph: #ffffff; --run-glyph: #ffffff; --warn-glyph: #2b1700; --idle-glyph: #18212a;
   --env-prod: #c4252b; --env-prod-fg: #ffffff;
   --env-other: #3f4a5a; --env-other-fg: #ffffff;
   --mark-a: #6a74e6; --mark-b: #4651c4; --mark-glyph: #ffffff;
-  --shadow-sheet: 0 0 0 1px rgb(20 22 29 / 0.05), 0 1px 2px rgb(20 22 29 / 0.04), 0 12px 32px -16px rgb(20 22 29 / 0.12);
   --shadow-raised: 0 0 0 1px rgb(20 22 29 / 0.06), 0 1px 2px rgb(20 22 29 / 0.06);
   --shadow-pop: 0 0 0 1px rgb(20 22 29 / 0.06), 0 4px 8px -2px rgb(20 22 29 / 0.08), 0 16px 40px -8px rgb(20 22 29 / 0.18);
   --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 [data-theme="dark"] {
-  --kind-plum: #c9a1e3;
-  --kind-violet: #b8a9eb;
-  --kind-magenta: #df9dc6;
-  --kind-rose: #dda3c5;
-  --kind-slate: #beb5c5;
-  --kind-graphite: #c0bbc1;
-  --kind-mauve: #c9aac3;
-  --kind-taupe: #cbb6b0;
+  --kind-in: #8fb0cf;
+  --kind-mid: #7fc0c8;
+  --kind-out: #d1b07a;
 
   color-scheme: dark;
-  --bg: #0b0c10;
-  --surface: #13141a;
-  --surface-2: #191b22;
-  --border: #23252e;
-  --border-strong: #32353f;
-  --fg: #ecedf2;
-  --muted: #9a9fae;
+  --bg: #0d1115;
+  --surface: #12171c;
+  --surface-2: #181e24;
+  --border: #242c34;
+  --border-strong: #323c46;
+  --fg: #e7ecf0;
+  --muted: #96a2ae;
   --accent: #5bbfdf;
   --accent-fg: #0b0c10;
   --ring: #5bbfdf;
-  --sidebar: #0b0c10;
-  --sidebar-fg: #b4b8c5;
-  --sidebar-active: #1c1e27;
+  --sidebar: #0f1418;
+  --sidebar-fg: #b3bdc7;
+  --sidebar-active: #1b232b;
   --ok-fg: #5fdd9d; --ok-bg: #0f2a1d;
   --bad-fg: #ff9a96; --bad-bg: #3a1517;
   --run-fg: #9dc0ff; --run-bg: #13264a;
   --warn-fg: #f7c948; --warn-bg: #3a2a08;
-  --idle-fg: #aab1bf; --idle-bg: #22252e;
-  --ok-solid: #2fc97a; --bad-solid: #ff5d62; --run-solid: #5593ff; --warn-solid: #f5a524; --idle-solid: #5d6473;
+  --idle-fg: #a5afba; --idle-bg: #20272e;
+  --ok-solid: #2fc97a; --bad-solid: #ff5d62; --run-solid: #5593ff; --warn-solid: #f5a524; --idle-solid: #5b6672;
   --ok-glyph: #06180d; --bad-glyph: #1f0505; --run-glyph: #050d1f; --warn-glyph: #1f1300; --idle-glyph: #ffffff;
   --env-prod: #c9372c; --env-prod-fg: #ffffff;
   --env-other: #3a4553; --env-other-fg: #f1f4f8;
   --mark-a: #a7aef7; --mark-b: #7c85e8; --mark-glyph: #0d0e22;
-  --shadow-sheet: 0 0 0 1px rgb(255 255 255 / 0.06), 0 12px 32px -16px rgb(0 0 0 / 0.6);
   --shadow-raised: 0 0 0 1px rgb(255 255 255 / 0.08), 0 1px 2px rgb(0 0 0 / 0.4);
   --shadow-pop: 0 0 0 1px rgb(255 255 255 / 0.08), 0 16px 40px -8px rgb(0 0 0 / 0.7);
+}
+
+/* One control height everywhere (buttons, inputs, selects, switchers); a phone gets the touch size. */
+@theme {
+  --spacing-control: 32px;
+}
+@media (max-width: 639px) {
+  :root { --spacing-control: 44px; }
 }
 
 @theme inline {
@@ -119,7 +116,6 @@
   --color-run-glyph: var(--run-glyph);
   --color-warn-glyph: var(--warn-glyph);
   --color-idle-glyph: var(--idle-glyph);
-  --shadow-sheet: var(--shadow-sheet);
   --shadow-raised: var(--shadow-raised);
   --shadow-pop: var(--shadow-pop);
   --font-sans: "Inter Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -183,10 +179,10 @@ code, pre, .font-mono { font-feature-settings: "calt"; letter-spacing: 0; }
 [data-edge]:not([data-fill]) > div { gap: 0 !important; padding-bottom: 12px; }
 [data-edge]:not([data-fill]) > div > :not(header):not([data-card]) { margin-block: 8px; }
 [data-edge] > div > * { min-width: 0; }
+[data-edge][data-fill] > div > nav[aria-label="Breadcrumb"] { padding: 8px 16px 0; }
 
-/* The page is one raised sheet on the canvas; the bar above and the navigation beside it sit on the canvas itself. */
-.sheet { background: var(--surface); box-shadow: var(--shadow-sheet); }
-@media (min-width: 1024px) { .sheet { border-radius: 8px; margin: 0 8px 8px 0; } }
+/* The page fills the window between the header, the navigation and the footer; dividers, not edges, separate them. */
+.sheet { background: var(--surface); }
 
 /* Controls answer the pointer: colour, border and shadow ease; a press settles half a pixel. */
 :where(a, button, summary, input, select, textarea, [role="tab"], [role="option"], [role="menuitem"]) {

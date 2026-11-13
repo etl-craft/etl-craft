@@ -214,7 +214,7 @@ export function SelectField({
   );
 }
 
-export const inputClass = "h-8 w-full rounded-md border border-border-strong bg-surface px-2.5 text-[13px] text-fg max-sm:h-11";
+export const inputClass = "h-control w-full rounded-md border border-border-strong bg-surface px-2.5 text-[13px] text-fg";
 
 /** A labelled control: one style for every form; `compact` is the small muted label used above toolbar filters. */
 export function Field({ label, compact, hideLabel, children }: { label: string; compact?: boolean; hideLabel?: boolean; children: React.ReactNode }) {

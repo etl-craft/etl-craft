@@ -57,7 +57,7 @@ const nodeTypes = { mapping: MappingBox };
 const fitOptions = readableFit;
 
 export function mappingLine(state: string) {
-  return { label: state === "declared" ? "Declared" : undefined, style: { stroke: state === "declared" ? "var(--kind-mauve)" : "var(--accent)", strokeDasharray: state === "declared" ? "5 4" : undefined } };
+  return { label: state === "declared" ? "Declared" : undefined, style: { stroke: state === "declared" ? "var(--kind-out)" : "var(--accent)", strokeDasharray: state === "declared" ? "5 4" : undefined } };
 }
 
 export function columnPaths(edges: CatalogEdge[], selected: string | null, target: string | null): Set<number> {
@@ -206,7 +206,7 @@ export function TaskMapping({ doc, task }: { doc: CatalogDoc; task: CatalogTask 
     }
     if (expressions.includes(edge.target_column)) path.push({id:"expression",input:field,output:edge.target_column});
     path.push(...ending.map(id => ({id,input:edge.target_column,output:edge.target_column})),{id:`target:${task.target}`,input:edge.target_column,output:edge.target_column});
-    const style = {...mappingLine(task.lineage.state).style,stroke:selected&&paths.has(index) ? "var(--accent)" : task.lineage.state==="declared" ? "var(--kind-mauve)" : "var(--accent)",strokeWidth:selected && paths.has(index) ? 2 : 1,opacity:selected && !paths.has(index) ? 0.3 : 1};
+    const style = {...mappingLine(task.lineage.state).style,stroke:selected&&paths.has(index) ? "var(--accent)" : task.lineage.state==="declared" ? "var(--kind-out)" : "var(--accent)",strokeWidth:selected && paths.has(index) ? 2 : 1,opacity:selected && !paths.has(index) ? 0.3 : 1};
     path.slice(1).forEach((target,part) => {
       const source = path[part]!;
       const key = JSON.stringify([source.id,source.output,target.id,target.input]);
@@ -234,7 +234,7 @@ export function TaskMapping({ doc, task }: { doc: CatalogDoc; task: CatalogTask 
   const logicRows=task.mapping.steps.flatMap(step=>(step.logic??[]).map(row=>({target:row.label==="Output"?row.columns[0]??"":"",source:stageLabel(step.kind),logic:row.expression,provenance:"Derived"})));
   return <div ref={frame} onKeyDown={event=>{key.onKeyDown(event);if(!event.defaultPrevented)diagramKeys(event,()=>setSelected(null));}} className="grid min-w-0 gap-2">
     {declared ? <p role="note" className="py-1 text-sm text-muted">The engine doesn't verify declared lineage against the script.</p> : null}
-    <DiagramToolbar zoomIn={!table?()=>void flow.current?.zoomIn():undefined} zoomOut={()=>void flow.current?.zoomOut()} fit={()=>fitDiagram(flow.current,frame.current)} reset={()=>void flow.current?.zoomTo(1)}><label className="flex min-w-0 items-center gap-2 text-xs"><span className="sr-only">Find a column</span><input ref={input} aria-label="Find a column" placeholder="Find a column" value={search} onChange={event=>setSearch(event.target.value)} className="h-8 w-40 min-w-0 rounded-sm border border-border bg-surface px-2 focus-visible:outline-2 focus-visible:outline-ring"/></label><Button onClick={()=>setTable(!table)}>{table ? "Diagram" : "Table view"}</Button>{!table ? <><Button onClick={()=>setAll(!all)}>{all ? "Used columns" : "Show all columns"}</Button><Button onClick={expansion.toggleAll}>{expansion.expanded ? "Collapse all" : "Expand all"}</Button></> : null}<CatalogWidthButton/>{!table?key.button:null}</DiagramToolbar>
+    <DiagramToolbar zoomIn={!table?()=>void flow.current?.zoomIn():undefined} zoomOut={()=>void flow.current?.zoomOut()} fit={()=>fitDiagram(flow.current,frame.current)} reset={()=>void flow.current?.zoomTo(1)}><label className="flex min-w-0 items-center gap-2 text-xs"><span className="sr-only">Find a column</span><input ref={input} aria-label="Find a column" placeholder="Find a column" value={search} onChange={event=>setSearch(event.target.value)} className="h-control w-40 min-w-0 rounded-sm border border-border bg-surface px-2 focus-visible:outline-2 focus-visible:outline-ring"/></label><Button onClick={()=>setTable(!table)}>{table ? "Diagram" : "Table view"}</Button>{!table ? <><Button onClick={()=>setAll(!all)}>{all ? "Used columns" : "Show all columns"}</Button><Button onClick={expansion.toggleAll}>{expansion.expanded ? "Collapse all" : "Expand all"}</Button></> : null}<CatalogWidthButton/>{!table?key.button:null}</DiagramToolbar>
     {table ? <div className="mapping-table" aria-label="Scrollable mapping table" tabIndex={0}><DataTable label="Task mapping" data={[
       ...(edges.length ? activeEdges.map(({edge})=>edge) : tableRows).map(edge=>({target:edge.target_column,source:edge.source_object ? `${edge.source_object.replace(/^external:/,"")}.${edge.source_column??""}` : "No direct source column",logic:edge.transformation==="copy" ? "Copy" : edge.transformation==="declared" ? "Declared" : edge.transformation,provenance:declared ? "Declared" : "Derived"})),
       ...logicRows,...rules.flatMap(rule=>(rule.logic??[{expression:rule.sql,columns:[],label:""}]).map(row=>({target:"",source:"Rules",logic:row.expression,provenance:"Derived"}))),

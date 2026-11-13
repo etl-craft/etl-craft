@@ -130,7 +130,7 @@ export function Console() {
                 setValue(recalled.current[position.current] ?? "");
               }
             }}
-            className="h-9 min-w-0 flex-1 rounded-md border border-border-strong bg-surface px-2 font-mono text-sm"
+            className="h-control min-w-0 flex-1 rounded-md border border-border-strong bg-surface px-2 font-mono text-sm"
           />
           <Button type="submit" variant="primary" disabled={busy || !value.trim()}>
             Run

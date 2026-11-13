@@ -1,3 +1,4 @@
+import { Segmented } from "@/components/segmented";
 import { RunLabel } from "@/components/run-label";
 import { searchDetail } from "@/lib/labels";
 import { useQuery } from "@tanstack/react-query";
@@ -61,18 +62,13 @@ export function Search() {
             </CardTitle>
             {found.data.truncated ? <span className="text-xs text-muted">More matched; type more of the name.</span> : null}
           </CardHeader>
-          <div role="group" aria-label="Result kinds" className="flex flex-wrap gap-1 border-b border-border px-3 py-1.5">
-            {kinds.map((k) => (
-              <button
-                key={k}
-                type="button"
-                aria-pressed={kind === k}
-                onClick={() => change({ kind: k === "ALL" ? null : k, page: null })}
-                className={`cursor-pointer rounded-sm border px-2 py-0.5 text-xs ${kind === k ? "border-accent bg-accent/10 text-fg" : "border-border-strong text-muted hover:bg-surface-2"}`}
-              >
-                {k === "ALL" ? "All" : k.charAt(0) + k.slice(1).toLowerCase()} <span className="num">{k === "ALL" ? hits.length : hits.filter((h) => h.kind === k).length}</span>
-              </button>
-            ))}
+          <div className="border-b border-border px-3 py-1.5">
+            <Segmented
+              label="Result kinds"
+              value={kind ?? "ALL"}
+              options={kinds.map((k) => ({ id: k, label: <>{k === "ALL" ? "All" : k.charAt(0) + k.slice(1).toLowerCase()} <span className="num">{k === "ALL" ? hits.length : hits.filter((h) => h.kind === k).length}</span></> }))}
+              onSelect={(k) => change({ kind: k === "ALL" ? null : k, page: null })}
+            />
           </div>
           <DataTable
             label="Search results"
@@ -86,7 +82,7 @@ export function Search() {
                   const target = hitLink(code, c.row.original);
                   if (c.row.original.kind === "RUN" && c.row.original.run_id !== null) return <RunLabel id={c.row.original.run_id} label={c.row.original.run_label} to={target.to}><Highlight text={c.getValue()} words={q} /></RunLabel>;
                   return (
-                    <Link className="font-medium text-accent hover:underline" to={target.to}>
+                    <Link className="font-medium text-fg hover:text-accent hover:underline" to={target.to}>
                       <Highlight text={c.getValue()} words={q} />
                     </Link>
                   );

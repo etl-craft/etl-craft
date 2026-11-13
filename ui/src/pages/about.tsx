@@ -1,14 +1,12 @@
-import { useQuery } from "@tanstack/react-query";
 import { ExternalLink } from "lucide-react";
 import { Fact, FactList, Loading, Notice, PageHeader } from "@/components/common";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
-import { getJson } from "@/lib/api";
-import type { About as AboutView } from "@/lib/types";
+import { useAbout } from "@/hooks";
 import { useDocumentTitle } from "@/title";
 
 export function About() {
   useDocumentTitle("About");
-  const about = useQuery({ queryKey: ["about"], queryFn: () => getJson<AboutView>("/api/v1/about") });
+  const about = useAbout();
   const data = about.data;
   return (
     <div className="grid grid-cols-1 gap-5">

@@ -29,7 +29,7 @@ export function Scheduled() {
   const link = columns.accessor("pipeline_code", {
     header: "Pipeline",
     cell: (c) => (
-      <Link className="font-medium text-accent hover:underline" to={pipelinePath(code, c.getValue())}>
+      <Link className="font-medium text-fg hover:text-accent hover:underline" to={pipelinePath(code, c.getValue())}>
         {c.getValue()}
       </Link>
     ),

@@ -48,7 +48,7 @@ function taskForMapping(state: "derived" | "declared" | "unavailable", edges: Ca
   return { label: "P.load", pipeline:"P", code:"load",handler:"PYTHON",run_condition:null,run_condition_count:null,documentation:null,documentation_version:null,target:null,sources:[],script:null,lineage:{state,reason:state === "unavailable" ? "Python utility scripts run arbitrary code; lineage is not derived" : null},mapping:{steps:[],edges,source:null,write:{action:null,managed_columns:[],keys:{}}},script_kind:"UTILITY",active_flag:"Y",target_active_flag:"Y",retries:0,retry_on:"NONE",timeout_seconds:0,secrets:[],upstream:[],downstream:[],rules:[],runs:[] };
 }
 it("labels declared lines distinctly and keeps derived lines plain", () => {
-  expect(mappingLine("declared")).toEqual({ label:"Declared",style:{stroke:"var(--kind-mauve)",strokeDasharray:"5 4"}});
+  expect(mappingLine("declared")).toEqual({ label:"Declared",style:{stroke:"var(--kind-out)",strokeDasharray:"5 4"}});
   expect(mappingLine("derived").label).toBeUndefined();
 });
 it("renders unavailable lineage as a neutral note, never an alert", () => {

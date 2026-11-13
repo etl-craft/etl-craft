@@ -57,7 +57,7 @@ export function AttemptLog({ code, attempt, open = false }: { code: string; atte
         </Button>
         {shown && log.isSuccess ? (
           <>
-            <input type="search" aria-label="Find in log" placeholder="Find in log" value={find} onChange={(event) => setFind(event.target.value)} className="h-7 w-44 rounded-sm border border-border-strong bg-surface px-2 text-xs" />
+            <input type="search" aria-label="Find in log" placeholder="Find in log" value={find} onChange={(event) => setFind(event.target.value)} className="h-control w-44 rounded-md border border-border-strong bg-surface px-2 text-xs" />
             {needle ? <span className="text-xs text-muted">{matching.length} of {lines.length} lines</span> : null}
             <Button size="sm" disabled={firstError < 0} onClick={() => box.current?.querySelector(`[data-line="${firstError}"]`)?.scrollIntoView({ block: "center" })}>
               First error

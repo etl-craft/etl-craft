@@ -366,7 +366,7 @@ export function RunOverview({ code, pipeline, runId, task, onTask }: { code: str
                       </button>
                     </Td>
                     <Td>
-                      <button type="button" className="cursor-pointer font-medium text-accent hover:underline" aria-pressed={isOpen} onClick={toggle}>
+                      <button type="button" className="cursor-pointer font-medium text-fg hover:text-accent hover:underline" aria-pressed={isOpen} onClick={toggle}>
                         {step.task_code}
                       </button>
                       {step.task_run_id ? <div><RunLabel id={step.task_run_id} label={step.task_run_label} /></div> : null}

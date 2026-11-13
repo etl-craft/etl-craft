@@ -71,9 +71,9 @@ function sections(code: string | undefined, admin: boolean): { title: string; it
 
 const row = (collapsed: boolean, active: boolean) =>
   cn(
-    "flex h-8 items-center gap-2.5 rounded-md text-[13px]",
-    collapsed ? "justify-center" : "px-2.5",
-    active ? "bg-sidebar-active font-medium text-fg shadow-raised [&>svg]:text-accent" : "text-sidebar-fg hover:bg-fg/5 hover:text-fg",
+    "relative flex h-control items-center gap-2.5 text-[13px]",
+    collapsed ? "justify-center" : "px-4",
+    active ? "bg-sidebar-active font-medium text-fg before:absolute before:inset-y-0 before:left-0 before:w-0.5 before:bg-accent" : "text-sidebar-fg hover:bg-fg/5 hover:text-fg",
   );
 
 /** The one navigation every page shares: icons always show; labels show when expanded. */
@@ -90,13 +90,13 @@ export function Sidebar({
 }) {
   return (
     <div className="flex h-full flex-col">
-      <nav aria-label="Main" className="flex-1 overflow-y-auto p-2">
+      <nav aria-label="Main" className="flex-1 overflow-y-auto py-2">
         {sections(code, admin).map((section) => (
-          <div key={section.title} className="mb-3 grid gap-0.5">
+          <div key={section.title} className="mb-3 grid">
             {collapsed ? (
-              <div className="mx-2 mb-1 h-px bg-border" aria-hidden />
+              <div className="mb-1 h-px bg-border" aria-hidden />
             ) : (
-              <p className="px-2.5 pb-1 pt-2 text-xs font-medium text-muted">{section.title}</p>
+              <p className="px-4 pb-1 pt-2 text-xs font-medium text-muted">{section.title}</p>
             )}
             {section.items.map(({ label, icon: Icon, to, href }) => {
               const content = (
@@ -118,7 +118,7 @@ export function Sidebar({
           </div>
         ))}
       </nav>
-      <div className="p-2">
+      <div className="border-t border-border py-1">
         <button
           type="button"
           onClick={onToggle}
