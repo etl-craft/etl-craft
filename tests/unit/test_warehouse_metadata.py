@@ -131,6 +131,8 @@ def test_snowflake_description_supplies_identity_without_an_extra_read(generated
         ({"type_code": 999}, None),
         ({"type_code": "unknown"}, None),
         ({"type_code": 9, "fields": ["nested"]}, None),
+        ({"type_code": 9}, None),  # OBJECT: structured or not, the driver cannot say
+        ({"type_code": 10}, None),  # ARRAY: ARRAY(NUMBER) and ARRAY report alike
     ],
 )
 def test_snowflake_protocol_types_are_exact_or_require_materialization(attributes, expected):
