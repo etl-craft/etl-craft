@@ -36,3 +36,9 @@ numbers. Longer windows keep a slot per day in the chart. In a pipeline or catal
 
 When starting the demo in a STRICT project, include `--reason "requested demo load"` with
 `etl-craft run`. RELAXED projects permit an empty reason; production projects remain STRICT.
+
+
+The ingestion tasks declare their external systems with `LINEAGE_SOURCE` for the native
+catalog. These declarations document the Python code; the engine does not verify them.
+Use the pipeline Graph and task Mapping tabs for the shared collapsed/expanded views.
+For a strict catalog build of the deployed seed sources, use `generate-docs --strict --with-warehouse`.

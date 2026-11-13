@@ -1,10 +1,18 @@
 """Mapping operators rendered from the lineage parser's existing SQL tree."""
 
+from __future__ import annotations
+
+from collections.abc import Mapping
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from sqlglot import exp
 
 from etl_craft.core.enums_lineage import MappingKind
+from etl_craft.handlers.mapping_logic import MappingLogic, grouping, predicates
+
+if TYPE_CHECKING:
+    from etl_craft.handlers.lineage import Edge
 
 
 @dataclass(frozen=True)
@@ -14,31 +22,56 @@ class MappingStep:
     kind: MappingKind
     expression: str
     name: str = ""
+    logic: tuple[MappingLogic, ...] = ()
+
+
+def render(node: exp.Expr, dialect: str | None) -> str:
+    """Hide only the trace's synthetic default namespace when rendering its SQL."""
+    display = node.copy()
+    for table in display.find_all(exp.Table):
+        if table.catalog == "__etl_craft":
+            table.set("catalog", None)
+        if table.db == "__unqualified":
+            table.set("db", None)
+    return display.sql(dialect=dialect)
 
 
 def steps(tree: exp.Query, dialect: str | None) -> tuple[MappingStep, ...]:
     """Keep aliases, joins and relational operators rather than inferring them from edges."""
     result = [
-        MappingStep(MappingKind.SOURCE, table.sql(dialect=dialect), table.alias_or_name)
+        MappingStep(MappingKind.SOURCE, render(table, dialect), table.alias_or_name)
         for table in tree.find_all(exp.Table)
     ]
     result.extend(
-        MappingStep(MappingKind.JOIN, join.sql(dialect=dialect)) for join in tree.find_all(exp.Join)
+        MappingStep(
+            MappingKind.JOIN,
+            render(join, dialect),
+            logic=predicates(join.args.get("on"), dialect, join=True),
+        )
+        for join in tree.find_all(exp.Join)
     )
     result.extend(
-        MappingStep(MappingKind.FILTER, where.sql(dialect=dialect))
+        MappingStep(
+            MappingKind.FILTER, render(where, dialect), logic=predicates(where.this, dialect)
+        )
         for where in tree.find_all(exp.Where)
     )
+    for select in tree.find_all(exp.Select):
+        group = select.args.get("group")
+        if group is not None:
+            result.append(
+                MappingStep(
+                    MappingKind.AGGREGATE,
+                    render(group, dialect),
+                    logic=grouping(group, select, dialect),
+                )
+            )
+        elif any(item.find(exp.AggFunc) for item in select.expressions):
+            result.append(
+                MappingStep(MappingKind.AGGREGATE, "", logic=grouping(exp.Group(), select, dialect))
+            )
     result.extend(
-        MappingStep(MappingKind.AGGREGATE, group.sql(dialect=dialect))
-        for group in tree.find_all(exp.Group)
-    )
-    result.extend(
-        MappingStep(MappingKind.AGGREGATE, aggregate.sql(dialect=dialect))
-        for aggregate in tree.find_all(exp.AggFunc)
-    )
-    result.extend(
-        MappingStep(MappingKind.SET, operation.sql(dialect=dialect))
+        MappingStep(MappingKind.SET, render(operation, dialect))
         for operation in tree.find_all(exp.SetOperation)
     )
     return tuple(result)
@@ -61,3 +94,22 @@ def parse_select(sql: str, dialect: str | None) -> exp.Query:
             "correct SELECT_QUERY or the SQL file"
         )
     return tree
+
+
+@dataclass(frozen=True)
+class TraceContext:
+    """The target and warehouse contract for one parsed SELECT."""
+
+    target: str
+    dialect: str | None
+    catalog: str | None = None
+    schemas: Mapping[str, Mapping[str, str]] | None = None
+    cached_edges: tuple[Edge, ...] = ()
+
+
+@dataclass(frozen=True)
+class SelectTrace:
+    """One qualified tree and the column edges traced from that same object."""
+
+    tree: exp.Query
+    edges: list[Edge]

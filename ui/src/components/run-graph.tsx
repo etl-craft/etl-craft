@@ -1,12 +1,16 @@
-import { ArrowUpRight, Box, Database, X, Code, Mail, Hourglass, ShieldCheck } from "lucide-react";
+import { ArrowUpRight, Box, Database, X, CalendarClock, Play, Network, Hourglass, type LucideIcon } from "lucide-react";
 import * as React from "react";
-import { Background, Controls, Handle, MarkerType, Position, ReactFlow, BaseEdge, EdgeLabelRenderer, getSmoothStepPath, type EdgeProps, type Edge, type Node, type NodeProps, type ReactFlowInstance } from "@xyflow/react";
+import { Background, Controls, Handle, MarkerType, Position, ReactFlow, getBezierPath, type EdgeProps, type Edge, type Node, type NodeProps, type ReactFlowInstance } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { edgeClass, solidClass, statusMeta } from "@/components/status";
+import { edgeClass, solidClass, statusMeta, StatusBadge } from "@/components/status";
 import { runCondition, dependencyStyle, definitionLabel, dependencySentence } from "@/lib/catalog-flow";
 import type { CatalogTask, DefinitionEdge } from "@/lib/catalog";
 import type { Graph } from "@/lib/types";
-import { handlerLabel } from "@/lib/labels";
+import { diagramKeys, DiagramNode, DiagramEdge, useDiagramExpansion } from "@/components/diagram-node";
+import { Button } from "@/components/ui/button";
+import { DiagramToolbar, DiagramChip } from "@/components/diagram-toolbar";
+import { kindColor } from "@/components/task-symbol";
+import { taskSymbol } from "@/components/task-symbol";
 import { cn } from "@/lib/utils";
 
 type Focus = "none" | "focus" | "lineage" | "dim";
@@ -15,7 +19,12 @@ export type Direction = "LR" | "TB";
 
 interface TaskData extends Record<string, unknown> {
   definition?: CatalogTask;
+  symbol?: {icon:LucideIcon;label:string};
+  expanded?: boolean;
+  onExpanded?: () => void;
   label: string;
+  tooltip?: string;
+  width?: number;
   vertical: boolean;
   status: string;
   focus: Focus;
@@ -35,6 +44,7 @@ const GAP_COL = 40;
 /** Fitting a large graph never shrinks it below this zoom (13 px text stays about 9 px): the rest is reached by panning. */
 const READABLE = 0.7;
 const FILL_FIT = { padding: 0.08, minZoom: READABLE, maxZoom: 1.3 };
+const DEFINITION_FIT = { padding: 0.08, minZoom: 0.01, maxZoom: 1 };
 const CARD_FIT = { padding: 0.12, minZoom: 0.8, maxZoom: 1 };
 
 const NODE_TONE: Record<Focus, string> = {
@@ -46,48 +56,38 @@ const NODE_TONE: Record<Focus, string> = {
 
 function Task({ data }: NodeProps<TaskNode>) {
   const plain = data.status === "";
-  const { icon: StatusIcon, label: statusLabel, spin } = plain ? { icon: Box, label: "", spin: false } : statusMeta(data.status);
-  const Icon = plain && data.definition ? ({ SQL: Database, PYTHON: Code, EMAIL_ALERT: Mail, EVENT_WAIT: Hourglass, BUSINESS_RULES: ShieldCheck }[data.definition.handler] ?? Box) : StatusIcon;
-  return (
-    <div
-      data-focus={data.focus}
-      style={data.definition?.active_flag === "N" ? { opacity: 0.4 } : undefined}
-      className={cn("flex w-[230px] items-center gap-2 rounded-sm border border-l-[4px] bg-surface pl-2.5 pr-2 text-[13px] transition-opacity", data.definition ? "h-[76px]" : "h-[52px]", NODE_TONE[data.focus], plain ? "border-l-border-strong" : edgeClass(data.status))}
-    >
-      <Handle type="target" position={data.vertical ? Position.Top : Position.Left} className="!size-1.5 !border-0 !bg-border-strong" />
-      <span className={cn("grid size-7 shrink-0 place-items-center rounded-sm", plain ? "bg-idle-bg text-idle" : solidClass(data.status))} title={statusLabel}>
-        <Icon aria-hidden className={cn("size-4", spin && "animate-spin")} />
-      </span>
-      <span className="grid min-w-0 flex-1">
-        <span className="line-clamp-2 break-all font-medium leading-tight" title={data.label}>{data.label}</span>
-        {data.definition ? <><span className="truncate text-xs text-muted" title={data.definition.target ?? undefined}>{handlerLabel(data.definition.handler)} · {data.definition.target} <span className="rounded-sm border border-border px-1">{runCondition(data.definition)}</span></span>{plain ? null : <span className="text-xs text-muted">{statusLabel}</span>}</> : plain ? null : <span className="text-xs text-muted">{statusLabel}</span>}
-      </span>
-      <button
-        type="button"
-        aria-label={`Open ${data.label} details`}
-        title="Open this task"
-        className="nodrag nopan grid size-7 shrink-0 cursor-pointer place-items-center rounded-md border border-border-strong text-muted hover:border-accent hover:bg-surface-2 hover:text-accent"
-        onClick={(event) => {
-          event.stopPropagation();
-          data.onOpen(data.label);
-        }}
-      >
-        <ArrowUpRight aria-hidden className="size-4" />
-      </button>
-      <Handle type="source" position={data.vertical ? Position.Bottom : Position.Right} className="!size-1.5 !border-0 !bg-border-strong" />
-    </div>
-  );
+  const {icon:StatusIcon,label:statusLabel,spin} = plain ? {icon:Box,label:"",spin:false} : statusMeta(data.status);
+  const open = <button type="button" aria-label={`Open ${data.label} details`} title="Open this task" className="nodrag nopan grid size-7 shrink-0 cursor-pointer place-items-center rounded-sm border border-border-strong text-muted hover:border-accent hover:bg-surface-2 hover:text-accent" onClick={event => { event.stopPropagation(); data.onOpen(data.label); }}><ArrowUpRight aria-hidden className="size-4"/></button>;
+  if (data.definition || data.symbol) {
+    const task = data.definition;
+    const symbol = task ? taskSymbol(task) : data.symbol!;
+    const status = plain ? null : <StatusBadge status={data.status} quiet/>;
+    const summary = <>{task?.active_flag==="N" ? <DiagramChip>Inactive</DiagramChip> : null}<span className="flex min-w-0 items-center justify-center gap-1"><span className="truncate" title={symbol.label}>{symbol.label}</span>{task ? <span className="shrink-0 rounded-sm border border-border px-1">{runCondition(task)}</span> : null}</span>{status}</>;
+    return <div data-focus={data.focus} className="relative" style={task?.active_flag === "N" ? {opacity:0.4} : undefined}>
+      <Handle type="target" position={data.vertical ? Position.Top : Position.Left} className="!size-1.5 !border-0 !bg-border-strong"/>
+      <DiagramNode title={data.label} tooltip={data.tooltip} width={data.width} icon={symbol.icon}  collapsedDescription={summary} expanded={data.expanded ?? false} onExpanded={() => data.onExpanded?.()} action={task ? undefined : open} description={<>{task?.active_flag==="N" ? <DiagramChip>Inactive</DiagramChip> : null}{symbol.label}{status}</>} className={cn("",NODE_TONE[data.focus],plain ? "border-l-border-strong" : edgeClass(data.status))}>
+        <div className="grid gap-1 px-2 pb-2 text-xs">{task ? <><span className="line-clamp-2 break-all" title={task.target ?? undefined}>{task.target ?? "No target"}</span><span>Runs when: <span className="rounded-sm bg-surface-2 px-1 text-xs">{runCondition(task)}</span></span></> : <span>{data.label.startsWith("Schedule:") ? "Schedules and triggers admit this pipeline." : data.label.startsWith("Downstream:") ? "Open the downstream pipeline to inspect its tasks." : "This gate waits for its upstream dependency."}</span>}</div>
+      </DiagramNode>
+      <Handle type="source" position={data.vertical ? Position.Bottom : Position.Right} className="!size-1.5 !border-0 !bg-border-strong"/>
+    </div>;
+  }
+  return <div data-focus={data.focus} className={cn("flex h-[52px] w-[230px] items-center gap-2 rounded-sm border border-l-4 bg-surface pl-2.5 pr-2 text-[13px] transition-opacity",NODE_TONE[data.focus],plain ? "border-l-border-strong" : edgeClass(data.status))}>
+    <Handle type="target" position={data.vertical ? Position.Top : Position.Left} className="!size-1.5 !border-0 !bg-border-strong"/>
+    <span className={cn("grid size-7 shrink-0 place-items-center rounded-sm",plain ? "bg-idle-bg text-idle" : solidClass(data.status))} title={statusLabel}><StatusIcon aria-hidden className={cn("size-4",spin && "animate-spin")}/></span>
+    <span className="grid min-w-0 flex-1"><span className="line-clamp-2 break-all font-medium leading-tight" title={data.label}>{data.label}</span>{plain ? null : <span className="text-xs text-muted">{statusLabel}</span>}</span>
+    {open}<Handle type="source" position={data.vertical ? Position.Bottom : Position.Right} className="!size-1.5 !border-0 !bg-border-strong"/>
+  </div>;
 }
 
 export function DependencyBadge({ edge }: { edge: Pick<DefinitionEdge, "dependency_type" | "consume_repairs"> }) {
   const label = definitionLabel({kind:"task",source:"",target:"",...edge});
-  return label ? <span className="inline-flex items-center gap-1 rounded-sm border border-border bg-surface px-1">{edge.dependency_type === "HAS_DATA" ? <Database aria-hidden className="size-3" /> : edge.dependency_type === "FAILURE" ? <X aria-hidden className="size-3" /> : null}{label}</span> : null;
+  return label ? <span className="inline-flex items-center gap-1 rounded-sm bg-surface px-1 text-xs">{edge.dependency_type === "HAS_DATA" ? <Database aria-hidden className="size-3" /> : edge.dependency_type === "FAILURE" ? <X aria-hidden className="size-3" /> : null}{label}</span> : null;
 }
 
 const nodeTypes = { task: Task };
 function DefinitionLink(props: EdgeProps) {
-  const [path, labelX, labelY] = getSmoothStepPath(props);
-  return <g><title>{String(props.data?.sentence ?? "")}</title><BaseEdge path={path} style={props.style} markerEnd={props.markerEnd} />{props.label ? <EdgeLabelRenderer><div title={String(props.data?.sentence ?? "")} className="nodrag nopan pointer-events-auto absolute text-xs" style={{ transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)` }}>{props.label}</div></EdgeLabelRenderer> : null}</g>;
+  const [path,labelX,labelY] = getBezierPath({...props,curvature:0.15});
+  return <DiagramEdge path={path} label={props.label} labelX={labelX} labelY={labelY} style={props.style} markerEnd={props.markerEnd} title={String(props.data?.sentence ?? "")}/>;
 }
 const edgeTypes = { definition: DefinitionLink };
 
@@ -181,7 +181,7 @@ export function RunGraph({
   direction,
   definition,
 }: {
-  definition?: { tasks: CatalogTask[]; edges: DefinitionEdge[] };
+  definition?: { tasks: CatalogTask[]; edges: DefinitionEdge[]; overlay?:boolean; onOverlay?:()=>void; schedule?:string|null };
   graph: Graph;
   statuses: Record<string, string>;
   focused: string | null;
@@ -194,6 +194,7 @@ export function RunGraph({
   /** Left to right or top to bottom; when omitted a filled graph picks the one that suits its pane's shape. */
   direction?: Direction;
 }) {
+  const expansion = useDiagramExpansion(false);
   const frame = React.useRef<HTMLDivElement>(null);
   const [width, setWidth] = React.useState(0);
   const [frameHeight, setFrameHeight] = React.useState(0);
@@ -207,21 +208,35 @@ export function RunGraph({
     observer.observe(element);
     return () => observer.disconnect();
   }, []);
-  const fitOptions = fill ? FILL_FIT : CARD_FIT;
+  const fitOptions = definition ? DEFINITION_FIT : fill ? FILL_FIT : CARD_FIT;
   const flow = React.useRef<ReactFlowInstance | null>(null);
-  const shown: Direction = direction ?? (fill && frameHeight > width ? "TB" : "LR");
+  const shown: Direction = direction ?? (definition ? "LR" : fill && frameHeight > width ? "TB" : "LR");
   const { nodes, edges, height, columns } = layout(graph, statuses, focused, onOpen, plain, shown);
+  let definitionHeight=280;
   if (definition) {
-    nodes.forEach(node => { node.data.definition = definition.tasks.find(task => task.code === node.id || task.label === node.id); node.position.y *= 1.4; if (!node.data.definition) node.data.status = ""; });
+    nodes.forEach(node => { node.data.definition = definition.tasks.find(task => task.code === node.id || task.label === node.id); node.position.y *= 1.5; node.data.expanded = expansion.isExpanded(node.id); node.data.width=160; node.data.onExpanded = () => expansion.toggle(node.id); if (!node.data.definition) { node.data.status = ""; node.data.tooltip=node.id.startsWith("Schedule: ") ? definition.schedule??"Manual" : node.id; node.data.symbol = node.id.startsWith("Schedule: ") ? {icon:node.id.startsWith("Schedule: manual") ? Play : CalendarClock,label:"Entry"} : node.id.startsWith("Downstream: ") ? {icon:Network,label:"Pipeline"} : {icon:Hourglass,label:"Dependency gate"}; } });
+    if (shown === "LR") {
+      let x = 0;
+      const groups = new Map<number,TaskNode[]>();
+      nodes.forEach(node => { const group = groups.get(node.position.x) ?? []; group.push(node); groups.set(node.position.x,group); });
+      [...groups.entries()].sort(([a],[b]) => a-b).forEach(([,group]) => {
+        const width = 160;
+        let y=0;
+        group.sort((a,b)=>a.position.y-b.position.y).forEach(node=>{node.position.x=x;node.position.y=y;y+=(node.data.expanded?112:88)+8;});
+        x += width + 72;
+      });
+    }
+    definitionHeight=Math.max(280,...nodes.map(node=>node.position.y+(node.data.expanded?118:92)+32));
     edges.forEach(edge => {
       const item = definition.edges.find(item => (item.source.endsWith(`.${edge.source}`) && item.target.endsWith(`.${edge.target}`)) || (item.kind === "task" && edge.source.startsWith(`Task gate: ${item.source} ·`) && item.target.endsWith(`.${edge.target}`)) || (item.kind === "pipeline" && ((item.target === definition.tasks[0]?.pipeline && edge.source.startsWith(`Upstream: ${item.source} ·`)) || (item.source === definition.tasks[0]?.pipeline && edge.target === `Downstream: ${item.target}`)))) ?? { kind: "task" as const, source: edge.source, target: edge.target, dependency_type: graph.depends_on[edge.target]?.find(([source]) => source === edge.source)?.[1] ?? "SUCCESS", consume_repairs: "Y" };
       edge.type = "definition";
       edge.data = { sentence: dependencySentence(item.source, item.target, item.dependency_type) };
       edge.style = { ...edge.style, ...dependencyStyle(item.dependency_type) };
       edge.label = definitionLabel(item) ? <DependencyBadge edge={item} /> : undefined;
-      edge.markerEnd = { type: MarkerType.ArrowClosed, color: "var(--muted)" };
+      edge.markerEnd = { type: MarkerType.ArrowClosed, color: "var(--muted)",width:10,height:10,markerUnits:"userSpaceOnUse" };
     });
   }
+  const wide = !definition && !fill && width > 0 && (definition ? Math.max(...nodes.map(node => node.position.x + (176))) + 48 : columns * (WIDTH + GAP_X) - GAP_X + 48) > width;
   // Bring a focused task into view when it is off-screen; leave the view alone when it is visible.
   React.useEffect(() => {
     const instance = flow.current;
@@ -230,22 +245,24 @@ export function RunGraph({
     const { x, zoom } = instance.getViewport();
     const left = node.position.x * zoom + x;
     if (left >= 0 && left + WIDTH * zoom <= width) return;
-    void instance.setCenter(node.position.x + WIDTH / 2, node.position.y + HEIGHT / 2, { zoom, duration: 250 });
+    void instance.setCenter(node.position.x + (instance.getNode(node.id)?.measured?.width ?? WIDTH) / 2, node.position.y + (instance.getNode(node.id)?.measured?.height ?? HEIGHT) / 2, { zoom, duration: 250 });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focused]);
-  // Refit after resizing without shrinking task text below the readable fit zoom.
+  // Definition diagrams keep their layout and change zoom to fit the pane.
   React.useEffect(() => {
-    if (fill && width > 0 && frameHeight > 0) void flow.current?.fitView(fitOptions);
-  }, [fill, width, frameHeight, shown, fitOptions]);
+    if ((definition || fill) && width > 0 && frameHeight > 0) {
+      if (wide) void flow.current?.setViewport({x:24,y:40,zoom:0.9});
+      else void flow.current?.fitView(fitOptions);
+    }
+  }, [definition, fill, width, frameHeight, shown, fitOptions, wide]);
   // A graph wider than its card keeps readable boxes starting at the left; a small one is fitted whole.
-  const wide = !fill && width > 0 && columns * (WIDTH + GAP_X) - GAP_X + 48 > width;
   return (
-    <div style={fill ? undefined : { height }} role="group" aria-label="Task graph" className={cn("flex w-full flex-col", fill && "h-full min-h-64")}>
+    <div style={definition ? {height:`min(70vh, ${definitionHeight+(width<480?180:100)}px)`} : fill ? undefined : { height }} role="group" aria-label="Task graph" className={cn("flex w-full flex-col", fill && "h-full min-h-64")}>
       {/* The hint sits above the canvas, so a graph shown at a readable size never runs under it. */}
       <p className="m-0 shrink-0 px-3 py-1.5 text-xs text-muted">
         {edges.length === 0 ? "No dependencies between these tasks: they can run at the same time." : focused ? `Showing everything upstream and downstream of ${focused}. Click the background to clear.` : "Click a task to highlight its lineage; drag to pan."}
       </p>
-      {definition ? <div className="flex flex-wrap gap-3 px-3 text-xs text-muted" aria-label="Dependency legend">{["SUCCESS","HAS_DATA","FAILURE","ALWAYS"].map(kind => <span key={kind}>{kind} {kind === "ALWAYS" ? "⋯ dotted" : kind === "FAILURE" ? "-- dashed" : "— solid"} <DependencyBadge edge={{dependency_type:kind,consume_repairs:"Y"}} /></span>)}<DependencyBadge edge={{dependency_type:"SUCCESS",consume_repairs:"N"}} /></div> : null}
+      {definition ? <><DiagramToolbar zoomIn={()=>void flow.current?.zoomIn()} zoomOut={()=>void flow.current?.zoomOut()} fit={()=>void flow.current?.fitView(fitOptions)} reset={()=>void flow.current?.zoomTo(1)}><label className="flex items-center gap-2 text-xs"><input type="checkbox" role="switch" checked={definition.overlay??false} onChange={definition.onOverlay} />Show last-run status</label><Button size="sm" onClick={expansion.toggleAll}>{expansion.expanded ? "Collapse all" : "Expand all"}</Button></DiagramToolbar><div className="flex flex-wrap gap-3 py-1 text-xs text-muted" aria-label="Dependency legend">{["SUCCESS","HAS_DATA","FAILURE","ALWAYS"].map(kind=><span key={kind} className="inline-flex items-center gap-1"><svg width="24" height="12" aria-hidden><path d="M 0 6 H 24" style={dependencyStyle(kind)}/></svg>{kind==="SUCCESS" ? "Succeeded" : <DependencyBadge edge={{dependency_type:kind,consume_repairs:"Y"}}/>}</span>)}<DependencyBadge edge={{dependency_type:"SUCCESS",consume_repairs:"N"}}/>{[...new Map(definition.tasks.map(task=>{const symbol=taskSymbol(task);return [symbol.label,{...symbol,color:kindColor(task.script_kind??task.handler)}] as const;})).values()].map(({icon:Icon,label,color})=><span key={label} className="inline-flex items-center gap-1"><Icon aria-hidden className="size-4" style={{color}}/>{label}</span>)}</div></> : null}
       <div ref={frame} className="relative min-h-0 flex-1">
       <ReactFlow
         key={`${wide ? "wide" : "fit"}:${shown}:${nodes.map((n) => n.id).join("|")}`}
@@ -256,12 +273,20 @@ export function RunGraph({
         fitView={!wide}
         fitViewOptions={fitOptions}
         defaultViewport={wide ? { x: 24, y: 40, zoom: 0.9 } : undefined}
-        minZoom={fill ? 0.15 : 0.5}
+        minZoom={definition ? 0.01 : fill ? 0.15 : 0.5}
         maxZoom={1.5}
         nodesDraggable={false}
         nodesConnectable={false}
+        onNodesChange={changes=>{if(definition&&changes.some(change=>change.type==="dimensions"))requestAnimationFrame(()=>void flow.current?.fitView(fitOptions));}}
         elementsSelectable
         onNodeClick={(_, node) => onFocus(node.id === focused ? null : node.id)}
+        onKeyDown={event=>{
+          diagramKeys(event,()=>onFocus(null));
+          if(event.key==="Enter"){
+            const element=(event.target as HTMLElement).closest<HTMLElement>("[data-id]");
+            if(element?.dataset.id)onFocus(element.dataset.id);
+          }
+        }}
         onInit={(instance) => {
           flow.current = instance as unknown as ReactFlowInstance;
         }}
@@ -269,7 +294,7 @@ export function RunGraph({
         proOptions={{ hideAttribution: true }}
       >
         <Background gap={20} color="var(--border)" />
-        <Controls fitViewOptions={fitOptions} showInteractive={false} position="bottom-right" />
+        {!definition ? <Controls fitViewOptions={fitOptions} showInteractive={false} position="bottom-right" /> : null}
       </ReactFlow>
       </div>
     </div>

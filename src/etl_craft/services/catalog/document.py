@@ -155,6 +155,7 @@ def catalog_document(catalog: Catalog) -> dict[str, Any]:
                 "table": rule.table,
                 "task": rule.task,
                 "key_column": rule.row.key_column,
+                "logic": [encode(row) for row in rule.logic],
                 "observations": [encode(o) for o in rule.observations],
             }
             for rule_id, rule in catalog.rules.items()

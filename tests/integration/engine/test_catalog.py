@@ -182,7 +182,7 @@ def test_the_catalog_joins_tasks_tables_and_rules(project):
     assert catalog.tasks["INGEST.pull"].row.last_run is None
     assert catalog.tasks["INGEST.stage"].row.has_successful_run
     # The SELECT * task keeps its table edge and says why its columns are unknown.
-    untraced = {task.label: task.lineage_error for task in catalog.untraced}
+    untraced = {task.label: task.lineage["reason"] for task in catalog.untraced}
     assert "SELECT *" in untraced["MART.copy_all"]
     assert "source ref.rates: schema missing" in untraced["SALES.convert"]
     edges = {(e.source, e.target, e.task) for e in catalog.table_edges}
@@ -478,7 +478,7 @@ def test_constant_lineage_has_no_gap_and_failed_reasons_are_escaped(project, tmp
             SELECT_QUERY="SELECT 1 AS id",
         )
     catalog = build_catalog(engine, config)
-    catalog.tasks["MART.copy_all"].lineage_error = '<script>alert("bad")</script>'
+    catalog.tasks["MART.copy_all"].lineage["reason"] = '<script>alert("bad")</script>'
     folder = write_site(catalog, config, tmp_path / "site").folder
     html = (folder / "tables/mart.constant.html").read_text()
     assert 'class="lineage"' in html and "no source column" in html
@@ -846,3 +846,27 @@ def test_catalog_histories_keep_stored_pipeline_and_task_labels(project):
         }
     assert all(run.run_label == labels[run.pipeline_run_id] for run in runs)
     assert all(run.task_run_label == task_labels[run.task_run_id] for run in tasks)
+
+
+@pytest.mark.parametrize("has_rate", [True, False])
+def test_observed_source_schema_resolves_only_columns_that_exist(project, has_rate):
+    import duckdb
+
+    from etl_craft.services.catalog.document import catalog_document
+
+    engine, config, root = project
+    with duckdb.connect(str(root / "analytics.duckdb")) as conn:
+        conn.execute("CREATE SCHEMA ref")
+        extra = ", rate DOUBLE" if has_rate else ""
+        conn.execute(f"CREATE TABLE ref.rates (currency VARCHAR{extra})")
+    catalog = build_catalog(engine, config, with_warehouse=True)
+    asset = catalog.tasks["SALES.convert"]
+    item = next(task for task in catalog_document(catalog)["tasks"] if task["label"] == asset.label)
+    if has_rate:
+        assert asset.lineage["reason"] is None
+        assert item["lineage"]["state"] == "derived"
+    else:
+        assert asset.lineage["reason"] is not None
+        assert "columns ['rate']" in asset.lineage["reason"]
+        assert "correct SELECT" in asset.lineage["reason"]
+        assert item["lineage"]["state"] == "unavailable"

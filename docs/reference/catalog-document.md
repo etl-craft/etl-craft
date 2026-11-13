@@ -29,9 +29,21 @@ or `unavailable`. Declared lineage comes only from `LINEAGE_SOURCE` and optional
 uses or verifies them. Intentional limitations are neutral information, not lineage gaps.
 Managed SELECT parse/resolution failures remain actionable gaps.
 
-`mapping` holds `steps` (`kind`, warehouse-rendered `expression`, source alias `name`),
+`mapping` holds `steps` (`kind`, warehouse-rendered `expression`, source alias `name`, and
+`logic` rows with `expression`, `columns` and `label`),
 `edges` (target object/column, source object/column, transformation, task), `source` for a
 declared external source and `write` (SQL action, keys and engine-managed column names). A direct SQL column copy has
 transformation `copy`. A declared edge has transformation `declared`. Target types and
 nullability come from the table's column collection. Rule metadata includes its SQL expression.
-All of these are snapshots of the build; generating a catalog does not run the pipeline.
+An edge with no source object/column has no direct column input; it is not assumed to be a
+literal constant. The diagram can show its parsed table row-set context without inventing a
+source column. All of these are snapshots of the build; generating a catalog does not run the pipeline.
+
+`logic` receives the same qualified sqlglot tree used by the column trace. It never parses
+SQL itself. Rule placeholders are expanded only by the existing shared business-rule scope
+expander before tracing the rule SELECT. Filter/HAVING conditions split only at AND;
+one-column predicates attach to field rows, while OR and cross-column conditions have no
+row attachment. Join equality keys attach to both key columns. Group-by rows carry the
+"Group by" label, aggregate outputs carry "Output", and rules retain their predicate rows.
+The table representation includes every condition once, even if a join key is shown twice
+in the diagram. No browser SQL parser is used.

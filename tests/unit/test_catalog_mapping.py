@@ -42,13 +42,13 @@ def document(asset):
                 "LINEAGE_COLUMNS": "Id:id",
             },
             "declared",
-            "does not verify",
+            "doesn't verify",
         ),
         (
             "PYTHON",
             {"SCRIPT_KIND": "INGESTION", "LINEAGE_SOURCE": "s3.orders/*.csv"},
             "declared",
-            "does not verify",
+            "doesn't verify",
         ),
         ("PYTHON", {"SCRIPT_KIND": "INGESTION"}, "unavailable", "add it"),
         ("PYTHON", {"SCRIPT_KIND": "UTILITY"}, "unavailable", "arbitrary code"),
@@ -122,7 +122,7 @@ def test_only_failed_managed_lineage_is_a_gap_and_shape_is_documented():
     from etl_craft.services.catalog.gaps import lineage_records
 
     sql = task()
-    sql.lineage_error = "SELECT could not parse; correct SELECT_QUERY"
+    sql.lineage["reason"] = "SELECT could not parse; correct SELECT_QUERY"
     utility = task("PYTHON", SCRIPT_KIND="UTILITY")
     catalog = Catalog(
         datetime.now(UTC), {}, {"P.sql": sql, "P.utility": utility}, {}, {}, {}, [], []
@@ -153,10 +153,125 @@ def test_missing_source_schema_is_a_gap_even_without_column_edges():
     from etl_craft.services.catalog.gaps import lineage_records
 
     asset = task()
-    asset.lineage_error = "source raw.orders: schema missing; declare columns and rebuild"
+    asset.lineage["reason"] = "source raw.orders: schema missing; declare columns and rebuild"
     asset.missing_sources = ("raw.orders",)
     catalog = Catalog(datetime.now(UTC), {}, {"P.load": asset}, {}, {}, {}, [], [])
     gaps = lineage_records(catalog, TableAsset("mart.orders", writers=["P.load"]))
     assert len(gaps) == 1
     assert gaps[0].tasks == ("P.load",)
-    assert gaps[0].reason == asset.lineage_error
+    assert gaps[0].reason == asset.lineage["reason"]
+
+
+def test_mapping_predicates_split_and_attach_once_without_splitting_or():
+    from etl_craft.handlers.lineage_mapping import parse_select, steps
+
+    sql = "SELECT a FROM raw.t WHERE a > 0 AND b = 'x' AND (c > 1 OR d < 2) AND a < b"
+    stage = next(
+        step for step in steps(parse_select(sql, "duckdb"), "duckdb") if step.kind == "filter"
+    )
+    assert len(stage.logic) == 4
+    assert [row.columns for row in stage.logic] == [("a",), ("b",), (), ()]
+    assert [row.expression for row in stage.logic] == [
+        "a > 0",
+        "b = 'x'",
+        "(c > 1 OR d < 2)",
+        "a < b",
+    ]
+
+
+def test_mapping_join_keys_group_rows_aggregate_and_having_share_the_parse():
+    from etl_craft.handlers.lineage_mapping import parse_select, steps
+
+    sql = (
+        "SELECT o.id, SUM(o.amount) AS total FROM raw.orders o "
+        "JOIN ref.rates r ON o.id=r.id WHERE o.amount > 0 "
+        "GROUP BY o.id HAVING SUM(o.amount)>10"
+    )
+    stages = steps(parse_select(sql, "duckdb"), "duckdb")
+    join = next(step for step in stages if step.kind == "join")
+    assert join.logic[0].columns == ("o.id", "r.id")
+    aggregate = next(step for step in stages if step.kind == "aggregate")
+    assert any(row.label == "Group by" and row.columns == ("o.id",) for row in aggregate.logic)
+    assert any(
+        row.label == "Output" and "SUM(o.amount) AS total" in row.expression
+        for row in aggregate.logic
+    )
+    assert any("SUM(o.amount) > 10" in row.expression for row in aggregate.logic)
+
+
+def test_rule_predicates_use_the_checked_column_not_the_returned_row_key():
+    from etl_craft.dialects.business_rules import expand_scope
+    from etl_craft.handlers.lineage import trace
+    from etl_craft.handlers.lineage_mapping import TraceContext
+    from etl_craft.handlers.mapping_logic import rule_predicates
+
+    traced = trace(
+        expand_scope(
+            "SELECT row_id FROM $$rows_in_scope WHERE amount < 0 AND (a > b OR a < 0)", "raw.orders"
+        ),
+        TraceContext(
+            "raw.out",
+            "duckdb",
+            schemas={
+                "raw.orders": {"row_id": "BIGINT", "amount": "BIGINT", "a": "BIGINT", "b": "BIGINT"}
+            },
+        ),
+    )
+    rows = rule_predicates(traced.tree, "duckdb")
+    assert rows[0].columns == ("orders.amount",)
+    assert rows[0].expression == "orders.amount < 0"
+    assert rows[1].columns == ()
+    assert "OR" in rows[1].expression
+
+
+def test_inactive_and_drop_tasks_are_limits_not_failed_select_gaps():
+    from dataclasses import replace
+
+    from etl_craft.core.enums import YesNo
+    from etl_craft.services.catalog.collect import TableAsset
+    from etl_craft.services.catalog.gaps import lineage_records
+    from etl_craft.services.catalog.mapping import lineage
+
+    inactive = task()
+    inactive.row = replace(inactive.row, active_flag=YesNo.NO)
+    inactive.lineage = lineage(inactive)
+    drop = task(SQL_ACTION="DROP_TABLE")
+    drop.lineage = lineage(drop)
+    catalog = Catalog(
+        datetime.now(UTC), {}, {"P.inactive": inactive, "P.drop": drop}, {}, {}, {}, [], []
+    )
+    assert (
+        lineage_records(catalog, TableAsset("mart.orders", writers=["P.inactive", "P.drop"])) == []
+    )
+
+
+def test_predicate_and_column_edges_share_the_same_qualified_tree(monkeypatch):
+    from sqlglot import exp
+
+    from etl_craft.handlers.lineage import table_name, trace
+    from etl_craft.handlers.lineage_mapping import TraceContext, parse_select, steps
+
+    tree = parse_select("SELECT amount FROM warehouse.raw.orders WHERE amount > 0", "duckdb")
+    traced = trace(
+        tree,
+        TraceContext("mart.out", "duckdb", "warehouse", {"raw.orders": {"amount": "BIGINT"}}),
+    )
+    assert traced.tree is tree
+    predicate = tree.find(exp.Where).this.find(exp.Column)
+    table = tree.find(exp.Table)
+    edge = traced.edges[0]
+
+    def refuse_reparse(*args, **kwargs):
+        pytest.fail("mapping must inspect the qualified trace tree, not parse another SELECT")
+
+    import sqlglot
+
+    from etl_craft.handlers.mapping_logic import rule_predicates
+
+    monkeypatch.setattr(sqlglot, "parse_one", refuse_reparse)
+    clause = next(stage for stage in steps(traced.tree, "duckdb") if stage.kind == "filter")
+    assert rule_predicates(traced.tree, "duckdb")[0] == clause.logic[0]
+    assert clause.logic[0].columns == (predicate.sql(dialect="duckdb"),)
+    assert clause.logic[0].columns == (f"{table.alias_or_name}.{edge.source_column}",)
+    assert table_name((table.catalog, table.db, table.name), "warehouse") == edge.source_object
+    assert predicate.name == edge.source_column

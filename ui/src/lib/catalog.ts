@@ -50,7 +50,7 @@ export interface CatalogTask {
   sources: string[];
   script: string | null;
   lineage: { state: "derived" | "declared" | "unavailable"; reason: string | null };
-  mapping: { steps: { kind: string; expression: string; name: string }[]; edges: CatalogEdge[]; source: string | null; write: { action: string | null; managed_columns: string[]; keys: Record<string, string> } };
+  mapping: { steps: { kind: string; expression: string; name: string; logic?: {expression:string;columns:string[];label:string}[] }[]; edges: CatalogEdge[]; source: string | null; write: { action: string | null; managed_columns: string[]; keys: Record<string, string> } };
   script_kind: string | null;
   run_condition_count: number | null;
   active_flag: string;
@@ -94,6 +94,7 @@ export interface CatalogTable {
   columns: CatalogColumn[];
 }
 export interface CatalogRule {
+  logic?:{expression:string;columns:string[];label:string}[];
   sql: string;
   id: number;
   name: string;

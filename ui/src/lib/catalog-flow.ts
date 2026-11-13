@@ -1,7 +1,8 @@
+import { describeCron } from "@/lib/format";
 import type { CatalogTask, DefinitionEdge } from "@/lib/catalog";
 
 export function runCondition(task: CatalogTask): string {
-  return task.run_condition === "N" ? `${task.run_condition_count} of ${task.upstream.length}` : task.run_condition === "ANY" ? "any" : "all";
+  return task.run_condition === "N" ? `${task.run_condition_count} of ${task.upstream.length}` : task.run_condition === "ANY" ? "Any" : "All";
 }
 export function runsWhen(task: CatalogTask): string {
   const names = task.upstream.map(([name]) => name).join(", ");
@@ -17,9 +18,9 @@ export function dependencyStyle(kind: string): { stroke: string; strokeDasharray
   return { stroke: "var(--muted)", strokeDasharray: kind === "FAILURE" ? "7 4" : kind === "ALWAYS" ? "2 4" : undefined };
 }
 export function dependencyBadge(kind: string): string {
-  return kind === "HAS_DATA" ? "has data" : kind === "FAILURE" ? "on failure" : kind === "ALWAYS" ? "always" : "";
+  return kind === "HAS_DATA" ? "Has data" : kind === "FAILURE" ? "On failure" : kind === "ALWAYS" ? "Always" : "";
 }
-export function definitionLabel(edge: DefinitionEdge): string { return [dependencyBadge(edge.dependency_type), edge.consume_repairs === "N" ? "⊘ no repairs" : ""].filter(Boolean).join(" · "); }
+export function definitionLabel(edge: DefinitionEdge): string { return [dependencyBadge(edge.dependency_type), edge.consume_repairs === "N" ? "No repairs" : ""].filter(Boolean).join(" · "); }
 export function dependencySentence(source: string, target: string, kind: string): string {
   if (source.startsWith("Schedule: ")) return `${target} becomes ready after its pipeline is admitted by the schedule or an explicit request`;
   return `${target} runs ${kind === "ALWAYS" ? `after ${source} finishes, whatever its outcome` : kind === "FAILURE" ? `only if ${source} failed` : kind === "HAS_DATA" ? `only if ${source} succeeded and wrote rows` : `only if ${source} succeeded`}`;
@@ -29,7 +30,7 @@ export function flowGraph(doc: import("@/lib/catalog").CatalogDoc, pipeline: imp
   const upstream = doc.definition_edges.filter(e => e.kind === "pipeline" && e.target === pipeline.code);
   const external = doc.definition_edges.filter(e => e.kind === "task" && e.target.startsWith(`${pipeline.code}.`) && !e.source.startsWith(`${pipeline.code}.`));
   const downstream = doc.definition_edges.filter(e => e.kind === "pipeline" && e.source === pipeline.code);
-  const entry = `Schedule: ${pipeline.schedule ?? "manual"}${pipeline.triggers.map(t => ` · trigger ${t.task}`).join("")}${pipeline.paused ? " · paused" : ""}`;
+  const entry = `Schedule: ${pipeline.schedule ? describeCron(pipeline.schedule) ?? "Custom schedule" : "Manual"}${pipeline.triggers.map(t => ` · trigger ${t.task}`).join("")}${pipeline.paused ? " · paused" : ""}`;
   const depends = { ...graph.depends_on };
   const roots = graph.waves[0] ?? [];
   const before = [...new Set([entry, ...upstream.map(e => `Upstream: ${e.source} · gate ${doc.gate_wait_minutes} min`), ...external.map(e => `Task gate: ${e.source} · gate ${doc.gate_wait_minutes} min`)])];

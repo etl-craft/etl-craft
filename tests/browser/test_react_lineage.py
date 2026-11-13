@@ -5,6 +5,7 @@ import re
 from pathlib import Path
 
 import pytest
+from playwright.sync_api import TimeoutError as BrowserTimeout
 from playwright.sync_api import expect, sync_playwright
 from test_react_ui import open_page, sign_in
 
@@ -17,8 +18,16 @@ pytestmark = pytest.mark.browser
 def shoot(page, name):
     shots = os.environ.get("ETL_CRAFT_UI_SCREENSHOTS")
     if shots:
+        page.wait_for_function("""() => [...document.querySelectorAll('.diagram-body')]
+            .every(element=>element.getAnimations().every(animation=>animation.playState==='finished'))
+        """)
         Path(shots).mkdir(parents=True, exist_ok=True)
-        page.screenshot(path=f"{shots}/{name}.png")
+        if name.startswith("catalog-flow"):
+            page.get_by_role("group", name="Task graph", exact=True).screenshot(
+                path=f"{shots}/{name}.png"
+            )
+        else:
+            page.screenshot(path=f"{shots}/{name}.png", full_page=True)
 
 
 @pytest.fixture
@@ -300,6 +309,35 @@ def mappings(site):
     return ctx, url
 
 
+def uniform_graph_nodes(page, expanded=False):
+    try:
+        page.wait_for_function(
+            """expanded => {
+            const canvas=document.querySelector('[aria-label="Task graph"] .react-flow');
+            const nodes=[...canvas.querySelectorAll('.react-flow__node')];
+            const pane=canvas.getBoundingClientRect();
+            return nodes.length>1 && nodes.every(node=>{
+                const box=node.getBoundingClientRect();
+                return box.left>=pane.left-1 && box.right<=pane.right+1
+                    && box.top>=pane.top-1 && box.bottom<=pane.bottom+1;
+            });
+        }""",
+            arg=expanded,
+        )
+    except BrowserTimeout:
+        page.screenshot(path="/tmp/catalog-flow/fit-failure.png")
+        pytest.fail(
+            str(
+                page.evaluate("""() => {
+            const canvas=document.querySelector('[aria-label="Task graph"] .react-flow');
+            const pane=canvas.getBoundingClientRect();
+            return {pane:pane.toJSON(),nodes:[...canvas.querySelectorAll(".react-flow__node")]
+                .map(node=>({id:node.dataset.id,box:node.getBoundingClientRect().toJSON()}))};
+        }""")
+            )
+        )
+
+
 @pytest.mark.parametrize(
     "appearance,width", [("light", 1280), ("dark", 1280), ("light", 390), ("dark", 390)]
 )
@@ -310,26 +348,87 @@ def test_native_flow_mapping_provenance_and_keyboard(mappings, appearance, width
         page.emulate_media(color_scheme=appearance)
         sign_in(page, url, "/ui/projects/default/catalog/pipelines/ORDERS?tab=lineage")
         expect(page.get_by_role("group", name="Task graph")).to_be_visible()
-        expect(page.get_by_text("SUCCESS — solid", exact=False)).to_be_visible()
-        expect(page.get_by_role("button", name="Open load details")).to_be_visible()
+        expect(page.get_by_text("Succeeded", exact=True)).to_be_visible()
+        expect(page.locator('[data-id="load"]')).to_be_visible()
         expect(page.locator('[data-id="disabled"] [data-focus]')).to_have_css("opacity", "0.4")
-        page.get_by_role("button", name="Show last-run status", exact=True).click()
+        uniform_graph_nodes(page)
+        load_node = page.locator('[data-id="load"]')
+        expect(load_node.locator(".lucide-history")).to_be_visible()
+        expect(page.locator('[data-id^="Schedule:"] .lucide-calendar-clock')).to_be_visible()
+        expect(page.locator('[data-id^="Schedule:"] strong')).to_have_attribute(
+            "title", "0 6 * * *"
+        )
+        page.get_by_role("button", name="Expand cleanup", exact=True).click()
+        page.wait_for_function("""() => {
+            const graph=document.querySelector('[aria-label="Task graph"]');
+            const nodes=[...graph.querySelectorAll('.react-flow__node')];
+            const bounds=nodes.map(node=>node.getBoundingClientRect());
+            return bounds.every((box,index)=>bounds.slice(index+1).every(other=>
+                box.right<=other.left+1 || other.right<=box.left+1
+                || box.bottom<=other.top+1 || other.bottom<=box.top+1));
+        }""")
+        page.get_by_role("button", name="Collapse cleanup", exact=True).click()
+        page.get_by_role("button", name="Expand all", exact=True).click()
+        uniform_graph_nodes(page, expanded=True)
+        expect(
+            page.locator('[data-id="disabled"]').get_by_text("Inactive", exact=True)
+        ).to_be_visible()
+        shoot(page, f"catalog-flow-expanded-{appearance}-{width}")
+        expect(load_node.get_by_text("mart.orders", exact=True)).to_be_visible()
+        page.get_by_role("button", name="Collapse all", exact=True).click()
+        expect(load_node.get_by_text("mart.orders", exact=True)).to_have_count(0)
+        page.get_by_role("button", name="Expand load", exact=True).click()
+        expect(load_node.get_by_text("mart.orders", exact=True)).to_be_visible()
+        page.get_by_role("button", name="Collapse load", exact=True).click()
+        page.get_by_role("switch", name="Show last-run status", exact=True).check()
+        expect(load_node.locator(".lucide-history")).to_be_visible()
         expect(page.locator('[data-id="load"]')).to_contain_text("Success")
-        page.get_by_role("button", name="Open load details").focus()
-        expect(page.get_by_role("button", name="Open load details")).to_be_focused()
+        load_node.focus()
+        load_node.press("ArrowRight")
+        load_node.focus()
+        expect(load_node).to_be_focused()
+        expect(load_node).to_have_css("outline-style", "solid")
         assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
         shoot(page, f"catalog-flow-{appearance}-{width}")
-        page.get_by_role("button", name="Open load details").press("Enter")
-        page.get_by_role("tab", name="Mapping", exact=True).click()
+        load_node.press("Enter")
+        expect(page.get_by_role("complementary", name="Task definition")).to_be_visible()
+        page.get_by_role("link", name="Open mapping", exact=True).click()
         if width == 390:
             expect(page.get_by_role("table", name="Task mapping")).to_be_visible()
+            shoot(page, f"catalog-mapping-derived-{appearance}-{width}")
             page.get_by_role("button", name="Diagram", exact=True).click()
         diagram = page.get_by_label("Task mapping diagram")
         expect(diagram).to_be_visible()
-        diagram.get_by_role("button", name="Fit View", exact=True).click()
-        expect(diagram.locator(".react-flow__viewport")).to_have_css(
-            "transform", re.compile(r"matrix\(0\.[7-9]|matrix\(1")
+        expect(diagram.locator("path.react-flow__edge-path").first).to_have_attribute(
+            "marker-end", re.compile("url")
         )
+        expect(
+            diagram.locator('[data-id="step:0"] [data-port="raw.orders.amount"]')
+        ).to_be_attached()
+        page.get_by_role("button", name="Collapse all", exact=True).click()
+        expect(diagram.locator("[data-port]")).to_have_count(0)
+        shoot(page, f"catalog-mapping-collapsed-{appearance}-{width}")
+        page.get_by_role("button", name="Expand raw.orders", exact=True).click()
+        expect(
+            diagram.locator('[data-id="source:raw.orders"] [data-port="amount"]')
+        ).to_be_visible()
+        expect(diagram.locator('[data-id="target:mart.orders"] [data-port]')).to_have_count(0)
+        page.get_by_role("button", name="Expand all", exact=True).click()
+        page.get_by_role("button", name="Fit view", exact=True).click()
+        page.wait_for_function("""() => {
+            const canvas=document.querySelector('[aria-label="Task mapping diagram"] .react-flow');
+            const pane=canvas.getBoundingClientRect();
+            return [...canvas.querySelectorAll('.react-flow__node')].every(node=>{
+                const box=node.getBoundingClientRect();
+                return box.left>=pane.left-1 && box.right<=pane.right+1
+                    && box.top>=pane.top-1 && box.bottom<=pane.bottom+1;
+            });
+        }""")
+        page.get_by_role("button", name="Reset zoom", exact=True).click()
+        expect(diagram.locator(".react-flow__viewport")).to_have_css(
+            "transform", re.compile(r"matrix\(1, 0, 0, 1,")
+        )
+        page.get_by_role("button", name="Fit view", exact=True).click()
         page.get_by_role("button", name="Show all columns", exact=True).click()
         page.wait_for_function("""() => {
             const first = document.querySelector('[data-id="source:raw.orders"]');
@@ -338,37 +437,57 @@ def test_native_flow_mapping_provenance_and_keyboard(mappings, appearance, width
                 && first.getBoundingClientRect().bottom <= second.getBoundingClientRect().top;
         }""")
         page.get_by_role("button", name="Used columns", exact=True).click()
-        diagram.get_by_role("button", name="Fit View", exact=True).click()
+        page.get_by_role("button", name="Fit view", exact=True).click()
         target = diagram.locator('[data-id="target:mart.orders"]').get_by_role(
             "button", name="amount", exact=False
         )
         target.click()
+        page.wait_for_function("""() => {
+            const canvas=document.querySelector('[aria-label="Task mapping diagram"] .react-flow');
+            const pane=canvas.getBoundingClientRect();
+            return [...canvas.querySelectorAll('.react-flow__node')].every(node=>{
+                const box=node.getBoundingClientRect();
+                return box.left>=pane.left-1 && box.right<=pane.right+1
+                    && box.top>=pane.top-1 && box.bottom<=pane.bottom+1;
+            });
+        }""")
         expect(
             diagram.locator('[data-id="source:raw.orders"]').get_by_role(
                 "button", name="amount", exact=False
             )
         ).to_have_class(re.compile("ring-2"))
+        expect(diagram.locator('[data-id="expression"] button.ring-2')).to_have_count(3)
         assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
-        shoot(page, f"catalog-mapping-derived-{appearance}-{width}")
-        page.get_by_role("textbox", name="Find column", exact=True).fill("factor")
+        shoot(
+            page,
+            f"catalog-mapping-derived{'-diagram' if width == 390 else ''}-{appearance}-{width}",
+        )
+        page.get_by_role("textbox", name="Find a column", exact=True).fill("factor")
         expect(
             diagram.locator('[data-id="source:ref.rates"]').get_by_role(
                 "button", name="factor", exact=False
             )
         ).to_be_visible()
         expect(target).to_be_visible()
-        page.get_by_role("textbox", name="Find column", exact=True).fill("")
+        page.get_by_role("textbox", name="Find a column", exact=True).fill("")
         page.goto(url + "/ui/projects/default/catalog/tasks/ORDERS.extract?tab=mapping")
-        expect(page.get_by_role("note")).to_contain_text("does not verify")
+        expect(page.get_by_role("note")).to_contain_text("doesn't verify")
         if width == 390:
+            expect(page.get_by_role("table", name="Task mapping")).to_be_visible()
+            shoot(page, f"catalog-mapping-declared-{appearance}-{width}")
             page.get_by_role("button", name="Diagram", exact=True).click()
         expect(
-            page.get_by_label("Task mapping diagram").get_by_text("declared", exact=False).first
+            page.get_by_label("Task mapping diagram").get_by_text("Declared", exact=True).first
         ).to_be_visible()
         assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
-        shoot(page, f"catalog-mapping-declared-{appearance}-{width}")
+        shoot(
+            page,
+            f"catalog-mapping-declared{'-diagram' if width == 390 else ''}-{appearance}-{width}",
+        )
         page.goto(url + "/ui/projects/default/catalog/tasks/ORDERS.cleanup?tab=mapping")
         expect(page.get_by_role("note")).to_contain_text("arbitrary code")
+        expect(page.get_by_role("toolbar")).to_have_count(0)
+        expect(page.get_by_label("Task mapping diagram")).to_have_count(0)
         expect(page.get_by_role("alert")).to_have_count(0)
         shoot(page, f"catalog-mapping-unavailable-{appearance}-{width}")
         assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")

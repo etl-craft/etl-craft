@@ -1495,14 +1495,34 @@ empty-history-page handling defect, which was corrected and verified. No cloud w
   CATALOG_PAGE file read. LINEAGE_SOURCE and LINEAGE_COLUMNS document Python INGESTION only;
   target columns are validated against active metadata, never verified against script code.
   Intentional unavailable lineage is neutral information; managed SELECT parse/source-contract
-  failures remain gaps. The same sqlglot tree feeds lineage and mapping, and existing React Flow
-  uses a simple column layout without a new dependency. Definition edges use neutral patterns
+  failures remain gaps. The same qualified sqlglot tree feeds lineage and mapping, and existing React Flow
+  uses a left-to-right column layout without a new dependency. Stages never wrap: automatic
+  fitting adjusts zoom to show the whole diagram, while Reset zoom returns to 100% for reading
+  and panning, as the owner decided. Definition edges use neutral patterns
   and icon badges (SUCCESS solid, HAS_DATA solid/database, FAILURE dashed/X, ALWAYS dotted),
   with words, hover explanations and no-repairs markers; colour belongs to the run-status overlay.
+  Pipeline tasks and mapping transformations share a collapsible symbol node: workflow tiles
+  stay compact, while expanded mapping nodes expose named input/output ports and each column's
+  journey through operators, expressions and writes. Task-type glyphs remain visible under
+  the status overlay; source, transformation and target categories use a separately contrasted
+  eight-hue palette on icons/left borders, excluding status hues. Expression input/output ports and the accessible journey table share
+  the diagram's recorded column edges. Connectors use rounded orthogonal gutters, short
+  destination arrowheads and obstacle bypasses; expression bodies contain ports/formulas,
+  not diagonal wires through their text. Pipeline entry, task, gate and downstream tiles have
+  uniform compact inline headers (including entry and gate nodes), with content-sized bodies. Expressions with no source
+  column use row-set context, not invented column ports. These are logical mappings, not
+  physical query plans. Requested warehouse comparison supplies observed source schemas;
+  missing referenced columns remain real gaps. Active migration examples and demo declarations
+  use LINEAGE_SOURCE; historical legacy migrations remain unchanged. AND-only predicate
+  splitting and row annotations inspect the qualified trace tree without reparsing; existing
+  expand_scope handles rule placeholders at the trace boundary; the table includes every
+  predicate. Diagrams wrap readable columns to fit the pane, use shared toolbars and keyboard
+  navigation, and honour reduced motion. Unavailable lineage has no graph or controls.
   All six native catalog slices are implemented; Insights remains on Home under the settled
   S7.AP/S7.AS decision. Static catalog files stay for offline sharing and publish-docs, not embedding.
   Acceptance availability: screenshots cover light, dark and 390 px; owner visual approval is
-  still required by the item's Done when. DuckDB/PostgreSQL lineage and catalog checks passed.
+  still required by the item's Done when for the latest revised screenshots (kept unticked by
+  owner instruction). DuckDB/PostgreSQL lineage and catalog checks passed.
   Cloud acceptance at HEAD 9178aedd7c772b94e747d7c9cb9ec9b1f889d21f with the catalog working tree:
   Snowflake recorded 13 passes, plus an existing protection ARRAY mismatch outside catalog code
   (`test_protected_edits_reload_unlock_and_per_cell_writers`, SCD1_MERGE/NATIVE); no warehouse

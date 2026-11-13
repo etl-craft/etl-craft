@@ -8,9 +8,13 @@ All notable changes are recorded here. The format follows
 
 - Native catalog shape `etl-craft/catalog/2` replaces shape 1 with definition-level dependency
   facts, three lineage states and task mapping operators. Rebuild existing catalog folders.
-  Pipeline Graph and task Mapping views share the app's controls and offer text/table alternatives.
+  Pipeline Graph and task Mapping share collapsible symbol nodes and text/table alternatives.
+  Expanded mappings trace each named column port through transformations to its target; compact
+  views retain the same paths, and task-type symbols stay visible under the status overlay.
+  Diagrams retain left-to-right stage order and fit by zooming; Reset zoom returns to 100%.
   Python ingestion tasks may document external sources with owner-approved `LINEAGE_SOURCE` and
   `LINEAGE_COLUMNS`; validation checks their target columns, but execution never reads them.
+  Replace pre-0.9 `SOURCE_OBJECT` catalog hints with `LINEAGE_SOURCE=system.object`.
   Dependency edges use neutral patterns and badges; colours remain reserved for run status.
 
 - Channel alerts resolve only administrator-approved references directly, without synthesizing

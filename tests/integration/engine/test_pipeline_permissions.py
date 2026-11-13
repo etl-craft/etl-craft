@@ -283,12 +283,12 @@ def test_shared_catalog_gap_reasons_do_not_name_restricted_writer_tasks(scene, m
     public = SimpleNamespace(
         row=SimpleNamespace(pipeline_code="OPEN", handler=Handler.PYTHON),
         params={},
-        lineage_error=None,
+        lineage={"state": "unavailable", "reason": None},
     )
     private = SimpleNamespace(
         row=SimpleNamespace(pipeline_code="PRIVATE", handler=Handler.SQL),
         params={"SQL_ACTION": SqlAction.CREATE_TABLE},
-        lineage_error="private SQL details",
+        lineage={"state": "unavailable", "reason": "private SQL details"},
     )
     catalog = Catalog(
         datetime.now(UTC),
