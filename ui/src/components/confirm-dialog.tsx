@@ -94,7 +94,7 @@ export function ConfirmDialog({
               value={typed}
               onChange={(event) => setTyped(event.target.value)}
               autoComplete="off"
-              className="h-9 rounded-md border border-border-strong bg-surface px-2 font-mono text-sm"
+              className="h-control rounded-md border border-border-strong bg-surface px-2 font-mono text-sm"
             />
           </label>
         ) : null}

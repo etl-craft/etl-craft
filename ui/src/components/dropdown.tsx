@@ -35,7 +35,7 @@ export const DropdownSeparator = () => <Menu.Separator className="my-1 h-px bg-b
 
 /** The shared native selection control keeps platform keyboard and form behaviour. */
 export function DropdownSelect({ className, ...props }: React.SelectHTMLAttributes<HTMLSelectElement>) {
-  return <select className={cn("h-8 w-full min-w-40 rounded-md border border-border-strong bg-surface px-2.5 text-[13px] text-fg max-sm:h-11", className)} {...props} />;
+  return <select className={cn("h-control w-full min-w-40 rounded-md border border-border-strong bg-surface px-2.5 text-[13px] text-fg", className)} {...props} />;
 }
 
 /** All disclosures share the same semantic control and chevron styling. */

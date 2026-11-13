@@ -8,7 +8,7 @@ function luminance(hex:string){const values=[1,3,5].map(start=>parseInt(hex.slic
 describe.each([["light",light],["dark",dark]])("category palette %s",(_,source)=>{
  it("contrasts at 3:1 with node backgrounds and never aliases status hues",()=>{
   const found=tokens(source!);const kinds=Object.entries(found).filter(([name])=>name.startsWith("kind-"));
-  expect(kinds).toHaveLength(8);
+  expect(kinds.map(([name])=>name)).toEqual(["kind-in","kind-mid","kind-out"]);
   const status=Object.entries(found).filter(([name])=>/^(ok|bad|run|warn)-/.test(name)).map(([,value])=>value);
   kinds.forEach(([,value])=>{const foreground=luminance(value),background=luminance(found.surface!);expect((Math.max(foreground,background)+0.05)/(Math.min(foreground,background)+0.05)).toBeGreaterThanOrEqual(3);expect(status).not.toContain(value);});
  });

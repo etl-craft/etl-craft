@@ -8,13 +8,13 @@ const button = cva(
   {
     variants: {
       variant: {
-        primary: "bg-accent text-accent-fg shadow-[inset_0_1px_0_rgb(255_255_255/0.2),0_1px_2px_rgb(20_22_29/0.25)] hover:brightness-110",
+        primary: "bg-accent text-accent-fg hover:brightness-110",
         danger: "border border-bad/50 bg-surface text-bad hover:bg-bad-bg",
         dangerSolid: "bg-bad text-surface hover:opacity-90",
-        outline: "bg-surface text-fg shadow-raised hover:bg-surface-2",
+        outline: "border border-border-strong bg-surface text-fg hover:bg-surface-2",
         ghost: "text-fg hover:bg-surface-2",
       },
-      size: { md: "h-8 px-3", sm: "h-8 px-2.5", icon: "h-8 w-8" },
+      size: { md: "h-control px-3", sm: "h-control px-2.5", icon: "size-control" },
     },
     defaultVariants: { variant: "outline", size: "md" },
   },

@@ -1,3 +1,4 @@
+import { Segmented } from "@/components/segmented";
 import { FailureDetails } from "@/components/attempt-details";
 import { Disclosure, DisclosureSummary } from "@/components/dropdown";
 import { useQuery } from "@tanstack/react-query";
@@ -160,15 +161,9 @@ export function Insights() {
         subtitle={d ? <>Runs started <When iso={d.window_start} /> to <When iso={d.window_end} /></> : undefined}
         actions={
           <div className="flex flex-wrap items-end justify-end gap-2">
-            <div role="group" aria-label="Time range" className="inline-flex h-8 items-center rounded-md bg-surface-2 p-0.5 text-[13px] max-sm:h-11">
-              {RANGES.map((r) => (
-                <button key={r.id} type="button" aria-pressed={activePreset === r.id} onClick={() => preset(r.days)} className={cn("h-7 cursor-pointer rounded-[5px] px-3 max-sm:h-10", activePreset === r.id ? "bg-surface font-medium text-fg shadow-raised" : "text-muted hover:text-fg")}>
-                  {r.label}
-                </button>
-              ))}
-            </div>
+            <Segmented label="Time range" value={activePreset ?? null} options={RANGES.map((r) => ({ id: r.id, label: r.label }))} onSelect={(id) => preset(RANGES.find((r) => r.id === id)!.days)} />
             <Disclosure className="relative">
-              <DisclosureSummary className="flex h-8 cursor-pointer list-none items-center rounded-md bg-surface px-3 text-[13px] font-medium shadow-raised hover:bg-surface-2 max-sm:h-11">
+              <DisclosureSummary className="flex h-control cursor-pointer list-none items-center rounded-md bg-surface px-3 text-[13px] font-medium shadow-raised hover:bg-surface-2">
                 {from || to ? `${from || "start"} to ${to || "today"}` : "Custom range"}
               </DisclosureSummary>
               <div className="absolute right-0 z-30 mt-1.5 flex gap-3 rounded-xl bg-surface p-3 shadow-pop">
@@ -181,7 +176,7 @@ export function Insights() {
               </div>
             </Disclosure>
             <Disclosure className="relative">
-              <DisclosureSummary className="flex h-8 cursor-pointer list-none items-center rounded-md bg-surface px-3 text-[13px] font-medium shadow-raised hover:bg-surface-2 max-sm:h-11">
+              <DisclosureSummary className="flex h-control cursor-pointer list-none items-center rounded-md bg-surface px-3 text-[13px] font-medium shadow-raised hover:bg-surface-2">
                 Pipelines {chosen.length ? `(${chosen.length} selected)` : "(all you can view)"}
               </DisclosureSummary>
               <fieldset className="absolute right-0 z-30 mt-1 grid max-h-72 min-w-64 gap-1 overflow-auto rounded-xl bg-surface p-3 shadow-pop">
@@ -222,7 +217,7 @@ export function Insights() {
                   data={d.per_pipeline}
                   empty={<EmptyState title="No pipeline ran in this window." nextStep="Choose a wider time range or run a pipeline." />}
                   columns={[
-                    pipelineCol.accessor("pipeline_code", { header: "Pipeline", cell: (c) => <Link className="font-medium text-accent hover:underline" to={pipelinePath(code, c.getValue() ?? "")}>{c.getValue()}</Link> }),
+                    pipelineCol.accessor("pipeline_code", { header: "Pipeline", cell: (c) => <Link className="font-medium text-fg hover:text-accent hover:underline" to={pipelinePath(code, c.getValue() ?? "")}>{c.getValue()}</Link> }),
                     pipelineCol.accessor("runs", { header: "Runs", cell: (c) => <span className="num">{c.getValue()}</span> }),
                     pipelineCol.accessor("success_rate", { header: "Success rate", cell: (c) => <span className="num">{percent(c.getValue())}</span> }),
                     pipelineCol.accessor("average_seconds", { header: "Average", cell: (c) => <span className="num">{seconds(c.getValue())}</span> }),
@@ -290,7 +285,7 @@ export function Insights() {
                   data={d.failures}
                   empty={<EmptyState title="No failed or lost attempts in this window." nextStep="Choose a wider time range to inspect earlier failures." />}
                   columns={[
-                    failureCol.accessor("pipeline_code", { header: "Pipeline", cell: (c) => <Link className="font-medium text-accent hover:underline" to={pipelinePath(code, c.getValue())}>{c.getValue()}</Link> }),
+                    failureCol.accessor("pipeline_code", { header: "Pipeline", cell: (c) => <Link className="font-medium text-fg hover:text-accent hover:underline" to={pipelinePath(code, c.getValue())}>{c.getValue()}</Link> }),
                     failureCol.accessor("task_code", { header: "Task" }),
                     failureCol.accessor("status", { header: "Status", cell: (c) => <StatusBadge quiet status={c.getValue()} /> }),
                     failureCol.accessor("failure_class", { header: "Details", cell: (c) => <FailureDetails failure={{ failure_class: c.getValue() }} /> }),

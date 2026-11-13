@@ -196,9 +196,10 @@ def test_the_navigation_collapses_to_icons_keeps_its_links_and_is_remembered(sce
         runs = nav.get_by_role("link", name="Runs", exact=True)
         wide = runs.bounding_box()["width"]
         expect(nav.get_by_text("Overview")).to_be_visible()
-        # the column reaches the bottom edge of the window, however short the page is
-        side = page.locator("aside").bounding_box()
-        assert side["y"] + side["height"] >= 899
+        # the column runs down to the footer bar, however short the page, and the footer to the edge
+        side, footer = page.locator("aside").bounding_box(), page.locator("footer").bounding_box()
+        assert abs(side["y"] + side["height"] - footer["y"]) <= 1
+        assert footer["y"] + footer["height"] >= 899
         page.get_by_role("button", name="Collapse the navigation").click()
         expect(nav.get_by_text("Overview")).to_have_count(0)
         expect(page.locator("aside")).to_have_css("width", "56px")

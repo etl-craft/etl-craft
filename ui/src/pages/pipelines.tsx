@@ -102,7 +102,7 @@ export function Pipelines() {
       />
       <AutoStartNotice code={code} />
       <div className="flex flex-wrap items-center gap-3">
-        <input type="search" aria-label="Find a pipeline" value={text} onChange={(event) => find(event.target.value)} placeholder="Find by name or description" className="h-9 w-72 rounded-md border border-border-strong bg-surface px-3 text-sm" />
+        <input type="search" aria-label="Find a pipeline" value={text} onChange={(event) => find(event.target.value)} placeholder="Find by name or description" className="h-control w-72 rounded-md border border-border-strong bg-surface px-3 text-sm" />
         <TagFilter known={known} selected={tags} onToggle={toggleTag} onClear={() => setParams(new URLSearchParams(), { replace: true })} />
         <span className="text-xs text-muted">{shown.length} of {all.length} pipelines</span>
       </div>
@@ -136,7 +136,7 @@ export function Pipelines() {
               header: "Pipeline",
               cell: (c) => (
                 <span className="grid">
-                  <Link className="font-medium text-accent hover:underline" to={pipelinePath(code, c.getValue())}>
+                  <Link className="font-medium text-fg hover:text-accent hover:underline" to={pipelinePath(code, c.getValue())}>
                     {c.getValue()}
                   </Link>
                   {c.row.original.pipeline_name !== c.getValue() ? <span className="text-xs text-muted">{c.row.original.pipeline_name}</span> : null}

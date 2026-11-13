@@ -6,6 +6,13 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+- Browser interface: a standard application frame (header, flush navigation with a divider and a
+  bar on the selected item, footer with the etl-craft and schema versions) replaces the floating
+  rounded page; the project and environment are one segmented control; neutrals are slate; the
+  accent is kept for actions, links and focus; diagram colours are three role colours instead of
+  eight. Every control shares one height token (44 px on a phone) and one segmented toggle, and a
+  lint rule and a browser test keep it that way.
+
 - `etl-craft run --full-refresh`, a one-time full refresh of a pipeline, or with `--task-code` (and
   `--with-downstream`) of a task and what reads it. The incremental tasks in scope read from the
   start for that run only, store the position they reach when they succeed, and the next run is

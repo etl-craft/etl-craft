@@ -130,7 +130,7 @@ export function TasksTab({ code, pipeline, graph, runId, run }: { code: string; 
           label="Pipeline tasks"
           data={tasks}
           columns={columnsOf<string>([
-            { id: "task", header: "Task", value: (t) => t, size: 280, cell: (t) => <Link className="font-medium text-accent hover:underline" to={taskPath(code, pipeline, t)}>{t}</Link> },
+            { id: "task", header: "Task", value: (t) => t, size: 280, cell: (t) => <Link className="font-medium text-fg hover:text-accent hover:underline" to={taskPath(code, pipeline, t)}>{t}</Link> },
             { id: "handler", header: "Handler", value: (t) => definitions.get(t)?.handler ?? "", size: 130, cell: (t) => (definitions.get(t) ? handlerLabel(definitions.get(t)?.handler) : "…") },
             { id: "waits", header: "Waits for", value: (t) => (graph.depends_on[t] ?? []).map(([upstream]) => upstream).join(", "), size: 320, cell: (t) => <span className="text-muted">{(graph.depends_on[t] ?? []).map(([upstream]) => upstream).join(", ") || "—"}</span> },
             ...(runId !== undefined ? [{ id: "state", header: `Run #${runId} · ${run?.run_label ?? ""}`, value: (t: string) => status.get(t) ?? "", size: 150, cell: (t: string) => (status.has(t) ? <StatusBadge quiet status={status.get(t)!} /> : "—") }] : []),

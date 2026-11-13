@@ -11,7 +11,17 @@ const tone = (env: EnvironmentInfo): string =>
 
 export function EnvironmentBadge({ env, className }: { env: EnvironmentInfo; className?: string }) {
   return (
-    <span className={cn("inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2.5 py-0.5 text-[11px] font-semibold tracking-wide", tone(env), className)}>
+    <span className={cn("inline-flex h-5 items-center gap-1 whitespace-nowrap rounded-sm px-2 text-[11px] font-semibold tracking-wide", tone(env), className)}>
+      {isProduction(env) ? <ShieldAlert aria-hidden className="size-3.5 shrink-0" /> : null}
+      {environmentLabel(env)}
+    </span>
+  );
+}
+
+/** The environment as the last segment of the project switcher: one control, one height, one border. */
+export function EnvironmentSegment({ env, className }: { env: EnvironmentInfo; className?: string }) {
+  return (
+    <span className={cn("inline-flex items-center gap-1 self-stretch whitespace-nowrap px-2.5 text-[11px] font-semibold tracking-wide", isProduction(env) ? "bg-[var(--env-prod)] text-[var(--env-prod-fg)]" : "border-l border-border-strong bg-surface-2 text-muted", className)}>
       {isProduction(env) ? <ShieldAlert aria-hidden className="size-3.5 shrink-0" /> : null}
       {environmentLabel(env)}
     </span>

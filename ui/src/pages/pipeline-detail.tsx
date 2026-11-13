@@ -8,6 +8,7 @@ import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { ActionButton } from "@/components/action-button";
 import { DropdownContent, DropdownItem, DropdownLabel, DropdownMenu, DropdownTrigger } from "@/components/dropdown";
 import { Button } from "@/components/ui/button";
+import { Segmented } from "@/components/segmented";
 import { Switch } from "@/components/switch";
 import { Breadcrumbs, Fact, FactList, Field, inputClass, Loading, Notice, PageHeader, SelectField } from "@/components/common";
 import { AuditTab, CalendarTab, DetailsTab, OverviewTab, TasksTab } from "@/components/pipeline-tabs";
@@ -276,21 +277,14 @@ export function PipelineDetail() {
         left={
         <Card className="flex min-h-0 flex-1 flex-col overflow-hidden">
           <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5 border-b border-border px-3 py-2">
-            <div role="group" aria-label="Run view" className="inline-flex rounded-md border border-border p-0.5 text-sm">
-              {(["grid", "graph"] as const).map((id) => (
-                <button key={id} type="button" aria-pressed={view === id} onClick={() => choose("view", id === "grid" ? null : id)} className={cn("cursor-pointer rounded-sm px-2.5 py-0.5", view === id ? "bg-accent/15 font-medium text-fg" : "text-muted hover:text-fg")}>
-                  {id === "grid" ? "Grid" : "Graph"}
-                </button>
-              ))}
-            </div>
+            <Segmented label="Run view" value={view} options={[{ id: "grid", label: "Grid" }, { id: "graph", label: "Graph" }]} onSelect={(id) => choose("view", id === "grid" ? null : id)} />
             {view === "graph" ? (
-              <div role="group" aria-label="Graph direction" className="inline-flex rounded-md border border-border p-0.5 text-xs">
-                {([["LR", "Horizontal"], ["TB", "Vertical"]] as const).map(([id, label]) => (
-                  <button key={id} type="button" aria-pressed={flow === id} title={flow === id ? `${label}; select again for automatic` : label} onClick={() => choose("flow", flow === id ? null : id.toLowerCase())} className={cn("cursor-pointer rounded-sm px-2 py-0.5", flow === id ? "bg-accent/15 font-medium text-fg" : "text-muted hover:text-fg")}>
-                    {label}
-                  </button>
-                ))}
-              </div>
+              <Segmented
+                label="Graph direction"
+                value={flow ?? null}
+                options={[{ id: "LR", label: "Horizontal" }, { id: "TB", label: "Vertical" }].map((o) => ({ ...o, title: flow === o.id ? `${o.label}; select again for automatic` : o.label }))}
+                onSelect={(id) => choose("flow", flow === id ? null : id.toLowerCase())}
+              />
             ) : (
               <div className="flex items-center gap-2">
                 <label className="flex items-center gap-1.5 text-xs text-muted">
@@ -302,7 +296,7 @@ export function PipelineDetail() {
                     max={200}
                     defaultValue={wanted}
                     aria-label="How many runs to show"
-                    className="h-8 w-16 rounded-md border border-border-strong bg-surface px-2 text-[13px] text-fg"
+                    className="h-control w-16 rounded-md border border-border-strong bg-surface px-2 text-[13px] text-fg"
                     onBlur={(event) => apply(event.currentTarget.value)}
                     onKeyDown={(event) => event.key === "Enter" && apply(event.currentTarget.value)}
                   />

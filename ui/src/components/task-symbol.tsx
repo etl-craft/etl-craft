@@ -20,7 +20,11 @@ export function taskSymbol(task: CatalogTask): { icon: LucideIcon; label: string
 }
 
 export const kindLabels:Record<string,string> = {source:"Source",join:"Join",filter:"Filter",expression:"Expression",aggregate:"Aggregate",rules:"Rules",write:"Write",target:"Target",set:"Set operation"};
-export function kindColor(kind:string): string {
-  const hue:Record<string,string> = {source:"slate",join:"plum",filter:"mauve",expression:"violet",aggregate:"magenta",rules:"taupe",write:"graphite",target:"rose",set:"plum",SQL:"violet",PYTHON:"plum",INGESTION:"slate",UTILITY:"plum",FILE_VALIDATION:"mauve",EMAIL_ALERT:"magenta",EVENT_WAIT:"taupe",RUN_PIPELINE:"slate",ERASURE:"graphite",SQL_SCRIPT:"rose",BUSINESS_RULES:"taupe"};
-  return `var(--kind-${hue[kind] ?? "graphite"})`;
+/** Three roles, not eight hues: where data comes in, what changes it, and where it lands. */
+const ROLE: Record<string, "in" | "mid" | "out"> = {
+  source: "in", INGESTION: "in", EVENT_WAIT: "in", FILE_VALIDATION: "in",
+  write: "out", target: "out", EMAIL_ALERT: "out", ERASURE: "out", RUN_PIPELINE: "out",
+};
+export function kindColor(kind: string): string {
+  return `var(--kind-${ROLE[kind] ?? "mid"})`;
 }

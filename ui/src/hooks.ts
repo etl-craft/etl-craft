@@ -11,6 +11,11 @@ export function useIdentity(code?: string) {
   });
 }
 
+/** The package and Engine DB schema versions, which never change while the page is open. */
+export function useAbout() {
+  return useQuery({ queryKey: ["about"], queryFn: () => getJson<About>("/api/v1/about"), staleTime: Infinity });
+}
+
 export function useHealth() {
   return useQuery({
     queryKey: ["health"],

@@ -495,7 +495,7 @@ export function TableObject({ code, doc, name, tab, onTab }: { code: string; doc
                 <EmptyState title="No task writes this table, so nothing describes it." nextStep="Declare a writing task and its documentation in the project config files, then rebuild the catalog." />
               )}
             </Section>
-            <Section fill className="max-h-96 @3xl:max-h-none" title={`Columns (${table.columns.length})`} aside={<input type="search" aria-label="Filter columns" placeholder="Filter columns…" value={filter} onChange={(event) => setFilter(event.target.value)} className="h-8 w-48 rounded-md border border-border-strong bg-surface px-2 text-[13px]" />}>
+            <Section fill className="max-h-96 @3xl:max-h-none" title={`Columns (${table.columns.length})`} aside={<input type="search" aria-label="Filter columns" placeholder="Filter columns…" value={filter} onChange={(event) => setFilter(event.target.value)} className="h-control w-48 rounded-md border border-border-strong bg-surface px-2 text-[13px]" />}>
               {shown.length ? (
                 <DataTable
                   label="Columns"
@@ -555,7 +555,7 @@ export function TableObject({ code, doc, name, tab, onTab }: { code: string; doc
             </SelectField>
             <div role="group" aria-label="Lineage view" className="inline-flex rounded-md border border-border p-0.5 text-sm">
               {([false, true] as const).map((list) => (
-                <button key={String(list)} type="button" aria-pressed={asList === list} onClick={() => setAsList(list)} className={cn("cursor-pointer rounded-sm px-2.5 py-1", asList === list ? "bg-accent/15 font-medium text-fg" : "text-muted hover:text-fg")}>
+                <button key={String(list)} type="button" aria-pressed={asList === list} onClick={() => setAsList(list)} className={cn("cursor-pointer rounded-sm px-2.5 py-1", asList === list ? "bg-fg/10 font-medium text-fg" : "text-muted hover:text-fg")}>
                   {list ? "List" : "Graph"}
                 </button>
               ))}
@@ -725,7 +725,7 @@ export function TablesList({ code, doc }: { code: string; doc: CatalogDoc }) {
       <div className="flex flex-wrap items-end gap-3">
         <label className="grid gap-1 text-xs text-muted">
           Find a table
-          <input type="search" value={text} onChange={(event) => setText(event.target.value)} placeholder="Name contains…" className="h-9 w-64 rounded-md border border-border-strong bg-surface px-2 text-sm text-fg" />
+          <input type="search" value={text} onChange={(event) => setText(event.target.value)} placeholder="Name contains…" className="h-control w-64 rounded-md border border-border-strong bg-surface px-2 text-sm text-fg" />
         </label>
         <SelectField compact label="Schema" value={schema} onChange={setSchema}>
           <option value="">All schemas</option>

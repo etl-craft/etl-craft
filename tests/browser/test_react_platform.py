@@ -293,3 +293,39 @@ def test_search_names_handlers_and_system_shows_the_schema_number(scene):
         expect(version.locator("dd span")).to_have_attribute("title", schema)
         assert problems == []
         browser.close()
+
+
+# row_heights.js lists the control heights on a page when they are not all the same (within 1px).
+ROW_HEIGHTS = (Path(__file__).parent / "row_heights.js").read_text()
+
+
+@pytest.mark.parametrize("width", [1280, 390])
+def test_every_control_on_a_page_has_the_same_height(scene, width):
+    _, url, _ = scene
+    pages = [
+        "/ui/projects/default/pipelines",
+        "/ui/projects/default/pipelines/ORDERS",
+        "/ui/projects/default/runs",
+        "/ui/projects/default/scheduled",
+        "/ui/projects/default/held",
+        "/ui/projects/default/uploads",
+        "/ui/projects/default/console",
+        "/ui/projects/default/catalog",
+        "/ui/projects/default/maintenance",
+        "/ui/projects/default/search?q=ORD",
+        "/ui/settings",
+        "/ui/admin?tab=accounts",
+        "/ui/system",
+    ]
+    with sync_playwright() as pw:
+        browser, page, _problems = open_page(pw, viewport={"width": width, "height": 900})
+        sign_in(page, url)
+        found = {}
+        for path in pages:
+            page.goto(url + path)
+            page.wait_for_load_state("networkidle")
+            problems = page.evaluate(ROW_HEIGHTS)
+            if problems:
+                found[path] = problems
+        browser.close()
+    assert found == {}, "\n".join(f"{path}: {row}" for path, rows in found.items() for row in rows)

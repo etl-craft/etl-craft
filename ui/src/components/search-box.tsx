@@ -106,7 +106,7 @@ export const SearchBox = React.forwardRef<HTMLInputElement, { code: string }>(fu
           }}
           onFocus={() => setOpen(true)}
           onKeyDown={key}
-          className="h-8 w-full rounded-lg border border-transparent bg-surface px-3 text-[13px] shadow-raised"
+          className="h-control w-full rounded-md border border-border-strong bg-surface px-3 text-[13px]"
         />
       </form>
       {open ? (
@@ -120,7 +120,7 @@ export const SearchBox = React.forwardRef<HTMLInputElement, { code: string }>(fu
                 index += 1;
                 const mine = index;
                 return (
-                  <button key={p.label} type="button" role="option" aria-selected={at === mine} onMouseEnter={() => setAt(mine)} onClick={() => go(p.to)} className={cn("flex w-full cursor-pointer items-baseline gap-2 rounded-sm px-3 py-1 text-left text-sm", at === mine && "bg-accent/15")}>
+                  <button key={p.label} type="button" role="option" aria-selected={at === mine} onMouseEnter={() => setAt(mine)} onClick={() => go(p.to)} className={cn("flex w-full cursor-pointer items-baseline gap-2 rounded-sm px-3 py-1 text-left text-sm", at === mine && "bg-fg/10")}>
                     <span className="truncate font-medium">{p.label}</span>
                   </button>
                 );
@@ -134,7 +134,7 @@ export const SearchBox = React.forwardRef<HTMLInputElement, { code: string }>(fu
                 index += 1;
                 const mine = index;
                 return (
-                  <button key={`${h.kind}:${h.label}:${h.run_id ?? ""}:${h.pipeline_code ?? ""}`} type="button" role="option" aria-selected={at === mine} onMouseEnter={() => setAt(mine)} onClick={() => go(hitLink(code, h).to)} className={cn("flex w-full cursor-pointer items-baseline gap-2 rounded-sm px-3 py-1.5 text-left text-sm", at === mine && "bg-accent/15")}>
+                  <button key={`${h.kind}:${h.label}:${h.run_id ?? ""}:${h.pipeline_code ?? ""}`} type="button" role="option" aria-selected={at === mine} onMouseEnter={() => setAt(mine)} onClick={() => go(hitLink(code, h).to)} className={cn("flex w-full cursor-pointer items-baseline gap-2 rounded-sm px-3 py-1.5 text-left text-sm", at === mine && "bg-fg/10")}>
                     <span className="truncate font-medium"><Highlight text={h.label} words={typed} /></span>
                     <span className="truncate text-xs text-muted">{searchDetail(h)}</span>
                   </button>

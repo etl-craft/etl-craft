@@ -40,7 +40,7 @@ function Group({ id, label, icon: Icon, open, toggle, children }: { id: string; 
 function Leaf({ to, label, icon: Icon, current, title }: { to: string; label: string; icon: typeof Database; current: boolean; title?: string }) {
   return (
     <li role="none">
-      <Link to={to} role="treeitem" data-key={to} tabIndex={useTab(to)} aria-current={current ? "page" : undefined} title={title ?? label} className={cn(row, current && "bg-accent/15 font-medium")}>
+      <Link to={to} role="treeitem" data-key={to} tabIndex={useTab(to)} aria-current={current ? "page" : undefined} title={title ?? label} className={cn(row, current && "bg-fg/10 font-medium")}>
         <Icon aria-hidden className="size-4 shrink-0 text-muted" />
         <span className="truncate">{label}</span>
       </Link>
@@ -95,7 +95,7 @@ export function CatalogTree({ code, doc, selected }: { code: string; doc: Catalo
       <label className="relative block">
         <span className="sr-only">Search the catalog</span>
         <Search aria-hidden className="pointer-events-none absolute left-2 top-2 size-4 text-muted" />
-        <input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search pipelines, tables, columns" className="h-8 w-full rounded-md border border-border-strong bg-surface pl-8 pr-2 text-[13px]" />
+        <input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search pipelines, tables, columns" className="h-control w-full rounded-md border border-border-strong bg-surface pl-8 pr-2 text-[13px]" />
       </label>
       <Roving.Provider value={{ active, first: catalogPath(code, "tables") }}>
       <ul

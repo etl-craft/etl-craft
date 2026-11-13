@@ -115,7 +115,7 @@ export function System() {
           data={health.data?.projects ?? []}
           empty={health.isSuccess ? <EmptyState title="No projects you can view." nextStep="Ask an administrator to register a project or grant you access." /> : undefined}
           columns={[
-            projects.accessor("project", { header: "Project", cell: (c) => <Link className="font-medium text-accent hover:underline" to={runsPath(c.getValue())}>{c.getValue()}</Link> }),
+            projects.accessor("project", { header: "Project", cell: (c) => <Link className="font-medium text-fg hover:text-accent hover:underline" to={runsPath(c.getValue())}>{c.getValue()}</Link> }),
             projects.display({ id: "env", header: "Environment", cell: (c) => <EnvironmentBadge env={{ type: c.row.original.environment_type, name: c.row.original.environment_name }} /> }),
             projects.accessor("running", { header: "Running" }),
             projects.accessor("queued_tasks", { header: "Queued tasks" }),

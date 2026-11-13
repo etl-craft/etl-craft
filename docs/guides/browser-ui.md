@@ -55,6 +55,12 @@ Use Tab and Shift+Tab to move, the skip link to reach content, `/` or Ctrl+K for
 Escape to close a dialog or menu. Every project page names its environment and
 governance; production has a stronger bordered badge as well as the word PRODUCTION.
 
+The page is a standard application frame. A header bar holds the logo, the project switcher (the
+project and its environment as one control, production in red), search, the theme and the
+account; the navigation sits beside the content with a divider, the selected item marked by a bar;
+and a footer bar shows the etl-craft and Engine DB schema versions with the live-update status.
+Every button, input and dropdown has one height (larger on a phone), so rows of controls line up.
+
 ```sh
 etl-craft account settings --theme dark --timezone Asia/Kolkata --page-size 40
 etl-craft account change-password

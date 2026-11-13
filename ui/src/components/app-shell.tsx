@@ -5,7 +5,7 @@ import * as React from "react";
 import { Link, Outlet, useLocation, useNavigate, useParams } from "react-router-dom";
 import { Notice } from "@/components/common";
 import { SearchBox } from "@/components/search-box";
-import { EnvironmentBadge, EnvironmentStrip } from "@/components/environment-badge";
+import { EnvironmentBadge, EnvironmentSegment, EnvironmentStrip } from "@/components/environment-badge";
 import { DropdownContent, DropdownItem, DropdownLabel, DropdownMenu, DropdownSeparator, DropdownTrigger } from "@/components/dropdown";
 import { Logo } from "@/components/logo";
 import { LiveStatus } from "@/components/live-status";
@@ -13,7 +13,7 @@ import { SessionGuard } from "@/components/session-guard";
 import { ShortcutsDialog } from "@/components/shortcuts-dialog";
 import { Sidebar } from "@/components/sidebar";
 import { Button } from "@/components/ui/button";
-import { useActiveProject, useHealth, useIdentity } from "@/hooks";
+import { useAbout, useActiveProject, useHealth, useIdentity } from "@/hooks";
 import { signOut } from "@/lib/api";
 import { rememberProject } from "@/lib/project-memory";
 import { rememberVisit } from "@/lib/recent";
@@ -58,6 +58,7 @@ export function AppShell() {
   }, []);
   const identity = useIdentity(code);
   const health = useHealth();
+  const about = useAbout();
   const current = health.data?.projects.find((p) => p.project === code);
   const [chosen, setTheme] = React.useState<Theme | null>(null);
   const theme = chosen ?? initialTheme(identity.data?.settings.theme);
@@ -87,7 +88,7 @@ export function AppShell() {
       <SessionGuard />
       <ShortcutsDialog open={shortcuts} onClose={() => setShortcuts(false)} />
       {env && isProduction(env) ? <EnvironmentStrip env={env} /> : null}
-      <header className="z-30 flex h-13 shrink-0 items-center gap-3 bg-bg px-4">
+      <header className="z-30 flex h-12 shrink-0 items-center gap-3 border-b border-border bg-surface px-4">
         <Button variant="ghost" size="icon" className="lg:hidden" aria-label={open ? "Close menu" : "Open menu"} onClick={() => setOpen(!open)}>
           {open ? <X className="size-5" /> : <Menu className="size-5" />}
         </Button>
@@ -95,26 +96,28 @@ export function AppShell() {
           <Logo className="size-7" />
           <span className="hidden sm:inline">etl-craft</span>
         </Link>
-        <DropdownMenu>
-          <DropdownTrigger asChild>
-            <Button variant="outline" size="sm" className="max-w-[40vw] truncate" aria-label="Switch project">
-              <span className="truncate">{code ?? "Select project"}</span>
-              <ChevronDown className="size-3.5" aria-hidden />
-            </Button>
-          </DropdownTrigger>
-          <DropdownContent align="start">
-            <DropdownLabel>Projects</DropdownLabel>
-            {(health.data?.projects ?? []).map((p) => (
-              <DropdownItem key={p.project} asChild>
-                <Link to={projectHomePath(p.project)} className="justify-between gap-4">
-                  <span>{p.project}</span>
-                  <EnvironmentBadge env={{ type: p.environment_type, name: p.environment_name }} />
-                </Link>
-              </DropdownItem>
-            ))}
-          </DropdownContent>
-        </DropdownMenu>
-        {env && !isProduction(env) ? <EnvironmentBadge env={env} className="max-sm:hidden" /> : null}
+        <div data-control="" className="inline-flex h-control max-w-[60vw] items-stretch overflow-hidden rounded-md border border-border-strong bg-surface">
+          <DropdownMenu>
+            <DropdownTrigger asChild>
+              <button type="button" aria-label="Switch project" className="flex min-w-0 cursor-pointer items-center gap-1.5 px-2.5 text-[13px] font-medium text-fg hover:bg-surface-2">
+                <span className="truncate">{code ?? "Select project"}</span>
+                <ChevronDown className="size-3.5 shrink-0 text-muted" aria-hidden />
+              </button>
+            </DropdownTrigger>
+            <DropdownContent align="start">
+              <DropdownLabel>Projects</DropdownLabel>
+              {(health.data?.projects ?? []).map((p) => (
+                <DropdownItem key={p.project} asChild>
+                  <Link to={projectHomePath(p.project)} className="justify-between gap-4">
+                    <span>{p.project}</span>
+                    <EnvironmentBadge env={{ type: p.environment_type, name: p.environment_name }} />
+                  </Link>
+                </DropdownItem>
+              ))}
+            </DropdownContent>
+          </DropdownMenu>
+          {env ? <EnvironmentSegment env={env} className="max-sm:hidden" /> : null}
+        </div>
         {code ? <SearchBox ref={searchBox} code={code} /> : null}
         {code ? (
           // The search box is hidden on a phone; the search page is one tap away instead.
@@ -125,7 +128,6 @@ export function AppShell() {
           </Button>
         ) : null}
         <div className="ml-auto flex items-center gap-1">
-          <LiveStatus className="mr-2 hidden sm:flex" />
           <Button variant="ghost" size="icon" aria-label={theme === "dark" ? "Use the light theme" : "Use the dark theme"} onClick={() => {
             const next: Theme = theme === "dark" ? "light" : "dark";
             applyTheme(next, true);
@@ -163,7 +165,7 @@ export function AppShell() {
       <div className="relative flex min-h-0 flex-1">
         <aside
           className={cn(
-            "z-20 shrink-0 bg-sidebar transition-[width] duration-200",
+            "z-20 shrink-0 border-r border-border bg-sidebar transition-[width] duration-200",
             open ? "absolute inset-y-0 left-0 block w-64 shadow-xl lg:static lg:shadow-none" : "hidden lg:block",
             !open && (collapsed ? "lg:w-14" : "lg:w-56"),
             open && (collapsed ? "lg:w-14" : "lg:w-56"),
@@ -197,6 +199,10 @@ export function AppShell() {
           </div>
         </main>
       </div>
+      <footer className="flex h-7 shrink-0 items-center justify-between gap-3 border-t border-border bg-surface-2 px-4 text-xs text-muted">
+        <span className="truncate">{about.data ? `etl-craft ${about.data.package_version}${about.data.schema_version ? ` · schema ${about.data.schema_version.split("_")[0]}` : ""}` : "etl-craft"}</span>
+        <LiveStatus className="flex" />
+      </footer>
     </div>
   );
 }
