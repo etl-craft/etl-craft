@@ -101,7 +101,12 @@ class SnowflakeWarehouse(WarehouseDialect):
         return describe_result(conn, self.event_probe_sql(sql, 0), self.result_type)
 
     def result_type(self, column: object) -> str | None:
-        """Keep driver-declared sizes and scales; structured types need materialized metadata."""
+        """Keep driver-declared sizes and scales; structured types need materialized metadata.
+
+        The driver reports an OBJECT or ARRAY (type codes 9 and 10) the same way whether it is
+        semi-structured or structured (``ARRAY(NUMBER(38,0))``), and sends no element types, so
+        neither is guessed here: they are read from the materialized catalog metadata.
+        """
         if getattr(column, "fields", None):
             return None
         code = getattr(column, "type_code", None)
@@ -125,8 +130,6 @@ class SnowflakeWarehouse(WarehouseDialect):
             6: "TIMESTAMP_LTZ",
             7: "TIMESTAMP_TZ",
             8: "TIMESTAMP_NTZ",
-            9: "OBJECT",
-            10: "ARRAY",
             11: "BINARY",
             12: "TIME",
             13: "BOOLEAN",

@@ -6,6 +6,10 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+- Snowflake: a structured `ARRAY(NUMBER(38,0))` (or `OBJECT`) result column is no longer created as a plain
+  `ARRAY`, which Snowflake refused on the merge. The driver reports both alike, so `OBJECT` and `ARRAY`
+  result types are read from the materialized catalog metadata instead of guessed.
+
 - Native catalog shape `etl-craft/catalog/2` replaces shape 1 with definition-level dependency
   facts, three lineage states and task mapping operators. Rebuild existing catalog folders.
   Pipeline Graph and task Mapping share collapsible symbol nodes and text/table alternatives.
