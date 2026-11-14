@@ -8,6 +8,8 @@ from etl_craft.cli import main
 from etl_craft.cli.banner import (
     MARK,
     RED,
+    WORDMARK,
+    WORDMARK_ROW,
     Facts,
     is_terminal,
     render,
@@ -41,7 +43,8 @@ class Terminal(io.StringIO):
 
 def test_a_terminal_banner_draws_the_mark_beside_aligned_rows():
     lines = render(FACTS, art=True, colour=False).splitlines()
-    assert lines[0].startswith(MARK[0]) and lines[0].endswith("etl-craft")
+    assert lines[0].startswith(MARK[0].rstrip())
+    assert lines[WORDMARK_ROW].endswith(WORDMARK[0])  # the name in block letters beside the mark
     assert any(line.rstrip().endswith("owner (admin)") for line in lines)
     assert any("none live" in line for line in lines)
     assert any("Server" in line and "1.2.4" in line for line in lines)

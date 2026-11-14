@@ -6,6 +6,8 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+- A new product mark (a hollow layer over a stem and two woven chevrons, sharp mitered line art in the accent colour) in the interface, favicon and catalog pages, with its vector sources in `brand/`. The terminal banner is now a two-tone half-block rendering of the mark beside an `ETL-CRAFT` block wordmark and the aligned facts, drawn only on a terminal wide enough for it.
+
 - Browser interface: a standard application frame (header, flush navigation with a divider and a
   bar on the selected item, footer with the etl-craft and schema versions) replaces the floating
   rounded page; the project and environment are one segmented control; neutrals are slate; the

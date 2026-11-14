@@ -10,18 +10,34 @@ from dataclasses import dataclass
 from typing import TextIO
 
 MARK = (
-    "     /\\     ",
-    "    /  \\    ",
-    "    \\  /    ",
-    "     \\/     ",
-    "   \\  |  /   ",
-    "    \\ | /    ",
-    "   \\  |  /   ",
-    "    \\ | /    ",
+    "          ▄▄██▄▄          ",
+    "       ▄██████████▄       ",
+    "   ▄▄████████████████▄▄   ",
+    " ▄██████████████████████▄ ",
+    "  ▀▀██████████████████▀▀  ",
+    "      ▀████████████▀      ",
+    " ▄▄▄     ▀▀████▀▀     ▄▄▄ ",
+    "▀█████▄            ▄█████▀",
+    "   ▀▀████▄ ████ ▄████▀▀   ",
+    " █▄▄  ▀▀██ ████ ██▀▀  ▄▄█ ",
+    "▀▀████▄▄   ████   ▄▄████▀▀",
+    "   ▀▀█████▄ ▀▀ ▄█████▀▀   ",
+    "       ▀██████████▀       ",
+    "          ▀▀██▀▀          ",
 )
-"""The mark: a plane over a stem and two chevrons, as the interface and the catalog draw it."""
+"""The mark: the product logo as half-block art, light above the stem and darker below it."""
+MARK_TOP_ROWS = 6
+WORDMARK = (
+    "█████ █████ █         █████ ████   ███  █████ █████",
+    "█       █   █         █     █   █ █   █ █       █  ",
+    "████    █   █     ███ █     ████  █████ ████    █  ",
+    "█       █   █         █     █  █  █   █ █       █  ",
+    "█████   █   █████     █████ █   █ █   █ █       █  ",
+)
+"""The product name in block letters, drawn beside the mark and above the facts."""
+WORDMARK_ROW = 2
 
-BLUE, BOLD, RED, RESET = "\033[38;5;75m", "\033[1m", "\033[1;31m", "\033[0m"
+LIGHT, TEAL, BOLD, RED, RESET = "\033[38;5;74m", "\033[38;5;31m", "\033[1m", "\033[1;31m", "\033[0m"
 
 
 @dataclass(frozen=True)
@@ -82,7 +98,7 @@ def wants_art(stream: TextIO, facts: Facts) -> bool:
         return False
     rows = _rows(facts)
     widest = max(len(label) + 2 + len(value) for label, value in rows)
-    return shutil.get_terminal_size().columns >= len(MARK[0]) + 2 + widest
+    return shutil.get_terminal_size().columns >= len(MARK[0]) + 2 + max(widest, len(WORDMARK[0]))
 
 
 def render(facts: Facts, *, art: bool, colour: bool) -> str:
@@ -97,13 +113,15 @@ def render(facts: Facts, *, art: bool, colour: bool) -> str:
     for label, value in rows:
         shown = paint(value, RED) if label == "Environment" and facts.production else value
         lines.append(f"{paint(label.ljust(width), BOLD)}  {shown}")
-    title = paint("etl-craft", BOLD)
-    body = [title, "-" * len("etl-craft"), *lines]
     if not art:
-        return "\n".join(body)
+        return "\n".join([paint("etl-craft", BOLD), "-" * len("etl-craft"), *lines])
+    # The name in block letters sits beside the mark, and the facts follow it.
+    right = [""] * WORDMARK_ROW + [paint(row, TEAL + BOLD) for row in WORDMARK] + ["", *lines]
     out = []
-    for index in range(max(len(MARK), len(body))):
-        left = paint(MARK[index], BLUE) if index < len(MARK) else " " * len(MARK[0])
-        right = body[index] if index < len(body) else ""
-        out.append(f"{left}  {right}".rstrip())
+    for index in range(max(len(MARK), len(right))):
+        if index < len(MARK):
+            left = paint(MARK[index], LIGHT if index < MARK_TOP_ROWS else TEAL)
+        else:
+            left = " " * len(MARK[0])
+        out.append(f"{left}  {right[index] if index < len(right) else ''}".rstrip())
     return "\n".join(out)
