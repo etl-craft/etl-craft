@@ -422,15 +422,31 @@ Column-mapping nodes initially show five rows. Scroll their column lists or resi
 to inspect more; wires follow visible rows, with off-screen columns attached at the list boundary.
 
 Drag a mapping node by its header to move it independently; drag the canvas background to pan.
-The diagram toolbar’s Move view left/right/up/down buttons move the visible area without
-dragging, using the mouse, touch or Enter/Space, while retaining the zoom and node positions.
-Resize from the visible corner grips or generous edge hit areas, outside the column controls.
+Diagram canvases have native horizontal and vertical scrollbars inside their frames. Their
+thumbs follow panning, zoom and Fit view; scroll the tracks or focus them and use the arrow keys.
+The toolbar’s Move view left/right/up/down buttons remain available for mouse, touch or
+Enter/Space activation. Both methods retain the zoom and node positions.
+
+Collapsed tasks show a type icon with their name underneath; table headers keep their
+compact framed identity. Expanded objects become framed windows with a distinct title bar.
+Expanded windows keep persistent vertical and horizontal scrollbars; long column names and
+details scroll inside the window without clipping. Runtime task
+icons keep their identity while status badges report the changing run state. Workspace panes
+keep visible neutral scroll tracks when their content overflows.
+Connection anchors stay invisible. Three dots in the lower-right scrollbar corner resize the
+window. Narrow mouse resize bands follow the frame edges, leaving the surrounding canvas free.
 Focus a mapping width/height grip and use the arrow keys to resize it. Column lists keep a
 scrollbar gutter; collapsing a resized box hides its rows, and expanding restores its size.
+Click a wire, or focus it and press Enter/Space, to highlight its recorded path and endpoints.
+Column connections highlight the corresponding rows; object-only connections highlight their
+frames without implying column lineage. Activate it again or press Escape to clear the selection.
+Selecting a connection keeps the address and viewport unchanged.
+
 Table columns and split panes also support keyboard resizing. The view key opens on request, remembers your choice and keeps its close
 button visible while you scroll its entries. Desktop mapping and catalog graph panes fill the
-available frame height. Fit view zooms out to show the complete diagram; Reset zoom returns to
-100% for reading.
+available frame height. Fit view zooms out to show the complete diagram; workspace task graphs
+keep a 70% readability floor, with scrollbars reaching the remaining objects in large graphs.
+Reset zoom returns to 100% for reading.
 
 Mapping rows with filters, expressions or rules have a neutral icon/label and a logic preview;
 these indicators do not use the selected lineage’s accent ring. Resolved object/column names

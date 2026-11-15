@@ -1,3 +1,4 @@
+import {DiagramFrame,useNodeMeasurements} from "@/components/diagram-frame";
 import {useLegend,statusEntries} from "@/components/legend";
 import {dependencyEntries,taskEntries,highlightedEntry,RunConditionMark} from "@/components/diagram-key";
 import {DependencyBadge} from "@/components/dependency-mark";
@@ -12,7 +13,7 @@ import { edgeClass, statusMeta, StatusBadge } from "@/components/status";
 import { dependencyBadge, dependencyStyle, definitionLabel, dependencySentence } from "@/lib/catalog-flow";
 import type { CatalogTask, DefinitionEdge } from "@/lib/catalog";
 import type { Graph } from "@/lib/types";
-import { diagramKeys, DiagramNode, DiagramEdge, useDiagramExpansion } from "@/components/diagram-node";
+import { diagramKeys, DiagramNode, DiagramEdge, useDiagramExpansion, connectionAction, isHighlightedConnection } from "@/components/diagram-node";
 import { Button } from "@/components/ui/button";
 import { DiagramToolbar, DiagramChip } from "@/components/diagram-toolbar";
 import { kindColor } from "@/components/task-symbol";
@@ -42,7 +43,7 @@ interface TaskData extends Record<string, unknown> {
 type TaskNode = Node<TaskData, "task">;
 
 const WIDTH = 230;
-const HEIGHT = 52;
+const HEIGHT = 144;
 const GAP_X = 70;
 const GAP_Y = 24;
 const MAX_ROWS = 4;
@@ -70,15 +71,14 @@ function shownTitle(label: string, isTask: boolean): string {
 
 function Task({ data }: NodeProps<TaskNode>) {
   const plain = data.status === "";
-  const {icon:StatusIcon,label:statusLabel} = plain ? {icon:Box,label:""} : statusMeta(data.status);
   const task = data.definition;
-  const symbol = task ? taskSymbol(task) : data.symbol ?? {icon:StatusIcon,label:statusLabel};
+  const symbol = task ? taskSymbol(task) : data.symbol ?? {icon:Box,label:"Task"};
   const status = plain ? null : <StatusBadge status={data.status} quiet/>;
   const summary = <>{task?.active_flag==="N" ? <DiagramChip>Inactive</DiagramChip> : null}{task||data.symbol ? <span className="flex min-w-0 items-center justify-center gap-1"><span className="truncate" title={symbol.label}>{symbol.label}</span>{task ? <RunConditionMark task={task}/> : null}</span> : null}{status}</>;
   return <div data-focus={data.focus} className="relative" style={task?.active_flag === "N" ? {opacity:0.4} : undefined}>
     <Handle type="target" position={data.vertical ? Position.Top : Position.Left} className="!size-1.5 !border-0 !bg-border-strong"/>
-    <DiagramNode title={shownTitle(data.label,Boolean(task)||!data.symbol)} tooltip={data.tooltip ?? data.label} width={data.width??WIDTH} color={task?kindColor(task.script_kind??task.handler):plain?"var(--muted)":`var(--${statusMeta(data.status).tone}-solid)`} icon={symbol.icon} collapsedDescription={summary} expanded={data.expanded ?? false} onExpanded={() => data.onExpanded?.()} details={data.catalogDetails ? {to:data.catalogDetails}:undefined} onInspect={data.inspectable ? ()=>data.onOpen(data.label) : undefined} description={<>{task?.active_flag==="N" ? <DiagramChip>Inactive</DiagramChip> : null}{task||data.symbol ? symbol.label : null}{status}</>} className={cn(NODE_TONE[data.focus],plain ? "border-l-border-strong" : edgeClass(data.status))}>
-      <div className="grid gap-1 px-2 pb-2 text-xs">{task ? <><span className="line-clamp-2 break-all" title={task.target ?? undefined}>{task.target ?? "No target"}</span><span>Runs when: <RunConditionMark task={task}/></span></> : data.symbol ? <span>{data.label.startsWith("Schedule:") ? "Schedules and triggers admit this pipeline." : data.label.startsWith("Downstream:") ? "Open the downstream pipeline to inspect its tasks." : "This gate waits for its upstream dependency."}</span> : <span>Upstream tasks: {data.upstreamCount??0}</span>}</div>
+    <DiagramNode bodyClassName="nowheel nodrag h-26 overflow-scroll" tile={!data.symbol} title={shownTitle(data.label,Boolean(task)||!data.symbol)} tooltip={data.tooltip ?? data.label} width={data.width??WIDTH} color={task?kindColor(task.script_kind??task.handler):plain?"var(--muted)":`var(--${statusMeta(data.status).tone}-solid)`} icon={symbol.icon} collapsedDescription={summary} expanded={data.expanded ?? false} onExpanded={() => data.onExpanded?.()} details={data.catalogDetails ? {to:data.catalogDetails}:undefined} onInspect={data.inspectable ? ()=>data.onOpen(data.label) : undefined} description={<>{task?.active_flag==="N" ? <DiagramChip>Inactive</DiagramChip> : null}{task||data.symbol ? symbol.label : null}{status}</>} className={cn(NODE_TONE[data.focus],plain ? "border-l-border-strong" : edgeClass(data.status))}>
+      <div className="grid min-w-max gap-1 px-2 pb-2 text-xs">{task ? <><span className="whitespace-nowrap" title={task.target ?? undefined}>{task.target ?? "No target"}</span><span>Runs when: <RunConditionMark task={task}/></span></> : data.symbol ? <span>{data.label.startsWith("Schedule:") ? "Schedules and triggers admit this pipeline." : data.label.startsWith("Downstream:") ? "Open the downstream pipeline to inspect its tasks." : "This gate waits for its upstream dependency."}</span> : <span>Upstream tasks: {data.upstreamCount??0}</span>}</div>
     </DiagramNode>
     <Handle type="source" position={data.vertical ? Position.Bottom : Position.Right} className="!size-1.5 !border-0 !bg-border-strong"/>
   </div>;
@@ -201,25 +201,29 @@ export function RunGraph({
   const frame = React.useRef<HTMLDivElement>(null);
   const [width, setWidth] = React.useState(0);
   const [frameHeight, setFrameHeight] = React.useState(0);
+  const [chromeHeight,setChromeHeight]=React.useState(0);
   React.useEffect(() => {
     const element = frame.current;
     if (!element) return;
     const observer = new ResizeObserver(([entry]) => {
       setWidth(entry?.contentRect.width ?? 0);
       setFrameHeight(entry?.contentRect.height ?? 0);
+      if(entry&&element.parentElement)setChromeHeight(Math.ceil(element.parentElement.clientHeight-entry.contentRect.height));
     });
     observer.observe(element);
     return () => observer.disconnect();
   }, []);
   const fitOptions = definition ? DEFINITION_FIT : fill ? FILL_FIT : CARD_FIT;
   const flow = React.useRef<ReactFlowInstance | null>(null);
+  const [wireFocus,setWireFocus]=React.useState<string|null|undefined>(undefined);
+  const measuredSizes=React.useRef(new Map<string,string>());
+  const definitionView=Boolean(definition);
   const shown: Direction = direction ?? (definition ? "LR" : fill && frameHeight > width ? "TB" : "LR");
   const { nodes, edges, height, columns } = layout(graph, statuses, focused, onOpen, plain, shown);
   nodes.forEach(node=>{node.data.upstreamCount=(graph.depends_on[node.id]??[]).length;node.data.inspectable=!definition;node.data.catalogDetails=catalogDetails?.(node.id)??undefined;node.data.expanded=expansion.isExpanded(node.id);node.data.onExpanded=()=>expansion.toggle(node.id);});
-  if(!definition&&nodes.some(node=>node.data.expanded))nodes.forEach(node=>{node.position.y*=1.5;});
   let definitionHeight=280;
   if (definition) {
-    nodes.forEach(node => { node.data.definition = definition.tasks.find(task => task.code === node.id || task.label === node.id); node.position.y *= 1.5; node.data.expanded = expansion.isExpanded(node.id); node.data.width=node.data.definition?176:Math.min(232,Math.max(176,shownTitle(node.data.label,false).length*7+104)); node.data.onExpanded = () => expansion.toggle(node.id); if (!node.data.definition) { node.data.status = ""; node.data.tooltip=node.id.startsWith("Schedule: ") ? definition.schedule??"Manual" : node.id; node.data.symbol = node.id.startsWith("Schedule: ") ? {icon:node.id.startsWith("Schedule: manual") ? Play : CalendarClock,label:"Schedule"} : node.id.startsWith("Downstream: ") ? {icon:Network,label:"Downstream pipeline"} : {icon:Hourglass,label:"Upstream gate"}; } });
+    nodes.forEach(node => { node.data.definition = definition.tasks.find(task => task.code === node.id || task.label === node.id); node.data.expanded = expansion.isExpanded(node.id); node.data.width=node.data.definition?176:Math.min(232,Math.max(176,shownTitle(node.data.label,false).length*7+104)); node.data.onExpanded = () => expansion.toggle(node.id); if (!node.data.definition) { node.data.status = ""; node.data.tooltip=node.id.startsWith("Schedule: ") ? definition.schedule??"Manual" : node.id; node.data.symbol = node.id.startsWith("Schedule: ") ? {icon:node.id.startsWith("Schedule: manual") ? Play : CalendarClock,label:"Schedule"} : node.id.startsWith("Downstream: ") ? {icon:Network,label:"Downstream pipeline"} : {icon:Hourglass,label:"Upstream gate"}; } });
     if (shown === "LR") {
       let x = 0;
       const groups = new Map<number,TaskNode[]>();
@@ -227,11 +231,11 @@ export function RunGraph({
       [...groups.entries()].sort(([a],[b]) => a-b).forEach(([,group]) => {
         const width = Math.max(...group.map(node=>node.data.width??176));
         let y=0;
-        group.sort((a,b)=>a.position.y-b.position.y).forEach(node=>{node.position.x=x;node.position.y=y;y+=(node.data.expanded?112:88)+8;});
+        group.sort((a,b)=>a.position.y-b.position.y).forEach(node=>{node.position.x=x;node.position.y=y;y+=HEIGHT+8;});
         x += width + 56;
       });
     }
-    definitionHeight=Math.max(280,...nodes.map(node=>node.position.y+(node.data.expanded?118:92)+32));
+    definitionHeight=Math.max(280,...nodes.map(node=>node.position.y+HEIGHT+32));
     edges.forEach(edge => {
       const item = definition.edges.find(item => (item.source.endsWith(`.${edge.source}`) && item.target.endsWith(`.${edge.target}`)) || (item.kind === "task" && edge.source.startsWith(`Task gate: ${item.source} ·`) && item.target.endsWith(`.${edge.target}`)) || (item.kind === "pipeline" && ((item.target === definition.tasks[0]?.pipeline && edge.source.startsWith(`Upstream: ${item.source} ·`)) || (item.source === definition.tasks[0]?.pipeline && edge.target === `Downstream: ${item.target}`)))) ?? { kind: "task" as const, source: edge.source, target: edge.target, dependency_type: graph.depends_on[edge.target]?.find(([source]) => source === edge.source)?.[1] ?? "SUCCESS", consume_repairs: "Y" };
       edge.type = "definition";
@@ -241,10 +245,16 @@ export function RunGraph({
       edge.markerEnd = { type: MarkerType.ArrowClosed, color: edge.style?.stroke ?? "var(--muted)",width:10,height:10,markerUnits:"userSpaceOnUse" };
     });
   }
-  const key=useLegend([...dependencyEntries(plain&&!definition?[]:definition ? edges.map(edge=>edge.data?.definition as DefinitionEdge) : Object.values(graph.depends_on).flatMap(deps=>deps.map(([,kind])=>({dependency_type:kind})))),...(definition?taskEntries(definition.tasks):[]),...(!plain?statusEntries(Object.values(statuses)):[]),...(plain&&!definition?[{id:"lineage",group:"Lineage",name:"Table dependency",meaning:"The source table feeds the target table",sample:<svg width="36" height="12"><path d="M 0 6 H 36" stroke="var(--muted)"/></svg>}]:[]),...(focused?[highlightedEntry]:[])]);
+  edges.forEach(edge=>{
+    const active=Boolean(focused)&&edge.style?.opacity!==0.25;
+    Object.assign(edge,connectionAction(edge,()=>{const next=active?null:edge.target;setWireFocus(next);onFocus(next);},active,String(edge.data?.sentence??`${edge.source} → ${edge.target}`)));
+  });
+  const measureNodes=useNodeMeasurements(nodes);
+  const key=useLegend([...dependencyEntries(plain&&!definition?[]:definition ? edges.map(edge=>edge.data?.definition as DefinitionEdge) : Object.values(graph.depends_on).flatMap(deps=>deps.map(([,kind])=>({dependency_type:kind})))),...(definition?taskEntries(definition.tasks):[]),...(!plain?statusEntries(Object.values(statuses)):[]),...(plain&&!definition?[{id:"lineage",group:"Lineage",name:"Table dependency",meaning:"The source table feeds the target table",sample:<svg width="36" height="12"><path d="M 0 6 H 36" stroke="var(--muted)"/></svg>}]:[]),...(edges.some(isHighlightedConnection)?[highlightedEntry]:[])]);
   const wide = !definition && !fill && width > 0 && (definition ? Math.max(...nodes.map(node => node.position.x + (176))) + 48 : columns * (WIDTH + GAP_X) - GAP_X + 48) > width;
   // Bring a focused task into view when it is off-screen; leave the view alone when it is visible.
   React.useEffect(() => {
+    if(wireFocus===focused)return;
     const instance = flow.current;
     const node = nodes.find((n) => n.id === focused);
     if (!instance || !node || width === 0) return;
@@ -253,23 +263,23 @@ export function RunGraph({
     if (left >= 0 && left + WIDTH * zoom <= width) return;
     void instance.setCenter(node.position.x + (instance.getNode(node.id)?.measured?.width ?? WIDTH) / 2, node.position.y + (instance.getNode(node.id)?.measured?.height ?? HEIGHT) / 2, { zoom, duration: 250 });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [focused]);
+  }, [focused,wireFocus]);
   // Definition diagrams keep their layout and change zoom to fit the pane.
   React.useEffect(() => {
-    if ((definition || fill) && width > 0 && frameHeight > 0) {
+    if (!focused && wireFocus!==focused && (definitionView || fill) && width > 0 && frameHeight > 0) {
       if (wide) void flow.current?.setViewport({x:24,y:40,zoom:0.9});
       else fitDiagram(flow.current,frame.current);
     }
-  }, [definition, fill, width, frameHeight, shown, fitOptions, wide]);
+  }, [definitionView, fill, width, frameHeight, shown, fitOptions, wide, focused,wireFocus]);
   // A graph wider than its card keeps readable boxes starting at the left; a small one is fitted whole.
   return (
-    <div style={definition ? {height:`min(70vh, ${definitionHeight+(width<480?180:100)}px)`} : fill ? undefined : { height }} role="group" aria-label="Task graph" tabIndex={0} onKeyDown={key.onKeyDown} className={cn("flex w-full flex-col", fill && "h-full min-h-0",fill && definition && "@3xl:!h-full")}>
+    <div style={definition ? {height:`min(70vh, ${definitionHeight+(chromeHeight||(width<480?204:124))}px)`} : fill ? undefined : { height }} role="group" aria-label="Task graph" tabIndex={0} onKeyDown={key.onKeyDown} className={cn("flex w-full flex-col", fill && "h-full min-h-0",fill && definition && "@3xl:!h-full")}>
       {/* The hint sits above the canvas, so a graph shown at a readable size never runs under it. */}
       <p className="m-0 shrink-0 px-3 py-1.5 text-xs text-muted">
-        {edges.length === 0 ? "No dependencies between these tasks: they can run at the same time." : focused ? `Showing everything upstream and downstream of ${focused}. Click the background to clear.` : "Click a task to highlight its lineage; drag to pan."}
+        {edges.length === 0 ? "No dependencies between these tasks: they can run at the same time." : focused ? `Showing everything upstream and downstream of ${focused}. Click the background to clear.` : "Click an icon to expand; select a wire to highlight its path."}
       </p>
-      <DiagramToolbar pan={(dx,dy)=>panDiagram(flow.current,dx,dy)} className="px-3" zoomIn={()=>void flow.current?.zoomIn()} zoomOut={()=>void flow.current?.zoomOut()} fit={()=>fitDiagram(flow.current,frame.current,true)} reset={()=>void flow.current?.zoomTo(1)}>{definition ? <><Switch checked={definition.overlay??false} onChange={()=>definition.onOverlay?.()} label="Show last-run status"/><Button onClick={expansion.toggleAll}>{expansion.expanded?"Collapse all":"Expand all"}</Button></>:null}<CatalogWidthButton/>{key.button}</DiagramToolbar>
-      <div ref={frame} className="relative min-h-0 flex-1">
+      <DiagramToolbar pan={(dx,dy)=>panDiagram(flow.current,dx,dy)} className="px-3" zoomIn={()=>void flow.current?.zoomIn()} zoomOut={()=>void flow.current?.zoomOut()} fit={()=>fitDiagram(flow.current,frame.current,definition?0.05:0.7)} reset={()=>void flow.current?.zoomTo(1)}>{definition ? <><Switch checked={definition.overlay??false} onChange={()=>definition.onOverlay?.()} label="Show last-run status"/><Button onClick={expansion.toggleAll}>{expansion.expanded?"Collapse all":"Expand all"}</Button></>:null}<CatalogWidthButton/>{key.button}</DiagramToolbar>
+      <DiagramFrame ref={frame} className="relative min-h-0 flex-1">
       <ReactFlow
         key={`${wide ? "wide" : "fit"}:${shown}:${nodes.map((n) => n.id).join("|")}`}
         nodes={nodes}
@@ -283,7 +293,15 @@ export function RunGraph({
         maxZoom={1.5}
         nodesDraggable={false}
         nodesConnectable={false}
-        onNodesChange={changes=>{if(changes.some(change=>change.type==="dimensions"))requestAnimationFrame(()=>fitDiagram(flow.current,frame.current));}}
+        onNodesChange={changes=>{
+          measureNodes(changes);
+          let changed=false;
+          changes.forEach(change=>{if(change.type==="dimensions"&&change.dimensions){
+            const size=`${change.dimensions.width}:${change.dimensions.height}`;
+            if(measuredSizes.current.get(change.id)!==size){measuredSizes.current.set(change.id,size);changed=true;}
+          }});
+          if(changed&&wireFocus!==focused)requestAnimationFrame(()=>fitDiagram(flow.current,frame.current));
+        }}
         elementsSelectable
         onNodeClick={(_, node) => onFocus(node.id === focused ? null : node.id)}
         onKeyDown={event=>{
@@ -303,7 +321,7 @@ export function RunGraph({
         <Background gap={20} color="var(--border)" />
 
       </ReactFlow>
-      {key.panel}</div>
+      {key.panel}</DiagramFrame>
     </div>
   );
 }

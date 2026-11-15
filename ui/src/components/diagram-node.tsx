@@ -1,4 +1,4 @@
-import { BaseEdge, EdgeLabelRenderer } from "@xyflow/react";
+import { BaseEdge, EdgeLabelRenderer, type Edge } from "@xyflow/react";
 import * as React from "react";
 import { ChevronDown, ChevronRight, MoreHorizontal, type LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,28 @@ import { openNavigationTab } from "@/lib/navigation";
 import { cn } from "@/lib/utils";
 
 export type DiagramDetails = { to: string };
+
+export type DiagramConnection = Pick<Edge,"source"|"target">;
+export function isHighlightedConnection(edge:Edge) {
+  return edge.domAttributes?.["aria-pressed"]===true;
+}
+export function sameConnection(left:DiagramConnection|null,right:DiagramConnection) {
+  return left?.source===right.source && left.target===right.target;
+}
+
+/** Wires activate the same recorded-path selection with a mouse, touch or keyboard. */
+export function connectionAction<E extends Edge>(edge:E,select:()=>void,active:boolean,label:string):E {
+  return {...edge,selected:false,selectable:false,deletable:false,focusable:true,interactionWidth:24,ariaRole:"button",ariaLabel:`Highlight path: ${label}`,className:cn(edge.className,"diagram-connection"),
+    style:{...edge.style,...(active?{stroke:"var(--accent)",strokeWidth:2.4,opacity:1}:{})},
+    domAttributes:{...edge.domAttributes,"aria-pressed":active,"aria-describedby":undefined,"aria-description":"Highlight the connected columns or objects. Press Escape to clear.",
+      onMouseDown:event=>event.preventDefault(),
+      onClick:event=>{event.stopPropagation();event.currentTarget.focus({preventScroll:true});select();},
+      onDoubleClick:event=>event.stopPropagation(),
+      onKeyDown:event=>{if(event.key==="Escape"){event.preventDefault();event.stopPropagation();if(active)select();return;}if(event.key==="Enter"||event.key===" "){event.preventDefault();event.stopPropagation();event.currentTarget.focus({preventScroll:true});select();}},
+    },
+  };
+}
+
 
 /** The menu is the keyboard and touch path to catalog details; inspection stays in place. */
 export function DiagramActions({ title, details, expanded, onExpanded, onInspect }: {title:string;details?:DiagramDetails;expanded:boolean;onExpanded:()=>void;onInspect?:()=>void}) {
@@ -42,18 +64,19 @@ export function useDiagramActivation(onExpand:()=>void, onOpen?:()=>void) {
 }
 
 /** The same compact header identifies pipeline tasks and column transformations. */
-export function DiagramNode({title,tooltip,description,collapsedDescription,icon:Icon,expanded,onExpanded,children,collapsedPorts,details,onInspect,className,color="var(--muted)",chip,width=160,height,bodyClassName}: {
+export function DiagramNode({title,tooltip,description,collapsedDescription,icon:Icon,expanded,onExpanded,children,collapsedPorts,details,onInspect,className,color="var(--muted)",chip,width=160,height,bodyClassName,tile=false}: {
   title:string;tooltip?:string;description?:React.ReactNode;collapsedDescription?:React.ReactNode;icon:LucideIcon;
   expanded:boolean;onExpanded:()=>void;children?:React.ReactNode;collapsedPorts?:React.ReactNode;
   details?:DiagramDetails;onInspect?:()=>void;headingClassName?:string;className?:string;color?:string;chip?:React.ReactNode;width?:number;
-  height?:number;bodyClassName?:string;
+  height?:number;bodyClassName?:string;tile?:boolean;
 }) {
   const href=useHref(details?.to??"/");
   const activation=useDiagramActivation(onExpanded,details ? ()=>openNavigationTab(href) : undefined);
-  return <div className={cn("diagram-node relative w-40 rounded-sm border border-border bg-surface text-[13px]",height!==undefined&&"flex flex-col",className)} style={{width,height,borderLeft:`3px solid ${color}`}}>
+  const collapsedTile=tile&&!expanded;
+  return <div data-collapsed-tile={collapsedTile} data-expanded={expanded} className={cn("diagram-node relative w-40 text-[13px]",!collapsedTile&&"border border-border-strong bg-surface",height!==undefined&&"flex flex-col",className)} style={{width:collapsedTile?160:width,height,borderLeft:collapsedTile?undefined:`3px solid ${color}`}}>
     <div className="mapping-drag-handle flex h-10 shrink-0 items-center gap-1 px-2" style={{background:`color-mix(in srgb, ${color} 12%, transparent)`}}>
       <button type="button" className="nopan flex h-full min-w-0 flex-1 cursor-pointer items-center gap-2 text-left" title={tooltip??title} aria-label={`${expanded ? "Collapse" : "Expand"} ${title}`} aria-expanded={expanded} {...activation}>
-        <Icon aria-hidden className="size-[18px] shrink-0" style={{color}}/>
+        <span className="diagram-object-icon" style={{color}}><Icon aria-hidden className="size-[18px] shrink-0"/></span>
         <strong className="min-w-0 flex-1 truncate font-medium" title={tooltip??title}>{title}</strong>
         {expanded ? <ChevronDown aria-hidden className="size-3 shrink-0"/> : <ChevronRight aria-hidden className="size-3 shrink-0"/>}
       </button>
@@ -73,7 +96,7 @@ export function useDiagramExpansion(initial:boolean) {
 export function DiagramEdge({path,label,labelX,labelY,style,markerEnd,title}: {
   path:string;label?:React.ReactNode;labelX:number;labelY:number;style?:React.CSSProperties;markerEnd?:string;title:string;
 }) {
-  return <g><title>{title}</title><BaseEdge path={path} style={style} markerEnd={markerEnd}/>{label ? <EdgeLabelRenderer><div title={title} className="nodrag nopan pointer-events-auto absolute whitespace-nowrap bg-surface text-xs" style={{transform:`translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`}}>{label}</div></EdgeLabelRenderer> : null}</g>;
+  return <g><title>{title}</title><BaseEdge interactionWidth={24} path={path} style={style} markerEnd={markerEnd}/>{label ? <EdgeLabelRenderer><div title={title} className="nodrag nopan pointer-events-auto absolute whitespace-nowrap bg-surface text-xs" style={{transform:`translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`}}>{label}</div></EdgeLabelRenderer> : null}</g>;
 }
 
 /** Arrow keys traverse diagram nodes; text inputs retain their native navigation. */

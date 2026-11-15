@@ -936,7 +936,9 @@ def test_workspace_order_breakpoint_and_old_run_selection_round_trip(scene, widt
             arg=width < 1024,
         )
         panes = page.locator("[data-pane]")
-        left, right = panes.nth(0).bounding_box(), panes.nth(1).bounding_box()
+        left, right = panes.evaluate_all(
+            "panes=>panes.map(element=>element.getBoundingClientRect().toJSON())"
+        )
         if width < 1024:
             assert right["y"] >= left["y"] + left["height"] - 1
             expect(page.get_by_role("separator", name="Resize the panes")).to_be_hidden()

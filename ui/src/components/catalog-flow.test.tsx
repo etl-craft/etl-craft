@@ -11,6 +11,7 @@ import { MarkerType } from "@xyflow/react";
 import type { Edge, Node } from "@xyflow/react";
 function render(element:ReactElement) { return rawRender(element,{wrapper:MemoryRouter}); }
 const captured = vi.hoisted(() => ({ edges: [] as Edge[], nodes: [] as Node[], fit: {} as {minZoom?:number}, renderBoxes: false }));
+vi.mock("@/components/diagram-frame",async importOriginal=>({...await importOriginal<typeof import("@/components/diagram-frame")>(),DiagramFrame:({children,...props}:React.ComponentProps<"div">)=><div {...props}>{children}</div>}));
 vi.mock("@xyflow/react", async importOriginal => {
   const actual = await importOriginal<typeof import("@xyflow/react")>();
   const update = () => {};
@@ -308,8 +309,8 @@ it("caps an expanded mapping column list at five rows without dropping columns",
   fireEvent.click(screen.getByRole("button", {name: "Show all columns"}));
   const rows = screen.getByTestId("source:raw.orders").querySelectorAll("[data-port]");
   expect(rows).toHaveLength(8);
-  expect(rows[0]!.parentElement).toHaveStyle({maxHeight: "168px"});
-  expect(rows[0]!.parentElement).toHaveClass("overflow-y-auto", "nowheel", "nodrag");
+  expect(rows[0]!.closest(".nowheel")).toHaveStyle({maxHeight: "182px"});
+  expect(rows[0]!.closest(".nowheel")).toHaveClass("overflow-scroll", "nowheel", "nodrag");
   expect(rows[7]).toHaveAttribute("data-port", "column_7");
 });
 

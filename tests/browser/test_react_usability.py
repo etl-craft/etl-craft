@@ -137,18 +137,23 @@ def test_recent_run_strip_has_one_touch_target_and_a_keyboard_run_chooser(scene)
 def test_mapping_resize_grips_and_scrollbars_do_not_cover_column_controls(mappings, width):
     _, url = mappings
     with sync_playwright() as pw:
-        browser, page, problems = open_page(pw, viewport={"width": width, "height": 1000})
+        browser, page, problems = open_page(
+            pw, viewport={"width": width, "height": 1000}, show_scrollbars=True
+        )
         sign_in(page, url, "/ui/projects/default/catalog/tasks/ORDERS.load?tab=mapping")
         if width == 390:
             page.get_by_role("button", name="Diagram", exact=True).click()
         page.get_by_role("button", name="Show all columns", exact=True).click()
         source = page.locator('[data-id="source:raw.orders"]')
         page.mouse.move(0, 0)
-        grip = source.locator(".react-flow__resize-control.top.left.handle")
+        grip = source.locator(".handle.bottom.right.window-corner")
         expect(grip).to_be_visible()
-        assert grip.evaluate("e => Number(getComputedStyle(e, '::after').opacity)") == 1
+        assert grip.evaluate("e=>getComputedStyle(e,'::after').boxShadow") != "none"
         box = grip.bounding_box()
-        assert box["width"] >= 24 and box["height"] >= 24
+        assert box["width"] == 12 and box["height"] == 12
+        list_box = source.locator(".nowheel").bounding_box()
+        assert box["x"] >= list_box["x"] + list_box["width"] - 14
+        assert box["y"] >= list_box["y"] + list_box["height"] - 14
         collisions = source.evaluate("""node => {
             const grips = [...node.querySelectorAll('.react-flow__resize-control')]
                 .filter(e=>getComputedStyle(e).display!=='none').map(e=>e.getBoundingClientRect());
@@ -156,8 +161,10 @@ def test_mapping_resize_grips_and_scrollbars_do_not_cover_column_controls(mappin
                 const r=e.getBoundingClientRect(), list=e.closest('.nowheel');
                 if(!list)return r;
                 const clip=list.getBoundingClientRect();
-                return {left:Math.max(r.left,clip.left),right:Math.min(r.right,clip.right),
-                    top:Math.max(r.top,clip.top),bottom:Math.min(r.bottom,clip.bottom)};
+                const right=clip.left+list.clientLeft+list.clientWidth;
+                const bottom=clip.top+list.clientTop+list.clientHeight;
+                return {left:Math.max(r.left,clip.left),right:Math.min(r.right,right),
+                    top:Math.max(r.top,clip.top),bottom:Math.min(r.bottom,bottom)};
             });
             const overlaps=(a,b)=>Math.min(a.right,b.right)-Math.max(a.left,b.left)>0.5 &&
                 Math.min(a.bottom,b.bottom)-Math.max(a.top,b.top)>0.5;
@@ -187,6 +194,15 @@ def test_mapping_resize_grips_and_scrollbars_do_not_cover_column_controls(mappin
         page.keyboard.press("ArrowRight")
         expect(resize).to_have_attribute("aria-valuenow", str(before + 16))
         height = source.get_by_role("separator", name="Resize raw.orders height", exact=True)
+        before_height = int(height.get_attribute("aria-valuenow"))
+        bezel = grip.bounding_box()
+        x, y = bezel["x"] + bezel["width"] / 2, bezel["y"] + bezel["height"] / 2
+        page.mouse.move(x, y)
+        page.mouse.down()
+        page.mouse.move(x + 12, y + 24, steps=8)
+        page.mouse.up()
+        expect(height).not_to_have_attribute("aria-valuenow", str(before_height))
+        assert int(height.get_attribute("aria-valuenow")) > before_height
         before_height = int(height.get_attribute("aria-valuenow"))
         height.focus()
         page.keyboard.press("ArrowDown")

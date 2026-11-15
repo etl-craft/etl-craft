@@ -271,7 +271,7 @@ export function PipelineDetail() {
       </PageHeader>
       <SplitPane
         id="pipeline"
-        minimumLeft={view === "grid" ? MIN_TASKS + 6 + GRID_COLUMNS[byTime ? "time" : "id"].minimum : 0}
+        minimumLeft={view === "grid" ? MIN_TASKS + 6 + GRID_COLUMNS[byTime ? "time" : "id"].minimum + 24 : 0}
         // On a narrow screen the selected run's details come before the grid of every run.
         narrowFirst={tab === "run" ? "right" : "left"}
         className="lg:min-h-0 lg:flex-1"

@@ -589,7 +589,9 @@ def test_catalog_readability_floating_key_and_full_width(mappings, appearance, w
 def test_mapping_ports_and_edges_stay_attached_when_columns_scroll_and_resize(mappings):
     _, url = mappings
     with sync_playwright() as pw:
-        browser, page, problems = open_page(pw, viewport={"width": 1440, "height": 1000})
+        browser, page, problems = open_page(
+            pw, viewport={"width": 1440, "height": 1000}, show_scrollbars=True
+        )
         sign_in(page, url, "/ui/projects/default/catalog/tasks/ORDERS.load?tab=mapping")
         diagram = page.get_by_label("Task mapping diagram", exact=True)
         expect(diagram).to_be_visible()
@@ -620,7 +622,7 @@ def test_mapping_ports_and_edges_stay_attached_when_columns_scroll_and_resize(ma
         }"""
         page.wait_for_function(attached)
         page.wait_for_function(connected)
-        scroll = source.locator(".overflow-y-auto")
+        scroll = source.locator(".nowheel")
         before = source.locator('[data-handleid="amount"]').bounding_box()
         scroll.evaluate(
             "el => { el.scrollTop=el.scrollHeight; el.dispatchEvent(new Event('scroll')); }"
@@ -641,7 +643,7 @@ def test_mapping_ports_and_edges_stay_attached_when_columns_scroll_and_resize(ma
         original = source.locator(".diagram-node").bounding_box()
         resize = source.locator(".react-flow__resize-control.bottom.right.handle")
         start = resize.bounding_box()
-        assert start["width"] >= 20 and start["height"] >= 20
+        assert start["width"] == 12 and start["height"] == 12
         page.mouse.move(start["x"] + start["width"] / 2, start["y"] + start["height"] / 2)
         page.mouse.down()
         page.mouse.move(start["x"] + 24, start["y"] + 72, steps=8)
