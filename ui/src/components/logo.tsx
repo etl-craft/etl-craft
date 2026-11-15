@@ -1,26 +1,13 @@
-import * as React from "react";
+import { cn } from "@/lib/utils";
 
 /**
- * The etl-craft mark: layered chevrons under a plane, on an accent tile. The tile and glyph
- * colours come from the theme (index.css), the same pair the catalog and the favicon use.
+ * The etl-craft mark: a hollow layer over a stem and two nested chevrons, woven. One path in the accent
+ * colour, so it follows the theme, with sharp mitered corners and no tile.
  */
 export function Logo({ className }: { className?: string }) {
-  const id = React.useId();
   return (
-    <svg viewBox="0 0 32 32" aria-hidden focusable="false" className={className}>
-      <defs>
-        <linearGradient id={id} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" className="[stop-color:var(--mark-a)]" />
-          <stop offset="1" className="[stop-color:var(--mark-b)]" />
-        </linearGradient>
-      </defs>
-      <rect width="32" height="32" rx="8" fill={`url(#${id})`} />
-      <g fill="none" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="[stroke:var(--mark-glyph)]">
-        <path d="M16 5.5 L24.5 9.75 L16 14 L7.5 9.75 Z" className="[fill:var(--mark-glyph)] [fill-opacity:0.26]" />
-        <path d="M16 14 V25.5" />
-        <path d="M9.5 17.5 L16 21 L22.5 17.5" />
-        <path d="M9.5 22 L16 25.5 L22.5 22" />
-      </g>
+    <svg viewBox="0 0 512 512" aria-hidden focusable="false" className={cn("text-accent", className)}>
+      <path fill="currentColor" fillRule="evenodd" d="M76 170 256 273.92 436 170 256 66.08ZM416 170 256 262.38 96 170 256 77.62ZM116 170 256 250.83 396 170 256 89.17ZM376 170 256 239.28 136 170 256 100.72ZM421 230.02 281 310.85 281 322.4 417.34 243.68 422.34 252.34 281 333.94 281 345.49 436 256ZM91 230.02 76 256 231 345.49 231 333.94 89.66 252.34 94.66 243.68 231 322.4 231 310.85ZM261 282.58 261 396.85 271 391.07 271 276.81ZM251 282.58 241 276.81 241 391.07 251 396.85ZM436 342 421 316.02 256 411.28 91 316.02 76 342 256 445.92ZM89.66 338.34 94.66 329.68 256 422.83 417.34 329.68 422.34 338.34 256 434.38Z" />
     </svg>
   );
 }

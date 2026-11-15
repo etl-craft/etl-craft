@@ -31,7 +31,6 @@
   --ok-glyph: #06301b; --bad-glyph: #ffffff; --run-glyph: #ffffff; --warn-glyph: #2b1700; --idle-glyph: #18212a;
   --env-prod: #c4252b; --env-prod-fg: #ffffff;
   --env-other: #3f4a5a; --env-other-fg: #ffffff;
-  --mark-a: #6a74e6; --mark-b: #4651c4; --mark-glyph: #ffffff;
   --shadow-raised: 0 0 0 1px rgb(20 22 29 / 0.06), 0 1px 2px rgb(20 22 29 / 0.06);
   --shadow-pop: 0 0 0 1px rgb(20 22 29 / 0.06), 0 4px 8px -2px rgb(20 22 29 / 0.08), 0 16px 40px -8px rgb(20 22 29 / 0.18);
   --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
@@ -64,7 +63,6 @@
   --ok-glyph: #06180d; --bad-glyph: #1f0505; --run-glyph: #050d1f; --warn-glyph: #1f1300; --idle-glyph: #ffffff;
   --env-prod: #c9372c; --env-prod-fg: #ffffff;
   --env-other: #3a4553; --env-other-fg: #f1f4f8;
-  --mark-a: #a7aef7; --mark-b: #7c85e8; --mark-glyph: #0d0e22;
   --shadow-raised: 0 0 0 1px rgb(255 255 255 / 0.08), 0 1px 2px rgb(0 0 0 / 0.4);
   --shadow-pop: 0 0 0 1px rgb(255 255 255 / 0.08), 0 16px 40px -8px rgb(0 0 0 / 0.7);
 }

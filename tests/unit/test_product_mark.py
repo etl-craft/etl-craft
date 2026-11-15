@@ -1,15 +1,17 @@
-"""One theme-aware tile mark for the console, sign-in, catalog, favicon and new interface."""
+"""The owner-supplied mark stays consistent across the packaged and browser surfaces."""
 
+import re
 from importlib.resources import files
+from pathlib import Path
 from xml.etree import ElementTree
 
 import pytest
 
 pytestmark = pytest.mark.unit
 
-# The tile's gradient ends and the glyph drawn on it, in each theme.
-LIGHT = {"tile": ("#3a6cf7", "#1b44c4"), "glyph": "#ffffff", "page": ("#eef2f6", "#edf1f5")}
-DARK = {"tile": ("#9dbaff", "#6d93f2"), "glyph": "#0c1426", "page": ("#151b23", "#0d1117")}
+REPO = Path(__file__).resolve().parents[2]
+STATIC = files("etl_craft.core").joinpath("static")
+NS = {"svg": "http://www.w3.org/2000/svg"}
 
 
 def luminance(value):
@@ -23,40 +25,56 @@ def contrast(first, second):
     return (max(a, b) + 0.05) / (min(a, b) + 0.05)
 
 
-def test_the_page_mark_and_the_favicon_draw_the_same_tile_and_glyph():
-    root = files("etl_craft.core").joinpath("static")
-    partial = ElementTree.fromstring(root.joinpath("mark.html").read_text())
-    favicon = ElementTree.fromstring(root.joinpath("favicon.svg").read_text())
-    ns = {"svg": "http://www.w3.org/2000/svg"}
-    assert partial.attrib["viewBox"] == favicon.attrib["viewBox"] == "0 0 32 32"
-
-    def shapes(svg):
-        return [node.attrib["d"] for node in svg.findall(".//svg:path", ns)]
-
-    def tile(svg):
-        node = svg.find("svg:rect", ns)
-        return node.attrib["width"], node.attrib["height"], node.attrib["rx"]
-
-    assert shapes(partial) == shapes(favicon)
-    assert len(shapes(partial)) == 4
-    assert tile(partial) == tile(favicon) == ("32", "32", "8")
+def test_the_page_and_react_marks_draw_the_owner_supplied_path():
+    source = ElementTree.parse(REPO / "brand/mark/etl-craft-mark.svg").getroot()
+    partial = ElementTree.fromstring(STATIC.joinpath("mark.html").read_text())
+    react = (REPO / "ui/src/components/logo.tsx").read_text()
+    for svg in (source, partial):
+        assert svg.attrib["viewBox"] == "0 0 512 512"
+        assert [node.tag for node in svg] == [f"{{{NS['svg']}}}path"]
+        assert svg[0].attrib["fill-rule"] == "evenodd"
+    assert partial[0].attrib["d"] == source[0].attrib["d"]
+    assert partial[0].attrib["fill"] == "currentColor"
     assert partial.attrib["aria-hidden"] == "true"
-    group = partial.find("svg:g", ns)
-    assert group.attrib["stroke-linecap"] == group.attrib["stroke-linejoin"] == "round"
-    assert "prefers-color-scheme: dark" in root.joinpath("favicon.svg").read_text()
+    assert partial.attrib["focusable"] == "false"
+    assert 'viewBox="0 0 512 512"' in react
+    assert re.findall(r'<path\b[^>]*\bd="([^"]+)"', react) == [source[0].attrib["d"]]
+    assert len(re.findall(r"<path\b", react)) == 1
+    assert 'fillRule="evenodd"' in react and 'fill="currentColor"' in react
+    assert not re.search(r"<(?:rect|defs|linearGradient|radialGradient)\b", react)
 
 
-@pytest.mark.parametrize("theme", [LIGHT, DARK], ids=["light", "dark"])
-def test_the_glyph_reads_on_the_tile_and_the_tile_stands_out_from_the_page(theme):
-    for tile in theme["tile"]:
-        assert contrast(theme["glyph"], tile) >= 3
-        for page in theme["page"]:
-            assert contrast(tile, page) >= 1.5 or contrast(theme["glyph"], tile) >= 4.5
+def test_the_favicon_is_the_owner_supplied_theme_aware_pixel_mark():
+    favicon = STATIC.joinpath("favicon.svg").read_text()
+    assert favicon == (REPO / "brand/favicon/favicon-32.svg").read_text()
+    svg = ElementTree.fromstring(favicon)
+    assert svg.attrib["viewBox"] == "0 0 32 32"
+    assert svg.attrib["width"] == svg.attrib["height"] == "32"
+    assert len(svg.findall("svg:path", NS)) == 1
+    assert svg.find("svg:path", NS).attrib["fill-rule"] == "evenodd"
+    css = re.sub(r"\s+", "", svg.find("svg:style", NS).text)
+    assert css == "path{fill:#1B7694}@media(prefers-color-scheme:dark){path{fill:#5BBFDF}}"
 
 
-def test_the_stylesheet_and_the_favicon_use_the_same_tile_colours():
-    root = files("etl_craft.core").joinpath("static")
-    css = root.joinpath("catalog.css").read_text()
-    favicon = root.joinpath("favicon.svg").read_text()
-    for colour in (*LIGHT["tile"], LIGHT["glyph"], *DARK["tile"], DARK["glyph"]):
-        assert colour in css and colour in favicon
+def test_the_stylesheet_colours_the_mark_for_both_themes():
+    css = re.sub(r"\s+", "", STATIC.joinpath("catalog.css").read_text())
+    assert "--mark:light-dark(#1b7694,#5bbfdf);" in css
+    assert re.search(r"\.product-mark\{[^}]*\bcolor:var\(--mark\)[;} ]", css)
+
+
+def test_no_obsolete_mark_tokens_remain_in_either_interface():
+    for directory in (REPO / "ui/src", REPO / "src/etl_craft/core/static"):
+        for path in directory.rglob("*"):
+            if path.is_file():
+                assert not re.search(rb"--mark-(?:a|b|glyph)\b", path.read_bytes()), str(path)
+
+
+@pytest.mark.parametrize(
+    ("colour", "pages"),
+    [("#1b7694", ("#eef2f6", "#edf1f5")), ("#5bbfdf", ("#151b23", "#0d1117"))],
+    ids=["light", "dark"],
+)
+def test_the_mark_stands_out_from_the_page_in_each_theme(colour, pages):
+    assert colour in STATIC.joinpath("catalog.css").read_text()
+    for page in pages:
+        assert contrast(colour, page) >= 3

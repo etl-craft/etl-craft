@@ -1,12 +1,1 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
-<style>.t1{stop-color:#3a6cf7}.t2{stop-color:#1b44c4}.g{stroke:#ffffff}.f{fill:#ffffff;fill-opacity:.28}
-@media (prefers-color-scheme: dark){.t1{stop-color:#9dbaff}.t2{stop-color:#6d93f2}.g{stroke:#0c1426}.f{fill:#0c1426;fill-opacity:.22}}</style>
-<defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop class="t1" offset="0"/><stop class="t2" offset="1"/></linearGradient></defs>
-<rect width="32" height="32" rx="8" fill="url(#g)"/>
-<g class="g" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-<path class="f" d="M16 5.5 L24.5 9.75 L16 14 L7.5 9.75 Z"/>
-<path d="M16 14 V25.5"/>
-<path d="M9.5 17.5 L16 21 L22.5 17.5"/>
-<path d="M9.5 22 L16 25.5 L22.5 22"/>
-</g>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32"><style>path{fill:#1B7694}@media (prefers-color-scheme:dark){path{fill:#5BBFDF}}</style><path fill-rule="evenodd" d="M16 0 32 8 16 16 0 8ZM0 11 0 16 12 22 12 17ZM32 16 32 11 20 17 20 22ZM18 17.236 16 18.236 14 17.236 14 23.764 16 24.764 18 23.764ZM0 19 16 27 32 19 32 24 16 32 0 24Z"/></svg>
