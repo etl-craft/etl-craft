@@ -190,7 +190,7 @@ item's text, or work done early under another item.
 | S7.H Cloud acceptance | In progress | #104–#110, #208, #231, #236, #247 | Native/Iceberg and managed-engine contracts exist; complete candidate evidence and unavailable provider cases remain |
 | S7.I The endurance run | Planned |  | 72-hour accelerated Support Insights candidate run, faults and bounded growth evidence after S8 is running |
 | S7.J Documentation to finish | In progress | #85, #227, #277 | Generated references and guides exist; supported public contracts, complete reference and recipes remain |
-| S7.L ETL Craft logo and CLI banner | In progress | #277, banner PR | Shared mark, favicon and theme assets and the CLI banner (`etl-craft about`, bare invocation) exist; branding guidance, vector sources and the documentation logo remain |
+| S7.L ETL Craft logo and CLI banner | In progress | #277, #400 | Owner-supplied logo, vector sources, theme-aware favicon and documentation assets, and the taller CLI banner are done; branding guidance remains |
 | S7.AL Pre-demo package gaps | In progress | #314, #315 | Slices 1–3 ship duplicate counts, current references and guarded-table validation guidance. Slice 4 (event-file validation) is in review; slices 5–6 remain. |
 | S7.AM Protection on every warehouse | Done | #311, #312, #313 | Atomic SCD merges, in-row protection and recovery, private audit identities and provider acceptance |
 | S7.AN Always show the environment | Done | #328 | CLI context and production confirmation; designed, sandboxed alert/SLA templates and catalog environment |
@@ -220,6 +220,14 @@ item's text, or work done early under another item.
 | S8.H Support Insights scenario coverage | Planned | | Deterministic mixed-quality generators, every-feature demonstrations, business-rule and stewardship cases, and runnable README coverage |
 
 ### Handover notes
+
+- **S7.L owner-supplied logo (#400).** The logo, editable vector sources, theme-aware
+  favicon, documentation raster previews and 20-row by 38-column terminal mark are done.
+  Branding guidance remains. Choices that differ from the item text: the owner supplied
+  the identity; the terminal uses two-tone half-block art from the flat banner vector, with
+  the block wordmark and aligned facts beside it. The favicon uses the pixel-grid variant.
+  Acceptance availability: full unit tests, static checks, strict docs and UI checks run
+  locally; CI owns the complete platform matrix. No schema, warehouse or service behavior changes.
 
 - **S7.B delegated pipeline grants (#386).** Choices that differ from the item text: this
   owner-requested slice exposes existing scoped grants on each pipeline, without introducing

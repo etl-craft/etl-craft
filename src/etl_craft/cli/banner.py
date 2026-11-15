@@ -10,23 +10,29 @@ from dataclasses import dataclass
 from typing import TextIO
 
 MARK = (
-    "          ▄▄██▄▄          ",
-    "       ▄██████████▄       ",
-    "   ▄▄████████████████▄▄   ",
-    " ▄██████████████████████▄ ",
-    "  ▀▀██████████████████▀▀  ",
-    "      ▀████████████▀      ",
-    " ▄▄▄     ▀▀████▀▀     ▄▄▄ ",
-    "▀█████▄            ▄█████▀",
-    "   ▀▀████▄ ████ ▄████▀▀   ",
-    " █▄▄  ▀▀██ ████ ██▀▀  ▄▄█ ",
-    "▀▀████▄▄   ████   ▄▄████▀▀",
-    "   ▀▀█████▄ ▀▀ ▄█████▀▀   ",
-    "       ▀██████████▀       ",
-    "          ▀▀██▀▀          ",
+    "                 ▄██▄▄                ",
+    "             ▄▄████████▄▄             ",
+    "          ▄▄███████████████▄          ",
+    "       ▄██████████████████████▄       ",
+    "   ▄▄████████████████████████████▄▄   ",
+    "  ▀████████████████████████████████▀  ",
+    "     ▀▀█████████████████████████▀     ",
+    "        ▀▀██████████████████▀▀        ",
+    "           ▀▀████████████▀▀           ",
+    "   ███▄        ▀██████▀        ▄███   ",
+    "  ███████▄▄       ▀▀       ▄▄███████  ",
+    "    ▀███████▄▄   ████   ▄▄███████▀    ",
+    "       ▀▀██████  ████  ██████▀▀       ",
+    "   ███▄   ▀▀███  ████  ███▀▀   ▄▄██   ",
+    "  ███████▄   ▀▀  ████  ▀▀   ▄███████  ",
+    "   ▀▀███████▄▄   ████   ▄▄███████▀▀   ",
+    "       ▀███████▄▄ ▀▀ ▄▄███████▀       ",
+    "          ▀▀███████████████▀          ",
+    "             ▀▀████████▀▀             ",
+    "                 ▀██▀▀                ",
 )
 """The mark: the product logo as half-block art, light above the stem and darker below it."""
-MARK_TOP_ROWS = 6
+MARK_TOP_ROWS = 10
 WORDMARK = (
     "█████ █████ █         █████ ████   ███  █████ █████",
     "█       █   █         █     █   █ █   █ █       █  ",
@@ -97,7 +103,8 @@ def wants_art(stream: TextIO, facts: Facts) -> bool:
     if suppressed() or not is_terminal(stream):
         return False
     rows = _rows(facts)
-    widest = max(len(label) + 2 + len(value) for label, value in rows)
+    label_width = max(len(label) for label, _ in rows)
+    widest = label_width + 2 + max(len(value) for _, value in rows)
     return shutil.get_terminal_size().columns >= len(MARK[0]) + 2 + max(widest, len(WORDMARK[0]))
 
 
