@@ -265,19 +265,50 @@ details[open] > summary::before { transform: rotate(45deg); }
 .mapping-node > .mapping-drag-handle:active { cursor: grabbing; }
 .react-flow__node-mapping .react-flow__resize-control { z-index: 5; }
 .react-flow__node-mapping .react-flow__resize-control.handle {
-  width: 24px; height: 24px; border: 0; border-radius: 0; background: transparent;
+  width: var(--resize-hit,24px); height: var(--resize-hit,24px); border: 0; border-radius: 0; background: transparent;
 }
 .react-flow__node-mapping .react-flow__resize-control.handle::after {
-  content: ""; position: absolute; inset: 9px; border: 1px solid var(--accent);
-  background: var(--surface); opacity: 0;
+  content: ""; position: absolute; inset: auto; border: var(--resize-stroke,1px) solid var(--accent);
+  width: var(--resize-mark,6px); height: var(--resize-mark,6px);
+  background: var(--surface); opacity: 1; pointer-events: none;
 }
-.react-flow__node-mapping:hover .react-flow__resize-control.handle::after,
-.react-flow__node-mapping:focus-within .react-flow__resize-control.handle::after { opacity: 1; }
 .react-flow__node-mapping .react-flow__resize-control.line { border: 0; }
-.react-flow__node-mapping .react-flow__resize-control.line:is(.left,.right) { width: 16px; }
-.react-flow__node-mapping .react-flow__resize-control.line:is(.top,.bottom) { height: 16px; }
 
 /* Keyboard focus uses the same clear boundary in dense lists and workspaces. */
 [role="separator"]:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
 main [role="tablist"] { background: var(--surface); }
 main thead button { min-height: 24px; }
+
+/* Invisible targets preserve the existing glyphs, spacing and control geometry. */
+main a[href], .hit-target, .checkbox-target { position: relative; }
+main a[href]::after, .hit-target::after, .checkbox-target::after {
+  content: ""; position: absolute; left: 50%; top: 50%; translate: -50% -50%;
+  width: max(100%, 24px); height: max(100%, 24px);
+}
+.checkbox-target input { position: relative; z-index: 1; }
+.pane-divider::before { content: ""; position: absolute; inset: 0 -6px; }
+
+/* Grips remain visible; their hit boxes occupy the surrounding gutter, not the node's contents. */
+.react-flow__node-mapping .react-flow__resize-control.handle.top.left { translate: -100% -100%; }
+.react-flow__node-mapping .react-flow__resize-control.handle.top.right { translate: 0 -100%; }
+.react-flow__node-mapping .react-flow__resize-control.handle.bottom.left { translate: -100% 0; }
+.react-flow__node-mapping .react-flow__resize-control.handle.bottom.right { translate: 0 0; }
+.react-flow__node-mapping .react-flow__resize-control.handle.top.left::after { right: 0; bottom: 0; }
+.react-flow__node-mapping .react-flow__resize-control.handle.top.right::after { left: 0; bottom: 0; }
+.react-flow__node-mapping .react-flow__resize-control.handle.bottom.left::after { right: 0; top: 0; }
+.react-flow__node-mapping .react-flow__resize-control.handle.bottom.right::after { left: 0; top: 0; }
+.react-flow__node-mapping .react-flow__resize-control.line:is(.left,.right) { width: var(--resize-hit,24px); }
+.react-flow__node-mapping .react-flow__resize-control.line:is(.top,.bottom) { height: var(--resize-hit,24px); }
+.react-flow__node-mapping .react-flow__resize-control.line.left { transform: translate(-100%,0); }
+.react-flow__node-mapping .react-flow__resize-control.line.right { transform: none; }
+.react-flow__node-mapping .react-flow__resize-control.line.top { transform: translate(0,-100%); }
+.react-flow__node-mapping .react-flow__resize-control.line.bottom { transform: none; }
+.react-flow__node-mapping .mapping-pointer-edge:is(.right,.bottom) { display: none; }
+.mapping-node .nowheel { scrollbar-gutter: stable; scrollbar-width: thin; scrollbar-color: var(--border-strong) transparent; overscroll-behavior: contain; }
+
+main a[href]::after { left: 0; translate: 0 -50%; }
+
+.table-cell-content:not(.line-clamp-2) { overflow: clip visible; }
+html[data-density="compact"] td:has([data-run-chart]) { padding-block: 2px; }
+
+.mapping-drag-handle > button { max-height: 100%; }

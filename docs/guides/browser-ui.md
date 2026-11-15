@@ -413,14 +413,21 @@ Failures table also keeps its classification under **Process details**.
 On screens narrower than 480 px, Runs uses labelled cards that retain every table field.
 Run numbers appear above single-line labels; hover or keyboard focus reveals the full label.
 Pipeline, Status and Tags filters stack. Home tabs scroll within the 16 px side gutters;
-keyboard focus brings each tab into view without scrolling the page horizontally.
+keyboard focus brings each tab into view without scrolling the page horizontally. Left/Right
+moves between tabs; Home/End selects the first/last tab. Edge chevrons indicate more tabs.
+The recent-run strip and duration bars open a run chooser with full identifiers and statuses;
+choose a run with touch or the keyboard to inspect it in the current tab.
 
 Column-mapping nodes initially show five rows. Scroll their column lists or resize the boxes
 to inspect more; wires follow visible rows, with off-screen columns attached at the list boundary.
 
 Drag a mapping node by its header to move it independently; drag the canvas background to pan.
-Resize from the generous edge or corner hit areas. Table columns and split panes also support
-keyboard resizing. The view key opens on request, remembers your choice and keeps its close
+The diagram toolbar’s Move view left/right/up/down buttons move the visible area without
+dragging, using the mouse, touch or Enter/Space, while retaining the zoom and node positions.
+Resize from the visible corner grips or generous edge hit areas, outside the column controls.
+Focus a mapping width/height grip and use the arrow keys to resize it. Column lists keep a
+scrollbar gutter; collapsing a resized box hides its rows, and expanding restores its size.
+Table columns and split panes also support keyboard resizing. The view key opens on request, remembers your choice and keeps its close
 button visible while you scroll its entries. Desktop mapping and catalog graph panes fill the
 available frame height. Fit view zooms out to show the complete diagram; Reset zoom returns to
 100% for reading.

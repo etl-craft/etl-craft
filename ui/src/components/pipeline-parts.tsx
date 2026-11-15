@@ -1,15 +1,27 @@
 import {LegendView,statusEntries} from "@/components/legend";
 import { CirclePause, X } from "lucide-react";
+import { DropdownMenu, DropdownTrigger, DropdownContent, DropdownItem } from "@/components/dropdown";
+import { Button } from "@/components/ui/button";
+import { RunLabel } from "@/components/run-label";
 import { When } from "@/components/when";
 import * as React from "react";
 import { AppLink as Link } from "@/components/navigation";
-import { isFailure, solidClass, StatusMark, statusMeta } from "@/components/status";
+import { isFailure, solidClass, StatusBadge, StatusMark, statusMeta } from "@/components/status";
 import { formatDuration } from "@/lib/format";
 import { runPath } from "@/lib/routes";
 import type { Pipeline, RunView } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
-/** A pipeline's newest runs as status marks; each opens its run. */
+/** Dense bars share one target; the chooser gives each recorded run its own full-size link. */
+function RunChartMenu({project,runs,label,className,style,children}:{project:string;runs:(Pick<RunView,"pipeline_run_id"|"pipeline_code"|"status"> & Partial<Pick<RunView,"run_label"|"start_date"|"end_date">>)[];label:string;className?:string;style?:React.CSSProperties;children:React.ReactNode}) {
+  return <DropdownMenu><DropdownTrigger asChild><Button data-run-chart variant="ghost" aria-label={label} title="Choose a run" style={style} className={cn("hit-target relative !h-auto min-h-6 min-w-6 !rounded-none !border-0 !bg-transparent !p-0 !justify-start",className)}>{children}</Button></DropdownTrigger><DropdownContent>
+    {[...runs].sort((a,b)=>b.pipeline_run_id-a.pipeline_run_id).map(run=><DropdownItem key={run.pipeline_run_id} asChild><Link to={runPath(project,run.pipeline_code,run.pipeline_run_id)} aria-label={`Run #${run.pipeline_run_id}${run.run_label?` · ${run.run_label}`:""}, ${statusMeta(run.status).label}, ${formatDuration(run.start_date ?? null,run.end_date ?? null)}`}>
+      <span className="min-w-0 flex-1"><RunLabel id={run.pipeline_run_id} label={run.run_label}/></span><StatusBadge status={run.status} quiet/>
+    </Link></DropdownItem>)}
+  </DropdownContent></DropdownMenu>;
+}
+
+/** A pipeline's newest runs as status marks with a chooser for inspecting any one. */
 export function RecentRuns({ project, pipeline }: { project: string; pipeline: Pipeline }) {
   const runs = pipeline.recent_runs;
   if (runs.length === 0) return <span className="text-muted">No runs yet</span>;
@@ -22,19 +34,11 @@ export function RecentRuns({ project, pipeline }: { project: string; pipeline: P
   const longest = Math.max(1, ...ordered.map(seconds));
   return (
     <span className="flex items-center gap-2">
-      <span role="list" aria-label="Recent runs, newest on the right" className="flex h-5 items-end gap-px">
-        {ordered.map((run) => (
-          <Link
-            key={run.pipeline_run_id}
-            role="listitem"
-            to={runPath(project, pipeline.pipeline_code, run.pipeline_run_id)}
-            aria-label={`Run ${run.pipeline_run_id}${run.run_label ? ` · ${run.run_label}` : ""}, ${statusMeta(run.status).label}`}
-            title={`Run ${run.pipeline_run_id}${run.run_label ? ` · ${run.run_label}` : ""}: ${statusMeta(run.status).label}${run.start_date && run.end_date ? ` · ${formatDuration(run.start_date, run.end_date)}` : ""}`}
-            style={{ height: `${Math.round(4 + (seconds(run) / longest) * 16)}px` }}
-            className={cn("w-1.5 rounded-xs hover:brightness-110", solidClass(run.status))}
-          />
-        ))}
-      </span>
+      <RunChartMenu project={project} runs={ordered.map(run=>({...run,pipeline_code:pipeline.pipeline_code}))} label={`Recent runs for ${pipeline.pipeline_code}`} style={{marginRight:Math.min(0,ordered.length*7-1-24)}}>
+        <span aria-hidden className="flex h-5 items-end gap-px">
+          {ordered.map(run=><span key={run.pipeline_run_id} style={{height:`${Math.round(4+(seconds(run)/longest)*16)}px`}} className={cn("w-1.5 rounded-xs",solidClass(run.status))}/>)}
+        </span>
+      </RunChartMenu>
       <RecentSummary latest={runs[0]!.status} failed={failed} ok={ok} total={runs.length} />
     </span>
   );
@@ -104,7 +108,7 @@ export function TagList({ tags }: { tags: string[] }) {
   );
 }
 
-/** Run durations, newest on the right; each bar opens its run. */
+/** Run durations, newest on the right, with the shared run chooser. */
 export function RunBars({ project, runs }: { project: string; runs: Pick<RunView, "run_label" | "pipeline_run_id" | "pipeline_code" | "status" | "start_date" | "end_date">[] }) {
   const [now] = React.useState(() => Date.now());
   if (runs.length < 5) return null;
@@ -113,18 +117,10 @@ export function RunBars({ project, runs }: { project: string; runs: Pick<RunView
   const longest = Math.max(1, ...ordered.map(seconds));
   return (
     // Bars start at the left and keep their width, so a few runs read as a short strip, not a corner of an empty panel.
-    <LegendView entries={statusEntries(ordered.map(run=>run.status),true)}><ul className="m-0 flex h-20 list-none items-end justify-start gap-0.5 p-0" aria-label="Run durations, newest on the right">
-      {ordered.map((run) => (
-        <li key={run.pipeline_run_id} className="flex h-full w-3 min-w-1.5 shrink items-end">
-          <Link
-            to={runPath(project, run.pipeline_code, run.pipeline_run_id)}
-            title={`Run ${run.pipeline_run_id}${run.run_label ? ` · ${run.run_label}` : ""} · ${statusMeta(run.status).label} · ${formatDuration(run.start_date, run.end_date)}`}
-            aria-label={`Run ${run.pipeline_run_id}${run.run_label ? ` · ${run.run_label}` : ""}, ${statusMeta(run.status).label}, ${formatDuration(run.start_date, run.end_date)}`}
-            style={{ height: `${Math.max(10, (seconds(run) / longest) * 100)}%` }}
-            className={cn("w-full rounded-xs hover:brightness-110", solidClass(run.status))}
-          />
-        </li>
-      ))}
-    </ul></LegendView>
+    <LegendView entries={statusEntries(ordered.map(run=>run.status),true)}><RunChartMenu project={project} runs={ordered} label="Run durations, newest on the right" className="w-full">
+      <span aria-hidden className="m-0 flex h-20 w-full items-end justify-start gap-0.5 p-0">
+        {ordered.map(run=><span key={run.pipeline_run_id} className="flex h-full w-3 min-w-1.5 shrink items-end"><span style={{height:`${Math.max(10,(seconds(run)/longest)*100)}%`}} className={cn("w-full rounded-xs",solidClass(run.status))}/></span>)}
+      </span>
+    </RunChartMenu></LegendView>
   );
 }

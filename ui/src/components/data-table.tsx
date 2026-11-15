@@ -251,15 +251,15 @@ export function DataTable<T>({
           <tr key={group.id}>
             {selection && rowId ? (
               <Th className="w-10">
-                <input type="checkbox" aria-label={`Select every row of ${label}`} checked={all} onChange={(event) => selection.onToggleAll(event.target.checked)} />
+                <label className="checkbox-target"><input type="checkbox" aria-label={`Select every row of ${label}`} checked={all} onChange={(event) => selection.onToggleAll(event.target.checked)} /></label>
               </Th>
             ) : null}
             {group.headers.map((header) => {
               const sorted = header.column.getIsSorted();
               return (
-                <Th key={header.id} style={{ width: widthOf(header.column) }} className="truncate" aria-sort={sorted === "asc" ? "ascending" : sorted === "desc" ? "descending" : "none"}>
+                <Th key={header.id} title={typeof header.column.columnDef.header==="string"?header.column.columnDef.header:undefined} style={{ width: widthOf(header.column) }} className="truncate" aria-sort={sorted === "asc" ? "ascending" : sorted === "desc" ? "descending" : "none"}>
                   {header.column.getCanSort() ? (
-                    <button type="button" className="inline-flex cursor-pointer items-center gap-1" onClick={header.column.getToggleSortingHandler()}>
+                    <button type="button" className="hit-target relative inline-flex max-w-[calc(100%-12px)] cursor-pointer items-center gap-1" onClick={header.column.getToggleSortingHandler()}>
                       {flexRender(header.column.columnDef.header, header.getContext())}
                       {sorted === "asc" ? <ArrowUp className="size-3" aria-hidden /> : sorted === "desc" ? <ArrowDown className="size-3" aria-hidden /> : null}
                     </button>
@@ -285,7 +285,7 @@ export function DataTable<T>({
                         event.preventDefault();
                         table.setColumnSizing((current) => ({ ...current, [header.column.id]: Math.min(900, Math.max(64, widthOf(header.column) + step)) }));
                       }}
-                      className={cn("group absolute right-0 top-0 z-20 flex h-full w-5 cursor-col-resize touch-none select-none items-center justify-center outline-none", header.column.getIsResizing() ? "bg-accent/20" : "hover:bg-accent/15 focus-visible:bg-accent/20")}
+                      className={cn("group absolute right-0 top-0 z-20 flex h-full w-6 cursor-col-resize touch-none select-none items-center justify-center outline-none", header.column.getIsResizing() ? "bg-accent/20" : "hover:bg-accent/15 focus-visible:bg-accent/20")}
                     >
                       <span aria-hidden className={cn("h-4 w-px rounded-full bg-border-strong transition-colors group-hover:h-5 group-hover:w-0.5 group-hover:bg-accent group-focus-visible:h-5 group-focus-visible:w-0.5 group-focus-visible:bg-accent", header.column.getIsResizing() && "h-5 w-0.5 bg-accent")} />
                     </div>
@@ -306,17 +306,17 @@ export function DataTable<T>({
           >
             {selection && rowId ? (
               <Td>
-                <input
+                <label className="checkbox-target"><input
                   type="checkbox"
                   aria-label={`Select ${rowLabel ? rowLabel(row.original) : rowId(row.original)}`}
                   checked={selection.ids.has(rowId(row.original))}
                   onChange={() => selection.onToggle(rowId(row.original))}
-                />
+                /></label>
               </Td>
             ) : null}
             {row.getVisibleCells().map((cell) => (
               <Td key={cell.id} data-label={stacked ? String(cell.column.columnDef.header) : undefined} style={{ width: widthOf(cell.column) }} title={hover(cell.getValue())}>
-                <div className={cn("max-w-full break-words leading-snug", wrap ? "line-clamp-2" : "truncate")}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</div>
+                <div className={cn("table-cell-content max-w-full break-words leading-snug", wrap ? "line-clamp-2" : "truncate")}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</div>
               </Td>
             ))}
           </tr>

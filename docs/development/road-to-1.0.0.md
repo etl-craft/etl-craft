@@ -198,7 +198,7 @@ item's text, or work done early under another item.
 | S7.AP Native catalog | Done | #389 | All six slices, shape 2, definition flow and task mappings; owner approved the screenshots 2026-11-13 |
 | S7.AQ Readable run identifiers | Done | #347, #369, #370 | A label beside every run and task run id, stored by the Engine DB; accepted wherever the integer is, and shown beside it |
 | S7.AR Restarting pipelines | Done | #349, #350, #356, #358 | Automatic starts on a chosen run ending, with `Allowed_auto_restarts` per environment; the demo's Gamma pipeline runs without a schedule. |
-| S7.AS Project dashboard and navigation | Done | #401, #402, #404 | Slices 1–5 verified and owner approved; shared controls, mapping and keys polished, with menus separating expansion from catalog navigation |
+| S7.AS Project dashboard and navigation | Done | #401, #402, #404 | Slices 1–5 verified and owner approved; shared controls and mapping polished; keyboard/target/scroll interaction follow-up preserves the frame |
 | S7.M Stewardship uploads | Done (M2) | #296, #305 | Atomic receipts and safe stored names; processed layout, retention archives and verified reruns; crash recovery and guarded upload history |
 | S7.S Seed tables | Done | #308 | Typed pinned-bundle seeds replace reference tables until recorded stewardship handover |
 | S7.T Business calendars | Done | #276 | Shared holiday and weekend calendars for schedules, run dates, backfill and catch-up |
@@ -238,6 +238,7 @@ item's text, or work done early under another item.
   The owner confirmed expandable table-column lineage: the Lineage diagram reuses mapping
   nodes; Column sources is the list with a writing-task selector. Missing source contracts
   are repaired in a companion Support Insights metadata change, explicitly authorised.
+  Shared-control usability follow-up adds tab keys/cues, larger targets, run choosers and visible mapping resize/scroll controls; navigation rules and the approved frame are preserved.
 
 - **S7.L owner-supplied logo (#400).** The logo, editable vector sources, theme-aware
   favicon, documentation raster previews and 20-row by 38-column terminal mark are done.
