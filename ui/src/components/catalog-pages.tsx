@@ -5,7 +5,8 @@ import { gapRemedy } from "@/lib/catalog";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronDown, Copy, Table2, Workflow, ListChecks, TriangleAlert } from "lucide-react";
 import * as React from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
+import { AppLink as Link } from "@/components/navigation";
 import { EmptyState, Fact, FactList, Loading, Notice, SelectField } from "@/components/common";
 import { RunBars } from "@/components/pipeline-parts";
 import { RunGraph } from "@/components/lazy-run-graph";
@@ -269,7 +270,7 @@ export function PipelineObject({ code, doc, name, tab, onTab }: { code: string; 
       ) : on === "lineage" ? (
         <div data-card className="grid gap-3 rounded-sm border border-border @3xl:flex @3xl:min-h-0 @3xl:flex-1 @3xl:flex-col">
 
-          <div className="min-h-80 overflow-hidden @3xl:min-h-0 @3xl:flex-1"><RunGraph definition={{ tasks, edges: doc.definition_edges,overlay,onOverlay:()=>setOverlay(!overlay),schedule:pipeline.schedule }} fill plain={!overlay} graph={graph} statuses={overlay ? Object.fromEntries(tasks.map(t => [t.code, t.runs.find(run => run.pipeline_run_id === pipeline.runs[0]?.pipeline_run_id)?.status ?? ""])) : {}} focused={focused} onFocus={setFocused} onOpen={(task) => { const destination = flowLocation(code, pipeline.code, task); if (destination) navigate(catalogPath(destination.project,destination.kind,destination.name)); else setFocused(task); }} /></div>
+          <div className="min-h-80 overflow-hidden @3xl:min-h-0 @3xl:flex-1"><RunGraph catalogDetails={node=>{const destination=flowLocation(code,pipeline.code,node);return destination ? catalogPath(destination.project,destination.kind,destination.name):null;}} definition={{ tasks, edges: doc.definition_edges,overlay,onOverlay:()=>setOverlay(!overlay),schedule:pipeline.schedule }} fill plain={!overlay} graph={graph} statuses={overlay ? Object.fromEntries(tasks.map(t => [t.code, t.runs.find(run => run.pipeline_run_id === pipeline.runs[0]?.pipeline_run_id)?.status ?? ""])) : {}} focused={focused} onFocus={setFocused} onOpen={(task) => { const destination = flowLocation(code, pipeline.code, task); if (destination) navigate(catalogPath(destination.project,destination.kind,destination.name)); else setFocused(task); }} /></div>
           <Disclosure><DisclosureSummary>Flow as text</DisclosureSummary><ul>{tasks.map(task => <li key={task.label}>{runsWhen(task)} Target: {task.target ?? "none"}. {task.lineage.state}.</li>)}</ul></Disclosure>
           {focused ? <aside onKeyDown={event=>{if(event.key==="Escape")setFocused(null);}} aria-label="Task definition" className="border border-border bg-surface p-3 text-sm">{focused.startsWith("Schedule: ") ? <p>{focused}. Auto-restart: {pipeline.auto_restart_condition.toLowerCase().replaceAll("_"," ")}. SLA: {pipeline.sla_in_hours ? `${pipeline.sla_in_hours} hours` : "not set"}.</p> : null}{tasks.filter(t => t.code === focused || t.label === focused).map(t => <div key={t.label}><p>{runsWhen(t)}</p><p>{t.target}{t.target_active_flag === "N" ? " · target inactive" : ""} · {t.lineage.state}</p><Link to={catalogPath(code, "tasks", t.label) + "?tab=mapping"}>Open mapping</Link></div>)}</aside> : null}
         </div>

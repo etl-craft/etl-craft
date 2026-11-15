@@ -1,6 +1,6 @@
 import { ChevronDown, ChevronRight, Database, ListChecks, Search, Table2, TriangleAlert, Workflow } from "lucide-react";
 import * as React from "react";
-import { Link } from "react-router-dom";
+import { AppLink as Link } from "@/components/navigation";
 import { pipelineGraph, schemasOf, type CatalogDoc } from "@/lib/catalog";
 import { catalogPath, type CatalogKind } from "@/lib/routes";
 import { cn } from "@/lib/utils";

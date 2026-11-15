@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { When } from "@/components/when";
 import * as React from "react";
-import { Link } from "react-router-dom";
+import { AppLink as Link } from "@/components/navigation";
 import { inputClass, Loading, Notice, PageHeader, SelectField, SettingRow } from "@/components/common";
 import { useToast } from "@/components/toast";
 import { Button } from "@/components/ui/button";

@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { When } from "@/components/when";
 import { createColumnHelper } from "@tanstack/react-table";
-import { Link } from "react-router-dom";
+import { AppLink as Link } from "@/components/navigation";
 import { EmptyState, Fact, FactList, Loading, Notice, PageHeader } from "@/components/common";
 import { DataTable } from "@/components/data-table";
 import { EnvironmentBadge } from "@/components/environment-badge";

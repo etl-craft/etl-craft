@@ -4,14 +4,14 @@ import {Handle,NodeResizer,useReactFlow,useUpdateNodeInternals,Position,type Nod
 import type {LucideIcon} from "lucide-react";
 import {MappingLogicMark,MappingConditions} from "@/components/diagram-key";
 import {DiagramChip} from "@/components/diagram-toolbar";
-import {DiagramNode,DiagramEdge} from "@/components/diagram-node";
+import {DiagramNode,DiagramEdge,type DiagramDetails} from "@/components/diagram-node";
 import {kindColor,kindLabels} from "@/components/task-symbol";
 import {Button} from "@/components/ui/button";
 import {mappingRoute,roundedMappingPath} from "@/lib/mapping-arrows";
 import {cn} from "@/lib/utils";
 
 export type Port = { name: string; detail: string; logic?:string; selection?: string; input?: boolean; output?: boolean };
-export type BoxData = { selection: string; title: string; description?: string; action?: React.ReactNode; columns: Port[]; declared: boolean; selected: Set<string>; onSelect: (name: string) => void; expanded: boolean; onExpanded: () => void; tableLevel?: boolean; kind:string; conditions?:string[]; icon: LucideIcon; size?: NodeSize; onResize: (id: string, size: NodeSize) => void } & Record<string, unknown>;
+export type BoxData = { selection: string; title: string; description?: string; details?: DiagramDetails; columns: Port[]; declared: boolean; selected: Set<string>; onSelect: (name: string) => void; expanded: boolean; onExpanded: () => void; tableLevel?: boolean; kind:string; conditions?:string[]; icon: LucideIcon; size?: NodeSize; onResize: (id: string, size: NodeSize) => void } & Record<string, unknown>;
 export type NodeSize = { width: number; height?: number };
 /** A node lists this many column rows before its list scrolls; a resized node fills its height instead. */
 export const SHOWN_ROWS = 5;
@@ -41,7 +41,7 @@ export function MappingBox({ id, data }: NodeProps<Node<BoxData>>) {
   const size = data.size;
   const fixedHeight = size?.height;
   const logicLabel = kindLabels[data.kind] ?? "Logic";
-  return <><NodeResizer minWidth={160} minHeight={HEADER_HEIGHT + ROW_HEIGHT * 2} onResize={(_, next) => data.onResize(id, { width: next.width, height: next.height })}/><DiagramNode title={data.title} action={data.action} width={size?.width ?? (data.declared?(id.startsWith("source:")?320:256):160)} height={fixedHeight} bodyClassName={fixedHeight!==undefined ? "flex min-h-0 flex-1 flex-col" : undefined} color={kindColor(data.kind)} chip={data.declared ? <DiagramChip>Declared</DiagramChip> : undefined} description={data.conditions?.length ? <MappingConditions conditions={data.conditions}/> : undefined} icon={data.icon} expanded={expanded} onExpanded={data.onExpanded} headingClassName="h-10" collapsedPorts={collapsedPorts} className={cn("mapping-node",data.declared && "border-dashed",data.selected.has(`${id}:object`) && "ring-2 ring-accent")}>
+  return <><NodeResizer minWidth={160} minHeight={HEADER_HEIGHT + ROW_HEIGHT * 2} onResize={(_, next) => data.onResize(id, { width: next.width, height: next.height })}/><DiagramNode title={data.title} details={data.details} width={size?.width ?? (data.declared?(id.startsWith("source:")?320:256):160)} height={fixedHeight} bodyClassName={fixedHeight!==undefined ? "flex min-h-0 flex-1 flex-col" : undefined} color={kindColor(data.kind)} chip={data.declared ? <DiagramChip>Declared</DiagramChip> : undefined} description={data.conditions?.length ? <MappingConditions conditions={data.conditions}/> : undefined} icon={data.icon} expanded={expanded} onExpanded={data.onExpanded} headingClassName="h-10" collapsedPorts={collapsedPorts} className={cn("mapping-node",data.declared && "border-dashed",data.selected.has(`${id}:object`) && "ring-2 ring-accent")}>
     {objectPorts}
     {data.columns.map((column, index) => {
       // Off-screen columns stay wired at the list boundary while their rows scroll.

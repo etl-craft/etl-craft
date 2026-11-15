@@ -1,22 +1,63 @@
 import { BaseEdge, EdgeLabelRenderer } from "@xyflow/react";
 import * as React from "react";
-import { ChevronDown, ChevronRight, type LucideIcon } from "lucide-react";
+import { ChevronDown, ChevronRight, MoreHorizontal, type LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { DropdownMenu, DropdownTrigger, DropdownContent, DropdownItem, DropdownLabel } from "@/components/dropdown";
+import { AppLink } from "@/components/navigation";
+import { useHref } from "react-router-dom";
+import { openNavigationTab } from "@/lib/navigation";
 import { cn } from "@/lib/utils";
 
+export type DiagramDetails = { to: string };
+
+/** The menu is the keyboard and touch path to catalog details; inspection stays in place. */
+export function DiagramActions({ title, details, expanded, onExpanded, onInspect }: {title:string;details?:DiagramDetails;expanded:boolean;onExpanded:()=>void;onInspect?:()=>void}) {
+  return <DropdownMenu>
+    <DropdownTrigger asChild><Button size="icon" variant="ghost" aria-label={`Node actions for ${title}`} className="nodrag nopan shrink-0" onClick={event=>event.stopPropagation()} onDoubleClick={event=>event.stopPropagation()}><MoreHorizontal aria-hidden className="size-4"/></Button></DropdownTrigger>
+    <DropdownContent onClick={event=>event.stopPropagation()} onKeyDown={event=>event.stopPropagation()}>
+      {!details ? <DropdownLabel>No catalog entry for this node</DropdownLabel> : null}
+      {details ? <DropdownItem asChild><AppLink to={details.to}>Open catalog details</AppLink></DropdownItem> : <DropdownItem disabled title="This node has no catalog entry">Open catalog details</DropdownItem>}
+      <DropdownItem onSelect={onExpanded}>{expanded ? "Collapse" : "Expand"}</DropdownItem>
+      {details ? <DropdownItem asChild><AppLink newTab to={details.to}>Open in new tab</AppLink></DropdownItem> : <DropdownItem disabled title="This node has no catalog entry">Open in new tab</DropdownItem>}
+      {onInspect ? <DropdownItem onSelect={onInspect}>Inspect task</DropdownItem> : null}
+    </DropdownContent>
+  </DropdownMenu>;
+}
+
+/** Defer a mouse click until a double-click can cancel it; keyboard activation is immediate. */
+export function useDiagramActivation(onExpand:()=>void, onOpen?:()=>void) {
+  const pending=React.useRef<ReturnType<typeof setTimeout>|undefined>(undefined);
+  const pointer=React.useRef("mouse");
+  const cancel=()=>{clearTimeout(pending.current);pending.current=undefined;};
+  React.useEffect(()=>()=>clearTimeout(pending.current),[]);
+  return {
+    onPointerDown:(event:React.PointerEvent)=>{pointer.current=event.pointerType;},
+    onClick:(event:React.MouseEvent)=>{
+      event.stopPropagation();cancel();
+      if(event.detail===0||pointer.current==="touch"){onExpand();return;}
+      if(event.detail===1)pending.current=setTimeout(onExpand,500);
+    },
+    onDoubleClick:(event:React.MouseEvent)=>{event.stopPropagation();cancel();if(pointer.current==="mouse")onOpen?.();},
+  };
+}
+
 /** The same compact header identifies pipeline tasks and column transformations. */
-export function DiagramNode({title,tooltip,description,collapsedDescription,icon:Icon,expanded,onExpanded,children,collapsedPorts,action,className,color="var(--muted)",chip,width=160,height,bodyClassName}: {
+export function DiagramNode({title,tooltip,description,collapsedDescription,icon:Icon,expanded,onExpanded,children,collapsedPorts,details,onInspect,className,color="var(--muted)",chip,width=160,height,bodyClassName}: {
   title:string;tooltip?:string;description?:React.ReactNode;collapsedDescription?:React.ReactNode;icon:LucideIcon;
   expanded:boolean;onExpanded:()=>void;children?:React.ReactNode;collapsedPorts?:React.ReactNode;
-  action?:React.ReactNode;headingClassName?:string;className?:string;color?:string;chip?:React.ReactNode;width?:number;
+  details?:DiagramDetails;onInspect?:()=>void;headingClassName?:string;className?:string;color?:string;chip?:React.ReactNode;width?:number;
   height?:number;bodyClassName?:string;
 }) {
+  const href=useHref(details?.to??"/");
+  const activation=useDiagramActivation(onExpanded,details ? ()=>openNavigationTab(href) : undefined);
   return <div className={cn("diagram-node relative w-40 rounded-sm border border-border bg-surface text-[13px]",height!==undefined&&"flex flex-col",className)} style={{width,height,borderLeft:`3px solid ${color}`}}>
     <div className="mapping-drag-handle flex h-10 shrink-0 items-center gap-1 px-2" style={{background:`color-mix(in srgb, ${color} 12%, transparent)`}}>
-      <Icon aria-hidden className="size-[18px] shrink-0" style={{color}}/>
-      <strong className="min-w-0 flex-1 truncate font-medium" title={tooltip??title}>{title}</strong>
-      {chip}{action}
-      <Button size="icon" variant="ghost" className="nodrag nopan !size-6 shrink-0" aria-label={`${expanded ? "Collapse" : "Expand"} ${title}`} aria-expanded={expanded} onClick={event=>{event.stopPropagation();onExpanded();}}>{expanded ? <ChevronDown aria-hidden className="size-3"/> : <ChevronRight aria-hidden className="size-3"/>}</Button>
+      <button type="button" className="nopan flex h-full min-w-0 flex-1 cursor-pointer items-center gap-2 text-left" title={tooltip??title} aria-label={`${expanded ? "Collapse" : "Expand"} ${title}`} aria-expanded={expanded} {...activation}>
+        <Icon aria-hidden className="size-[18px] shrink-0" style={{color}}/>
+        <strong className="min-w-0 flex-1 truncate font-medium" title={tooltip??title}>{title}</strong>
+        {expanded ? <ChevronDown aria-hidden className="size-3 shrink-0"/> : <ChevronRight aria-hidden className="size-3 shrink-0"/>}
+      </button>
+      {chip}<DiagramActions title={title} details={details} expanded={expanded} onExpanded={onExpanded} onInspect={onInspect}/>
     </div>
     {expanded ? <div className={cn("diagram-body",bodyClassName)}>{description ? <div className="px-2 pb-1 text-xs text-muted">{description}</div> : null}{children}</div> : <>{collapsedDescription ? <div className="truncate px-2 pb-2 text-xs text-muted">{collapsedDescription}</div> : null}{collapsedPorts}</>}
   </div>;

@@ -391,3 +391,7 @@ expandable-object-lineage = [
 workspace-panel-headings = [
     "tests/browser/test_react_pipelines.py::test_a_pipeline_has_an_overview_tasks_and_details_and_a_way_back",
 ]
+
+diagram-navigation-gestures = [
+    "tests/browser/test_react_lineage.py::test_node_header_double_click_and_keyboard_menu_follow_navigation_rule",
+]

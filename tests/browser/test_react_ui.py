@@ -93,14 +93,15 @@ def test_home_runs_and_run_detail_lead_to_a_confirmed_recovery(scene):
         graph = page.get_by_role("group", name="Task graph")
         expect(graph.get_by_text("EXTRACT")).to_be_visible()
         expect(graph.get_by_text("LOAD")).to_be_visible()
-        # a click shows the lineage and opens nothing; the task's arrow opens its details
+        # The node selects lineage; its menu inspects the task in the existing workspace.
         expect(graph.locator("[data-focus=none]")).to_have_count(3)
-        graph.get_by_text("LOAD", exact=True).click()
+        graph.locator('[data-id="LOAD"]').click(position={"x": 2, "y": 2})
         expect(graph.locator("[data-focus=focus]")).to_have_count(1)
         expect(graph.locator("[data-focus=lineage]")).to_have_count(1)  # EXTRACT, upstream of LOAD
         expect(graph.locator("[data-focus=dim]")).to_have_count(1)  # AUDIT is unrelated
         expect(page.get_by_label("Task LOAD")).to_have_count(0)
-        graph.get_by_role("button", name="Open LOAD details").click()
+        graph.get_by_role("button", name="Node actions for LOAD").click()
+        page.get_by_role("menuitem", name="Inspect task", exact=True).click()
         expect(page.get_by_label("Task LOAD")).to_be_visible()
         page.get_by_role("button", name="Recover run").click()
         dialog = page.get_by_role("dialog")
@@ -377,10 +378,22 @@ def test_an_active_run_graph_refreshes_task_states_without_the_run_tab(site):
             task_run(conn, copy, run, RunStatus.SKIPPED)
             task_run(conn, after, run, RunStatus.IN_PROGRESS)
         expect(copy_node.get_by_text("Skipped", exact=True)).to_be_visible(timeout=12_000)
-        expect(copy_node.locator("[data-focus]")).to_have_class(re.compile("border-l-idle-solid"))
+        expect(copy_node.locator(".diagram-node")).to_have_class(re.compile("border-l-idle-solid"))
         expect(after_node.get_by_text("Running", exact=True)).to_be_visible()
-        expect(after_node.locator("[data-focus]")).to_have_class(re.compile("border-l-run-solid"))
-        expect(done_node.locator("[data-focus]")).to_have_class(re.compile("border-l-ok-solid"))
+        expect(after_node.locator(".diagram-node")).to_have_class(re.compile("border-l-run-solid"))
+        expect(done_node.locator(".diagram-node")).to_have_class(re.compile("border-l-ok-solid"))
+        for node, tone in ((copy_node, "idle"), (after_node, "run"), (done_node, "ok")):
+            assert node.locator(".diagram-node").evaluate(
+                """(element, tone) => {
+                const sample = document.createElement('span');
+                sample.style.color = `var(--${tone}-solid)`;
+                element.append(sample);
+                const expected = getComputedStyle(sample).color;
+                sample.remove();
+                return getComputedStyle(element).borderLeftColor === expected;
+            }""",
+                tone,
+            )
         assert (
             page.request.get(url + f"/api/v1/projects/default/runs/{run}").json()["status"]
             == RunStatus.IN_PROGRESS

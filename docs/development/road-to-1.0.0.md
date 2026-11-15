@@ -198,7 +198,7 @@ item's text, or work done early under another item.
 | S7.AP Native catalog | Done | #389 | All six slices, shape 2, definition flow and task mappings; owner approved the screenshots 2026-11-13 |
 | S7.AQ Readable run identifiers | Done | #347, #369, #370 | A label beside every run and task run id, stored by the Engine DB; accepted wherever the integer is, and shown beside it |
 | S7.AR Restarting pipelines | Done | #349, #350, #356, #358 | Automatic starts on a chosen run ending, with `Allowed_auto_restarts` per environment; the demo's Gamma pipeline runs without a schedule. |
-| S7.AS Project dashboard and navigation | Done | #401 | Slices 1–5 verified and owner approved; follow-up polishes shared controls, mapping interaction and accurate keys |
+| S7.AS Project dashboard and navigation | Done | #401, #402, #404 | Slices 1–5 verified and owner approved; shared controls, mapping and keys polished, with menus separating expansion from catalog navigation |
 | S7.M Stewardship uploads | Done (M2) | #296, #305 | Atomic receipts and safe stored names; processed layout, retention archives and verified reruns; crash recovery and guarded upload history |
 | S7.S Seed tables | Done | #308 | Typed pinned-bundle seeds replace reference tables until recorded stewardship handover |
 | S7.T Business calendars | Done | #276 | Shared holiday and weekend calendars for schedules, run dates, backfill and catch-up |
@@ -220,6 +220,8 @@ item's text, or work done early under another item.
 | S8.H Support Insights scenario coverage | Planned | | Deterministic mixed-quality generators, every-feature demonstrations, business-rule and stewardship cases, and runnable README coverage |
 
 ### Handover notes
+
+- **S7.AS navigation follow-up.** Owner-approved diagram gestures and a shared menu preserve keyboard/touch access; ordinary inspection stays in the current tab.
 
 - **S7.AS implementation inventory.** Choices that differ from the item text: slices 1 and 2
   already shipped (navigation groups, Projects under Platform, Insights redirect, integer run IDs

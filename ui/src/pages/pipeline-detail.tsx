@@ -1,3 +1,4 @@
+import { catalogPath } from "@/lib/routes";
 import { AccessTab } from "@/pages/admin/access";
 import { RunLabel } from "@/components/run-label";
 import { useQuery } from "@tanstack/react-query";
@@ -340,6 +341,7 @@ export function PipelineDetail() {
               ) : null}
               <div className="relative min-h-0 flex-1">
               <RunGraph
+                catalogDetails={taskCode=>catalogPath(code,"tasks",`${pipeline}.${taskCode}`)}
                 fill
                 direction={flow}
                 graph={graph.data}

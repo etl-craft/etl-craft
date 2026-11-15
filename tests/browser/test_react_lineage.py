@@ -833,3 +833,47 @@ def test_column_sources_filters_by_the_selected_writing_task(mappings):
         expect(page.get_by_role("table", name="Column sources")).to_be_visible()
         assert problems == []
         browser.close()
+
+
+def test_node_header_double_click_and_keyboard_menu_follow_navigation_rule(mappings):
+    _, url = mappings
+    with sync_playwright() as pw:
+        browser, page, problems = open_page(pw, viewport={"width": 1440, "height": 900})
+        sign_in(page, url, "/ui/projects/default/catalog/tables/mart.orders?tab=lineage")
+        node = page.locator('[data-id="raw.orders"]')
+        header = node.get_by_role("button", name="Expand raw.orders", exact=True)
+        header.click()
+        header = node.get_by_role("button", name="Collapse raw.orders", exact=True)
+        expect(header).to_have_attribute("aria-expanded", "true")
+        header.evaluate("""element => {
+            window.expansionChanges = [];
+            new MutationObserver(records => records.forEach(record =>
+                window.expansionChanges.push(record.target.getAttribute('aria-expanded'))))
+                .observe(element, {attributes:true, attributeFilter:['aria-expanded']});
+        }""")
+        with page.expect_popup() as opened:
+            header.dblclick()
+        popup = opened.value
+        expect(popup).to_have_url(re.compile(r"/ui/projects/default/catalog/tables/raw\.orders$"))
+        expect(popup.get_by_role("heading", name="orders", exact=True)).to_be_visible()
+        expect(header).to_have_attribute("aria-expanded", "true")
+        assert popup.evaluate("window.opener === null")
+        assert page.evaluate("window.expansionChanges") == []
+        popup.close()
+        menu = node.get_by_role("button", name="Node actions for raw.orders", exact=True)
+        menu.focus()
+        page.keyboard.press("Enter")
+        item = page.get_by_role("menuitem", name="Open catalog details", exact=True)
+        expect(item).to_be_focused()
+        page.keyboard.press("ArrowDown")
+        expect(page.get_by_role("menuitem", name="Collapse", exact=True)).to_be_focused()
+        page.keyboard.press("Escape")
+        expect(item).not_to_be_visible()
+        expect(menu).to_be_focused()
+        page.keyboard.press("Enter")
+        expect(item).to_be_focused()
+        page.keyboard.press("Enter")
+        expect(page).to_have_url(re.compile(r"/ui/projects/default/catalog/tables/raw\.orders$"))
+        expect(page.get_by_role("heading", name="orders", exact=True)).to_be_visible()
+        assert problems == []
+        browser.close()

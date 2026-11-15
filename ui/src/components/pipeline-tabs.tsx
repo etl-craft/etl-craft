@@ -4,7 +4,7 @@ import { Disclosure, DisclosureSummary } from "@/components/dropdown";
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { When } from "@/components/when";
 import * as React from "react";
-import { Link } from "react-router-dom";
+import { AppLink as Link } from "@/components/navigation";
 import { EmptyState, Fact, FactList, Loading, Notice, SelectField } from "@/components/common";
 import { RunBars } from "@/components/pipeline-parts";
 import { isFailure, StatusBadge, taskStatus, toneClass } from "@/components/status";

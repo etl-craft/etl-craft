@@ -3,7 +3,7 @@ import * as React from "react";
 import { dayLabel, formatSeconds, measured } from "@/lib/format";
 import type { DayInsight } from "@/lib/types";
 import { EmptyState } from "@/components/common";
-import { Link } from "react-router-dom";
+import { AppLink as Link } from "@/components/navigation";
 import { cn } from "@/lib/utils";
 
 const DailyChart = React.lazy(() => import("@/components/chart-renderers").then((module) => ({ default: module.DailyChart })));

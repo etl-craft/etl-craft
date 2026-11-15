@@ -1,7 +1,7 @@
 import { DropdownSelect } from "@/components/dropdown";
 import { ArrowLeft, Inbox, type LucideIcon } from "lucide-react";
 import * as React from "react";
-import { Link } from "react-router-dom";
+import { AppLink as Link } from "@/components/navigation";
 import { cn } from "@/lib/utils";
 
 /** The path to the page from the project's lists, each part a link except the last. */

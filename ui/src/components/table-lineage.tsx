@@ -1,7 +1,6 @@
 import * as React from "react";
 import {Background,MarkerType,ReactFlow,type Node,type Edge,type ReactFlowInstance} from "@xyflow/react";
-import {ArrowUpRight,Database} from "lucide-react";
-import {Link} from "react-router-dom";
+import {Database} from "lucide-react";
 import {MappingBox,MappingLink,SHOWN_ROWS,ROW_HEIGHT,HEADER_HEIGHT,type BoxData,type NodeSize} from "@/components/mapping-node";
 import {DiagramToolbar} from "@/components/diagram-toolbar";
 import {diagramKeys,useDiagramExpansion} from "@/components/diagram-node";
@@ -52,7 +51,7 @@ export function TableLineage({doc,name,depth,direction}:{doc:CatalogDoc;name:str
   wave.forEach(object=>{
    const fields=[...new Set([...(doc.tables.find(table=>table.name===object)?.columns.map(column=>column.name)??[]),...columns.flatMap(edge=>[...(edge.source_object===object?[edge.source_column!]:[]),...(edge.target_object===object?[edge.target_column]:[])])])];
    const expanded=expansion.isExpanded(object);
-   nodes.push({id:object,type:"mapping",dragHandle:".mapping-drag-handle",position:positions[object]??{x:x*320,y},data:{selection:object,title:object.replace(/^external:/,""),columns:fields.map(field=>({name:field,detail:"",selection:`${object}:${field}`})),declared:false,selected:highlighted,onSelect:port=>setSelected(port===selected?null:port),expanded,onExpanded:()=>expansion.toggle(object),tableLevel:true,kind:object===name?"target":"source",icon:Database,size:sizes[object]??{width:240},onResize:(id,size)=>{setPositions(Object.fromEntries(nodes.map(node=>[node.id,node.position])));setSizes(previous=>({...previous,[id]:size}));},action:doc.tables.some(table=>table.name===object)?<Link aria-label={`Open ${object} details`} title="Open table details" className="nodrag nopan grid size-6 shrink-0 place-items-center border border-border-strong text-muted" to={catalogPath(doc.project,"tables",object)}><ArrowUpRight aria-hidden className="size-3"/></Link>:undefined}});
+   nodes.push({id:object,type:"mapping",dragHandle:".mapping-drag-handle",position:positions[object]??{x:x*320,y},data:{selection:object,title:object.replace(/^external:/,""),columns:fields.map(field=>({name:field,detail:"",selection:`${object}:${field}`})),declared:false,selected:highlighted,onSelect:port=>setSelected(port===selected?null:port),expanded,onExpanded:()=>expansion.toggle(object),tableLevel:true,kind:object===name?"target":"source",icon:Database,size:sizes[object]??{width:240},onResize:(id,size)=>{setPositions(Object.fromEntries(nodes.map(node=>[node.id,node.position])));setSizes(previous=>({...previous,[id]:size}));},details:doc.tables.some(table=>table.name===object)?{to:catalogPath(doc.project,"tables",object)}:undefined}});
    y+=(expanded?(sizes[object]?.height??HEADER_HEIGHT+Math.min(fields.length,SHOWN_ROWS)*ROW_HEIGHT+8):HEADER_HEIGHT)+48;
   });
  });
@@ -76,7 +75,7 @@ export function TableLineage({doc,name,depth,direction}:{doc:CatalogDoc;name:str
   observer.observe(element);return()=>observer.disconnect();
  },[]);
  return <div role="group" aria-label="Lineage diagram" tabIndex={0} className="flex h-[70dvh] min-h-0 flex-1 flex-col @3xl:h-full" onKeyDown={event=>{key.onKeyDown(event);if(!event.defaultPrevented)diagramKeys(event,()=>setSelected(null));}}>
-  <p className="m-0 px-3 py-1.5 text-xs text-muted">Expand tables to show columns; select a column to follow its recorded path. Drag headers to move boxes.</p>
+  <p className="m-0 px-3 py-1.5 text-xs text-muted">Click a header to expand columns; double-click to open catalog details, or use its actions menu. Select a column to follow its path. Drag headers to move boxes.</p>
   <DiagramToolbar zoomIn={()=>void flow.current?.zoomIn()} zoomOut={()=>void flow.current?.zoomOut()} fit={()=>fitDiagram(flow.current,frame.current,true)} reset={()=>void flow.current?.zoomTo(1)}><Button onClick={expansion.toggleAll}>{expansion.expanded?"Collapse all":"Expand all"}</Button><CatalogWidthButton/>{key.button}</DiagramToolbar>
   {selected&&!paths.size?<p role="status" className="m-0 text-xs text-muted">No column path is recorded for {selected.replace(/:([^:]*)$/,".$1")}.</p>:null}
   <div ref={frame} className="relative min-h-72 flex-1 @3xl:min-h-0"><ReactFlow nodes={nodes} edges={edges} nodeTypes={nodeTypes} edgeTypes={edgeTypes} minZoom={0.05} maxZoom={2} nodesConnectable={false} onNodesChange={changes=>{const moved=changes.flatMap(change=>change.type==="position"&&change.position?[[change.id,change.position] as const]:[]);if(moved.length)setPositions(previous=>({...previous,...Object.fromEntries(moved)}));}} onInit={instance=>{flow.current=instance;requestAnimationFrame(()=>fitDiagram(instance,frame.current));}} onPaneClick={()=>setSelected(null)} proOptions={{hideAttribution:true}}><Background/></ReactFlow>{key.panel}</div>

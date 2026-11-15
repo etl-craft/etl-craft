@@ -1,3 +1,4 @@
+import { AppLink } from "@/components/navigation";
 import { ExternalLink } from "lucide-react";
 import { Fact, FactList, Loading, Notice, PageHeader } from "@/components/common";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
@@ -36,10 +37,10 @@ export function About() {
               {data.controllers.length ? null : <li className="text-muted">No live controller heartbeat. Ask the operator to start a controller.</li>}
             </ul>
           </Card>
-          <a className="inline-flex items-center gap-1.5 text-sm text-accent hover:underline" href={data.docs_url} target="_blank" rel="noopener noreferrer">
+          <AppLink documentation className="inline-flex items-center gap-1.5 text-sm text-accent hover:underline" to={data.docs_url}>
             Documentation for this release line <ExternalLink className="size-3.5" aria-hidden />
             <span className="sr-only">(opens in a new tab)</span>
-          </a>
+          </AppLink>
         </>
       ) : null}
     </div>

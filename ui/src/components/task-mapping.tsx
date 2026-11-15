@@ -7,7 +7,7 @@ import * as React from "react";
 import { Background, MarkerType, ReactFlow, type Node, type Edge } from "@xyflow/react";
 import { Database, GitMerge, Filter, Sigma, Layers, FunctionSquare, ShieldCheck, type LucideIcon } from "lucide-react";
 import { catalogPath } from "@/lib/routes";
-import { Link } from "react-router-dom";
+import { AppLink as Link } from "@/components/navigation";
 import { DiagramToolbar } from "@/components/diagram-toolbar";
 import { mappingFields, stageRows, stageLabel, sourceAliases } from "@/lib/mapping-logic";
 import { kindColor } from "@/components/task-symbol";
@@ -90,7 +90,8 @@ export function TaskMapping({ doc, task }: { doc: CatalogDoc; task: CatalogTask 
   const stages = task.mapping.steps.filter(step=>step.kind!=="source");
   const add = (id:string,title:string,x:number,y:number,columns:Port[],icon:LucideIcon,description?:string,conditions?:string[]) => {
     const open = expansion.isExpanded(id);
-    nodes.push({id,type:"mapping",position:{x,y},dragHandle:".mapping-drag-handle",data:{selection:id,title,description,columns,icon,conditions,kind:id.startsWith("step:") ? stages[Number(id.slice(5))]!.kind : id.split(":")[0]!,declared,selected:selected ? highlights : new Set(),onSelect:setSelected,expanded:open,onExpanded:() => expansion.toggle(id),tableLevel:(declared && !edges.length) || (rowset && (id.startsWith("source:") || id.startsWith("step:") || (id==="expression" && activeEdges.some(({edge}) => !edge.source_column)))),size:sizes[id],onResize:(id,size)=>{setPositions(Object.fromEntries(nodes.map(node=>[node.id,node.position])));resize(id,size);}}});
+    const object = (id.startsWith("source:") || id.startsWith("target:")) && doc.tables.some(table=>table.name===title);
+    nodes.push({id,type:"mapping",position:{x,y},dragHandle:".mapping-drag-handle",data:{details:{to:catalogPath(doc.project,object ? "tables" : "tasks",object ? title : task.label)},selection:id,title,description,columns,icon,conditions,kind:id.startsWith("step:") ? stages[Number(id.slice(5))]!.kind : id.split(":")[0]!,declared,selected:selected ? highlights : new Set(),onSelect:setSelected,expanded:open,onExpanded:() => expansion.toggle(id),tableLevel:(declared && !edges.length) || (rowset && (id.startsWith("source:") || id.startsWith("step:") || (id==="expression" && activeEdges.some(({edge}) => !edge.source_column)))),size:sizes[id],onResize:(id,size)=>{setPositions(Object.fromEntries(nodes.map(node=>[node.id,node.position])));resize(id,size);}}});
   };
   const nodeHeight = (id: string, rows: number) => sizes[id]?.height ?? HEADER_HEIGHT + Math.min(rows, SHOWN_ROWS) * ROW_HEIGHT + 8;
   const sources = unavailable ? [] : task.sources;

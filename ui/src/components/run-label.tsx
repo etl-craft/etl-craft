@@ -1,6 +1,6 @@
 import { useId, useState, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
-import { Link } from "react-router-dom";
+import { AppLink as Link } from "@/components/navigation";
 
 /** The stored label is text beside the integer; navigation always uses the integer address. */
 export function RunLabel({ id, label, to, children, compact = false, truncate = false }: { id: number | string; label?: string | null; to?: string; children?: ReactNode; compact?: boolean; truncate?: boolean }) {
