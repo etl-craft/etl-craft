@@ -435,3 +435,11 @@ own meanings. Keys show the same dependency patterns, selection outlines, condit
 row markers as the view. The selection entry appears only while a lineage path is selected.
 Expand a derived-query alias to inspect its recorded SQL. After upgrading, rebuild an older
 catalog to include its subquery and CTE source bindings.
+
+The table’s **Lineage diagram** opens table boxes into columns. Select a column to follow
+its recorded upstream and downstream paths; collapsed boxes keep the object relationship.
+A labelled dashed connection means the table relationship is known but a column path is not
+recorded. The same scroll, resize and independent header-drag controls apply to these boxes.
+**Column sources** lists each column’s upstream source and writing task. When more than one
+task writes a target, choose a Writing task to filter that list. Unavailable lineage names
+the task and the recorded reason, rather than suggesting that an existing definition is absent.

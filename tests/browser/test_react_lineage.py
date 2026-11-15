@@ -109,16 +109,16 @@ def test_refreshing_and_rebuilding_shows_the_traced_chain_and_the_api_agrees(cha
         about = page.get_by_label("About this table")
         expect(about.get_by_role("link", name="SALES.convert")).to_be_visible()
         expect(about.get_by_role("link", name="MART.daily")).to_be_visible()
-        page.get_by_role("tab", name="Object lineage", exact=True).click()
-        graph = page.get_by_role("group", name="Task graph")
+        page.get_by_role("tab", name="Lineage diagram", exact=True).click()
+        graph = page.get_by_role("group", name="Lineage diagram")
         expect(graph).to_be_visible()
         # narrowing the graph redraws it: no leftover edge to a table that is no longer drawn
         page.get_by_label("Direction").select_option("down")
         page.get_by_label("Depth").select_option("1")
-        expect(graph.locator("[data-focus]")).to_have_count(2)
+        expect(graph.locator(".react-flow__node")).to_have_count(2)
         expect(graph.locator(".react-flow__edge")).to_have_count(1)
-        page.get_by_role("tab", name="Column lineage").click()
-        lineage = page.get_by_role("table", name="Column lineage")
+        page.get_by_role("tab", name="Column sources").click()
+        lineage = page.get_by_role("table", name="Column sources")
         expect(lineage).to_contain_text("staging.orders.amount")
         expect(lineage).to_contain_text("ref.rates.rate")
         expect(lineage).to_contain_text("SALES.convert")
@@ -182,6 +182,10 @@ def test_a_task_that_cannot_be_traced_is_named_with_its_reason_and_counted(chain
         shoot(page, "catalog-lineage-errors")
         rebuild(page)
         expect(page.get_by_role("tree", name="Catalog objects")).to_be_visible()
+        for path in ("tasks/BROKEN.oops?tab=lineage", "tables/bad.t?tab=columns"):
+            page.goto(url + "/ui/projects/default/catalog/" + path)
+            expect(page.get_by_role("tabpanel")).to_contain_text("must be a read-only SELECT")
+            expect(page.get_by_role("tabpanel")).to_contain_text("BROKEN.oops")
         browser.close()
 
 
@@ -209,7 +213,7 @@ def test_all_tables_lists_every_table_and_filters_by_name(chain):
         summary = page.locator("dl").filter(has=page.get_by_text("Open gaps", exact=True))
         expect(summary.get_by_text("Last written", exact=True)).to_be_visible()
         expect(summary.get_by_text("Open gaps", exact=True)).to_be_visible()
-        page.get_by_role("tab", name="Object lineage", exact=True).click()
+        page.get_by_role("tab", name="Lineage diagram", exact=True).click()
         page.get_by_role("button", name="List", exact=True).click()
         expect(
             page.get_by_role("table", name="Upstream and downstream tables").get_by_role(
@@ -757,5 +761,75 @@ def test_catalog_diagrams_use_the_visible_desktop_height_and_fit_all_nodes(mappi
             }""",
                 arg=label,
             )
+        assert problems == []
+        browser.close()
+
+
+def test_table_lineage_expands_columns_and_highlights_the_recorded_path(mappings):
+    _, url = mappings
+    with sync_playwright() as pw:
+        browser, page, problems = open_page(pw, viewport={"width": 1440, "height": 900})
+        sign_in(page, url, "/ui/projects/default/catalog/tables/mart.orders?tab=lineage")
+        expect(page.get_by_role("tab", name="Lineage diagram", exact=True)).to_be_visible()
+        expect(page.get_by_role("tab", name="Column sources", exact=True)).to_be_visible()
+        diagram = page.get_by_role("group", name="Lineage diagram", exact=True)
+        expect(diagram).to_be_visible()
+        expect(diagram.locator("[data-port]")).to_have_count(0)
+        page.get_by_role("button", name="Expand all", exact=True).click()
+        source = diagram.locator('[data-id="raw.orders"] [data-port="amount"] button')
+        target = diagram.locator('[data-id="mart.orders"] [data-port="amount"] button')
+        expect(source).to_be_visible()
+        expect(target).to_be_visible()
+        page.get_by_role("button", name="Fit view", exact=True).click()
+        source.click()
+        expect(target).to_have_class(re.compile("ring-2"))
+        expect(diagram.locator('[data-testid="rf__edge-column:0"]')).to_be_attached()
+        page.get_by_role("button", name="Fit view", exact=True).click()
+        page.wait_for_function("""() => {
+            const canvas=document.querySelector('[aria-label="Lineage diagram"] .react-flow');
+            const box=canvas.getBoundingClientRect();
+            return [...canvas.querySelectorAll('.react-flow__node')].every(node=>{
+                const n=node.getBoundingClientRect();
+                return n.left>=box.left && n.right<=box.right &&
+                    n.top>=box.top && n.bottom<=box.bottom;
+            });
+        }""")
+        page.get_by_role("button", name="Collapse all", exact=True).click()
+        expect(diagram.locator("[data-port]")).to_have_count(0)
+        assert problems == []
+        browser.close()
+
+
+def test_column_sources_filters_by_the_selected_writing_task(mappings):
+    from etl_craft.services.catalog.collect import build_catalog
+    from etl_craft.services.catalog.site import write_site
+    from etl_craft.services.operations.documents import docs_folder
+
+    ctx, url = mappings
+    with acting_as(ctx.actor), ctx.engine.begin() as conn:
+        pipeline = add_pipeline(conn, "REPAIR")
+        add_task(
+            conn,
+            pipeline,
+            "load_backup",
+            SQL_ACTION="APPEND_TABLE",
+            TARGET_OBJECT="mart.orders",
+            SELECT_QUERY="SELECT id, amount FROM raw.orders",
+        )
+    with acting_as(ctx.actor):
+        write_site(build_catalog(ctx.engine, ctx.config), ctx.config, docs_folder(ctx.config))
+    with sync_playwright() as pw:
+        browser, page, problems = open_page(pw, viewport={"width": 1440, "height": 900})
+        sign_in(page, url, "/ui/projects/default/catalog/tables/mart.orders?tab=columns")
+        writer = page.get_by_label("Writing task")
+        writer.select_option("ORDERS.load")
+        expect(page.get_by_role("table", name="Column sources")).to_contain_text("ORDERS.load")
+        writer.select_option("REPAIR.load_backup")
+        expect(page.get_by_role("table", name="Column sources")).to_contain_text(
+            "REPAIR.load_backup"
+        )
+        expect(page.get_by_role("table", name="Column sources")).not_to_contain_text("ORDERS.load")
+        writer.select_option("")
+        expect(page.get_by_role("table", name="Column sources")).to_be_visible()
         assert problems == []
         browser.close()

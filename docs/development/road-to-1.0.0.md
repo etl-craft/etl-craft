@@ -233,6 +233,9 @@ item's text, or work done early under another item.
   run locally; the owner approved all five slices, including revised phone tabs and run cards.
   Owner-directed follow-up preserves the frame and sharp edges while repairing mapping drag,
   scroll/resize geometry, logic/alias explanations, category colours and shared view keys.
+  The owner confirmed expandable table-column lineage: the Lineage diagram reuses mapping
+  nodes; Column sources is the list with a writing-task selector. Missing source contracts
+  are repaired in a companion Support Insights metadata change, explicitly authorised.
 
 - **S7.L owner-supplied logo (#400).** The logo, editable vector sources, theme-aware
   favicon, documentation raster previews and 20-row by 38-column terminal mark are done.

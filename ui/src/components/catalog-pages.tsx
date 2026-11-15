@@ -1,3 +1,4 @@
+import {TableLineage} from "@/components/table-lineage";
 import { flowGraph, flowLocation, runsWhen } from "@/lib/catalog-flow";
 import { RunLabel } from "@/components/run-label";
 import { gapRemedy } from "@/lib/catalog";
@@ -17,7 +18,7 @@ import { columnsOf, DataTable } from "@/components/data-table";
 import { When } from "@/components/when";
 import { useRoleAtLeast } from "@/hooks";
 import { getJson, project } from "@/lib/api";
-import { impact, isOpenGap, pipelineGraph, tableLineage, typeOf, type CatalogColumn, type CatalogDoc, type ImpactRow, type CatalogEdge, type CatalogRun, type CatalogTable, type CatalogTask } from "@/lib/catalog";
+import { impact, isOpenGap, pipelineGraph, typeOf, type CatalogColumn, type CatalogDoc, type ImpactRow, type CatalogEdge, type CatalogRun, type CatalogTable, type CatalogTask } from "@/lib/catalog";
 import { describeCron, formatDuration } from "@/lib/format";
 import { handlerLabel } from "@/lib/labels";
 import { catalogPath, pipelinePath, taskPath } from "@/lib/routes";
@@ -169,7 +170,7 @@ export function CatalogHome({ code, doc }: { code: string; doc: CatalogDoc }) {
         {tile("Tables", tables.length)}
         {tile("Columns", columns)}
         {tile("Rules", doc.rules.length)}
-        <Link to={catalogPath(code, "gaps")} aria-label={`${open.length} open gaps`} className="rounded-lg hover:ring-2 hover:ring-accent">
+        <Link to={catalogPath(code, "gaps")} className="rounded-lg hover:ring-2 hover:ring-accent">
           {tile("Open gaps", open.length)}
         </Link>
       </div>
@@ -281,11 +282,13 @@ export function PipelineObject({ code, doc, name, tab, onTab }: { code: string; 
   );
 }
 
-function ColumnLineage({ code, edges }: { code: string; edges: CatalogEdge[] }) {
+function ColumnLineage({ code, edges, tasks }: { code: string; edges: CatalogEdge[]; tasks: CatalogTask[] }) {
+  const unavailable=tasks.filter(task=>task.lineage.state==="unavailable" && task.lineage.reason);
+  if (!edges.length && unavailable.length) return <EmptyState title="Column lineage is unavailable." nextStep={<>{unavailable.map(task=><span className="block" key={task.label}><Link className={link} to={catalogPath(code,"tasks",task.label)}>{task.label}</Link>: {task.lineage.reason}</span>)}</>}/>;
   if (!edges.length) return <EmptyState title="No column lineage was traced for this selection." nextStep="Declare task sources and targets, refresh lineage, then rebuild the catalog." />;
   return (
     <DataTable
-      label="Column lineage"
+      label="Column sources"
       data={edges}
       columns={columnsOf<CatalogEdge>([
         { id: "column", header: "Column", value: (e) => `${e.target_object}.${e.target_column}`, size: 300, cell: (e) => <span className="font-mono text-xs">{e.target_object}.{e.target_column}</span> },
@@ -303,7 +306,7 @@ export function TaskObject({ code, doc, name, tab, onTab }: { code: string; doc:
   if (!task) return <Notice className="m-4">No task {name} in this catalog build.</Notice>;
   const rules = doc.rules.filter((r) => r.task === task.label);
   const edges = doc.column_edges.filter((e) => e.task === task.label);
-  const tabs = [{ id: "overview", label: "Overview" }, { id: "mapping", label: "Mapping" }, { id: "lineage", label: "Column lineage" }, { id: "runs", label: "Runs" }];
+  const tabs = [{ id: "overview", label: "Overview" }, { id: "mapping", label: "Mapping" }, { id: "lineage", label: "Column sources" }, { id: "runs", label: "Runs" }];
   const on = tabs.some((t) => t.id === tab) ? tab : "overview";
   return (
     <ObjectPage tab={on} fit={on==="mapping"} header={
@@ -364,8 +367,8 @@ export function TaskObject({ code, doc, name, tab, onTab }: { code: string; doc:
           </aside>
         </div>
       ) : on === "mapping" ? <React.Suspense fallback={<div className="min-h-[36rem]"><Loading what="task mapping" /></div>}><TaskMapping key={task.label} doc={doc} task={task} /></React.Suspense> : on === "lineage" ? (
-        <Section title="Column lineage" aside={<span className="text-xs text-muted">{edges.length} traced</span>}>
-          <ColumnLineage code={code} edges={edges} />
+        <Section title="Column sources" aside={<span className="text-xs text-muted">{edges.length} traced</span>}>
+          <ColumnLineage code={code} edges={edges} tasks={[task]} />
         </Section>
       ) : (
         <Section title="Recent runs">
@@ -407,10 +410,9 @@ function TableData({ code, table }: { code: string; table: string }) {
 
 /** A table, as a data explorer shows it: description, columns with their types, then lineage, history and quality. */
 export function TableObject({ code, doc, name, tab, onTab }: { code: string; doc: CatalogDoc; name: string; tab: string; onTab: (tab: string) => void }) {
-  const navigate = useNavigate();
   const [filter, setFilter] = React.useState("");
   const [column, setColumn] = React.useState("");
-  const [focused, setFocused] = React.useState<string | null>(null);
+  const [writer, setWriter] = React.useState("");
   const [depth, setDepth] = React.useState("2");
   const [asList, setAsList] = React.useState(false);
   const [showAll, setShowAll] = React.useState(false);
@@ -425,8 +427,8 @@ export function TableObject({ code, doc, name, tab, onTab }: { code: string; doc
   const tabs = [
     { id: "overview", label: "Overview" },
     ...(developer ? [{ id: "data", label: "Data" }] : []),
-    { id: "lineage", label: "Object lineage" },
-    { id: "columns", label: "Column lineage" },
+    { id: "lineage", label: "Lineage diagram" },
+    { id: "columns", label: "Column sources" },
     { id: "history", label: "History" },
     { id: "quality", label: "Quality" },
   ];
@@ -434,7 +436,7 @@ export function TableObject({ code, doc, name, tab, onTab }: { code: string; doc
   const shown = table.columns.filter((c) => !filter || `${c.name} ${c.comment ?? ""} ${typeOf(c)}`.toLowerCase().includes(filter.toLowerCase()));
   const hasType = table.columns.some((c) => Boolean(c.warehouse_type ?? c.data_type));
   const hasDeclared = table.columns.some((c) => Boolean(c.declared_type));
-  const edges = doc.column_edges.filter((e) => e.target_object === table.name && (!column || e.target_column === column));
+  const edges = doc.column_edges.filter((e) => e.target_object === table.name && (!column || e.target_column === column) && (!writer || e.task===writer));
   const everyRun = writers.flatMap((w) => w.runs.map((r) => ({ ...r, pipeline: w.pipeline })));
   const lastWrite = everyRun.filter((r) => r.end).sort((a, b) => (b.end ?? "").localeCompare(a.end ?? ""))[0];
   const lastRun = everyRun.sort((a, b) => (b.start ?? "").localeCompare(a.start ?? ""))[0];
@@ -560,7 +562,7 @@ export function TableObject({ code, doc, name, tab, onTab }: { code: string; doc
                 </button>
               ))}
             </div>
-            <span className="pb-1 text-xs text-muted">{asList ? "Every table that feeds this one, or is fed by it." : "Select a table to open it."}</span>
+            <span className="pb-1 text-xs text-muted">{asList ? "Every table that feeds this one, or is fed by it." : "Expand a table to follow its columns."}</span>
           </div>
           {asList ? (
             <DataTable
@@ -576,15 +578,16 @@ export function TableObject({ code, doc, name, tab, onTab }: { code: string; doc
               ])}
             />
           ) : (
-            <div data-card className="min-h-72 flex-1 overflow-hidden rounded-sm border border-border">
-              <RunGraph fill plain graph={tableLineage(doc, table.name, Number(depth), direction)} statuses={{}} focused={focused ?? table.name} onFocus={setFocused} onOpen={(next) => navigate(catalogPath(code, "tables", next))} />
+            <div data-card className="flex min-h-72 flex-1 flex-col overflow-hidden rounded-sm border border-border @3xl:min-h-0">
+              <TableLineage key={table.name} doc={doc} name={table.name} depth={Number(depth)} direction={direction}/>
             </div>
           )}
         </div>
       ) : on === "columns" ? (
         <Section
-          title="Column lineage"
-          aside={
+          title="Column sources"
+          aside={<div className="flex min-w-0 max-w-full flex-wrap items-end gap-3 [&_label]:max-w-full [&_select]:max-w-full">
+            {writers.length>1?<SelectField compact label="Writing task" value={writer} onChange={setWriter}><option value="">All writing tasks</option>{writers.map(task=><option key={task.label} value={task.label}>{task.label}</option>)}</SelectField>:null}
             <SelectField compact label="Column" value={column} onChange={setColumn}>
               <option value="">All columns</option>
               {table.columns.map((c) => (
@@ -593,9 +596,9 @@ export function TableObject({ code, doc, name, tab, onTab }: { code: string; doc
                 </option>
               ))}
             </SelectField>
-          }
+          </div>}
         >
-          <ColumnLineage code={code} edges={edges} />
+          <ColumnLineage code={code} edges={edges} tasks={writers.filter(task=>!writer||task.label===writer)} />
         </Section>
       ) : on === "history" ? (
         <Section title="Recent writes">

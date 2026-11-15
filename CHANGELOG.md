@@ -6,6 +6,11 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+- Table **Lineage diagram** boxes expand into columns and highlight recorded upstream/downstream
+  paths, using the same mapping controls. **Column sources** names the upstream-column list and
+  offers a Writing task filter for targets with multiple writers. Empty task/table lineage views
+  show the recorded cause when tracing is unavailable.
+
 - Column-mapping wires stay attached when a node’s column list scrolls or its box is resized.
   Hidden columns share the visible list boundary instead of leaving detached wire segments.
   Drag mapping headers to move individual nodes; larger resize targets keep the canvas steady.

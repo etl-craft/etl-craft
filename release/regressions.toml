@@ -381,3 +381,9 @@ diagram-viewport-controls = [
     "tests/browser/test_react_lineage.py::test_scrolling_the_mapping_key_keeps_its_close_button_visible",
     "tests/browser/test_react_lineage.py::test_catalog_diagrams_use_the_visible_desktop_height_and_fit_all_nodes",
 ]
+
+expandable-object-lineage = [
+    "tests/browser/test_react_lineage.py::test_table_lineage_expands_columns_and_highlights_the_recorded_path",
+    "tests/browser/test_react_lineage.py::test_column_sources_filters_by_the_selected_writing_task",
+    "tests/browser/test_react_lineage.py::test_a_task_that_cannot_be_traced_is_named_with_its_reason_and_counted",
+]
