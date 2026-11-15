@@ -420,7 +420,10 @@ to inspect more; wires follow visible rows, with off-screen columns attached at 
 
 Drag a mapping node by its header to move it independently; drag the canvas background to pan.
 Resize from the generous edge or corner hit areas. Table columns and split panes also support
-keyboard resizing. The view key opens on request and remembers your choice.
+keyboard resizing. The view key opens on request, remembers your choice and keeps its close
+button visible while you scroll its entries. Desktop mapping and catalog graph panes fill the
+available frame height. Fit view zooms out to show the complete diagram; Reset zoom returns to
+100% for reading.
 
 Mapping rows with filters, expressions or rules have a neutral icon/label and a logic preview;
 these indicators do not use the selected lineage’s accent ring. Resolved object/column names

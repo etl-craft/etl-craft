@@ -43,7 +43,7 @@ export function useLegend(entries:LegendEntry[]) {
 
 export function Legend({id,open,entries,onClose}:{id:string;open:boolean;entries:LegendEntry[];onClose:()=>void}) {
   return <section id={id} hidden={!open} role="region" aria-label="View key" tabIndex={0} className="view-key">
-    <header className="flex items-center justify-between gap-2 pb-2"><strong className="text-sm">Key</strong><Button size="icon" variant="ghost" aria-label="Close key" onClick={onClose}><X aria-hidden className="size-4"/></Button></header>
+    <header className="sticky top-0 z-10 flex items-center justify-between gap-2 bg-surface pb-2"><strong className="text-sm">Key</strong><Button size="icon" variant="ghost" aria-label="Close key" onClick={onClose}><X aria-hidden className="size-4"/></Button></header>
     {[...new Set(entries.map(entry=>entry.group))].map(group=><div key={group} className="mb-3 last:mb-0"><h3 className="mb-1 text-xs font-medium text-muted">{group}</h3><table className="w-full text-left text-xs"><tbody>{entries.filter(entry=>entry.group===group).map(entry=><tr key={entry.id}><td aria-hidden className="w-12 py-1 pr-2">{entry.sample}</td><th scope="row" className="whitespace-nowrap py-1 pr-3 font-medium">{entry.name}</th><td className="py-1 text-muted">{entry.meaning}</td></tr>)}</tbody></table></div>)}
   </section>;
 }

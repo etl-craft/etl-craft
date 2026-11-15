@@ -17,7 +17,9 @@ All notable changes are recorded here. The format follows
   and row markers; runtime dependency labels and patterns match their keys.
 - Browser polish keeps the conventional frame and sharp edges: distinct table headers, aligned
   diagram toolbars, wider column/pane resize targets and visible keyboard focus. View keys
-  start closed unless previously opened; mobile branding and resize controls have accessible
+  start closed unless previously opened and keep their close button visible when scrolled.
+  Desktop catalog diagram panes fill the available frame; Fit view fits the whole diagram.
+  Mobile branding and resize controls have accessible
   names and values, and decorative sparklines stay out of keyboard navigation.
 
 - Project navigation and dashboard completion: Pipelines lists dependency conditions and the

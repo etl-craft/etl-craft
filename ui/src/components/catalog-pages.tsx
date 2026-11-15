@@ -203,7 +203,7 @@ export function PipelineObject({ code, doc, name, tab, onTab }: { code: string; 
   const tabs = [{ id: "overview", label: "Overview" }, { id: "lineage", label: "Graph" }, { id: "runs", label: "Runs" }];
   const on = tabs.some((t) => t.id === tab) ? tab : "overview";
   return (
-    <ObjectPage tab={on} header={
+    <ObjectPage tab={on} fit={on==="lineage"} header={
       <>
       <Crumbs code={code} trail={[{ label: "Pipelines" }, { label: pipeline.code }]} />
       <Title icon={Workflow} name={pipeline.code} copy={pipeline.code}>
@@ -266,9 +266,9 @@ export function PipelineObject({ code, doc, name, tab, onTab }: { code: string; 
           </aside>
         </div>
       ) : on === "lineage" ? (
-        <div data-card className="grid gap-3 rounded-sm border border-border">
+        <div data-card className="grid gap-3 rounded-sm border border-border @3xl:flex @3xl:min-h-0 @3xl:flex-1 @3xl:flex-col">
 
-          <div className="min-h-80 overflow-hidden"><RunGraph definition={{ tasks, edges: doc.definition_edges,overlay,onOverlay:()=>setOverlay(!overlay),schedule:pipeline.schedule }} fill plain={!overlay} graph={graph} statuses={overlay ? Object.fromEntries(tasks.map(t => [t.code, t.runs.find(run => run.pipeline_run_id === pipeline.runs[0]?.pipeline_run_id)?.status ?? ""])) : {}} focused={focused} onFocus={setFocused} onOpen={(task) => { const destination = flowLocation(code, pipeline.code, task); if (destination) navigate(catalogPath(destination.project,destination.kind,destination.name)); else setFocused(task); }} /></div>
+          <div className="min-h-80 overflow-hidden @3xl:min-h-0 @3xl:flex-1"><RunGraph definition={{ tasks, edges: doc.definition_edges,overlay,onOverlay:()=>setOverlay(!overlay),schedule:pipeline.schedule }} fill plain={!overlay} graph={graph} statuses={overlay ? Object.fromEntries(tasks.map(t => [t.code, t.runs.find(run => run.pipeline_run_id === pipeline.runs[0]?.pipeline_run_id)?.status ?? ""])) : {}} focused={focused} onFocus={setFocused} onOpen={(task) => { const destination = flowLocation(code, pipeline.code, task); if (destination) navigate(catalogPath(destination.project,destination.kind,destination.name)); else setFocused(task); }} /></div>
           <Disclosure><DisclosureSummary>Flow as text</DisclosureSummary><ul>{tasks.map(task => <li key={task.label}>{runsWhen(task)} Target: {task.target ?? "none"}. {task.lineage.state}.</li>)}</ul></Disclosure>
           {focused ? <aside onKeyDown={event=>{if(event.key==="Escape")setFocused(null);}} aria-label="Task definition" className="border border-border bg-surface p-3 text-sm">{focused.startsWith("Schedule: ") ? <p>{focused}. Auto-restart: {pipeline.auto_restart_condition.toLowerCase().replaceAll("_"," ")}. SLA: {pipeline.sla_in_hours ? `${pipeline.sla_in_hours} hours` : "not set"}.</p> : null}{tasks.filter(t => t.code === focused || t.label === focused).map(t => <div key={t.label}><p>{runsWhen(t)}</p><p>{t.target}{t.target_active_flag === "N" ? " · target inactive" : ""} · {t.lineage.state}</p><Link to={catalogPath(code, "tasks", t.label) + "?tab=mapping"}>Open mapping</Link></div>)}</aside> : null}
         </div>
@@ -306,7 +306,7 @@ export function TaskObject({ code, doc, name, tab, onTab }: { code: string; doc:
   const tabs = [{ id: "overview", label: "Overview" }, { id: "mapping", label: "Mapping" }, { id: "lineage", label: "Column lineage" }, { id: "runs", label: "Runs" }];
   const on = tabs.some((t) => t.id === tab) ? tab : "overview";
   return (
-    <ObjectPage tab={on} header={
+    <ObjectPage tab={on} fit={on==="mapping"} header={
       <>
       <Crumbs code={code} trail={[{ label: task.pipeline, to: catalogPath(code, "pipelines", task.pipeline) }, { label: task.code }]} />
       <Title icon={ListChecks} name={task.code} copy={task.label}>

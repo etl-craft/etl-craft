@@ -265,12 +265,12 @@ export function RunGraph({
   }, [definition, fill, width, frameHeight, shown, fitOptions, wide]);
   // A graph wider than its card keeps readable boxes starting at the left; a small one is fitted whole.
   return (
-    <div style={definition ? {height:`min(70vh, ${definitionHeight+(width<480?180:100)}px)`} : fill ? undefined : { height }} role="group" aria-label="Task graph" tabIndex={0} onKeyDown={key.onKeyDown} className={cn("flex w-full flex-col", fill && "h-full min-h-64")}>
+    <div style={definition ? {height:`min(70vh, ${definitionHeight+(width<480?180:100)}px)`} : fill ? undefined : { height }} role="group" aria-label="Task graph" tabIndex={0} onKeyDown={key.onKeyDown} className={cn("flex w-full flex-col", fill && "h-full min-h-0",fill && definition && "@3xl:!h-full")}>
       {/* The hint sits above the canvas, so a graph shown at a readable size never runs under it. */}
       <p className="m-0 shrink-0 px-3 py-1.5 text-xs text-muted">
         {edges.length === 0 ? "No dependencies between these tasks: they can run at the same time." : focused ? `Showing everything upstream and downstream of ${focused}. Click the background to clear.` : "Click a task to highlight its lineage; drag to pan."}
       </p>
-      <DiagramToolbar className="px-3" zoomIn={()=>void flow.current?.zoomIn()} zoomOut={()=>void flow.current?.zoomOut()} fit={()=>fitDiagram(flow.current,frame.current)} reset={()=>void flow.current?.zoomTo(1)}>{definition ? <><Switch checked={definition.overlay??false} onChange={()=>definition.onOverlay?.()} label="Show last-run status"/><Button onClick={expansion.toggleAll}>{expansion.expanded?"Collapse all":"Expand all"}</Button></>:null}<CatalogWidthButton/>{key.button}</DiagramToolbar>
+      <DiagramToolbar className="px-3" zoomIn={()=>void flow.current?.zoomIn()} zoomOut={()=>void flow.current?.zoomOut()} fit={()=>fitDiagram(flow.current,frame.current,true)} reset={()=>void flow.current?.zoomTo(1)}>{definition ? <><Switch checked={definition.overlay??false} onChange={()=>definition.onOverlay?.()} label="Show last-run status"/><Button onClick={expansion.toggleAll}>{expansion.expanded?"Collapse all":"Expand all"}</Button></>:null}<CatalogWidthButton/>{key.button}</DiagramToolbar>
       <div ref={frame} className="relative min-h-0 flex-1">
       <ReactFlow
         key={`${wide ? "wide" : "fit"}:${shown}:${nodes.map((n) => n.id).join("|")}`}
@@ -281,7 +281,7 @@ export function RunGraph({
         fitView={false}
         fitViewOptions={fitOptions}
         defaultViewport={wide ? { x: 24, y: 40, zoom: 0.9 } : undefined}
-        minZoom={0.15}
+        minZoom={0.05}
         maxZoom={1.5}
         nodesDraggable={false}
         nodesConnectable={false}

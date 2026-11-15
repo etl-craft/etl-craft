@@ -540,7 +540,7 @@ def test_catalog_readability_floating_key_and_full_width(mappings, appearance, w
                 else page.get_by_label(label, exact=True)
             )
             expect(canvas).to_be_visible()
-            page.get_by_role("button", name="Fit view", exact=True).click()
+            page.get_by_role("button", name="Reset zoom", exact=True).click()
             page.wait_for_function(
                 """label=>{
                 const canvas=document.querySelector(`[aria-label="${label}"]`);
@@ -691,5 +691,71 @@ def test_catalog_tabs_own_the_visible_object_panel(mappings, object_path):
         expect(panel).to_be_visible()
         expect(active).to_have_attribute("aria-controls", panel.get_attribute("id"))
         expect(panel).to_have_attribute("aria-labelledby", active.get_attribute("id"))
+        assert problems == []
+        browser.close()
+
+
+def test_scrolling_the_mapping_key_keeps_its_close_button_visible(mappings):
+    _, url = mappings
+    with sync_playwright() as pw:
+        browser, page, problems = open_page(pw, viewport={"width": 1440, "height": 900})
+        sign_in(page, url, "/ui/projects/default/catalog/tasks/ORDERS.load?tab=mapping")
+        page.get_by_role("button", name="Key", exact=True).click()
+        key = page.get_by_role("region", name="View key")
+        key.evaluate("el => { el.scrollTop=el.scrollHeight; }")
+        assert key.evaluate("el => el.scrollTop") > 0
+        close = key.get_by_role("button", name="Close key", exact=True).bounding_box()
+        bounds = key.bounding_box()
+        assert close["y"] >= bounds["y"]
+        assert close["y"] + close["height"] <= bounds["y"] + bounds["height"]
+        page.get_by_role("button", name="Close key", exact=True).click()
+        expect(key).not_to_be_visible()
+        assert problems == []
+        browser.close()
+
+
+@pytest.mark.parametrize(
+    ("path", "label"),
+    [
+        ("tasks/ORDERS.load?tab=mapping", "Task mapping diagram"),
+        ("pipelines/ORDERS?tab=lineage", "Task graph"),
+    ],
+)
+def test_catalog_diagrams_use_the_visible_desktop_height_and_fit_all_nodes(mappings, path, label):
+    _, url = mappings
+    with sync_playwright() as pw:
+        browser, page, problems = open_page(pw, viewport={"width": 1440, "height": 900})
+        sign_in(page, url, "/ui/projects/default/catalog/" + path)
+        diagram = page.get_by_label(label, exact=True)
+        expect(diagram).to_be_visible()
+        before = diagram.bounding_box()
+        assert before["y"] + before["height"] <= 880
+        page.set_viewport_size({"width": 1440, "height": 700})
+        page.wait_for_function(
+            """({label,before}) => {
+            const diagram=document.querySelector(`[aria-label="${label}"]`);
+            const box=diagram.getBoundingClientRect();
+            return box.height < before && box.bottom <= innerHeight-20;
+        }""",
+            arg={"label": label, "before": before["height"]},
+        )
+        for width in (1440, 390):
+            page.set_viewport_size({"width": width, "height": 900})
+            if label == "Task mapping diagram" and not diagram.is_visible():
+                page.get_by_role("button", name="Diagram", exact=True).click()
+            expect(diagram.locator(".react-flow__node").first).to_be_visible()
+            page.get_by_role("button", name="Fit view", exact=True).click()
+            page.wait_for_function(
+                """label => {
+                const diagram=document.querySelector(`[aria-label="${label}"] .react-flow`);
+                const frame=diagram.getBoundingClientRect();
+                return [...diagram.querySelectorAll('.react-flow__node')].every(node=>{
+                    const box=node.getBoundingClientRect();
+                    return box.left>=frame.left && box.right<=frame.right &&
+                        box.top>=frame.top && box.bottom<=frame.bottom;
+                });
+            }""",
+                arg=label,
+            )
         assert problems == []
         browser.close()
