@@ -5,7 +5,7 @@ import csv
 import pytest
 from sqlalchemy import text
 
-from etl_craft.core.errors import MetadataFileError
+from etl_craft.core.errors import ExitCode, MetadataFileError
 from etl_craft.services.config_files import export_config, read_config_files, sync_config
 from fixtures.metadata import add_pipeline
 
@@ -64,4 +64,34 @@ def test_a_bad_condition_in_the_file_is_refused_naming_the_value(engine_db, tmp_
     set_in_file(folder, "WATCH", "when-it-succeeds")
     with pytest.raises(MetadataFileError, match="when-it-succeeds"):
         read_config_files(folder)
+    assert restart_of(engine_db.engine, "WATCH") == "SCHEDULE"
+
+
+@pytest.mark.parametrize(
+    ("value", "expected", "remedy"),
+    [
+        ("success", "not one of NONE, SCHEDULE", "write NONE"),
+        ("SUCCESS|", "not one of NONE, SCHEDULE", "values joined with |"),
+        ("SUCCESS|SUCCESS", "repeats a value", "name each of"),
+        ("NONE|SUCCESS", "combines NONE with another value", "use NONE alone"),
+        ("ALWAYS|FAILURE", "already includes SUCCESS, SKIPPED", "write ALWAYS alone"),
+    ],
+)
+def test_restart_file_refusal_names_object_value_expectation_and_remedy(
+    engine_db, tmp_path, value, expected, remedy
+):
+    with engine_db.engine.begin() as conn:
+        add_pipeline(conn, "WATCH")
+    folder = tmp_path / "config"
+    export_config(engine_db.engine, folder)
+    set_in_file(folder, "WATCH", value)
+    with pytest.raises(MetadataFileError) as error:
+        read_config_files(folder)
+    message = str(error.value)
+    assert str(folder / "pipelines.csv") in message
+    assert "column AUTO_RESTART_CONDITION" in message
+    assert repr(value) in message
+    assert expected in message
+    assert remedy in message
+    assert error.value.exit_code == ExitCode.METADATA_FILE
     assert restart_of(engine_db.engine, "WATCH") == "SCHEDULE"

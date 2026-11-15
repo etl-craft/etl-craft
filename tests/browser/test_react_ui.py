@@ -84,7 +84,7 @@ def test_home_runs_and_run_detail_lead_to_a_confirmed_recovery(scene):
         page.get_by_role(
             "link", name=f"#{bad}"
         ).first.click()  # the pipeline's workspace, this run selected
-        expect(page.get_by_role("heading", name="OPS")).to_be_visible()
+        expect(page.get_by_role("heading", name="OPS", exact=True, level=1)).to_be_visible()
         expect(
             page.get_by_role("table", name="Run grid").locator("[aria-current=true]")
         ).to_have_count(1)

@@ -15,6 +15,7 @@ from sqlalchemy import inspect, text
 from sqlalchemy.exc import IntegrityError
 
 from etl_craft.core.actor import acting_as
+from etl_craft.core.enums import AutoRestartCondition
 from etl_craft.dialects.engine import build_engine
 from etl_craft.engine.migrations import apply_pending_migrations
 from etl_craft.engine.schema import init_db
@@ -45,6 +46,13 @@ def test_an_earlier_engine_db_upgrades_to_the_current_schema(
     )
     upgrade_ended = datetime.now(UTC)
     with engine.connect() as conn:
+        restart_conditions = (
+            conn.execute(text("SELECT AUTO_RESTART_CONDITION AS condition FROM CFG_PIPELINES"))
+            .scalars()
+            .all()
+        )
+        assert restart_conditions
+        assert all(value == AutoRestartCondition.SCHEDULE for value in restart_conditions)
         flags = (
             conn.execute(text("SELECT STEWARDABLE_FLAG AS stewardable_flag FROM CFG_PIPELINES"))
             .scalars()

@@ -1085,3 +1085,21 @@ def test_cloning_schedule_refuses_invalid_values(tmp_path, key, value):
     message = str(error.value)
     assert f"Cloning.{key}" in message and repr(value) in message
     assert "whole number" in message
+
+
+@pytest.mark.parametrize(
+    "value", ["success", "SUCCESS|", "SUCCESS|SUCCESS", "NONE|SUCCESS", "ALWAYS|FAILURE"]
+)
+def test_restart_environment_refusal_names_object_value_expectation_and_remedy(tmp_path, value):
+    from etl_craft.core.errors import ExitCode
+
+    path = _write(tmp_path, _minimal(Orchestration={"Allowed_auto_restarts": value}))
+    with pytest.raises(ConfigurationError) as error:
+        load_config(path)
+    message = str(error.value)
+    assert str(path) in message
+    assert "Orchestration.Allowed_auto_restarts" in message
+    assert repr(value) in message
+    assert "NONE or to SCHEDULE and run endings joined with |" in message
+    assert "set it to" in message
+    assert error.value.exit_code == ExitCode.CONFIGURATION
