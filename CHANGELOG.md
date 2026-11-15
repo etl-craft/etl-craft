@@ -6,6 +6,20 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+- Column-mapping wires stay attached when a node’s column list scrolls or its box is resized.
+  Hidden columns share the visible list boundary instead of leaving detached wire segments.
+  Drag mapping headers to move individual nodes; larger resize targets keep the canvas steady.
+  Neutral filter/expression markers distinguish row logic from selected lineage, and a visible
+  source-alias key explains SQL names beside resolved object/column labels. Aliased subqueries
+  and CTEs retain their recorded SQL instead of being presented as physical tables.
+- Diagrams use distinct cyan, violet, magenta, teal and brown category families, separate from
+  run-state colours. Legends show real renderings of active selections, conditions, dependencies
+  and row markers; runtime dependency labels and patterns match their keys.
+- Browser polish keeps the conventional frame and sharp edges: distinct table headers, aligned
+  diagram toolbars, wider column/pane resize targets and visible keyboard focus. View keys
+  start closed unless previously opened; mobile branding and resize controls have accessible
+  names and values, and decorative sparklines stay out of keyboard navigation.
+
 - Project navigation and dashboard completion: Pipelines lists dependency conditions and the
   last run beside its recent-success marks; pipeline grids put the newest run on the right.
   Old run links retain task and view selections when opening the pipeline workspace.

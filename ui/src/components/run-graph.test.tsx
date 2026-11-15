@@ -27,3 +27,14 @@ describe("the graph layout", () => {
     expect(new Set(nodes.map((n) => n.position.y)).size).toBe(2);
   });
 });
+
+it.each([
+ ["HAS_DATA","Has data",undefined],
+ ["FAILURE","On failure","7 4"],
+ ["ALWAYS","Always","2 4"],
+])("keeps the %s runtime edge consistent with its legend",(condition,label,dash)=>{
+ const graph:Graph={waves:[["a"],["b"]],conditional:[],depends_on:{b:[["a",condition!]]}};
+ const edge=layout(graph,{},null).edges[0]!;
+ expect(edge.label).toBe(label);
+ expect(edge.style?.strokeDasharray).toBe(dash);
+});

@@ -241,7 +241,7 @@ export function DataTable<T>({
     <div ref={frame} className="w-full min-w-0">
     {find ? (
       <div className="flex items-center gap-3 border-b border-border px-3 py-1.5">
-        <input type="search" aria-label={`Filter ${label}`} placeholder="Filter" value={query} onChange={(event) => change(event.target.value)} className="h-control w-56 rounded-md border border-border-strong bg-surface px-2 text-xs" />
+        <input type="search" aria-label={`Filter ${label}`} placeholder="Filter" value={query} onChange={(event) => change(event.target.value)} className="h-control w-full max-w-72 rounded-md border border-border-strong bg-surface px-2 text-xs" />
         {query ? <span className="text-xs text-muted">{table.getRowModel().rows.length} of {data.length}</span> : null}
       </div>
     ) : null}
@@ -270,6 +270,9 @@ export function DataTable<T>({
                     <div
                       role="separator"
                       aria-orientation="vertical"
+                      aria-valuemin={header.column.columnDef.minSize ?? 64}
+                      aria-valuemax={header.column.columnDef.maxSize ?? 900}
+                      aria-valuenow={Math.round(widthOf(header.column))}
                       aria-label={`Resize the ${typeof header.column.columnDef.header === "string" ? header.column.columnDef.header : header.column.id} column`}
                       tabIndex={0}
                       title="Drag to resize; double-click to reset"
@@ -282,9 +285,9 @@ export function DataTable<T>({
                         event.preventDefault();
                         table.setColumnSizing((current) => ({ ...current, [header.column.id]: Math.min(900, Math.max(64, widthOf(header.column) + step)) }));
                       }}
-                      className={cn("group absolute right-0 top-0 flex h-full w-3 cursor-col-resize touch-none select-none items-center justify-center outline-none", header.column.getIsResizing() ? "bg-accent/20" : "hover:bg-accent/15 focus-visible:bg-accent/20")}
+                      className={cn("group absolute right-0 top-0 z-20 flex h-full w-5 cursor-col-resize touch-none select-none items-center justify-center outline-none", header.column.getIsResizing() ? "bg-accent/20" : "hover:bg-accent/15 focus-visible:bg-accent/20")}
                     >
-                      <span aria-hidden className={cn("h-4 w-px rounded-full bg-border-strong transition-all group-hover:h-5 group-hover:w-0.5 group-hover:bg-accent group-focus-visible:h-5 group-focus-visible:w-0.5 group-focus-visible:bg-accent", header.column.getIsResizing() && "h-5 w-0.5 bg-accent")} />
+                      <span aria-hidden className={cn("h-4 w-px rounded-full bg-border-strong transition-colors group-hover:h-5 group-hover:w-0.5 group-hover:bg-accent group-focus-visible:h-5 group-focus-visible:w-0.5 group-focus-visible:bg-accent", header.column.getIsResizing() && "h-5 w-0.5 bg-accent")} />
                     </div>
                   ) : null}
                 </Th>

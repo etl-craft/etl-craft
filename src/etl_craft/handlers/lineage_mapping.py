@@ -43,6 +43,15 @@ def steps(tree: exp.Query, dialect: str | None) -> tuple[MappingStep, ...]:
         for table in tree.find_all(exp.Table)
     ]
     result.extend(
+        MappingStep(MappingKind.SOURCE, render(query, dialect), query.alias)
+        for query in tree.find_all(exp.Subquery)
+        if query.alias
+    )
+    result.extend(
+        MappingStep(MappingKind.SOURCE, render(query.this, dialect), query.alias)
+        for query in tree.find_all(exp.CTE)
+    )
+    result.extend(
         MappingStep(
             MappingKind.JOIN,
             render(join, dialect),

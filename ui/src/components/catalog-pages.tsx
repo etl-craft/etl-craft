@@ -82,11 +82,11 @@ function Section({ title, aside, fill, className, children }: { title: string; a
 }
 
 /** An object's page: its breadcrumb, title and tabs stay put, and its body scrolls under them (`fit`: the body arranges itself to the window instead). */
-function ObjectPage({ header, fit, children }: { header: React.ReactNode; fit?: boolean; children: React.ReactNode }) {
+function ObjectPage({ header, tab, fit, children }: { header: React.ReactNode; tab?: string; fit?: boolean; children: React.ReactNode }) {
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
       <div className="grid shrink-0 gap-3 px-4 pt-4">{header}</div>
-      <div data-scroll-area className={cn("min-h-0 min-w-0 flex-1 p-4", fit ? "flex flex-col overflow-auto @3xl:overflow-hidden" : "overflow-auto")}>{children}</div>
+      <div id={tab ? "tabpanel" : undefined} role={tab ? "tabpanel" : undefined} aria-labelledby={tab ? `tab-${tab}` : undefined} data-scroll-area className={cn("min-h-0 min-w-0 flex-1 p-4", fit ? "flex flex-col overflow-auto @3xl:overflow-hidden" : "overflow-auto")}>{children}</div>
     </div>
   );
 }
@@ -203,7 +203,7 @@ export function PipelineObject({ code, doc, name, tab, onTab }: { code: string; 
   const tabs = [{ id: "overview", label: "Overview" }, { id: "lineage", label: "Graph" }, { id: "runs", label: "Runs" }];
   const on = tabs.some((t) => t.id === tab) ? tab : "overview";
   return (
-    <ObjectPage header={
+    <ObjectPage tab={on} header={
       <>
       <Crumbs code={code} trail={[{ label: "Pipelines" }, { label: pipeline.code }]} />
       <Title icon={Workflow} name={pipeline.code} copy={pipeline.code}>
@@ -306,7 +306,7 @@ export function TaskObject({ code, doc, name, tab, onTab }: { code: string; doc:
   const tabs = [{ id: "overview", label: "Overview" }, { id: "mapping", label: "Mapping" }, { id: "lineage", label: "Column lineage" }, { id: "runs", label: "Runs" }];
   const on = tabs.some((t) => t.id === tab) ? tab : "overview";
   return (
-    <ObjectPage header={
+    <ObjectPage tab={on} header={
       <>
       <Crumbs code={code} trail={[{ label: task.pipeline, to: catalogPath(code, "pipelines", task.pipeline) }, { label: task.code }]} />
       <Title icon={ListChecks} name={task.code} copy={task.label}>
@@ -448,7 +448,7 @@ export function TableObject({ code, doc, name, tab, onTab }: { code: string; doc
   const openGaps = doc.gaps.filter((g) => g.table === table.name && isOpenGap(g)).length;
   const history = writers.flatMap((w) => w.runs.map((r) => ({ ...r, task: w.label, pipeline: w.pipeline }))).sort((a, b) => (b.start ?? "").localeCompare(a.start ?? "")).slice(0, 30);
   return (
-    <ObjectPage fit={on === "overview" || on === "lineage"} header={
+    <ObjectPage tab={on} fit={on === "overview" || on === "lineage"} header={
       <>
       <Crumbs code={code} trail={[{ label: table.schema || "schema" }, { label: table.table }]} />
       <Title icon={Table2} name={table.table} copy={table.name} />

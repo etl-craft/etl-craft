@@ -1,6 +1,7 @@
 """Browser SSO redirects through the TLS issuer without copying a device code."""
 
 import os
+import re
 from pathlib import Path
 
 import pytest
@@ -82,7 +83,7 @@ def test_sign_out_follows_provider_discovery_and_revokes_local_session(site, iss
         page.wait_for_url(url + "/ui")
         expect(page.get_by_role("heading", name="Home", exact=True)).to_be_visible()
         page.evaluate("() => document.fonts.ready")
-        page.get_by_role("button", name="Account menu", exact=True).click()
+        page.get_by_role("button", name=re.compile(r"^Account menu: ")).click()
         page.get_by_role("menuitem", name="Sign out", exact=True).click()
         expect(page.get_by_role("heading", name="Sign in to etl-craft")).to_be_visible()
         assert page.request.get(url + "/api/v1/whoami").status == 401

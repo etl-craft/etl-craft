@@ -580,3 +580,116 @@ def test_catalog_readability_floating_key_and_full_width(mappings, appearance, w
                 expect(page.get_by_role("tree", name="Catalog objects")).to_be_visible()
         assert problems == []
         browser.close()
+
+
+def test_mapping_ports_and_edges_stay_attached_when_columns_scroll_and_resize(mappings):
+    _, url = mappings
+    with sync_playwright() as pw:
+        browser, page, problems = open_page(pw, viewport={"width": 1440, "height": 1000})
+        sign_in(page, url, "/ui/projects/default/catalog/tasks/ORDERS.load?tab=mapping")
+        diagram = page.get_by_label("Task mapping diagram", exact=True)
+        expect(diagram).to_be_visible()
+        page.get_by_role("button", name="Show all columns", exact=True).click()
+        source = diagram.locator('[data-id="source:raw.orders"]')
+        expect(source.locator("[data-port]")).to_have_count(12)
+        attached = """() => {
+            const node=document.querySelector('[data-id="source:raw.orders"]');
+            const box=node.querySelector('.diagram-node').getBoundingClientRect();
+            const handles=[...node.querySelectorAll('.react-flow__handle')];
+            return handles.length>=12 && handles.every(handle=>{
+                const port=handle.getBoundingClientRect();
+                return port.top>=box.top && port.bottom<=box.bottom;
+            });
+        }"""
+        connected = """() => {
+            const diagram=document.querySelector('[aria-label="Task mapping diagram"]');
+            const ports=[...diagram.querySelectorAll('.react-flow__handle')].map(handle=>{
+                const box=handle.getBoundingClientRect();
+                return {x:box.x+box.width/2,y:box.y+box.height/2};
+            });
+            const paths=[...diagram.querySelectorAll('path.react-flow__edge-path')];
+            return paths.length>0 && paths.every(path=>[0,path.getTotalLength()].every(length=>{
+                const point=path.getPointAtLength(length);
+                const screen=new DOMPoint(point.x,point.y).matrixTransform(path.getScreenCTM());
+                return ports.some(port=>Math.hypot(port.x-screen.x,port.y-screen.y)<6);
+            }));
+        }"""
+        page.wait_for_function(attached)
+        page.wait_for_function(connected)
+        scroll = source.locator(".overflow-y-auto")
+        before = source.locator('[data-handleid="amount"]').bounding_box()
+        scroll.evaluate(
+            "el => { el.scrollTop=el.scrollHeight; el.dispatchEvent(new Event('scroll')); }"
+        )
+        page.wait_for_function(attached)
+        page.wait_for_function(
+            """before => {
+            const node=document.querySelector('[data-id="source:raw.orders"]');
+            const port=node.querySelector('[data-handleid="amount"]');
+            return port.getBoundingClientRect().y < before;
+        }""",
+            arg=before["y"],
+        )
+        page.wait_for_function(connected)
+        viewport = diagram.locator(".react-flow__viewport").evaluate(
+            "el => getComputedStyle(el).transform"
+        )
+        original = source.locator(".diagram-node").bounding_box()
+        resize = source.locator(".react-flow__resize-control.bottom.right.handle")
+        start = resize.bounding_box()
+        assert start["width"] >= 20 and start["height"] >= 20
+        page.mouse.move(start["x"] + start["width"] / 2, start["y"] + start["height"] / 2)
+        page.mouse.down()
+        page.mouse.move(start["x"] + 24, start["y"] + 72, steps=8)
+        page.mouse.up()
+        page.wait_for_function(
+            """original => {
+            const node=document.querySelector('[data-id="source:raw.orders"] .diagram-node');
+            const box=node.getBoundingClientRect();
+            return box.width>original.width && box.height>original.height;
+        }""",
+            arg=original,
+        )
+        page.wait_for_function(attached)
+        page.wait_for_function(connected)
+        expect(source.locator("[data-port]")).to_have_count(12)
+        assert (
+            diagram.locator(".react-flow__viewport").evaluate(
+                "el => getComputedStyle(el).transform"
+            )
+            == viewport
+        )
+        stationary = diagram.locator('[data-id="source:ref.rates"]')
+        untouched = stationary.bounding_box()
+        header = source.locator("strong").bounding_box()
+        moved = source.bounding_box()
+        page.mouse.move(header["x"] + 20, header["y"] + 8)
+        page.mouse.down()
+        page.mouse.move(header["x"] + 70, header["y"] + 48, steps=8)
+        page.mouse.up()
+        after = source.bounding_box()
+        other = stationary.bounding_box()
+        assert 40 <= after["x"] - moved["x"] <= 52
+        assert 30 <= after["y"] - moved["y"] <= 42
+        assert abs(other["x"] - untouched["x"]) < 2
+        assert abs(other["y"] - untouched["y"]) < 2
+        page.wait_for_function(connected)
+        assert problems == []
+        browser.close()
+
+
+@pytest.mark.parametrize(
+    "object_path", ["pipelines/ORDERS", "tasks/ORDERS.load", "tables/mart.orders"]
+)
+def test_catalog_tabs_own_the_visible_object_panel(mappings, object_path):
+    _, url = mappings
+    with sync_playwright() as pw:
+        browser, page, problems = open_page(pw)
+        sign_in(page, url, "/ui/projects/default/catalog/" + object_path)
+        active = page.get_by_role("tab", selected=True)
+        panel = page.get_by_role("tabpanel")
+        expect(panel).to_be_visible()
+        expect(active).to_have_attribute("aria-controls", panel.get_attribute("id"))
+        expect(panel).to_have_attribute("aria-labelledby", active.get_attribute("id"))
+        assert problems == []
+        browser.close()
