@@ -387,3 +387,7 @@ expandable-object-lineage = [
     "tests/browser/test_react_lineage.py::test_column_sources_filters_by_the_selected_writing_task",
     "tests/browser/test_react_lineage.py::test_a_task_that_cannot_be_traced_is_named_with_its_reason_and_counted",
 ]
+
+workspace-panel-headings = [
+    "tests/browser/test_react_pipelines.py::test_a_pipeline_has_an_overview_tasks_and_details_and_a_way_back",
+]
