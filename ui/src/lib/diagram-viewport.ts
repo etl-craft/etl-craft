@@ -14,3 +14,10 @@ export function fitDiagram<N extends Node,E extends Edge>(instance:ReactFlowInst
   if(bounds.width+48>pane.width||bounds.height+48>pane.height)void instance.setViewport({x:24-bounds.x,y:24-bounds.y,zoom:1});
   else void instance.fitView(readableFit);
 }
+
+/** Move the visible window in screen pixels while keeping the current zoom and node positions. */
+export function panDiagram<N extends Node,E extends Edge>(instance:ReactFlowInstance<N,E>|null,dx:number,dy:number) {
+  if(!instance)return;
+  const viewport=instance.getViewport();
+  void instance.setViewport({...viewport,x:viewport.x-dx,y:viewport.y-dy});
+}

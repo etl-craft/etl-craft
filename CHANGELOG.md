@@ -6,6 +6,11 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+- Shared tabs support arrow keys, Home/End and contained scroll cues. Table, pane and inline
+  targets are easier to use without changing the frame; dense run charts offer a keyboard/touch
+  run chooser. Mapping resize grips stay visible, leave column scrollbars clear and support
+  keyboard resizing; diagram move buttons pan without dragging. Collapsing a resized node restores its compact header and keeps its size.
+
 - Diagram headers expand on a single click; mouse double-click opens catalog details in a new
   tab without toggling expansion. The shared Node actions menu offers catalog details,
   expansion and a new-tab action for keyboard and touch users. Main navigation and run/task

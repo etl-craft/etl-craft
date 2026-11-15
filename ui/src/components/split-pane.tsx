@@ -70,7 +70,7 @@ export function SplitPane({ id, left, right, initial = 0.42, className, narrowFi
         onPointerMove={drag}
         onDoubleClick={() => set(initial)}
         onKeyDown={key}
-        className={cn("group hidden cursor-col-resize touch-none items-center justify-center outline-none lg:flex",collapsedLeft&&"!hidden")}
+        className={cn("pane-divider relative group hidden cursor-col-resize touch-none items-center justify-center outline-none lg:flex",collapsedLeft&&"!hidden")}
       >
         <span className="h-full w-px bg-border-strong group-hover:w-0.5 group-hover:bg-accent group-focus-visible:bg-accent group-active:bg-accent" />
       </div>

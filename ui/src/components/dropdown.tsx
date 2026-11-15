@@ -12,7 +12,7 @@ export function DropdownContent({ className, ...props }: React.ComponentProps<ty
       <Menu.Content
         align="end"
         sideOffset={6}
-        className={cn("z-50 min-w-56 rounded-lg bg-surface p-1 text-[13px] text-fg shadow-pop", className)}
+        className={cn("z-50 max-h-[var(--radix-dropdown-menu-content-available-height)] max-w-[calc(100vw-2rem)] overflow-y-auto overscroll-contain min-w-56 rounded-lg bg-surface p-1 text-[13px] text-fg shadow-pop", className)}
         {...props}
       />
     </Menu.Portal>

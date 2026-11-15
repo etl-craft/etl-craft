@@ -395,3 +395,12 @@ workspace-panel-headings = [
 diagram-navigation-gestures = [
     "tests/browser/test_react_lineage.py::test_node_header_double_click_and_keyboard_menu_follow_navigation_rule",
 ]
+
+shared-ui-interaction-targets = [
+    "tests/browser/test_react_usability.py::test_diagram_view_moves_with_buttons_without_dragging",
+    "tests/browser/test_react_usability.py::test_phone_tabs_use_arrow_keys_and_keep_a_scroll_cue_inside_the_gutter",
+    "tests/browser/test_react_usability.py::test_table_and_pane_resize_targets_work_away_from_the_exact_border",
+    "tests/browser/test_react_usability.py::test_touch_selection_and_breadcrumbs_work_outside_the_visible_glyph",
+    "tests/browser/test_react_usability.py::test_recent_run_strip_has_one_touch_target_and_a_keyboard_run_chooser",
+    "tests/browser/test_react_usability.py::test_mapping_resize_grips_and_scrollbars_do_not_cover_column_controls",
+]

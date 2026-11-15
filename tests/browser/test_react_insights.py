@@ -367,14 +367,19 @@ def test_chart_renderers_load_on_home_without_changing_run_or_catalog_charts(sce
         pending = []
         page.route("**/chart-renderers-*.js", lambda route: pending.append(route))
         sign_in(page, url, "/ui/projects/default/runs")
-        durations = page.get_by_role("list", name="Run durations, newest on the right")
-        expect(durations.get_by_role("link")).to_have_count(6)
+        durations = page.get_by_role("button", name="Run durations, newest on the right")
+        durations.focus()
+        page.keyboard.press("Enter")
+        expect(page.get_by_role("menu").get_by_role("menuitem")).to_have_count(6)
+        page.keyboard.press("Escape")
+        expect(page.get_by_role("menu")).not_to_be_visible()
         assert not pending
         page.evaluate("() => document.fonts.ready.then(() => true)")
         page.goto(url + "/ui/projects/default/catalog/pipelines/ORDERS?tab=runs")
-        expect(
-            page.get_by_role("list", name="Run durations, newest on the right").get_by_role("link")
-        ).to_have_count(6)
+        page.get_by_role("button", name="Run durations, newest on the right").click()
+        expect(page.get_by_role("menu").get_by_role("menuitem")).to_have_count(6)
+        page.keyboard.press("Escape")
+        expect(page.get_by_role("menu")).not_to_be_visible()
         assert not pending
         page.goto(url + "/ui/projects/default")
         panel = page.get_by_role("region", name="Runs per day", exact=True)
@@ -408,7 +413,8 @@ def test_chart_renderers_load_on_home_without_changing_run_or_catalog_charts(sce
 
 
 def test_phone_home_tabs_scroll_inside_the_gutter_and_follow_keyboard_focus(scene):
-    _, url = scene
+    ctx, url = scene
+    act(ctx, ActionName.GENERATE_DOCS)
     with sync_playwright() as pw:
         browser, page, problems = open_page(
             pw, viewport={"width": 390, "height": 900}, has_touch=True
@@ -423,7 +429,7 @@ def test_phone_home_tabs_scroll_inside_the_gutter_and_follow_keyboard_focus(scen
         overview = tabs.get_by_role("tab", name="Overview", exact=True)
         overview.focus()
         for _ in range(6):
-            page.keyboard.press("Tab")
+            page.keyboard.press("ArrowRight")
         failures = tabs.get_by_role("tab", name="Failures", exact=True)
         expect(failures).to_be_focused()
         last = failures.bounding_box()

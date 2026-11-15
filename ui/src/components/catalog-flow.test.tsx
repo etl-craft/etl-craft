@@ -14,7 +14,7 @@ const captured = vi.hoisted(() => ({ edges: [] as Edge[], nodes: [] as Node[], f
 vi.mock("@xyflow/react", async importOriginal => {
   const actual = await importOriginal<typeof import("@xyflow/react")>();
   const update = () => {};
-  return { ...actual, Handle: () => null, NodeResizer: () => null, useUpdateNodeInternals: () => update,
+  return { ...actual, Handle: () => null, NodeResizer: () => null, NodeResizeControl: () => null, useStore: (select:(state:{nodeLookup:Map<string,{measured?:{width:number;height:number}}>;transform:number[]})=>unknown)=>select({nodeLookup:new Map(),transform:[0,0,1]}), useUpdateNodeInternals: () => update,
     ReactFlow: ({ edges, nodes, fitViewOptions, nodeTypes }: { edges: Edge[]; nodes: Node[]; fitViewOptions:{minZoom?:number}; nodeTypes: Record<string, ComponentType<{id: string; data: Node["data"]}>> }) => {
     captured.edges = edges; captured.nodes = nodes; captured.fit=fitViewOptions;
     return captured.renderBoxes ? <>{nodes.map(node => {

@@ -3,7 +3,7 @@ import {dependencyEntries,taskEntries,highlightedEntry,RunConditionMark} from "@
 import {DependencyBadge} from "@/components/dependency-mark";
 import {CatalogWidthButton} from "@/components/catalog-width";
 import {Switch} from "@/components/switch";
-import {fitDiagram,readableFit} from "@/lib/diagram-viewport";
+import {panDiagram,fitDiagram,readableFit} from "@/lib/diagram-viewport";
 import { Box, CalendarClock, Play, Network, Hourglass, type LucideIcon } from "lucide-react";
 import * as React from "react";
 import { Background, Handle, MarkerType, Position, ReactFlow, getBezierPath, type EdgeProps, type Edge, type Node, type NodeProps, type ReactFlowInstance } from "@xyflow/react";
@@ -268,7 +268,7 @@ export function RunGraph({
       <p className="m-0 shrink-0 px-3 py-1.5 text-xs text-muted">
         {edges.length === 0 ? "No dependencies between these tasks: they can run at the same time." : focused ? `Showing everything upstream and downstream of ${focused}. Click the background to clear.` : "Click a task to highlight its lineage; drag to pan."}
       </p>
-      <DiagramToolbar className="px-3" zoomIn={()=>void flow.current?.zoomIn()} zoomOut={()=>void flow.current?.zoomOut()} fit={()=>fitDiagram(flow.current,frame.current,true)} reset={()=>void flow.current?.zoomTo(1)}>{definition ? <><Switch checked={definition.overlay??false} onChange={()=>definition.onOverlay?.()} label="Show last-run status"/><Button onClick={expansion.toggleAll}>{expansion.expanded?"Collapse all":"Expand all"}</Button></>:null}<CatalogWidthButton/>{key.button}</DiagramToolbar>
+      <DiagramToolbar pan={(dx,dy)=>panDiagram(flow.current,dx,dy)} className="px-3" zoomIn={()=>void flow.current?.zoomIn()} zoomOut={()=>void flow.current?.zoomOut()} fit={()=>fitDiagram(flow.current,frame.current,true)} reset={()=>void flow.current?.zoomTo(1)}>{definition ? <><Switch checked={definition.overlay??false} onChange={()=>definition.onOverlay?.()} label="Show last-run status"/><Button onClick={expansion.toggleAll}>{expansion.expanded?"Collapse all":"Expand all"}</Button></>:null}<CatalogWidthButton/>{key.button}</DiagramToolbar>
       <div ref={frame} className="relative min-h-0 flex-1">
       <ReactFlow
         key={`${wide ? "wide" : "fit"}:${shown}:${nodes.map((n) => n.id).join("|")}`}

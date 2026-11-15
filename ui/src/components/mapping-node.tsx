@@ -1,6 +1,6 @@
 import "@xyflow/react/dist/style.css";
 import * as React from "react";
-import {Handle,NodeResizer,useReactFlow,useUpdateNodeInternals,Position,type Node,type NodeProps,type Edge,type EdgeProps} from "@xyflow/react";
+import {Handle,NodeResizer,NodeResizeControl,ResizeControlVariant,useStore,useReactFlow,useUpdateNodeInternals,Position,type Node,type NodeProps,type Edge,type EdgeProps} from "@xyflow/react";
 import type {LucideIcon} from "lucide-react";
 import {MappingLogicMark,MappingConditions} from "@/components/diagram-key";
 import {DiagramChip} from "@/components/diagram-toolbar";
@@ -17,6 +17,29 @@ export type NodeSize = { width: number; height?: number };
 export const SHOWN_ROWS = 5;
 export const ROW_HEIGHT = 32;
 export const HEADER_HEIGHT = 44;
+/** Resizing stays outside the node's buttons and scrollbars, with a keyboard path per axis. */
+function MappingResizer({id,data}:{id:string;data:BoxData}) {
+  const measured=useStore(state=>state.nodeLookup.get(id)?.measured);
+  const zoom=useStore(state=>state.transform[2]);
+  const width=measured?.width??data.size?.width??160;
+  const height=measured?.height??data.size?.height??HEADER_HEIGHT;
+  const minimumHeight=data.expanded ? HEADER_HEIGHT+ROW_HEIGHT*2 : Math.min(HEADER_HEIGHT,height);
+  const style={"--resize-hit":`${24/zoom}px`,"--resize-mark":`${6/zoom}px`,"--resize-stroke":`${1/zoom}px`} as React.CSSProperties;
+  const resize=(_:unknown,next:{width:number;height:number})=>data.onResize(id,{width:next.width,height:next.height});
+  const key=(event:React.KeyboardEvent,axis:"width"|"height")=>{
+    const step=axis==="width" ? (event.key==="ArrowRight"?16:event.key==="ArrowLeft"?-16:0) : (event.key==="ArrowDown"?16:event.key==="ArrowUp"?-16:0);
+    if(!step)return;
+    event.preventDefault();event.stopPropagation();
+    data.onResize(id,{width:axis==="width"?Math.max(160,width+step):width,height:axis==="height"?Math.max(minimumHeight,height+step):data.size?.height});
+  };
+  return <>
+    <NodeResizer autoScale={false} minWidth={160} minHeight={minimumHeight} handleStyle={style} lineStyle={style} lineClassName="mapping-pointer-edge" onResize={resize}/>
+    {(["width","height"] as const).map(axis=><NodeResizeControl key={axis} variant={ResizeControlVariant.Line} position={axis==="width"?"right":"bottom"} autoScale={false} style={style} minWidth={160} minHeight={minimumHeight} onResize={resize}>
+      <div role="separator" tabIndex={0} aria-label={`Resize ${data.title} ${axis}`} aria-orientation={axis==="width"?"vertical":"horizontal"} aria-valuemin={axis==="width"?160:minimumHeight} aria-valuemax={Number.MAX_VALUE} aria-valuenow={Math.round(axis==="width"?width:height)} aria-valuetext={`${Math.round(axis==="width"?width:height)} pixels`} title={axis==="width"?"Drag or use Left/Right to resize width":"Drag or use Up/Down to resize height"} onKeyDown={event=>key(event,axis)} className="h-full w-full outline-none"/>
+    </NodeResizeControl>)}
+  </>;
+}
+
 export function MappingBox({ id, data }: NodeProps<Node<BoxData>>) {
   const expanded = data.expanded;
   const [engine,setEngine]=React.useState(false);
@@ -41,7 +64,8 @@ export function MappingBox({ id, data }: NodeProps<Node<BoxData>>) {
   const size = data.size;
   const fixedHeight = size?.height;
   const logicLabel = kindLabels[data.kind] ?? "Logic";
-  return <><NodeResizer minWidth={160} minHeight={HEADER_HEIGHT + ROW_HEIGHT * 2} onResize={(_, next) => data.onResize(id, { width: next.width, height: next.height })}/><DiagramNode title={data.title} details={data.details} width={size?.width ?? (data.declared?(id.startsWith("source:")?320:256):160)} height={fixedHeight} bodyClassName={fixedHeight!==undefined ? "flex min-h-0 flex-1 flex-col" : undefined} color={kindColor(data.kind)} chip={data.declared ? <DiagramChip>Declared</DiagramChip> : undefined} description={data.conditions?.length ? <MappingConditions conditions={data.conditions}/> : undefined} icon={data.icon} expanded={expanded} onExpanded={data.onExpanded} headingClassName="h-10" collapsedPorts={collapsedPorts} className={cn("mapping-node",data.declared && "border-dashed",data.selected.has(`${id}:object`) && "ring-2 ring-accent")}>
+  return <><MappingResizer id={id} data={data}/><DiagramNode title={data.title} details={data.details} width={size?.width ?? (data.declared?(id.startsWith("source:")?320:256):160)} height={expanded?fixedHeight:undefined} bodyClassName={fixedHeight!==undefined ? "flex min-h-0 flex-1 flex-col" : undefined} color={kindColor(data.kind)} chip={data.declared ? <DiagramChip>Declared</DiagramChip> : undefined} description={data.conditions?.length ? <MappingConditions conditions={data.conditions}/> : undefined} icon={data.icon} expanded={expanded} onExpanded={data.onExpanded} headingClassName="h-10" collapsedPorts={collapsedPorts} className={cn("mapping-node",data.declared && "border-dashed",data.selected.has(`${id}:object`) && "ring-2 ring-accent")}>
+
     {objectPorts}
     {data.columns.map((column, index) => {
       // Off-screen columns stay wired at the list boundary while their rows scroll.

@@ -117,13 +117,17 @@ describe("catalog gap remedies", () => {
 });
 
 
-it("shows sparse catalog run durations in the table and charts measured durations for larger series", () => {
+it("shows sparse catalog run durations in the table and charts measured durations for larger series", async () => {
   const run = { pipeline_run_id: 7, status: "SUCCESS", start: "2026-11-10T10:00:00Z", end: "2026-11-10T10:00:06Z" };
   const pipeline = { ...doc.pipelines[0]!, runs: [run] };
   wrap(<PipelineObject code="demo" doc={{ ...doc, pipelines: [pipeline] }} name="LOAD" tab="runs" onTab={() => undefined} />);
   expect(within(screen.getByRole("table", { name: "Recent runs" })).getByText("6s")).toBeTruthy();
-  expect(screen.queryByRole("list", { name: "Run durations, newest on the right" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "Run durations, newest on the right" })).toBeNull();
   cleanup();
   wrap(<PipelineObject code="demo" doc={{ ...doc, pipelines: [{ ...pipeline, runs: Array.from({ length: 5 }, (_, index) => ({ ...run, pipeline_run_id: index + 7 })) }] }} name="LOAD" tab="runs" onTab={() => undefined} />);
-  expect(within(screen.getByRole("list", { name: "Run durations, newest on the right" })).getByRole("link", { name: "Run 7, Success, 6s" })).toBeTruthy();
+  const chart = screen.getByRole("button", { name: "Run durations, newest on the right" });
+  fireEvent.keyDown(chart, { key: "Enter" });
+  const runLink = await screen.findByRole("menuitem", { name: /Run #7.*Success, 6s/ });
+  expect(runLink).toHaveAttribute("href", "/projects/demo/pipelines/LOAD?run=7");
+  expect(runLink).not.toHaveAttribute("target");
 });
