@@ -89,11 +89,13 @@ export function DailyRuns({ days }: { days: DayInsight[] }) {
       ))}
     </dl>
   );
-  return <LegendView entries={statusEntries([...(days.some(day=>day.succeeded>0)?["SUCCESS"]:[]),...(days.some(day=>day.failed>0)?["FAILED"]:[]),...(days.some(day=>day.runs>day.succeeded+day.failed)?["OTHER"]:[])])}><div className="h-64 px-3 pb-3 pt-4"><React.Suspense fallback={<span role="status" className="text-xs text-muted">Loading chart…</span>}><DailyChart days={days} /></React.Suspense></div></LegendView>;
+  const states=[...(days.some(day=>day.succeeded>0)?["SUCCESS"]:[]),...(days.some(day=>day.failed>0)?["FAILED"]:[]),...(days.some(day=>day.runs>day.succeeded+day.failed)?["OTHER"]:[])];
+  const entries=statusEntries(states,true);
+  return <LegendView entries={entries}><div className="h-64 px-3 pb-3 pt-4"><React.Suspense fallback={<span role="status" className="text-xs text-muted">Loading chart…</span>}><DailyChart days={days} /></React.Suspense></div></LegendView>;
 }
 
 /** A sparse series keeps its numeric headline; a longer one loads its renderer on demand. */
 export function Spark({ data, color }: { data: { v: number | null }[]; color: string }) {
   if (data.filter((p) => p.v !== null).length < 5) return null;
-  return <div aria-hidden className="h-10 overflow-hidden rounded-b-xl"><React.Suspense fallback={<span className="sr-only">Loading chart…</span>}><SparkChart data={data} color={color} /></React.Suspense></div>;
+  return <div aria-hidden inert className="h-10 overflow-hidden rounded-b-xl"><React.Suspense fallback={<span className="sr-only">Loading chart…</span>}><SparkChart data={data} color={color} /></React.Suspense></div>;
 }

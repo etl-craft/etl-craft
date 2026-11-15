@@ -20,9 +20,11 @@ export function taskSymbol(task: CatalogTask): { icon: LucideIcon; label: string
 }
 
 export const kindLabels:Record<string,string> = {source:"Source",join:"Join",filter:"Filter",expression:"Expression",aggregate:"Aggregate",rules:"Rules",write:"Write",target:"Target",set:"Set operation"};
-/** Three roles, not eight hues: where data comes in, what changes it, and where it lands. */
-const ROLE: Record<string, "in" | "mid" | "out"> = {
-  source: "in", INGESTION: "in", EVENT_WAIT: "in", FILE_VALIDATION: "in",
+/** Distinct diagram families identify objects, relations, constraints, computations and writes. */
+const ROLE: Record<string, "in" | "mid" | "out" | "join" | "filter"> = {
+  source: "in", INGESTION: "in", EVENT_WAIT: "in",
+  join: "join", aggregate: "join", set: "join",
+  filter: "filter", rules: "filter", BUSINESS_RULES: "filter", FILE_VALIDATION: "filter",
   write: "out", target: "out", EMAIL_ALERT: "out", ERASURE: "out", RUN_PIPELINE: "out",
 };
 export function kindColor(kind: string): string {

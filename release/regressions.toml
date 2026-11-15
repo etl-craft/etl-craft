@@ -360,3 +360,34 @@ provider-single-logout = [
     "tests/integration/api/test_single_logout.py::test_logout_refuses_a_foreign_post_logout_address_without_a_redirect",
     "tests/browser/test_sso_redirect.py::test_sign_out_follows_provider_discovery_and_revokes_local_session",
 ]
+
+mapping-scroll-edges = [
+    "tests/browser/test_react_lineage.py::test_mapping_ports_and_edges_stay_attached_when_columns_scroll_and_resize",
+]
+
+shared-ui-resize-accessibility = [
+    "tests/browser/test_react_ui.py::test_shared_phone_frame_and_table_resize_controls_have_accessible_names",
+]
+
+catalog-tab-panel-association = [
+    "tests/browser/test_react_lineage.py::test_catalog_tabs_own_the_visible_object_panel",
+]
+
+derived-source-alias-explanation = [
+    "tests/unit/test_catalog_mapping.py::test_mapping_records_the_derived_source_alias_with_its_original_query",
+]
+
+diagram-viewport-controls = [
+    "tests/browser/test_react_lineage.py::test_scrolling_the_mapping_key_keeps_its_close_button_visible",
+    "tests/browser/test_react_lineage.py::test_catalog_diagrams_use_the_visible_desktop_height_and_fit_all_nodes",
+]
+
+expandable-object-lineage = [
+    "tests/browser/test_react_lineage.py::test_table_lineage_expands_columns_and_highlights_the_recorded_path",
+    "tests/browser/test_react_lineage.py::test_column_sources_filters_by_the_selected_writing_task",
+    "tests/browser/test_react_lineage.py::test_a_task_that_cannot_be_traced_is_named_with_its_reason_and_counted",
+]
+
+workspace-panel-headings = [
+    "tests/browser/test_react_pipelines.py::test_a_pipeline_has_an_overview_tasks_and_details_and_a_way_back",
+]

@@ -12,7 +12,7 @@ export function DiagramNode({title,tooltip,description,collapsedDescription,icon
   height?:number;bodyClassName?:string;
 }) {
   return <div className={cn("diagram-node relative w-40 rounded-sm border border-border bg-surface text-[13px]",height!==undefined&&"flex flex-col",className)} style={{width,height,borderLeft:`3px solid ${color}`}}>
-    <div className="flex h-10 items-center gap-1 px-2" style={{background:`color-mix(in srgb, ${color} 7%, transparent)`}}>
+    <div className="mapping-drag-handle flex h-10 shrink-0 items-center gap-1 px-2" style={{background:`color-mix(in srgb, ${color} 12%, transparent)`}}>
       <Icon aria-hidden className="size-[18px] shrink-0" style={{color}}/>
       <strong className="min-w-0 flex-1 truncate font-medium" title={tooltip??title}>{title}</strong>
       {chip}{action}

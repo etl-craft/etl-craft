@@ -2,17 +2,19 @@
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
 :root {
-  /* Kinds by role, for diagram icons and borders only: where data comes in, what changes it, where it lands. */
-  --kind-in: #4d6a87;
-  --kind-mid: #3f7a82;
-  --kind-out: #8a6a3d;
+  /* Diagram category colours stay separate from run-state tokens and selected lineage. */
+  --kind-in: #236f86;
+  --kind-mid: #26756a;
+  --kind-out: #805b3c;
+  --kind-join: #7146a0;
+  --kind-filter: #9a4278;
 
   color-scheme: light;
   --bg: #f3f5f7;
   --surface: #ffffff;
   --surface-2: #f7f9fa;
   --border: #e2e6ea;
-  --border-strong: #cdd3da;
+  --border-strong: #828e9a;
   --fg: #18212a;
   --muted: #5a6672;
   --accent: #1b7694;
@@ -36,16 +38,18 @@
   --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 [data-theme="dark"] {
-  --kind-in: #8fb0cf;
-  --kind-mid: #7fc0c8;
-  --kind-out: #d1b07a;
+  --kind-in: #79cbe3;
+  --kind-mid: #7bcbbb;
+  --kind-out: #d4b394;
+  --kind-join: #b9a0ee;
+  --kind-filter: #e69fc8;
 
   color-scheme: dark;
   --bg: #0d1115;
   --surface: #12171c;
   --surface-2: #181e24;
   --border: #242c34;
-  --border-strong: #323c46;
+  --border-strong: #627282;
   --fg: #e7ecf0;
   --muted: #96a2ae;
   --accent: #5bbfdf;
@@ -255,3 +259,25 @@ details[open] > summary::before { transform: rotate(45deg); }
   .runs-filters > label, .runs-filters > div, .runs-filters > button { width: 100%; min-width: 0; }
   .runs-filters > div > button { width: 100%; justify-content: space-between; }
 }
+
+/* Resize hit areas stay generous while their visible borders remain sharp and thin. */
+.mapping-node > .mapping-drag-handle { cursor: grab; touch-action: none; user-select: none; }
+.mapping-node > .mapping-drag-handle:active { cursor: grabbing; }
+.react-flow__node-mapping .react-flow__resize-control { z-index: 5; }
+.react-flow__node-mapping .react-flow__resize-control.handle {
+  width: 24px; height: 24px; border: 0; border-radius: 0; background: transparent;
+}
+.react-flow__node-mapping .react-flow__resize-control.handle::after {
+  content: ""; position: absolute; inset: 9px; border: 1px solid var(--accent);
+  background: var(--surface); opacity: 0;
+}
+.react-flow__node-mapping:hover .react-flow__resize-control.handle::after,
+.react-flow__node-mapping:focus-within .react-flow__resize-control.handle::after { opacity: 1; }
+.react-flow__node-mapping .react-flow__resize-control.line { border: 0; }
+.react-flow__node-mapping .react-flow__resize-control.line:is(.left,.right) { width: 16px; }
+.react-flow__node-mapping .react-flow__resize-control.line:is(.top,.bottom) { height: 16px; }
+
+/* Keyboard focus uses the same clear boundary in dense lists and workspaces. */
+[role="separator"]:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
+main [role="tablist"] { background: var(--surface); }
+main thead button { min-height: 24px; }

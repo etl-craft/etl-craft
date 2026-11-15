@@ -56,7 +56,7 @@ export function SplitPane({ id, left, right, initial = 0.42, className, narrowFi
     event.preventDefault();
   };
   return (
-    <div ref={frame} style={{ "--split": collapsedLeft ? "0%" : `${shown * 100}%` } as React.CSSProperties} className={cn("grid min-h-0 gap-3 lg:grid-cols-[var(--split)_7px_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)] lg:gap-0", collapsedLeft && "!grid-cols-[minmax(0,1fr)]", className)}>
+    <div ref={frame} style={{ "--split": collapsedLeft ? "0%" : `${shown * 100}%` } as React.CSSProperties} className={cn("grid min-h-0 gap-3 lg:grid-cols-[var(--split)_12px_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)] lg:gap-0", collapsedLeft && "!grid-cols-[minmax(0,1fr)]", className)}>
       <div data-pane className={cn("flex min-h-0 min-w-0 flex-col",collapsedLeft&&"hidden")}>{left}</div>
       <div
         role="separator"

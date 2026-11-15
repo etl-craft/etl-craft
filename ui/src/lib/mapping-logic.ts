@@ -1,6 +1,20 @@
 import type { CatalogTask } from "@/lib/catalog";
 
 export type LogicRow={expression:string;columns:string[];label:string};
+/** The recorded source steps explain SQL aliases without changing the SQL text. */
+export function sourceAliases(task:CatalogTask):{alias:string;object:string;query?:string}[] {
+  const bindings=task.mapping.steps.filter(step=>step.kind==="source").map(step=>{
+    const derived=/^\s*(?:\(|SELECT\b|WITH\b)/i.test(step.expression);
+    const object=derived ? step.name : step.expression.split(/\s+(?:AS\s+)?/i)[0]!;
+    const resolved=derived ? object : task.sources.find(item=>item.toLowerCase()===object.toLowerCase())
+      ?? task.sources.find(item=>object.toLowerCase().endsWith(`.${item.toLowerCase()}`)||item.toLowerCase().endsWith(`.${object.toLowerCase()}`))
+      ?? object;
+    return {alias:step.name,object:resolved,query:derived ? step.expression : undefined,reference:!derived && object.toLowerCase()===step.name.toLowerCase()};
+  });
+  const queries=new Set(bindings.filter(binding=>binding.query).map(binding=>binding.alias.toLowerCase()));
+  const explained=bindings.filter(binding=>!binding.reference || !queries.has(binding.alias.toLowerCase())).map(({alias,object,query})=>({alias,object,query}));
+  return [...new Map(explained.map(binding=>[JSON.stringify(binding),binding] as const)).values()];
+}
 /** Resolve parser aliases to recorded source identities, without parsing SQL in the browser. */
 export function mappingFields(task:CatalogTask, columns:string[], tables:readonly {name:string;columns:readonly {name:string}[]}[]=[]):string[] {
   return columns.flatMap(column=>{
@@ -13,11 +27,7 @@ export function mappingFields(task:CatalogTask, columns:string[], tables:readonl
       return projected.length===1?projected:[];
     }
     const alias=parts.slice(0,-1).join(".");
-    const source=task.mapping.steps.find(step=>step.kind==="source"&&step.name.toLowerCase()===alias.toLowerCase());
-    const object=source?.expression.split(/\s+(?:AS\s+)?/i)[0] ?? alias;
-    const resolved=task.sources.find(item=>item.toLowerCase()===object.toLowerCase())
-      ?? task.sources.find(item=>object.toLowerCase().endsWith(`.${item.toLowerCase()}`)||item.toLowerCase().endsWith(`.${object.toLowerCase()}`))
-      ?? object;
+    const resolved=sourceAliases(task).find(({alias:name})=>name.toLowerCase()===alias.toLowerCase())?.object ?? alias;
     return [`${resolved}.${name}`];
   });
 }

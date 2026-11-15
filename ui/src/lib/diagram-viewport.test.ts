@@ -26,3 +26,10 @@ describe("fitDiagram",()=>{
     expect(calls.setViewport).not.toHaveBeenCalled();
   });
 });
+
+it("fits the complete measured diagram when explicitly requested",()=>{
+ const {frame,instance,calls}=setup(390,{x:0,y:0,width:1600,height:600});
+ fitDiagram(instance,frame,true);
+ expect(calls.setViewport).not.toHaveBeenCalled();
+ expect(calls.fitView).toHaveBeenCalledWith({padding:0.08,minZoom:0.05,maxZoom:1});
+});

@@ -1,7 +1,7 @@
 import * as React from "react";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { StatusMark, statusMeta } from "@/components/status";
+import { StatusMark, statusMeta, solidClass } from "@/components/status";
 
 export interface LegendEntry { id:string; group:string; name:string; meaning:string; sample:React.ReactNode }
 export const LegendViewer = React.createContext("local");
@@ -12,11 +12,12 @@ const STATUS_MEANING:Record<string,string>={
   QUEUED:"Waiting for a free slot",NOT_STARTED:"Has not started yet",SKIPPED:"Skipped on purpose",
   CANCELLED:"Stopped by a person",LOST:"The worker stopped reporting; the engine reconciles it",
   STOPPED:"Stopped before it finished",ABORTED:"Ended early by the engine",HELD:"Held until someone releases it",
+  OTHER:"Runs not counted as succeeded or failed",
   MET:"Finished within its SLA",BREACHED:"Missed its SLA",
 };
 
-export function statusEntries(statuses:Iterable<string>):LegendEntry[] {
-  return [...new Set(statuses)].filter(Boolean).map(status=>({id:`status:${status}`,group:"Status",name:statusMeta(status).label,meaning:STATUS_MEANING[status]??"Status of a run or task",sample:<StatusMark status={status} solid/>}));
+export function statusEntries(statuses:Iterable<string>, bars=false):LegendEntry[] {
+  return [...new Set(statuses)].filter(Boolean).map(status=>({id:`status:${status}`,group:"Status",name:statusMeta(status).label,meaning:STATUS_MEANING[status]??"Status of a run or task",sample:bars ? <span aria-hidden className={`inline-block h-3 w-8 ${solidClass(status)}`}/> : <StatusMark status={status} solid/>}));
 }
 
 /** One floating key, with entries supplied by the view and preferences scoped to its viewer. */
@@ -25,7 +26,7 @@ export function useLegend(entries:LegendEntry[]) {
   const storage=`etl-craft-key:${viewer}`;
   const [open,setOpen]=React.useState(()=>{
     try{const kept=localStorage.getItem(storage);if(kept)return kept==="open";}catch{/* Storage is optional. */}
-    return !window.matchMedia?.("(max-width: 480px)").matches;
+    return false;
   });
   const toggle=React.useRef<HTMLButtonElement>(null);
   const id=React.useId();
@@ -42,7 +43,7 @@ export function useLegend(entries:LegendEntry[]) {
 
 export function Legend({id,open,entries,onClose}:{id:string;open:boolean;entries:LegendEntry[];onClose:()=>void}) {
   return <section id={id} hidden={!open} role="region" aria-label="View key" tabIndex={0} className="view-key">
-    <header className="flex items-center justify-between gap-2 pb-2"><strong className="text-sm">Key</strong><Button size="icon" variant="ghost" aria-label="Close key" onClick={onClose}><X aria-hidden className="size-4"/></Button></header>
+    <header className="sticky top-0 z-10 flex items-center justify-between gap-2 bg-surface pb-2"><strong className="text-sm">Key</strong><Button size="icon" variant="ghost" aria-label="Close key" onClick={onClose}><X aria-hidden className="size-4"/></Button></header>
     {[...new Set(entries.map(entry=>entry.group))].map(group=><div key={group} className="mb-3 last:mb-0"><h3 className="mb-1 text-xs font-medium text-muted">{group}</h3><table className="w-full text-left text-xs"><tbody>{entries.filter(entry=>entry.group===group).map(entry=><tr key={entry.id}><td aria-hidden className="w-12 py-1 pr-2">{entry.sample}</td><th scope="row" className="whitespace-nowrap py-1 pr-3 font-medium">{entry.name}</th><td className="py-1 text-muted">{entry.meaning}</td></tr>)}</tbody></table></div>)}
   </section>;
 }

@@ -92,14 +92,14 @@ export function AppShell() {
         <Button variant="ghost" size="icon" className="lg:hidden" aria-label={open ? "Close menu" : "Open menu"} onClick={() => setOpen(!open)}>
           {open ? <X className="size-5" /> : <Menu className="size-5" />}
         </Button>
-        <Link to={code ? projectHomePath(code) : homePath} className="flex items-center gap-2 font-semibold">
+        <Link aria-label="etl-craft" to={code ? projectHomePath(code) : homePath} className="flex items-center gap-2 font-semibold">
           <Logo className="size-7" />
           <span className="hidden sm:inline">etl-craft</span>
         </Link>
         <div data-control="" className="inline-flex h-control max-w-[60vw] items-stretch overflow-hidden rounded-md border border-border-strong bg-surface">
           <DropdownMenu>
             <DropdownTrigger asChild>
-              <button type="button" aria-label="Switch project" className="flex min-w-0 cursor-pointer items-center gap-1.5 px-2.5 text-[13px] font-medium text-fg hover:bg-surface-2">
+              <button type="button" aria-label={`Switch project: ${code ?? "Select project"}`} className="flex min-w-0 cursor-pointer items-center gap-1.5 px-2.5 text-[13px] font-medium text-fg hover:bg-surface-2">
                 <span className="truncate">{code ?? "Select project"}</span>
                 <ChevronDown className="size-3.5 shrink-0 text-muted" aria-hidden />
               </button>
@@ -137,7 +137,7 @@ export function AppShell() {
           </Button>
           <DropdownMenu>
             <DropdownTrigger asChild>
-              <Button variant="ghost" size="sm" aria-label="Account menu">
+              <Button variant="ghost" size="sm" aria-label={`Account menu: ${person ?? identity.data?.name ?? "Account"}`}>
                 {person ?? identity.data?.name ?? "Account"}
                 <ChevronDown className="size-3.5" aria-hidden />
               </Button>

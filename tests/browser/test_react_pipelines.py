@@ -365,12 +365,15 @@ def test_a_pipeline_has_an_overview_tasks_and_details_and_a_way_back(scene):
         page.context.set_default_timeout(8000)
         sign_in(page, url, "/ui/projects/default/pipelines/OPS")
         expect(page.get_by_role("tab", name="Overview")).to_have_attribute("aria-selected", "true")
+        expect(page.get_by_role("heading", name="Overview", level=2, exact=True)).to_be_attached()
         expect(page.get_by_text("Failed runs", exact=True)).to_be_visible()
         page.get_by_role("tab", name="Tasks").click()
+        expect(page.get_by_role("heading", name="Tasks", level=2, exact=True)).to_be_attached()
         expect(
             page.get_by_role("table", name="Pipeline tasks").get_by_role("link")
         ).not_to_have_count(0)
         page.get_by_role("tab", name="Details").click()
+        expect(page.get_by_role("heading", name="Details", level=2, exact=True)).to_be_attached()
         expect(page.get_by_text("Refresh", exact=True).last).to_be_visible()
         expect(page.get_by_role("region", name="Task definitions")).to_be_visible()
         expect(

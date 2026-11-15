@@ -1,5 +1,5 @@
 import {useLegend,statusEntries} from "@/components/legend";
-import {dependencyEntries,taskEntries,highlightedEntry} from "@/components/diagram-key";
+import {dependencyEntries,taskEntries,highlightedEntry,RunConditionMark} from "@/components/diagram-key";
 import {DependencyBadge} from "@/components/dependency-mark";
 import {CatalogWidthButton} from "@/components/catalog-width";
 import {Switch} from "@/components/switch";
@@ -9,7 +9,7 @@ import * as React from "react";
 import { Background, Handle, MarkerType, Position, ReactFlow, getBezierPath, type EdgeProps, type Edge, type Node, type NodeProps, type ReactFlowInstance } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { edgeClass, solidClass, statusMeta, StatusBadge } from "@/components/status";
-import { runCondition, dependencyStyle, definitionLabel, dependencySentence } from "@/lib/catalog-flow";
+import { dependencyBadge, dependencyStyle, definitionLabel, dependencySentence } from "@/lib/catalog-flow";
 import type { CatalogTask, DefinitionEdge } from "@/lib/catalog";
 import type { Graph } from "@/lib/types";
 import { diagramKeys, DiagramNode, DiagramEdge, useDiagramExpansion } from "@/components/diagram-node";
@@ -73,11 +73,11 @@ function Task({ data }: NodeProps<TaskNode>) {
     const task = data.definition;
     const symbol = task ? taskSymbol(task) : data.symbol!;
     const status = plain ? null : <StatusBadge status={data.status} quiet/>;
-    const summary = <>{task?.active_flag==="N" ? <DiagramChip>Inactive</DiagramChip> : null}<span className="flex min-w-0 items-center justify-center gap-1"><span className="truncate" title={symbol.label}>{symbol.label}</span>{task ? <span className="shrink-0 rounded-sm border border-border px-1">{runCondition(task)}</span> : null}</span>{status}</>;
+    const summary = <>{task?.active_flag==="N" ? <DiagramChip>Inactive</DiagramChip> : null}<span className="flex min-w-0 items-center justify-center gap-1"><span className="truncate" title={symbol.label}>{symbol.label}</span>{task ? <RunConditionMark task={task}/> : null}</span>{status}</>;
     return <div data-focus={data.focus} className="relative" style={task?.active_flag === "N" ? {opacity:0.4} : undefined}>
       <Handle type="target" position={data.vertical ? Position.Top : Position.Left} className="!size-1.5 !border-0 !bg-border-strong"/>
       <DiagramNode title={shownTitle(data.label,Boolean(task))} tooltip={data.tooltip ?? data.label} width={data.width} color={task?kindColor(task.script_kind??task.handler):"var(--muted)"} icon={symbol.icon}  collapsedDescription={summary} expanded={data.expanded ?? false} onExpanded={() => data.onExpanded?.()} action={task ? undefined : open} description={<>{task?.active_flag==="N" ? <DiagramChip>Inactive</DiagramChip> : null}{symbol.label}{status}</>} className={cn("",NODE_TONE[data.focus],plain ? "border-l-border-strong" : edgeClass(data.status))}>
-        <div className="grid gap-1 px-2 pb-2 text-xs">{task ? <><span className="line-clamp-2 break-all" title={task.target ?? undefined}>{task.target ?? "No target"}</span><span>Runs when: <span className="rounded-sm bg-surface-2 px-1 text-xs">{runCondition(task)}</span></span></> : <span>{data.label.startsWith("Schedule:") ? "Schedules and triggers admit this pipeline." : data.label.startsWith("Downstream:") ? "Open the downstream pipeline to inspect its tasks." : "This gate waits for its upstream dependency."}</span>}</div>
+        <div className="grid gap-1 px-2 pb-2 text-xs">{task ? <><span className="line-clamp-2 break-all" title={task.target ?? undefined}>{task.target ?? "No target"}</span><span>Runs when: <RunConditionMark task={task}/></span></> : <span>{data.label.startsWith("Schedule:") ? "Schedules and triggers admit this pipeline." : data.label.startsWith("Downstream:") ? "Open the downstream pipeline to inspect its tasks." : "This gate waits for its upstream dependency."}</span>}</div>
       </DiagramNode>
       <Handle type="source" position={data.vertical ? Position.Bottom : Position.Right} className="!size-1.5 !border-0 !bg-border-strong"/>
     </div>;
@@ -159,12 +159,12 @@ export function layout(
         id: `${dependency}->${task}`,
         source: dependency,
         target: task,
-        label: condition && condition !== "SUCCESS" ? condition.toLowerCase() : undefined,
+        label: condition ? dependencyBadge(condition) || undefined : undefined,
         style: {
+          ...dependencyStyle(condition ?? "SUCCESS"),
           stroke: color,
           strokeWidth: on ? 2.4 : 1.6,
           opacity: lineage && !on ? 0.25 : 1,
-          ...(condition && condition !== "SUCCESS" ? { strokeDasharray: "6 4" } : {}),
         },
         markerEnd: { type: MarkerType.ArrowClosed, width: 16, height: 16, color },
         labelBgStyle: { fill: "var(--surface)", stroke: "var(--border-strong)" },
@@ -238,12 +238,12 @@ export function RunGraph({
       const item = definition.edges.find(item => (item.source.endsWith(`.${edge.source}`) && item.target.endsWith(`.${edge.target}`)) || (item.kind === "task" && edge.source.startsWith(`Task gate: ${item.source} ·`) && item.target.endsWith(`.${edge.target}`)) || (item.kind === "pipeline" && ((item.target === definition.tasks[0]?.pipeline && edge.source.startsWith(`Upstream: ${item.source} ·`)) || (item.source === definition.tasks[0]?.pipeline && edge.target === `Downstream: ${item.target}`)))) ?? { kind: "task" as const, source: edge.source, target: edge.target, dependency_type: graph.depends_on[edge.target]?.find(([source]) => source === edge.source)?.[1] ?? "SUCCESS", consume_repairs: "Y" };
       edge.type = "definition";
       edge.data = { definition:item, sentence: dependencySentence(item.source, item.target, item.dependency_type) };
-      edge.style = { ...edge.style, ...dependencyStyle(item.dependency_type) };
+      edge.style = { ...edge.style, ...dependencyStyle(item.dependency_type), stroke: edge.style?.stroke };
       edge.label = definitionLabel(item) ? <DependencyBadge edge={item} /> : undefined;
-      edge.markerEnd = { type: MarkerType.ArrowClosed, color: "var(--muted)",width:10,height:10,markerUnits:"userSpaceOnUse" };
+      edge.markerEnd = { type: MarkerType.ArrowClosed, color: edge.style?.stroke ?? "var(--muted)",width:10,height:10,markerUnits:"userSpaceOnUse" };
     });
   }
-  const key=useLegend([...dependencyEntries(plain&&!definition?[]:definition ? edges.map(edge=>edge.data?.definition as DefinitionEdge) : Object.values(graph.depends_on).flatMap(deps=>deps.map(([,kind])=>({dependency_type:kind})))),...(definition?taskEntries(definition.tasks):[]),...(!plain?statusEntries(Object.values(statuses)):[]),...(plain&&!definition?[{id:"lineage",group:"Lineage",name:"Table dependency",meaning:"The source table feeds the target table",sample:<svg width="36" height="12"><path d="M 0 6 H 36" stroke="var(--muted)"/></svg>},highlightedEntry]:[])]);
+  const key=useLegend([...dependencyEntries(plain&&!definition?[]:definition ? edges.map(edge=>edge.data?.definition as DefinitionEdge) : Object.values(graph.depends_on).flatMap(deps=>deps.map(([,kind])=>({dependency_type:kind})))),...(definition?taskEntries(definition.tasks):[]),...(!plain?statusEntries(Object.values(statuses)):[]),...(plain&&!definition?[{id:"lineage",group:"Lineage",name:"Table dependency",meaning:"The source table feeds the target table",sample:<svg width="36" height="12"><path d="M 0 6 H 36" stroke="var(--muted)"/></svg>}]:[]),...(focused?[highlightedEntry]:[])]);
   const wide = !definition && !fill && width > 0 && (definition ? Math.max(...nodes.map(node => node.position.x + (176))) + 48 : columns * (WIDTH + GAP_X) - GAP_X + 48) > width;
   // Bring a focused task into view when it is off-screen; leave the view alone when it is visible.
   React.useEffect(() => {
@@ -265,12 +265,12 @@ export function RunGraph({
   }, [definition, fill, width, frameHeight, shown, fitOptions, wide]);
   // A graph wider than its card keeps readable boxes starting at the left; a small one is fitted whole.
   return (
-    <div style={definition ? {height:`min(70vh, ${definitionHeight+(width<480?180:100)}px)`} : fill ? undefined : { height }} role="group" aria-label="Task graph" tabIndex={0} onKeyDown={key.onKeyDown} className={cn("flex w-full flex-col", fill && "h-full min-h-64")}>
+    <div style={definition ? {height:`min(70vh, ${definitionHeight+(width<480?180:100)}px)`} : fill ? undefined : { height }} role="group" aria-label="Task graph" tabIndex={0} onKeyDown={key.onKeyDown} className={cn("flex w-full flex-col", fill && "h-full min-h-0",fill && definition && "@3xl:!h-full")}>
       {/* The hint sits above the canvas, so a graph shown at a readable size never runs under it. */}
       <p className="m-0 shrink-0 px-3 py-1.5 text-xs text-muted">
         {edges.length === 0 ? "No dependencies between these tasks: they can run at the same time." : focused ? `Showing everything upstream and downstream of ${focused}. Click the background to clear.` : "Click a task to highlight its lineage; drag to pan."}
       </p>
-      <DiagramToolbar className="px-3" zoomIn={()=>void flow.current?.zoomIn()} zoomOut={()=>void flow.current?.zoomOut()} fit={()=>fitDiagram(flow.current,frame.current)} reset={()=>void flow.current?.zoomTo(1)}>{definition ? <><Switch checked={definition.overlay??false} onChange={()=>definition.onOverlay?.()} label="Show last-run status"/><Button onClick={expansion.toggleAll}>{expansion.expanded?"Collapse all":"Expand all"}</Button></>:null}<CatalogWidthButton/>{key.button}</DiagramToolbar>
+      <DiagramToolbar className="px-3" zoomIn={()=>void flow.current?.zoomIn()} zoomOut={()=>void flow.current?.zoomOut()} fit={()=>fitDiagram(flow.current,frame.current,true)} reset={()=>void flow.current?.zoomTo(1)}>{definition ? <><Switch checked={definition.overlay??false} onChange={()=>definition.onOverlay?.()} label="Show last-run status"/><Button onClick={expansion.toggleAll}>{expansion.expanded?"Collapse all":"Expand all"}</Button></>:null}<CatalogWidthButton/>{key.button}</DiagramToolbar>
       <div ref={frame} className="relative min-h-0 flex-1">
       <ReactFlow
         key={`${wide ? "wide" : "fit"}:${shown}:${nodes.map((n) => n.id).join("|")}`}
@@ -281,7 +281,7 @@ export function RunGraph({
         fitView={false}
         fitViewOptions={fitOptions}
         defaultViewport={wide ? { x: 24, y: 40, zoom: 0.9 } : undefined}
-        minZoom={0.15}
+        minZoom={0.05}
         maxZoom={1.5}
         nodesDraggable={false}
         nodesConnectable={false}

@@ -1,3 +1,4 @@
+import {MemoryRouter} from "react-router-dom";
 import {RunGraph} from "@/components/run-graph";
 import { useState, type ComponentType } from "react";
 import { Database, Download, Code, History, GitMerge, Eye, Trash2, ListPlus, ListMinus, Plus, Replace, Table2, Terminal, Bell, Hourglass, Network, ShieldCheck, FileCheck2, Eraser } from "lucide-react";
@@ -193,7 +194,10 @@ it.each(["straight","offset","bypass"])("routes %s column arrows orthogonally ou
     }
   });
   expect(roundedMappingPath(points)).not.toMatch(/NaN|Infinity/);
-  if (kind === "bypass") expect(roundedMappingPath(points)).toContain("Q");
+  if (kind === "bypass") {
+    expect(roundedMappingPath(points)).toContain("Q");
+    expect(Math.min(...points.map(point=>point[1]!))).toBeGreaterThanOrEqual(0);
+  }
 });
 
 it.each(["42","COUNT(*)"])("uses row-set context, not an invented column input, for %s", transformation => {
@@ -256,6 +260,7 @@ it("uses sentence-case stage and dependency labels instead of raw enum values",a
  [...container.querySelectorAll("span,button")].forEach(element=>expect(enums.has(element.textContent??"")).toBe(false));
  expect(screen.queryByText("Succeeded",{exact:true})).toBeNull();
  expect(screen.queryByText("Has data",{exact:true})).toBeNull();
+ fireEvent.click(screen.getByRole("button",{name:"Key"}));
  expect(screen.getByText("SCD2 merge",{exact:true})).toBeVisible();
 });
 
@@ -305,4 +310,93 @@ it("caps an expanded mapping column list at five rows without dropping columns",
   expect(rows[0]!.parentElement).toHaveStyle({maxHeight: "168px"});
   expect(rows[0]!.parentElement).toHaveClass("overflow-y-auto", "nowheel", "nodrag");
   expect(rows[7]).toHaveAttribute("data-port", "column_7");
+});
+
+it("distinguishes row logic from lineage selection and explains source aliases",()=>{
+ localStorage.clear();
+ captured.renderBoxes=true;
+ vi.stubGlobal("matchMedia",()=>({matches:false}));
+ const task=taskForMapping("derived",[{task:"P.load",source_object:"raw.orders",source_column:"amount",target_object:"mart.orders",target_column:"amount",transformation:"copy"}]);
+ task.sources=["raw.orders"];task.target="mart.orders";
+ task.mapping.steps=[{kind:"source",name:"l",expression:"raw.orders AS l"},{kind:"filter",name:"",expression:"",logic:[{expression:"l.amount > 0",columns:["l.amount"],label:""}]}];
+ render(<TaskMapping doc={{tables:[{name:"raw.orders",columns:[{name:"amount"}]},{name:"mart.orders",columns:[{name:"amount"}]}],rules:[]} as unknown as CatalogDoc} task={task}/>);
+ expect(screen.getByText("l = raw.orders")).toBeVisible();
+ const row=screen.getByTestId("step:0").querySelector('[data-port="raw.orders.amount"]')!;
+ expect(row).toHaveTextContent("orders.amount");
+ expect(row).toHaveTextContent("Filter");
+ expect(row.querySelector(".ring-2")).toBeNull();
+ fireEvent.click(screen.getByRole("button",{name:"Key"}));
+ expect(screen.queryByRole("rowheader",{name:"Highlighted path"})).toBeNull();
+ fireEvent.click(row.querySelector("button")!);
+ expect(row.querySelector("button")).toHaveClass("ring-2");
+ expect(screen.getByRole("rowheader",{name:"Highlighted path"})).toBeVisible();
+ expect(row).toHaveTextContent("Filter");
+});
+
+it("preserves selected lineage colour on definition edges and their arrows",()=>{
+ const first={...taskForMapping("derived"),code:"a",label:"P.a"};
+ const second={...taskForMapping("derived"),code:"b",label:"P.b"};
+ render(<RunGraph graph={{waves:[["a"],["b"]],conditional:[],depends_on:{b:[["a","SUCCESS"]]}}} statuses={{}} focused="b" onFocus={()=>undefined} onOpen={()=>undefined} plain definition={{tasks:[first,second],edges:[{kind:"task",source:"P.a",target:"P.b",dependency_type:"SUCCESS",consume_repairs:"Y"}]}}/>);
+ expect(captured.edges[0]!.style?.stroke).toBe("var(--accent)");
+ expect(captured.edges[0]!.markerEnd).toMatchObject({color:"var(--accent)"});
+});
+
+it("uses the actual inactive chip in the task-kind key",async()=>{
+ const {taskEntries}=await import("@/components/diagram-key");
+ const task=taskForMapping("derived");task.handler="SQL";task.mapping.write.action="APPEND_TABLE";task.active_flag="N";
+ const entry=taskEntries([task]).find(entry=>entry.id==="inactive")!;
+ const {container}=render(<>{entry.sample}</>);
+ expect(screen.getByText("Inactive")).toBeVisible();
+ expect(container.querySelector(".lucide-circle-dashed")).toBeNull();
+});
+
+it("explains derived queries without assigning computed fields to a physical table",async()=>{
+ const {mappingFields}=await import("@/lib/mapping-logic");
+ vi.stubGlobal("matchMedia",()=>({matches:false}));
+ const query="(SELECT source_id, ROW_NUMBER() OVER (ORDER BY upload_id) AS receipt_order FROM raw.receipts) AS l";
+ const task=taskForMapping("derived");task.sources=["raw.l","raw.receipts"];
+ task.mapping.steps=[{kind:"source",name:"l",expression:"l"},{kind:"source",name:"l",expression:query}];
+ expect(mappingFields(task,["l.receipt_order"])).toEqual(["l.receipt_order"]);
+ render(<TaskMapping doc={{tables:[],rules:[]} as unknown as CatalogDoc} task={task}/>);
+ const label=screen.getByText("l = derived query");
+ const details=label.closest("details");
+ expect(details).not.toBeNull();
+ expect(details?.querySelector("summary")).toContainElement(label);
+ expect(details?.querySelector("pre")).toHaveTextContent(query);
+});
+
+it("names a selected condition-only field without inventing an output path",()=>{
+ localStorage.clear();captured.renderBoxes=true;vi.stubGlobal("matchMedia",()=>({matches:false}));
+ const task=taskForMapping("derived",[{task:"P.load",source_object:"raw.orders",source_column:"amount",target_object:"mart.orders",target_column:"amount",transformation:"copy"}]);
+ task.sources=["raw.orders"];task.target="mart.orders";
+ task.mapping.steps=[{kind:"filter",name:"",expression:"",logic:[{expression:"extra > 0",columns:["extra"],label:""}]}];
+ render(<TaskMapping doc={{tables:[{name:"raw.orders",columns:[{name:"amount"},{name:"extra"}]},{name:"mart.orders",columns:[{name:"amount"}]}],rules:[]} as unknown as CatalogDoc} task={task}/>);
+ const row=screen.getByTestId("source:raw.orders").querySelector('[data-port="extra"] button')!;
+ fireEvent.click(row);
+ expect(row).toHaveClass("ring-2");
+ expect(screen.getByText("No output-column path is recorded for raw.orders.extra.")).toBeVisible();
+ fireEvent.click(screen.getByRole("button",{name:"Key"}));
+ expect(screen.queryByRole("rowheader",{name:"Highlighted path"})).toBeNull();
+});
+
+it("keeps a set operation's recorded category instead of deriving it from its title",()=>{
+ vi.stubGlobal("matchMedia",()=>({matches:false}));
+ const task=taskForMapping("derived");task.mapping.steps=[{kind:"set",name:"",expression:"UNION ALL",logic:[]}];
+ render(<TaskMapping doc={{tables:[],rules:[]} as unknown as CatalogDoc} task={task}/>);
+ expect(captured.nodes.find(node=>node.id==="step:0")!.data.kind).toBe("set");
+});
+
+it("expands object columns and follows ancestors and descendants without sibling branches",async()=>{
+ const {TableLineage}=await import("@/components/table-lineage");
+ captured.renderBoxes=true;
+ const edge=(source:string,column:string,target:string,targetColumn:string)=>({task:"P.load",source_object:source,source_column:column,target_object:target,target_column:targetColumn,transformation:"copy"});
+ const doc={project:"demo",tasks:[],tables:["raw.orders","mart.orders","report.orders","other.orders"].map(name=>({name,columns:[{name:"amount"}]})),table_edges:[{source:"external:s3.orders",target:"raw.orders"},{source:"raw.orders",target:"mart.orders"},{source:"mart.orders",target:"report.orders"},{source:"raw.orders",target:"other.orders"}],column_edges:[edge("external:s3.orders","amount","raw.orders","amount"),edge("raw.orders","amount","mart.orders","amount"),edge("mart.orders","amount","report.orders","amount"),edge("raw.orders","amount","other.orders","amount")]} as unknown as CatalogDoc;
+ render(<MemoryRouter><TableLineage doc={doc} name="mart.orders" depth={2} direction="both"/></MemoryRouter>);
+ expect(screen.queryByRole("link",{name:"Open external:s3.orders details"})).toBeNull();
+ expect(screen.getByTestId("external:s3.orders")).toHaveTextContent("s3.orders");
+ fireEvent.click(screen.getByRole("button",{name:"Expand all"}));
+ fireEvent.click(screen.getByTestId("mart.orders").querySelector('[data-port="amount"] button')!);
+ expect(screen.getByTestId("raw.orders").querySelector('[data-port="amount"] button')).toHaveClass("ring-2");
+ expect(screen.getByTestId("report.orders").querySelector('[data-port="amount"] button')).toHaveClass("ring-2");
+ expect(captured.edges.filter(edge=>edge.style?.stroke==="var(--accent)").length).toBe(3);
 });

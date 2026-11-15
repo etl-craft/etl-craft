@@ -13,7 +13,8 @@ export function mappingRoute({sourceX,sourceY,targetX,targetY,lane,obstacles}: {
   const blocked = obstacles.filter(box => box.x < targetX && box.x + box.width > sourceX && box.y < Math.max(sourceY,targetY) + 8 && box.y + box.height > Math.min(sourceY,targetY) - 8);
   if (blocked.length) {
     const top = Math.min(sourceY,targetY,...blocked.map(box => box.y)) - 24 - lane * 12;
-    return [[sourceX,sourceY],[sourceX+margin,sourceY],[sourceX+margin,top],[targetX-margin,top],[targetX-margin,targetY],[targetX,targetY]];
+    const bypass = top >= 0 ? top : Math.max(sourceY,targetY,...blocked.map(box=>box.y+box.height)) + 24 + lane * 12;
+    return [[sourceX,sourceY],[sourceX+margin,sourceY],[sourceX+margin,bypass],[targetX-margin,bypass],[targetX-margin,targetY],[targetX,targetY]];
   }
   const centre = sourceX + margin + Math.max(0,targetX-sourceX-2*margin)*lane;
   return [[sourceX,sourceY],[centre,sourceY],[centre,targetY],[targetX,targetY]];

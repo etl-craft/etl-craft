@@ -109,16 +109,16 @@ def test_refreshing_and_rebuilding_shows_the_traced_chain_and_the_api_agrees(cha
         about = page.get_by_label("About this table")
         expect(about.get_by_role("link", name="SALES.convert")).to_be_visible()
         expect(about.get_by_role("link", name="MART.daily")).to_be_visible()
-        page.get_by_role("tab", name="Object lineage", exact=True).click()
-        graph = page.get_by_role("group", name="Task graph")
+        page.get_by_role("tab", name="Lineage diagram", exact=True).click()
+        graph = page.get_by_role("group", name="Lineage diagram")
         expect(graph).to_be_visible()
         # narrowing the graph redraws it: no leftover edge to a table that is no longer drawn
         page.get_by_label("Direction").select_option("down")
         page.get_by_label("Depth").select_option("1")
-        expect(graph.locator("[data-focus]")).to_have_count(2)
+        expect(graph.locator(".react-flow__node")).to_have_count(2)
         expect(graph.locator(".react-flow__edge")).to_have_count(1)
-        page.get_by_role("tab", name="Column lineage").click()
-        lineage = page.get_by_role("table", name="Column lineage")
+        page.get_by_role("tab", name="Column sources").click()
+        lineage = page.get_by_role("table", name="Column sources")
         expect(lineage).to_contain_text("staging.orders.amount")
         expect(lineage).to_contain_text("ref.rates.rate")
         expect(lineage).to_contain_text("SALES.convert")
@@ -182,6 +182,10 @@ def test_a_task_that_cannot_be_traced_is_named_with_its_reason_and_counted(chain
         shoot(page, "catalog-lineage-errors")
         rebuild(page)
         expect(page.get_by_role("tree", name="Catalog objects")).to_be_visible()
+        for path in ("tasks/BROKEN.oops?tab=lineage", "tables/bad.t?tab=columns"):
+            page.goto(url + "/ui/projects/default/catalog/" + path)
+            expect(page.get_by_role("tabpanel")).to_contain_text("must be a read-only SELECT")
+            expect(page.get_by_role("tabpanel")).to_contain_text("BROKEN.oops")
         browser.close()
 
 
@@ -209,7 +213,7 @@ def test_all_tables_lists_every_table_and_filters_by_name(chain):
         summary = page.locator("dl").filter(has=page.get_by_text("Open gaps", exact=True))
         expect(summary.get_by_text("Last written", exact=True)).to_be_visible()
         expect(summary.get_by_text("Open gaps", exact=True)).to_be_visible()
-        page.get_by_role("tab", name="Object lineage", exact=True).click()
+        page.get_by_role("tab", name="Lineage diagram", exact=True).click()
         page.get_by_role("button", name="List", exact=True).click()
         expect(
             page.get_by_role("table", name="Upstream and downstream tables").get_by_role(
@@ -540,7 +544,7 @@ def test_catalog_readability_floating_key_and_full_width(mappings, appearance, w
                 else page.get_by_label(label, exact=True)
             )
             expect(canvas).to_be_visible()
-            page.get_by_role("button", name="Fit view", exact=True).click()
+            page.get_by_role("button", name="Reset zoom", exact=True).click()
             page.wait_for_function(
                 """label=>{
                 const canvas=document.querySelector(`[aria-label="${label}"]`);
@@ -578,5 +582,254 @@ def test_catalog_readability_floating_key_and_full_width(mappings, appearance, w
             page.get_by_role("button", name="Restore tree", exact=True).press("Escape")
             if width >= 1024:
                 expect(page.get_by_role("tree", name="Catalog objects")).to_be_visible()
+        assert problems == []
+        browser.close()
+
+
+def test_mapping_ports_and_edges_stay_attached_when_columns_scroll_and_resize(mappings):
+    _, url = mappings
+    with sync_playwright() as pw:
+        browser, page, problems = open_page(pw, viewport={"width": 1440, "height": 1000})
+        sign_in(page, url, "/ui/projects/default/catalog/tasks/ORDERS.load?tab=mapping")
+        diagram = page.get_by_label("Task mapping diagram", exact=True)
+        expect(diagram).to_be_visible()
+        page.get_by_role("button", name="Show all columns", exact=True).click()
+        source = diagram.locator('[data-id="source:raw.orders"]')
+        expect(source.locator("[data-port]")).to_have_count(12)
+        attached = """() => {
+            const node=document.querySelector('[data-id="source:raw.orders"]');
+            const box=node.querySelector('.diagram-node').getBoundingClientRect();
+            const handles=[...node.querySelectorAll('.react-flow__handle')];
+            return handles.length>=12 && handles.every(handle=>{
+                const port=handle.getBoundingClientRect();
+                return port.top>=box.top && port.bottom<=box.bottom;
+            });
+        }"""
+        connected = """() => {
+            const diagram=document.querySelector('[aria-label="Task mapping diagram"]');
+            const ports=[...diagram.querySelectorAll('.react-flow__handle')].map(handle=>{
+                const box=handle.getBoundingClientRect();
+                return {x:box.x+box.width/2,y:box.y+box.height/2};
+            });
+            const paths=[...diagram.querySelectorAll('path.react-flow__edge-path')];
+            return paths.length>0 && paths.every(path=>[0,path.getTotalLength()].every(length=>{
+                const point=path.getPointAtLength(length);
+                const screen=new DOMPoint(point.x,point.y).matrixTransform(path.getScreenCTM());
+                return ports.some(port=>Math.hypot(port.x-screen.x,port.y-screen.y)<6);
+            }));
+        }"""
+        page.wait_for_function(attached)
+        page.wait_for_function(connected)
+        scroll = source.locator(".overflow-y-auto")
+        before = source.locator('[data-handleid="amount"]').bounding_box()
+        scroll.evaluate(
+            "el => { el.scrollTop=el.scrollHeight; el.dispatchEvent(new Event('scroll')); }"
+        )
+        page.wait_for_function(attached)
+        page.wait_for_function(
+            """before => {
+            const node=document.querySelector('[data-id="source:raw.orders"]');
+            const port=node.querySelector('[data-handleid="amount"]');
+            return port.getBoundingClientRect().y < before;
+        }""",
+            arg=before["y"],
+        )
+        page.wait_for_function(connected)
+        viewport = diagram.locator(".react-flow__viewport").evaluate(
+            "el => getComputedStyle(el).transform"
+        )
+        original = source.locator(".diagram-node").bounding_box()
+        resize = source.locator(".react-flow__resize-control.bottom.right.handle")
+        start = resize.bounding_box()
+        assert start["width"] >= 20 and start["height"] >= 20
+        page.mouse.move(start["x"] + start["width"] / 2, start["y"] + start["height"] / 2)
+        page.mouse.down()
+        page.mouse.move(start["x"] + 24, start["y"] + 72, steps=8)
+        page.mouse.up()
+        page.wait_for_function(
+            """original => {
+            const node=document.querySelector('[data-id="source:raw.orders"] .diagram-node');
+            const box=node.getBoundingClientRect();
+            return box.width>original.width && box.height>original.height;
+        }""",
+            arg=original,
+        )
+        page.wait_for_function(attached)
+        page.wait_for_function(connected)
+        expect(source.locator("[data-port]")).to_have_count(12)
+        assert (
+            diagram.locator(".react-flow__viewport").evaluate(
+                "el => getComputedStyle(el).transform"
+            )
+            == viewport
+        )
+        stationary = diagram.locator('[data-id="source:ref.rates"]')
+        untouched = stationary.bounding_box()
+        header = source.locator("strong").bounding_box()
+        moved = source.bounding_box()
+        page.mouse.move(header["x"] + 20, header["y"] + 8)
+        page.mouse.down()
+        page.mouse.move(header["x"] + 70, header["y"] + 48, steps=8)
+        page.mouse.up()
+        after = source.bounding_box()
+        other = stationary.bounding_box()
+        assert 40 <= after["x"] - moved["x"] <= 52
+        assert 30 <= after["y"] - moved["y"] <= 42
+        assert abs(other["x"] - untouched["x"]) < 2
+        assert abs(other["y"] - untouched["y"]) < 2
+        page.wait_for_function(connected)
+        assert problems == []
+        browser.close()
+
+
+@pytest.mark.parametrize(
+    "object_path", ["pipelines/ORDERS", "tasks/ORDERS.load", "tables/mart.orders"]
+)
+def test_catalog_tabs_own_the_visible_object_panel(mappings, object_path):
+    _, url = mappings
+    with sync_playwright() as pw:
+        browser, page, problems = open_page(pw)
+        sign_in(page, url, "/ui/projects/default/catalog/" + object_path)
+        active = page.get_by_role("tab", selected=True)
+        panel = page.get_by_role("tabpanel")
+        expect(panel).to_be_visible()
+        expect(active).to_have_attribute("aria-controls", panel.get_attribute("id"))
+        expect(panel).to_have_attribute("aria-labelledby", active.get_attribute("id"))
+        assert problems == []
+        browser.close()
+
+
+def test_scrolling_the_mapping_key_keeps_its_close_button_visible(mappings):
+    _, url = mappings
+    with sync_playwright() as pw:
+        browser, page, problems = open_page(pw, viewport={"width": 1440, "height": 900})
+        sign_in(page, url, "/ui/projects/default/catalog/tasks/ORDERS.load?tab=mapping")
+        page.get_by_role("button", name="Key", exact=True).click()
+        key = page.get_by_role("region", name="View key")
+        key.evaluate("el => { el.scrollTop=el.scrollHeight; }")
+        assert key.evaluate("el => el.scrollTop") > 0
+        close = key.get_by_role("button", name="Close key", exact=True).bounding_box()
+        bounds = key.bounding_box()
+        assert close["y"] >= bounds["y"]
+        assert close["y"] + close["height"] <= bounds["y"] + bounds["height"]
+        page.get_by_role("button", name="Close key", exact=True).click()
+        expect(key).not_to_be_visible()
+        assert problems == []
+        browser.close()
+
+
+@pytest.mark.parametrize(
+    ("path", "label"),
+    [
+        ("tasks/ORDERS.load?tab=mapping", "Task mapping diagram"),
+        ("pipelines/ORDERS?tab=lineage", "Task graph"),
+    ],
+)
+def test_catalog_diagrams_use_the_visible_desktop_height_and_fit_all_nodes(mappings, path, label):
+    _, url = mappings
+    with sync_playwright() as pw:
+        browser, page, problems = open_page(pw, viewport={"width": 1440, "height": 900})
+        sign_in(page, url, "/ui/projects/default/catalog/" + path)
+        diagram = page.get_by_label(label, exact=True)
+        expect(diagram).to_be_visible()
+        before = diagram.bounding_box()
+        assert before["y"] + before["height"] <= 880
+        page.set_viewport_size({"width": 1440, "height": 700})
+        page.wait_for_function(
+            """({label,before}) => {
+            const diagram=document.querySelector(`[aria-label="${label}"]`);
+            const box=diagram.getBoundingClientRect();
+            return box.height < before && box.bottom <= innerHeight-20;
+        }""",
+            arg={"label": label, "before": before["height"]},
+        )
+        for width in (1440, 390):
+            page.set_viewport_size({"width": width, "height": 900})
+            if label == "Task mapping diagram" and not diagram.is_visible():
+                page.get_by_role("button", name="Diagram", exact=True).click()
+            expect(diagram.locator(".react-flow__node").first).to_be_visible()
+            page.get_by_role("button", name="Fit view", exact=True).click()
+            page.wait_for_function(
+                """label => {
+                const diagram=document.querySelector(`[aria-label="${label}"] .react-flow`);
+                const frame=diagram.getBoundingClientRect();
+                return [...diagram.querySelectorAll('.react-flow__node')].every(node=>{
+                    const box=node.getBoundingClientRect();
+                    return box.left>=frame.left && box.right<=frame.right &&
+                        box.top>=frame.top && box.bottom<=frame.bottom;
+                });
+            }""",
+                arg=label,
+            )
+        assert problems == []
+        browser.close()
+
+
+def test_table_lineage_expands_columns_and_highlights_the_recorded_path(mappings):
+    _, url = mappings
+    with sync_playwright() as pw:
+        browser, page, problems = open_page(pw, viewport={"width": 1440, "height": 900})
+        sign_in(page, url, "/ui/projects/default/catalog/tables/mart.orders?tab=lineage")
+        expect(page.get_by_role("tab", name="Lineage diagram", exact=True)).to_be_visible()
+        expect(page.get_by_role("tab", name="Column sources", exact=True)).to_be_visible()
+        diagram = page.get_by_role("group", name="Lineage diagram", exact=True)
+        expect(diagram).to_be_visible()
+        expect(diagram.locator("[data-port]")).to_have_count(0)
+        page.get_by_role("button", name="Expand all", exact=True).click()
+        source = diagram.locator('[data-id="raw.orders"] [data-port="amount"] button')
+        target = diagram.locator('[data-id="mart.orders"] [data-port="amount"] button')
+        expect(source).to_be_visible()
+        expect(target).to_be_visible()
+        page.get_by_role("button", name="Fit view", exact=True).click()
+        source.click()
+        expect(target).to_have_class(re.compile("ring-2"))
+        expect(diagram.locator('[data-testid="rf__edge-column:0"]')).to_be_attached()
+        page.get_by_role("button", name="Fit view", exact=True).click()
+        page.wait_for_function("""() => {
+            const canvas=document.querySelector('[aria-label="Lineage diagram"] .react-flow');
+            const box=canvas.getBoundingClientRect();
+            return [...canvas.querySelectorAll('.react-flow__node')].every(node=>{
+                const n=node.getBoundingClientRect();
+                return n.left>=box.left && n.right<=box.right &&
+                    n.top>=box.top && n.bottom<=box.bottom;
+            });
+        }""")
+        page.get_by_role("button", name="Collapse all", exact=True).click()
+        expect(diagram.locator("[data-port]")).to_have_count(0)
+        assert problems == []
+        browser.close()
+
+
+def test_column_sources_filters_by_the_selected_writing_task(mappings):
+    from etl_craft.services.catalog.collect import build_catalog
+    from etl_craft.services.catalog.site import write_site
+    from etl_craft.services.operations.documents import docs_folder
+
+    ctx, url = mappings
+    with acting_as(ctx.actor), ctx.engine.begin() as conn:
+        pipeline = add_pipeline(conn, "REPAIR")
+        add_task(
+            conn,
+            pipeline,
+            "load_backup",
+            SQL_ACTION="APPEND_TABLE",
+            TARGET_OBJECT="mart.orders",
+            SELECT_QUERY="SELECT id, amount FROM raw.orders",
+        )
+    with acting_as(ctx.actor):
+        write_site(build_catalog(ctx.engine, ctx.config), ctx.config, docs_folder(ctx.config))
+    with sync_playwright() as pw:
+        browser, page, problems = open_page(pw, viewport={"width": 1440, "height": 900})
+        sign_in(page, url, "/ui/projects/default/catalog/tables/mart.orders?tab=columns")
+        writer = page.get_by_label("Writing task")
+        writer.select_option("ORDERS.load")
+        expect(page.get_by_role("table", name="Column sources")).to_contain_text("ORDERS.load")
+        writer.select_option("REPAIR.load_backup")
+        expect(page.get_by_role("table", name="Column sources")).to_contain_text(
+            "REPAIR.load_backup"
+        )
+        expect(page.get_by_role("table", name="Column sources")).not_to_contain_text("ORDERS.load")
+        writer.select_option("")
+        expect(page.get_by_role("table", name="Column sources")).to_be_visible()
         assert problems == []
         browser.close()

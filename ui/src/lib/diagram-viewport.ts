@@ -1,12 +1,13 @@
 import type {ReactFlowInstance,Node,Edge} from "@xyflow/react";
 
 export const readableFit={padding:0.08,minZoom:1,maxZoom:1};
-/** Fit at the 12 px row-text floor; oversized diagrams start at their sources and pan. */
-export function fitDiagram<N extends Node,E extends Edge>(instance:ReactFlowInstance<N,E>|null,frame:HTMLElement|null) {
+/** Start at readable size; an explicit whole-diagram request may zoom out to fit. */
+export function fitDiagram<N extends Node,E extends Edge>(instance:ReactFlowInstance<N,E>|null,frame:HTMLElement|null,whole=false) {
   if(!instance||!frame)return;
   const canvas=frame.matches('.react-flow')?frame:frame.querySelector('.react-flow');
   if(!canvas)return;
   const nodes=instance.getNodes();if(!nodes.length)return;
+  if(whole){void instance.fitView({...readableFit,minZoom:0.05});return;}
   // The instance reads the measured sizes; the standalone helper sees unmeasured nodes as zero wide.
   const bounds=instance.getNodesBounds(nodes);
   const pane=canvas.getBoundingClientRect();

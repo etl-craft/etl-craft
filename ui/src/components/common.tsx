@@ -144,7 +144,7 @@ export function PageHeader({
               <ArrowLeft className="size-4" aria-hidden />
             </Link>
           ) : null}
-          <h1 className={cn("m-0 font-semibold tracking-tight", compact ? "text-lg" : "text-2xl leading-8")}>{title}</h1>
+          <h1 className={cn("m-0 break-words font-semibold tracking-tight", compact ? "text-lg" : "text-2xl leading-8")}>{title}</h1>
           {status}
         </div>
         {subtitle ? <p className="m-0 text-sm text-muted">{subtitle}</p> : null}

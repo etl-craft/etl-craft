@@ -275,3 +275,29 @@ def test_predicate_and_column_edges_share_the_same_qualified_tree(monkeypatch):
     assert clause.logic[0].columns == (f"{table.alias_or_name}.{edge.source_column}",)
     assert table_name((table.catalog, table.db, table.name), "warehouse") == edge.source_object
     assert predicate.name == edge.source_column
+
+
+@pytest.mark.parametrize("source_kind", ["subquery", "cte"])
+def test_mapping_records_the_derived_source_alias_with_its_original_query(source_kind):
+    from etl_craft.core.enums_lineage import MappingKind
+    from etl_craft.handlers.lineage_mapping import parse_select, steps
+
+    query = (
+        "SELECT source_id, ROW_NUMBER() OVER (ORDER BY upload_id DESC) AS receipt_order "
+        "FROM lnd.receipts WHERE pipeline_run_id=42"
+    )
+    source = f"({query}) AS l" if source_kind == "subquery" else "l"
+    sql = (
+        (f"WITH l AS ({query}) " if source_kind == "cte" else "")
+        + f"SELECT l.source_id FROM prs.receipts p JOIN {source} "
+        "ON l.source_id=p.source_id WHERE l.receipt_order=1"
+    )
+    sources = [
+        stage
+        for stage in steps(parse_select(sql, "duckdb"), "duckdb")
+        if stage.kind == MappingKind.SOURCE and stage.name == "l"
+    ]
+    assert sources
+    assert any("ROW_NUMBER()" in source.expression for source in sources)
+    assert any("lnd.receipts" in source.expression for source in sources)
+    assert any("pipeline_run_id = 42" in source.expression for source in sources)

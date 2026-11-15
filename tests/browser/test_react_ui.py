@@ -478,3 +478,25 @@ def test_phone_run_cards_keep_labels_on_one_line_and_every_field_in_view(site):
         assert page.evaluate("document.documentElement.scrollWidth - innerWidth") == 0
         assert problems == []
         browser.close()
+
+
+def test_shared_phone_frame_and_table_resize_controls_have_accessible_names(scene):
+    _, url, _, _ = scene
+    with sync_playwright() as pw:
+        browser, page, problems = open_page(pw, viewport={"width": 390, "height": 900})
+        sign_in(page, url, "/ui/projects/default/runs")
+        expect(
+            page.get_by_role("banner").get_by_role("link", name="etl-craft", exact=True)
+        ).to_be_visible()
+        expect(
+            page.get_by_role("button", name="Switch project: default", exact=True)
+        ).to_be_visible()
+        expect(page.get_by_role("button", name="Account menu: owner", exact=True)).to_be_visible()
+        page.set_viewport_size({"width": 1440, "height": 900})
+        resize = page.get_by_role("separator", name="Resize the Run column", exact=True)
+        expect(resize).to_have_attribute("aria-valuenow", re.compile(r"\d+"))
+        expect(resize).to_have_attribute("aria-valuemin", "64")
+        expect(resize).to_have_attribute("aria-valuemax", "900")
+        assert resize.bounding_box()["width"] >= 20
+        assert problems == []
+        browser.close()

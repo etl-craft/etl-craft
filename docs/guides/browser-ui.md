@@ -414,3 +414,32 @@ On screens narrower than 480 px, Runs uses labelled cards that retain every tabl
 Run numbers appear above single-line labels; hover or keyboard focus reveals the full label.
 Pipeline, Status and Tags filters stack. Home tabs scroll within the 16 px side gutters;
 keyboard focus brings each tab into view without scrolling the page horizontally.
+
+Column-mapping nodes initially show five rows. Scroll their column lists or resize the boxes
+to inspect more; wires follow visible rows, with off-screen columns attached at the list boundary.
+
+Drag a mapping node by its header to move it independently; drag the canvas background to pan.
+Resize from the generous edge or corner hit areas. Table columns and split panes also support
+keyboard resizing. The view key opens on request, remembers your choice and keeps its close
+button visible while you scroll its entries. Desktop mapping and catalog graph panes fill the
+available frame height. Fit view zooms out to show the complete diagram; Reset zoom returns to
+100% for reading.
+
+Mapping rows with filters, expressions or rules have a neutral icon/label and a logic preview;
+these indicators do not use the selected lineage’s accent ring. Resolved object/column names
+identify each row, while the source-alias key explains abbreviations in the unchanged SQL preview.
+
+Diagram categories use separate colour families: cyan inputs, violet relational stages, magenta
+filters and rules, teal calculations, and brown writes and targets. Run-state colours keep their
+own meanings. Keys show the same dependency patterns, selection outlines, condition chips and
+row markers as the view. The selection entry appears only while a lineage path is selected.
+Expand a derived-query alias to inspect its recorded SQL. After upgrading, rebuild an older
+catalog to include its subquery and CTE source bindings.
+
+The table’s **Lineage diagram** opens table boxes into columns. Select a column to follow
+its recorded upstream and downstream paths; collapsed boxes keep the object relationship.
+A labelled dashed connection means the table relationship is known but a column path is not
+recorded. The same scroll, resize and independent header-drag controls apply to these boxes.
+**Column sources** lists each column’s upstream source and writing task. When more than one
+task writes a target, choose a Writing task to filter that list. Unavailable lineage names
+the task and the recorded reason, rather than suggesting that an existing definition is absent.
