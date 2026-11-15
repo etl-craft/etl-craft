@@ -1,8 +1,11 @@
-import { Navigate, useParams } from "react-router-dom";
-import { runPath } from "@/lib/routes";
+import { Navigate, useLocation, useParams } from "react-router-dom";
+import { pipelinePath } from "@/lib/routes";
 
-/** An older address of a run opens the run in its pipeline's workspace. */
+/** An older run address opens its pipeline workspace with the same selection and filters. */
 export function RunRedirect() {
   const { project = "", pipeline = "", runId = "" } = useParams();
-  return <Navigate replace to={runPath(project, pipeline, runId)} />;
+  const { search } = useLocation();
+  const params = new URLSearchParams(search);
+  params.set("run", runId);
+  return <Navigate replace to={`${pipelinePath(project, pipeline)}?${params}`} />;
 }

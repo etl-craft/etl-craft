@@ -248,6 +248,7 @@ export interface RecentRun {
 }
 
 export interface Pipeline {
+  depends_on: [string, string][];
   alert_deliveries?: AlertDelivery[];
   pipeline_code: string;
   pipeline_name: string;

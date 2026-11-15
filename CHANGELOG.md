@@ -6,6 +6,14 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+- Project navigation and dashboard completion: Pipelines lists dependency conditions and the
+  last run beside its recent-success marks; pipeline grids put the newest run on the right.
+  Old run links retain task and view selections when opening the pipeline workspace.
+  Home owns the dashboard implementation; the old Insights address remains a redirect.
+  Pipeline list/detail JSON adds `depends_on`, shared with the dependency column.
+  On phones, Home tabs scroll within their gutter and run rows become labelled cards with
+  single-line run labels, full-label tooltips and stacked filters.
+
 - A new product mark (a hollow layer over a stem and two woven chevrons, sharp mitered line art in the accent colour) in the interface, favicon and catalog pages, with its vector sources in `brand/`. The terminal banner is now a taller, crisper 20-row by 38-column two-tone half-block rendering of the mark beside an `ETL-CRAFT` block wordmark and the aligned facts, drawn only on a terminal wide enough for it.
 
 - Browser interface: a standard application frame (header, flush navigation with a divider and a

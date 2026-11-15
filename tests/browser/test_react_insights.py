@@ -405,3 +405,33 @@ def test_chart_renderers_load_on_home_without_changing_run_or_catalog_charts(sce
         shoot(page, "lazy-home-charts")
         assert problems == []
         browser.close()
+
+
+def test_phone_home_tabs_scroll_inside_the_gutter_and_follow_keyboard_focus(scene):
+    _, url = scene
+    with sync_playwright() as pw:
+        browser, page, problems = open_page(
+            pw, viewport={"width": 390, "height": 900}, has_touch=True
+        )
+        sign_in(page, url, "/ui/projects/default")
+        tabs = page.get_by_role("tablist")
+        expect(tabs.get_by_role("tab", name="Overview", exact=True)).to_be_visible()
+        box = tabs.bounding_box()
+        assert box["x"] == 16 and box["x"] + box["width"] == 374
+        assert tabs.evaluate("el => el.scrollWidth > el.clientWidth")
+        assert tabs.evaluate("el => getComputedStyle(el).overflowX") == "auto"
+        overview = tabs.get_by_role("tab", name="Overview", exact=True)
+        overview.focus()
+        for _ in range(6):
+            page.keyboard.press("Tab")
+        failures = tabs.get_by_role("tab", name="Failures", exact=True)
+        expect(failures).to_be_focused()
+        last = failures.bounding_box()
+        assert last["x"] >= box["x"] and last["x"] + last["width"] <= box["x"] + box["width"] + 1
+        assert tabs.evaluate("el => el.scrollLeft") > 0
+        failures.press("Enter")
+        expect(failures).to_have_attribute("aria-selected", "true")
+        assert "tab=failures" in page.url
+        assert page.evaluate("document.documentElement.scrollWidth - innerWidth") == 0
+        assert problems == []
+        browser.close()

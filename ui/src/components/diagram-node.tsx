@@ -5,19 +5,20 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 /** The same compact header identifies pipeline tasks and column transformations. */
-export function DiagramNode({title,tooltip,description,collapsedDescription,icon:Icon,expanded,onExpanded,children,collapsedPorts,action,className,color="var(--muted)",chip,width=160}: {
+export function DiagramNode({title,tooltip,description,collapsedDescription,icon:Icon,expanded,onExpanded,children,collapsedPorts,action,className,color="var(--muted)",chip,width=160,height,bodyClassName}: {
   title:string;tooltip?:string;description?:React.ReactNode;collapsedDescription?:React.ReactNode;icon:LucideIcon;
   expanded:boolean;onExpanded:()=>void;children?:React.ReactNode;collapsedPorts?:React.ReactNode;
   action?:React.ReactNode;headingClassName?:string;className?:string;color?:string;chip?:React.ReactNode;width?:number;
+  height?:number;bodyClassName?:string;
 }) {
-  return <div className={cn("diagram-node relative w-40 rounded-sm border border-border bg-surface text-[13px]",className)} style={{width,borderLeft:`3px solid ${color}`}}>
+  return <div className={cn("diagram-node relative w-40 rounded-sm border border-border bg-surface text-[13px]",height!==undefined&&"flex flex-col",className)} style={{width,height,borderLeft:`3px solid ${color}`}}>
     <div className="flex h-10 items-center gap-1 px-2" style={{background:`color-mix(in srgb, ${color} 7%, transparent)`}}>
       <Icon aria-hidden className="size-[18px] shrink-0" style={{color}}/>
       <strong className="min-w-0 flex-1 truncate font-medium" title={tooltip??title}>{title}</strong>
       {chip}{action}
       <Button size="icon" variant="ghost" className="nodrag nopan !size-6 shrink-0" aria-label={`${expanded ? "Collapse" : "Expand"} ${title}`} aria-expanded={expanded} onClick={event=>{event.stopPropagation();onExpanded();}}>{expanded ? <ChevronDown aria-hidden className="size-3"/> : <ChevronRight aria-hidden className="size-3"/>}</Button>
     </div>
-    {expanded ? <div className="diagram-body">{description ? <div className="px-2 pb-1 text-xs text-muted">{description}</div> : null}{children}</div> : <>{collapsedDescription ? <div className="truncate px-2 pb-2 text-xs text-muted">{collapsedDescription}</div> : null}{collapsedPorts}</>}
+    {expanded ? <div className={cn("diagram-body",bodyClassName)}>{description ? <div className="px-2 pb-1 text-xs text-muted">{description}</div> : null}{children}</div> : <>{collapsedDescription ? <div className="truncate px-2 pb-2 text-xs text-muted">{collapsedDescription}</div> : null}{collapsedPorts}</>}
   </div>;
 }
 

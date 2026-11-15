@@ -2,7 +2,7 @@ import { render, screen, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { describe, expect, it } from "vitest";
 import { Sidebar } from "@/components/sidebar";
-import { InsightsRedirect } from "@/pages/insights";
+import { InsightsRedirect } from "@/pages/project-dashboard";
 
 function nav(code: string | undefined, admin: boolean, at = "/") {
   return render(

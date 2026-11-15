@@ -52,7 +52,7 @@ export function Runs() {
         status={status || undefined}
         codes={codes}
         toolbar={
-          <>
+          <div className="runs-filters flex w-full flex-wrap items-end gap-3">
             <SelectField compact label="Pipeline" value={pipeline} onChange={(value) => set("pipeline", value)}>
               <option value="">All pipelines</option>
               {(pipelines.data?.pipelines ?? []).map((p) => (
@@ -75,7 +75,7 @@ export function Runs() {
               </Button>
             ) : null}
             <TagFilter known={known} selected={tags} onToggle={toggleTag} onClear={() => set("tag", "")} />
-          </>
+          </div>
         }
       />
     </div>

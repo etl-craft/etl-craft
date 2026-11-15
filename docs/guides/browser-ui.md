@@ -3,7 +3,7 @@
 Run `etl-craft ui` with the `ui` extra, or use the controller's HTTP server. Put an HTTPS
 reverse proxy in front of it, preserving the public Host header (for example nginx
 `proxy_set_header Host $http_host`): browser cookies are always Secure, including local sign-in.
-Open `/ui`; sign-in is at `/ui/signin`. The minimum width is 320 CSS pixels; 960 pixels or
+Open `/ui`; sign-in is at `/ui/signin`. The minimum width is 320 CSS pixels; 1024 pixels or
 wider gives the desktop layout.
 The layout remains usable at 200% zoom.
 
@@ -68,6 +68,26 @@ etl-craft account unlock --name alice
 ```
 
 ## Home, About and catalog
+
+Navigation groups **Home, Pipelines and Catalog** under Overview; **Runs, Scheduled runs,
+Held and paused, Uploads, Console and Maintenance** under Operations; and **Projects, System
+health, Agents and Administration** under Platform. Maintenance and Administration appear
+only for administrators. The old project Insights address redirects to Home and retains filters.
+Home contains Overview, Capacity, Catalog, Pipelines, Data, Quality and Failures tabs.
+
+Pipelines is the operational list: description, schedule, dependency conditions, last run,
+recent success and tag filters live together. Pipeline list/detail JSON includes `depends_on`
+as pairs of upstream pipeline names and recorded dependency types. Export CSV includes
+the dependency conditions and last-run IDs as well.
+
+A pipeline and its runs share one workspace. The grid shows tasks as rows and runs as columns,
+newest on the right, with duration bars above the same columns when enough runs exist. Grid/Graph
+switches views. The right pane contains Overview, the selected run, Runs, Tasks, Calendar, Audit
+log, Details and Access. Selecting a run or task persists `?run=ID&task=CODE`; old run addresses
+redirect here while retaining task selections and view filters. Desktop panes scroll independently
+within the window; below 1024 pixels they stack. A selected run's panel comes first on a narrow
+screen. Details links to the catalog for pipeline and task descriptions, keeping one documentation
+source.
 
 On phones, Home's time presets, custom date range and pipeline filter use the same control
 height and wrap within the page. The custom range still opens the two UTC-day fields.
@@ -357,7 +377,7 @@ unchanged.
 
 ## Audit presentation
 
-The run grid keeps the newest run beside task names. Its single outer divider remains
+The run grid orders runs from oldest to newest, with the newest on the right and initially visible. Its single outer divider remains
 adjustable; names size automatically to the longest name and narrow only to preserve the newest
 run. Recorded skipped tasks name their failed upstream in the task list, and active-run graphs
 refresh recorded task statuses and shared colours while the run is still in progress.
@@ -389,3 +409,8 @@ word; failures and warnings retain their pills, as do statuses on detail pages.
 An attempt leads with its recorded error message. Open **Process details** for the unchanged
 failure classification, source and code, along with process and retry evidence. The Home
 Failures table also keeps its classification under **Process details**.
+
+On screens narrower than 480 px, Runs uses labelled cards that retain every table field.
+Run numbers appear above single-line labels; hover or keyboard focus reveals the full label.
+Pipeline, Status and Tags filters stack. Home tabs scroll within the 16 px side gutters;
+keyboard focus brings each tab into view without scrolling the page horizontally.

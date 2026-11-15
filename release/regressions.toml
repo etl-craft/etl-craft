@@ -331,7 +331,7 @@ ui-audit-operability = [
     "tests/unit/test_operations.py::test_status_tasks_follow_metadata_dependencies_instead_of_the_alphabet",
     "tests/integration/engine/test_account_login.py::test_account_add_accepts_a_piped_password_without_auditing_it",
     "tests/integration/engine/test_account_login.py::test_account_add_without_terminal_names_the_password_stdin_remedy",
-    "tests/browser/test_react_pipelines.py::test_the_newest_grid_run_is_next_to_task_names",
+    "tests/browser/test_react_pipelines.py::test_the_newest_grid_run_is_on_the_right_with_readable_status_symbols",
     "tests/browser/test_react_tasks.py::test_a_skipped_task_names_its_failed_upstream",
 ]
 

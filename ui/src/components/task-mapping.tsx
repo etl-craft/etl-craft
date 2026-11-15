@@ -3,7 +3,7 @@ import {mappingStageEntry,highlightedEntry} from "@/components/diagram-key";
 import {CatalogWidthButton} from "@/components/catalog-width";
 import {fitDiagram,readableFit} from "@/lib/diagram-viewport";
 import * as React from "react";
-import { Background, Handle, MarkerType, useReactFlow, useUpdateNodeInternals, Position, ReactFlow, type Node, type NodeProps, type Edge, type EdgeProps } from "@xyflow/react";
+import { Background, Handle, MarkerType, NodeResizer, useReactFlow, useUpdateNodeInternals, Position, ReactFlow, type Node, type NodeProps, type Edge, type EdgeProps } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { Database, GitMerge, Filter, Sigma, Layers, FunctionSquare, ShieldCheck, type LucideIcon } from "lucide-react";
 import { catalogPath } from "@/lib/routes";
@@ -20,7 +20,12 @@ import { mappingRoute, roundedMappingPath } from "@/lib/mapping-arrows";
 import { cn } from "@/lib/utils";
 
 type Port = { name: string; detail: string; logic?:string; selection?: string; input?: boolean; output?: boolean };
-type BoxData = { selection: string; title: string; description?: string; columns: Port[]; declared: boolean; selected: Set<string>; onSelect: (name: string) => void; expanded: boolean; onExpanded: () => void; tableLevel?: boolean; kind:string; conditions?:string[]; icon: LucideIcon } & Record<string, unknown>;
+type BoxData = { selection: string; title: string; description?: string; columns: Port[]; declared: boolean; selected: Set<string>; onSelect: (name: string) => void; expanded: boolean; onExpanded: () => void; tableLevel?: boolean; kind:string; conditions?:string[]; icon: LucideIcon; size?: NodeSize; onResize: (id: string, size: NodeSize) => void } & Record<string, unknown>;
+type NodeSize = { width: number; height?: number };
+/** A node lists this many column rows before its list scrolls; a resized node fills its height instead. */
+const SHOWN_ROWS = 5;
+const ROW_HEIGHT = 32;
+const HEADER_HEIGHT = 44;
 function MappingBox({ id, data }: NodeProps<Node<BoxData>>) {
   const expanded = data.expanded;
   const [engine,setEngine]=React.useState(false);
@@ -28,9 +33,11 @@ function MappingBox({ id, data }: NodeProps<Node<BoxData>>) {
   React.useLayoutEffect(() => { updateNodeInternals(id); }, [id, expanded, data.columns, updateNodeInternals]);
   const objectPorts = data.tableLevel ? <>{!id.startsWith("source:") ? <Handle type="target" position={Position.Left} id="object" style={{top:expanded ? 48 : 64}}/> : null}{!id.startsWith("target:") && id!=="expression" ? <Handle type="source" position={Position.Right} id="object" style={{top:expanded ? 48 : 64}}/> : null}</> : null;
   const collapsedPorts = <>{data.columns.map(column => <React.Fragment key={column.name}>{column.input !== false ? <Handle type="target" position={Position.Left} id={column.name}/> : null}{column.output !== false ? <Handle type="source" position={Position.Right} id={column.name}/> : null}</React.Fragment>)}{objectPorts}</>;
-  return <DiagramNode title={data.title} width={data.declared?(id.startsWith("source:")?320:256):160} color={kindColor(data.kind)} chip={data.declared ? <DiagramChip>Declared</DiagramChip> : undefined} description={data.conditions?.length ? <span title={data.conditions.join("; ")}>{data.conditions.length} condition{data.conditions.length===1 ? "" : "s"} across columns</span> : undefined} icon={data.icon} expanded={expanded} onExpanded={data.onExpanded} headingClassName="h-10" collapsedPorts={collapsedPorts} className={cn(data.declared && "border-dashed",data.selected.has(`${id}:object`) && "ring-2 ring-accent")}>
+  const size = data.size;
+  const fixedHeight = size?.height;
+  return <><NodeResizer minWidth={160} minHeight={HEADER_HEIGHT + ROW_HEIGHT * 2} onResize={(_, next) => data.onResize(id, { width: next.width, height: next.height })}/><DiagramNode title={data.title} width={size?.width ?? (data.declared?(id.startsWith("source:")?320:256):160)} height={fixedHeight} bodyClassName={fixedHeight!==undefined ? "flex min-h-0 flex-1 flex-col" : undefined} color={kindColor(data.kind)} chip={data.declared ? <DiagramChip>Declared</DiagramChip> : undefined} description={data.conditions?.length ? <span title={data.conditions.join("; ")}>{data.conditions.length} condition{data.conditions.length===1 ? "" : "s"} across columns</span> : undefined} icon={data.icon} expanded={expanded} onExpanded={data.onExpanded} headingClassName="h-10" collapsedPorts={collapsedPorts} className={cn(data.declared && "border-dashed",data.selected.has(`${id}:object`) && "ring-2 ring-accent")}>
     {objectPorts}
-    <div className="relative px-2 pb-2">
+    <div className={cn("nowheel nodrag relative min-h-0 overflow-y-auto px-2 pb-2", fixedHeight!==undefined && "flex-1")} style={fixedHeight===undefined ? {maxHeight: SHOWN_ROWS * ROW_HEIGHT + 8} : undefined}>
       {data.columns.map(column => <div key={column.name} className="relative flex h-8 items-center" style={{opacity:data.selected.size&&!data.selected.has(column.selection??`${data.selection}:${column.name}`)?0.3:1}} data-port={column.name}>
         {column.input !== false ? <Handle style={{left:-8}} className="!bg-border-strong" type="target" position={Position.Left} id={column.name}/> : null}
         <Button size="sm" variant="ghost" className={cn("relative !h-8 min-h-8 w-full justify-start text-left", data.selected.has(column.selection ?? `${data.selection}:${column.name}`) && "ring-2 ring-accent")} onClick={() => data.onSelect(column.selection ?? `${data.selection}:${column.name}`)}><span className="min-w-0 flex-1 truncate bg-surface" title={column.logic ?? column.name}>{column.logic ?? column.name.split(".").at(-1)}</span>{column.detail ? <span className="max-w-[45%] truncate bg-surface text-muted" title={column.detail}>{column.detail}</span> : null}</Button>
@@ -38,14 +45,14 @@ function MappingBox({ id, data }: NodeProps<Node<BoxData>>) {
       </div>)}
     </div>
     {data.description && data.kind==="write" ? <><button aria-expanded={engine} className="nodrag nopan w-full px-2 py-1 text-left text-xs text-muted focus-visible:outline-2 focus-visible:outline-ring" onClick={()=>setEngine(!engine)}>{`Engine columns (${data.description.split(",").length})`}</button>{engine ? <ul className="grid gap-1 px-2 pb-2 text-xs text-muted">{data.description.split(",").map(name=><li key={name}>{name.trim().toLowerCase()}</li>)}</ul> : null}</> : null}
-  </DiagramNode>;
+  </DiagramNode></>;
 }
 type MappingEdge = Edge<{lane:number; obstacles:string[]; sentence:string}>;
 function MappingLink(props: EdgeProps<MappingEdge>) {
   const flow = useReactFlow<Node<BoxData>,MappingEdge>();
   const obstacles = (props.data?.obstacles ?? []).flatMap(id => {
     const node = flow.getNode(id);
-    return node ? [{x:node.position.x,y:node.position.y,width:node.measured?.width ?? (node.data.declared?(node.id.startsWith("source:")?320:256):160),height:node.measured?.height ?? (node.data.expanded ? 40+node.data.columns.length*32 : 128)}] : [];
+    return node ? [{x:node.position.x,y:node.position.y,width:node.measured?.width ?? (node.data.declared?(node.id.startsWith("source:")?320:256):160),height:node.measured?.height ?? (node.data.expanded ? HEADER_HEIGHT+Math.min(node.data.columns.length,SHOWN_ROWS)*ROW_HEIGHT+8 : 128)}] : [];
   });
   const points = mappingRoute({...props,lane:props.data?.lane ?? 0.5,obstacles});
   const first = points[1]!, last = points.at(-2)!;
@@ -79,6 +86,8 @@ export function TaskMapping({ doc, task }: { doc: CatalogDoc; task: CatalogTask 
   const [all, setAll] = React.useState(false);
   const [search, setSearch] = React.useState("");
   const [selected, setSelected] = React.useState<string | null>(null);
+  const [sizes, setSizes] = React.useState<Record<string, NodeSize>>({});
+  const resize = React.useCallback((id: string, size: NodeSize) => setSizes(previous => ({ ...previous, [id]: size })), []);
   React.useEffect(()=>{
     const key=(event:KeyboardEvent)=>{
       if(event.key==="Escape")setSelected(null);
@@ -117,8 +126,9 @@ export function TaskMapping({ doc, task }: { doc: CatalogDoc; task: CatalogTask 
   const outputs = [...new Set(activeEdges.map(({edge}) => edge.target_column))].sort((left,right) => (targetTable?.columns.findIndex(column => column.name === left) ?? 0)-(targetTable?.columns.findIndex(column => column.name === right) ?? 0)).map(name => ({name,detail:"",selection:`target:${task.target}:${name}`}));
   const add = (id:string,title:string,x:number,y:number,columns:Port[],icon:LucideIcon,description?:string,conditions?:string[]) => {
     const open = expansion.isExpanded(id);
-    nodes.push({id,type:"mapping",position:{x,y},data:{selection:id,title,description,columns,icon,conditions,kind:id.startsWith("step:") ? title.toLowerCase() : id.split(":")[0]!,declared,selected:selected ? highlights : new Set(),onSelect:setSelected,expanded:open,onExpanded:() => expansion.toggle(id),tableLevel:(declared && !edges.length) || (rowset && (id.startsWith("source:") || id.startsWith("step:") || (id==="expression" && activeEdges.some(({edge}) => !edge.source_column))))}});
+    nodes.push({id,type:"mapping",position:{x,y},data:{selection:id,title,description,columns,icon,conditions,kind:id.startsWith("step:") ? title.toLowerCase() : id.split(":")[0]!,declared,selected:selected ? highlights : new Set(),onSelect:setSelected,expanded:open,onExpanded:() => expansion.toggle(id),tableLevel:(declared && !edges.length) || (rowset && (id.startsWith("source:") || id.startsWith("step:") || (id==="expression" && activeEdges.some(({edge}) => !edge.source_column)))),size:sizes[id],onResize:resize}});
   };
+  const nodeHeight = (id: string, rows: number) => sizes[id]?.height ?? HEADER_HEIGHT + Math.min(rows, SHOWN_ROWS) * ROW_HEIGHT + 8;
   const sources = unavailable ? [] : task.sources;
   let sourceY = 0;
   sources.forEach(source => {
@@ -127,7 +137,7 @@ export function TaskMapping({ doc, task }: { doc: CatalogDoc; task: CatalogTask 
     const names = new Set([...columns.filter(column => all || used.has(column.name)).map(column => column.name),...used].filter((name):name is string => !!name));
     const shown = [...names].filter(name => !query || visible.has(`source:${source}:${name}`) || name.toLowerCase().includes(query));
     add(`source:${source}`,source.replace(/^external:/,""),0,sourceY,shown.map(name => ({name,detail:columns.find(column => column.name === name)?.declared_type ?? "",input:false})),Database);
-    sourceY += expansion.isExpanded(`source:${source}`) ? Math.max(160,shown.length * 32 + 80) : 160;
+    sourceY += expansion.isExpanded(`source:${source}`) ? Math.max(160, nodeHeight(`source:${source}`, shown.length) + 40) : 160;
   });
   let x = sources.length ? declared ? 392 : 208 : 0;
   const relational: string[] = [];
@@ -174,7 +184,7 @@ export function TaskMapping({ doc, task }: { doc: CatalogDoc; task: CatalogTask 
   }
   const layoutHeight=Math.max(240,...nodes.map(node=>{
     const data=node.data;
-    return node.position.y+(data.expanded ? 44+data.columns.length*32+(data.conditions?.length?24:0)+(data.description&&data.kind==="write"?24:0) : 72)+32;
+    return node.position.y+(data.expanded ? nodeHeight(node.id, data.columns.length)+(data.conditions?.length?24:0)+(data.description&&data.kind==="write"?24:0) : 72)+32;
   }));
   const nodeById = new Map(nodes.map(node=>[node.id,node]));
   if(selected)nodes.forEach(node=>{node.style={opacity:node.data.columns.some(port=>highlights.has(port.selection??`${node.id}:${port.name}`)) ? 1 : 0.3};});

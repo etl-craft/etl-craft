@@ -236,3 +236,22 @@ details[open] > summary::before { transform: rotate(45deg); }
 @media (prefers-reduced-motion: reduce) { .view-key { transition: none; } }
 .mapping-table ::-webkit-scrollbar { width: 10px; height: 10px; }
 .mapping-table ::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 4px; }
+
+/* Run lists keep every field visible in a card on small phones. */
+@media (width < 480px) {
+  .stacked-table { display: block; min-width: 0 !important; }
+  .stacked-table thead { display: none; }
+  .stacked-table tbody { display: grid; gap: 12px; padding: 0 16px 12px; }
+  .stacked-table tbody tr {
+    display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); height: auto;
+    border: 1px solid var(--border); border-radius: 4px;
+  }
+  .stacked-table td { display: block; min-width: 0; width: auto !important; border: 0; padding: 8px 12px; }
+  .stacked-table td:first-child, .stacked-table td[data-label="Status"] { grid-column: 1 / -1; }
+  .stacked-table td::before { content: attr(data-label); display: block; margin-bottom: 2px; font-size: 12px; color: var(--muted); }
+  .stacked-table td:first-child::before { content: none; }
+  .stacked-table td > div { display: block; overflow: visible; -webkit-line-clamp: unset; }
+  .runs-filters { display: grid; grid-template-columns: minmax(0, 1fr); }
+  .runs-filters > label, .runs-filters > div, .runs-filters > button { width: 100%; min-width: 0; }
+  .runs-filters > div > button { width: 100%; justify-content: space-between; }
+}

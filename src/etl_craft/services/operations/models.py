@@ -204,6 +204,7 @@ class PipelineView:
     """The pipeline's ``DESCRIPTION``: what it does, shown beside its tasks' documentation."""
 
     alert_deliveries: tuple[AlertDelivery, ...] = ()
+    depends_on: tuple[tuple[str, str], ...] = ()
 
 
 @dataclass(frozen=True)

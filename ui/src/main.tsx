@@ -18,7 +18,7 @@ import { Settings } from "@/pages/settings";
 import { SignIn, SsoCallback } from "@/pages/signin";
 import { System } from "@/pages/system";
 import { Held } from "@/pages/held";
-import { Insights, InsightsRedirect } from "@/pages/insights";
+import { ProjectDashboard, InsightsRedirect } from "@/pages/project-dashboard";
 import { Items } from "@/pages/items";
 import { HomeEntry, ProjectList } from "@/pages/home";
 import { PipelineDetail } from "@/pages/pipeline-detail";
@@ -50,7 +50,7 @@ createRoot(document.getElementById("root")!).render(
           <Route element={<AppShell />}>
             <Route index element={<HomeEntry />} />
             <Route path="projects" element={<ProjectList />} />
-            <Route path="projects/:project" element={<Insights />} />
+            <Route path="projects/:project" element={<ProjectDashboard />} />
             <Route path="system" element={<System />} />
             <Route path="agents" element={<Agents />} />
             <Route path="admin" element={<Admin />} />
