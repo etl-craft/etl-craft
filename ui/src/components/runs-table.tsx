@@ -47,6 +47,7 @@ export function RunsTable({ code, pipeline, status, codes, filters = {}, highlig
       <Card>
         <DataTable
           label="Pipeline runs"
+          stacked
           data={rows}
           highlight={highlight === undefined ? undefined : (run) => run.pipeline_run_id === highlight}
           initialSort={[{ id: "id", desc: true }]}
@@ -58,10 +59,10 @@ export function RunsTable({ code, pipeline, status, codes, filters = {}, highlig
               id: "id",
               header: "Run",
               cell: (c) => (
-                <RunLabel id={c.getValue()} label={c.row.original.run_label} to={pipeline ? runPath(code, c.row.original.pipeline_code, c.getValue()) : pipelineRunPath(code, c.row.original.pipeline_code, c.getValue())} />
+                <RunLabel truncate id={c.getValue()} label={c.row.original.run_label} to={pipeline ? runPath(code, c.row.original.pipeline_code, c.getValue()) : pipelineRunPath(code, c.row.original.pipeline_code, c.getValue())} />
               ),
             }),
-            // Status sits beside the run number, so it is in view at phone width and read first when scanning.
+            // Status precedes the remaining fields in both the table and phone cards.
             columns.accessor("status", { header: "Status", cell: (c) => <StatusBadge quiet status={c.getValue()} /> }),
             ...(pipeline ? [] : [columns.accessor("pipeline_code", { id: "pipeline", header: "Pipeline", cell: (c) => <span className="font-medium">{c.getValue()}</span> })]),
             columns.accessor("trigger_kind", { header: "Trigger", cell: (c) => <span className="text-muted">{words(c.getValue()).toLowerCase()}{c.row.original.backfill ? " · backfill" : ""}{c.row.original.full_refresh ? " · full refresh" : ""}</span> }),

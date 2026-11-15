@@ -198,7 +198,7 @@ item's text, or work done early under another item.
 | S7.AP Native catalog | Done | #389 | All six slices, shape 2, definition flow and task mappings; owner approved the screenshots 2026-11-13 |
 | S7.AQ Readable run identifiers | Done | #347, #369, #370 | A label beside every run and task run id, stored by the Engine DB; accepted wherever the integer is, and shown beside it |
 | S7.AR Restarting pipelines | In progress | slice 1 PR | A pipeline setting, `RESTART_CONDITION`, starts the next run when the last one ends in a chosen status, so a file watcher runs continuously without a schedule |
-| S7.AS Project dashboard and navigation | In progress | | Home becomes a project dashboard with tabs and charts; a pipeline and its runs are one split workspace; Projects moves into Platform; the section Project is renamed Operations |
+| S7.AS Project dashboard and navigation | Done | #401 | Slices 1–5 verified; phone tabs and run cards revised; owner approved Support Insights captures |
 | S7.M Stewardship uploads | Done (M2) | #296, #305 | Atomic receipts and safe stored names; processed layout, retention archives and verified reruns; crash recovery and guarded upload history |
 | S7.S Seed tables | Done | #308 | Typed pinned-bundle seeds replace reference tables until recorded stewardship handover |
 | S7.T Business calendars | Done | #276 | Shared holiday and weekend calendars for schedules, run dates, backfill and catch-up |
@@ -220,6 +220,17 @@ item's text, or work done early under another item.
 | S8.H Support Insights scenario coverage | Planned | | Deterministic mixed-quality generators, every-feature demonstrations, business-rule and stewardship cases, and runnable README coverage |
 
 ### Handover notes
+
+- **S7.AS implementation inventory.** Choices that differ from the item text: slices 1 and 2
+  already shipped (navigation groups, Projects under Platform, Insights redirect, integer run IDs
+  and labels). Slice 3 already provides the shared workspace, tabs, address selection, old-run
+  redirect and responsive split; slice 4 already renders Home. Slice 5 already has description,
+  schedule, tag filters and recent status/success marks. Completion adds dependency conditions
+  and an explicit last-run link, restores newest-on-right grid ordering, preserves old-link task
+  and view selections, and names the dashboard module for Home. The existing S7.AO A14 chart
+  renderers remain; no chart dependency is added or redesigned. Pipeline list/detail views share
+  one batch dependency read. Acceptance availability: unit, UI, API and touched browser suites
+  run locally; the owner approved all five slices, including revised phone tabs and run cards.
 
 - **S7.L owner-supplied logo (#400).** The logo, editable vector sources, theme-aware
   favicon, documentation raster previews and 20-row by 38-column terminal mark are done.

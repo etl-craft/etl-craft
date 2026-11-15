@@ -110,7 +110,7 @@ function TablePanel({ title, note, action, children }: { title: string; note?: s
   );
 }
 
-export function Insights() {
+export function ProjectDashboard() {
   const { project: code = "" } = useParams();
   const [params, setParams] = useSearchParams();
   const developer = useRoleAtLeast("developer");
@@ -195,7 +195,7 @@ export function Insights() {
       {found.isPending ? <Loading what="the dashboard" /> : null}
       {d && total ? (
         <>
-          <Tabs tabs={TABS} value={tab} onChange={(id) => set("tab", id === "overview" ? null : id)} />
+          <Tabs className="mx-4" tabs={TABS} value={tab} onChange={(id) => set("tab", id === "overview" ? null : id)} />
           <div role="tabpanel" id="tabpanel" aria-labelledby={`tab-${tab}`} className="flex min-h-0 flex-1 flex-col gap-3 overflow-auto lg:overflow-hidden">
             {tab === "capacity" ? <Capacity /> : null}
             {tab === "catalog" ? <CatalogTab code={code} /> : null}

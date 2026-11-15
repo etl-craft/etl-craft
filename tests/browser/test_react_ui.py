@@ -424,3 +424,57 @@ def test_run_addresses_validate_the_complete_stored_label(scene):
                     page.set_viewport_size({"width": width, "height": 900})
                     page.screenshot(path=f"{shots}/run-label-refusal-{theme}-{width}.png")
         browser.close()
+
+
+def test_phone_run_cards_keep_labels_on_one_line_and_every_field_in_view(site):
+    ctx, url = site
+    code = "SUPPORT_INSIGHTS_ALPHA_INTERACTION_INGESTION_HISTORY"
+    with acting_as(Actor("owner", ActorKind.USER)), ctx.engine.begin() as conn:
+        pipeline = add_pipeline(conn, code)
+        conn.execute(
+            text("UPDATE CFG_PIPELINES SET PIPELINE_PARAMETERS=:params WHERE PIPELINE_ID=:id"),
+            {"params": '{"TAGS":["team:support"]}', "id": pipeline},
+        )
+        run = start_run(conn, pipeline)
+        finish_run(conn, run)
+    with sync_playwright() as pw:
+        browser, page, problems = open_page(pw, viewport={"width": 390, "height": 1000})
+        sign_in(page, url, "/ui/projects/default/runs")
+        table = page.get_by_role("table", name="Pipeline runs")
+        link = table.get_by_role("link", name=f"#{run}", exact=True)
+        expect(link).to_be_visible()
+        row = table.get_by_role("row").filter(
+            has=page.get_by_role("link", name=f"#{run}", exact=True)
+        )
+        label = row.locator("[data-run-label]")
+        full = label.inner_text()
+        assert full.startswith(code)
+        expect(label).to_have_attribute("title", full)
+        assert label.evaluate("el => getComputedStyle(el).whiteSpace") == "nowrap"
+        assert label.evaluate("el => getComputedStyle(el).textOverflow") == "ellipsis"
+        assert label.evaluate("el => el.scrollWidth > el.clientWidth")
+        link.focus()
+        expect(page.get_by_role("tooltip")).to_have_text(full)
+        for field in (
+            "Status",
+            "Pipeline",
+            "Trigger",
+            "Logical date",
+            "Started",
+            "Duration",
+            "Started by",
+        ):
+            cell = row.locator(f'[data-label="{field}"]')
+            expect(cell).to_be_visible()
+            box = cell.bounding_box()
+            assert box["x"] >= 16 and box["x"] + box["width"] <= 374
+        controls = [
+            page.get_by_role("combobox", name=title, exact=True) for title in ("Pipeline", "Status")
+        ]
+        controls.append(page.get_by_role("button", name="Tags", exact=True))
+        boxes = [control.bounding_box() for control in controls]
+        assert boxes[0]["y"] < boxes[1]["y"] < boxes[2]["y"]
+        assert len({round(box["height"]) for box in boxes}) == 1
+        assert page.evaluate("document.documentElement.scrollWidth - innerWidth") == 0
+        assert problems == []
+        browser.close()

@@ -37,7 +37,7 @@ from etl_craft.services.operations.requests import (
 from etl_craft.services.operations.snapshots import run_view, task_run_view
 from fixtures.auth import service_token
 from fixtures.engine_db import apply_schema, sqlite_engine_db
-from fixtures.metadata import add_pipeline, add_task, start_run
+from fixtures.metadata import add_pipeline, add_pipeline_dependency, add_task, start_run
 
 pytestmark = [pytest.mark.unit, pytest.mark.usefixtures("cli_logging")]
 P = "P"
@@ -803,3 +803,21 @@ def test_run_reason_follows_project_governance_in_every_environment(ctx):
             done = invoke(ctx, ActionName.RUN, request)
             assert done.run.pipeline_run_id is not None
             invoke(ctx, ActionName.RECONCILE, ReconcileInput(pipeline_code=code))
+
+
+@pytest.mark.parametrize("action", [ActionName.PIPELINES, ActionName.PIPELINE])
+def test_pipeline_views_include_the_recorded_dependency_condition(ctx, action):
+    with ctx.engine.begin() as conn:
+        upstream = add_pipeline(conn, "UPSTREAM")
+        downstream = add_pipeline(conn, "DOWNSTREAM")
+        add_pipeline_dependency(conn, downstream, upstream, "HAS_DATA")
+    request = (
+        TagFilter() if action == ActionName.PIPELINES else PipelineInput(pipeline_code="DOWNSTREAM")
+    )
+    result = invoke(ctx, action, request)
+    view = (
+        next(p for p in result.pipelines if p.pipeline_code == "DOWNSTREAM")
+        if action == ActionName.PIPELINES
+        else result
+    )
+    assert view.depends_on == (("UPSTREAM", "HAS_DATA"),)

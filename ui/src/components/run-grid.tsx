@@ -18,7 +18,7 @@ export const MIN_TASKS = 96;
 export const GRID_COLUMNS = { id: { width: 28, minimum: 30 }, time: { width: 176, minimum: 178 } };
 
 /**
- * Every task against the pipeline's recent runs, newest beside the task names, like the duration bars above it: one glance shows where and when a task
+ * Every task against the pipeline's recent runs, newest on the right, like the duration bars above it: one glance shows where and when a task
  * started failing. A column header selects a run; a cell selects the run and opens that task in it.
  */
 export function RunGrid({ code, pipeline, graph, runs, extra, selected, onSelect, bars = true, labels = "id" }: { code: string; pipeline: string; graph: Graph; runs: RunView[]; extra?: RunView; selected?: number; onSelect: (runId: number, task?: string) => void; bars?: boolean; labels?: "id" | "time" }) {
@@ -28,7 +28,7 @@ export function RunGrid({ code, pipeline, graph, runs, extra, selected, onSelect
   const latest = runs;
   const newest = latest[0]?.pipeline_run_id;
   // A run opened by a link that is older than the newest ones shown still has its column, set apart from them.
-  const shown = [...latest, ...(extra && !latest.some((r) => r.pipeline_run_id === extra.pipeline_run_id) ? [extra] : [])].sort((a, b) => b.pipeline_run_id - a.pipeline_run_id);
+  const shown = [...latest, ...(extra && !latest.some((r) => r.pipeline_run_id === extra.pipeline_run_id) ? [extra] : [])].sort((a, b) => a.pipeline_run_id - b.pipeline_run_id);
   const showBars = bars && shown.length >= 5;
   const apart = (run: RunView) => extra !== undefined && run.pipeline_run_id === extra.pipeline_run_id && !latest.some((r) => r.pipeline_run_id === run.pipeline_run_id);
   const box = React.useRef<HTMLDivElement>(null);
@@ -124,8 +124,8 @@ export function RunGrid({ code, pipeline, graph, runs, extra, selected, onSelect
           </div>
         </div>
         <div aria-hidden className="w-1.5 shrink-0 border-l border-border-strong" />
-        {/* Newest first: narrowing the pane clips old runs at the far edge. */}
-        <div ref={box} dir="ltr" onScroll={sync} style={{ width: matrixWidth, minWidth: 0 }} className="min-h-0 shrink-0 overflow-auto">
+        {/* The right scroll origin keeps the newest run visible as the pane narrows. */}
+        <div ref={box} dir="rtl" onScroll={sync} style={{ width: matrixWidth, minWidth: 0 }} className="min-h-0 shrink-0 overflow-auto">
           <div dir="ltr" className="w-max">
             <table aria-label="Run grid" style={{ width: shown.length * cell }} className="table-fixed border-separate border-spacing-0 text-[13px]">
               <thead>

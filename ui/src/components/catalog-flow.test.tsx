@@ -1,5 +1,5 @@
 import {RunGraph} from "@/components/run-graph";
-import { useState } from "react";
+import { useState, type ComponentType } from "react";
 import { Database, Download, Code, History, GitMerge, Eye, Trash2, ListPlus, ListMinus, Plus, Replace, Table2, Terminal, Bell, Hourglass, Network, ShieldCheck, FileCheck2, Eraser } from "lucide-react";
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { dependencyStyle, dependencyBadge, dependencySentence, definitionLabel, runCondition, runsWhen } from "@/lib/catalog-flow";
@@ -8,11 +8,17 @@ import { TaskMapping, mappingLine, columnPaths } from "@/components/task-mapping
 import type { CatalogTask, CatalogEdge, CatalogDoc } from "@/lib/catalog";
 import { MarkerType } from "@xyflow/react";
 import type { Edge, Node } from "@xyflow/react";
-const captured = vi.hoisted(() => ({ edges: [] as Edge[], nodes: [] as Node[], fit: {} as {minZoom?:number} }));
+const captured = vi.hoisted(() => ({ edges: [] as Edge[], nodes: [] as Node[], fit: {} as {minZoom?:number}, renderBoxes: false }));
 vi.mock("@xyflow/react", async importOriginal => {
   const actual = await importOriginal<typeof import("@xyflow/react")>();
-  return { ...actual, ReactFlow: ({ edges, nodes, fitViewOptions }: { edges: Edge[]; nodes: Node[]; fitViewOptions:{minZoom?:number} }) => {
-    captured.edges = edges; captured.nodes = nodes; captured.fit=fitViewOptions; return null;
+  const update = () => {};
+  return { ...actual, Handle: () => null, NodeResizer: () => null, useUpdateNodeInternals: () => update,
+    ReactFlow: ({ edges, nodes, fitViewOptions, nodeTypes }: { edges: Edge[]; nodes: Node[]; fitViewOptions:{minZoom?:number}; nodeTypes: Record<string, ComponentType<{id: string; data: Node["data"]}>> }) => {
+    captured.edges = edges; captured.nodes = nodes; captured.fit=fitViewOptions;
+    return captured.renderBoxes ? <>{nodes.map(node => {
+      const Box = nodeTypes[node.type ?? "mapping"]!;
+      return <div key={node.id} data-testid={node.id}><Box id={node.id} data={node.data}/></div>;
+    })}</> : null;
   } };
 });
 
@@ -42,7 +48,7 @@ describe("definition dependencies", () => {
 });
 
 
-beforeEach(()=>{vi.stubGlobal("ResizeObserver",class {observe(){} disconnect(){}});});
+beforeEach(()=>{captured.renderBoxes = false; vi.stubGlobal("ResizeObserver",class {observe(){} disconnect(){}});});
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 function taskForMapping(state: "derived" | "declared" | "unavailable", edges: CatalogEdge[] = []): CatalogTask {
   return { label: "P.load", pipeline:"P", code:"load",handler:"PYTHON",run_condition:null,run_condition_count:null,documentation:null,documentation_version:null,target:null,sources:[],script:null,lineage:{state,reason:state === "unavailable" ? "Python utility scripts run arbitrary code; lineage is not derived" : null},mapping:{steps:[],edges,source:null,write:{action:null,managed_columns:[],keys:{}}},script_kind:"UTILITY",active_flag:"Y",target_active_flag:"Y",retries:0,retry_on:"NONE",timeout_seconds:0,secrets:[],upstream:[],downstream:[],rules:[],runs:[] };
@@ -279,4 +285,24 @@ it("sizes entry and exit boxes to their names, without the kind prefix, before t
   expect(node.data.width).toBeLessThanOrEqual(232);
   expect(node.data.width).toBeGreaterThanOrEqual(Math.min(232,name.length*7+104));
 }
+});
+
+
+it("caps an expanded mapping column list at five rows without dropping columns", () => {
+  captured.renderBoxes = true;
+  vi.stubGlobal("matchMedia", () => ({matches: false}));
+  const names = Array.from({length: 8}, (_, index) => `column_${index}`);
+  const edges = names.map(name => ({task: "P.load", source_object: "raw.orders", source_column: name,
+    target_object: "mart.orders", target_column: name, transformation: "copy"}));
+  const task = taskForMapping("derived", edges);
+  task.sources = ["raw.orders"]; task.target = "mart.orders";
+  const columns = names.map(name => ({name, declared_type: "BIGINT", declared_nullable: "N"}));
+  const doc = {tables: [{name: "raw.orders", columns}, {name: "mart.orders", columns}], rules: []} as unknown as CatalogDoc;
+  render(<TaskMapping doc={doc} task={task}/>);
+  fireEvent.click(screen.getByRole("button", {name: "Show all columns"}));
+  const rows = screen.getByTestId("source:raw.orders").querySelectorAll("[data-port]");
+  expect(rows).toHaveLength(8);
+  expect(rows[0]!.parentElement).toHaveStyle({maxHeight: "168px"});
+  expect(rows[0]!.parentElement).toHaveClass("overflow-y-auto", "nowheel", "nodrag");
+  expect(rows[7]).toHaveAttribute("data-port", "column_7");
 });

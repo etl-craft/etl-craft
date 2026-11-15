@@ -1,5 +1,7 @@
 """The React pipelines, pipeline, scheduled and held pages in a real browser."""
 
+import csv
+import io
 import json
 import os
 import re
@@ -16,6 +18,7 @@ from fixtures.actions import act
 from fixtures.metadata import (
     add_dependency,
     add_pipeline,
+    add_pipeline_dependency,
     add_task,
     finish_run,
     start_run,
@@ -103,9 +106,20 @@ def test_filter_by_tag_select_pause_and_export(scene):
         with page.expect_download() as download:
             page.get_by_role("button", name="Export CSV").click()
         content = Path(download.value.path()).read_text(encoding="utf-8")
-        assert content.startswith(
-            "pipeline,name,description,tags,schedule,next_run,automatic_runs,paused_tasks"
-        )
+        exported = csv.DictReader(io.StringIO(content))
+        assert {
+            "pipeline",
+            "name",
+            "description",
+            "tags",
+            "schedule",
+            "dependencies",
+            "last_run",
+            "next_run",
+            "automatic_runs",
+            "paused_tasks",
+        } <= set(exported.fieldnames or ())
+        assert next(exported)["last_run"]
         assert "SALES" in content and "paused by owner: month-end freeze" in content
         assert problems == []
         browser.close()
@@ -386,7 +400,7 @@ def test_a_narrow_grid_hides_the_oldest_runs_never_the_newest(scene):
         headers.first.wait_for()  # the runs are drawn once their history has loaded
         assert headers.count() >= 2
         area = grid.locator("xpath=parent::div/parent::div").bounding_box()
-        newest = headers.first.bounding_box()
+        newest = headers.last.bounding_box()
         assert newest["x"] + newest["width"] <= area["x"] + area["width"] + 1, (
             "the newest run is cut off"
         )
@@ -447,7 +461,7 @@ def test_one_grid_divider_fits_names_and_keeps_the_latest_run_visible(site, meth
                         && box.width > 0 && item.width > 0
                         && item.left >= box.left - 1 && item.right <= box.right + 1;
                 }""",
-                arg=[area.element_handle(), grid.locator("thead th a").first.element_handle()],
+                arg=[area.element_handle(), grid.locator("thead th a").last.element_handle()],
                 timeout=5000,
             )
 
@@ -487,13 +501,13 @@ def test_the_top_search_groups_matches_as_you_type_and_opens_one(scene):
         browser.close()
 
 
-def test_the_newest_grid_run_is_next_to_task_names(scene):
+def test_the_newest_grid_run_is_on_the_right_with_readable_status_symbols(scene):
     _, url, active = scene
     with sync_playwright() as pw:
         browser, page, problems = open_page(pw)
         sign_in(page, url, "/ui/projects/default/pipelines/SALES")
-        first = page.get_by_role("table", name="Run grid").locator("thead th a").first
-        expect(first).to_have_attribute("href", re.compile(rf"/pipelines/SALES\?run={active}$"))
+        newest = page.get_by_role("table", name="Run grid").locator("thead th a").last
+        expect(newest).to_have_attribute("href", re.compile(rf"/pipelines/SALES\?run={active}$"))
         square = (
             page.get_by_role("table", name="Run grid")
             .get_by_role("img", name=re.compile("success$"))
@@ -883,5 +897,84 @@ def test_the_run_grid_and_the_run_graph_float_a_key_that_names_their_marks(scene
             panel.press("Escape")
             expect(panel).not_to_be_visible()
             expect(toggle).to_be_focused()
+        assert problems == []
+        browser.close()
+
+
+@pytest.mark.parametrize("width", [1023, 1024])
+def test_workspace_order_breakpoint_and_old_run_selection_round_trip(scene, width):
+    ctx, url, _ = scene
+    with acting_as(Actor("owner", ActorKind.USER)), ctx.engine.begin() as conn:
+        pipeline = conn.execute(
+            text("SELECT PIPELINE_ID FROM CFG_PIPELINES WHERE PIPELINE_CODE='OPS'")
+        ).scalar_one()
+        for _ in range(5):
+            run = start_run(conn, pipeline)
+            finish_run(conn, run)
+    with sync_playwright() as pw:
+        browser, page, problems = open_page(pw, viewport={"width": width, "height": 900})
+        sign_in(page, url, "/ui/projects/default/pipelines/OPS")
+        page.evaluate("document.fonts.ready")
+        grid = page.get_by_role("table", name="Run grid")
+        headers = grid.locator("thead th a")
+        expect(headers).not_to_have_count(0)
+        ids = [int(link.get_attribute("href").split("run=")[1]) for link in headers.all()]
+        assert ids == sorted(ids), "the newest run must be on the right"
+        page.wait_for_function(
+            """stacked => {
+                const panes = document.querySelectorAll('[data-pane]');
+                const [left, right] = [...panes].map(el => el.getBoundingClientRect());
+                return stacked ? right.top >= left.bottom - 1 : right.left >= left.right;
+            }""",
+            arg=width < 1024,
+        )
+        panes = page.locator("[data-pane]")
+        left, right = panes.nth(0).bounding_box(), panes.nth(1).bounding_box()
+        if width < 1024:
+            assert right["y"] >= left["y"] + left["height"] - 1
+            expect(page.get_by_role("separator", name="Resize the panes")).to_be_hidden()
+        else:
+            assert right["x"] >= left["x"] + left["width"]
+            expect(page.get_by_role("separator", name="Resize the panes")).to_be_visible()
+        run = ids[0]
+        page.goto(url + f"/ui/projects/default/runs/OPS/{run}?task=LOAD&view=graph")
+        expect(page.get_by_label("Task LOAD", exact=True)).to_be_visible()
+        assert f"run={run}" in page.url and "task=LOAD" in page.url and "view=graph" in page.url
+        page.evaluate("document.fonts.ready")
+        page.reload()
+        expect(page.get_by_label("Task LOAD", exact=True)).to_be_visible()
+        assert problems == []
+        browser.close()
+
+
+def test_pipeline_list_shows_dependencies_and_links_the_latest_run(scene):
+    ctx, url, _ = scene
+    with acting_as(Actor("owner", ActorKind.USER)), ctx.engine.begin() as conn:
+        pipelines = {
+            row.code: row.id
+            for row in conn.execute(
+                text("SELECT PIPELINE_CODE AS code, PIPELINE_ID AS id FROM CFG_PIPELINES")
+            )
+        }
+        add_pipeline_dependency(conn, pipelines["OPS"], pipelines["SALES"], "HAS_DATA")
+    with sync_playwright() as pw:
+        browser, page, problems = open_page(pw, viewport={"width": 1440, "height": 900})
+        sign_in(page, url, "/ui/projects/default/pipelines")
+        table = page.get_by_role("table", name="Pipelines")
+        for column in ("Description", "Schedule", "Waits for", "Last run", "Recent success"):
+            expect(
+                table.get_by_role(
+                    "columnheader", name=re.compile(r"^" + re.escape(column) + r"(?: |$)")
+                )
+            ).to_be_visible()
+        row = table.get_by_role("row").filter(has=page.get_by_role("link", name="OPS", exact=True))
+        expect(row.get_by_text("SALES (HAS_DATA)", exact=True)).to_be_visible()
+        latest = row.get_by_role("link", name=re.compile(r"^#\d+$"))
+        assert "?run=" in latest.get_attribute("href")
+        page.evaluate("document.fonts.ready")
+        latest.click()
+        expect(page.get_by_role("tab", name=re.compile(r"^Run #"))).to_have_attribute(
+            "aria-selected", "true"
+        )
         assert problems == []
         browser.close()

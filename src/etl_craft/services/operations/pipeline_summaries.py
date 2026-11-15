@@ -34,6 +34,11 @@ def summarize(
                 None if row.end_date is None else as_utc(row.end_date),
             )
         )
+    dependencies: dict[str, list[tuple[str, str]]] = {}
+    for row in conn.execute(statement(conn, "active_pipeline_dependency_edges")):
+        dependencies.setdefault(row.pipeline_code, []).append(
+            (row.depends_on_pipeline_code, row.dependency_type)
+        )
     ticks = _next_runs(
         conn, {v.pipeline_id for v in views if v.paused is None}, now, refresh_required
     )
@@ -43,6 +48,7 @@ def summarize(
             next_run=ticks.get(view.pipeline_id, (None, None))[0],
             schedule_problem=ticks.get(view.pipeline_id, (None, None))[1],
             recent_runs=tuple(recent.get(view.pipeline_id, ())),
+            depends_on=tuple(dependencies.get(view.pipeline_code, ())),
         )
         for view in views
     )

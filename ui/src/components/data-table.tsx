@@ -146,6 +146,7 @@ export function DataTable<T>({
   more,
   highlight,
   find,
+  stacked = false,
 }: {
   data: T[];
   columns: Column<T>[];
@@ -163,6 +164,8 @@ export function DataTable<T>({
   highlight?: (row: T) => boolean;
   /** A filter box above the rows: keeps the rows with any shown value containing the text. */
   find?: boolean;
+  /** Runs keep all fields in labelled cards below 480 px. */
+  stacked?: boolean;
 }) {
   const [sorting, setSorting] = React.useState<SortingState>(initialSort ?? []);
   // The filter text lives in the address, so a filtered list can be shared or reloaded: one parameter per table.
@@ -242,7 +245,7 @@ export function DataTable<T>({
         {query ? <span className="text-xs text-muted">{table.getRowModel().rows.length} of {data.length}</span> : null}
       </div>
     ) : null}
-    <Table aria-label={label} more={more} className="table-fixed" style={{ minWidth: fitted }}>
+    <Table aria-label={label} more={more} className={cn("table-fixed", stacked && "stacked-table")} style={{ minWidth: fitted }}>
       <thead>
         {table.getHeaderGroups().map((group) => (
           <tr key={group.id}>
@@ -309,7 +312,7 @@ export function DataTable<T>({
               </Td>
             ) : null}
             {row.getVisibleCells().map((cell) => (
-              <Td key={cell.id} style={{ width: widthOf(cell.column) }} title={hover(cell.getValue())}>
+              <Td key={cell.id} data-label={stacked ? String(cell.column.columnDef.header) : undefined} style={{ width: widthOf(cell.column) }} title={hover(cell.getValue())}>
                 <div className={cn("max-w-full break-words leading-snug", wrap ? "line-clamp-2" : "truncate")}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</div>
               </Td>
             ))}

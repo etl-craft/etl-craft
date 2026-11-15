@@ -1,5 +1,7 @@
 import {LegendView,statusEntries} from "@/components/legend";
 import { AutoStartNotice } from "@/components/auto-start-notice";
+import { RunLabel } from "@/components/run-label";
+import { When } from "@/components/when";
 import { TagFilter } from "@/components/tag-filter";
 import { useQuery } from "@tanstack/react-query";
 import { createColumnHelper } from "@tanstack/react-table";
@@ -15,7 +17,7 @@ import { slaVerdict, StatusBadge } from "@/components/status";
 import { Card } from "@/components/ui/card";
 import { useCanRun, useProjectInfo, useRoleAtLeast } from "@/hooks";
 import { getJson, project } from "@/lib/api";
-import { pipelinePath } from "@/lib/routes";
+import { pipelinePath, runPath } from "@/lib/routes";
 import type { BulkOutcome, Pipeline } from "@/lib/types";
 import { useDocumentTitle } from "@/title";
 
@@ -92,9 +94,9 @@ export function Pipelines() {
           ) : null}
           <CsvButton
             name={`${code}-pipelines.csv`}
-            header={["pipeline", "name", "description", "tags", "schedule", "next_run", "automatic_runs", "paused_tasks"]}
+            header={["pipeline", "name", "description", "tags", "schedule", "dependencies", "last_run", "next_run", "automatic_runs", "paused_tasks"]}
             rows={(selected.length ? shown.filter((p) => chosen.has(p.pipeline_code)) : shown).map((p) => [
-              p.pipeline_code, p.pipeline_name, p.description ?? "", p.tags.join(" "), p.run_schedule ?? "", p.next_run ?? "", p.paused ? `paused by ${p.paused.paused_by}: ${p.paused.reason}` : "active", p.task_pauses.length,
+              p.pipeline_code, p.pipeline_name, p.description ?? "", p.tags.join(" "), p.run_schedule ?? "", p.depends_on.map(([name, kind]) => `${name} (${kind})`).join(", "), p.recent_runs[0]?.pipeline_run_id ?? "", p.next_run ?? "", p.paused ? `paused by ${p.paused.paused_by}: ${p.paused.reason}` : "active", p.task_pauses.length,
             ])}
           />
           </div>
@@ -143,10 +145,16 @@ export function Pipelines() {
                 </span>
               ),
             }),
-            columns.display({ id: "recent", header: "Recent runs", minSize: 176, cell: (c) => <RecentRuns project={code} pipeline={c.row.original} /> }),
+            columns.display({ id: "recent", header: "Recent success", minSize: 176, cell: (c) => <RecentRuns project={code} pipeline={c.row.original} /> }),
             columns.display({ id: "description", header: "Description", cell: (c) => <span className="line-clamp-2 max-w-md text-[13px] text-muted" title={c.row.original.description ?? undefined}>{c.row.original.description ?? "—"}</span> }),
             columns.display({ id: "tags", header: "Tags", cell: (c) => <TagList tags={c.row.original.tags} /> }),
             columns.accessor("run_schedule", { header: "Schedule", enableSorting: false, cell: (c) => (c.getValue() ? <code className="whitespace-nowrap font-mono text-xs">{c.getValue()}</code> : <span className="whitespace-nowrap text-muted">Not scheduled</span>) }),
+            columns.display({ id: "dependencies", header: "Waits for", cell: (c) => c.row.original.depends_on.length ? c.row.original.depends_on.map(([pipeline, kind]) => `${pipeline} (${kind})`).join(", ") : "None" }),
+            columns.display({ id: "last", header: "Last run", cell: (c) => {
+              const pipeline = c.row.original;
+              const run = pipeline.recent_runs[0];
+              return run ? <span className="grid gap-1"><RunLabel id={run.pipeline_run_id} label={run.run_label} to={runPath(code, pipeline.pipeline_code, run.pipeline_run_id)} /><When iso={run.start_date} /></span> : <span className="text-muted">No runs yet</span>;
+            } }),
             columns.display({ id: "next", header: "Next run", cell: (c) => <NextRun pipeline={c.row.original} /> }),
             ...(all.some((p) => p.sla_in_hours) ? [
             columns.display({
