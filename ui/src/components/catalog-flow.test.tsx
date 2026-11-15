@@ -390,11 +390,13 @@ it("expands object columns and follows ancestors and descendants without sibling
  const {TableLineage}=await import("@/components/table-lineage");
  captured.renderBoxes=true;
  const edge=(source:string,column:string,target:string,targetColumn:string)=>({task:"P.load",source_object:source,source_column:column,target_object:target,target_column:targetColumn,transformation:"copy"});
- const doc={project:"demo",tasks:[],tables:["raw.orders","mart.orders","report.orders","other.orders"].map(name=>({name,columns:[{name:"amount"}]})),table_edges:[{source:"raw.orders",target:"mart.orders"},{source:"mart.orders",target:"report.orders"},{source:"raw.orders",target:"other.orders"}],column_edges:[edge("raw.orders","amount","mart.orders","amount"),edge("mart.orders","amount","report.orders","amount"),edge("raw.orders","amount","other.orders","amount")]} as unknown as CatalogDoc;
+ const doc={project:"demo",tasks:[],tables:["raw.orders","mart.orders","report.orders","other.orders"].map(name=>({name,columns:[{name:"amount"}]})),table_edges:[{source:"external:s3.orders",target:"raw.orders"},{source:"raw.orders",target:"mart.orders"},{source:"mart.orders",target:"report.orders"},{source:"raw.orders",target:"other.orders"}],column_edges:[edge("external:s3.orders","amount","raw.orders","amount"),edge("raw.orders","amount","mart.orders","amount"),edge("mart.orders","amount","report.orders","amount"),edge("raw.orders","amount","other.orders","amount")]} as unknown as CatalogDoc;
  render(<MemoryRouter><TableLineage doc={doc} name="mart.orders" depth={2} direction="both"/></MemoryRouter>);
+ expect(screen.queryByRole("link",{name:"Open external:s3.orders details"})).toBeNull();
+ expect(screen.getByTestId("external:s3.orders")).toHaveTextContent("s3.orders");
  fireEvent.click(screen.getByRole("button",{name:"Expand all"}));
  fireEvent.click(screen.getByTestId("mart.orders").querySelector('[data-port="amount"] button')!);
  expect(screen.getByTestId("raw.orders").querySelector('[data-port="amount"] button')).toHaveClass("ring-2");
  expect(screen.getByTestId("report.orders").querySelector('[data-port="amount"] button')).toHaveClass("ring-2");
- expect(captured.edges.filter(edge=>edge.style?.stroke==="var(--accent)").length).toBe(2);
+ expect(captured.edges.filter(edge=>edge.style?.stroke==="var(--accent)").length).toBe(3);
 });
