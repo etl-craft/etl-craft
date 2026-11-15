@@ -383,16 +383,17 @@ def test_an_active_run_graph_refreshes_task_states_without_the_run_tab(site):
         expect(after_node.locator(".diagram-node")).to_have_class(re.compile("border-l-run-solid"))
         expect(done_node.locator(".diagram-node")).to_have_class(re.compile("border-l-ok-solid"))
         for node, tone in ((copy_node, "idle"), (after_node, "run"), (done_node, "ok")):
-            assert node.locator(".diagram-node").evaluate(
-                """(element, tone) => {
+            page.wait_for_function(
+                """([element, tone]) => {
                 const sample = document.createElement('span');
-                sample.style.color = `var(--${tone}-solid)`;
+                sample.style.borderLeftColor = `var(--${tone}-solid)`;
                 element.append(sample);
-                const expected = getComputedStyle(sample).color;
+                const expected = getComputedStyle(sample).borderLeftColor;
                 sample.remove();
                 return getComputedStyle(element).borderLeftColor === expected;
             }""",
-                tone,
+                arg=[node.locator(".diagram-node").element_handle(), tone],
+                timeout=5000,
             )
         assert (
             page.request.get(url + f"/api/v1/projects/default/runs/{run}").json()["status"]
@@ -463,7 +464,13 @@ def test_phone_run_cards_keep_labels_on_one_line_and_every_field_in_view(site):
         full = label.inner_text()
         assert full.startswith(code)
         expect(label).to_have_attribute("title", full)
-        assert label.evaluate("el => getComputedStyle(el).whiteSpace") == "nowrap"
+        assert label.evaluate("el => getComputedStyle(el).getPropertyValue('text-wrap-mode')") == (
+            "nowrap"
+        )
+        assert label.evaluate(
+            """el => el.getBoundingClientRect().height <=
+                parseFloat(getComputedStyle(el).lineHeight) + 1"""
+        )
         assert label.evaluate("el => getComputedStyle(el).textOverflow") == "ellipsis"
         assert label.evaluate("el => el.scrollWidth > el.clientWidth")
         link.focus()
