@@ -1,3 +1,4 @@
+import { AppLink } from "@/components/navigation";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Check, Copy, ExternalLink } from "lucide-react";
 import * as React from "react";
@@ -52,10 +53,10 @@ function SsoWait({ grant, returnTo }: { grant: SsoStart; returnTo: string }) {
           {copied ? <Check className="size-3.5 text-ok" aria-hidden /> : <Copy className="size-3.5" aria-hidden />}
         </button>
       </p>
-      <a className="inline-flex items-center gap-1 text-accent hover:underline" href={grant.verification_uri} target="_blank" rel="noopener noreferrer">
+      <AppLink className="inline-flex items-center gap-1 text-accent hover:underline" to={grant.verification_uri}>
         Open your identity provider <ExternalLink className="size-3.5" aria-hidden />
         <span className="sr-only">(opens in a new tab)</span>
-      </a>
+      </AppLink>
       <p role="status" className="m-0 text-muted">
         {status}
       </p>

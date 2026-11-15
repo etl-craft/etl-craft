@@ -1,14 +1,15 @@
 import {MemoryRouter} from "react-router-dom";
 import {RunGraph} from "@/components/run-graph";
-import { useState, type ComponentType } from "react";
+import { useState, type ReactElement, type ComponentType } from "react";
 import { Database, Download, Code, History, GitMerge, Eye, Trash2, ListPlus, ListMinus, Plus, Replace, Table2, Terminal, Bell, Hourglass, Network, ShieldCheck, FileCheck2, Eraser } from "lucide-react";
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { dependencyStyle, dependencyBadge, dependencySentence, definitionLabel, runCondition, runsWhen } from "@/lib/catalog-flow";
-import { cleanup, render, screen, fireEvent } from "@testing-library/react";
+import { cleanup, render as rawRender, screen, fireEvent } from "@testing-library/react";
 import { TaskMapping, mappingLine, columnPaths } from "@/components/task-mapping";
 import type { CatalogTask, CatalogEdge, CatalogDoc } from "@/lib/catalog";
 import { MarkerType } from "@xyflow/react";
 import type { Edge, Node } from "@xyflow/react";
+function render(element:ReactElement) { return rawRender(element,{wrapper:MemoryRouter}); }
 const captured = vi.hoisted(() => ({ edges: [] as Edge[], nodes: [] as Node[], fit: {} as {minZoom?:number}, renderBoxes: false }));
 vi.mock("@xyflow/react", async importOriginal => {
   const actual = await importOriginal<typeof import("@xyflow/react")>();
@@ -391,7 +392,7 @@ it("expands object columns and follows ancestors and descendants without sibling
  captured.renderBoxes=true;
  const edge=(source:string,column:string,target:string,targetColumn:string)=>({task:"P.load",source_object:source,source_column:column,target_object:target,target_column:targetColumn,transformation:"copy"});
  const doc={project:"demo",tasks:[],tables:["raw.orders","mart.orders","report.orders","other.orders"].map(name=>({name,columns:[{name:"amount"}]})),table_edges:[{source:"external:s3.orders",target:"raw.orders"},{source:"raw.orders",target:"mart.orders"},{source:"mart.orders",target:"report.orders"},{source:"raw.orders",target:"other.orders"}],column_edges:[edge("external:s3.orders","amount","raw.orders","amount"),edge("raw.orders","amount","mart.orders","amount"),edge("mart.orders","amount","report.orders","amount"),edge("raw.orders","amount","other.orders","amount")]} as unknown as CatalogDoc;
- render(<MemoryRouter><TableLineage doc={doc} name="mart.orders" depth={2} direction="both"/></MemoryRouter>);
+ render(<TableLineage doc={doc} name="mart.orders" depth={2} direction="both"/>);
  expect(screen.queryByRole("link",{name:"Open external:s3.orders details"})).toBeNull();
  expect(screen.getByTestId("external:s3.orders")).toHaveTextContent("s3.orders");
  fireEvent.click(screen.getByRole("button",{name:"Expand all"}));

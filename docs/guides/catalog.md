@@ -465,9 +465,18 @@ contrasted in light and dark. Green, red, blue and amber remain status colours. 
 edges stay neutral. Derived column lines use the accent; declared lines are mauve and dashed
 with a Declared chip. Selection strengthens the whole column path and fades unrelated paths.
 
-Use Tab or the arrow keys to move through nodes and Enter to open one. Escape clears a
-mapping selection or closes the task panel; `/` focuses Find a column. Controls keep visible
-focus rings. Highlight and expansion feedback respects reduced motion.
+Click a node header to expand or collapse it. A mouse double-click opens its catalog details
+in a new tab without toggling expansion; a single mouse click waits briefly to distinguish the
+shortcut. Use **Node actions** for keyboard and touch: **Open catalog details** stays in the
+current tab, **Expand** / **Collapse** changes the box, and **Open in new tab** preserves the diagram.
+Nodes without a catalog entry explain why their navigation actions are unavailable. Run graphs
+also offer **Inspect task**, which opens the existing workspace panel in the current tab.
+
+Use Tab or the arrow keys to move through nodes. Enter or Space on the header changes expansion;
+Enter on **Node actions** opens its menu, arrows move between items, and Escape dismisses it.
+Escape also clears a mapping selection or closes the task panel; `/` focuses Find a column.
+Controls keep visible focus rings. Documentation and external links open in a new tab and
+announce that behavior. Highlight and expansion feedback respects reduced motion.
 
 ### Key, zoom and full width
 

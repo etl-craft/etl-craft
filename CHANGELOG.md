@@ -6,6 +6,11 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+- Diagram headers expand on a single click; mouse double-click opens catalog details in a new
+  tab without toggling expansion. The shared Node actions menu offers catalog details,
+  expansion and a new-tab action for keyboard and touch users. Main navigation and run/task
+  inspection stay in the current tab; documentation and external links announce their new tab.
+
 - Table **Lineage diagram** boxes expand into columns and highlight recorded upstream/downstream
   paths, using the same mapping controls. **Column sources** names the upstream-column list and
   offers a Writing task filter for targets with multiple writers. Empty task/table lineage views

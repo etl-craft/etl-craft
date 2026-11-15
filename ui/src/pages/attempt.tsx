@@ -1,6 +1,7 @@
 import { RunLabel } from "@/components/run-label";
 import { useQuery } from "@tanstack/react-query";
-import { Link, useParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
+import { AppLink as Link } from "@/components/navigation";
 import { AttemptDetails } from "@/components/attempt-details";
 import { Breadcrumbs, Loading, Notice, PageHeader } from "@/components/common";
 import { Card } from "@/components/ui/card";

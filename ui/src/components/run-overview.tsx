@@ -2,7 +2,7 @@ import { RunLabel, copyRunLabel } from "@/components/run-label";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronDown, ChevronRight, CircleX, Copy, Download, LifeBuoy } from "lucide-react";
 import * as React from "react";
-import { Link } from "react-router-dom";
+import { AppLink as Link } from "@/components/navigation";
 import { Fact, FactList, Loading, Notice, ParamList } from "@/components/common";
 import { DropdownContent, DropdownItem, DropdownLabel, DropdownMenu, DropdownSeparator, DropdownTrigger } from "@/components/dropdown";
 import { ActionButton } from "@/components/action-button";

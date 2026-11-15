@@ -3,7 +3,7 @@ import { DailyRuns, Spark } from "@/components/charts";
 import { RunLabel } from "@/components/run-label";
 import { ArrowUpRight, Timer } from "lucide-react";
 import * as React from "react";
-import { Link } from "react-router-dom";
+import { AppLink as Link } from "@/components/navigation";
 import { StatusMark } from "@/components/status";
 import { When } from "@/components/when";
 import { formatDuration, formatSeconds, percent, seconds } from "@/lib/format";

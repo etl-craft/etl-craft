@@ -2,7 +2,7 @@ import {LegendView,statusEntries} from "@/components/legend";
 import { CirclePause, X } from "lucide-react";
 import { When } from "@/components/when";
 import * as React from "react";
-import { Link } from "react-router-dom";
+import { AppLink as Link } from "@/components/navigation";
 import { isFailure, solidClass, StatusMark, statusMeta } from "@/components/status";
 import { formatDuration } from "@/lib/format";
 import { runPath } from "@/lib/routes";

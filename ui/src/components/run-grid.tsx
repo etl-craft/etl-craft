@@ -3,7 +3,7 @@ import { RunLabel } from "@/components/run-label";
 import { When } from "@/components/when";
 import { useQueries } from "@tanstack/react-query";
 import * as React from "react";
-import { Link } from "react-router-dom";
+import { AppLink as Link } from "@/components/navigation";
 import { Loading, Notice } from "@/components/common";
 import { StatusMark, solidClass, statusMeta } from "@/components/status";
 import { formatDuration } from "@/lib/format";

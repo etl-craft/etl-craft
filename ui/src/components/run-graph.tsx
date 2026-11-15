@@ -4,11 +4,11 @@ import {DependencyBadge} from "@/components/dependency-mark";
 import {CatalogWidthButton} from "@/components/catalog-width";
 import {Switch} from "@/components/switch";
 import {fitDiagram,readableFit} from "@/lib/diagram-viewport";
-import { ArrowUpRight, Box, CalendarClock, Play, Network, Hourglass, type LucideIcon } from "lucide-react";
+import { Box, CalendarClock, Play, Network, Hourglass, type LucideIcon } from "lucide-react";
 import * as React from "react";
 import { Background, Handle, MarkerType, Position, ReactFlow, getBezierPath, type EdgeProps, type Edge, type Node, type NodeProps, type ReactFlowInstance } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { edgeClass, solidClass, statusMeta, StatusBadge } from "@/components/status";
+import { edgeClass, statusMeta, StatusBadge } from "@/components/status";
 import { dependencyBadge, dependencyStyle, definitionLabel, dependencySentence } from "@/lib/catalog-flow";
 import type { CatalogTask, DefinitionEdge } from "@/lib/catalog";
 import type { Graph } from "@/lib/types";
@@ -25,6 +25,9 @@ export type Direction = "LR" | "TB";
 
 interface TaskData extends Record<string, unknown> {
   definition?: CatalogTask;
+  catalogDetails?: string;
+  inspectable?: boolean;
+  upstreamCount?: number;
   symbol?: {icon:LucideIcon;label:string};
   expanded?: boolean;
   onExpanded?: () => void;
@@ -67,26 +70,17 @@ function shownTitle(label: string, isTask: boolean): string {
 
 function Task({ data }: NodeProps<TaskNode>) {
   const plain = data.status === "";
-  const {icon:StatusIcon,label:statusLabel,spin} = plain ? {icon:Box,label:"",spin:false} : statusMeta(data.status);
-  const open = <button type="button" aria-label={`Open ${data.label} details`} title="Open this task" className="nodrag nopan grid size-7 shrink-0 cursor-pointer place-items-center rounded-sm border border-border-strong text-muted hover:border-accent hover:bg-surface-2 hover:text-accent" onClick={event => { event.stopPropagation(); data.onOpen(data.label); }}><ArrowUpRight aria-hidden className="size-4"/></button>;
-  if (data.definition || data.symbol) {
-    const task = data.definition;
-    const symbol = task ? taskSymbol(task) : data.symbol!;
-    const status = plain ? null : <StatusBadge status={data.status} quiet/>;
-    const summary = <>{task?.active_flag==="N" ? <DiagramChip>Inactive</DiagramChip> : null}<span className="flex min-w-0 items-center justify-center gap-1"><span className="truncate" title={symbol.label}>{symbol.label}</span>{task ? <RunConditionMark task={task}/> : null}</span>{status}</>;
-    return <div data-focus={data.focus} className="relative" style={task?.active_flag === "N" ? {opacity:0.4} : undefined}>
-      <Handle type="target" position={data.vertical ? Position.Top : Position.Left} className="!size-1.5 !border-0 !bg-border-strong"/>
-      <DiagramNode title={shownTitle(data.label,Boolean(task))} tooltip={data.tooltip ?? data.label} width={data.width} color={task?kindColor(task.script_kind??task.handler):"var(--muted)"} icon={symbol.icon}  collapsedDescription={summary} expanded={data.expanded ?? false} onExpanded={() => data.onExpanded?.()} action={task ? undefined : open} description={<>{task?.active_flag==="N" ? <DiagramChip>Inactive</DiagramChip> : null}{symbol.label}{status}</>} className={cn("",NODE_TONE[data.focus],plain ? "border-l-border-strong" : edgeClass(data.status))}>
-        <div className="grid gap-1 px-2 pb-2 text-xs">{task ? <><span className="line-clamp-2 break-all" title={task.target ?? undefined}>{task.target ?? "No target"}</span><span>Runs when: <RunConditionMark task={task}/></span></> : <span>{data.label.startsWith("Schedule:") ? "Schedules and triggers admit this pipeline." : data.label.startsWith("Downstream:") ? "Open the downstream pipeline to inspect its tasks." : "This gate waits for its upstream dependency."}</span>}</div>
-      </DiagramNode>
-      <Handle type="source" position={data.vertical ? Position.Bottom : Position.Right} className="!size-1.5 !border-0 !bg-border-strong"/>
-    </div>;
-  }
-  return <div data-focus={data.focus} className={cn("flex h-[52px] w-[230px] items-center gap-2 rounded-sm border border-l-4 bg-surface pl-2.5 pr-2 text-[13px] transition-opacity",NODE_TONE[data.focus],plain ? "border-l-border-strong" : edgeClass(data.status))}>
+  const {icon:StatusIcon,label:statusLabel} = plain ? {icon:Box,label:""} : statusMeta(data.status);
+  const task = data.definition;
+  const symbol = task ? taskSymbol(task) : data.symbol ?? {icon:StatusIcon,label:statusLabel};
+  const status = plain ? null : <StatusBadge status={data.status} quiet/>;
+  const summary = <>{task?.active_flag==="N" ? <DiagramChip>Inactive</DiagramChip> : null}{task||data.symbol ? <span className="flex min-w-0 items-center justify-center gap-1"><span className="truncate" title={symbol.label}>{symbol.label}</span>{task ? <RunConditionMark task={task}/> : null}</span> : null}{status}</>;
+  return <div data-focus={data.focus} className="relative" style={task?.active_flag === "N" ? {opacity:0.4} : undefined}>
     <Handle type="target" position={data.vertical ? Position.Top : Position.Left} className="!size-1.5 !border-0 !bg-border-strong"/>
-    <span className={cn("grid size-7 shrink-0 place-items-center rounded-sm",plain ? "bg-idle-bg text-idle" : solidClass(data.status))} title={statusLabel}><StatusIcon aria-hidden className={cn("size-4",spin && "animate-spin")}/></span>
-    <span className="grid min-w-0 flex-1"><span className="line-clamp-2 break-all font-medium leading-tight" title={data.label}>{data.label}</span>{plain ? null : <span className="text-xs text-muted">{statusLabel}</span>}</span>
-    {open}<Handle type="source" position={data.vertical ? Position.Bottom : Position.Right} className="!size-1.5 !border-0 !bg-border-strong"/>
+    <DiagramNode title={shownTitle(data.label,Boolean(task)||!data.symbol)} tooltip={data.tooltip ?? data.label} width={data.width??WIDTH} color={task?kindColor(task.script_kind??task.handler):plain?"var(--muted)":`var(--${statusMeta(data.status).tone}-solid)`} icon={symbol.icon} collapsedDescription={summary} expanded={data.expanded ?? false} onExpanded={() => data.onExpanded?.()} details={data.catalogDetails ? {to:data.catalogDetails}:undefined} onInspect={data.inspectable ? ()=>data.onOpen(data.label) : undefined} description={<>{task?.active_flag==="N" ? <DiagramChip>Inactive</DiagramChip> : null}{task||data.symbol ? symbol.label : null}{status}</>} className={cn(NODE_TONE[data.focus],plain ? "border-l-border-strong" : edgeClass(data.status))}>
+      <div className="grid gap-1 px-2 pb-2 text-xs">{task ? <><span className="line-clamp-2 break-all" title={task.target ?? undefined}>{task.target ?? "No target"}</span><span>Runs when: <RunConditionMark task={task}/></span></> : data.symbol ? <span>{data.label.startsWith("Schedule:") ? "Schedules and triggers admit this pipeline." : data.label.startsWith("Downstream:") ? "Open the downstream pipeline to inspect its tasks." : "This gate waits for its upstream dependency."}</span> : <span>Upstream tasks: {data.upstreamCount??0}</span>}</div>
+    </DiagramNode>
+    <Handle type="source" position={data.vertical ? Position.Bottom : Position.Right} className="!size-1.5 !border-0 !bg-border-strong"/>
   </div>;
 }
 
@@ -187,7 +181,9 @@ export function RunGraph({
   fill,
   direction,
   definition,
+  catalogDetails,
 }: {
+  catalogDetails?: (node:string)=>string|null;
   definition?: { tasks: CatalogTask[]; edges: DefinitionEdge[]; overlay?:boolean; onOverlay?:()=>void; schedule?:string|null };
   graph: Graph;
   statuses: Record<string, string>;
@@ -219,6 +215,8 @@ export function RunGraph({
   const flow = React.useRef<ReactFlowInstance | null>(null);
   const shown: Direction = direction ?? (definition ? "LR" : fill && frameHeight > width ? "TB" : "LR");
   const { nodes, edges, height, columns } = layout(graph, statuses, focused, onOpen, plain, shown);
+  nodes.forEach(node=>{node.data.upstreamCount=(graph.depends_on[node.id]??[]).length;node.data.inspectable=!definition;node.data.catalogDetails=catalogDetails?.(node.id)??undefined;node.data.expanded=expansion.isExpanded(node.id);node.data.onExpanded=()=>expansion.toggle(node.id);});
+  if(!definition&&nodes.some(node=>node.data.expanded))nodes.forEach(node=>{node.position.y*=1.5;});
   let definitionHeight=280;
   if (definition) {
     nodes.forEach(node => { node.data.definition = definition.tasks.find(task => task.code === node.id || task.label === node.id); node.position.y *= 1.5; node.data.expanded = expansion.isExpanded(node.id); node.data.width=node.data.definition?176:Math.min(232,Math.max(176,shownTitle(node.data.label,false).length*7+104)); node.data.onExpanded = () => expansion.toggle(node.id); if (!node.data.definition) { node.data.status = ""; node.data.tooltip=node.id.startsWith("Schedule: ") ? definition.schedule??"Manual" : node.id; node.data.symbol = node.id.startsWith("Schedule: ") ? {icon:node.id.startsWith("Schedule: manual") ? Play : CalendarClock,label:"Schedule"} : node.id.startsWith("Downstream: ") ? {icon:Network,label:"Downstream pipeline"} : {icon:Hourglass,label:"Upstream gate"}; } });

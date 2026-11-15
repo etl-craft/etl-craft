@@ -16,16 +16,14 @@ import {
   Workflow,
   type LucideIcon,
 } from "lucide-react";
-import { NavLink } from "react-router-dom";
+import { AppNavLink as NavLink } from "@/components/navigation";
 import { adminPath, agentsPath, systemPath, catalogPath, consolePath, heldPath, homePath, maintenancePath, pipelinesPath, projectHomePath, projectsPath, runsPath, scheduledPath, uploadsPath } from "@/lib/routes";
 import { cn } from "@/lib/utils";
 
 interface Item {
   label: string;
   icon: LucideIcon;
-  /** An in-app route, or a page of the existing interface until its slice lands. */
-  to?: string;
-  href?: string;
+  to: string;
 }
 
 function sections(code: string | undefined, admin: boolean): { title: string; items: Item[] }[] {
@@ -98,21 +96,18 @@ export function Sidebar({
             ) : (
               <p className="px-4 pb-1 pt-2 text-xs font-medium text-muted">{section.title}</p>
             )}
-            {section.items.map(({ label, icon: Icon, to, href }) => {
+            {section.items.map(({ label, icon: Icon, to }) => {
               const content = (
                 <>
                   <Icon aria-hidden className="size-4 shrink-0" />
                   <span className={cn("truncate", collapsed && "sr-only")}>{label}</span>
                 </>
               );
-              return to ? (
+              return (
                 <NavLink key={label} to={to} end={to === homePath || to === projectsPath || to === (code ? projectHomePath(code) : homePath)} title={collapsed ? label : undefined} className={({ isActive }) => row(collapsed, isActive)}>
                   {content}
                 </NavLink>
-              ) : (
-                <a key={label} href={href} title={collapsed ? label : undefined} className={row(collapsed, false)}>
-                  {content}
-                </a>
+
               );
             })}
           </div>
