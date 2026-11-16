@@ -1,3 +1,4 @@
+import { PipelinePause } from "@/components/pipeline-pause";
 import {LegendView,statusEntries} from "@/components/legend";
 import { AutoStartNotice } from "@/components/auto-start-notice";
 import { RunLabel } from "@/components/run-label";
@@ -170,7 +171,7 @@ export function Pipelines() {
               },
             })
             ] : []),
-            columns.display({ id: "auto", header: "Automatic runs", cell: (c) => <PauseState pipeline={c.row.original} /> }),
+            columns.display({ id: "auto", header: "Automatic runs", minSize:220, cell: (c) => <div className="flex flex-wrap items-center gap-2"><PauseState pipeline={c.row.original} /><PipelinePause code={code} pipeline={c.row.original}/></div> }),
           ]}
         /></LegendView>
         {list.isPending ? <Loading what="pipelines" className="p-4" /> : null}

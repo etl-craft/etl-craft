@@ -79,6 +79,7 @@ export function Held() {
         <CardHeader>
           <CardTitle>Paused pipelines · {paused.length}</CardTitle>
         </CardHeader>
+        <p className="m-0 px-4 pb-3 text-sm text-muted">Open a pipeline to resume automatic runs and choose what happens next.</p>
         <DataTable find
           label="Paused pipelines"
           data={paused}
@@ -88,26 +89,7 @@ export function Held() {
             pauses.display({ id: "by", header: "By", cell: (c) => c.row.original.paused?.paused_by }),
             pauses.display({ id: "since", header: "Since", cell: (c) => <When iso={c.row.original.paused?.paused_at} /> }),
             pauses.display({ id: "reason", header: "Reason", cell: (c) => c.row.original.paused?.reason }),
-            ...(canRun
-              ? [
-                  pauses.display({
-                    id: "act",
-                    header: "Actions",
-                    cell: (c) => (
-                      <ActionButton<{ message?: string }>
-                        code={code}
-                        label="Resume"
-                        title={`Resume ${c.row.original.pipeline_code}`}
-                        effect="Allows automatic runs again; the next scheduled run is waited for."
-                        endpoint="/controls"
-                        body={(reason) => ({ pipeline_code: c.row.original.pipeline_code, action: "RESUME", reason, then: "wait" })}
-                        describe={result}
-                        size="sm"
-                      />
-                    ),
-                  }),
-                ]
-              : []),
+
           ]}
         />
       </Card>

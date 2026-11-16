@@ -1,9 +1,10 @@
+import { PipelinePause } from "@/components/pipeline-pause";
 import { catalogPath } from "@/lib/routes";
 import { AccessTab } from "@/pages/admin/access";
 import { RunLabel } from "@/components/run-label";
 import { useQuery } from "@tanstack/react-query";
 import { When } from "@/components/when";
-import { Check, ChevronDown, Pause, Play, PlayCircle } from "lucide-react";
+import { Check, ChevronDown, PlayCircle } from "lucide-react";
 import * as React from "react";
 import { Navigate, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { ActionButton } from "@/components/action-button";
@@ -133,7 +134,6 @@ export function PipelineDetail() {
     setToEmpty([]);
     setEmptyOk(false);
   };
-  const [then, setThen] = React.useState("wait");
   const p = found.data;
 
   if(asked==="tasks"||asked==="details"){
@@ -206,38 +206,7 @@ export function PipelineDetail() {
                   </div>
                 }
               />
-              {p.paused ? (
-                <ActionButton<{ message?: string }>
-                  code={code}
-                  label="Resume"
-                  title={`Resume ${pipeline}`}
-                  effect="Allows automatic runs again."
-                  endpoint="/controls"
-                  body={(reason) => ({ pipeline_code: pipeline, action: "RESUME", reason, then })}
-                  describe={(r) => r.message ?? "Resume requested."}
-                  icon={<Play className="size-4" aria-hidden />}
-                  fields={
-                    p.run_schedule ? (
-                      <SelectField label="After resuming" value={then} onChange={setThen}>
-                        <option value="wait">Wait for the next scheduled run</option>
-                        <option value="run-now">Run now</option>
-                        <option value="catch-up">Catch up missed runs</option>
-                      </SelectField>
-                    ) : undefined
-                  }
-                />
-              ) : (
-                <ActionButton<{ message?: string }>
-                  code={code}
-                  label="Pause"
-                  title={`Pause ${pipeline}`}
-                  effect="Stops new automatic runs. Runs already started continue."
-                  endpoint="/controls"
-                  body={(reason) => ({ pipeline_code: pipeline, action: "PAUSE", reason })}
-                  describe={(r) => r.message ?? "Pause requested."}
-                  icon={<Pause className="size-4" aria-hidden />}
-                />
-              )}
+              <PipelinePause code={code} pipeline={p}/>
             </div>
           ) : null
         }
