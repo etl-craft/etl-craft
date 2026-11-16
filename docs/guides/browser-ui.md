@@ -422,17 +422,22 @@ Column-mapping nodes initially show five rows. Scroll their column lists or resi
 to inspect more; wires follow visible rows, with off-screen columns attached at the list boundary.
 
 Drag a mapping node by its header to move it independently; drag the canvas background to pan.
-Diagram canvases have native horizontal and vertical scrollbars inside their frames. Their
+Diagram canvases have application-drawn horizontal and vertical scrollbars inside their frames. Their
 thumbs follow panning, zoom and Fit view; scroll the tracks or focus them and use the arrow keys.
 The toolbar’s Move view left/right/up/down buttons remain available for mouse, touch or
 Enter/Space activation. Both methods retain the zoom and node positions.
 
 Collapsed tasks show a type icon with their name underneath; table headers keep their
 compact framed identity. Expanded objects become framed windows with a distinct title bar.
-Expanded windows keep persistent vertical and horizontal scrollbars; long column names and
+Expanded windows keep persistent application-drawn vertical and horizontal scrollbars; long column names and
 details scroll inside the window without clipping. Runtime task
 icons keep their identity while status badges report the changing run state. Workspace panes
 keep visible neutral scroll tracks when their content overflows.
+The tracks and thumbs retain their appearance even when browser or OS settings hide native
+scrollbars. Tab focuses a scrollbar; arrows move in small steps, Page Up/Down moves a page,
+and Home/End reaches either end. Drag a thumb or click its track with a mouse or touch.
+Column content retains native wheel, touch and focus scrolling.
+
 Connection anchors stay invisible. Three dots in the lower-right scrollbar corner resize the
 window. Narrow mouse resize bands follow the frame edges, leaving the surrounding canvas free.
 Focus a mapping width/height grip and use the arrow keys to resize it. Column lists keep a

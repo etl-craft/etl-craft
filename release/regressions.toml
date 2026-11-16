@@ -405,7 +405,9 @@ shared-ui-interaction-targets = [
     "tests/browser/test_react_usability.py::test_mapping_resize_grips_and_scrollbars_do_not_cover_column_controls",
 ]
 
-native-diagram-scrollbars = [
+diagram-scrollbars = [
+    "tests/browser/test_react_scrollbars.py::test_touch_thumb_drag_and_column_swipe_do_not_pan_the_canvas",
+    "tests/browser/test_react_scrollbars.py::test_application_scrollbars_work_without_native_browser_chrome",
     "tests/browser/test_react_frames.py::test_mouse_resizing_stays_on_the_frame_instead_of_the_surrounding_canvas",
     "tests/browser/test_react_frames.py::test_expanded_window_scrolls_long_columns_without_moving_its_header_or_canvas",
     "tests/browser/test_react_frames.py::test_phone_task_graph_starts_with_its_complete_root_before_parallel_waves",
@@ -413,5 +415,5 @@ native-diagram-scrollbars = [
     "tests/browser/test_react_connections.py::test_object_connection_marks_both_frames_without_claiming_column_lineage",
     "tests/browser/test_react_frames.py::test_native_grid_scrollbar_keeps_the_latest_run_clickable",
     "tests/browser/test_react_frames.py::test_boundary_column_selection_ring_stays_inside_the_scrollport",
-    "tests/browser/test_react_frames.py::test_native_diagram_scrollbars_move_the_view_and_follow_its_controls",
+    "tests/browser/test_react_frames.py::test_diagram_scrollbars_move_the_view_and_follow_its_controls",
 ]

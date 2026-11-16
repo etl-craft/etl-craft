@@ -309,8 +309,8 @@ it("caps an expanded mapping column list at five rows without dropping columns",
   fireEvent.click(screen.getByRole("button", {name: "Show all columns"}));
   const rows = screen.getByTestId("source:raw.orders").querySelectorAll("[data-port]");
   expect(rows).toHaveLength(8);
-  expect(rows[0]!.closest(".nowheel")).toHaveStyle({maxHeight: "182px"});
-  expect(rows[0]!.closest(".nowheel")).toHaveClass("overflow-scroll", "nowheel", "nodrag");
+  expect(rows[0]!.closest(".scroll-window")).toHaveStyle({maxHeight: "182px"});
+  expect(rows[0]!.closest(".nowheel")).toHaveClass("app-scrollport", "nowheel", "nodrag");
   expect(rows[7]).toHaveAttribute("data-port", "column_7");
 });
 

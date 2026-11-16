@@ -198,7 +198,7 @@ item's text, or work done early under another item.
 | S7.AP Native catalog | Done | #389 | All six slices, shape 2, definition flow and task mappings; owner approved the screenshots 2026-11-13 |
 | S7.AQ Readable run identifiers | Done | #347, #369, #370 | A label beside every run and task run id, stored by the Engine DB; accepted wherever the integer is, and shown beside it |
 | S7.AR Restarting pipelines | Done | #349, #350, #356, #358 | Automatic starts on a chosen run ending, with `Allowed_auto_restarts` per environment; the demo's Gamma pipeline runs without a schedule. |
-| S7.AS Project dashboard and navigation | Done | #401, #402, #404, #405 | Slices 1–5 owner approved; shared controls polished, with framed working panes, native diagram scrollbars and unclipped column selection in follow-up |
+| S7.AS Project dashboard and navigation | Done | #401, #402, #404, #405, #406, #407 | Slices 1–5 owner approved; shared controls polished, with framed working panes, application-drawn diagram scrollbars and unclipped column selection in follow-up |
 | S7.M Stewardship uploads | Done (M2) | #296, #305 | Atomic receipts and safe stored names; processed layout, retention archives and verified reruns; crash recovery and guarded upload history |
 | S7.S Seed tables | Done | #308 | Typed pinned-bundle seeds replace reference tables until recorded stewardship handover |
 | S7.T Business calendars | Done | #276 | Shared holiday and weekend calendars for schedules, run dates, backfill and catch-up |
@@ -241,7 +241,8 @@ item's text, or work done early under another item.
   nodes; Column sources is the list with a writing-task selector. Missing source contracts
   are repaired in a companion Support Insights metadata change, explicitly authorised.
   Shared-control usability follow-up adds tab keys/cues, larger targets, run choosers and visible mapping resize/scroll controls; navigation rules and the approved frame are preserved.
-  Owner-approved framed-diagram follow-up adds native canvas scrollbars and framed expanded objects with compact labeled type icons; wire selection highlights recorded endpoints, and connection dots give way to window-corner grips and persistent list scrollers; the conventional application shell and status semantics remain.
+  Browser acceptance: Chromium and Firefox reviewed; WebKit is unavailable locally because its host libraries are missing.
+  Owner-approved framed-diagram follow-up adds application-drawn canvas/window scrollbars and framed expanded objects with compact labeled type icons; wire selection highlights recorded endpoints, and connection dots give way to window-corner grips and persistent list scrollers; the conventional application shell and status semantics remain.
 
 - **S7.L owner-supplied logo (#400).** The logo, editable vector sources, theme-aware
   favicon, documentation raster previews and 20-row by 38-column terminal mark are done.

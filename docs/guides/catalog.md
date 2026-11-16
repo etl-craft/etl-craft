@@ -465,7 +465,8 @@ contrasted in light and dark. Green, red, blue and amber remain status colours. 
 edges stay neutral. Derived column lines use the accent; declared lines are mauve and dashed
 with a Declared chip. Selection strengthens the whole column path and fades unrelated paths.
 Selected column outlines stay inside their rows, including the first and last row of a
-scrolling diagram window.
+scrolling diagram window. Tracks and thumbs are drawn by the application so browser
+scrollbar settings cannot hide them; content still scrolls with the wheel, touch and keyboard.
 
 Click a node header to expand or collapse it. A mouse double-click opens its catalog details
 in a new tab without toggling expansion; a single mouse click waits briefly to distinguish the
