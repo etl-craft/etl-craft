@@ -46,8 +46,6 @@ def test_connection_click_and_keyboard_highlight_its_recorded_endpoints(mappings
     with sync_playwright() as pw:
         browser, page, problems = open_page(pw, viewport={"width": width, "height": 1000})
         sign_in(page, url, routes[view])
-        if view == "mapping" and width == 390:
-            page.get_by_role("button", name="Diagram", exact=True).click()
         if view == "lineage":
             page.get_by_role("button", name="Expand all", exact=True).click()
         page.wait_for_load_state("networkidle")

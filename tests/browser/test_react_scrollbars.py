@@ -30,8 +30,6 @@ def test_application_scrollbars_work_without_native_browser_chrome(mappings, wid
         problems = []
         page.on("pageerror", lambda error: problems.append(str(error)))
         sign_in(page, url, routes[view])
-        if view == "mapping" and width == 390:
-            page.get_by_role("button", name="Diagram", exact=True).click()
         canvas = page.locator(".react-flow__viewport")
         expect(page.locator(".diagram-node").first).to_be_visible()
         bars = [

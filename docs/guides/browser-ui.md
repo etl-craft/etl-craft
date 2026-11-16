@@ -481,3 +481,15 @@ recorded. The same scroll, resize and independent header-drag controls apply to 
 **Column sources** lists each column’s upstream source and writing task. When more than one
 task writes a target, choose a Writing task to filter that list. Unavailable lineage names
 the task and the recorded reason, rather than suggesting that an existing definition is absent.
+
+
+The Catalog header's **Collapse catalog sidebar** / **Expand catalog sidebar** controls every
+catalog page, independently of the application navigation. It replaces the diagram-only Full
+width control; small screens start collapsed. Mapping remains a diagram on phones too. Its
+**Column sources** tab keeps the table, stage conditions, rule expressions, provenance and
+declared table-level sources. Column rows can be filtered without hiding whole-task logic.
+Table Overview keeps Written by, Read by and Schema once; its column list stays there.
+The catalog pipeline's **Open pipeline runs** link opens the project's live Runs page filtered
+to that pipeline, and its old Runs tab address redirects there. Task Runs stays because it adds
+task-run identifiers and inserted/updated/deleted counts. The catalog filter remains scoped to
+the built objects and columns, while top-bar search uses the live operational index.

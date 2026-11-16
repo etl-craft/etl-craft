@@ -141,8 +141,6 @@ def test_mapping_resize_grips_and_scrollbars_do_not_cover_column_controls(mappin
             pw, viewport={"width": width, "height": 1000}, show_scrollbars=True
         )
         sign_in(page, url, "/ui/projects/default/catalog/tasks/ORDERS.load?tab=mapping")
-        if width == 390:
-            page.get_by_role("button", name="Diagram", exact=True).click()
         page.get_by_role("button", name="Show all columns", exact=True).click()
         source = page.locator('[data-id="source:raw.orders"]')
         page.mouse.move(0, 0)
@@ -253,8 +251,6 @@ def test_diagram_view_moves_with_buttons_without_dragging(mappings, width, view)
     with sync_playwright() as pw:
         browser, page, problems = open_page(pw, viewport={"width": width, "height": 1000})
         sign_in(page, url, routes[view])
-        if view == "mapping" and width == 390:
-            page.get_by_role("button", name="Diagram", exact=True).click()
         viewport = page.locator(".react-flow__viewport")
         expect(viewport).to_be_visible()
         for direction in ("right", "down", "left", "up"):

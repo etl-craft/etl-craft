@@ -2,13 +2,13 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it } from "vitest";
-import { GapsObject, PipelineObject, TableObject } from "@/components/catalog-pages";
+import { CatalogHome, GapsObject, PipelineObject, TableObject, TaskObject } from "@/components/catalog-pages";
 import { CatalogInsights } from "@/components/catalog-insights";
 import { CatalogTree } from "@/components/catalog-tree";
-import { pipelineGraph, tableLineage, type CatalogDoc } from "@/lib/catalog";
+import { pipelineGraph, tableLineage, type CatalogDoc, type CatalogTask } from "@/lib/catalog";
 
 const column = (name: string, over: object = {}) => ({ name, data_type: "bigint", comment: null, declared_type: null, warehouse_type: "bigint", declared_nullable: null, warehouse_nullable: "Y", declared: true, warehouse_present: true, engine_managed: false, ...over });
-const task = (pipeline: string, code: string, over: object = {}) => ({ label: `${pipeline}.${code}`, pipeline, code, handler: "SQL", run_condition: null, documentation: `${code} does its work.`, documentation_version: 1, target: null, sources: [], script: null, lineage: { state: "derived", reason: null }, mapping: { steps: [], edges: [], source: null, write: { action: "CREATE_TABLE", managed_columns: [], keys: {} } }, script_kind: null, run_condition_count: null, active_flag: "Y", target_active_flag: "Y", retries: 0, retry_on: "TRANSIENT", timeout_seconds: 0, secrets: [], upstream: [], downstream: [], rules: [], runs: [], ...over });
+const task = (pipeline: string, code: string, over: object = {}): CatalogTask => ({ label: `${pipeline}.${code}`, pipeline, code, handler: "SQL", run_condition: null, documentation: `${code} does its work.`, documentation_version: 1, target: null, sources: [], script: null, lineage: { state: "derived", reason: null }, mapping: { steps: [], edges: [], source: null, write: { action: "CREATE_TABLE", managed_columns: [], keys: {} } }, script_kind: null, run_condition_count: null, active_flag: "Y", target_active_flag: "Y", retries: 0, retry_on: "TRANSIENT", timeout_seconds: 0, secrets: [], upstream: [], downstream: [], rules: [], runs: [], ...over });
 const table = (name: string, over: object = {}) => {
   const [schema, short] = name.split(".");
   return { name, database: "w", schema, table: short, external: false, label: name, declared_kind: null, warehouse_kind: "TABLE", in_warehouse: true, warehouse_checked: true, findings: [], writers: [], readers: [], rules: [], columns: [column("id")], ...over };
@@ -117,17 +117,63 @@ describe("catalog gap remedies", () => {
 });
 
 
-it("shows sparse catalog run durations in the table and charts measured durations for larger series", async () => {
-  const run = { pipeline_run_id: 7, status: "SUCCESS", start: "2026-11-10T10:00:00Z", end: "2026-11-10T10:00:06Z" };
-  const pipeline = { ...doc.pipelines[0]!, runs: [run] };
-  wrap(<PipelineObject code="demo" doc={{ ...doc, pipelines: [pipeline] }} name="LOAD" tab="runs" onTab={() => undefined} />);
-  expect(within(screen.getByRole("table", { name: "Recent runs" })).getByText("6s")).toBeTruthy();
-  expect(screen.queryByRole("button", { name: "Run durations, newest on the right" })).toBeNull();
+it("replaces catalog pipeline run repeats while keeping task-specific run data", () => {
+  wrap(<PipelineObject code="demo" doc={doc} name="LOAD" tab="overview" onTab={()=>undefined}/>);
+  expect(screen.queryByRole("tab",{name:"Runs"})).toBeNull();
+  expect(screen.getByRole("link",{name:"Open pipeline runs"})).toHaveAttribute("href","/projects/demo/runs?pipeline=LOAD");
   cleanup();
-  wrap(<PipelineObject code="demo" doc={{ ...doc, pipelines: [{ ...pipeline, runs: Array.from({ length: 5 }, (_, index) => ({ ...run, pipeline_run_id: index + 7 })) }] }} name="LOAD" tab="runs" onTab={() => undefined} />);
-  const chart = screen.getByRole("button", { name: "Run durations, newest on the right" });
-  fireEvent.keyDown(chart, { key: "Enter" });
-  const runLink = await screen.findByRole("menuitem", { name: /Run #7.*Success, 6s/ });
-  expect(runLink).toHaveAttribute("href", "/projects/demo/pipelines/LOAD?run=7");
-  expect(runLink).not.toHaveAttribute("target");
+  const run={pipeline_run_id:7,task_run_id:11,status:"SUCCESS",start:"2026-11-10T10:00:00Z",end:"2026-11-10T10:00:06Z",insert_count:3,update_count:2,delete_count:1};
+  const item=task("LOAD","a",{runs:[run]});
+  wrap(<TaskObject code="demo" doc={{...doc,tasks:[item]}} name="LOAD.a" tab="runs" onTab={()=>undefined}/>);
+  const recent=screen.getByRole("table",{name:"Recent runs"});
+  expect(recent).toHaveTextContent("6s");
+  expect(within(recent).getByRole("columnheader",{name:/^Task run\b/})).toBeVisible();
+  expect(within(recent).getByText("#11")).toBeVisible();
+  expect(recent).toHaveTextContent("+3 ~2 −1");
+  expect(screen.getByRole("tab",{name:"Runs"})).toBeVisible();
+});
+
+it("keeps mapping edges, stage conditions, rejection expressions and provenance in Column sources", () => {
+  const edge={task:"LOAD.a",target_object:"stg.orders",target_column:"total",source_object:"raw.orders",source_column:"amount",transformation:"amount * 2"};
+  const item=task("LOAD","a",{target:"stg.orders",sources:["raw.orders"],mapping:{...doc.tasks[0]!.mapping,edges:[edge],steps:[{kind:"source",expression:"raw.orders AS o",name:"o"},{kind:"filter",expression:"amount > 0",name:"",logic:[{label:"Filter",columns:["amount"],expression:"amount > 0"}]}]}});
+  const built={...doc,tasks:[item],column_edges:[edge],rules:[{id:7,name:"Positive",type:"REJECT",table:"stg.orders",task:"RULES.check",sql:"total >= 0",logic:[{label:"Reject",columns:["total"],expression:"total >= 0"}]}]} as unknown as CatalogDoc;
+  wrap(<TaskObject code="demo" doc={built} name="LOAD.a" tab="lineage" onTab={()=>undefined}/>);
+  const sources=screen.getByRole("table",{name:"Column sources"});
+  expect(within(sources).getByText("raw.orders.amount")).toBeVisible();
+  expect(within(sources).getByText("amount * 2")).toBeVisible();
+  expect(within(sources).getAllByText("stg.orders.total")).toHaveLength(1);
+  expect(within(sources).getByText("Derived")).toBeVisible();
+  const logic=screen.getByRole("table",{name:"Task logic"});
+  expect(logic).toHaveTextContent("amount > 0");
+  expect(logic).toHaveTextContent("total >= 0");
+  expect(logic).toHaveTextContent("Rules · Positive");
+  expect(screen.getByText("o = raw.orders")).toBeVisible();
+});
+
+it("keeps declared table-level mapping sources without inventing column lineage", () => {
+  const item=task("LOAD","a",{target:"stg.orders",sources:["external:crm.orders"],lineage:{state:"declared",reason:null}});
+  wrap(<TaskObject code="demo" doc={{...doc,tasks:[item]}} name="LOAD.a" tab="lineage" onTab={()=>undefined}/>);
+  const sources=screen.getByRole("table",{name:"Column sources"});
+  expect(sources).toHaveTextContent("stg.orders.(table)");
+  expect(sources).toHaveTextContent("crm.orders");
+  expect(sources).toHaveTextContent("Declared");
+  expect(sources).not.toHaveTextContent(".null");
+});
+
+it("keeps table writer reader and schema facts once in Overview", () => {
+  wrap(<TableObject code="demo" doc={doc} name="stg.orders" tab="overview" onTab={()=>undefined}/>);
+  expect(screen.getAllByText("Written by",{exact:true})).toHaveLength(1);
+  expect(screen.getAllByText("Read by",{exact:true})).toHaveLength(1);
+  expect(screen.getAllByText("Schema",{exact:true})).toHaveLength(1);
+  expect(within(screen.getByLabelText("About this table")).getByRole("link",{name:"LOAD.a"})).toBeVisible();
+  expect(screen.getByRole("table",{name:"Columns"})).toHaveTextContent("amount");
+});
+
+
+
+it("keeps one catalog gap destination while retaining distinct attention facts", () => {
+  wrap(<CatalogHome code="demo" doc={doc}/>);
+  expect(screen.getAllByRole("link").filter(link=>link.getAttribute("href")==="/projects/demo/catalog/gaps")).toHaveLength(1);
+  expect(screen.getByText(/without documentation/)).toBeVisible();
+  expect(screen.getByText(/no task writes/)).toBeVisible();
 });

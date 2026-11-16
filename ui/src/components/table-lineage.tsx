@@ -5,7 +5,6 @@ import {Database} from "lucide-react";
 import {MappingBox,MappingLink,SHOWN_ROWS,ROW_HEIGHT,HEADER_HEIGHT,type BoxData,type NodeSize,highlightConnection,selectionForPort} from "@/components/mapping-node";
 import {DiagramToolbar} from "@/components/diagram-toolbar";
 import {diagramKeys,useDiagramExpansion,connectionAction,isHighlightedConnection,sameConnection,type DiagramConnection} from "@/components/diagram-node";
-import {CatalogWidthButton} from "@/components/catalog-width";
 import {Button} from "@/components/ui/button";
 import {useLegend} from "@/components/legend";
 import {highlightedEntry} from "@/components/diagram-key";
@@ -92,7 +91,7 @@ export function TableLineage({doc,name,depth,direction}:{doc:CatalogDoc;name:str
  },[]);
  return <div role="group" aria-label="Lineage diagram" tabIndex={0} className="flex h-[70dvh] min-h-0 flex-1 flex-col @3xl:h-full" onKeyDown={event=>{key.onKeyDown(event);if(!event.defaultPrevented)diagramKeys(event,()=>{setSelected(null);setConnection(null);});}}>
   <p className="m-0 px-3 py-1.5 text-xs text-muted">Click a header to expand columns; double-click to open catalog details, or use its actions menu. Select a column to follow its path. Drag headers to move boxes.</p>
-  <DiagramToolbar pan={(dx,dy)=>panDiagram(flow.current,dx,dy)} zoomIn={()=>void flow.current?.zoomIn()} zoomOut={()=>void flow.current?.zoomOut()} fit={()=>fitDiagram(flow.current,frame.current,0.05)} reset={()=>void flow.current?.zoomTo(1)}><Button onClick={expansion.toggleAll}>{expansion.expanded?"Collapse all":"Expand all"}</Button><CatalogWidthButton/>{key.button}</DiagramToolbar>
+  <DiagramToolbar pan={(dx,dy)=>panDiagram(flow.current,dx,dy)} zoomIn={()=>void flow.current?.zoomIn()} zoomOut={()=>void flow.current?.zoomOut()} fit={()=>fitDiagram(flow.current,frame.current,0.05)} reset={()=>void flow.current?.zoomTo(1)}><Button onClick={expansion.toggleAll}>{expansion.expanded?"Collapse all":"Expand all"}</Button>{key.button}</DiagramToolbar>
   {selected&&!paths.size?<p role="status" className="m-0 text-xs text-muted">No column path is recorded for {selected.replace(/:([^:]*)$/,".$1")}.</p>:null}
   <DiagramFrame ref={frame} className="relative min-h-72 flex-1 @3xl:min-h-0"><ReactFlow nodes={nodes} edges={edges} nodeTypes={nodeTypes} edgeTypes={edgeTypes} minZoom={0.05} maxZoom={2} nodesConnectable={false} onNodesChange={changes=>{measureNodes(changes);const moved=changes.flatMap(change=>change.type==="position"&&change.position?[[change.id,change.position] as const]:[]);if(moved.length)setPositions(previous=>({...previous,...Object.fromEntries(moved)}));}} onInit={instance=>{flow.current=instance;requestAnimationFrame(()=>fitDiagram(instance,frame.current));}} onPaneClick={()=>{setSelected(null);setConnection(null);}} proOptions={{hideAttribution:true}}><Background/></ReactFlow>{key.panel}</DiagramFrame>
  </div>;

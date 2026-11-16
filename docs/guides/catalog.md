@@ -426,7 +426,7 @@ when collapsed; expanding the node reveals its field-by-field journey.
 Joins and filters list the fields passing through them. An expression has named input ports,
 its output port and the formula connecting its contributors. Reject and write stages keep named
 output columns, so a path continues to the exact target column rather than a box-level anchor.
-The table view includes this same column journey. Connectors use rounded right-angle routes,
+The **Column sources** tab lists this same column journey. Connectors use rounded right-angle routes,
 small destination arrowheads and separate gutters; copy paths bypass intervening boxes instead
 of crossing their contents. Stages stay in left-to-right order. The initial view and **Fit view** choose a zoom that
 shows the entire diagram inside the pane; **Reset zoom** returns to 100% for reading and
@@ -438,7 +438,9 @@ keeps matching names and their connected column paths. Joins, filters, grouping,
 rendering from the same parsed SELECT as column lineage. Computed columns show expressions;
 reject rules and the engine write action follow, including merge keys. Target columns show their
 declared type and nullability. Select a source or target column to highlight the columns it feeds
-or depends on. **Table view** exposes the same column edges and is the default on narrow phones.
+or depends on. Mapping stays a diagram at every screen width; **Column sources** is its accessible
+table, including stage conditions, rule expressions, provenance and declared table-level sources.
+Its Filter control narrows the column rows; the Task logic section retains whole-task context.
 
 Lineage has three states: **derived** for parsed managed SQL; **declared** for Python ingestion
 with `LINEAGE_SOURCE`; and **unavailable** with a neutral explanation for arbitrary scripts and
@@ -481,11 +483,13 @@ Escape also clears a mapping selection or closes the task panel; `/` focuses Fin
 Controls keep visible focus rings. Documentation and external links open in a new tab and
 announce that behavior. Highlight and expansion feedback respects reduced motion.
 
-### Key, zoom and full width
+### Key, zoom and catalog sidebar
 
 Node text never renders below 12 px. A diagram too wide for its pane opens at 100% from its first
-column and pans; **Fit view** applies the same rule. **Full width** hides the catalog tree while a
-diagram is open, and Escape or **Restore tree** brings it back.
+column and pans; **Fit view** applies the same rule. **Collapse catalog sidebar** and
+**Expand catalog sidebar** in the Catalog header control the tree on every catalog page.
+The sidebar starts collapsed on small screens and can be expanded there too; its state is
+independent of the application navigation. Diagram-specific Full width controls are removed.
 
 **Key** opens a floating table over the canvas (or `?` while the canvas has focus). It lists only
 what the view shows: dependency types, task kinds, mapping stages, lineage provenance, markers and
@@ -506,8 +510,8 @@ Derived and declared task mappings:
 ![Derived SQL task mapping](../assets/catalog/catalog-mapping-derived-light-1280.png)
 ![Declared ingestion task mapping](../assets/catalog/catalog-mapping-declared-dark-1280.png)
 
-On a phone, the mapping opens as an accessible table. The diagram remains available through
-its toggle, and unavailable lineage is a neutral notice with a target-page link.
+On a phone, Mapping keeps its diagram, while **Column sources** provides the accessible table.
+Unavailable lineage is a neutral notice with a target-page link.
 
 ![Unavailable lineage on a phone](../assets/catalog/catalog-mapping-unavailable-dark-390.png)
 
