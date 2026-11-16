@@ -466,9 +466,7 @@ def test_phone_run_cards_keep_labels_on_one_line_and_every_field_in_view(site):
         full = label.inner_text()
         assert full.startswith(code)
         expect(label).to_have_attribute("title", full)
-        assert label.evaluate("el => getComputedStyle(el).getPropertyValue('text-wrap-mode')") == (
-            "nowrap"
-        )
+        assert label.evaluate("el => getComputedStyle(el).whiteSpace") == "nowrap"
         assert label.evaluate(
             """el => el.getBoundingClientRect().height <=
                 parseFloat(getComputedStyle(el).lineHeight) + 1"""
