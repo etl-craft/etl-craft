@@ -161,7 +161,11 @@ list and is not a forecast. Old Calendar addresses open this view with the pipel
 
 **Run now** admits one manual run of
 the whole pipeline for the controller, optionally for a run date, or as a one-time **Full refresh** (optionally of one task and the tasks that read it); when a refresh would empty append targets the dialog names them and asks for a switch to accept before it runs. The pipeline header keeps the schedule, refresh type, SLA, tags and automatic-run state;
-upstream pipeline relationships remain in the catalog. **Pause** and **Resume** act on automatic runs of this pipeline only.
+upstream pipeline relationships remain in the catalog. **Pause** and **Resume** act on automatic runs of this pipeline only. The same confirmation
+appears in its header and its Pipelines row, with the wait, run-now and catch-up choices for
+scheduled pipelines. Held and paused keeps the pause actor, time, reason and pipeline link;
+follow that link to resume. Task Resume/Release and selected-pipeline bulk controls remain
+available for their separate scopes.
 
 The pipeline grid has one adjustable divider beside the details panel. Task names automatically
 expand to the longest complete name as the grid widens, taking space from older runs first.

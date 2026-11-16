@@ -433,3 +433,8 @@ catalog-view-consolidation = [
     "tests/browser/test_react_catalog_consolidation.py::test_catalog_pipeline_runs_link_and_old_address_reach_scoped_live_history",
     "tests/browser/test_react_catalog_consolidation.py::test_catalog_sidebar_toggle_is_universal_and_independent_of_main_navigation",
 ]
+
+pipeline-action-consolidation = [
+    "tests/browser/test_react_action_consolidation.py::test_pipeline_row_pause_resume_keeps_confirmation_policy_and_header_action",
+    "tests/browser/test_react_action_consolidation.py::test_held_pipeline_resume_is_replaced_by_link_without_losing_pause_facts",
+]

@@ -6,6 +6,11 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+- Pipeline Pause/Resume uses one shared confirmation in the pipeline header and Pipelines row,
+  including the scheduled resume choices. Held and paused keeps pause facts and pipeline links;
+  resume from the pipeline page instead of its duplicate pipeline Resume button. Bulk pipeline
+  controls, task Resume/Release, Run now and the distinct Recover/Reconcile actions remain.
+
 - Catalog Mapping keeps one diagram at every width; Column sources now holds its column table,
   stage conditions, rule expressions, provenance and declared table-level sources instead of
   the duplicate Table view toggle.
