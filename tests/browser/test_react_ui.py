@@ -55,8 +55,10 @@ def sign_in(page, url, destination="/ui", name="owner"):
     page.wait_for_url(url + destination)
 
 
-def open_page(pw, **options):
-    browser = pw.chromium.launch()
+def open_page(pw, *, show_scrollbars=False, **options):
+    browser = pw.chromium.launch(
+        ignore_default_args=["--hide-scrollbars"] if show_scrollbars else None
+    )
     page = browser.new_context(ignore_https_errors=True, **options).new_page()
     page.context.set_default_timeout(10_000)  # a loaded runner needs more than 5 s
     problems = []
@@ -95,7 +97,7 @@ def test_home_runs_and_run_detail_lead_to_a_confirmed_recovery(scene):
         expect(graph.get_by_text("LOAD")).to_be_visible()
         # The node selects lineage; its menu inspects the task in the existing workspace.
         expect(graph.locator("[data-focus=none]")).to_have_count(3)
-        graph.locator('[data-id="LOAD"]').click(position={"x": 2, "y": 2})
+        graph.locator('[data-id="LOAD"]').get_by_text("Failed", exact=True).click()
         expect(graph.locator("[data-focus=focus]")).to_have_count(1)
         expect(graph.locator("[data-focus=lineage]")).to_have_count(1)  # EXTRACT, upstream of LOAD
         expect(graph.locator("[data-focus=dim]")).to_have_count(1)  # AUDIT is unrelated

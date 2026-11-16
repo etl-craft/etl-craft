@@ -36,13 +36,18 @@ export function RunGrid({ code, pipeline, graph, runs, extra, selected, onSelect
   const hasRuns = shown.length > 0;
   // The task column is as wide as the longest task code, up to this much of the pane: it gives way only so far.
   const [room, setRoom] = React.useState(0);
+  const [gutter, setGutter] = React.useState(0);
   React.useLayoutEffect(() => {
     const element = outer.current;
     if (!element) return;
-    const measure = () => setRoom(Math.max(0, element.clientWidth - 6));
+    const measure = () => {
+      setRoom(Math.max(0, element.clientWidth - 6));
+      setGutter(box.current ? box.current.offsetWidth - box.current.clientWidth : 0);
+    };
     measure();
     const watch = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(measure);
     watch?.observe(element);
+    if (box.current) watch?.observe(box.current);
     return () => watch?.disconnect();
   }, [hasRuns]);
   const head = React.useRef<HTMLDivElement>(null);
@@ -54,8 +59,8 @@ export function RunGrid({ code, pipeline, graph, runs, extra, selected, onSelect
     head.current?.querySelectorAll("tbody th span").forEach((name) => observer?.observe(name));
     return () => observer?.disconnect();
   }, [graph, hasRuns]);
-  const taskWidth = Math.max(MIN_TASKS, Math.min(natural, room - reserve));
-  const matrixWidth = Math.max(0, Math.min(room - taskWidth, shown.length * cell + 2));
+  const taskWidth = Math.max(MIN_TASKS, Math.min(natural, room - reserve - gutter));
+  const matrixWidth = Math.max(0, Math.min(room - taskWidth, shown.length * cell + 2 + gutter));
   const [bar, setBar] = React.useState(0);
   // A run chosen from elsewhere is brought into view.
   React.useEffect(() => {

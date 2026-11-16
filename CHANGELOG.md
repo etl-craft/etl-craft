@@ -6,6 +6,16 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+- Diagrams have framed working surfaces with persistent native horizontal and vertical
+  scrollbars synchronized with pan, zoom and Fit view. Expanded objects use framed title bars;
+  collapsed tasks use type icons with their names underneath. Workspace panes and column lists expose
+  clearer frames and neutral scroll tracks. Run grids keep the newest column clear of native
+  scrollbars; task identity stays separate from its run status. Connection anchors stay hidden,
+  with three-dot resize grips in mapping windows’ scrollbar corners and persistent scrollers
+  on both axes in expanded windows.
+  Oversized graphs start at their first object. Selecting a wire highlights its recorded path
+  and endpoints without navigating or moving the view; Enter/Space and Escape work too.
+
 - Shared tabs support arrow keys, Home/End and contained scroll cues. Table, pane and inline
   targets are easier to use without changing the frame; dense run charts offer a keyboard/touch
   run chooser. Mapping resize grips stay visible, leave column scrollbars clear and support
