@@ -4,7 +4,8 @@ import { useState, type ReactElement, type ComponentType } from "react";
 import { Database, Download, Code, History, GitMerge, Eye, Trash2, ListPlus, ListMinus, Plus, Replace, Table2, Terminal, Bell, Hourglass, Network, ShieldCheck, FileCheck2, Eraser } from "lucide-react";
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { dependencyStyle, dependencyBadge, dependencySentence, definitionLabel, runCondition, runsWhen } from "@/lib/catalog-flow";
-import { cleanup, render as rawRender, screen, fireEvent } from "@testing-library/react";
+import { cleanup, render as rawRender, screen, fireEvent, within } from "@testing-library/react";
+import { ColumnSources } from "@/components/column-sources";
 import { TaskMapping, mappingLine, columnPaths } from "@/components/task-mapping";
 import type { CatalogTask, CatalogEdge, CatalogDoc } from "@/lib/catalog";
 import { MarkerType } from "@xyflow/react";
@@ -66,13 +67,13 @@ it("renders unavailable lineage as a neutral note, never an alert", () => {
   expect(screen.getByRole("note")).toHaveTextContent("arbitrary code");
   expect(screen.queryByRole("alert")).toBeNull();
 });
-it("uses the diagram edges in the accessible mapping table", () => {
+it("keeps a mapping diagram on phones and removes its duplicate table control", () => {
   vi.stubGlobal("matchMedia", () => ({matches:true}));
   const edges: CatalogEdge[] = [{task:"P.load",target_object:"mart.orders",target_column:"total",source_object:"raw.orders",source_column:"amount",transformation:"amount * 2"}];
   render(<TaskMapping doc={{tables:[],rules:[]} as unknown as CatalogDoc} task={taskForMapping("derived",edges)} />);
-  expect(screen.getByRole("table", {name:"Task mapping"})).toHaveTextContent("raw.orders.amount");
-  expect(screen.getByRole("table", {name:"Task mapping"})).toHaveTextContent("amount * 2");
-  expect(screen.getByRole("table", {name:"Task mapping"})).toHaveTextContent("total");
+  expect(screen.getByLabelText("Task mapping diagram")).toBeTruthy();
+  expect(screen.queryByRole("button",{name:"Table view"})).toBeNull();
+  expect(screen.queryByRole("table",{name:"Task mapping"})).toBeNull();
 });
 
 it("renders dependency icons, neutral badges and the no-repairs marker", async () => {
@@ -143,9 +144,7 @@ it("keeps named column ports through joins, filters, expressions and the write",
   expect(captured.edges.map(edge => [edge.source,edge.sourceHandle,edge.target,edge.targetHandle])).toEqual(routes);
   fireEvent.click(screen.getByRole("button",{name:"Expand all"}));
   expect(captured.nodes.every(node => node.data.expanded)).toBe(true);
-  fireEvent.click(screen.getByRole("button",{name:"Table view"}));
-  expect(screen.getByRole("table",{name:"Task mapping"})).toHaveTextContent("price * quantity");
-  expect(screen.getByRole("table",{name:"Task mapping"})).toHaveTextContent("Derived");
+  expect(screen.queryByRole("button",{name:"Table view"})).toBeNull();
 });
 
 it.each([
@@ -239,10 +238,10 @@ it("puts every conjunct exactly once in the accessible table",()=>{
   {expression:"a > 0",columns:["a"],label:""},{expression:"b = 'x'",columns:["b"],label:""},
   {expression:"c > 1 OR d < 2",columns:[],label:""},{expression:"a < b",columns:[],label:""},
  ]}];
- render(<TaskMapping doc={{tables:[],rules:[]} as unknown as CatalogDoc} task={task}/>);
+ render(<ColumnSources code="demo" doc={{rules:[]} as unknown as CatalogDoc} tasks={[task]} edges={[]}/>);
  ["a > 0","b = 'x'","c > 1 OR d < 2","a < b"].forEach(text=>expect(screen.getAllByText(text)).toHaveLength(1));
  expect(screen.queryByRole("button",{name:"Table view"})).toBeNull();
- expect(screen.getByRole("button",{name:"Diagram"})).toBeVisible();
+ expect(screen.getByRole("table",{name:"Task logic"})).toBeVisible();
 });
 it("clears column highlighting with Escape and focuses search with slash",async ()=>{
  vi.stubGlobal("matchMedia",()=>({matches:false}));
@@ -279,8 +278,10 @@ it("leaves a wire gutter between declared source and target boxes",()=>{
 it("keeps join and filter predicates out of the Target column",()=>{
  vi.stubGlobal("matchMedia",()=>({matches:true}));
  const task=taskForMapping("derived");task.mapping.steps=[{kind:"join",name:"",expression:"",logic:[{expression:"o.id = r.id",columns:["o.id","r.id"],label:""}]},{kind:"filter",name:"",expression:"",logic:[{expression:"o.amount > 0",columns:["o.amount"],label:""}]}];
- render(<TaskMapping doc={{tables:[],rules:[]} as unknown as CatalogDoc} task={task}/>);
- for(const logic of ["o.id = r.id","o.amount > 0"]){const row=screen.getByText(logic).closest("tr")!;expect(row.querySelector("td")?.textContent).toBe("");}
+ render(<ColumnSources code="demo" doc={{rules:[]} as unknown as CatalogDoc} tasks={[task]} edges={[]}/>);
+ const headers=within(screen.getByRole("table",{name:"Task logic"})).getAllByRole("columnheader");
+ const column=headers.findIndex(header=>header.textContent?.trim()==="Column");
+ for(const logic of ["o.id = r.id","o.amount > 0"]){const row=screen.getByText(logic).closest("tr")!;expect(within(row).getAllByRole("cell")[column]?.textContent).toBe("");}
 });
 it("sizes entry and exit boxes to their names, without the kind prefix, before truncating",()=>{
  vi.stubGlobal("ResizeObserver",class{observe(){}disconnect(){}});

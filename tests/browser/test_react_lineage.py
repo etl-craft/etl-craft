@@ -329,7 +329,7 @@ FIRST_COLUMN_WHOLE = """label => {
 def uniform_graph_nodes(page):
     """Text stays readable: the whole flow fits without the tree; a phone keeps column one whole."""
     phone = page.viewport_size["width"] < 640
-    full = page.get_by_role("button", name="Full width", exact=True)
+    full = page.get_by_role("button", name="Collapse catalog sidebar", exact=True)
     hid = not phone and full.is_visible()
     if hid:
         full.click()
@@ -358,7 +358,7 @@ def uniform_graph_nodes(page):
             )
         )
     if hid:
-        page.get_by_role("button", name="Restore tree", exact=True).click()
+        page.get_by_role("button", name="Expand catalog sidebar", exact=True).click()
 
 
 @pytest.mark.parametrize(
@@ -423,10 +423,6 @@ def test_native_flow_mapping_provenance_and_keyboard(mappings, appearance, width
         load_node.press("Enter")
         expect(page.get_by_role("complementary", name="Task definition")).to_be_visible()
         page.get_by_role("link", name="Open mapping", exact=True).click()
-        if width == 390:
-            expect(page.get_by_role("table", name="Task mapping")).to_be_visible()
-            shoot(page, f"catalog-mapping-derived-{appearance}-{width}")
-            page.get_by_role("button", name="Diagram", exact=True).click()
         diagram = page.get_by_label("Task mapping diagram")
         expect(diagram).to_be_visible()
         expect(diagram.locator("path.react-flow__edge-path").first).to_have_attribute(
@@ -486,10 +482,6 @@ def test_native_flow_mapping_provenance_and_keyboard(mappings, appearance, width
         page.get_by_role("textbox", name="Find a column", exact=True).fill("")
         page.goto(url + "/ui/projects/default/catalog/tasks/ORDERS.extract?tab=mapping")
         expect(page.get_by_role("note")).to_contain_text("doesn't verify")
-        if width == 390:
-            expect(page.get_by_role("table", name="Task mapping")).to_be_visible()
-            shoot(page, f"catalog-mapping-declared-{appearance}-{width}")
-            page.get_by_role("button", name="Diagram", exact=True).click()
         expect(
             page.get_by_label("Task mapping diagram").get_by_text("Declared", exact=True).first
         ).to_be_visible()
@@ -511,7 +503,7 @@ def test_native_flow_mapping_provenance_and_keyboard(mappings, appearance, width
 
 @pytest.mark.parametrize("appearance", ["light", "dark"])
 @pytest.mark.parametrize("width", [1280, 1024, 390])
-def test_catalog_readability_floating_key_and_full_width(mappings, appearance, width):
+def test_catalog_readability_floating_key_and_catalog_sidebar(mappings, appearance, width):
     _, url = mappings
     with sync_playwright() as pw:
         browser, page, problems = open_page(pw, viewport={"width": width, "height": 1000})
@@ -522,22 +514,6 @@ def test_catalog_readability_floating_key_and_full_width(mappings, appearance, w
             ("tasks/ORDERS.load?tab=mapping", "Task mapping diagram"),
         ]:
             page.goto(f"{url}/ui/projects/default/catalog/{path}")
-            if width == 390 and label == "Task mapping diagram":
-                table = page.get_by_role("table", name="Task mapping", exact=True)
-                expect(table).to_be_visible()
-                scroller = table.locator("..")
-                assert scroller.evaluate("el=>el.scrollWidth>el.clientWidth")
-                scroller.evaluate(
-                    "el=>{el.scrollLeft=el.scrollWidth;el.scrollTop=el.scrollHeight;}"
-                )
-                last = table.locator("tbody tr").last
-                last.scroll_into_view_if_needed()
-                expect(last).to_be_visible()
-                assert (
-                    last.locator("td").first.evaluate("el=>getComputedStyle(el).wordBreak")
-                    == "normal"
-                )
-                page.get_by_role("button", name="Diagram", exact=True).click()
             canvas = (
                 page.get_by_role("group", name=label, exact=True)
                 if label == "Task graph"
@@ -577,11 +553,12 @@ def test_catalog_readability_floating_key_and_full_width(mappings, appearance, w
             panel.press("Escape")
             expect(panel).not_to_be_visible()
             expect(toggle).to_be_focused()
-            page.get_by_role("button", name="Full width", exact=True).click()
+            collapse = page.get_by_role("button", name="Collapse catalog sidebar", exact=True)
+            if collapse.is_visible():
+                collapse.click()
             expect(page.get_by_role("tree", name="Catalog objects")).not_to_be_visible()
-            page.get_by_role("button", name="Restore tree", exact=True).press("Escape")
-            if width >= 1024:
-                expect(page.get_by_role("tree", name="Catalog objects")).to_be_visible()
+            page.get_by_role("button", name="Expand catalog sidebar", exact=True).press("Enter")
+            expect(page.get_by_role("tree", name="Catalog objects")).to_be_visible()
         assert problems == []
         browser.close()
 
@@ -747,8 +724,6 @@ def test_catalog_diagrams_use_the_visible_desktop_height_and_fit_all_nodes(mappi
         )
         for width in (1440, 390):
             page.set_viewport_size({"width": width, "height": 900})
-            if label == "Task mapping diagram" and not diagram.is_visible():
-                page.get_by_role("button", name="Diagram", exact=True).click()
             expect(diagram.locator(".react-flow__node").first).to_be_visible()
             page.get_by_role("button", name="Fit view", exact=True).click()
             page.wait_for_function(

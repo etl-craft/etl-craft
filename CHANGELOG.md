@@ -6,6 +6,15 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+- Catalog Mapping keeps one diagram at every width; Column sources now holds its column table,
+  stage conditions, rule expressions, provenance and declared table-level sources instead of
+  the duplicate Table view toggle.
+- Catalog pipeline Runs moves to a link to live Runs filtered by pipeline; old tab addresses
+  redirect there. Task-specific Runs remains. Table writer/reader facts appear once in Overview,
+  and the Open gaps tile replaces the repeated gap link under Needs attention.
+- One Catalog header control collapses or expands its sidebar across all catalog pages,
+  replacing diagram Full width controls while keeping application navigation independent.
+
 - Pipeline Overview no longer repeats recent-run lists; the workspace grid and Runs tab keep
   run identifiers, outcomes and durations, while Overview keeps its summaries and history links.
 - Pipeline Tasks and Details tabs are consolidated into grid task details, the existing task

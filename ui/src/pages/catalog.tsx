@@ -1,4 +1,3 @@
-import {CatalogWidth} from "@/components/catalog-width";
 import { useMutation } from "@tanstack/react-query";
 import * as React from "react";
 import { ActionButton } from "@/components/action-button";
@@ -9,10 +8,9 @@ import { failureText, useProjectInfo, useRoleAtLeast } from "@/hooks";
 import { ApiError, getJson, project } from "@/lib/api";
 import { useCatalog } from "@/lib/catalog";
 import { catalogPath, type CatalogKind } from "@/lib/routes";
-import { cn } from "@/lib/utils";
 import type { LineageRefresh, Report } from "@/lib/types";
 import { useDocumentTitle } from "@/title";
-import { ArrowLeft, ChevronDown } from "lucide-react";
+import { ArrowLeft, ChevronDown, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { DropdownContent, DropdownItem, DropdownMenu, DropdownTrigger } from "@/components/dropdown";
 import { useParams, useSearchParams } from "react-router-dom";
 import { AppLink as Link } from "@/components/navigation";
@@ -77,8 +75,8 @@ export function Catalog() {
   const kind = (KINDS as string[]).includes(first) ? (first as CatalogKind) : undefined;
   const name = others.join("/") || undefined;
   useDocumentTitle(kind === "gaps" ? "Catalog gaps" : name ? `${name} · Catalog` : "Catalog", code, info.project && { type: info.project.environment_type, name: info.project.environment_name });
-  const [wide,setWide]=React.useState(false);
-  const diagram=!!kind&&["graph","mapping","lineage"].includes(params.get("tab")??"");
+  const [collapsed,setCollapsed]=React.useState(()=>window.matchMedia("(max-width: 1023px)").matches);
+  const sidebar=React.useId();
   const tab = params.get("tab") ?? "overview";
   const onTab = (next: string) => {
     const copy = new URLSearchParams(params);
@@ -103,13 +101,14 @@ export function Catalog() {
   );
 
   return (
-    <CatalogWidth value={{wide,toggle:()=>setWide(value=>!value)}}><div onKeyDownCapture={event=>{if(event.key==="Escape")setWide(false);}} className="flex min-h-0 flex-1 flex-col gap-2">
+    <div className="flex min-h-0 flex-1 flex-col gap-2">
       <PageHeader
         compact
         title="Catalog"
         actions={
           // One primary action; the rest are in one menu, each with what it does.
           <div className="flex flex-wrap items-start gap-2" role="group" aria-label="Catalog actions">
+            {doc ? <Button aria-controls={sidebar} aria-expanded={!collapsed} onClick={()=>setCollapsed(value=>!value)}>{collapsed?<PanelLeftOpen aria-hidden className="size-4"/>:<PanelLeftClose aria-hidden className="size-4"/>}{collapsed?"Expand catalog sidebar":"Collapse catalog sidebar"}</Button>:null}
             {developer ? (
               <ActionButton<Done> code={code} label="Rebuild catalog" title="Rebuild the catalog" effect="Generates the catalog again from the current metadata." endpoint="/docs" body={() => ({})} askReason={false} describe={(r) => r.message ?? "The catalog was rebuilt."} onDone={() => void built.refetch()} variant="primary" />
             ) : null}
@@ -192,11 +191,11 @@ export function Catalog() {
       {doc ? (
         <SplitPane
           id="catalog"
-          collapsedLeft={wide&&diagram}
+          collapsedLeft={collapsed}
           initial={0.26}
           className="lg:min-h-0 lg:flex-1"
           left={
-            <Card className={cn("flex min-h-0 flex-1 flex-col overflow-hidden", kind && "max-lg:hidden")}>
+            <Card id={sidebar} role="region" aria-label="Catalog sidebar" className="flex min-h-0 flex-1 flex-col overflow-hidden max-lg:max-h-80">
               <CatalogTree code={code} doc={doc} selected={{ kind, name }} />
             </Card>
           }
@@ -212,6 +211,6 @@ export function Catalog() {
           }
         />
       ) : null}
-    </div></CatalogWidth>
+    </div>
   );
 }

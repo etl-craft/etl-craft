@@ -426,3 +426,10 @@ pipeline-view-consolidation = [
     "tests/browser/test_react_pipeline_consolidation.py::test_old_calendar_address_leads_to_scoped_historical_days_on_scheduled_runs",
     "tests/browser/test_react_pipeline_consolidation.py::test_removed_pipeline_tabs_are_not_offered_on_the_workspace",
 ]
+
+catalog-view-consolidation = [
+    "tests/browser/test_react_catalog_consolidation.py::test_mapping_is_a_diagram_and_column_sources_keeps_its_logic",
+    "tests/browser/test_react_catalog_consolidation.py::test_table_overview_is_the_only_writer_reader_fact_location",
+    "tests/browser/test_react_catalog_consolidation.py::test_catalog_pipeline_runs_link_and_old_address_reach_scoped_live_history",
+    "tests/browser/test_react_catalog_consolidation.py::test_catalog_sidebar_toggle_is_universal_and_independent_of_main_navigation",
+]

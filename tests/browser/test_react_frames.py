@@ -28,8 +28,6 @@ def test_diagram_scrollbars_move_the_view_and_follow_its_controls(mappings, widt
             pw, viewport={"width": width, "height": 1000}, color_scheme=scheme, show_scrollbars=True
         )
         sign_in(page, url, routes[view])
-        if view == "mapping" and width == 390:
-            page.get_by_role("button", name="Diagram", exact=True).click()
         assert page.evaluate("""() => {
             const sample=document.createElement('span');document.body.append(sample);
             const canvas=document.createElement('canvas');canvas.width=canvas.height=1;
@@ -299,8 +297,6 @@ def test_expanded_window_scrolls_long_columns_without_moving_its_header_or_canva
         )
         sign_in(page, url, route)
         if view == "mapping":
-            if width == 390:
-                page.get_by_role("button", name="Diagram", exact=True).click()
             page.get_by_role("button", name="Show all columns", exact=True).click()
         else:
             page.get_by_role("button", name="Expand all", exact=True).click()
@@ -339,8 +335,6 @@ def test_mouse_resizing_stays_on_the_frame_instead_of_the_surrounding_canvas(map
     with sync_playwright() as pw:
         browser, page, problems = open_page(pw, viewport={"width": width, "height": 1000})
         sign_in(page, url, "/ui/projects/default/catalog/tasks/ORDERS.load?tab=mapping")
-        if width == 390:
-            page.get_by_role("button", name="Diagram", exact=True).click()
         node = page.locator('[data-id="source:raw.orders"]')
         frame = node.locator(".diagram-node")
         resize = node.get_by_role("separator", name="Resize raw.orders width", exact=True)
@@ -389,8 +383,6 @@ def test_boundary_column_selection_ring_stays_inside_the_scrollport(mappings, wi
         )
         sign_in(page, url, route)
         if view == "mapping":
-            if width == 390:
-                page.get_by_role("button", name="Diagram", exact=True).click()
             page.get_by_role("button", name="Show all columns", exact=True).click()
         else:
             page.get_by_role("button", name="Expand all", exact=True).click()

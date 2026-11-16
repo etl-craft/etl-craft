@@ -1,14 +1,14 @@
+import { ColumnSources } from "@/components/column-sources";
 import {TableLineage} from "@/components/table-lineage";
 import { flowGraph, flowLocation, runsWhen } from "@/lib/catalog-flow";
 import { RunLabel } from "@/components/run-label";
 import { gapRemedy } from "@/lib/catalog";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronDown, Copy, Table2, Workflow, ListChecks, TriangleAlert } from "lucide-react";
+import { Copy, Table2, Workflow, ListChecks, TriangleAlert } from "lucide-react";
 import * as React from "react";
-import { useNavigate } from "react-router-dom";
+import { Navigate, useNavigate } from "react-router-dom";
 import { AppLink as Link } from "@/components/navigation";
 import { EmptyState, Fact, FactList, Loading, Notice, SelectField } from "@/components/common";
-import { RunBars } from "@/components/pipeline-parts";
 import { RunGraph } from "@/components/lazy-run-graph";
 import { StatusBadge } from "@/components/status";
 import { Tabs } from "@/components/tabs";
@@ -19,15 +19,24 @@ import { columnsOf, DataTable } from "@/components/data-table";
 import { When } from "@/components/when";
 import { useRoleAtLeast } from "@/hooks";
 import { getJson, project } from "@/lib/api";
-import { impact, isOpenGap, pipelineGraph, typeOf, type CatalogColumn, type CatalogDoc, type ImpactRow, type CatalogEdge, type CatalogRun, type CatalogTable, type CatalogTask } from "@/lib/catalog";
+import { impact, isOpenGap, pipelineGraph, typeOf, type CatalogColumn, type CatalogDoc, type ImpactRow, type CatalogRun, type CatalogTable, type CatalogTask } from "@/lib/catalog";
 import { describeCron, formatDuration } from "@/lib/format";
 import { handlerLabel } from "@/lib/labels";
-import { catalogPath, pipelinePath, taskPath } from "@/lib/routes";
+import { catalogPath, pipelinePath, runsPath, taskPath } from "@/lib/routes";
 import type { TablePreview } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import { Disclosure, DisclosureSummary, DropdownContent, DropdownItem, DropdownMenu, DropdownTrigger } from "@/components/dropdown";
+import { Disclosure, DisclosureSummary } from "@/components/dropdown";
 
 const TaskMapping = React.lazy(() => import("@/components/task-mapping").then(module => ({default: module.TaskMapping})));
+
+const CATALOG_TABS = {
+  pipelines: [{id:"overview",label:"Overview"},{id:"lineage",label:"Graph"}],
+  tasks: [{id:"overview",label:"Overview"},{id:"mapping",label:"Mapping"},{id:"lineage",label:"Column sources"},{id:"runs",label:"Runs"}],
+  tables: [{id:"overview",label:"Overview"},{id:"data",label:"Data"},{id:"lineage",label:"Lineage diagram"},{id:"columns",label:"Column sources"},{id:"history",label:"History"},{id:"quality",label:"Quality"}],
+};
+function catalogTabs(kind:keyof typeof CATALOG_TABS, developer=false) {
+  return CATALOG_TABS[kind].filter(tab=>tab.id!=="data"||developer);
+}
 
 const link = "text-accent hover:underline";
 
@@ -90,26 +99,6 @@ function ObjectPage({ header, tab, fit, children }: { header: React.ReactNode; t
       <div className="grid shrink-0 gap-3 px-4 pt-4">{header}</div>
       <div id={tab ? "tabpanel" : undefined} role={tab ? "tabpanel" : undefined} aria-labelledby={tab ? `tab-${tab}` : undefined} data-scroll-area className={cn("min-h-0 min-w-0 flex-1 p-4", fit ? "flex flex-col overflow-auto @3xl:overflow-hidden" : "overflow-auto")}>{children}</div>
     </div>
-  );
-}
-
-/** One task is a link to it; several are a menu of links, so every count in a header leads somewhere. */
-function LinkMenu({ code, labels, kind }: { code: string; labels: string[]; kind: "tasks" | "tables" }) {
-  if (labels.length === 0) return <>none</>;
-  if (labels.length === 1) return <Link className={link} to={catalogPath(code, kind, labels[0]!)}>{labels[0]}</Link>;
-  return (
-    <DropdownMenu>
-      <DropdownTrigger className={cn("inline-flex cursor-pointer items-center gap-0.5", link)}>
-        {labels.length} {kind} <ChevronDown className="size-3" aria-hidden />
-      </DropdownTrigger>
-      <DropdownContent align="start" className="max-h-80 min-w-64 overflow-auto">
-        {labels.map((label) => (
-          <DropdownItem key={label} asChild>
-            <Link to={catalogPath(code, kind, label)}>{label}</Link>
-          </DropdownItem>
-        ))}
-      </DropdownContent>
-    </DropdownMenu>
   );
 }
 
@@ -177,11 +166,6 @@ export function CatalogHome({ code, doc }: { code: string; doc: CatalogDoc }) {
       </div>
       <Section title="Needs attention">
         <ul className="m-0 grid list-none gap-1 p-0 text-[13px]">
-          <li>
-            <Link className={link} to={catalogPath(code, "gaps")}>
-              {open.length} schema or lineage gap{open.length === 1 ? "" : "s"}
-            </Link>
-          </li>
           <li>{undocumented} task{undocumented === 1 ? "" : "s"} without documentation</li>
           <li>{unwritten.length} table{unwritten.length === 1 ? "" : "s"} no task writes{unwritten.length ? `: ${unwritten.slice(0, 6).map((t) => t.name).join(", ")}${unwritten.length > 6 ? "…" : ""}` : ""}</li>
         </ul>
@@ -197,12 +181,13 @@ export function PipelineObject({ code, doc, name, tab, onTab }: { code: string; 
   const [focused, setFocused] = React.useState<string | null>(null);
   const [overlay, setOverlay] = React.useState(false);
   if (!pipeline) return <Notice className="m-4">No pipeline {name} in this catalog build.</Notice>;
+  if(tab==="runs")return <Navigate replace to={runsPath(code,pipeline.code)}/>;
   const graph = flowGraph(doc, pipeline, pipelineGraph(doc, pipeline));
   // Tasks in the order they run, as the grid lists them, not alphabetically.
   const order = new Map(graph.waves.flat().map((label, i) => [label, i]));
   const at = (t: CatalogTask) => order.get(t.label) ?? order.get(t.code) ?? Number.MAX_SAFE_INTEGER;
   const tasks = doc.tasks.filter((t) => t.pipeline === pipeline.code).sort((a, b) => at(a) - at(b) || a.code.localeCompare(b.code));
-  const tabs = [{ id: "overview", label: "Overview" }, { id: "lineage", label: "Graph" }, { id: "runs", label: "Runs" }];
+  const tabs = catalogTabs("pipelines");
   const on = tabs.some((t) => t.id === tab) ? tab : "overview";
   return (
     <ObjectPage tab={on} fit={on==="lineage"} header={
@@ -212,6 +197,7 @@ export function PipelineObject({ code, doc, name, tab, onTab }: { code: string; 
         <Link className={`ml-auto text-sm ${link}`} to={pipelinePath(code, pipeline.code)}>
           Open in the pipeline workspace
         </Link>
+        <Link className={`text-sm ${link}`} to={runsPath(code,pipeline.code)}>Open pipeline runs</Link>
       </Title>
       <Tabs tabs={tabs} value={on} onChange={onTab} />
       </>
@@ -274,30 +260,8 @@ export function PipelineObject({ code, doc, name, tab, onTab }: { code: string; 
           <Disclosure><DisclosureSummary>Flow as text</DisclosureSummary><ul>{tasks.map(task => <li key={task.label}>{runsWhen(task)} Target: {task.target ?? "none"}. {task.lineage.state}.</li>)}</ul></Disclosure>
           {focused ? <aside onKeyDown={event=>{if(event.key==="Escape")setFocused(null);}} aria-label="Task definition" className="border border-border bg-surface p-3 text-sm">{focused.startsWith("Schedule: ") ? <p>{focused}. Auto-restart: {pipeline.auto_restart_condition.toLowerCase().replaceAll("_"," ")}. SLA: {pipeline.sla_in_hours ? `${pipeline.sla_in_hours} hours` : "not set"}.</p> : null}{tasks.filter(t => t.code === focused || t.label === focused).map(t => <div key={t.label}><p>{runsWhen(t)}</p><p>{t.target}{t.target_active_flag === "N" ? " · target inactive" : ""} · {t.lineage.state}</p><Link to={catalogPath(code, "tasks", t.label) + "?tab=mapping"}>Open mapping</Link></div>)}</aside> : null}
         </div>
-      ) : (
-        <Section title="Recent runs" aside={<RunBars project={code} runs={pipeline.runs.map((run) => ({ ...run, pipeline_code: pipeline.code, start_date: run.start, end_date: run.end }))} />}>
-          <RunsTable code={code} pipeline={pipeline.code} runs={pipeline.runs} />
-        </Section>
-      )}
+      ) : null}
     </ObjectPage>
-  );
-}
-
-function ColumnLineage({ code, edges, tasks }: { code: string; edges: CatalogEdge[]; tasks: CatalogTask[] }) {
-  const unavailable=tasks.filter(task=>task.lineage.state==="unavailable" && task.lineage.reason);
-  if (!edges.length && unavailable.length) return <EmptyState title="Column lineage is unavailable." nextStep={<>{unavailable.map(task=><span className="block" key={task.label}><Link className={link} to={catalogPath(code,"tasks",task.label)}>{task.label}</Link>: {task.lineage.reason}</span>)}</>}/>;
-  if (!edges.length) return <EmptyState title="No column lineage was traced for this selection." nextStep="Declare task sources and targets, refresh lineage, then rebuild the catalog." />;
-  return (
-    <DataTable
-      label="Column sources"
-      data={edges}
-      columns={columnsOf<CatalogEdge>([
-        { id: "column", header: "Column", value: (e) => `${e.target_object}.${e.target_column}`, size: 300, cell: (e) => <span className="font-mono text-xs">{e.target_object}.{e.target_column}</span> },
-        { id: "from", header: "Made from", value: (e) => (e.source_object ? `${e.source_object}.${e.source_column}` : "a constant"), size: 300, cell: (e) => <span className="font-mono text-xs">{e.source_object ? `${e.source_object}.${e.source_column}` : "a constant"}</span> },
-        { id: "how", header: "How", value: (e) => e.transformation, size: 140, cell: (e) => <span className="text-muted">{e.transformation.toLowerCase()}</span> },
-        { id: "task", header: "Task", value: (e) => e.task, size: 260, cell: (e) => <Link className={link} to={catalogPath(code, "tasks", e.task)}>{e.task}</Link> },
-      ])}
-    />
   );
 }
 
@@ -307,7 +271,7 @@ export function TaskObject({ code, doc, name, tab, onTab }: { code: string; doc:
   if (!task) return <Notice className="m-4">No task {name} in this catalog build.</Notice>;
   const rules = doc.rules.filter((r) => r.task === task.label);
   const edges = doc.column_edges.filter((e) => e.task === task.label);
-  const tabs = [{ id: "overview", label: "Overview" }, { id: "mapping", label: "Mapping" }, { id: "lineage", label: "Column sources" }, { id: "runs", label: "Runs" }];
+  const tabs = catalogTabs("tasks");
   const on = tabs.some((t) => t.id === tab) ? tab : "overview";
   return (
     <ObjectPage tab={on} fit={on==="mapping"} header={
@@ -369,7 +333,7 @@ export function TaskObject({ code, doc, name, tab, onTab }: { code: string; doc:
         </div>
       ) : on === "mapping" ? <React.Suspense fallback={<div className="min-h-[36rem]"><Loading what="task mapping" /></div>}><TaskMapping key={task.label} doc={doc} task={task} /></React.Suspense> : on === "lineage" ? (
         <Section title="Column sources" aside={<span className="text-xs text-muted">{edges.length} traced</span>}>
-          <ColumnLineage code={code} edges={edges} tasks={[task]} />
+          <ColumnSources code={code} doc={doc} edges={edges} tasks={[task]} />
         </Section>
       ) : (
         <Section title="Recent runs">
@@ -425,15 +389,7 @@ export function TableObject({ code, doc, name, tab, onTab }: { code: string; doc
   const writers = describe(doc, table);
   const rules = doc.rules.filter((r) => table.rules.includes(r.id));
   const gaps = doc.gaps.filter((g) => g.table === table.name && (showAll || isOpenGap(g)));
-  const tabs = [
-    { id: "overview", label: "Overview" },
-    ...(developer ? [{ id: "data", label: "Data" }] : []),
-    { id: "lineage", label: "Lineage diagram" },
-    { id: "columns", label: "Column sources" },
-    { id: "history", label: "History" },
-    { id: "quality", label: "Quality" },
-  ];
-  const on = tabs.some((t) => t.id === tab) ? tab : "overview";
+  const tabs = catalogTabs("tables",developer);  const on = tabs.some((t) => t.id === tab) ? tab : "overview";
   const shown = table.columns.filter((c) => !filter || `${c.name} ${c.comment ?? ""} ${typeOf(c)}`.toLowerCase().includes(filter.toLowerCase()));
   const hasType = table.columns.some((c) => Boolean(c.warehouse_type ?? c.data_type));
   const hasDeclared = table.columns.some((c) => Boolean(c.declared_type));
@@ -479,8 +435,6 @@ export function TableObject({ code, doc, name, tab, onTab }: { code: string; doc
         <Fact inline label="Open gaps">
           {openGaps ? toTab("quality", "the gaps", openGaps) : "none"}
         </Fact>
-        <Fact inline label="Written by"><LinkMenu code={code} labels={table.writers} kind="tasks" /></Fact>
-        <Fact inline label="Read by"><LinkMenu code={code} labels={table.readers} kind="tasks" /></Fact>
       </FactList>
       <Tabs tabs={tabs} value={on} onChange={onTab} />
       </>
@@ -599,7 +553,7 @@ export function TableObject({ code, doc, name, tab, onTab }: { code: string; doc
             </SelectField>
           </div>}
         >
-          <ColumnLineage code={code} edges={edges} tasks={writers.filter(task=>!writer||task.label===writer)} />
+          <ColumnSources code={code} doc={doc} edges={edges} tasks={writers.filter(task=>!writer||task.label===writer)} target={table.name} column={column} />
         </Section>
       ) : on === "history" ? (
         <Section title="Recent writes">
