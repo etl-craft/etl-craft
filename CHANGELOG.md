@@ -6,6 +6,9 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+- Selected mapping and lineage columns keep their complete outline visible at the first and
+  last rows of a scrolling window.
+
 - Diagrams have framed working surfaces with persistent native horizontal and vertical
   scrollbars synchronized with pan, zoom and Fit view. Expanded objects use framed title bars;
   collapsed tasks use type icons with their names underneath. Workspace panes and column lists expose

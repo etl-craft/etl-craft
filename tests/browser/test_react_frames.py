@@ -394,3 +394,49 @@ def test_mouse_resizing_stays_on_the_frame_instead_of_the_surrounding_canvas(map
         assert int(resize.get_attribute("aria-valuenow")) > int(before)
         assert not problems
         browser.close()
+
+
+@pytest.mark.parametrize("scheme", ["light", "dark"])
+@pytest.mark.parametrize("width", [1440, 390])
+@pytest.mark.parametrize("view", ["mapping", "lineage"])
+def test_boundary_column_selection_ring_stays_inside_the_scrollport(mappings, width, view, scheme):
+    _, url = mappings
+    route = (
+        "/ui/projects/default/catalog/tasks/ORDERS.load?tab=mapping"
+        if view == "mapping"
+        else "/ui/projects/default/catalog/tables/mart.orders?tab=lineage"
+    )
+    with sync_playwright() as pw:
+        browser, page, problems = open_page(
+            pw,
+            viewport={"width": width, "height": 1000},
+            color_scheme=scheme,
+            show_scrollbars=True,
+        )
+        sign_in(page, url, route)
+        if view == "mapping":
+            if width == 390:
+                page.get_by_role("button", name="Diagram", exact=True).click()
+            page.get_by_role("button", name="Show all columns", exact=True).click()
+        else:
+            page.get_by_role("button", name="Expand all", exact=True).click()
+        identity = "source:raw.orders" if view == "mapping" else "raw.orders"
+        node = page.locator(f'[data-id="{identity}"]')
+        rows = node.locator("[data-port] > button")
+        expect(rows.first).to_be_visible()
+        for boundary in ("first", "last"):
+            row = rows.first if boundary == "first" else rows.last
+            row.scroll_into_view_if_needed()
+            row.click()
+            expect(row).to_have_class(re.compile(r"ring-accent"))
+            assert row.evaluate("""e=>{
+                const style=getComputedStyle(e);
+                const ring=style.getPropertyValue('--tw-ring-shadow');
+                return ring.includes('inset') && style.boxShadow.includes('inset');
+            }"""), "Selection must paint inside the row, including at either scroll boundary"
+            shots = os.environ.get("ETL_CRAFT_UI_SCREENSHOTS")
+            if shots:
+                Path(shots).mkdir(parents=True, exist_ok=True)
+                node.screenshot(path=f"{shots}/selection-{view}-{scheme}-{width}-{boundary}.png")
+        assert not problems
+        browser.close()

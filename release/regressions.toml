@@ -412,5 +412,6 @@ native-diagram-scrollbars = [
     "tests/browser/test_react_connections.py::test_connection_click_and_keyboard_highlight_its_recorded_endpoints",
     "tests/browser/test_react_connections.py::test_object_connection_marks_both_frames_without_claiming_column_lineage",
     "tests/browser/test_react_frames.py::test_native_grid_scrollbar_keeps_the_latest_run_clickable",
+    "tests/browser/test_react_frames.py::test_boundary_column_selection_ring_stays_inside_the_scrollport",
     "tests/browser/test_react_frames.py::test_native_diagram_scrollbars_move_the_view_and_follow_its_controls",
 ]
