@@ -221,6 +221,8 @@ item's text, or work done early under another item.
 
 ### Handover notes
 
+- **S7.AS pipeline view consolidation (#410).** Recent-run lists and Tasks/Details tabs move to the grid, Runs, task definitions and header facts; Calendar moves to Scheduled runs as scoped run history by day; Project Home is unchanged.
+
 - **S7.AS column selection.** Shared mapping rows draw selection inside their boundaries so scrolling cannot crop the first or last outline.
 
 - **S7.AS navigation follow-up.** Owner-approved diagram gestures and a shared menu preserve keyboard/touch access; ordinary inspection stays in the current tab.

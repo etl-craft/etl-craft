@@ -1,3 +1,6 @@
+import { GridTaskDetails } from "@/components/grid-task-details";
+import { Button } from "@/components/ui/button";
+import { ChevronDown } from "lucide-react";
 import {useLegend,statusEntries} from "@/components/legend";
 import { RunLabel } from "@/components/run-label";
 import { When } from "@/components/when";
@@ -22,6 +25,7 @@ export const GRID_COLUMNS = { id: { width: 28, minimum: 30 }, time: { width: 176
  * started failing. A column header selects a run; a cell selects the run and opens that task in it.
  */
 export function RunGrid({ code, pipeline, graph, runs, extra, selected, onSelect, bars = true, labels = "id" }: { code: string; pipeline: string; graph: Graph; runs: RunView[]; extra?: RunView; selected?: number; onSelect: (runId: number, task?: string) => void; bars?: boolean; labels?: "id" | "time" }) {
+  const [details,setDetails]=React.useState<string|null>(null);
   const cell = GRID_COLUMNS[labels].width;
   const reserve = GRID_COLUMNS[labels].minimum;
   const tasks = graph.waves.flat();
@@ -53,13 +57,13 @@ export function RunGrid({ code, pipeline, graph, runs, extra, selected, onSelect
   const head = React.useRef<HTMLDivElement>(null);
   const [natural, setNatural] = React.useState(128);
   React.useLayoutEffect(() => {
-    const measure = () => setNatural(Math.max(128, ...Array.from(head.current?.querySelectorAll("tbody th span") ?? [], (name) => Math.ceil(name.getBoundingClientRect().width) + 24)));
+    const measure = () => setNatural(Math.max(128, ...Array.from(head.current?.querySelectorAll("tbody th span") ?? [], (name) => Math.ceil(name.scrollWidth) + 40)));
     measure();
     const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(measure);
     head.current?.querySelectorAll("tbody th span").forEach((name) => observer?.observe(name));
     return () => observer?.disconnect();
   }, [graph, hasRuns]);
-  const taskWidth = Math.max(MIN_TASKS, Math.min(natural, room - reserve - gutter));
+  const taskWidth = Math.max(MIN_TASKS, Math.min(natural, hasRuns ? room - reserve - gutter : room));
   const matrixWidth = Math.max(0, Math.min(room - taskWidth, shown.length * cell + 2 + gutter));
   const [bar, setBar] = React.useState(0);
   // A run chosen from elsewhere is brought into view.
@@ -84,7 +88,6 @@ export function RunGrid({ code, pipeline, graph, runs, extra, selected, onSelect
   const seconds = (run: RunView) => (run.start_date ? Math.max(0, ((run.end_date ? new Date(run.end_date).getTime() : now) - new Date(run.start_date).getTime()) / 1000) : 0);
   const longest = Math.max(1, ...shown.map(seconds));
   const key=useLegend(statusEntries([...shown.map(run=>run.status),...[...cells,...aside].flatMap(read=>read.data?.entries.map(entry=>entry.status)??[])]));
-  if (shown.length === 0) return <p className="m-0 p-4 text-muted">No runs yet.</p>;
   const failed = cells.find((c) => c.isError);
   const sync = () => {
     if (head.current && box.current) {
@@ -100,7 +103,7 @@ export function RunGrid({ code, pipeline, graph, runs, extra, selected, onSelect
   return (
     <div ref={outer} tabIndex={0} onKeyDown={key.onKeyDown} className="relative flex h-full min-h-0 w-full flex-col"><div className="flex justify-end px-2 py-1">{key.button}</div>{key.panel}
       {failed?.error ? <Notice className="m-3">{(failed.error as Error).message}</Notice> : null}
-      {cells.some((c) => c.isPending) ? <Loading what="the grid" className="p-3" /> : null}
+      {hasRuns && cells.some((c) => c.isPending) ? <Loading what="the grid" className="p-3" /> : null}
       <div className="flex min-h-0 flex-1">
         <div style={{ width: taskWidth }} className="flex shrink-0 flex-col">
           {/* The task list scrolls with the matrix and has no scroll bar of its own. */}
@@ -120,7 +123,7 @@ export function RunGrid({ code, pipeline, graph, runs, extra, selected, onSelect
                 {tasks.map((task) => (
                   <tr key={task}>
                     <th scope="row" className="h-8 truncate border-t border-border bg-surface px-3 py-0 text-left font-medium" title={task}>
-                      <span className="inline-block">{task}</span>
+                      <Button size="sm" variant="ghost" className="!h-8 w-full justify-between gap-1 !px-0" aria-label={`Task definition for ${task}`} onClick={()=>setDetails(task)}><span className="inline-block truncate">{task}</span><ChevronDown aria-hidden className="size-3 shrink-0"/></Button>
                     </th>
                   </tr>
                 ))}
@@ -130,6 +133,7 @@ export function RunGrid({ code, pipeline, graph, runs, extra, selected, onSelect
         </div>
         <div aria-hidden className="w-1.5 shrink-0 border-l border-border-strong" />
         {/* The right scroll origin keeps the newest run visible as the pane narrows. */}
+        {!hasRuns?<p className="m-0 p-4 text-muted">No runs yet.</p>:null}
         <div ref={box} dir="rtl" onScroll={sync} style={{ width: matrixWidth, minWidth: 0 }} className="min-h-0 shrink-0 overflow-auto">
           <div dir="ltr" className="w-max">
             <table aria-label="Run grid" style={{ width: shown.length * cell }} className="table-fixed border-separate border-spacing-0 text-[13px]">
@@ -190,6 +194,7 @@ export function RunGrid({ code, pipeline, graph, runs, extra, selected, onSelect
           </div>
         </div>
       </div>
+      <GridTaskDetails code={code} pipeline={pipeline} task={details} graph={graph} onClose={()=>setDetails(null)}/>
     </div>
   );
 }

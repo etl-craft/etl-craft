@@ -82,11 +82,10 @@ the dependency conditions and last-run IDs as well.
 
 A pipeline and its runs share one workspace. The grid shows tasks as rows and runs as columns,
 newest on the right, with duration bars above the same columns when enough runs exist. Grid/Graph
-switches views. The right pane contains Overview, the selected run, Runs, Tasks, Calendar, Audit
-log, Details and Access. Selecting a run or task persists `?run=ID&task=CODE`; old run addresses
+switches views. The right pane contains Overview, the selected run, Runs, Audit log and Access. Selecting a run or task persists `?run=ID&task=CODE`; old run addresses
 redirect here while retaining task selections and view filters. Desktop panes scroll independently
 within the window; below 1024 pixels they stack. A selected run's panel comes first on a narrow
-screen. Details links to the catalog for pipeline and task descriptions, keeping one documentation
+screen. Overview links to the catalog for pipeline and task descriptions, keeping one documentation
 source.
 
 On phones, Home's time presets, custom date range and pipeline filter use the same control
@@ -147,12 +146,22 @@ the filter is the same `tag` parameter as `etl-craft pipelines --tag` and
 `GET /api/v1/projects/{project}/pipelines?tag=…`, so the page, the CLI and the API return the
 same pipelines, with the same `next_run`, `schedule_problem` and `recent_runs` fields in JSON.
 
-A pipeline's page has a **Runs** tab (run durations as bars, then one page of runs, newest
-first, with **Older runs** to page back), a **Matrix** tab (tasks as rows and the same runs as
-columns, each cell a task run's status and duration that opens that task in its run) and a
-**Tasks** tab (each task, its wave and what it waits for). **Run now** admits one manual run of
-the whole pipeline for the controller, optionally for a run date, or as a one-time **Full refresh** (optionally of one task and the tasks that read it); when a refresh would empty append targets the dialog names them and asks for a switch to accept before it runs. The details panel shows the schedule, refresh type, SLA, tags, upstream pipelines
-and paused tasks. **Pause** and **Resume** act on automatic runs of this pipeline only.
+A pipeline's **Runs** tab keeps its run identifiers, outcomes, durations and filters; the
+workspace grid compares the same runs by task. Select a task name in the grid to inspect its
+handler and declared upstream tasks, including before the pipeline has run. The dialog links
+to the task's history, definition and complete parameters. Pipeline settings, including restart
+behaviour and task count, stay in the header facts; its description lives in the catalog.
+Overview keeps window summaries and links to run history instead of repeating recent-run lists.
+The former Tasks and Details tab addresses open Overview and preserve a selected run and task.
+
+**Scheduled runs** also contains **Run history by day**, the historical calendar formerly on a
+pipeline's Calendar tab. It includes manual runs, has a pipeline filter and can load earlier
+runs; its note states how many records are loaded. It is separate from the next scheduled-start
+list and is not a forecast. Old Calendar addresses open this view with the pipeline selected.
+
+**Run now** admits one manual run of
+the whole pipeline for the controller, optionally for a run date, or as a one-time **Full refresh** (optionally of one task and the tasks that read it); when a refresh would empty append targets the dialog names them and asks for a switch to accept before it runs. The pipeline header keeps the schedule, refresh type, SLA, tags and automatic-run state;
+upstream pipeline relationships remain in the catalog. **Pause** and **Resume** act on automatic runs of this pipeline only.
 
 The pipeline grid has one adjustable divider beside the details panel. Task names automatically
 expand to the longest complete name as the grid widens, taking space from older runs first.
@@ -295,7 +304,8 @@ etl-craft announce end --announcement-id 3 --reason "upgrade finished"
 
 ## Tasks and uploads
 
-Select a task on a pipeline's **Tasks** tab (or find it with search) to open its page: its last
+Select a task name in the pipeline grid, then follow **Task history, definition and parameters**
+(or find the task with search) to open its page: its last
 runs with the rows read, inserted, updated, deleted and rejected, how long each took and rows
 per second, and the success count. An ingestion Python task shows its stored **Offset** and a
 watermarked SQL task its **Watermark**; operators can reset it, and the next run starts from

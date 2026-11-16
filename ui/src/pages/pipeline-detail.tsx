@@ -5,14 +5,14 @@ import { useQuery } from "@tanstack/react-query";
 import { When } from "@/components/when";
 import { Check, ChevronDown, Pause, Play, PlayCircle } from "lucide-react";
 import * as React from "react";
-import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { Navigate, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { ActionButton } from "@/components/action-button";
 import { DropdownContent, DropdownItem, DropdownLabel, DropdownMenu, DropdownTrigger } from "@/components/dropdown";
 import { Button } from "@/components/ui/button";
 import { Segmented } from "@/components/segmented";
 import { Switch } from "@/components/switch";
 import { Breadcrumbs, Fact, FactList, Field, inputClass, Loading, Notice, PageHeader, SelectField } from "@/components/common";
-import { AuditTab, CalendarTab, DetailsTab, OverviewTab, TasksTab } from "@/components/pipeline-tabs";
+import { AuditTab, OverviewTab, pipelineTabs } from "@/components/pipeline-tabs";
 import { StatusBadge, taskStatus } from "@/components/status";
 import { PauseState } from "@/components/pipeline-parts";
 import { RunGraph } from "@/components/lazy-run-graph";
@@ -27,12 +27,10 @@ import { autoStarts } from "@/lib/auto-starts";
 import { useAutoStarts, useCanRun, useProjectInfo, useRunReference } from "@/hooks";
 import { describeCron, formatDuration } from "@/lib/format";
 import { ApiError, getJson, project } from "@/lib/api";
-import { pipelinesPath, projectHomePath, taskPath } from "@/lib/routes";
+import { pipelinesPath, projectHomePath, scheduledPath, taskPath } from "@/lib/routes";
 import { cn } from "@/lib/utils";
 import type { Graph, Pipeline, RunView, Steps } from "@/lib/types";
 import { useDocumentTitle } from "@/title";
-
-const TAB_IDS = ["overview", "run", "runs", "tasks", "calendar", "audit", "details", "access"];
 
 export function PipelineDetail() {
   const { project: code = "", pipeline = "" } = useParams();
@@ -94,17 +92,8 @@ export function PipelineDetail() {
     enabled: view === "graph" && selected !== undefined,
     refetchInterval: selectedRun?.status === "IN-PROGRESS" ? 5_000 : false,
   });
-  const tab = TAB_IDS.includes(asked) && (asked !== "run" || selected !== undefined) ? asked : chosen !== undefined ? "run" : "overview";
-  const tabs = [
-    { id: "overview", label: "Overview" },
-    ...(selected !== undefined ? [{ id: "run", label: `Run #${selected} · ${selectedRun?.run_label ?? ""}` }] : []),
-    { id: "runs", label: "Runs" },
-    { id: "tasks", label: "Tasks" },
-    { id: "calendar", label: "Calendar" },
-    { id: "audit", label: "Audit log" },
-    { id: "details", label: "Details" },
-    { id: "access", label: "Access" },
-  ];
+  const tabs=pipelineTabs(selected,selectedRun?.run_label);
+  const tab=tabs.some(item=>item.id===asked)?asked:chosen!==undefined?"run":"overview";
   const state = params.get("status") ?? "";
   const select = (runId: number, taskCode?: string) => {
     const next = new URLSearchParams(params);
@@ -147,6 +136,11 @@ export function PipelineDetail() {
   const [then, setThen] = React.useState("wait");
   const p = found.data;
 
+  if(asked==="tasks"||asked==="details"){
+    const next=new URLSearchParams(params);next.set("tab","overview");
+    return <Navigate replace to={`?${next}`}/>;
+  }
+  if(asked==="calendar")return <Navigate replace to={scheduledPath(code,pipeline)}/>;
   if (asLabel && addressed.isError) return <Notice>{(addressed.error as Error).message}</Notice>;
   if (asLabel && addressed.isPending) return <Loading what="the selected run" />;
   if (found.isError) return <Notice>{(found.error as Error).message}</Notice>;
@@ -262,8 +256,10 @@ export function PipelineDetail() {
             </Fact>
             <Fact inline label="Next run">{starts && !starts.schedule ? <span className="text-muted" title="Schedules are switched off here by the controller or the project">Not started here</span> : <When iso={p.next_run} empty={p.restart_note ?? "—"} />}</Fact>
             <Fact inline label="Refresh">{p.refresh_type.toLowerCase()}</Fact>
-            {p.sla_in_hours ? <Fact inline label="SLA">{p.sla_in_hours} h</Fact> : null}
-            {p.tags.length ? <Fact inline label="Tags">{p.tags.join(", ")}</Fact> : null}
+            <Fact inline label="SLA">{p.sla_in_hours?`${p.sla_in_hours} h`:"None"}</Fact>
+            <Fact inline label="Restarts">{p.restart_note??"On its schedule only"}</Fact>
+            <Fact inline label="Tasks">{graph.data?.waves.flat().length??"…"}</Fact>
+            <Fact inline label="Tags">{p.tags.length?p.tags.join(", "):"None"}</Fact>
           </FactList>
         ) : (
           <Loading what="pipeline" />
@@ -403,16 +399,12 @@ export function PipelineDetail() {
               <RunOverview code={code} pipeline={pipeline} runId={selected} task={task} onTask={(next) => choose("task", next)} />
             ) : !p || !graph.isSuccess ? (
               <Loading what="pipeline" />
-            ) : tab === "tasks" ? (
-              <TasksTab code={code} pipeline={pipeline} graph={graph.data} runId={selected} run={selectedRun} />
-            ) : tab === "calendar" ? (
-              <CalendarTab runs={runs} />
+
             ) : tab === "audit" ? (
               <AuditTab code={code} pipeline={pipeline} />
             ) : tab === "access" ? (
               <AccessTab key={`${code}:${pipeline}`} project={code} projects={[code]} pipeline={pipeline} />
-            ) : tab === "details" ? (
-              <DetailsTab code={code} pipeline={p} graph={graph.data} />
+
             ) : (
               <OverviewTab code={code} pipeline={p} runs={runs} />
             )}
