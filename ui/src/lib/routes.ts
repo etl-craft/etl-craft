@@ -21,7 +21,7 @@ export const pipelinePath = (project: string, pipeline: string, tab?: string): s
 /** A pipeline's runs with one run highlighted: where the project's run list leads. */
 export const pipelineRunPath = (project: string, pipeline: string, runId: number | string): string =>
   `/projects/${enc(project)}/pipelines/${enc(pipeline)}?run=${enc(String(runId))}`;
-export const scheduledPath = (project: string): string => `/projects/${enc(project)}/scheduled`;
+export const scheduledPath = (project: string, pipeline?:string): string => `/projects/${enc(project)}/scheduled` + (pipeline ? `?pipeline=${enc(pipeline)}` : "");
 export const heldPath = (project: string): string => `/projects/${enc(project)}/held`;
 export const taskPath = (project: string, pipeline: string, task: string): string =>
   `/projects/${enc(project)}/pipelines/${enc(pipeline)}/tasks/${enc(task)}`;

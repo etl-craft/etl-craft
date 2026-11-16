@@ -6,6 +6,15 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+- Pipeline Overview no longer repeats recent-run lists; the workspace grid and Runs tab keep
+  run identifiers, outcomes and durations, while Overview keeps its summaries and history links.
+- Pipeline Tasks and Details tabs are consolidated into grid task details, the existing task
+  definition/parameter page and pipeline header facts. Old tab links open Overview without
+  losing the selected run or task; long parameter values wrap on the task page, and descriptions
+  remain in the catalog.
+- The pipeline Calendar moves to Scheduled runs as Run history by day, with a pipeline filter
+  and earlier-history loading. Old Calendar links retain their pipeline scope.
+
 - Diagram canvases and expanded windows draw persistent scrollbar tracks and thumbs consistently
   across browsers, including when native scrollbars are hidden. Shared controls support thumb
   dragging, track clicks, arrows, Page Up/Down, Home/End and touch; node content keeps native scrolling.

@@ -1,10 +1,13 @@
+import { RunCalendar } from "@/components/run-calendar";
+import { useRuns } from "@/components/runs-table";
+import { Button } from "@/components/ui/button";
 import {LegendView,statusEntries} from "@/components/legend";
 import { useQuery } from "@tanstack/react-query";
 import { createColumnHelper } from "@tanstack/react-table";
 import * as React from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useSearchParams } from "react-router-dom";
 import { AppLink as Link } from "@/components/navigation";
-import { Loading, Notice, PageHeader, EmptyState } from "@/components/common";
+import { Loading, Notice, PageHeader, EmptyState, SelectField } from "@/components/common";
 import { DataTable } from "@/components/data-table";
 import { PauseState, RecentRuns } from "@/components/pipeline-parts";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
@@ -20,6 +23,9 @@ const columns = createColumnHelper<Pipeline>();
 
 export function Scheduled() {
   const { project: code = "" } = useParams();
+  const [params,setParams]=useSearchParams();
+  const pipeline=params.get("pipeline")??"";
+  const history=useRuns(code,pipeline||undefined);
   const [now] = React.useState(() => Date.now());
   const info = useProjectInfo(code);
   useDocumentTitle("Scheduled runs", code, info.project && { type: info.project.environment_type, name: info.project.environment_name });
@@ -74,6 +80,18 @@ export function Scheduled() {
           />
         </Card>
       ) : null}
+      <Card>
+        <CardHeader><CardTitle>Run history by day</CardTitle></CardHeader>
+        <div className="grid gap-3 p-4">
+          <SelectField compact label="History pipeline" value={pipeline} onChange={value=>{const next=new URLSearchParams(params);if(value)next.set("pipeline",value);else next.delete("pipeline");setParams(next,{replace:true});}}>
+            <option value="">All pipelines</option>
+            {(list.data?.pipelines??[]).map(p=><option key={p.pipeline_code} value={p.pipeline_code}>{p.pipeline_code}</option>)}
+          </SelectField>
+          <p className="m-0 text-xs text-muted">Historical outcomes, including manual runs; this is not a forecast. Showing {history.all.length} loaded runs.</p>
+          {history.runs.isPending?<Loading what="run history"/>:history.runs.isError?<Notice>{history.runs.error.message}</Notice>:<RunCalendar runs={history.all}/>}
+          {history.runs.hasNextPage?<Button disabled={history.runs.isFetchingNextPage} onClick={()=>void history.runs.fetchNextPage()}>{history.runs.isFetchingNextPage?"Loading earlier runs…":"Load earlier runs"}</Button>:null}
+        </div>
+      </Card>
     </div>
   );
 }

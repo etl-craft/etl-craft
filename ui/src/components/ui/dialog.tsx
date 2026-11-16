@@ -30,7 +30,10 @@ export function Dialog({
     <dialog
       ref={ref}
       aria-labelledby={labelledBy}
-      onClose={onClose}
+      onClose={() => {
+        // A queued close event can arrive after this dialog reopens.
+        if (!ref.current?.open) onClose();
+      }}
       onClick={(event) => {
         if (event.target === ref.current) onClose();
       }}

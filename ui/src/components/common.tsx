@@ -230,11 +230,11 @@ export function Field({ label, compact, hideLabel, children }: { label: string; 
 /** Name and value pairs such as task parameters: names muted, values in monospace and wrapped. */
 export function ParamList({ entries }: { entries: [string, string][] }) {
   return (
-    <dl className="m-0 grid gap-x-6 gap-y-2 text-[13px] sm:grid-cols-[max-content_1fr]">
+    <dl className="m-0 min-w-0 grid gap-x-6 gap-y-2 text-[13px] sm:grid-cols-[max-content_minmax(0,1fr)]">
       {entries.map(([name, value]) => (
         <div key={name} className="contents">
           <dt className="font-mono text-xs text-muted">{name}</dt>
-          <dd className="m-0 break-words font-mono text-xs">{value}</dd>
+          <dd className="m-0 min-w-0 break-words font-mono text-xs">{value}</dd>
         </div>
       ))}
     </dl>

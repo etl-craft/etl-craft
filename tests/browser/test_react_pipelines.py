@@ -315,7 +315,6 @@ def test_the_pipeline_pages_render_cleanly_in_both_themes_and_on_a_phone(scene, 
     pages = {
         "pipelines": "/ui/projects/default/pipelines",
         "pipeline": "/ui/projects/default/pipelines/OPS",
-        "pipeline-tasks": "/ui/projects/default/pipelines/OPS?tab=tasks",
         "scheduled": "/ui/projects/default/scheduled",
         "held": "/ui/projects/default/held",
     }
@@ -362,30 +361,28 @@ def test_the_panes_resize_and_the_graph_stays_whole(scene):
         browser.close()
 
 
-def test_a_pipeline_has_an_overview_tasks_and_details_and_a_way_back(scene):
+def test_a_pipeline_keeps_task_definitions_and_catalog_links_in_the_grid(scene):
     _, url, _ = scene
     with sync_playwright() as pw:
         browser, page, problems = open_page(pw, viewport={"width": 1440, "height": 900})
         page.context.set_default_timeout(8000)
         sign_in(page, url, "/ui/projects/default/pipelines/OPS")
-        expect(page.get_by_role("tab", name="Overview")).to_have_attribute("aria-selected", "true")
-        expect(page.get_by_role("heading", name="Overview", level=2, exact=True)).to_be_attached()
+        expect(page.get_by_role("tab", name="Overview", exact=True)).to_have_attribute(
+            "aria-selected", "true"
+        )
         expect(page.get_by_text("Failed runs", exact=True)).to_be_visible()
-        page.get_by_role("tab", name="Tasks").click()
-        expect(page.get_by_role("heading", name="Tasks", level=2, exact=True)).to_be_attached()
+        page.get_by_role("button", name="Task definition for EXTRACT", exact=True).click()
+        dialog = page.get_by_role("dialog", name="Task definition · EXTRACT")
+        expect(dialog.get_by_text("Handler", exact=True)).to_be_visible()
         expect(
-            page.get_by_role("table", name="Pipeline tasks").get_by_role("link")
-        ).not_to_have_count(0)
-        page.get_by_role("tab", name="Details").click()
-        expect(page.get_by_role("heading", name="Details", level=2, exact=True)).to_be_attached()
-        expect(page.get_by_text("Refresh", exact=True).last).to_be_visible()
-        expect(page.get_by_role("region", name="Task definitions")).to_be_visible()
+            dialog.get_by_role("link", name="Task history, definition and parameters")
+        ).to_have_attribute("href", "/ui/projects/default/pipelines/OPS/tasks/EXTRACT")
+        page.keyboard.press("Escape")
         expect(
-            page.get_by_role("link", name="Open the documentation in the catalog")
-        ).to_be_visible()
-        expect(page.get_by_role("tab", name="Docs")).to_have_count(
-            0
-        )  # documented once, in the catalog
+            page.get_by_role("link", name="About this pipeline in the catalog")
+        ).to_have_attribute("href", "/ui/projects/default/catalog/pipelines/OPS")
+        for name in ("Tasks", "Details", "Calendar", "Docs"):
+            expect(page.get_by_role("tab", name=name, exact=True)).to_have_count(0)
         page.get_by_role("link", name="Back to Pipelines").click()
         expect(page.get_by_role("table", name="Pipelines")).to_be_visible()
         assert problems == []
@@ -440,11 +437,11 @@ def test_one_grid_divider_fits_names_and_keeps_the_latest_run_visible(site, meth
         expect(grid.locator("thead th a").first).to_be_visible()
         expect(page.get_by_role("separator")).to_have_count(1)
         full = task_cell.evaluate("""el => {
-            const range = document.createRange();
-            range.selectNodeContents(el);
-            const style = getComputedStyle(el);
-            return Math.ceil(range.getBoundingClientRect().width
-                + parseFloat(style.paddingLeft) + parseFloat(style.paddingRight));
+            const button=el.querySelector('button'),label=button.querySelector('span');
+            const style=getComputedStyle(el),control=getComputedStyle(button);
+            return label.scrollWidth + parseFloat(style.paddingLeft)
+                + parseFloat(style.paddingRight) + parseFloat(control.columnGap)
+                + button.querySelector('svg').getBoundingClientRect().width;
         }""")
 
         def resize_grid(wide):
