@@ -77,7 +77,8 @@ def test_rename_preserves_offsets_and_events(rename_project, kind, value):
         pipeline_code="P",
         task_code="T",
         action=ControlAction.PAUSE,
-        reason="standing hold",
+        outcome=RunStatus.SKIPPED,
+        reason="standing outcome",
     )
     first = rename(ctx)
     assert first.pipeline_id == pipeline and first.task_id is None

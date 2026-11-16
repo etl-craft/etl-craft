@@ -26,6 +26,7 @@ from sqlalchemy.engine import Connection, Engine
 from etl_craft.config import ConnectorConfig
 from etl_craft.core.actor import SYSTEM_ACTOR, acting_as, current_actor
 from etl_craft.core.enums import (
+    FINISHED_RUN_STATUSES,
     SETTLED_STATUSES,
     AttemptStatus,
     DeploymentProfile,
@@ -548,13 +549,9 @@ def _try_local_attempt(
     """Hold the shared process allowance through claim, child exit and outcome recording."""
     owner = leases.owner_id()
     with engine.begin() as conn:
-        from etl_craft.engine import standing_pauses
         from etl_craft.engine.agent_transitions import claim_with_capacity
         from etl_craft.execution.placement import local_capacity, local_headroom
 
-        paused = standing_pauses.apply_queued(conn, spec.attempt_id)
-        if paused is not None:
-            return TaskOutcome(paused.outcome, paused.describe(), spec.task_run_id)
         claimed = claim_with_capacity(
             conn,
             spec.attempt_id,
@@ -569,6 +566,11 @@ def _try_local_attempt(
             wait=True,
         )
         if not claimed:
+            result = conn.execute(
+                statement(conn, "task_run_result"), {"task_run_id": spec.task_run_id}
+            ).one()
+            if result.status in FINISHED_RUN_STATUSES:
+                return TaskOutcome(RunStatus(result.status), result.error_message, spec.task_run_id)
             from etl_craft.engine.placement import record_wait_reasons
 
             record_wait_reasons(

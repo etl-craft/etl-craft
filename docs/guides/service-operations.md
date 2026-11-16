@@ -192,5 +192,5 @@ in a new context. See the [control guide](run-control.md#recover-or-restart-an-e
 Pipeline `ControlRequest` pauses accept `active_runs=ActiveRuns.DRAIN` (default) or `FINISH`,
 with `replace=True` to switch an open version atomically. Task pauses require a markable
 `outcome` and refuse `active_runs`; their outcome applies before the task starts, including
-under earlier admissions. `ActionName.HOLDS` and its read operation are removed. All interfaces
+under earlier admissions. All interfaces
 continue to invoke the same control operation for role checks and audit attribution.

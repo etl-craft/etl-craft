@@ -233,9 +233,8 @@ A repeated pause requires `--replace`, which closes and opens the pause version 
 FINISH to DRAIN takes effect at the next dispatch boundary; DRAIN to FINISH releases waiting work.
 
 `AUD_PIPELINE_PAUSES` retains the mode, versions, actor, reason and resume decision. Existing
-pipeline pauses created before this feature retain **FINISH**, matching their original behaviour.
-`hold`, `release`, their controls and the holds API no longer exist. To stop dispatch for
-maintenance, pause the pipeline with DRAIN; there is no longer a hold of one task for inspection.
+pipeline pauses created before migration 0096 retain **FINISH**. To stop dispatch for
+maintenance, pause the pipeline with DRAIN.
 
 HTTP clients use `POST /api/v1/projects/{project}/controls` with `pipeline_code`, `action`
 (`PAUSE` or `RESUME`), `reason` and optional pipeline `active_runs` (`DRAIN` or `FINISH`).

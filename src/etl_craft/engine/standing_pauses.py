@@ -103,15 +103,10 @@ def pin(conn: Connection, pipeline_id: int, run_id: int, actor: Actor) -> None:
 
 def drains(conn: Connection, pipeline_id: int, run_id: int) -> bool:
     """Fence dispatch for DRAIN pauses, except for one-run pause permissions."""
-    return bool(
-        conn.execute(
-            statement(conn, "pipeline_pause_drains"),
-            {
-                "pipeline_id": pipeline_id,
-                "run_id": run_id,
-            },
-        ).scalar_one()
-    )
+    from etl_craft.engine.controls import dispatch_policy
+
+    policy = dispatch_policy(conn, run_id)
+    return bool(policy and policy[0].pipeline_id == pipeline_id and policy[0].draining)
 
 
 def at_task(
@@ -192,10 +187,7 @@ def apply_queued(conn: Connection, attempt_id: int) -> TaskPause | None:
     task = conn.execute(
         statement(conn, "control_attempt_context"), {"attempt_id": attempt_id}
     ).one()
-    run = conn.execute(
-        statement(conn, "control_run_context"), {"run_id": task.pipeline_run_id}
-    ).one()
-    pause = at_task(conn, run.pipeline_id, task.pipeline_run_id, task.task_id, datetime.now(UTC))
+    pause = at_task(conn, task.pipeline_id, task.pipeline_run_id, task.task_id, datetime.now(UTC))
     if pause is not None:
         apply(conn, pause, task.pipeline_run_id)
     return pause

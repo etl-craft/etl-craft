@@ -352,7 +352,7 @@ and paused tasks with their required outcome, scope, expiry, actor and reason. E
 Pipeline **Pause** preselects **Stop active runs at the next task** (DRAIN); choose
 **Let active runs finish** for FINISH. **Replace pause** changes the open mode atomically.
 Task history and run inspection offer **Pause task**, with **SKIPPED** visibly preselected;
-SUCCESS and FAILED are the other outcomes. There is no wait pause and no Hold/Release action.
+SUCCESS and FAILED are the other outcomes.
 
 On a pipeline's **Runs** and **Matrix** tabs, filter runs by **Pool**, **Agent id** or
 **Failure class** to find, for example, the runs that failed permanently or ran on one agent;
