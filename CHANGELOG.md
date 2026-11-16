@@ -6,6 +6,11 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+- Top-bar search keeps keyboard-selected results visible and announces the selected option;
+  failed searches show their cause and a Retry search button without hiding page shortcuts.
+- Full-page navigation focuses the content pane; workspace tabs and run/task selections retain
+  focus. Action feedback stays until dismissed, with a larger desktop and touch close target.
+
 - Pipeline Pause/Resume uses one shared confirmation in the pipeline header and Pipelines row,
   including the scheduled resume choices. Held and paused keeps pause facts and pipeline links;
   resume from the pipeline page instead of its duplicate pipeline Resume button. Bulk pipeline

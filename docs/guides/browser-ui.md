@@ -52,7 +52,10 @@ day labels stay dates. Both themes use the catalog's shared assets and the produ
 unwrapped (hover shows the full value); **Wrap text** wraps them, and the choice is kept.
 
 Use Tab and Shift+Tab to move, the skip link to reach content, `/` or Ctrl+K for search, and
-Escape to close a dialog or menu. Every project page names its environment and
+Escape to close a dialog or menu. Opening a different page focuses its content pane; changing
+workspace tabs or run/task selections leaves focus on the control you used. Action feedback stays
+until you dismiss it, so background updates cannot remove an answer before you finish reading it.
+Every project page names its environment and
 governance; production has a stronger bordered badge as well as the word PRODUCTION.
 
 The page is a standard application frame. A header bar holds the logo, the project switcher (the
@@ -282,7 +285,10 @@ their code or name, a run by its exact run id or run key, and tables when you ca
 whole project. Results open the object's page; a table opens its catalog page. The search page
 also lists the pipelines and runs you opened recently in this browser; they are kept in the
 browser only. `etl-craft search TEXT` and `GET /api/v1/projects/{project}/search?q=TEXT` return
-the same hits. The interface names task handlers in words (for example, Email alert); API and
+the same hits. In top-bar suggestions, Up/Down selects a result and scrolls it into view; Enter
+opens it, and Escape closes the suggestions. A failed search names the query and the cause,
+with **Retry search** reachable by Tab; page shortcuts remain available during an index outage.
+The interface names task handlers in words (for example, Email alert); API and
 CLI results retain the handler codes.
 
 ## Administration

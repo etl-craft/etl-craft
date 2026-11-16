@@ -37,6 +37,10 @@ export function AppShell() {
   const { project: addressed } = useParams();
   const { code, ready } = useActiveProject();
   const location = useLocation();
+  const main = React.useRef<HTMLElement>(null);
+  React.useEffect(() => {
+    main.current?.focus({ preventScroll: true });
+  }, [location.pathname]);
   // A workspace page (a pipeline, the catalog) fills the screen and its panes scroll on their own.
   const fill = /^\/projects\/[^/]+(\/(pipelines\/[^/]+|catalog(\/.*)?))?$/.test(location.pathname);
   const navigate = useNavigate();
@@ -188,7 +192,7 @@ export function AppShell() {
             }}
           />
         </aside>
-        <main id="main" data-scroll-area className={cn("sheet min-w-0 flex-1 overflow-y-auto", fill && "lg:overflow-hidden")}>
+        <main ref={main} id="main" tabIndex={-1} aria-label="Page content" data-scroll-area className={cn("sheet min-w-0 flex-1 overflow-y-auto", fill && "lg:overflow-hidden")}>
           <div key={location.pathname.split("/").slice(0, 4).join("/")} data-edge="" data-fill={fill ? "" : undefined} className={cn("page-in w-full", fill ? "flex min-h-full flex-col lg:h-full lg:min-h-0" : "min-h-full")}>
             {unavailable && ready ? (
               <Notice>
