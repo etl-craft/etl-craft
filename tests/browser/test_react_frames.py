@@ -16,9 +16,7 @@ pytestmark = pytest.mark.browser
 @pytest.mark.parametrize("scheme", ["light", "dark"])
 @pytest.mark.parametrize("width", [1440, 390])
 @pytest.mark.parametrize("view", ["mapping", "lineage", "graph"])
-def test_native_diagram_scrollbars_move_the_view_and_follow_its_controls(
-    mappings, width, view, scheme
-):
+def test_diagram_scrollbars_move_the_view_and_follow_its_controls(mappings, width, view, scheme):
     _, url = mappings
     routes = {
         "mapping": "/ui/projects/default/catalog/tasks/ORDERS.load?tab=mapping",
@@ -49,8 +47,8 @@ def test_native_diagram_scrollbars_move_the_view_and_follow_its_controls(
         }""")
         canvas = page.locator(".react-flow__viewport")
         expect(canvas).to_be_visible()
-        horizontal = page.get_by_role("region", name="Diagram horizontal scrollbar", exact=True)
-        vertical = page.get_by_role("region", name="Diagram vertical scrollbar", exact=True)
+        horizontal = page.get_by_role("scrollbar", name="Diagram horizontal scrollbar", exact=True)
+        vertical = page.get_by_role("scrollbar", name="Diagram vertical scrollbar", exact=True)
         assert page.locator(".react-flow__handle").evaluate_all(
             "handles=>handles.every(e=>getComputedStyle(e).opacity==='0')"
         )
@@ -100,18 +98,21 @@ def test_native_diagram_scrollbars_move_the_view_and_follow_its_controls(
                     dots.transform==='none'&&dots.boxShadow!=='none';
             }""")
             columns = node.locator(".nowheel")
-            assert columns.evaluate("e=>getComputedStyle(e).overflowY") == "scroll"
-            assert columns.evaluate("e=>e.offsetWidth-e.clientWidth") >= 12
-            assert columns.evaluate("""e=>
-                getComputedStyle(e,'::-webkit-scrollbar-corner').backgroundColor===
-                getComputedStyle(e,'::-webkit-scrollbar-track').backgroundColor""")
+            assert columns.evaluate("e=>getComputedStyle(e).overflowY") == "auto"
+            assert (
+                node.get_by_role("scrollbar", name="Window vertical scrollbar").evaluate(
+                    "e=>e.offsetWidth"
+                )
+                == 14
+            )
+            expect(node.locator(".scroll-window-corner")).to_be_visible()
         if view == "graph":
             expect(node).to_have_attribute("data-collapsed-tile", "false")
+            expect(node.get_by_role("scrollbar", name="Window vertical scrollbar")).to_be_visible()
             assert (
-                node.locator(".diagram-body").evaluate("e=>getComputedStyle(e).overflowY")
-                == "scroll"
+                node.locator(".app-scrollport").evaluate("e=>getComputedStyle(e).overflowY")
+                == "auto"
             )
-            assert node.locator(".diagram-body").evaluate("e=>e.offsetWidth-e.clientWidth") >= 12
         assert (
             node.locator(".mapping-drag-handle").evaluate(
                 "e=>getComputedStyle(e).borderBottomStyle"
@@ -124,69 +125,41 @@ def test_native_diagram_scrollbars_move_the_view_and_follow_its_controls(
             )
         for control, axis in ((horizontal, "x"), (vertical, "y")):
             expect(control).to_be_visible()
-            assert (
-                control.evaluate(
-                    "(e,axis)=>axis==='x'?e.offsetHeight-e.clientHeight:e.offsetWidth-e.clientWidth",
-                    axis,
-                )
-                >= 23
-            )
-            assert (
-                control.evaluate(
-                    "(e, axis)=>getComputedStyle(e)[axis==='x'?'overflowX':'overflowY']", axis
-                )
-                == "scroll"
-            )
-            control.scroll_into_view_if_needed()
-            before = control.evaluate("(e, axis)=>axis==='x'?e.scrollLeft:e.scrollTop", axis)
+            assert control.evaluate("(e,axis)=>axis==='x'?e.offsetHeight:e.offsetWidth", axis) >= 23
+            before = control.get_attribute("aria-valuenow")
             transform = canvas.get_attribute("style")
             control.hover()
             page.mouse.wheel(120 if axis == "x" else 0, 120 if axis == "y" else 0)
-            page.wait_for_function(
-                "([e,axis,before])=>(axis==='x'?e.scrollLeft:e.scrollTop)!==before",
-                arg=[control.element_handle(), axis, before],
-            )
+            expect(control).not_to_have_attribute("aria-valuenow", before)
             expect(canvas).not_to_have_attribute("style", transform)
-        before = horizontal.evaluate("e=>e.scrollLeft")
+        before = float(horizontal.get_attribute("aria-valuenow"))
         page.get_by_role("button", name="Move view right", exact=True).click()
         page.wait_for_function(
-            "([e,before])=>e.scrollLeft>before", arg=[horizontal.element_handle(), before]
+            "([e,before])=>Number(e.getAttribute('aria-valuenow'))>before",
+            arg=[horizontal.element_handle(), before],
         )
         horizontal.focus()
-        before = horizontal.evaluate("e=>e.scrollLeft")
+        before = float(horizontal.get_attribute("aria-valuenow"))
         page.keyboard.press("ArrowLeft")
         page.wait_for_function(
-            "([e,before])=>e.scrollLeft<before", arg=[horizontal.element_handle(), before]
+            "([e,before])=>Number(e.getAttribute('aria-valuenow'))<before",
+            arg=[horizontal.element_handle(), before],
         )
         horizontal.scroll_into_view_if_needed()
         box = horizontal.bounding_box()
-        before = horizontal.evaluate("e=>e.scrollLeft")
-        horizontal.evaluate("""e=>{
-            e.dataset.scrolling='true';
-            e.addEventListener('scrollend',()=>e.dataset.scrolling='false',{once:true});
-        }""")
+        before = horizontal.get_attribute("aria-valuenow")
         page.mouse.click(box["x"] + box["width"] - 5, box["y"] + box["height"] - 5)
-        page.wait_for_function(
-            "([e,before])=>e.scrollLeft!==before", arg=[horizontal.element_handle(), before]
-        )
-        page.wait_for_function("e=>e.dataset.scrolling==='false'", arg=horizontal.element_handle())
-        horizontal.scroll_into_view_if_needed()
-        thumb = horizontal.evaluate("""e=>{
-            const box=e.getBoundingClientRect();
-            const thickness=e.offsetHeight-e.clientHeight-1;
-            const inset=parseFloat(getComputedStyle(e,'::-webkit-scrollbar-button').width)||0;
-            const track=e.clientWidth-2*inset;
-            const length=Math.max(thickness,track*e.clientWidth/e.scrollWidth);
-            const position=(track-length)*e.scrollLeft/(e.scrollWidth-e.clientWidth);
-            return {x:box.x+inset+position+length/2,y:box.bottom-thickness/2};
-        }""")
-        before = horizontal.evaluate("e=>e.scrollLeft")
-        page.mouse.move(thumb["x"], thumb["y"])
+        expect(horizontal).not_to_have_attribute("aria-valuenow", before)
+        thumb = horizontal.locator(".app-scrollbar-thumb").bounding_box()
+        before = float(horizontal.get_attribute("aria-valuenow"))
+        x, y = thumb["x"] + thumb["width"] / 2, thumb["y"] + thumb["height"] / 2
+        page.mouse.move(x, y)
         page.mouse.down()
-        page.mouse.move(thumb["x"] - 24, thumb["y"], steps=8)
+        page.mouse.move(x - 24, y, steps=8)
         page.mouse.up()
         page.wait_for_function(
-            "([e,before])=>e.scrollLeft<before", arg=[horizontal.element_handle(), before]
+            "([e,before])=>Number(e.getAttribute('aria-valuenow'))<before",
+            arg=[horizontal.element_handle(), before],
         )
         page.get_by_role("button", name="Fit view", exact=True).click()
         expect(horizontal).to_be_visible()
@@ -208,14 +181,15 @@ def test_native_diagram_scrollbars_move_the_view_and_follow_its_controls(
                 )
             ) from error
         zoom = canvas.evaluate("e=>new DOMMatrix(getComputedStyle(e).transform).a")
-        extent = horizontal.evaluate("e=>e.scrollWidth")
+        extent = float(horizontal.get_attribute("aria-valuemax"))
         page.get_by_role("button", name="Zoom in", exact=True).click()
         page.wait_for_function(
             "([e,before])=>new DOMMatrix(getComputedStyle(e).transform).a>before",
             arg=[canvas.element_handle(), zoom],
         )
         page.wait_for_function(
-            "([e,before])=>e.scrollWidth>before", arg=[horizontal.element_handle(), extent]
+            "([e,before])=>Number(e.getAttribute('aria-valuemax'))>before",
+            arg=[horizontal.element_handle(), extent],
         )
         assert page.evaluate("document.documentElement.scrollWidth<=innerWidth")
         assert problems == []

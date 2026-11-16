@@ -222,7 +222,11 @@ def test_mapping_resize_grips_and_scrollbars_do_not_cover_column_controls(mappin
         page.wait_for_function("e=>e.scrollTop>0", arg=columns.element_handle())
         assert page.locator(".react-flow__viewport").get_attribute("style") == transform
         assert abs(source.locator(".mapping-drag-handle").bounding_box()["y"] - header["y"]) < 1
-        assert columns.evaluate("e=>getComputedStyle(e).scrollbarGutter") == "stable"
+        assert columns.evaluate("""e=>{
+            const frame=e.closest('.scroll-window');
+            return frame.clientWidth-e.clientWidth===14 && frame.clientHeight-e.clientHeight===14;
+        }""")
+        expect(source.get_by_role("scrollbar", name="Window vertical scrollbar")).to_be_visible()
         # Collapse changes geometry; expanding restores the chosen size and its scrollable rows.
         source.get_by_role("button", name="Collapse raw.orders", exact=True).click()
         page.wait_for_function(

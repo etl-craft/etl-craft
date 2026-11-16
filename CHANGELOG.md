@@ -6,10 +6,14 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+- Diagram canvases and expanded windows draw persistent scrollbar tracks and thumbs consistently
+  across browsers, including when native scrollbars are hidden. Shared controls support thumb
+  dragging, track clicks, arrows, Page Up/Down, Home/End and touch; node content keeps native scrolling.
+
 - Selected mapping and lineage columns keep their complete outline visible at the first and
   last rows of a scrolling window.
 
-- Diagrams have framed working surfaces with persistent native horizontal and vertical
+- Diagrams have framed working surfaces with persistent horizontal and vertical
   scrollbars synchronized with pan, zoom and Fit view. Expanded objects use framed title bars;
   collapsed tasks use type icons with their names underneath. Workspace panes and column lists expose
   clearer frames and neutral scroll tracks. Run grids keep the newest column clear of native

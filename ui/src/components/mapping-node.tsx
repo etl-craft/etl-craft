@@ -1,3 +1,4 @@
+import { ScrollWindow } from "@/components/scrollbar";
 import "@xyflow/react/dist/style.css";
 import * as React from "react";
 import {Handle,NodeResizer,NodeResizeControl,ResizeControlVariant,useStore,useReactFlow,useUpdateNodeInternals,Position,type Node,type NodeProps,type Edge,type EdgeProps} from "@xyflow/react";
@@ -70,7 +71,7 @@ export function MappingBox({ id, data }: NodeProps<Node<BoxData>>) {
     const element = list.current;
     if (!element) return;
     const measure = () => setViewport(previous => {
-      const next = {top: element.offsetTop, height: element.clientHeight, bottom:element.offsetTop+element.offsetHeight, corner:element.offsetWidth>element.clientWidth&&element.offsetHeight>element.clientHeight, scroll: element.scrollTop};
+      const next = {top: element.parentElement!.offsetTop, height: element.clientHeight, bottom:element.parentElement!.offsetTop+element.parentElement!.offsetHeight, corner:true, scroll: element.scrollTop};
       return previous.top === next.top && previous.height === next.height && previous.bottom===next.bottom && previous.corner===next.corner && previous.scroll === next.scroll ? previous : next;
     });
     measure();
@@ -95,11 +96,11 @@ export function MappingBox({ id, data }: NodeProps<Node<BoxData>>) {
         {column.output !== false ? <Handle style={{top}} title={column.name} className="!bg-border-strong" type="source" position={Position.Right} id={column.name}/> : null}
       </React.Fragment>;
     })}
-    <div ref={list} onScroll={event => { const scroll = event.currentTarget.scrollTop; setViewport(previous => ({...previous, scroll})); }} className={cn("nowheel nodrag relative min-h-0 overflow-scroll px-2 pb-2", fixedHeight!==undefined && "flex-1")} style={fixedHeight===undefined ? {maxHeight: SHOWN_ROWS * ROW_HEIGHT + COLUMN_PADDING} : undefined}>
-      <div className="min-w-max">{data.columns.map(column => <div key={column.name} className="relative flex h-8 items-center" style={{opacity:data.selected.size&&!data.selected.has(selectionForPort(data.selection,column))?0.3:1}} data-port={column.name}>
+    <ScrollWindow viewportRef={list} onScroll={event => { const scroll = event.currentTarget.scrollTop; setViewport(previous => ({...previous, scroll})); }} className={cn("relative min-h-0", fixedHeight!==undefined && "flex-1")} style={fixedHeight===undefined ? {maxHeight: SHOWN_ROWS * ROW_HEIGHT + COLUMN_PADDING} : undefined}>
+      <div className="min-w-max px-2 pb-2">{data.columns.map(column => <div key={column.name} className="relative flex h-8 items-center" style={{opacity:data.selected.size&&!data.selected.has(selectionForPort(data.selection,column))?0.3:1}} data-port={column.name}>
         <Button size="sm" variant="ghost" className={cn("relative !h-8 min-h-8 w-full justify-start text-left", data.selected.has(selectionForPort(data.selection,column)) && "ring-2 ring-inset ring-accent")} onClick={() => data.onSelect(selectionForPort(data.selection,column))}><span className="grid min-w-0 flex-1 text-left" title={column.logic ? `${column.name}\n${logicLabel}: ${column.logic}` : column.name}><span className="whitespace-nowrap">{column.name.split(".").slice(data.kind==="source"||data.kind==="target" ? -1 : -2).join(".")}</span>{column.logic ? <span className="whitespace-nowrap text-xs font-normal leading-3 text-muted">{column.logic}</span> : null}</span>{column.logic ? <MappingLogicMark kind={data.kind}/> : null}{column.detail ? <span className="max-w-[45%] truncate bg-surface text-muted" title={column.detail}>{column.detail}</span> : null}</Button>
       </div>)}</div>
-    </div>
+    </ScrollWindow>
     {data.description && data.kind==="write" ? <><button aria-expanded={engine} className="nodrag nopan w-full px-2 py-1 text-left text-xs text-muted focus-visible:outline-2 focus-visible:outline-ring" onClick={()=>setEngine(!engine)}>{`Engine columns (${data.description.split(",").length})`}</button>{engine ? <ul className="grid gap-1 px-2 pb-2 text-xs text-muted">{data.description.split(",").map(name=><li key={name}>{name.trim().toLowerCase()}</li>)}</ul> : null}</> : null}
   </DiagramNode></>;
 }
