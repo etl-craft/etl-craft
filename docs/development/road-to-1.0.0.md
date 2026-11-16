@@ -198,7 +198,7 @@ item's text, or work done early under another item.
 | S7.AP Native catalog | Done | #389 | All six slices, shape 2, definition flow and task mappings; owner approved the screenshots 2026-11-13 |
 | S7.AQ Readable run identifiers | Done | #347, #369, #370 | A label beside every run and task run id, stored by the Engine DB; accepted wherever the integer is, and shown beside it |
 | S7.AR Restarting pipelines | Done | #349, #350, #356, #358 | Automatic starts on a chosen run ending, with `Allowed_auto_restarts` per environment; the demo's Gamma pipeline runs without a schedule. |
-| S7.AS Project dashboard and navigation | Done | #401, #402, #404, #405, #406, #407 | Slices 1–5 owner approved; shared controls polished, with framed working panes, application-drawn diagram scrollbars and unclipped column selection in follow-up |
+| S7.AS Project dashboard and navigation | Done | #401, #402, #404, #405, #406, #407, #413 | Slices 1–5 owner approved; shared controls polished, with framed working panes, application-drawn diagram scrollbars, unclipped column selection and accessible search/action feedback in follow-up |
 | S7.M Stewardship uploads | Done (M2) | #296, #305 | Atomic receipts and safe stored names; processed layout, retention archives and verified reruns; crash recovery and guarded upload history |
 | S7.S Seed tables | Done | #308 | Typed pinned-bundle seeds replace reference tables until recorded stewardship handover |
 | S7.T Business calendars | Done | #276 | Shared holiday and weekend calendars for schedules, run dates, backfill and catch-up |
@@ -220,6 +220,8 @@ item's text, or work done early under another item.
 | S8.H Support Insights scenario coverage | Planned | | Deterministic mixed-quality generators, every-feature demonstrations, business-rule and stewardship cases, and runnable README coverage |
 
 ### Handover notes
+
+- **S7.AS shared interaction follow-up (#413).** Search selections stay visible and announced, failures offer keyboard retry, page navigation focuses content without disturbing workspace selections, and action feedback remains dismissible; the approved frames and navigation rules are unchanged.
 
 - **S7.AS action consolidation (#412).** Pipeline header and list rows share Pause/Resume; Held and paused keeps facts and links to that flow, while bulk/task controls, distinct Recover/Reconcile and Project Home remain unchanged.
 

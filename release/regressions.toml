@@ -438,3 +438,10 @@ pipeline-action-consolidation = [
     "tests/browser/test_react_action_consolidation.py::test_pipeline_row_pause_resume_keeps_confirmation_policy_and_header_action",
     "tests/browser/test_react_action_consolidation.py::test_held_pipeline_resume_is_replaced_by_link_without_losing_pause_facts",
 ]
+
+shared-search-feedback = [
+    "tests/browser/test_react_search_feedback.py::test_search_keyboard_selection_is_announced_and_scrolls_inside_the_popup",
+    "tests/browser/test_react_search_feedback.py::test_search_failure_can_be_retried_with_keyboard_and_keeps_local_navigation",
+    "tests/browser/test_react_search_feedback.py::test_page_navigation_focuses_content_but_workspace_selection_keeps_focus",
+    "tests/browser/test_react_search_feedback.py::test_action_feedback_has_a_usable_close_target_and_remains_keyboard_dismissible",
+]

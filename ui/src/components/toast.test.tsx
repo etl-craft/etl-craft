@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import * as React from "react";
 import { act } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { TOAST_MS, ToastProvider, useToast } from "@/components/toast";
+import { ToastProvider, useToast } from "@/components/toast";
 
 function Asker() {
   const toast = useToast();
@@ -44,7 +44,7 @@ describe("toasts", () => {
     expect(screen.getByRole("status")).not.toHaveTextContent("Recover accepted");
   });
 
-  it("close by themselves after a few seconds", () => {
+  it("keep the answer until it is dismissed, including while focused", () => {
     vi.useFakeTimers();
     render(
       <ToastProvider>
@@ -53,9 +53,13 @@ describe("toasts", () => {
     );
     fireEvent.click(screen.getByText("Ask"));
     expect(screen.getByRole("status")).toHaveTextContent("Recover accepted");
+    screen.getByLabelText("Dismiss").focus();
     act(() => {
-      vi.advanceTimersByTime(TOAST_MS);
+      vi.advanceTimersByTime(60_000);
     });
+    expect(screen.getByRole("status")).toHaveTextContent("Recover accepted");
+    expect(screen.getByLabelText("Dismiss")).toHaveFocus();
+    fireEvent.click(screen.getByLabelText("Dismiss"));
     expect(screen.getByRole("status")).not.toHaveTextContent("Recover accepted");
   });
 

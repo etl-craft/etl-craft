@@ -2,7 +2,9 @@ import { searchDetail } from "@/lib/labels";
 import { useQuery } from "@tanstack/react-query";
 import * as React from "react";
 import { useNavigate } from "react-router-dom";
-import { Highlight } from "@/components/common";
+import { failureText } from "@/hooks";
+import { Button } from "@/components/ui/button";
+import { Highlight, Notice } from "@/components/common";
 import { hitLink } from "@/pages/search";
 import { getJson, project } from "@/lib/api";
 import { agentsPath, catalogPath, consolePath, heldPath, maintenancePath, pipelinesPath, projectHomePath, runsPath, scheduledPath, searchPath, settingsPath, systemPath, uploadsPath } from "@/lib/routes";
@@ -41,6 +43,8 @@ export const SearchBox = React.forwardRef<HTMLInputElement, { code: string }>(fu
   const [open, setOpen] = React.useState(false);
   const [at, setAt] = React.useState(-1);
   const root = React.useRef<HTMLDivElement>(null);
+  const listId = React.useId();
+  const optionId = (index: number) => `${listId}-option-${index}`;
   // The question is sent a moment after typing stops.
   React.useEffect(() => {
     const wait = window.setTimeout(() => setTyped(text.trim()), 200);
@@ -53,6 +57,10 @@ export const SearchBox = React.forwardRef<HTMLInputElement, { code: string }>(fu
     ...pages.map((p) => ({ key: `page:${p.label}`, label: p.label, detail: "Go to", to: p.to })),
     ...groups.flatMap((g) => g.hits).map((h) => ({ key: `${h.kind}:${h.label}:${h.run_id ?? ""}:${h.pipeline_code ?? ""}`, label: h.label, detail: searchDetail(h), to: hitLink(code, h).to })),
   ];
+  const activeId = open && flat[at] ? optionId(at) : undefined;
+  React.useEffect(() => {
+    if (activeId) document.getElementById(activeId)?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }, [activeId]);
   React.useEffect(() => {
     if (!open) return;
     const away = (event: MouseEvent) => (root.current?.contains(event.target as Node) ? undefined : setOpen(false));
@@ -65,19 +73,19 @@ export const SearchBox = React.forwardRef<HTMLInputElement, { code: string }>(fu
     navigate(to);
   };
   const key = (event: React.KeyboardEvent) => {
-    if (event.key === "Escape") setOpen(false);
-    else if (event.key === "ArrowDown" && flat.length) {
+    if (event.key === "ArrowDown" && flat.length) {
       event.preventDefault();
       setOpen(true);
       setAt((i) => (i + 1) % flat.length);
     } else if (event.key === "ArrowUp" && flat.length) {
       event.preventDefault();
+      setOpen(true);
       setAt((i) => (i <= 0 ? flat.length - 1 : i - 1));
     }
   };
   let index = -1;
   return (
-    <div ref={root} className="relative ml-2 hidden max-w-sm flex-1 sm:block">
+    <div ref={root} onKeyDown={(event) => { if (event.key === "Escape") { root.current?.querySelector("input")?.focus(); setOpen(false); } }} onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false); }} className="relative ml-2 hidden max-w-sm flex-1 sm:block">
       <form
         role="search"
         onSubmit={(event) => {
@@ -93,7 +101,8 @@ export const SearchBox = React.forwardRef<HTMLInputElement, { code: string }>(fu
           type="search"
           role="combobox"
           aria-expanded={open}
-          aria-controls="search-suggestions"
+          aria-controls={open ? listId : undefined}
+          aria-activedescendant={activeId}
           aria-autocomplete="list"
           aria-label="Search pipelines, tasks, tables and runs"
           placeholder="Search or jump to (Ctrl+K)"
@@ -110,7 +119,9 @@ export const SearchBox = React.forwardRef<HTMLInputElement, { code: string }>(fu
         />
       </form>
       {open ? (
-        <div id="search-suggestions" role="listbox" aria-label="Matches" className="absolute left-0 top-full z-40 mt-1 max-h-[70vh] w-[min(34rem,90vw)] overflow-auto rounded-md border border-border bg-surface p-1 shadow-lg">
+        <div className="absolute left-0 top-full z-40 mt-1 max-h-[70vh] w-[min(34rem,90vw)] overflow-auto rounded-md border border-border bg-surface p-1 shadow-lg">
+          {typed.length >= 2 && found.isError ? <div className="grid gap-2 p-2"><Notice className="min-w-0 break-words">Search for “{typed}” failed: {failureText(found.error)} Retry the search.</Notice><Button type="button" onClick={() => { root.current?.querySelector("input")?.focus(); void found.refetch(); }}>Retry search</Button></div> : null}
+          <div id={listId} role="listbox" aria-label="Matches">
           {typed.length >= 2 && found.isPending ? <p className="m-0 px-3 py-2 text-xs text-muted">Searching…</p> : null}
           {typed.length >= 2 && found.isSuccess && flat.length === 0 ? <p className="m-0 px-3 py-2 text-sm text-muted">Nothing matches &ldquo;{typed}&rdquo;.</p> : null}
           {pages.length ? (
@@ -120,7 +131,7 @@ export const SearchBox = React.forwardRef<HTMLInputElement, { code: string }>(fu
                 index += 1;
                 const mine = index;
                 return (
-                  <button key={p.label} type="button" role="option" aria-selected={at === mine} onMouseEnter={() => setAt(mine)} onClick={() => go(p.to)} className={cn("flex w-full cursor-pointer items-baseline gap-2 rounded-sm px-3 py-1 text-left text-sm", at === mine && "bg-fg/10")}>
+                  <button key={p.label} id={optionId(mine)} tabIndex={-1} type="button" role="option" aria-selected={at === mine} onMouseEnter={() => setAt(mine)} onClick={() => go(p.to)} className={cn("flex w-full cursor-pointer items-baseline gap-2 rounded-sm px-3 py-1 text-left text-sm", at === mine && "bg-fg/10")}>
                     <span className="truncate font-medium">{p.label}</span>
                   </button>
                 );
@@ -134,7 +145,7 @@ export const SearchBox = React.forwardRef<HTMLInputElement, { code: string }>(fu
                 index += 1;
                 const mine = index;
                 return (
-                  <button key={`${h.kind}:${h.label}:${h.run_id ?? ""}:${h.pipeline_code ?? ""}`} type="button" role="option" aria-selected={at === mine} onMouseEnter={() => setAt(mine)} onClick={() => go(hitLink(code, h).to)} className={cn("flex w-full cursor-pointer items-baseline gap-2 rounded-sm px-3 py-1.5 text-left text-sm", at === mine && "bg-fg/10")}>
+                  <button key={`${h.kind}:${h.label}:${h.run_id ?? ""}:${h.pipeline_code ?? ""}`} id={optionId(mine)} tabIndex={-1} type="button" role="option" aria-selected={at === mine} onMouseEnter={() => setAt(mine)} onClick={() => go(hitLink(code, h).to)} className={cn("flex w-full cursor-pointer items-baseline gap-2 rounded-sm px-3 py-1.5 text-left text-sm", at === mine && "bg-fg/10")}>
                     <span className="truncate font-medium"><Highlight text={h.label} words={typed} /></span>
                     <span className="truncate text-xs text-muted">{searchDetail(h)}</span>
                   </button>
@@ -142,6 +153,7 @@ export const SearchBox = React.forwardRef<HTMLInputElement, { code: string }>(fu
               })}
             </div>
           ))}
+          </div>
           {found.isSuccess && found.data.truncated ? <p className="m-0 px-3 py-1 text-xs text-muted">Press Enter for the full list.</p> : null}
         </div>
       ) : null}
