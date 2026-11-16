@@ -244,14 +244,13 @@ def test_a_full_refresh_warns_before_emptying_a_target_and_waits_for_acceptance(
     assert plan is not None and json.loads(plan)["empty_targets"] == ["mart.orders"]
 
 
-def test_scheduled_and_held_pages_list_work_and_release_a_hold(scene):
-    ctx, url, active = scene
+def test_scheduled_and_paused_pages_list_work_and_resume_a_pause(scene):
+    ctx, url, _ = scene
     act(
         ctx,
         ActionName.CONTROL,
         pipeline_code="SALES",
-        run_id=active,
-        action="HOLD",
+        action="PAUSE",
         reason="check totals",
     )
     with sync_playwright() as pw:
@@ -263,14 +262,14 @@ def test_scheduled_and_held_pages_list_work_and_release_a_hold(scene):
         expect(nxt.get_by_role("link", name="SALES")).to_have_count(0)  # not scheduled
         shoot(page, "scheduled")
         page.goto(url + "/ui/projects/default/held")
-        held = page.get_by_role("table", name="Held runs and tasks")
+        held = page.get_by_role("table", name="Paused pipelines")
         expect(held.get_by_text("check totals")).to_be_visible()
         shoot(page, "held")
-        held.get_by_role("button", name="Release").click()
+        held.get_by_role("button", name="Resume").click()
         dialog = page.get_by_role("dialog")
         dialog.get_by_label("Reason (kept in the audit trail)").fill("totals checked")
-        dialog.get_by_role("button", name="Release").click()
-        expect(page.get_by_text("Nothing is held.")).to_be_visible()
+        dialog.get_by_role("button", name="Resume").click()
+        expect(page.get_by_text("No pipeline is paused.")).to_be_visible()
         assert problems == []
         browser.close()
 
@@ -302,16 +301,14 @@ def test_a_viewer_can_read_the_pipelines_but_not_change_them(scene):
 @pytest.mark.parametrize("scheme", ["light", "dark"])
 @pytest.mark.parametrize("width", [1280, 390])
 def test_the_pipeline_pages_render_cleanly_in_both_themes_and_on_a_phone(scene, scheme, width):
-    ctx, url, active = scene
+    ctx, url, _ = scene
     act(
         ctx,
         ActionName.CONTROL,
         pipeline_code="SALES",
-        run_id=active,
-        action="HOLD",
+        action="PAUSE",
         reason="check totals",
     )
-    act(ctx, ActionName.CONTROL, pipeline_code="SALES", action="PAUSE", reason="freeze")
     pages = {
         "pipelines": "/ui/projects/default/pipelines",
         "pipeline": "/ui/projects/default/pipelines/OPS",

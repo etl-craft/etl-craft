@@ -220,7 +220,7 @@ def test_ids_cannot_bypass_restrictions_for_attempts_logs_or_controls(scene):
         ActionName.CONTROL,
         pipeline_code="PRIVATE",
         run_id=run,
-        action="HOLD",
+        action="STOP",
         reason="test restriction",
     )
     for action, fields in (

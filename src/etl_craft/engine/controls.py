@@ -80,16 +80,33 @@ def blocked(conn: Connection, run_id: int) -> dict[int | None, ControlAction]:
     return {row.task_id: ControlAction(row.action) for row in rows}
 
 
-def assert_dispatch(conn: Connection, run_id: int, task_id: int) -> None:
-    """Refuse even force/retry admissions while this task or its run is held/stopped."""
+def assert_dispatch(conn: Connection, run_id: int, task_id: int, *, wait: bool = False) -> bool:
+    """Refuse even force/retry admissions while the pipeline drains or this scope is stopped."""
+    from etl_craft.engine import standing_pauses
+
+    row = conn.execute(statement(conn, "control_run_context"), {"run_id": run_id}).one()
+    standing_pauses.lock(conn, row.pipeline_id)
     lock_run(conn, run_id)
+    if (
+        standing_pauses.drains(conn, row.pipeline_id, run_id)
+        and not conn.execute(
+            statement(conn, "pause_event_admitted"), {"run_id": run_id, "task_id": task_id}
+        ).scalar_one()
+    ):
+        if wait:
+            return False
+        raise RunRefusedError(
+            f"pipeline_run_id={run_id}, task_id={task_id}: pipeline pause is DRAIN; "
+            "expected dispatch permission; resume the pipeline or replace its pause with FINISH"
+        )
     fences = blocked(conn, run_id)
     action = fences.get(None) or fences.get(task_id)
     if action is not None:
         raise RunRefusedError(
             f"pipeline_run_id={run_id}, task_id={task_id}: dispatch is fenced by {action}; "
-            "inspect the control request and release the selected scope after it completes"
+            "inspect the control request and recover the selected scope after it completes"
         )
+    return True
 
 
 def guard_task(conn: Connection, task_run_id: int) -> None:
@@ -102,14 +119,14 @@ def guard_task(conn: Connection, task_run_id: int) -> None:
     assert_dispatch(conn, row.pipeline_run_id, row.task_id)
 
 
-def guard_attempt(conn: Connection, attempt_id: int) -> None:
+def guard_attempt(conn: Connection, attempt_id: int, *, wait: bool = False) -> bool:
     """Fence the queued-to-owned transition as well as initial queue creation."""
     row = conn.execute(
         statement(conn, "control_attempt_context"), {"attempt_id": attempt_id}
     ).one_or_none()
     if row is None:
-        return
-    assert_dispatch(conn, row.pipeline_run_id, row.task_id)
+        return True
+    return assert_dispatch(conn, row.pipeline_run_id, row.task_id, wait=wait)
 
 
 def affected(conn: Connection, attempt_ids: tuple[int, ...]) -> tuple[ControlAttempt, ...]:

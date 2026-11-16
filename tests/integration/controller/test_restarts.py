@@ -99,18 +99,31 @@ def test_the_environment_suppresses_endings_it_does_not_allow(engine_db):
     assert len(runs(engine_db, pipeline)) == 2
 
 
-def test_a_paused_pipeline_does_not_restart(engine_db):
+def test_a_paused_pipeline_does_not_restart_until_resumed(engine_db):
     paused, _run, end = ended(engine_db, "SUCCESS", "SUCCESS", "PAUSED")
     with engine_db.engine.begin() as conn:
         conn.execute(
             text(
-                "INSERT INTO AUD_PIPELINE_PAUSES (PIPELINE_ID, PAUSED_BY, REASON) "
-                "VALUES (:p, 'owner', 'maintenance')"
+                "INSERT INTO AUD_PIPELINE_PAUSES (PIPELINE_ID, PAUSED_BY, REASON, ACTIVE_RUNS) "
+                "VALUES (:p, 'owner', 'maintenance', 'DRAIN')"
             ),
             {"p": paused},
         )
     Restarts().refresh(context(engine_db), end + timedelta(hours=1))
     assert len(runs(engine_db, paused)) == 1
+    from etl_craft.core.enums import ActionName, ControlAction
+    from etl_craft.services.operations.actions import invoke
+    from etl_craft.services.operations.requests import ControlRequest
+
+    invoke(
+        context(engine_db),
+        ActionName.CONTROL,
+        ControlRequest(
+            pipeline_code="PAUSED", action=ControlAction.RESUME, reason="maintenance complete"
+        ),
+    )
+    Restarts().refresh(context(engine_db), end + timedelta(hours=1))
+    assert len(runs(engine_db, paused)) == 2
 
 
 def test_a_disabled_project_does_not_restart(engine_db):

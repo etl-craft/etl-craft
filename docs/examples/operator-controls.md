@@ -4,8 +4,8 @@ Use the exact run id returned by `etl-craft run --init-only`. These examples use
 control `17`; substitute the ids returned by your commands.
 
 ```bash
-etl-craft hold --pipeline-code SALES_DAILY --run-id 42 --task-code transform --reason "inspect input"
-etl-craft release --pipeline-code SALES_DAILY --run-id 42 --task-code transform --reason "ready"
+etl-craft pause --pipeline-code SALES_DAILY --active-runs DRAIN --reason "drain for maintenance"
+etl-craft resume --pipeline-code SALES_DAILY --then wait --reason "maintenance complete"
 etl-craft stop --pipeline-code SALES_DAILY --run-id 42 --request-key drain-42 --reason "maintenance"
 etl-craft control-request --control-id 17 --format json
 ```

@@ -122,7 +122,7 @@ committed work; inspect its exact run before retrying.
 | GET | `/run-zip` | `pipeline_code`; `run_id` or `run_key`: a zip of the run log, each attempt's log, the status, history and explain documents and `manifest.json`, streamed as an attachment |
 | POST | `/runs` | A `RunRequest`: `pipeline_code` and `task_code`, `standalone`, `rerun`, `with_downstream`, `run_date`, `backfill_from`/`backfill_to`, `full_refresh` with `empty_targets`, `reason` |
 | POST | `/marks` | `pipeline_code`, `reason`, and `status` or `watermark`; optional `task_code`, `rows`, `stale`, `new_run` |
-| POST | `/controls` | `pipeline_code`, `action` (`HOLD`, `RELEASE`, `STOP`, `ABORT`, `RECOVER`, `RESTART`, `RUN_PAUSED`, `PAUSE`, `RESUME`), `reason`; optional `task_code`, `request_key` |
+| POST | `/controls` | `pipeline_code`, `action` (`STOP`, `ABORT`, `RECOVER`, `RESTART`, `RUN_PAUSED`, `PAUSE`, `RESUME`), `reason`; optional `task_code`, `request_key` |
 | POST | `/controls/bulk` | `requests`: 1 to 100 controls, each with an explicit `run_id` or `run_key` and a unique `request_key` |
 | POST | `/reconciliations` | Optional `pipeline_code`, `task_code` |
 | GET, POST | `/tokens`; POST `/tokens/revoke` | Admin: list, create (`name`, `role`, optional `expires`), revoke (`token_id`) |
@@ -274,3 +274,14 @@ comparison after project and pipeline visibility checks. A visible mismatch retu
 `RunStateError` (HTTP 409) naming the expected label; a hidden or foreign run remains not found.
 Responses continue to contain numeric IDs. A label is an alternative spelling of an exact
 selection, never a request for the latest run.
+
+### Pipeline and task pause policy
+
+`POST /controls` with `action: "PAUSE"` defaults a pipeline's `active_runs` to `DRAIN`;
+`FINISH` lets admitted runs continue. Use `replace: true` to atomically change an open pause.
+Task pauses require `task_code` and `outcome: "SUCCESS" | "SKIPPED" | "FAILED"`, and refuse
+`active_runs`. Requests missing the task outcome fail before a write with HTTP 400 and
+`UsageError` (exit code 2). Pipeline reads include `paused.active_runs` and exact
+`paused.drained_runs` identities; task pause reads always contain an outcome.
+`GET /holds` and the `HOLD`/`RELEASE` controls are removed. Old browser `/held` addresses
+redirect to `/paused`; this browser redirect is not an API compatibility route.

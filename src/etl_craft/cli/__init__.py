@@ -69,8 +69,6 @@ class CommandHelp(argparse.HelpFormatter):
                 else "Control work"
                 if name
                 in {
-                    "hold",
-                    "release",
                     "stop",
                     "abort",
                     "pause",

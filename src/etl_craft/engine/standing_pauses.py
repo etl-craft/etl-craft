@@ -8,6 +8,7 @@ from sqlalchemy.engine import Connection
 
 from etl_craft.core.actor import SYSTEM_ACTOR, Actor, acting_as
 from etl_craft.core.enums import Handler, InterventionAction, RunStatus, ScriptKind
+from etl_craft.core.errors import RunRefusedError
 from etl_craft.core.script_kinds import script_kind
 from etl_craft.core.time import as_utc
 from etl_craft.engine.queries import statement
@@ -22,7 +23,7 @@ class TaskPause:
     pause_id: int
     pipeline_id: int
     task_id: int
-    outcome: RunStatus | None
+    outcome: RunStatus
     expires_at: datetime | None
     paused_at: datetime
     actor: str
@@ -43,7 +44,7 @@ class TaskPause:
         """Show the control's identity and every operator-owned field."""
         return (
             f"{self.task_code}: standing pause {self.pause_id}: actor={self.actor}, "
-            f"outcome={self.outcome or 'hold'}, "
+            f"outcome={self.outcome}, "
             f"expiry={self.expires_at or 'until resume'}, reason={self.reason!r}"
         )
 
@@ -54,6 +55,19 @@ def lock(conn: Connection, pipeline_id: int) -> None:
     from etl_craft.engine.locks import advisory_key
 
     for_engine(conn).standing_pause_lock(conn, advisory_key(f"standing-pause:{pipeline_id}"))
+
+
+def assert_admission(conn: Connection, pipeline_id: int) -> None:
+    """Serialize a new run with a pause before creating any admission record."""
+    lock(conn, pipeline_id)
+    mode = conn.execute(
+        statement(conn, "pipeline_pause_mode"), {"pipeline_id": pipeline_id}
+    ).scalar_one_or_none()
+    if mode is not None:
+        raise RunRefusedError(
+            f"pipeline_id={pipeline_id}: active pause has active_runs={mode}; "
+            "expected an unpaused pipeline for a new run; resume the pipeline first"
+        )
 
 
 def current(conn: Connection, pipeline_id: int | None) -> tuple[TaskPause, ...]:
@@ -87,18 +101,29 @@ def pin(conn: Connection, pipeline_id: int, run_id: int, actor: Actor) -> None:
             )
 
 
+def drains(conn: Connection, pipeline_id: int, run_id: int) -> bool:
+    """Fence dispatch for DRAIN pauses, except for one-run pause permissions."""
+    return bool(
+        conn.execute(
+            statement(conn, "pipeline_pause_drains"),
+            {
+                "pipeline_id": pipeline_id,
+                "run_id": run_id,
+            },
+        ).scalar_one()
+    )
+
+
 def at_task(
     conn: Connection, pipeline_id: int, run_id: int, task_id: int, now: datetime
-) -> tuple[TaskPause | None, bool]:
-    """Return the admitted outcome or a live hold, never inherit a newer pause outcome."""
+) -> TaskPause | None:
+    """Apply the recorded version or the live outcome only before a task starts."""
     lock(conn, pipeline_id)
-    return effects(conn, pipeline_id, run_id, now).get(task_id, (None, False))
+    return effects(conn, pipeline_id, run_id, now).get(task_id)
 
 
-def effects(
-    conn: Connection, pipeline_id: int, run_id: int, now: datetime
-) -> dict[int, tuple[TaskPause, bool]]:
-    """Read all effective versions in two statements, including earlier admissions' holds."""
+def effects(conn: Connection, pipeline_id: int, run_id: int, now: datetime) -> dict[int, TaskPause]:
+    """Keep admission versions across replacements; earlier runs inherit live outcomes."""
     live_pauses = current(conn, pipeline_id)
     if not live_pauses:
         return {}
@@ -106,16 +131,16 @@ def effects(
         row.task_id: TaskPause(**row._mapping)
         for row in conn.execute(statement(conn, "standing_pause_admission"), {"run_id": run_id})
     }
-    result = {}
-    for live in live_pauses:
-        if not live.active(now):
-            continue
-        pinned = admitted.get(live.task_id)
-        if pinned is None or pinned.outcome is None or not pinned.active(now):
-            result[live.task_id] = (live, True)
-        else:
-            result[live.task_id] = (pinned, False)
-    return result
+    started = set(
+        conn.execute(statement(conn, "standing_pause_started"), {"run_id": run_id}).scalars()
+    )
+    return {
+        live.task_id: admitted.get(live.task_id, live)
+        for live in live_pauses
+        if live.active(now)
+        and live.task_id not in started
+        and (live.task_id not in admitted or admitted[live.task_id].active(now))
+    }
 
 
 @acting_as(SYSTEM_ACTOR)
@@ -162,6 +187,20 @@ def apply(conn: Connection, pause: TaskPause, run_id: int) -> None:
     )
 
 
+def apply_queued(conn: Connection, attempt_id: int) -> TaskPause | None:
+    """Resolve a newly paused task before a queued attempt acquires an owner or a slot."""
+    task = conn.execute(
+        statement(conn, "control_attempt_context"), {"attempt_id": attempt_id}
+    ).one()
+    run = conn.execute(
+        statement(conn, "control_run_context"), {"run_id": task.pipeline_run_id}
+    ).one()
+    pause = at_task(conn, run.pipeline_id, task.pipeline_run_id, task.task_id, datetime.now(UTC))
+    if pause is not None:
+        apply(conn, pause, task.pipeline_run_id)
+    return pause
+
+
 def applied(conn: Connection, run_id: int, task_id: int) -> TaskPause | None:
     """Return the historical applied version even after replacement, resume or expiry."""
     row = conn.execute(
@@ -172,21 +211,3 @@ def applied(conn: Connection, run_id: int, task_id: int) -> TaskPause | None:
         },
     ).one_or_none()
     return None if row is None else TaskPause(**row._mapping)
-
-
-@acting_as(SYSTEM_ACTOR)
-def hold(conn: Connection, pause: TaskPause, run_id: int) -> None:
-    """Record a reached hold once per version without creating an attempt or task ending."""
-    previous = applied(conn, run_id, pause.task_id)
-    if previous is not None and previous.pause_id == pause.pause_id:
-        return
-    record_intervention(
-        conn,
-        pipeline_id=pause.pipeline_id,
-        pipeline_run_id=run_id,
-        task_id=pause.task_id,
-        action=InterventionAction.PAUSE_APPLIED,
-        reason=pause.reason,
-        requested_by=SYSTEM_ACTOR.name,
-        details=InterventionDetails(item_key=str(pause.pause_id)),
-    )

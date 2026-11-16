@@ -73,7 +73,7 @@ etl-craft account unlock --name alice
 ## Home, About and catalog
 
 Navigation groups **Home, Pipelines and Catalog** under Overview; **Runs, Scheduled runs,
-Held and paused, Uploads, Console and Maintenance** under Operations; and **Projects, System
+Paused, Uploads, Console and Maintenance** under Operations; and **Projects, System
 health, Agents and Administration** under Platform. Maintenance and Administration appear
 only for administrators. The old project Insights address redirects to Home and retains filters.
 Home contains Overview, Capacity, Catalog, Pipelines, Data, Quality and Failures tabs.
@@ -164,11 +164,11 @@ list and is not a forecast. Old Calendar addresses open this view with the pipel
 
 **Run now** admits one manual run of
 the whole pipeline for the controller, optionally for a run date, or as a one-time **Full refresh** (optionally of one task and the tasks that read it); when a refresh would empty append targets the dialog names them and asks for a switch to accept before it runs. The pipeline header keeps the schedule, refresh type, SLA, tags and automatic-run state;
-upstream pipeline relationships remain in the catalog. **Pause** and **Resume** act on automatic runs of this pipeline only. The same confirmation
+upstream pipeline relationships remain in the catalog. **Pause** blocks new runs and chooses DRAIN or FINISH for admitted runs; **Resume** releases them. The same confirmation
 appears in its header and its Pipelines row, with the wait, run-now and catch-up choices for
-scheduled pipelines. Held and paused keeps the pause actor, time, reason and pipeline link;
-follow that link to resume. Task Resume/Release and selected-pipeline bulk controls remain
-available for their separate scopes.
+scheduled pipelines. Paused keeps the mode, drained runs, actor, time, reason and pipeline link,
+with the same Resume and Replace pause controls. Paused tasks show their required outcome and
+can be resumed individually. Selected-pipeline bulk controls retain their separate scope.
 
 The pipeline grid has one adjustable divider beside the details panel. Task names automatically
 expand to the longest complete name as the grid widens, taking space from older runs first.
@@ -192,7 +192,7 @@ Actions act on the selection only: the whole run, or the selected task in it. Ea
 from the `capabilities` read: an unavailable one is disabled and says why. Choosing one opens a
 confirmation with the exact scope, its data effect and whether successful work is kept; the
 request goes to `POST /api/v1/projects/{project}/controls`. The scoped CLI commands
-`hold`, `release`, `stop`, `abort`, `run --recover` and `run --restart` submit the
+`stop`, `abort`, `run --recover` and `run --restart` submit the
 corresponding requests. The page shows the recorded status. A request is not completion: the page shows the run's state
 when it changes.
 
@@ -344,12 +344,15 @@ The **Catalog** page offers **Validate metadata** to everyone, **Rebuild catalog
 first build it says the catalog is not generated yet. The **Pipelines** list has **Refresh all**
 for developers, which validates every pipeline's current definition and pins passing versions.
 
-## Held and paused work
+## Paused work
 
-**Held and paused** lists what is waiting on a person: runs or tasks on hold (operators can
-**Release** them), paused pipelines (resume them from the pipeline's page, where you choose to
-run now, catch up or wait), and paused tasks with what downstream tasks see meanwhile (operators
-can **Resume task**). `etl-craft holds` lists the holds.
+**Paused** lists paused pipelines with their DRAIN/FINISH mode and links to their drained runs,
+and paused tasks with their required outcome, scope, expiry, actor and reason. Each row offers
+**Resume** through the shared controls. Older `/held` addresses redirect here.
+Pipeline **Pause** preselects **Stop active runs at the next task** (DRAIN); choose
+**Let active runs finish** for FINISH. **Replace pause** changes the open mode atomically.
+Task history and run inspection offer **Pause task**, with **SKIPPED** visibly preselected;
+SUCCESS and FAILED are the other outcomes. There is no wait pause and no Hold/Release action.
 
 On a pipeline's **Runs** and **Matrix** tabs, filter runs by **Pool**, **Agent id** or
 **Failure class** to find, for example, the runs that failed permanently or ran on one agent;

@@ -74,8 +74,7 @@ def check_event(
                 with engine.begin() as conn:
                     fences = controls.blocked(conn, pipeline_run_id)
                     if None in fences or task_id in fences:
-                        return EventCheck(now + timedelta(seconds=1), message="dispatch is held")
-                    controls.assert_dispatch(conn, pipeline_run_id, task_id)
+                        return EventCheck(now + timedelta(seconds=1), message="dispatch is stopped")
                 wait = _EventWait(
                     engine, config, pipeline_run_id, task_id, decisions, cancel, force_check
                 )
@@ -173,6 +172,7 @@ def _save_wait(
 ) -> None:
     """Record the wait's first check, deadline, next check and file observations."""
     first, deadline, next_check = times
+    controls.assert_dispatch(conn, params["pipeline_run_id"], params["task_id"])
     transitions.lock_active_run(conn, params["pipeline_run_id"])
     conn.execute(
         statement(conn, "save_event_wait"),

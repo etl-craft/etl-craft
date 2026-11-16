@@ -717,13 +717,16 @@ def resume_operation(engine, config, reason):
 def test_a_paused_pipeline_starts_nothing_until_resumed(config, pipeline):
     engine, _ = pipeline
     message = pause_pipeline(engine, config, "P", "source is down", requested_by=WHO)
-    assert message == "P: paused; `etl-craft run` starts nothing of it until resumed"
-    with pytest.raises(RunStateError, match=r"P is already paused since .* by tester@host"):
+    assert message == "P: paused; active_runs=DRAIN; no new runs until resume"
+    with pytest.raises(RunStateError, match=r"P: already paused \(DRAIN\) since .* by tester@host"):
         pause_pipeline(engine, config, "P", "again", requested_by=WHO)
 
     held = run_pipeline(engine, config, "P", child=CHILD)
     assert (held.status, held.pipeline_run_id) == (RunStatus.SKIPPED, None)
-    assert "P: paused since" in held.message and "source is down; nothing started" in held.message
+    assert (
+        "P: paused (DRAIN) since" in held.message
+        and "source is down; nothing started" in held.message
+    )
     assert init_pipeline_run(engine, config, "P").pipeline_run_id is None
     task = run_task(engine, config, "P", "extract", child=CHILD)
     assert task.status == RunStatus.SKIPPED and "nothing started or recorded" in task.message
@@ -749,49 +752,6 @@ def test_a_paused_pipeline_starts_nothing_until_resumed(config, pipeline):
         "source is back",
     )
     assert row.resumed_at is not None
-
-
-@pytest.mark.chaos
-def test_a_run_paused_while_it_runs_stops_starting_tasks_and_goes_on_once_resumed(config, pipeline):
-    engine, ids = pipeline
-    with engine.begin() as conn:
-        conn.execute(
-            text("UPDATE CFG_TASK_PARAMETERS SET PARAMETER_VALUE = 'brief' WHERE TASK_ID = :t"),
-            {"t": ids["extract"]},
-        )
-        conn.execute(
-            text("UPDATE CFG_TASKS SET ACTIVE_FLAG = 'N' WHERE TASK_ID IN (:b, :a)"),
-            {"b": ids["broken"], "a": ids["after_broken"]},
-        )
-    outcome = {}
-    thread = threading.Thread(
-        target=contextvars.copy_context().run,
-        args=(lambda: outcome.setdefault("run", run_pipeline(engine, config, "P", child=CHILD)),),
-    )
-    thread.start()
-    started = time.monotonic()
-    while time.monotonic() - started < 30:
-        with engine.connect() as conn:
-            running = conn.execute(
-                text("SELECT COUNT(*) FROM AUD_TASK_RUN_LOG WHERE STATUS = 'IN-PROGRESS'")
-            ).scalar_one()
-        if running:
-            break
-        time.sleep(0.05)
-    message = pause_pipeline(engine, config, "P", "hold on", requested_by=WHO)
-    assert "starts no more tasks and stays IN-PROGRESS" in message
-    thread.join(timeout=60)
-    held = outcome["run"]
-    assert held.status == RunStatus.IN_PROGRESS
-    assert "stays IN-PROGRESS, paused since" in held.message
-    # extract finished; transform, which waits on it, did not start.
-    assert statuses(engine, held.pipeline_run_id) == {"extract": ("SUCCESS", 1)}
-    assert run_status(engine, held.pipeline_run_id) == "IN-PROGRESS"
-
-    assert "goes on with" in resume_operation(engine, config, "go")
-    done = run_pipeline(engine, config, "P", child=CHILD)
-    assert (done.status, done.pipeline_run_id) == (RunStatus.SUCCESS, held.pipeline_run_id)
-    assert statuses(engine, held.pipeline_run_id)["transform"] == ("SUCCESS", 9)
 
 
 def test_a_run_skipped_on_purpose_is_recorded_and_seen_downstream(config, pipeline):

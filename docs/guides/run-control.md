@@ -9,7 +9,7 @@ intervention, the message it had before.
 
 ## Choose the run
 
-`run`, `mark`, `stop`, `abort`, `hold`, `release`, `history` and `steps` accept `--run-id 42` or
+`run`, `mark`, `stop`, `abort`, `history` and `steps` accept `--run-id 42` or
 `--run-key 'manual:...'`. The identity must belong to `--pipeline-code`. Without a selector,
 operations use the pipeline's single non-terminal whole-pipeline run. Independent manual
 selections always require an explicit selector to resume. When none or several exist, the command
@@ -168,7 +168,6 @@ A pipeline with a run in progress is refused: mark that run, or stop or abort it
 |---|---|---|---|
 | `stop` | stop their processes and tagged queries | blocked | the run ends `CANCELLED` after confirmation |
 | `abort` | their task processes are stopped now, ending `CANCELLED` | blocked | the run ends `CANCELLED` |
-| `hold` | finish and keep their own outcome | blocked until `release` | the run stays `IN-PROGRESS` |
 
 ```bash
 etl-craft abort --pipeline-code SALES_DAILY --reason "the source sent yesterday's file"
@@ -211,47 +210,37 @@ queries finish. Legacy external-orchestrator deployments continue to direct cont
 orchestrator. An event probe with an unknown run identity must finish or be reconciled before
 a scoped control can be accepted.
 
-## Hold or release dispatch in a selected run
-
-```bash
-etl-craft hold --pipeline-code SALES_DAILY --run-id 42 --reason "hold dispatch"
-etl-craft hold --pipeline-code SALES_DAILY --run-id 42 --task-code transform --reason "inspect input"
-etl-craft release --pipeline-code SALES_DAILY --run-id 42 --task-code transform --reason "ready"
-etl-craft release --pipeline-code SALES_DAILY --run-id 42 --reason "resume dispatch"
-```
-
-Holds block new admission, including force and retry claims, while existing attempts finish. A task hold
-leaves its dependents pending and lets unrelated ready tasks run. The run stays `IN-PROGRESS`;
-release the exact held scope, then resume with `etl-craft run` if its supervisor has exited.
-Releasing a task does not release a run hold, and releasing a run does not release task holds.
-Release refuses until an earlier stop/abort in that scope has completed.
-
-`pause` and `resume` act on the pipeline definition instead (below). Definition pauses and
-holds are independent: `release` does not clear a definition pause, and `resume` does not release
-a hold.
-
-HTTP clients use `POST /api/v1/projects/{project}/controls` with `pipeline_code`,
-`action` (`HOLD`, `RELEASE`, `STOP`, `ABORT`), `reason`, optional `run_id`/`run_key`, `task_code` and `request_key`.
-`GET /api/v1/projects/{project}/control-requests/{control_id}` returns the same
-document as `control-request`.
-Controls require operator; inspection requires viewer. Local and `--api` commands call the
-same services and preserve the authenticated actor.
-
 ## Pause and resume a pipeline
 
 ```bash
-etl-craft pause --pipeline-code SALES_DAILY --reason "the CRM is being migrated this week"
-etl-craft resume --pipeline-code SALES_DAILY --then wait --reason "the migration is done"
+etl-craft pause --pipeline-code SALES_DAILY --active-runs DRAIN --reason "maintenance"
+etl-craft pause --pipeline-code SALES_DAILY --active-runs FINISH --replace --reason "finish admitted loads"
+etl-craft resume --pipeline-code SALES_DAILY --then wait --reason "maintenance complete"
 ```
 
-While a pipeline is paused, `etl-craft run` starts nothing of it (whole runs, single tasks and
-`--init-only` alike): it says the pipeline is paused, by whom and why, and exits `0`, so a
-scheduler that keeps calling it raises no alarm. A run in progress when the pipeline is paused
-lets its running tasks finish, starts no more, and stays `IN-PROGRESS`; the interrupted run
-command exits `22` (`INCOMPLETE`). After `resume`, the next
-`run --pipeline-code` goes on with it. `etl-craft pipelines` and the catalog show every paused
-pipeline, and `AUD_PIPELINE_PAUSES` keeps every pause with who paused and resumed it, when and
-why.
+A pipeline pause blocks new runs and chooses what happens to runs admitted before it:
+
+- **DRAIN** (the default): running attempts finish with their own outcome. No new task attempt,
+  retry, force dispatch or restart claim starts. The original run stays `IN-PROGRESS` and waits
+  without reserving an agent slot. Already-admitted gate and event waits can finish, but their
+  downstream tasks wait for resume.
+- **FINISH**: admitted runs dispatch and complete normally; new runs remain blocked.
+
+A run with explicit **RUN_PAUSED** permission is exempt from DRAIN. Resume releases drained
+runs under their original admission; it does not recover them or publish a repair revision.
+Scheduled pipelines still require `--then run-now|catch-up|wait`; unscheduled pipelines refuse it.
+A repeated pause requires `--replace`, which closes and opens the pause version atomically.
+FINISH to DRAIN takes effect at the next dispatch boundary; DRAIN to FINISH releases waiting work.
+
+`AUD_PIPELINE_PAUSES` retains the mode, versions, actor, reason and resume decision. Existing
+pipeline pauses created before this feature retain **FINISH**, matching their original behaviour.
+`hold`, `release`, their controls and the holds API no longer exist. To stop dispatch for
+maintenance, pause the pipeline with DRAIN; there is no longer a hold of one task for inspection.
+
+HTTP clients use `POST /api/v1/projects/{project}/controls` with `pipeline_code`, `action`
+(`PAUSE` or `RESUME`), `reason` and optional pipeline `active_runs` (`DRAIN` or `FINISH`).
+Task pauses require `task_code` and `outcome` (`SUCCESS`, `SKIPPED` or `FAILED`), and refuse
+`active_runs`. Stop, abort, recover, restart and one-run permission retain their existing scope.
 
 ## Skip a run on purpose
 
@@ -457,7 +446,7 @@ supervisor, a pending stop, an unobserved process exit or an unknown server quer
 preparation. A task restart needs the same target/checkpoint/dependency isolation as a standalone
 selection. Task-only recovery of a terminal whole-pipeline run refuses to reopen its siblings;
 recover the whole run, use a supported isolated restart, or explicitly rerun the task instead.
-Recovery clears its own dispatch fence, retaining other task holds. Restart does not clear any
+Recovery clears its own dispatch fence, retaining other task stop fences. Restart does not clear any
 source fence. Successful and skipped evidence is never reset by recovery.
 
 ## Run once while automatic execution remains paused
@@ -471,7 +460,7 @@ etl-craft run --reason "requested data load" --pipeline-code SALES_DAILY --run-i
 ```
 
 This permission lasts for that run. The definition pause stays open and blocks automatic starts
-and other executions. It grants no release of a scoped hold, stop fence, dependency requirement
+and other executions. It clears no stop fence, dependency requirement
 or human data lock. To create a new context directly, omit the run selector and provide a request key:
 `run --pipeline-code SALES_DAILY --allow-paused --request-key maintenance-1 --reason ...`.
 Add `--task-code TASK` for an isolated one-task context; the existing standalone isolation and
@@ -497,7 +486,7 @@ The selection file is a UTF-8 JSON list of 1–100 control objects:
 ```json
 [
   {"pipeline_code":"SALES_DAILY","run_id":43,"task_code":"transform",
-   "action":"HOLD","reason":"inspect input","request_key":"hold-transform-43"},
+   "action":"STOP","reason":"stop incorrect input","request_key":"stop-transform-43"},
   {"pipeline_code":"OTHER","run_id":12,"action":"STOP",
    "reason":"maintenance","request_key":"stop-other-12"}
 ]
@@ -543,11 +532,10 @@ request for each code; editing tags later cannot change that selection.
 ## Standing task pauses
 
 A task pause applies across runs without changing config or requiring a refresh. Other branches
-continue. With no outcome the task waits; an optional `SUCCESS`, `FAILED` or `SKIPPED` replaces
-execution. Reasons are required in STRICT projects and optional in RELAXED projects.
+continue. A required `SUCCESS`, `FAILED` or `SKIPPED` outcome replaces execution. Reasons are required in STRICT projects and optional in RELAXED projects.
 
 ```bash
-etl-craft pause --pipeline-code SALES_DAILY --task-code load --reason "source maintenance"
+etl-craft pause --pipeline-code SALES_DAILY --task-code load --outcome SKIPPED --reason "source maintenance"
 etl-craft pause --pipeline-code SALES_DAILY --task-code load --replace --outcome SKIPPED \
   --expires-at 2026-12-01T12:00:00+00:00 --reason "skip during maintenance"
 etl-craft resume --pipeline-code SALES_DAILY --task-code load --reason "source restored"
@@ -560,9 +548,10 @@ and opens the new one in one transaction, with no unpaused window. Resume remove
 pause and its outcome and creates no runs. Tasks have no schedule ticks, so task resume refuses
 `--then`.
 
-A run admitted before a pause or before a replacement never inherits the later outcome: it
-waits at that task until unpaused, then executes normally. Runs admitted while a pause is in
-force record its version and use that version's outcome. An outcome of FAILED creates no
+A task that has not started receives the live pause outcome even when its run was admitted
+before the pause. A task already running finishes normally. Runs admitted while a pause version
+is active retain that exact version across replacements. Resume or expiry ends its applicability.
+Each applied outcome records `PAUSE_APPLIED` with the outcome and pause version. An outcome of FAILED creates no
 attempt, retry or failure alert. A supplied SUCCESS writes no rows, satisfies no HAS_DATA gate
 and publishes no fresh output revision to consumers. History records the applied pause id.
 Status, explain, the metadata and graph reads, and config plan/apply show the control's actor,
@@ -582,6 +571,6 @@ Scheduled pipeline resume requires `--then run-now|catch-up|wait`:
 
 An interactive CLI shows the retained ticks and asks for a choice. The API and non-interactive
 CLI refuse an omitted choice. Unscheduled pipeline resume needs no choice and refuses `--then`.
-Already-running work and independent run/task holds are preserved. The resume history records
+Running attempts finish normally; drained runs continue under their original admission. The resume history records
 the actor, reason, choice and created run ids; a controller restart preserves the next-tick
 boundary. Bulk resume uses the same operation for each selected pipeline.

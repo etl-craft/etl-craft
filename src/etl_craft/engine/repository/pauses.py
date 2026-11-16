@@ -2,15 +2,25 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 
 from sqlalchemy import BigInteger, DateTime, bindparam
 from sqlalchemy.engine import Connection
 
 from etl_craft.core.actor import current_actor
+from etl_craft.core.enums import ActiveRuns, RunStatus
 from etl_craft.core.time import as_utc
 from etl_craft.engine.queries import statement
+
+
+@dataclass(frozen=True)
+class DrainedRun:
+    """An admitted run waiting for a pipeline's DRAIN pause to be resumed."""
+
+    pipeline_run_id: int
+    run_label: str
+    status: RunStatus
 
 
 @dataclass(frozen=True)
@@ -21,10 +31,14 @@ class Pause:
     paused_by: str
     reason: str
     pipeline_code: str = ""
+    active_runs: ActiveRuns = ActiveRuns.DRAIN
+    drained_runs: tuple[DrainedRun, ...] = ()
 
     def describe(self) -> str:
         """Return one line saying since when, by whom and why."""
-        return f"paused since {self.paused_at} by {self.paused_by}: {self.reason}"
+        return (
+            f"paused ({self.active_runs}) since {self.paused_at} by {self.paused_by}: {self.reason}"
+        )
 
 
 def fetch_open_pause(conn: Connection, pipeline_id: int) -> Pause | None:
@@ -32,24 +46,59 @@ def fetch_open_pause(conn: Connection, pipeline_id: int) -> Pause | None:
     row = conn.execute(
         statement(conn, "open_pipeline_pause"), {"pipeline_id": pipeline_id}
     ).one_or_none()
-    return None if row is None else Pause(**row._mapping)
+    if row is None:
+        return None
+    pause = Pause(**row._mapping)
+    return replace(pause, drained_runs=_drained(conn, pipeline_id).get(pipeline_id, ()))
 
 
 def fetch_open_pauses(conn: Connection) -> dict[str, Pause]:
-    """Return every paused pipeline's open pause, by pipeline code."""
+    """Return project-scoped pipeline pause policies and waiting runs in two reads."""
+    runs = _drained(conn, None)
     return {
-        row.pipeline_code: Pause(**row._mapping)
+        row.pipeline_code: Pause(
+            paused_at=row.paused_at,
+            paused_by=row.paused_by,
+            reason=row.reason,
+            pipeline_code=row.pipeline_code,
+            active_runs=row.active_runs,
+            drained_runs=runs.get(row.pipeline_id, ()),
+        )
         for row in conn.execute(statement(conn, "open_pipeline_pauses"))
     }
 
 
-def record_pause(conn: Connection, pipeline_id: int, paused_by: str, reason: str) -> None:
+def _drained(conn: Connection, pipeline_id: int | None) -> dict[int, tuple[DrainedRun, ...]]:
+    """Group exact waiting run identities without querying each paused pipeline."""
+    runs: dict[int, list[DrainedRun]] = {}
+    for row in conn.execute(
+        statement(conn, "pipeline_pause_runs").bindparams(
+            bindparam("pipeline_id", type_=BigInteger)
+        ),
+        {"pipeline_id": pipeline_id},
+    ):
+        runs.setdefault(row.pipeline_id, []).append(
+            DrainedRun(row.pipeline_run_id, row.run_label, row.status)
+        )
+    return {pipeline: tuple(values) for pipeline, values in runs.items()}
+
+
+def record_pause(
+    conn: Connection,
+    pipeline_id: int,
+    paused_by: str,
+    reason: str,
+    *,
+    active_runs: ActiveRuns = ActiveRuns.DRAIN,
+    now: datetime | None = None,
+) -> None:
     """Open a pause of ``pipeline_id``."""
     conn.execute(
         statement(conn, "insert_pipeline_pause"),
         {
             "pipeline_id": pipeline_id,
-            "now": datetime.now(UTC),
+            "now": now or datetime.now(UTC),
+            "active_runs": active_runs,
             "actor_kind": current_actor().kind.value,
             "paused_by": paused_by,
             "reason": reason,

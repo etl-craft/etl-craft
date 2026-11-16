@@ -1,3 +1,4 @@
+import { TaskPauseControl } from "@/components/task-pause";
 import { RunLabel, copyRunLabel } from "@/components/run-label";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronDown, ChevronRight, CircleX, Copy, Download, LifeBuoy } from "lucide-react";
@@ -74,6 +75,7 @@ function TaskDetails({ code, pipeline, runId, task, handler }: { code: string; p
       {/* The message is shown once: on the attempt that recorded it, or here when no attempt did. */}
       {run?.error_message && !run.attempts.some((a) => a.error_message === run.error_message) ? <Notice mono>{run.error_message}</Notice> : null}
       <ScopeControls code={code} pipeline={pipeline} runId={runId} task={task} />
+      <TaskPauseControl code={code} pipeline={pipeline} task={task} />
       {run && run.status !== "SUCCESS" ? <Why code={code} pipeline={pipeline} runId={runId} task={task} /> : null}
       {run && run.attempts.length === 0 ? (
         <p className="m-0 text-muted">No attempt was started for this task{run.status === "SKIPPED" ? ": an upstream outcome skipped it" : ""}.</p>

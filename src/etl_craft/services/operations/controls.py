@@ -1,4 +1,4 @@
-"""Actor-scoped run/task holds, stops, aborts and durable request inspection."""
+"""Actor-scoped run/task stops, aborts and durable request inspection."""
 
 from __future__ import annotations
 
@@ -29,7 +29,15 @@ from etl_craft.core.errors import (
     UsageError,
 )
 from etl_craft.core.governance import check_reason
-from etl_craft.engine import attempt_cancellation, controls, locks, run_scopes, runlog, transitions
+from etl_craft.engine import (
+    attempt_cancellation,
+    controls,
+    locks,
+    run_scopes,
+    runlog,
+    standing_pauses,
+    transitions,
+)
 from etl_craft.engine.controls import ControlView
 from etl_craft.engine.queries import statement
 from etl_craft.engine.repository.pipelines import resolve_pipeline_id
@@ -81,6 +89,7 @@ def request_control(ctx: OperationContext, request: ControlRequest) -> ControlVi
         return _new_paused(ctx, request)
     with control_scope(ctx, request) as run_id, ctx.engine.begin() as conn:
         pipeline_id = resolve_pipeline_id(conn, request.pipeline_code)
+        standing_pauses.lock(conn, pipeline_id)
         controls.lock_run(conn, run_id)
         selected = runlog.select_run(conn, pipeline_id, runlog.RunSelector(run_id=run_id))
         task_id = (
@@ -137,19 +146,6 @@ def check_control(
         or a.process_ended_at is None
         or a.queries_ended_at is None
     )
-    if request.action in {ControlAction.HOLD, ControlAction.RELEASE}:
-        pending = (
-            conn.execute(
-                statement(conn, "control_unfinished"), {"run_id": run_id, "task_id": task_id}
-            )
-            .scalars()
-            .all()
-        )
-        if pending:
-            raise RunRefusedError(
-                f"run_id={run_id}: pending controls={pending}; inspect process/query "
-                f"acknowledgements before changing this fence"
-            )
     _check_query_control(ctx, request, attempts)
     return attempts
 
@@ -181,9 +177,10 @@ def _existing(
             request.action in RECOVERY_ACTIONS and request.request_key is not None
         ):
             return int(latest.control_id)
-        if latest.status != ControlStatus.COMPLETED and (
-            request.action in {ControlAction.HOLD, ControlAction.RELEASE}
-            or (latest.action == ControlAction.ABORT and request.action == ControlAction.STOP)
+        if (
+            latest.status != ControlStatus.COMPLETED
+            and latest.action == ControlAction.ABORT
+            and request.action == ControlAction.STOP
         ):
             raise RunRefusedError(
                 f"control_id={latest.control_id} is {latest.status}; inspect its process/query "

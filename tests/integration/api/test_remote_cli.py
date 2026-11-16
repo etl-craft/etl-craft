@@ -341,7 +341,7 @@ def test_remote_controls_follow_the_role_and_record_refusals(server, monkeypatch
 def test_remote_controls_reach_the_same_actions_with_the_selected_run(server, monkeypatch, capsys):
     url, run_id = server["url"], server["run"]
     calls = []
-    held = ControlRequest(pipeline_code="P", action=ControlAction.HOLD, reason="test")
+    held = ControlRequest(pipeline_code="P", action=ControlAction.STOP, reason="test")
     control = replace(invoke(server["ctx"], ActionName.CONTROL, held), message="P: done")
     done = OperationResult(RunStatus.SUCCESS, "P: done", 1, "P")
     backfill = BackfillView(
@@ -521,7 +521,7 @@ def test_remote_scoped_cli_uses_same_request_and_status_document(server, monkeyp
     url, run_id = server["url"], server["run"]
     code, out, err = run(
         capsys,
-        "hold",
+        "stop",
         "--pipeline-code",
         "P",
         "--run-id",
@@ -536,58 +536,20 @@ def test_remote_scoped_cli_uses_same_request_and_status_document(server, monkeyp
         url,
     )
     assert code == 0, err
-    held = json.loads(out)
-    assert held["status"] == "COMPLETED" and held["action"] == "HOLD"
+    stopped = json.loads(out)
+    assert stopped["status"] == "COMPLETED" and stopped["action"] == "STOP"
     code, out, err = run(
         capsys,
         "control-request",
         "--control-id",
-        str(held["control_id"]),
+        str(stopped["control_id"]),
         "--format",
         "json",
         "--api",
         url,
     )
     assert code == 0, err
-    assert json.loads(out) == held
-    code, out, err = run(
-        capsys,
-        "stop",
-        "--pipeline-code",
-        "P",
-        "--run-id",
-        str(run_id),
-        "--task-code",
-        "T",
-        "--reason",
-        "drain",
-        "--format",
-        "json",
-        "--api",
-        url,
-    )
-    assert code == 0, err
-    stopped = json.loads(out)
-    assert stopped["action"] == "STOP" and stopped["status"] == "COMPLETED"
-    assert stopped["run_status"] == "IN-PROGRESS" and stopped["task_code"] == "T"
-    code, out, err = run(
-        capsys,
-        "release",
-        "--pipeline-code",
-        "P",
-        "--run-id",
-        str(run_id),
-        "--task-code",
-        "T",
-        "--reason",
-        "ready",
-        "--format",
-        "json",
-        "--api",
-        url,
-    )
-    assert code == 0, err
-    assert json.loads(out)["action"] == "RELEASE"
+    assert json.loads(out) == stopped
 
 
 def test_remote_cli_prepares_recovery_restart_and_selected_bulk(
@@ -653,7 +615,7 @@ def test_remote_cli_prepares_recovery_restart_and_selected_bulk(
                 {
                     "pipeline_code": "P",
                     "run_id": restarted["execution_run_id"],
-                    "action": "HOLD",
+                    "action": "STOP",
                     "reason": "pause new work",
                     "request_key": "bulk:hold",
                 }
@@ -664,7 +626,7 @@ def test_remote_cli_prepares_recovery_restart_and_selected_bulk(
         capsys, "run", "--controls-file", str(selection), "--format", "json", "--api", url
     )
     assert code == 0, err
-    assert json.loads(out)["outcomes"][0]["control"]["action"] == "HOLD"
+    assert json.loads(out)["outcomes"][0]["control"]["action"] == "STOP"
 
 
 def test_a_runner_holding_only_a_token_publishes_and_applies_a_bundle(
@@ -720,3 +682,45 @@ def _pipelines(ctx, code):
         return conn.execute(
             text("SELECT PIPELINE_ID AS id FROM CFG_PIPELINES WHERE PIPELINE_CODE=:c"), {"c": code}
         ).all()
+
+
+@pytest.mark.parametrize("remote", [False, True])
+@pytest.mark.parametrize("verb", ["hold", "release"])
+def test_removed_hold_and_release_are_unknown_locally_and_remotely(
+    server, monkeypatch, capsys, remote, verb
+):
+    monkeypatch.setenv("ETL_CRAFT_TOKEN", server["service"]["operator"])
+    args = [verb, "--pipeline-code", "P", "--reason", "maintenance"]
+    if remote:
+        args += ["--api", server["url"]]
+    with pytest.raises(SystemExit) as refused:
+        main(args)
+    assert refused.value.code == ExitCode.USAGE
+    err = capsys.readouterr().err
+    assert "invalid choice" in err and verb in err
+
+
+@pytest.mark.parametrize("remote", [False, True])
+@pytest.mark.parametrize("with_mode", [False, True])
+def test_task_pause_cli_refuses_missing_outcome_or_pipeline_mode_before_writes(
+    server, monkeypatch, capsys, remote, with_mode
+):
+    monkeypatch.setenv("ETL_CRAFT_TOKEN", server["service"]["operator"])
+    args = ["pause", "--pipeline-code", "P", "--task-code", "T", "--reason", "maintenance"]
+    if with_mode:
+        args += ["--active-runs", "DRAIN", "--outcome", "SKIPPED"]
+    if remote:
+        args += ["--api", server["url"]]
+    code, _, err = run(capsys, *args)
+    assert code == ExitCode.USAGE
+    assert "pipeline P task T" in err
+    assert (
+        "task pauses take an outcome, not --active-runs"
+        if with_mode
+        else "a task pause needs --outcome SUCCESS, SKIPPED or FAILED"
+    ) in err
+    with server["ctx"].engine.connect() as conn:
+        assert (
+            conn.execute(text("SELECT COUNT(*) AS count FROM AUD_PIPELINE_PAUSES")).scalar_one()
+            == 0
+        )

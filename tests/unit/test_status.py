@@ -61,7 +61,10 @@ def snapshot(ctx):
         ("blocked by failure", "Repair or retry the failed upstream to satisfy the dependencies."),
         ("unsatisfiable", "Repair the upstream outcome or dependency before rerunning."),
         ("retry scheduled", "The supervisor can claim the retry at 2026-10-09T00:01:00+00:00."),
-        ("paused", "Resume the pipeline before starting this task."),
+        (
+            "paused",
+            "Resume the pipeline or replace DRAIN with FINISH before dispatching this task.",
+        ),
         ("success", "No work is needed; this task is already settled."),
         ("skipped", "No work is needed; this task is already settled."),
     ],

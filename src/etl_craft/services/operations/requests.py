@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any, ClassVar
 from etl_craft.core.enums import (
     DEFINITION_CONTROLS,
     MARKABLE_STATUSES,
+    ActiveRuns,
     ControlAction,
     FailureClass,
     LineageDirection,
@@ -514,6 +515,7 @@ class ControlRequest(RunSelection):
     request_key: str | None = None
 
     outcome: RunStatus | None = None
+    active_runs: ActiveRuns | None = None
     expires_at: datetime | None = None
     replace: bool = False
     then: ResumeChoice | None = None
@@ -538,10 +540,37 @@ class ControlRequest(RunSelection):
             self.outcome is not None or self.expires_at is not None or self.replace
         ):
             raise UsageError("outcome, expires_at and replace apply only to pause; omit them")
-        if self.task_code is None and (
-            self.outcome is not None or self.expires_at is not None or self.replace
+        identity = f"pipeline {self.pipeline_code}" + (
+            f" task {self.task_code}" if self.task_code else ""
+        )
+        if self.active_runs is not None and self.active_runs not in tuple(ActiveRuns):
+            raise UsageError(
+                f"{identity}: active_runs={self.active_runs!r}; "
+                "expected DRAIN or FINISH; choose one"
+            )
+        if self.task_code is not None and self.active_runs is not None:
+            raise UsageError(
+                f"{identity}: active_runs={self.active_runs}; "
+                "task pauses take an outcome, not --active-runs; omit --active-runs "
+                "and supply --outcome SUCCESS, SKIPPED or FAILED"
+            )
+        if self.action != ControlAction.PAUSE and self.active_runs is not None:
+            raise UsageError(
+                f"{identity}: active_runs={self.active_runs}; expected this only for "
+                "pipeline pause; omit --active-runs"
+            )
+        if (
+            self.action == ControlAction.PAUSE
+            and self.task_code is not None
+            and self.outcome is None
         ):
-            raise UsageError("outcome, expires_at and replace need task_code; name the task")
+            raise UsageError(
+                f"{identity}: outcome=None; "
+                "a task pause needs --outcome SUCCESS, SKIPPED or FAILED; "
+                "supply --outcome"
+            )
+        if self.task_code is None and (self.outcome is not None or self.expires_at is not None):
+            raise UsageError("outcome and expires_at need task_code; name the task")
         if self.request_key is not None:
             require_text("request_key", self.request_key, limit=128)
 

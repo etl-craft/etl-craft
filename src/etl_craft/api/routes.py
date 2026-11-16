@@ -250,11 +250,18 @@ def parse_request(action: Action, given: dict[str, object]) -> object:
     try:
         return _adapter(action.name).validate_python(given)
     except ValidationError as error:
-        problems = "; ".join(
-            f"`{'.'.join(str(p) for p in e['loc'])}` {e['msg'][:1].lower()}{e['msg'][1:]}"
-            for e in error.errors()
-        )
-        raise UsageError(f"{action.name}: {problems}") from None
+        problems = []
+        for problem in error.errors():
+            field = ".".join(str(part) for part in problem["loc"])
+            message = problem["msg"]
+            if problem["type"] == "enum" and isinstance(problem["input"], (str, int)):
+                problems.append(
+                    f"`{field}`={problem['input']!r}; expected {message}; "
+                    "choose one of the expected values"
+                )
+            else:
+                problems.append(f"`{field}` {message[:1].lower()}{message[1:]}")
+        raise UsageError(f"{action.name}: {'; '.join(problems)}") from None
 
 
 def _openapi(action: Action) -> dict[str, object]:

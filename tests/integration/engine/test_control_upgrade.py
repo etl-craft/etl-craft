@@ -58,7 +58,7 @@ def test_migrating_populated_controls_preserves_requests_fences_and_immutability
             key="retained-key",
             run=run,
             task=a,
-            action=ControlAction.HOLD,
+            action=ControlAction.STOP,
             status=ControlStatus.COMPLETED,
             actor=ctx.actor.name,
             kind=ctx.actor.kind,
@@ -76,7 +76,7 @@ def test_migrating_populated_controls_preserves_requests_fences_and_immutability
             ),
             {"id": run},
         ).scalar_one()
-        assert controls.blocked(conn, run) == {a: ControlAction.HOLD}
+        assert controls.blocked(conn, run) == {a: ControlAction.STOP}
     shown = act(ctx, ActionName.CONTROL_REQUEST, control_id=held.control_id)
     assert run_label
     assert shown.run_label == run_label

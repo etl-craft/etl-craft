@@ -193,8 +193,8 @@ SEEDS = [
     ),
     (
         "AUD_PIPELINE_PAUSES",
-        "PIPELINE_ID,PAUSED_AT,PAUSED_BY,REASON,RESUMED_AT",
-        f"p,{DAY},'plan','plan',{DAY}+INTERVAL '1 minute'",
+        "PIPELINE_ID,PAUSED_AT,PAUSED_BY,REASON,RESUMED_AT,ACTIVE_RUNS",
+        f"p,{DAY},'plan','plan',{DAY}+INTERVAL '1 minute','FINISH'",
         RUNS,
     ),
     (
@@ -226,7 +226,7 @@ SEEDS = [
     (
         "AUD_CONTROL_REQUESTS",
         "REQUEST_KEY,PIPELINE_RUN_ID,ACTION,STATUS,ATTEMPT_IDS,REQUESTED_BY,REQUESTED_BY_KIND,REASON,REQUESTED_AT,MESSAGE",
-        f"'plan:'||{RUN_ID},{RUN_ID},'HOLD','COMPLETED','[]','plan','SYSTEM','plan',{DAY},'plan'",
+        f"'plan:'||{RUN_ID},{RUN_ID},'STOP','COMPLETED','[]','plan','SYSTEM','plan',{DAY},'plan'",
         RUNS,
     ),
     (

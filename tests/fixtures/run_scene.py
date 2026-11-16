@@ -45,7 +45,7 @@ def seed(engine, config):
         ctx,
         ActionName.CONTROL,
         pipeline_code="ORDERS",
-        action=ControlAction.HOLD,
+        action=ControlAction.STOP,
         run_id=run,
         task_code="LOAD",
         reason="check the load",

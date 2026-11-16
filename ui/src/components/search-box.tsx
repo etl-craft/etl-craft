@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Highlight, Notice } from "@/components/common";
 import { hitLink } from "@/pages/search";
 import { getJson, project } from "@/lib/api";
-import { agentsPath, catalogPath, consolePath, heldPath, maintenancePath, pipelinesPath, projectHomePath, runsPath, scheduledPath, searchPath, settingsPath, systemPath, uploadsPath } from "@/lib/routes";
+import { agentsPath, catalogPath, consolePath, pausedPath, maintenancePath, pipelinesPath, projectHomePath, runsPath, scheduledPath, searchPath, settingsPath, systemPath, uploadsPath } from "@/lib/routes";
 import type { SearchView } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -26,7 +26,7 @@ const pagesOf = (code: string): { label: string; to: string }[] => [
   { label: "Catalog", to: catalogPath(code) },
   { label: "Runs", to: runsPath(code) },
   { label: "Scheduled runs", to: scheduledPath(code) },
-  { label: "Held and paused", to: heldPath(code) },
+  { label: "Paused", to: pausedPath(code) },
   { label: "Uploads", to: uploadsPath(code) },
   { label: "Console", to: consolePath(code) },
   { label: "Maintenance", to: maintenancePath(code) },

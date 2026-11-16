@@ -15,7 +15,7 @@ describe("status", () => {
     expect(statusMeta("REFUSED").tone).toBe("bad");
     expect(statusMeta("LOST").tone).toBe("warn");
     expect(statusMeta("BREACHED").tone).toBe("warn");
-    for (const stopped of ["CANCELLED", "STOPPED", "ABORTED", "HELD", "SKIPPED"]) expect(statusMeta(stopped).tone).toBe("idle");
+    for (const stopped of ["CANCELLED", "STOPPED", "ABORTED", "SKIPPED"]) expect(statusMeta(stopped).tone).toBe("idle");
     expect(isFailure("TIMED_OUT")).toBe(true);
     expect(isFailure("CANCELLED")).toBe(false);
   });

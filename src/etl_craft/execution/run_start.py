@@ -18,7 +18,7 @@ from etl_craft.core.enums import (
 from etl_craft.core.errors import RunStateError, StaleTransitionError
 from etl_craft.core.faults import fault_point
 from etl_craft.core.graph import DependencyGraph, build_graph
-from etl_craft.engine import run_scopes, runlog, transitions
+from etl_craft.engine import run_scopes, runlog, standing_pauses, transitions
 from etl_craft.engine.repository import trackers
 from etl_craft.engine.repository.dependencies import PipelineGraphData, fetch_pipeline_graph
 from etl_craft.engine.repository.intervention_rows import record_intervention
@@ -225,6 +225,7 @@ def start_steps(
     if options.check_gate and not _event_run(engine, queued):
         if queued is None:
             with engine.begin() as conn:
+                standing_pauses.assert_admission(conn, pipeline_id)
                 queued = transitions.create_run(
                     conn,
                     pipeline_id,
@@ -382,6 +383,8 @@ def _admit_run(
 ) -> int | None:
     """Admit or create the selected run; None means initialization already admitted it."""
     created: int | None
+    if queued is None:
+        standing_pauses.assert_admission(conn, pipeline_id)
     if queued is not None:
         try:
             transitions.admit_run(conn, queued, current_actor())

@@ -362,6 +362,7 @@ INTRODUCED: dict[InputKind, dict[str, str]] = {
             "--accept-new-url",
             "--account",
             "--action",
+            "--active-runs",
             "--admin-name",
             "--after",
             "--agent",

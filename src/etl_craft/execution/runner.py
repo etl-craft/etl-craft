@@ -548,9 +548,13 @@ def _try_local_attempt(
     """Hold the shared process allowance through claim, child exit and outcome recording."""
     owner = leases.owner_id()
     with engine.begin() as conn:
+        from etl_craft.engine import standing_pauses
         from etl_craft.engine.agent_transitions import claim_with_capacity
         from etl_craft.execution.placement import local_capacity, local_headroom
 
+        paused = standing_pauses.apply_queued(conn, spec.attempt_id)
+        if paused is not None:
+            return TaskOutcome(paused.outcome, paused.describe(), spec.task_run_id)
         claimed = claim_with_capacity(
             conn,
             spec.attempt_id,
@@ -761,12 +765,9 @@ def _standing_outcome(
     """Keep dependency overrides from implicitly removing a standing task pause."""
     from etl_craft.engine import standing_pauses
 
-    pause, holds = standing_pauses.at_task(conn, pipeline_id, run_id, task_id, now)
+    pause = standing_pauses.at_task(conn, pipeline_id, run_id, task_id, now)
     if pause is None:
         return None
-    if holds:
-        standing_pauses.hold(conn, pause, run_id)
-        return _skipped(pause.describe(), waiting=True)
     standing_pauses.apply(conn, pause, run_id)
     assert pause.outcome is not None
     return TaskOutcome(pause.outcome, pause.describe())

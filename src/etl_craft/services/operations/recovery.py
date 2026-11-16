@@ -21,10 +21,7 @@ if TYPE_CHECKING:
     from etl_craft.services.operations.requests import ControlRequest
 
 RECOVERY_ACTIONS = frozenset({ControlAction.RECOVER, ControlAction.RESTART})
-IMMEDIATE_ACTIONS = (
-    frozenset({ControlAction.HOLD, ControlAction.RELEASE, ControlAction.RUN_PAUSED})
-    | RECOVERY_ACTIONS
-)
+IMMEDIATE_ACTIONS = frozenset({ControlAction.RUN_PAUSED}) | RECOVERY_ACTIONS
 
 
 def check_recovery(

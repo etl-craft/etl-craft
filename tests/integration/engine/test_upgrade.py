@@ -109,8 +109,8 @@ def test_an_earlier_engine_db_upgrades_to_the_current_schema(
             )
         )
     insert = text(
-        "INSERT INTO AUD_PIPELINE_PAUSES (PIPELINE_ID, PAUSED_BY, REASON) "
-        "SELECT PIPELINE_ID, 'op', 'why' FROM CFG_PIPELINES WHERE PIPELINE_CODE = 'P'"
+        "INSERT INTO AUD_PIPELINE_PAUSES (PIPELINE_ID, PAUSED_BY, REASON, ACTIVE_RUNS) "
+        "SELECT PIPELINE_ID, 'op', 'why', 'DRAIN' FROM CFG_PIPELINES WHERE PIPELINE_CODE = 'P'"
     )
     with engine.begin() as conn:
         conn.execute(insert)
@@ -289,7 +289,7 @@ def test_browser_account_migration_retains_real_users_and_sessions(
 def test_ending_evidence_upgrade_keeps_existing_observations_unclassified(empty_engine_db):
     from etl_craft.core.actor import SYSTEM_ACTOR
     from etl_craft.engine import migrations, transitions
-    from fixtures.metadata import add_pipeline, add_task, start_run
+    from fixtures.metadata import add_pipeline, add_task, insert, start_run
 
     db = empty_engine_db
     install(db, "0.3.0")
@@ -302,8 +302,17 @@ def test_ending_evidence_upgrade_keeps_existing_observations_unclassified(empty_
         task = add_task(conn, pipeline, "load")
         run = start_run(conn, pipeline)
         summary = transitions.find_or_create_task_run(conn, task, run).task_run_id
-        attempt = transitions.queue_attempt(conn, summary, SYSTEM_ACTOR)
         observed = datetime.now(UTC)
+        attempt = insert(
+            conn,
+            "INSERT INTO AUD_TASK_ATTEMPTS (TASK_RUN_ID,ATTEMPT_NUMBER,STATUS,QUEUED_AT,"
+            "REQUESTED_BY,REQUESTED_BY_KIND) VALUES (:summary,1,'QUEUED',:now,:actor,:kind)",
+            "ATTEMPT_ID",
+            summary=summary,
+            now=observed,
+            actor=SYSTEM_ACTOR.name,
+            kind=SYSTEM_ACTOR.kind,
+        )
         conn.execute(
             text(
                 "INSERT INTO AUD_TASK_ATTEMPTS (TASK_RUN_ID, ATTEMPT_NUMBER, STATUS, "

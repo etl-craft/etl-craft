@@ -1,4 +1,4 @@
-"""Scoped run controls: ``stop``, ``abort``, ``hold`` and ``release`` share one implementation."""
+"""Scoped run controls: ``stop`` and ``abort`` share one implementation."""
 
 from __future__ import annotations
 
@@ -25,14 +25,6 @@ HELP = {
     ControlAction.ABORT: (
         "Abort the selected run or task: stop its task processes now; commits are kept.",
         "the run or task to abort",
-    ),
-    ControlAction.HOLD: (
-        "Hold dispatch in the selected run or task; running attempts finish.",
-        "the run or task to hold",
-    ),
-    ControlAction.RELEASE: (
-        "Release a hold on exactly the run or task that was held.",
-        "the run or task to release",
     ),
 }
 

@@ -8,24 +8,42 @@ from sqlalchemy import bindparam
 from sqlalchemy.engine import Connection, Row
 
 from etl_craft.core.actor import Actor
-from etl_craft.engine import controls
+from etl_craft.engine import controls, standing_pauses
 from etl_craft.engine.metrics import lifecycle
 from etl_craft.engine.queries import statement
 
 
 def claim_queued_attempt(
-    conn: Connection, agent_id: int, pool: str, free: dict[str, object]
+    conn: Connection,
+    agent_id: int,
+    pool: str,
+    free: dict[str, object],
+    pipelines: tuple[int, ...],
 ) -> Row[tuple[object, ...]] | None:
     """Claim the highest-priority queued attempt this agent has a free slot for, or ``None``."""
     from etl_craft.engine.placement import claim_parameters
 
+    if not pipelines:
+        return None
+    for pipeline_id in pipelines:
+        standing_pauses.lock(conn, pipeline_id)
+    for attempt_id in conn.execute(
+        statement(conn, "queued_pause_attempts").bindparams(
+            bindparam("pipeline_ids", expanding=True)
+        ),
+        {"pool": pool, "pipeline_ids": pipelines},
+    ).scalars():
+        standing_pauses.apply_queued(conn, attempt_id)
     claimed = conn.execute(
-        statement(conn, "transition_claim_queued_attempt"),
+        statement(conn, "transition_claim_queued_attempt").bindparams(
+            bindparam("pipeline_ids", expanding=True)
+        ),
         {
             **claim_parameters(),
             "owner": str(agent_id),
             "agent_id": agent_id,
             "pool": pool,
+            "pipeline_ids": pipelines,
             **free,
         },
     ).one_or_none()
@@ -61,7 +79,8 @@ def claim_with_capacity(
     from etl_craft.engine import transitions
     from etl_craft.engine.placement import claim_parameters
 
-    controls.guard_attempt(conn, attempt_id)
+    if not controls.guard_attempt(conn, attempt_id, wait=wait):
+        return False
     with conn.begin_nested():
         row = conn.execute(
             statement(conn, "transition_claim_attempt").bindparams(

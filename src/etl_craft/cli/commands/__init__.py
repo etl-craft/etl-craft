@@ -24,7 +24,6 @@ from etl_craft.cli.commands import (
     graph,
     group,
     history,
-    holds,
     init_db,
     insights,
     items,
@@ -58,7 +57,7 @@ from etl_craft.cli.commands import (
 from etl_craft.cli.commands.common import Command as Command
 from etl_craft.core.enums import ControlAction
 
-CONTROL_VERBS = (ControlAction.STOP, ControlAction.ABORT, ControlAction.HOLD, ControlAction.RELEASE)
+CONTROL_VERBS = (ControlAction.STOP, ControlAction.ABORT)
 
 COMMANDS: tuple[Command, ...] = (
     *login.COMMANDS,
@@ -93,7 +92,6 @@ COMMANDS: tuple[Command, ...] = (
     pause.command(ControlAction.PAUSE),
     pause.command(ControlAction.RESUME),
     pipelines.COMMAND,
-    holds.COMMAND,
     offset.COMMAND,
     search.COMMAND,
     task.COMMAND,

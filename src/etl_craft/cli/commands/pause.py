@@ -20,6 +20,7 @@ from etl_craft.cli.prompts import can_prompt
 from etl_craft.core.enums import (
     MARKABLE_STATUSES,
     ActionName,
+    ActiveRuns,
     ControlAction,
     ResumeChoice,
     enum_value,
@@ -31,7 +32,7 @@ from etl_craft.services.operations.models import OperationResult, PipelineListVi
 from etl_craft.services.operations.requests import BulkControlRequest, ControlRequest, TagFilter
 
 HELP = {
-    ControlAction.PAUSE: "Pause a pipeline or task across runs; optionally set a task outcome.",
+    ControlAction.PAUSE: "Pause a pipeline or task across runs; task pauses require an outcome.",
     ControlAction.RESUME: "Resume a pipeline or task; scheduled pipelines need --then.",
 }
 
@@ -46,9 +47,14 @@ def _configure(parser: argparse.ArgumentParser, *, action: ControlAction) -> Non
     )
     if action == ControlAction.PAUSE:
         parser.add_argument(
+            "--active-runs",
+            choices=tuple(ActiveRuns),
+            help="Pipeline pause: DRAIN (default) stops new tasks; FINISH completes active runs.",
+        )
+        parser.add_argument(
             "--outcome",
             choices=MARKABLE_STATUSES,
-            help="Supply this outcome instead of running the task; omit to hold.",
+            help="Required for a task pause: supply this outcome instead of running the task.",
         )
         parser.add_argument(
             "--expires-at",
@@ -59,7 +65,7 @@ def _configure(parser: argparse.ArgumentParser, *, action: ControlAction) -> Non
         parser.add_argument(
             "--replace",
             action="store_true",
-            help="Atomically replace an existing task pause; no unpaused window.",
+            help="Atomically replace an existing pipeline or task pause; no unpaused window.",
         )
     configure_tags(parser)
     parser.add_argument("--reason", default="", help=f"Why; recorded with the {verb}.")
