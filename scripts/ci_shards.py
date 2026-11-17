@@ -26,7 +26,7 @@ SERVICE_MARKERS = {
 }
 SHARDS = {
     "coverage": 1,
-    "browser": 1,
+    "browser": 2,
     "measured-coverage": 4,
     "engine": 5,
     "warehouse-local": 1,

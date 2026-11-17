@@ -30,6 +30,7 @@ jobs:
       coverage: ${{ steps.plan.outputs.coverage }}
       service: ${{ steps.plan.outputs.service }}
       e2e: ${{ steps.plan.outputs.e2e }}
+      browser: ${{ steps.plan.outputs.browser }}
       wheel: ${{ steps.plan.outputs.wheel }}
     steps:
       - uses: actions/checkout@v7
@@ -126,9 +127,12 @@ jobs:
         run: make services-down
 
   browser:
-    name: browser sessions and accessibility
+    name: browser sessions and accessibility (shard ${{ matrix.index }})
     needs: [prepare, package]
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.prepare.outputs.browser) }}
     timeout-minutes: 8
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -147,11 +151,11 @@ jobs:
       - name: Execute browser tests and record complete collection
         env:
           ETL_CRAFT_REQUIRE_SERVICES: "1"
-        run: uv run python scripts/ci_shards.py run browser 0 1 "$RUNNER_TEMP/result"
+        run: uv run python scripts/ci_shards.py run browser '${{ matrix.index }}' '${{ matrix.count }}' "$RUNNER_TEMP/result"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         if: always()
         with:
-          name: ci-browser-0
+          name: ci-browser-${{ matrix.index }}
           path: ${{ runner.temp }}/result
           if-no-files-found: error
 
