@@ -226,9 +226,12 @@ def test_a_full_refresh_warns_before_emptying_a_target_and_waits_for_acceptance(
         shoot(page, f"full-refresh-warning-{scheme}-{width}")
         accept.click()
         expect(submit).to_be_enabled()
-        with page.expect_request(lambda r: r.method == "POST" and r.url.endswith("/runs")) as sent:
+        # Wait for the answer: closing the browser first can abort the request before it commits.
+        with page.expect_response(
+            lambda r: r.request.method == "POST" and r.url.endswith("/runs")
+        ) as sent:
             submit.click()
-        body = sent.value.post_data_json
+        body = sent.value.request.post_data_json
         assert body["full_refresh"] is True and body["empty_targets"] == ["mart.orders"]
         assert body["reason"] == "profile fixed" and "task_code" not in body
         browser.close()
