@@ -180,3 +180,51 @@ def test_clone_refuses_to_truncate_an_archive_table(sql_world):
     assert world.rows(f"SELECT _ETL_ARCHIVE_ENGINE_ID FROM {world.name('AUD_ACTIONS')}") == [
         ("original",)
     ]
+
+
+def test_clones_hide_team_named_sensitive_parameters_in_rows_history_and_snapshots(sql_world):
+    from fixtures.metadata import start_run
+
+    world = sql_world
+    inputs = json.dumps({"vendor_secret": "inner-hidden-1", "days": 3})
+    with world.engine_db.begin() as conn:
+        other = add_pipeline(conn, "SECRETIVE")
+        add_task(
+            conn,
+            other,
+            "script",
+            handler="PYTHON",
+            SCRIPT_FILE="python_scripts/s.py",
+            api_token="clone-hidden-token-1",
+            INPUT_PARAMS=inputs,
+        )
+        add_task(conn, other, "merge", SQL_ACTION="SCD1_MERGE", MERGE_KEY="customer_id")
+        conn.execute(
+            text(
+                "UPDATE CFG_TASK_PARAMETERS SET PARAMETER_VALUE='clone-hidden-token-2' "
+                "WHERE PARAMETER_NAME='api_token'"
+            )
+        )
+        start_run(conn, other)
+    clone(world.engine_db, cloning(world))
+    mirrored = dict(
+        world.rows(
+            f"SELECT PARAMETER_NAME, PARAMETER_VALUE FROM {world.name('CFG_TASK_PARAMETERS')}"
+        )
+    )
+    assert mirrored["api_token"] == "[REDACTED]"
+    assert mirrored["MERGE_KEY"] == "customer_id"
+    assert json.loads(mirrored["INPUT_PARAMS"]) == {"vendor_secret": "[REDACTED]", "days": 3}
+    history = world.rows(
+        f"SELECT PARAMETER_VALUE FROM {world.name('AUD_CFG_TASK_PARAMETERS_HISTORY')} "
+        "WHERE PARAMETER_NAME='api_token'"
+    )
+    assert history and {value for (value,) in history} == {"[REDACTED]"}
+    snapshots = " ".join(
+        str(value)
+        for (value,) in world.rows(
+            f"SELECT METADATA_SNAPSHOT FROM {world.name('AUD_PIPELINES_RUN_LOG')}"
+        )
+    )
+    assert "clone-hidden-token" not in snapshots and "inner-hidden-1" not in snapshots
+    assert "customer_id" in snapshots

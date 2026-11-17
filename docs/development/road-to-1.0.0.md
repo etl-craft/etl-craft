@@ -182,7 +182,7 @@ item's text, or work done early under another item.
 | S7.AI Fixes from the 2026-10-27 audit | Done | #264 | Pool/attempt credentials, bounded SSO, publishing, sign-in, dependency bounds, setup and first-ending metrics. |
 | S7.AK Schema checker | Done | S7.AK PR | Optional per-project schedule plus an on-demand check that compare declared tables with the warehouse; Insights and the catalog show the last check |
 | S7.B Users, roles and identities | In progress | #203–#207, #231, #261, #263, #264, #277, #386 | Accounts, fixed roles, scoped grants, delegated pipeline grant UI, pool-bound agents and browser sign-in exist; custom roles, bindings and access explain remain |
-| S7.C Redaction | In progress | #228, #309 | Recursive name masking and shared operation-scoped value masking exist; resolved-secret registration and Sensitive_patterns remain |
+| S7.C Redaction | Done | #228, #309, S7.C PR | Recursive name masking, operation-scoped value masking, process-wide masking of every resolved secret, and Redaction.Sensitive_patterns for team-named parameters in the catalog, task read and clones |
 | S7.D Alert channels | Done | #387 | Admin-owned webhook/Slack routing, isolated event-admitted alert runs, bounded signed delivery and sanitized pipeline/project history |
 | S7.E Secrets providers | In progress | #84, #120, #323 | ENVIRONMENT/FILE task declarations, fenced TLS delivery and private child pipe; secret managers and Cache_seconds remain |
 | S7.F Packaging and deployment | Done | #227, #231, #316 | Wheel-built role images, tagged release smoke and publishing, Compose/Kubernetes manifests and systemd units |
@@ -1174,6 +1174,15 @@ empty-history-page handling defect, which was corrected and verified. No cloud w
   recovery repetitions. Local Semgrep found no issue. Generated warehouse SQL is unchanged,
   so cloud suites do not apply.
 
+- **S7.C redaction (owner, 2026-11-17).** Choices that differ from the item text: the
+  default `*KEY*` would hide `MERGE_KEY` and other package parameters, which never hold a
+  secret (secrets are always variable names), so patterns apply only to team-named parameters
+  (Python script parameters) and `INPUT_PARAMS` keys. Masked values read `[REDACTED]`, the
+  existing marker, not `***`. Resolved secrets are remembered per process and masked in its
+  logs, stored task logs and attempt log files only (values under four characters are not
+  remembered); errors and results keep operation-scoped masking so ordinary words stay exact. Clones mask the parameter tables,
+  their history and the `METADATA_SNAPSHOT` of runs and refreshes. Acceptance availability: no
+  warehouse SQL changed; clone masking ran on all four local warehouses.
 - **S7.E task-secret slice (owner).** SECRETS and task.secret use ENVIRONMENT/FILE;
   fenced claim delivery uses TLS and a private stdin pipe, with redaction before child log
   persistence. AWS Secrets Manager, Vault and Secrets.Cache_seconds remain unimplemented;

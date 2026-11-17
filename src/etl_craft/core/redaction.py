@@ -5,6 +5,19 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 
 _VALUES: ContextVar[tuple[str, ...]] = ContextVar("redacted_values", default=())
+_RESOLVED: set[str] = set()
+"""Secrets this process resolved itself; masked in its logs for the life of the process."""
+SHORTEST_REMEMBERED = 4
+"""Shorter values would mask ordinary words everywhere; they are not remembered."""
+DEFAULT_SENSITIVE_PATTERNS = ("*TOKEN*", "*SECRET*", "*PASSWORD*", "*KEY*")
+REDACTED = "[REDACTED]"
+
+
+def remember(value: str) -> str:
+    """Mask a secret this process resolved in every later log line and stored task log."""
+    if len(value) >= SHORTEST_REMEMBERED:
+        _RESOLVED.add(value)
+    return value
 
 
 @contextmanager
@@ -36,8 +49,61 @@ def registering(*values: str) -> Iterator[None]:
 def mask_text(value: str) -> str:
     """Remove registered values before text leaves the operation."""
     for secret in _VALUES.get():
-        value = value.replace(secret, "[REDACTED]")
+        value = value.replace(secret, REDACTED)
     return value
+
+
+def mask_log(value: str) -> str:
+    """Remove registered values and every secret this process resolved, before a log is kept.
+
+    Only logs get the process-wide set: results and errors keep exact text, so a secret that
+    happens to be an ordinary word does not rewrite them.
+    """
+    value = mask_text(value)
+    for secret in sorted(_RESOLVED, key=len, reverse=True):
+        value = value.replace(secret, REDACTED)
+    return value
+
+
+def sensitive(name: str, patterns: tuple[str, ...]) -> bool:
+    """Whether a parameter name matches a ``Redaction.Sensitive_patterns`` glob, in any case."""
+    from fnmatch import fnmatchcase
+
+    return any(fnmatchcase(name.upper(), pattern.upper()) for pattern in patterns)
+
+
+def public_parameters(
+    parameters: Mapping[str, str], patterns: tuple[str, ...], package: frozenset[str]
+) -> dict[str, str]:
+    """Hide values of team-named sensitive parameters and sensitive ``INPUT_PARAMS`` keys.
+
+    Package parameter names (``MERGE_KEY``, ``SQL_ACTION``) never hold a secret, since secrets
+    are always variable names, so the patterns apply only to the names a team chose.
+    """
+    import json
+
+    shown: dict[str, str] = {}
+    for name, value in parameters.items():
+        if name.upper() == "INPUT_PARAMS" and value:
+            try:
+                document = json.loads(value)
+            except ValueError:
+                document = None
+            shown[name] = (
+                json.dumps(
+                    {
+                        key: REDACTED if sensitive(str(key), patterns) else item
+                        for key, item in document.items()
+                    }
+                )
+                if isinstance(document, dict)
+                else value
+            )
+        elif name.upper() not in package and sensitive(name, patterns):
+            shown[name] = REDACTED
+        else:
+            shown[name] = value
+    return shown
 
 
 def mask(value: object) -> object:

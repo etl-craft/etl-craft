@@ -28,6 +28,7 @@ from etl_craft.core.enums import (
     TlsMode,
 )
 from etl_craft.core.errors import ConfigurationError
+from etl_craft.core.redaction import DEFAULT_SENSITIVE_PATTERNS
 from etl_craft.core.resources import Sizing
 from etl_craft.core.restart import EVERYTHING
 
@@ -325,6 +326,8 @@ class ConnectorConfig:
     retention: Retention = field(default_factory=Retention)
     uploads: Uploads = field(default_factory=Uploads)
     privacy_hmac_secret: str | None = None
+    sensitive_patterns: tuple[str, ...] = DEFAULT_SENSITIVE_PATTERNS
+    """``Redaction.Sensitive_patterns``: team-named parameters whose values are hidden."""
     retry_on: RetryOn = RetryOn.TRANSIENT
 
     @property

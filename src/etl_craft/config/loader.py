@@ -53,6 +53,8 @@ from etl_craft.config.model import DEFAULT_LOG_DIR, EXAMPLE_PATH, ConnectionProf
 from etl_craft.config.object_stores import ARTIFACT_KEYS, LOG_KEYS, STORE_KEYS, with_artifacts
 from etl_craft.config.privacy import KEYS as PRIVACY_KEYS
 from etl_craft.config.privacy import parse_privacy
+from etl_craft.config.redaction import KEYS as REDACTION_KEYS
+from etl_craft.config.redaction import parse_redaction
 from etl_craft.config.resolve import Resolver
 from etl_craft.config.retention import KEYS as RETENTION_KEYS
 from etl_craft.config.retention import parse_retention
@@ -78,6 +80,7 @@ SECTIONS = (
     "Retention",
     "Uploads",
     "Privacy",
+    "Redaction",
 )
 
 
@@ -112,6 +115,7 @@ def settings_by_section() -> dict[str, frozenset[str]]:
         "Uploads": UPLOAD_KEYS,
         "Uploads.Archive_to": ARCHIVE_KEYS,
         "Privacy": PRIVACY_KEYS,
+        "Redaction": REDACTION_KEYS,
     }
 
 
@@ -256,6 +260,7 @@ def parse_config(raw: object, path: Path, *, agent: bool = False) -> ConnectorCo
     config = ConnectorConfig(
         uploads=parse_uploads(raw, path, resolver),
         privacy_hmac_secret=parse_privacy(raw, path, resolver),
+        sensitive_patterns=parse_redaction(raw, path),
         retention=parse_retention(raw, global_profile, path, resolver),
         deployment=deployment,
         api_address=api_address,
