@@ -39,8 +39,8 @@ def add_pause(conn, pipeline, reason):
     return conn.execute(
         text(
             "INSERT INTO AUD_PIPELINE_PAUSES "
-            "(PIPELINE_ID, REASON, PAUSED_BY, PAUSED_BY_KIND, PAUSED_AT) "
-            "VALUES (:p,:r,'tester','SYSTEM',:now) RETURNING PIPELINE_PAUSE_ID AS pause_id"
+            "(PIPELINE_ID, REASON, PAUSED_BY, PAUSED_BY_KIND, PAUSED_AT, ACTIVE_RUNS) "
+            "VALUES (:p,:r,'tester','SYSTEM',:now,'FINISH') RETURNING PIPELINE_PAUSE_ID AS pause_id"
         ),
         {"p": pipeline, "r": reason, "now": datetime.now(UTC)},
     ).scalar_one()

@@ -121,7 +121,7 @@ def test_cli_omitted_recovery_reason_obeys_governance(
 
 
 @pytest.mark.parametrize("policy", ("STRICT", "RELAXED"))
-@pytest.mark.parametrize("verb", ("hold", "release", "stop", "abort"))
+@pytest.mark.parametrize("verb", ("stop", "abort"))
 @pytest.mark.parametrize("interface", ("cli", "api"))
 def test_control_reason_policy_has_the_same_cli_and_api_effect(
     metadata_project, monkeypatch, capsys, policy, verb, interface
@@ -130,7 +130,6 @@ def test_control_reason_policy_has_the_same_cli_and_api_effect(
     from sqlalchemy import text
 
     from etl_craft.api.app import create_app
-    from etl_craft.core.enums import ControlAction
     from etl_craft.services.operations.actions import ACTIONS, action_path
     from fixtures.metadata import add_task, start_run
 
@@ -144,15 +143,6 @@ def test_control_reason_policy_has_the_same_cli_and_api_effect(
         pipeline = add_pipeline(conn, "P")
         add_task(conn, pipeline, "T", "PYTHON")
         run = start_run(conn, pipeline)
-    if verb == "release":
-        act(
-            ctx,
-            ActionName.CONTROL,
-            pipeline_code="P",
-            run_id=run,
-            action=ControlAction.HOLD,
-            reason="seed",
-        )
     with project.engine.connect() as conn:
         before = conn.execute(
             text("SELECT COUNT(*) AS count FROM AUD_CONTROL_REQUESTS")

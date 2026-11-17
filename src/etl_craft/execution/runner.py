@@ -26,6 +26,7 @@ from sqlalchemy.engine import Connection, Engine
 from etl_craft.config import ConnectorConfig
 from etl_craft.core.actor import SYSTEM_ACTOR, acting_as, current_actor
 from etl_craft.core.enums import (
+    FINISHED_RUN_STATUSES,
     SETTLED_STATUSES,
     AttemptStatus,
     DeploymentProfile,
@@ -565,6 +566,11 @@ def _try_local_attempt(
             wait=True,
         )
         if not claimed:
+            result = conn.execute(
+                statement(conn, "task_run_result"), {"task_run_id": spec.task_run_id}
+            ).one()
+            if result.status in FINISHED_RUN_STATUSES:
+                return TaskOutcome(RunStatus(result.status), result.error_message, spec.task_run_id)
             from etl_craft.engine.placement import record_wait_reasons
 
             record_wait_reasons(
@@ -761,12 +767,9 @@ def _standing_outcome(
     """Keep dependency overrides from implicitly removing a standing task pause."""
     from etl_craft.engine import standing_pauses
 
-    pause, holds = standing_pauses.at_task(conn, pipeline_id, run_id, task_id, now)
+    pause = standing_pauses.at_task(conn, pipeline_id, run_id, task_id, now)
     if pause is None:
         return None
-    if holds:
-        standing_pauses.hold(conn, pause, run_id)
-        return _skipped(pause.describe(), waiting=True)
     standing_pauses.apply(conn, pause, run_id)
     assert pause.outcome is not None
     return TaskOutcome(pause.outcome, pause.describe())

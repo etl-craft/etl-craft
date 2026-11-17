@@ -25,6 +25,7 @@ import json
 import logging
 from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass
+from datetime import UTC, datetime
 
 from sqlalchemy.engine import Connection, Engine
 
@@ -33,6 +34,7 @@ from etl_craft.core.actor import Actor, current_actor
 from etl_craft.core.enums import (
     FINISHED_RUN_STATUSES,
     MARKABLE_STATUSES,
+    ActiveRuns,
     GatePolicy,
     Handler,
     InterventionAction,
@@ -302,6 +304,14 @@ def skip_run(
     )
 
 
+@dataclass(frozen=True)
+class PauseOptions:
+    """Pipeline pause dispatch mode and atomic replacement choice."""
+
+    active_runs: ActiveRuns = ActiveRuns.DRAIN
+    replace: bool = False
+
+
 def pause_pipeline(
     engine: Engine,
     config: ConnectorConfig,
@@ -309,27 +319,38 @@ def pause_pipeline(
     reason: str,
     *,
     requested_by: str | None = None,
+    options: PauseOptions | None = None,
 ) -> str:
-    """Pause ``pipeline_code`` until it is resumed; return what was done, in one line.
+    """Atomically open or replace a pipeline pause at the dispatch boundary."""
+    from etl_craft.engine import standing_pauses
 
-    Raises ``RunStateError`` when it is already paused.
-    """
     _check(config, "pause", reason, None, None)
+    options = options or PauseOptions()
     who = requested_by or current_actor().name
+    now = datetime.now(UTC)
     with engine.begin() as conn:
         pipeline_id = resolve_pipeline_id(conn, pipeline_code)
+        standing_pauses.lock(conn, pipeline_id)
         existing = pauses.fetch_open_pause(conn, pipeline_id)
+        if existing is not None and not options.replace:
+            raise RunStateError(
+                f"{pipeline_code}: already {existing.describe()}; "
+                "use --replace to replace the active pause atomically"
+            )
+        if existing is None and options.replace:
+            raise RunStateError(
+                f"{pipeline_code}: --replace found no active pipeline pause; "
+                "expected an open pause; omit --replace to create one"
+            )
         if existing is not None:
-            raise RunStateError(f"{pipeline_code} is already {existing.describe()}")
-        pauses.record_pause(conn, pipeline_id, who, reason)
-        active = runlog.fetch_active_pipeline_run_id(conn, pipeline_id)
-    message = f"{pipeline_code}: paused; `etl-craft run` starts nothing of it until resumed"
-    if active is not None:
-        message += (
-            f", and pipeline_run_id={active}, in progress, starts no more tasks and stays "
-            "IN-PROGRESS"
+            pauses.close_pause(conn, pipeline_id, who, reason, now=now)
+        pauses.record_pause(
+            conn, pipeline_id, who, reason, active_runs=options.active_runs, now=now
         )
-    logger.warning("%s (by %s: %s)", message, who, reason)
+    message = (
+        f"{pipeline_code}: paused; active_runs={options.active_runs}; no new runs until resume"
+    )
+    logger.info("%s (by %s: %s)", message, who, reason)
     return message
 
 
@@ -355,7 +376,9 @@ def open_pause(
             ):
                 return pause
             selected = runlog.select_run(conn, pipeline_id, selector)
-            if controls.permits_paused(conn, selected.pipeline_run_id):
+            if selected.status == RunStatus.IN_PROGRESS or controls.permits_paused(
+                conn, selected.pipeline_run_id
+            ):
                 return None
         return pause
 

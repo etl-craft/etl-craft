@@ -20,17 +20,14 @@ from etl_craft.core.enums import (
 )
 from etl_craft.core.errors import PermissionDeniedError, RunRefusedError, RunStateError, UsageError
 from etl_craft.engine import attempt_starts, controls, runlog, transitions
-from etl_craft.engine.runlog import RunSelector
 from etl_craft.execution import control_flow
 from etl_craft.execution.attempt_types import ChildOptions, TaskRun
-from etl_craft.execution.pipeline import run_pipeline
 from etl_craft.execution.runner import admit_attempt, execute_attempt
 from etl_craft.handlers.resources import LocalLocker
-from etl_craft.services.operations import from_json, to_json
 from etl_craft.services.operations.actions import invoke
 from etl_craft.services.operations.controls import ControlRequest
 from fixtures.actions import act
-from fixtures.metadata import add_dependency, add_pipeline, add_task, start_run
+from fixtures.metadata import add_pipeline, add_task, start_run
 from fixtures.races import paused_after, two_at_once
 from fixtures.scoped_controls import ctx as ctx
 
@@ -67,30 +64,6 @@ def queue(ctx, run, task):
         return transitions.queue_attempt(conn, binding.task_run_id, current_actor())
 
 
-def test_task_hold_release_and_force_admission_are_scoped(ctx):
-    _, run, first, second = seed(ctx)
-    held = ask(ctx, run, ControlAction.HOLD, "first", "hold:first")
-    assert held.status == ControlStatus.COMPLETED and held.attempt_ids == ()
-    assert held.requested_by == "operator" and held.task_id == first
-    with pytest.raises(RunRefusedError, match="fenced by HOLD"):
-        admit_attempt(
-            ctx.engine,
-            ctx.config,
-            TaskRun(
-                pipeline_code="P", task_code="first", task_id=first, pipeline_run_id=run, force=True
-            ),
-        )
-    assert queue(ctx, run, second)
-    released = ask(ctx, run, ControlAction.RELEASE, "first")
-    assert released.status == ControlStatus.COMPLETED
-    assert queue(ctx, run, first)
-    assert (
-        act(ctx, ActionName.CONTROL_REQUEST, control_id=held.control_id).action
-        == ControlAction.HOLD
-    )
-    assert from_json(type(held), to_json(held)) == held
-
-
 @pytest.mark.parametrize("action", [ControlAction.STOP, ControlAction.ABORT])
 def test_queued_work_is_acknowledged_without_starting_a_process(ctx, action):
     _, run, first, _ = seed(ctx)
@@ -107,8 +80,8 @@ def test_queued_work_is_acknowledged_without_starting_a_process(ctx, action):
 def test_repeated_keys_and_concurrent_controls_keep_original_scope(ctx):
     _, run, _, _ = seed(ctx)
     results = two_at_once(
-        lambda: ask(ctx, run, ControlAction.HOLD, key="same"),
-        lambda: ask(ctx, run, ControlAction.HOLD, key="same"),
+        lambda: ask(ctx, run, ControlAction.RUN_PAUSED, key="same"),
+        lambda: ask(ctx, run, ControlAction.RUN_PAUSED, key="same"),
         at=(ctx.engine, "begin"),
     )
     assert results[0].control_id == results[1].control_id
@@ -118,37 +91,6 @@ def test_repeated_keys_and_concurrent_controls_keep_original_scope(ctx):
         act(ctx, ActionName.CONTROL_REQUEST, control_id=results[0].control_id).requested_by
         == "operator"
     )
-
-
-def test_claim_racing_hold_is_either_owned_or_fenced(ctx):
-    _, run, first, _ = seed(ctx)
-    attempt = queue(ctx, run, first)
-
-    def claim():
-        try:
-            with ctx.engine.begin() as conn:
-                transitions.claim_attempt(
-                    conn,
-                    attempt,
-                    current_actor(),
-                    owner="agent",
-                    lease_expires_at=datetime.now(UTC) + timedelta(seconds=60),
-                )
-            return True
-        except RunRefusedError:
-            return False
-
-    owned, held = two_at_once(
-        claim,
-        lambda: ask(ctx, run, ControlAction.HOLD, "first"),
-        at=(ctx.engine, "begin"),
-    )
-    assert held.status == ControlStatus.COMPLETED
-    with ctx.engine.connect() as conn:
-        actual = controls.affected(conn, (attempt,))[0]
-    assert actual.status == (AttemptStatus.CLAIMED if owned else AttemptStatus.QUEUED)
-    with pytest.raises(RunRefusedError, match="fenced by HOLD"):
-        claim_again(ctx, attempt)
 
 
 def claim_again(ctx, attempt):
@@ -185,8 +127,8 @@ def test_unknown_query_acknowledgement_stays_pending_after_lease_loss(ctx):
     assert pending.status == ControlStatus.ACKNOWLEDGED
     assert pending.run_status == RunStatus.IN_PROGRESS and pending.completed_at is None
     assert "expired lease is not completion" in pending.message
-    with pytest.raises(RunRefusedError, match="expired lease is not completion"):
-        ask(ctx, run, ControlAction.RELEASE)
+    with pytest.raises(RunRefusedError, match="ended ownership"):
+        ask(ctx, run, ControlAction.RECOVER)
 
 
 def test_missing_query_adapter_refuses_abort_before_mutating_the_scope(ctx, monkeypatch):
@@ -227,7 +169,7 @@ def test_missing_query_adapter_refuses_abort_before_mutating_the_scope(ctx, monk
 def test_role_legacy_and_reason_refusals_are_explicit(ctx):
     _, run, _, _ = seed(ctx)
     with pytest.raises(PermissionDeniedError):
-        ask(replace(ctx, role=ApiRole.VIEWER), run, ControlAction.HOLD)
+        ask(replace(ctx, role=ApiRole.VIEWER), run, ControlAction.RUN_PAUSED)
     with pytest.raises(UsageError, match=r"default.*CUSTOM.*STRICT.*--reason"):
         invoke(
             ctx,
@@ -264,27 +206,6 @@ def test_completed_summary_is_not_process_exit_evidence(ctx):
     assert done.status == ControlStatus.COMPLETED and done.run_status == RunStatus.CANCELLED
     assert done.attempts[0].status == AttemptStatus.SUCCESS
     assert done.attempts[0].process_ended_at and done.attempts[0].queries_ended_at
-
-
-def test_task_hold_keeps_downstream_pending_but_runs_other_tasks(ctx):
-    pipeline, run, first, second = seed(ctx)
-    with ctx.engine.begin() as conn:
-        third = add_task(conn, pipeline, "third", "PYTHON", BEHAVIOUR="succeed")
-        add_dependency(conn, pipeline, third, first)
-    held = ask(ctx, run, ControlAction.HOLD, "first")
-    done = run_pipeline(ctx.engine, ctx.config, "P", child=CHILD, selector=RunSelector(run_id=run))
-    assert done.status == RunStatus.IN_PROGRESS
-    with ctx.engine.connect() as conn:
-        states = runlog.fetch_run_state(conn, run, [first, second, third])
-    assert first not in states and third not in states
-    assert states[second].status == RunStatus.SUCCESS
-    ask(ctx, run, ControlAction.RELEASE, "first")
-    done = run_pipeline(ctx.engine, ctx.config, "P", child=CHILD, selector=RunSelector(run_id=run))
-    assert done.status == RunStatus.SUCCESS
-    assert (
-        act(ctx, ActionName.CONTROL_REQUEST, control_id=held.control_id).action
-        == ControlAction.HOLD
-    )
 
 
 def wait_for(check, timeout=20):
@@ -376,23 +297,6 @@ def test_task_control_observes_just_its_worker_and_preserves_other_work(ctx, tmp
     assert state[second].status == RunStatus.SUCCESS
 
 
-def test_run_hold_is_independent_of_definition_pause_and_other_pipeline(ctx):
-    _, run, first, _ = seed(ctx)
-    with ctx.engine.begin() as conn:
-        other_pipeline = add_pipeline(conn, "OTHER")
-        other_task = add_task(conn, other_pipeline, "other", "PYTHON")
-        other_run = start_run(conn, other_pipeline)
-    ask(ctx, run, ControlAction.HOLD)
-    with pytest.raises(RunRefusedError, match="fenced by HOLD"):
-        queue(ctx, run, first)
-    assert queue(ctx, other_run, other_task)
-    ask(ctx, run, ControlAction.RELEASE, "first")
-    with pytest.raises(RunRefusedError, match="fenced by HOLD"):
-        queue(ctx, run, first)
-    ask(ctx, run, ControlAction.RELEASE)
-    assert queue(ctx, run, first)
-
-
 def test_event_probe_control_is_fenced_without_claiming_an_unobserved_query_ended(ctx, tmp_path):
     from etl_craft.engine import locks
     from etl_craft.execution.events import check_event
@@ -429,11 +333,6 @@ def test_event_probe_control_is_fenced_without_claiming_an_unobserved_query_ende
     finally:
         done.set()
         holder.join(10)
-    held = ask(ctx, run, ControlAction.HOLD, "wait")
-    waiting = check_event(ctx.engine, ctx.config, run, task, datetime.now(UTC))
-    assert waiting.status is None and waiting.next_check_at
-    assert held.attempt_ids == () and held.status == ControlStatus.COMPLETED
-    ask(ctx, run, ControlAction.RELEASE, "wait")
     assert (
         check_event(ctx.engine, ctx.config, run, task, datetime.now(UTC)).status
         == RunStatus.SUCCESS
@@ -494,7 +393,7 @@ def test_pending_abort_cannot_be_downgraded_or_released(ctx):
     claim_again(ctx, attempt)
     aborted = ask(ctx, run, ControlAction.ABORT, "first")
     assert aborted.completed_at is None
-    for action in (ControlAction.STOP, ControlAction.RELEASE):
+    for action in (ControlAction.STOP,):
         with pytest.raises(RunRefusedError, match="inspect its process/query acknowledgements"):
             ask(ctx, run, action, "first")
     with ctx.engine.connect() as conn:
@@ -514,7 +413,7 @@ def test_request_key_racing_across_runs_has_one_owner(ctx):
                 ActionName.CONTROL,
                 ControlRequest(
                     pipeline_code=code,
-                    action=ControlAction.HOLD,
+                    action=ControlAction.RUN_PAUSED,
                     reason="test",
                     run_id=run_id,
                     request_key="global-key",
@@ -627,7 +526,7 @@ def test_active_run_is_pinned_before_event_locks_and_never_reselected(ctx, monke
         invoke(
             ctx,
             ActionName.CONTROL,
-            ControlRequest(pipeline_code="P", action=ControlAction.HOLD, reason="maintenance"),
+            ControlRequest(pipeline_code="P", action=ControlAction.STOP, reason="maintenance"),
         )
     with ctx.engine.connect() as conn:
         assert controls.blocked(conn, replacements[0]) == {}

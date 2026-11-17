@@ -104,8 +104,6 @@ EXPECTED = {
         "HANDED_OFF",
     },
     enums.ControlAction: {
-        "HOLD",
-        "RELEASE",
         "STOP",
         "ABORT",
         "RECOVER",
@@ -123,6 +121,7 @@ EXPECTED = {
     enums.HttpMethod: {"GET", "POST"},
     enums.HttpScheme: {"http", "https"},
     enums.LineageDirection: {"BOTH", "UPSTREAM", "DOWNSTREAM"},
+    enums.ActiveRuns: {"DRAIN", "FINISH"},
     enums.ResumeChoice: {"run-now", "catch-up", "wait"},
     enums.ControlStatus: {"REQUESTED", "ACKNOWLEDGED", "COMPLETED"},
     enums.EndingEvidenceKind: {"VERIFIED", "ATTESTED"},

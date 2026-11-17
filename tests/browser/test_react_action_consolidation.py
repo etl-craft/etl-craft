@@ -1,4 +1,4 @@
-"""Pipeline actions have one shared flow and remain reachable from Held and paused."""
+"""Pipeline actions share one flow, including the Paused page."""
 
 import re
 
@@ -61,7 +61,7 @@ def test_pipeline_row_pause_resume_keeps_confirmation_policy_and_header_action(s
 
 
 @pytest.mark.parametrize("width", [1440, 390])
-def test_held_pipeline_resume_is_replaced_by_link_without_losing_pause_facts(scene, width):
+def test_paused_pipeline_keeps_shared_resume_and_pipeline_link(scene, width):
     ctx, url, _ = scene
     act(ctx, ActionName.CONTROL, pipeline_code="OPS", action="PAUSE", reason="review totals")
     with sync_playwright() as pw:
@@ -71,7 +71,7 @@ def test_held_pipeline_resume_is_replaced_by_link_without_losing_pause_facts(sce
         expect(paused).to_contain_text("review totals")
         expect(paused).to_contain_text("owner")
         expect(paused.locator("time")).to_be_visible()
-        expect(paused.get_by_role("button", name="Resume", exact=True)).to_have_count(0)
+        expect(paused.get_by_role("button", name="Resume", exact=True)).to_have_count(1)
         paused.get_by_role("link", name="OPS", exact=True).click()
         page.wait_for_url(re.compile(r"/pipelines/OPS$"))
         page.get_by_role("button", name="Resume", exact=True).click()

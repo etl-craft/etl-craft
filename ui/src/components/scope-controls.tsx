@@ -8,13 +8,11 @@ import { getJson, project } from "@/lib/api";
 import type { Capabilities, ControlView } from "@/lib/types";
 
 export const EFFECT: Record<string, string> = {
-  HOLD: "Stops new work in this scope from starting. Work already running continues.",
-  RELEASE: "Lets held work in this scope start again.",
   STOP: "Asks running attempts to stop. Acknowledged when execution ends.",
   ABORT: "Ends the work in this scope without further attempts.",
   RECOVER: "Reopens the scope: failed and unfinished work runs again.",
   RESTART: "Replaces the scope's work in a new execution context.",
-  RUN_PAUSED: "Gives this one run permission to run its paused tasks.",
+  RUN_PAUSED: "Gives this one run permission while its pipeline remains paused.",
 };
 export const DANGER = new Set(["STOP", "ABORT"]);
 export const label = (action: string) => action.charAt(0) + action.slice(1).toLowerCase().replace("_", " ");

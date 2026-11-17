@@ -181,7 +181,8 @@ def test_a_queued_attempt_is_claimed_by_its_token_identity(agent_scene):
         row = conn.execute(
             text(
                 "SELECT OWNER_ID AS owner_id, STATUS AS status, RESERVED_CPU AS cpu, "
-                "RESERVED_MEMORY_MB AS memory FROM AUD_TASK_ATTEMPTS WHERE ATTEMPT_ID=:id"
+                "RESERVED_MEMORY_MB AS memory FROM AUD_TASK_ATTEMPTS "
+                "WHERE ATTEMPT_ID=:id"
             ),
             {"id": attempt},
         ).one()
@@ -536,7 +537,8 @@ def test_claim_clears_the_previous_queued_reason(agent_scene):
         row = conn.execute(
             text(
                 "SELECT STATUS AS status, ERROR_MESSAGE AS error_message "
-                "FROM AUD_TASK_ATTEMPTS WHERE ATTEMPT_ID=:id"
+                "FROM AUD_TASK_ATTEMPTS "
+                "WHERE ATTEMPT_ID=:id"
             ),
             {"id": attempt},
         ).one()
@@ -584,7 +586,8 @@ def test_cancellation_needs_warehouse_confirmation_from_the_pinned_owner(agent_s
         row = conn.execute(
             text(
                 "SELECT STATUS AS status, CANCEL_REQUESTED_AT AS requested, "
-                "CANCEL_ACKNOWLEDGED_AT AS acknowledged FROM AUD_TASK_ATTEMPTS WHERE ATTEMPT_ID=:id"
+                "CANCEL_ACKNOWLEDGED_AT AS acknowledged FROM AUD_TASK_ATTEMPTS "
+                "WHERE ATTEMPT_ID=:id"
             ),
             {"id": attempt},
         ).one()
@@ -741,7 +744,8 @@ def test_pipeline_limit_skips_blocked_work_and_preserves_its_reason(agent_scene)
         row = conn.execute(
             text(
                 "SELECT STATUS AS status, ERROR_MESSAGE AS reason "
-                "FROM AUD_TASK_ATTEMPTS WHERE ATTEMPT_ID=:id"
+                "FROM AUD_TASK_ATTEMPTS "
+                "WHERE ATTEMPT_ID=:id"
             ),
             {"id": blocked},
         ).one()
@@ -761,7 +765,8 @@ def test_warehouse_limit_is_shared_between_pipelines(agent_scene):
         row = conn.execute(
             text(
                 "SELECT STATUS AS status, ERROR_MESSAGE AS reason "
-                "FROM AUD_TASK_ATTEMPTS WHERE ATTEMPT_ID=:id"
+                "FROM AUD_TASK_ATTEMPTS "
+                "WHERE ATTEMPT_ID=:id"
             ),
             {"id": second},
         ).one()
@@ -797,7 +802,8 @@ def test_claimed_resources_are_released_with_the_ending(agent_scene, status):
         before = conn.execute(
             text(
                 "SELECT RESERVED_CPU AS cpu, RESERVED_MEMORY_MB AS memory "
-                "FROM AUD_TASK_ATTEMPTS WHERE ATTEMPT_ID=:id"
+                "FROM AUD_TASK_ATTEMPTS "
+                "WHERE ATTEMPT_ID=:id"
             ),
             {"id": queued},
         ).one()
@@ -809,7 +815,8 @@ def test_claimed_resources_are_released_with_the_ending(agent_scene, status):
         after = conn.execute(
             text(
                 "SELECT RESERVED_CPU AS cpu, RESERVED_MEMORY_MB AS memory "
-                "FROM AUD_TASK_ATTEMPTS WHERE ATTEMPT_ID=:id"
+                "FROM AUD_TASK_ATTEMPTS "
+                "WHERE ATTEMPT_ID=:id"
             ),
             {"id": queued},
         ).one()
@@ -1068,7 +1075,8 @@ def test_missing_default_pool_cannot_bypass_custom_pool_admission(agent_scene):
         row = conn.execute(
             text(
                 "SELECT STATUS AS status, ERROR_MESSAGE AS reason "
-                "FROM AUD_TASK_ATTEMPTS WHERE ATTEMPT_ID=:id"
+                "FROM AUD_TASK_ATTEMPTS "
+                "WHERE ATTEMPT_ID=:id"
             ),
             {"id": attempt},
         ).one()
@@ -1464,7 +1472,8 @@ def test_agent_control_handoff_publishes_an_empty_log_after_the_child_settles(ag
         row = conn.execute(
             text(
                 "SELECT STATUS AS status, LOG_PATH AS log_path "
-                "FROM AUD_TASK_ATTEMPTS WHERE ATTEMPT_ID=:id"
+                "FROM AUD_TASK_ATTEMPTS "
+                "WHERE ATTEMPT_ID=:id"
             ),
             {"id": attempt},
         ).one()
@@ -1672,7 +1681,8 @@ def test_project_revocation_refuses_agent_dispatch(agent_scene):
         row = conn.execute(
             text(
                 "SELECT STATUS AS status,ERROR_MESSAGE AS message,TASK_LOG AS task_log "
-                "FROM AUD_TASK_ATTEMPTS WHERE ATTEMPT_ID=:id"
+                "FROM AUD_TASK_ATTEMPTS "
+                "WHERE ATTEMPT_ID=:id"
             ),
             {"id": attempt},
         ).one()
@@ -1837,7 +1847,8 @@ def test_agent_start_returns_the_exact_recorded_microsecond_clock(agent_scene):
         row = conn.execute(
             text(
                 "SELECT STARTED_AT AS started_at,STATUS AS status "
-                "FROM AUD_TASK_ATTEMPTS WHERE ATTEMPT_ID=:id"
+                "FROM AUD_TASK_ATTEMPTS "
+                "WHERE ATTEMPT_ID=:id"
             ),
             {"id": attempt},
         ).one()
@@ -2893,7 +2904,8 @@ def test_start_response_loss_ends_the_claim_and_keeps_observed_identity(
         row = conn.execute(
             text(
                 "SELECT STATUS AS status,PID AS pid,PROCESS_START AS birth, "
-                "ERROR_MESSAGE AS message FROM AUD_TASK_ATTEMPTS WHERE ATTEMPT_ID=:id"
+                "ERROR_MESSAGE AS message FROM AUD_TASK_ATTEMPTS "
+                "WHERE ATTEMPT_ID=:id"
             ),
             {"id": attempt},
         ).one()
@@ -3076,3 +3088,43 @@ def test_agent_alert_delivery_uses_scoped_attempt_and_server_credentials(agent_s
     assert response.status_code == 200, response.text
     assert response.json()["data"]["variables"]["ALERT_SENT"] is True and len(sent) == 1
     assert "private-url-token" not in response.text and "private-signing-key" not in response.text
+
+
+@pytest.mark.parametrize("scope", ["pipeline", "task"])
+def test_agent_claim_observes_pauses_created_after_queueing_without_taking_a_slot(
+    agent_scene, scope
+):
+    db, client, _, human, _, _ = agent_scene
+    attempt = queue(db)
+    body = {"pipeline_code": "P", "action": "PAUSE", "reason": "maintenance"}
+    if scope == "task":
+        body.update(task_code="T", outcome="SKIPPED")
+    else:
+        body.update(active_runs="DRAIN")
+    response = client.post("/api/v1/projects/default/controls", json=body, headers=human)
+    assert response.status_code == 200, response.text
+    assert claim_available(agent_scene) is None
+    with db.engine.connect() as conn:
+        row = conn.execute(
+            text(
+                "SELECT STATUS AS status,OWNER_ID AS owner FROM AUD_TASK_ATTEMPTS "
+                "WHERE ATTEMPT_ID=:id"
+            ),
+            {"id": attempt},
+        ).one()
+        assert row.owner is None
+        assert row.status == (AttemptStatus.CANCELLED if scope == "task" else AttemptStatus.QUEUED)
+        if scope == "task":
+            assert (
+                conn.execute(text("SELECT STATUS AS status FROM AUD_TASK_RUN_LOG")).scalar_one()
+                == "SKIPPED"
+            )
+            assert (
+                conn.execute(
+                    text(
+                        "SELECT count(*) AS count FROM AUD_RUN_INTERVENTIONS "
+                        "WHERE ACTION='PAUSE_APPLIED'"
+                    )
+                ).scalar_one()
+                == 1
+            )

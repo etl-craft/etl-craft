@@ -11,6 +11,7 @@ from sqlalchemy.engine import Connection, RowMapping
 
 from etl_craft.core.enums import (
     ADMITTED_OUTCOMES,
+    ActiveRuns,
     AttemptStatus,
     DeploymentProfile,
     GatePolicy,
@@ -20,7 +21,7 @@ from etl_craft.core.enums import (
 )
 from etl_craft.core.graph import DependencyGraph, RunState, TaskRunState, build_graph
 from etl_craft.core.time import as_utc, elapsed_seconds
-from etl_craft.engine import runlog, standing_pauses
+from etl_craft.engine import controls, runlog, standing_pauses
 from etl_craft.engine.connection import read_snapshot
 from etl_craft.engine.queries import statement
 from etl_craft.engine.repository import trackers
@@ -97,6 +98,7 @@ class TaskSnapshot:
     now: datetime
     blocked_by_failure: bool = False
     standing_pause: TaskPause | None = None
+    permits_paused: bool = False
 
 
 @dataclass(frozen=True)
@@ -123,6 +125,24 @@ class Explanation:
     retry_source: str | None = None
 
 
+def _pause_action(snapshot: TaskSnapshot) -> str | None:
+    """Explain only dispatch that is paused, not an already running attempt."""
+    task = snapshot.task
+    if task is not None and any(
+        a.status in {AttemptStatus.CLAIMED, AttemptStatus.RUNNING} for a in task.attempts
+    ):
+        return None
+    pause = snapshot.pipeline.paused
+    if pause is not None and pause.active_runs == ActiveRuns.DRAIN and not snapshot.permits_paused:
+        return "Resume the pipeline or replace DRAIN with FINISH before dispatching this task."
+    if snapshot.standing_pause is not None:
+        return (
+            f"Standing pause {snapshot.standing_pause.pause_id} supplies "
+            f"{snapshot.standing_pause.outcome}; no attempt is dispatched."
+        )
+    return None
+
+
 def explain(snapshot: TaskSnapshot) -> Explanation:
     """Explain a captured state with no database calls, clock reads or mutations."""
     task = snapshot.task
@@ -132,13 +152,8 @@ def explain(snapshot: TaskSnapshot) -> Explanation:
     met = len(snapshot.dependencies) - len(unmet)
     if task is not None and task.status in {RunStatus.SUCCESS, RunStatus.SKIPPED}:
         state, action = task.status.lower(), "No work is needed; this task is already settled."
-    elif snapshot.pipeline.paused is not None or snapshot.standing_pause is not None:
-        state = "paused"
-        action = (
-            "Resume the pipeline before starting this task."
-            if snapshot.pipeline.paused
-            else "Resume the task pause before starting this task; inspect its admitted version."
-        )
+    elif pause_action := _pause_action(snapshot):
+        state, action = "paused", pause_action
     elif retry_at is not None:
         state = "retry scheduled"
         action = f"The supervisor can claim the retry at {retry_at.isoformat()}."
@@ -308,6 +323,7 @@ def _admitted_snapshots(
     pipeline_dependencies = _pipeline_dependencies(conn, pipeline_id, run, policy, decisions, now)
     snapshots = []
     effects = standing_pauses.effects(conn, pipeline_id, run_id, now)
+    permits_paused = controls.permits_paused(conn, run_id)
     for definition in definitions:
         if task_code is not None and definition.task_code != task_code:
             continue
@@ -317,7 +333,6 @@ def _admitted_snapshots(
         dependencies = _dependencies(
             conn, graph, state, codes, definition.task_id, task, decisions, policy, run.backfill
         )
-        control, held = effects.get(definition.task_id, (None, False))
         snapshots.append(
             TaskSnapshot(
                 pipeline,
@@ -333,7 +348,8 @@ def _admitted_snapshots(
                 definition.task_id in impossible,
                 now,
                 definition.task_id in failed_blocks,
-                replace(control, outcome=None) if control is not None and held else control,
+                effects.get(definition.task_id),
+                permits_paused,
             )
         )
     order = {

@@ -16,7 +16,7 @@ from etl_craft.core.enums import AttemptStatus, Handler, RetryOn, RunStatus, Scr
 from etl_craft.core.errors import MetadataError, StaleTransitionError
 from etl_craft.core.script_kinds import script_kind
 from etl_craft.core.time import as_utc
-from etl_craft.engine import transitions
+from etl_craft.engine import standing_pauses, transitions
 from etl_craft.engine.queries import statement
 from etl_craft.engine.repository.tasks import fetch_task_execution_detail, fetch_task_parameters
 from etl_craft.engine.run_definitions import for_run
@@ -134,6 +134,13 @@ def refresh_retries(
                     exhausted.add(row.task_id)
                     continue
                 due = datetime.now(UTC) + timedelta(seconds=policy.delay(row.attempt_number))
+                context = conn.execute(
+                    statement(conn, "control_run_context"), {"run_id": pipeline_run_id}
+                ).one()
+                standing_pauses.lock(conn, context.pipeline_id)
+                if standing_pauses.drains(conn, context.pipeline_id, pipeline_run_id):
+                    waiting[row.task_id] = due
+                    continue
                 try:
                     queued = transitions.queue_attempt(
                         conn,

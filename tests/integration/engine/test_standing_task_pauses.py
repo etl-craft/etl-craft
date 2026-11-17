@@ -109,7 +109,9 @@ def test_standing_pause_outcome_creates_no_attempt_or_data(cli_project, outcome)
         assert version == "1"
 
 
-def test_replacing_pause_changes_only_later_admissions_and_keeps_earlier_runs_held(paused_task):
+def test_replacement_keeps_admitted_versions_and_earlier_unstarted_tasks_inherit_outcomes(
+    paused_task,
+):
     from etl_craft.engine import standing_pauses, transitions
 
     ctx, request = paused_task
@@ -127,15 +129,15 @@ def test_replacing_pause_changes_only_later_admissions_and_keeps_earlier_runs_he
     with ctx.engine.begin() as conn:
         later = transitions.create_run(conn, pipeline, ctx.actor)
         now = datetime.now(UTC)
-        old_pause, held = standing_pauses.at_task(conn, pipeline, before, task, now)
-        assert held and old_pause.outcome == RunStatus.FAILED
-        pinned, held = standing_pauses.at_task(conn, pipeline, first, task, now)
-        assert not held and pinned.pause_id == 1 and pinned.outcome == RunStatus.SUCCESS
-        pinned, held = standing_pauses.at_task(conn, pipeline, later, task, now)
-        assert not held and pinned.pause_id == 2 and pinned.outcome == RunStatus.FAILED
+        old_pause = standing_pauses.at_task(conn, pipeline, before, task, now)
+        assert old_pause.outcome == RunStatus.FAILED
+        pinned = standing_pauses.at_task(conn, pipeline, first, task, now)
+        assert pinned.pause_id == 1 and pinned.outcome == RunStatus.SUCCESS
+        pinned = standing_pauses.at_task(conn, pipeline, later, task, now)
+        assert pinned.pause_id == 2 and pinned.outcome == RunStatus.FAILED
     invoke(ctx, ActionName.CONTROL, replace(request, action=ControlAction.RESUME, outcome=None))
     with ctx.engine.begin() as conn:
-        assert standing_pauses.at_task(conn, pipeline, before, task, now) == (None, False)
+        assert standing_pauses.at_task(conn, pipeline, before, task, now) is None
 
 
 @pytest.fixture
@@ -210,13 +212,16 @@ def test_pause_expiry_releases_held_runs_without_rewriting_history(paused_task):
 
     ctx, request = paused_task
     expires = datetime.now(UTC) + timedelta(hours=1)
-    invoke(ctx, ActionName.CONTROL, replace(request, outcome=None, expires_at=expires))
+    invoke(ctx, ActionName.CONTROL, replace(request, expires_at=expires))
     with ctx.engine.begin() as conn:
         pipeline = conn.execute(text("SELECT PIPELINE_ID FROM CFG_PIPELINES")).scalar_one()
         task = conn.execute(text("SELECT TASK_ID FROM CFG_TASKS")).scalar_one()
         run = transitions.create_run(conn, pipeline, ctx.actor)
-        assert standing_pauses.at_task(conn, pipeline, run, task, expires - timedelta(seconds=1))[1]
-        assert standing_pauses.at_task(conn, pipeline, run, task, expires) == (None, False)
+        assert (
+            standing_pauses.at_task(conn, pipeline, run, task, expires - timedelta(seconds=1))
+            is not None
+        )
+        assert standing_pauses.at_task(conn, pipeline, run, task, expires) is None
         assert conn.execute(text("SELECT RESUMED_AT FROM AUD_PIPELINE_PAUSES")).scalar_one() is None
 
 
@@ -241,9 +246,8 @@ def test_pause_and_run_concurrently_capture_one_consistent_version(paused_task):
         pinned = conn.execute(
             text("SELECT ITEM_KEY FROM AUD_RUN_INTERVENTIONS WHERE ACTION='PAUSE_ADMISSION'")
         ).scalar_one_or_none()
-        pause, held = standing_pauses.at_task(conn, pipeline, run, task, datetime.now(UTC))
+        pause = standing_pauses.at_task(conn, pipeline, run, task, datetime.now(UTC))
     assert pause is not None
-    assert held == (pinned is None)
     assert pinned is None or pinned == str(pause.pause_id)
 
 
@@ -268,17 +272,24 @@ def test_standing_pause_api_uses_grants_and_refuses_cross_project(paused_task):
         )
     client = TestClient(create_app(ctx))
     route = action_path(ACTIONS[ActionName.CONTROL]).format(project="default")
-    body = {"pipeline_code": "P", "task_code": "T", "action": "PAUSE", "reason": "maintenance"}
+    body = {
+        "pipeline_code": "P",
+        "task_code": "T",
+        "action": "PAUSE",
+        "outcome": "SKIPPED",
+        "reason": "maintenance",
+    }
     assert client.post(route, json=body).status_code == 401
     for token, expected in ((viewer.token, 403), (runner.token, 200)):
         response = client.post(route, json=body, headers={"Authorization": "Bearer " + token})
         assert response.status_code == expected, response.text
     body["action"] = "RESUME"
+    body.pop("outcome")
     for token, expected in ((viewer.token, 403), (runner.token, 200)):
         response = client.post(route, json=body, headers={"Authorization": "Bearer " + token})
         assert response.status_code == expected, response.text
     for expiry in ("2026-12-01T12:00:00", "2000-01-01T12:00:00+00:00"):
-        invalid = {**body, "action": "PAUSE", "expires_at": expiry}
+        invalid = {**body, "action": "PAUSE", "outcome": "SKIPPED", "expires_at": expiry}
         response = client.post(
             route, json=invalid, headers={"Authorization": "Bearer " + runner.token}
         )
@@ -323,7 +334,7 @@ def test_standing_pause_api_uses_grants_and_refuses_cross_project(paused_task):
         )
 
 
-def test_preexisting_run_holds_only_the_paused_task_then_executes_after_resume(cli_project):
+def test_preexisting_run_applies_outcome_to_unstarted_task_without_executing_it(cli_project):
     project = cli_project
     root = project.config.project_dir
     (project.config.python_scripts_dir / "load.py").write_text(
@@ -361,14 +372,23 @@ def test_preexisting_run_holds_only_the_paused_task_then_executes_after_resume(c
         )
         assert (root / "other").read_text() == "ran"
         assert not (root / "load").exists()
-        code, output = project.run("status", "--pipeline-code", "P")
-        assert code == 0 and "standing pause" in output and "hold older run" in output
+        assert parent.wait() == 0, parent.output
+        with project.engine.connect() as conn:
+            assert (
+                conn.execute(
+                    text(
+                        "SELECT TO_STATUS AS outcome FROM AUD_RUN_INTERVENTIONS "
+                        "WHERE ACTION='PAUSE_APPLIED'"
+                    )
+                ).scalar_one()
+                == RunStatus.SUCCESS
+            )
         code, output = project.run(
             "resume", "--pipeline-code", "P", "--task-code", "load", "--reason", "maintenance done"
         )
         assert code == 0, output
         assert parent.wait() == 0, parent.output
-        assert (root / "load").read_text() == "ran"
+        assert not (root / "load").exists()
     finally:
         parent.close()
 
@@ -431,7 +451,15 @@ def test_explicit_dependency_overrides_never_resume_a_standing_pause(cli_project
     )
     assert (
         project.run(
-            "pause", "--pipeline-code", "P", "--task-code", "load", "--reason", "maintenance"
+            "pause",
+            "--pipeline-code",
+            "P",
+            "--task-code",
+            "load",
+            "--outcome",
+            "SKIPPED",
+            "--reason",
+            "maintenance",
         )[0]
         == 0
     )
@@ -642,8 +670,7 @@ def test_queued_run_keeps_its_pause_version_when_later_admitted(paused_task):
     invoke(ctx, ActionName.CONTROL, replace(request, replace=True, outcome=RunStatus.FAILED))
     with ctx.engine.begin() as conn:
         transitions.admit_run(conn, queued, ctx.actor)
-        control, held = standing_pauses.at_task(conn, pipeline, queued, task, datetime.now(UTC))
-        assert not held
+        control = standing_pauses.at_task(conn, pipeline, queued, task, datetime.now(UTC))
         assert control.pause_id == 1 and control.outcome == RunStatus.SUCCESS
 
 
@@ -726,8 +753,8 @@ def test_resume_then_new_pause_does_not_revive_the_old_admitted_outcome(paused_t
     invoke(ctx, ActionName.CONTROL, replace(request, action=ControlAction.RESUME, outcome=None))
     invoke(ctx, ActionName.CONTROL, replace(request, outcome=RunStatus.FAILED))
     with ctx.engine.begin() as conn:
-        pause, held = standing_pauses.at_task(conn, pipeline, run, task, datetime.now(UTC))
-        assert held and pause.outcome == RunStatus.FAILED
+        pause = standing_pauses.at_task(conn, pipeline, run, task, datetime.now(UTC))
+        assert pause.outcome == RunStatus.FAILED
 
 
 def test_several_atomic_replacements_keep_the_original_admitted_outcome(paused_task):
@@ -742,8 +769,8 @@ def test_several_atomic_replacements_keep_the_original_admitted_outcome(paused_t
     for outcome in (RunStatus.FAILED, RunStatus.SKIPPED):
         invoke(ctx, ActionName.CONTROL, replace(request, replace=True, outcome=outcome))
     with ctx.engine.begin() as conn:
-        pause, held = standing_pauses.at_task(conn, pipeline, run, task, datetime.now(UTC))
-        assert not held and pause.outcome == RunStatus.SUCCESS
+        pause = standing_pauses.at_task(conn, pipeline, run, task, datetime.now(UTC))
+        assert pause.outcome == RunStatus.SUCCESS
 
 
 @pytest.mark.parametrize("outcome", [RunStatus.SUCCESS, RunStatus.FAILED, RunStatus.SKIPPED])

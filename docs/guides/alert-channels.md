@@ -6,7 +6,7 @@ selecting only the configured alert task. Event admission never performs HTTP.
 
 The source run, its admission, tasks and dependency decisions are unchanged. The event satisfies
 the selected alert task's source dependencies, so a stuck upstream cannot delay its notification.
-A paused source pipeline **does not suppress alerts**. Holds or cancellation applied to the alert
+A paused source pipeline **does not suppress alerts**. Stops or cancellation applied to the alert
 run itself still control that run. Alert runs never generate further channel alerts.
 
 ## Configure a channel
@@ -123,3 +123,7 @@ executable project code: Python tasks run with the host’s access, and projects
 trust one another’s executable code, as the [security guide](../deploying/security.md) explains.
 Local alert processes receive only the admitted channel’s credentials through the existing
 private pipe; agents receive no channel credential values and request server-side delivery.
+
+Pipeline DRAIN pauses let running alert attempts finish; they prevent new ordinary task and
+retry dispatch until resume. A standing FAILED task outcome creates no attempt and therefore
+no task-failure alert. Existing isolated, event-admitted alert deliveries keep their admission.

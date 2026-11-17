@@ -436,7 +436,7 @@ catalog-view-consolidation = [
 
 pipeline-action-consolidation = [
     "tests/browser/test_react_action_consolidation.py::test_pipeline_row_pause_resume_keeps_confirmation_policy_and_header_action",
-    "tests/browser/test_react_action_consolidation.py::test_held_pipeline_resume_is_replaced_by_link_without_losing_pause_facts",
+    "tests/browser/test_react_action_consolidation.py::test_paused_pipeline_keeps_shared_resume_and_pipeline_link",
 ]
 
 shared-search-feedback = [

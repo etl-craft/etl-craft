@@ -17,7 +17,7 @@ import { Search } from "@/pages/search";
 import { Settings } from "@/pages/settings";
 import { SignIn, SsoCallback } from "@/pages/signin";
 import { System } from "@/pages/system";
-import { Held } from "@/pages/held";
+import { Paused, HeldRedirect } from "@/pages/paused";
 import { ProjectDashboard, InsightsRedirect } from "@/pages/project-dashboard";
 import { Items } from "@/pages/items";
 import { HomeEntry, ProjectList } from "@/pages/home";
@@ -67,7 +67,8 @@ createRoot(document.getElementById("root")!).render(
             <Route path="projects/:project/console" element={<Console />} />
             <Route path="projects/:project/catalog/*" element={<Catalog />} />
             <Route path="projects/:project/scheduled" element={<Scheduled />} />
-            <Route path="projects/:project/held" element={<Held />} />
+            <Route path="projects/:project/paused" element={<Paused />} />
+            <Route path="projects/:project/held" element={<HeldRedirect />} />
             <Route path="projects/:project/runs" element={<Runs />} />
             <Route path="projects/:project/runs/:pipeline/:runId/tasks/:task/attempts/:attemptId" element={<Attempt />} />
             <Route path="projects/:project/runs/:pipeline/:runId/tasks/:task/items" element={<Items />} />

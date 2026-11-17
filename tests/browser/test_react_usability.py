@@ -48,13 +48,15 @@ def test_table_and_pane_resize_targets_work_away_from_the_exact_border(scene):
     with sync_playwright() as pw:
         browser, page, problems = open_page(pw, viewport={"width": 1440, "height": 1000})
         sign_in(page, url, "/ui/projects/default/pipelines")
+        # The header is drawn before the rows; their arrival moves it, so drag after they load.
+        expect(page.get_by_role("link", name="OPS", exact=True).first).to_be_visible()
         grip = page.get_by_role("separator", name="Resize the Pipeline column", exact=True)
+        grip.hover(position={"x": 2, "y": 12})
         box = grip.bounding_box()
         assert box["width"] >= 24
         before = int(grip.get_attribute("aria-valuenow"))
-        page.mouse.move(box["x"] + 2, box["y"] + box["height"] / 2)
         page.mouse.down()
-        page.mouse.move(box["x"] + 42, box["y"] + box["height"] / 2, steps=8)
+        page.mouse.move(box["x"] + 42, box["y"] + 12, steps=8)
         page.mouse.up()
         expect(grip).not_to_have_attribute("aria-valuenow", str(before))
         grip.focus()
@@ -112,10 +114,15 @@ def test_recent_run_strip_has_one_touch_target_and_a_keyboard_run_chooser(scene)
         )
         sign_in(page, url, "/ui/projects/default/pipelines")
         chooser = page.get_by_role("button", name="Recent runs for OPS", exact=True)
-        chooser.scroll_into_view_if_needed()
-        box = chooser.bounding_box()
-        assert box["width"] >= 24 and box["height"] >= 24
-        page.touchscreen.tap(box["x"] + box["width"] / 2, box["y"] + 1)
+        expect(chooser).to_be_visible()
+        box = page.wait_for_function(
+            """() => {
+                const r = document.querySelector('[aria-label="Recent runs for OPS"]')
+                    ?.getBoundingClientRect();
+                return r && r.width >= 24 && r.height >= 24 && {width: r.width, height: r.height};
+            }"""
+        ).json_value()
+        chooser.tap(position={"x": box["width"] / 2, "y": 1})
         expect(page.get_by_role("menu")).to_be_visible()
         page.keyboard.press("Escape")
         expect(page.get_by_role("menu")).not_to_be_visible()

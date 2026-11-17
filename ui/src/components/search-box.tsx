@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Highlight, Notice } from "@/components/common";
 import { hitLink } from "@/pages/search";
 import { getJson, project } from "@/lib/api";
-import { agentsPath, catalogPath, consolePath, heldPath, maintenancePath, pipelinesPath, projectHomePath, runsPath, scheduledPath, searchPath, settingsPath, systemPath, uploadsPath } from "@/lib/routes";
+import { agentsPath, catalogPath, consolePath, pausedPath, maintenancePath, pipelinesPath, projectHomePath, runsPath, scheduledPath, searchPath, settingsPath, systemPath, uploadsPath } from "@/lib/routes";
 import type { SearchView } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -26,7 +26,7 @@ const pagesOf = (code: string): { label: string; to: string }[] => [
   { label: "Catalog", to: catalogPath(code) },
   { label: "Runs", to: runsPath(code) },
   { label: "Scheduled runs", to: scheduledPath(code) },
-  { label: "Held and paused", to: heldPath(code) },
+  { label: "Paused", to: pausedPath(code) },
   { label: "Uploads", to: uploadsPath(code) },
   { label: "Console", to: consolePath(code) },
   { label: "Maintenance", to: maintenancePath(code) },
@@ -51,7 +51,9 @@ export const SearchBox = React.forwardRef<HTMLInputElement, { code: string }>(fu
     return () => window.clearTimeout(wait);
   }, [text]);
   const found = useQuery({ queryKey: ["suggest", code, typed], queryFn: () => getJson<SearchView>(`${project(code)}/search`, { q: typed }), enabled: typed.length >= 2, staleTime: 15_000 });
-  const groups = (typed.length < 2 ? [] : GROUPS).map(([kind, label]) => ({ label, hits: (found.data?.hits ?? []).filter((h) => h.kind === kind).slice(0, PER_GROUP) })).filter((g) => g.hits.length);
+  // Matches for an earlier question are never offered: Enter would open a result for text no longer in the box.
+  const current = typed === text.trim();
+  const groups = (typed.length < 2 || !current ? [] : GROUPS).map(([kind, label]) => ({ label, hits: (found.data?.hits ?? []).filter((h) => h.kind === kind).slice(0, PER_GROUP) })).filter((g) => g.hits.length);
   const pages = pagesOf(code).filter((p) => text.trim() === "" || p.label.toLowerCase().includes(text.trim().toLowerCase())).slice(0, text.trim() === "" ? 12 : 4);
   const flat: { key: string; label: string; detail: string; to: string }[] = [
     ...pages.map((p) => ({ key: `page:${p.label}`, label: p.label, detail: "Go to", to: p.to })),
@@ -122,8 +124,8 @@ export const SearchBox = React.forwardRef<HTMLInputElement, { code: string }>(fu
         <div className="absolute left-0 top-full z-40 mt-1 max-h-[70vh] w-[min(34rem,90vw)] overflow-auto rounded-md border border-border bg-surface p-1 shadow-lg">
           {typed.length >= 2 && found.isError ? <div className="grid gap-2 p-2"><Notice className="min-w-0 break-words">Search for “{typed}” failed: {failureText(found.error)} Retry the search.</Notice><Button type="button" onClick={() => { root.current?.querySelector("input")?.focus(); void found.refetch(); }}>Retry search</Button></div> : null}
           <div id={listId} role="listbox" aria-label="Matches">
-          {typed.length >= 2 && found.isPending ? <p className="m-0 px-3 py-2 text-xs text-muted">Searching…</p> : null}
-          {typed.length >= 2 && found.isSuccess && flat.length === 0 ? <p className="m-0 px-3 py-2 text-sm text-muted">Nothing matches &ldquo;{typed}&rdquo;.</p> : null}
+          {typed.length >= 2 && (found.isPending || !current) ? <p className="m-0 px-3 py-2 text-xs text-muted">Searching…</p> : null}
+          {typed.length >= 2 && current && found.isSuccess && flat.length === 0 ? <p className="m-0 px-3 py-2 text-sm text-muted">Nothing matches &ldquo;{typed}&rdquo;.</p> : null}
           {pages.length ? (
             <div role="group" aria-label="Go to">
               <p className="m-0 px-3 pb-0.5 pt-2 text-xs font-semibold text-muted">Go to</p>
@@ -131,7 +133,7 @@ export const SearchBox = React.forwardRef<HTMLInputElement, { code: string }>(fu
                 index += 1;
                 const mine = index;
                 return (
-                  <button key={p.label} id={optionId(mine)} tabIndex={-1} type="button" role="option" aria-selected={at === mine} onMouseEnter={() => setAt(mine)} onClick={() => go(p.to)} className={cn("flex w-full cursor-pointer items-baseline gap-2 rounded-sm px-3 py-1 text-left text-sm", at === mine && "bg-fg/10")}>
+                  <button key={p.label} id={optionId(mine)} tabIndex={-1} type="button" role="option" aria-selected={at === mine} onMouseMove={() => setAt(mine)} onClick={() => go(p.to)} className={cn("flex w-full cursor-pointer items-baseline gap-2 rounded-sm px-3 py-1 text-left text-sm", at === mine && "bg-fg/10")}>
                     <span className="truncate font-medium">{p.label}</span>
                   </button>
                 );
@@ -145,7 +147,7 @@ export const SearchBox = React.forwardRef<HTMLInputElement, { code: string }>(fu
                 index += 1;
                 const mine = index;
                 return (
-                  <button key={`${h.kind}:${h.label}:${h.run_id ?? ""}:${h.pipeline_code ?? ""}`} id={optionId(mine)} tabIndex={-1} type="button" role="option" aria-selected={at === mine} onMouseEnter={() => setAt(mine)} onClick={() => go(hitLink(code, h).to)} className={cn("flex w-full cursor-pointer items-baseline gap-2 rounded-sm px-3 py-1.5 text-left text-sm", at === mine && "bg-fg/10")}>
+                  <button key={`${h.kind}:${h.label}:${h.run_id ?? ""}:${h.pipeline_code ?? ""}`} id={optionId(mine)} tabIndex={-1} type="button" role="option" aria-selected={at === mine} onMouseMove={() => setAt(mine)} onClick={() => go(hitLink(code, h).to)} className={cn("flex w-full cursor-pointer items-baseline gap-2 rounded-sm px-3 py-1.5 text-left text-sm", at === mine && "bg-fg/10")}>
                     <span className="truncate font-medium"><Highlight text={h.label} words={typed} /></span>
                     <span className="truncate text-xs text-muted">{searchDetail(h)}</span>
                   </button>

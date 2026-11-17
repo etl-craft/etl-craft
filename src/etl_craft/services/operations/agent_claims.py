@@ -32,15 +32,13 @@ from etl_craft.services.operations.tokens import TokenGrant, issue_token
 def claim_once(ctx: OperationContext, request: AgentClaim, agent_id: int) -> AgentReply | None:
     """Claim exactly one row; a missing notification never affects correctness."""
     with ctx.engine.begin() as conn:
+        candidates = conn.execute(statement(conn, "agent_host_lock"), {"agent_id": agent_id}).all()
         agent = conn.execute(statement(conn, "agent_get"), {"agent_id": agent_id}).one_or_none()
         if agent is None or agent.status == AgentStatus.GONE:
             raise RunRefusedError(f"agent {agent_id}: GONE or missing; stop children and register")
         require_pool(conn, agent.pool, f"agent {agent_id}", token_id=agent_id)
         hub = notification_hub(ctx.config, ctx.engine)
         hub.subscribe(pool_channel(agent.pool), agent_channel(agent_id))
-        resources = from_json(AgentResources, json.loads(agent.resource_report))
-        conn.execute(statement(conn, "agent_host_lock"), {"node_id": resources.node_id}).all()
-        agent = conn.execute(statement(conn, "agent_get"), {"agent_id": agent_id}).one()
         if not agent.credential_live:
             raise PermissionDeniedError(
                 f"agent {agent_id}: credential is no longer valid; expected a live agent token "
@@ -76,6 +74,9 @@ def claim_once(ctx: OperationContext, request: AgentClaim, agent_id: int) -> Age
                 "memory_free_mb": memory,
                 "warehouse_limit": ctx.config.max_warehouse_queries,
             },
+            tuple(
+                sorted({int(row.pipeline_id) for row in candidates if row.pipeline_id is not None})
+            ),
         )
         if claimed is None:
             from etl_craft.engine.placement import record_wait_reasons
@@ -97,20 +98,19 @@ def claim_once(ctx: OperationContext, request: AgentClaim, agent_id: int) -> Age
         if refusal is not None:
             refuse_attempt(conn, claimed.attempt_id, refusal, ctx.config.logs.tail_bytes)
             return None
-        credential = _issue_credential(ctx, conn, int(claimed.attempt_id))
+        credential = _issue_credential(ctx, conn, int(claimed.attempt_id), agent)
     return _reply(ctx, claimed, work, credential)
 
 
-def _issue_credential(ctx: OperationContext, conn: Connection, attempt_id: int) -> str:
-    account = conn.execute(
-        statement(conn, "agent_credential_account"), {"token_id": ctx.credential_token_id}
-    ).one()
+def _issue_credential(
+    ctx: OperationContext, conn: Connection, attempt_id: int, agent: Row[tuple[object, ...]]
+) -> str:
     return issue_token(
         conn,
         ctx.actor.name,
         TokenGrant(
-            account.account_id,
-            account.name,
+            agent.credential_account_id,
+            agent.credential_account_name,
             TokenKind.ATTEMPT,
             None,
             attempt_id=attempt_id,

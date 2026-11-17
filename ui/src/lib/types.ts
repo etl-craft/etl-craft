@@ -1,4 +1,4 @@
-export type RunStatus = "IN-PROGRESS" | "SUCCESS" | "FAILED" | "SKIPPED" | "LOST" | "STOPPED" | "ABORTED" | "HELD" | string;
+export type RunStatus = "IN-PROGRESS" | "SUCCESS" | "FAILED" | "SKIPPED" | "LOST" | "STOPPED" | "ABORTED" | string;
 
 export interface Identity {
   name: string;
@@ -222,7 +222,11 @@ export interface ControlView {
   run_label?: string;
 }
 
+export type ActiveRuns = "DRAIN" | "FINISH";
+
 export interface Pause {
+  active_runs: ActiveRuns;
+  drained_runs: { pipeline_run_id: number; run_label: string; status: RunStatus }[];
   paused_at: string;
   paused_by: string;
   reason: string;
@@ -230,7 +234,7 @@ export interface Pause {
 
 export interface TaskPause {
   task_code: string;
-  outcome: string | null;
+  outcome: "SUCCESS" | "SKIPPED" | "FAILED";
   expires_at: string | null;
   paused_at: string;
   actor: string;
@@ -267,17 +271,6 @@ export interface Pipeline {
   next_run: string | null;
   schedule_problem: string | null;
   recent_runs: RecentRun[];
-}
-
-export interface Hold {
-  control_id: number;
-  pipeline_run_id: number;
-  pipeline_code: string;
-  task_code: string | null;
-  requested_by: string;
-  reason: string | null;
-  requested_at: string;
-  run_label?: string;
 }
 
 export interface BulkOutcome {

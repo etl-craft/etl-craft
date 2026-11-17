@@ -7,8 +7,8 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import ClassVar
 
-from sqlalchemy import bindparam
-from sqlalchemy.engine import Connection
+from sqlalchemy import BigInteger, bindparam
+from sqlalchemy.engine import Connection, Row
 
 from etl_craft.core.actor import current_actor
 from etl_craft.core.enums import (
@@ -74,22 +74,74 @@ def lock_run(conn: Connection, run_id: int) -> None:
     conn.execute(statement(conn, "control_lock_run"), {"run_id": run_id})
 
 
+@dataclass(frozen=True)
+class DispatchScope:
+    """The immutable pipeline, run and task identity at a dispatch boundary."""
+
+    pipeline_id: int
+    run_id: int
+    task_id: int
+
+
+def dispatch_policy(
+    conn: Connection, run_id: int, task_id: int | None = None
+) -> tuple[Row[tuple[object, ...]], ...]:
+    """Read scoped fences, pause policy and admitted event permission together."""
+    return tuple(
+        conn.execute(
+            statement(conn, "control_blocked").bindparams(bindparam("task_id", type_=BigInteger)),
+            {"run_id": run_id, "task_id": task_id},
+        )
+    )
+
+
 def blocked(conn: Connection, run_id: int) -> dict[int | None, ControlAction]:
     """Return each scope whose latest command retains a dispatch fence."""
-    rows = conn.execute(statement(conn, "control_blocked"), {"run_id": run_id})
-    return {row.task_id: ControlAction(row.action) for row in rows}
+    return {
+        row.task_id: ControlAction(row.action)
+        for row in dispatch_policy(conn, run_id)
+        if row.action is not None
+    }
 
 
-def assert_dispatch(conn: Connection, run_id: int, task_id: int) -> None:
-    """Refuse even force/retry admissions while this task or its run is held/stopped."""
-    lock_run(conn, run_id)
-    fences = blocked(conn, run_id)
-    action = fences.get(None) or fences.get(task_id)
+def _dispatch(
+    conn: Connection, scope: DispatchScope, *, wait: bool = False, apply_pause: bool = False
+) -> bool:
+    """Read policy after locking, before queuing or claiming any attempt."""
+    from etl_craft.engine import standing_pauses
+
+    standing_pauses.lock(conn, scope.pipeline_id)
+    lock_run(conn, scope.run_id)
+    policy = dispatch_policy(conn, scope.run_id, scope.task_id)
+    if apply_pause and policy[0].task_paused:
+        pause = standing_pauses.at_task(
+            conn, scope.pipeline_id, scope.run_id, scope.task_id, datetime.now(UTC)
+        )
+        if pause is not None:
+            standing_pauses.apply(conn, pause, scope.run_id)
+            return False
+    if policy[0].draining and not policy[0].event_admitted:
+        if wait:
+            return False
+        raise RunRefusedError(
+            f"pipeline_run_id={scope.run_id}, task_id={scope.task_id}: pipeline pause is DRAIN; "
+            "expected dispatch permission; resume the pipeline or replace its pause with FINISH"
+        )
+    fences = {row.task_id: row.action for row in policy if row.action is not None}
+    action = fences.get(None) or fences.get(scope.task_id)
     if action is not None:
         raise RunRefusedError(
-            f"pipeline_run_id={run_id}, task_id={task_id}: dispatch is fenced by {action}; "
-            "inspect the control request and release the selected scope after it completes"
+            f"pipeline_run_id={scope.run_id}, task_id={scope.task_id}: "
+            f"dispatch is fenced by {action}; "
+            "inspect the control request and recover the selected scope after it completes"
         )
+    return True
+
+
+def assert_dispatch(conn: Connection, run_id: int, task_id: int, *, wait: bool = False) -> bool:
+    """Refuse even force/retry admissions while the pipeline drains or this scope is stopped."""
+    row = conn.execute(statement(conn, "control_run_context"), {"run_id": run_id}).one()
+    return _dispatch(conn, DispatchScope(row.pipeline_id, run_id, task_id), wait=wait)
 
 
 def guard_task(conn: Connection, task_run_id: int) -> None:
@@ -97,19 +149,21 @@ def guard_task(conn: Connection, task_run_id: int) -> None:
     row = conn.execute(
         statement(conn, "control_task_context"), {"task_run_id": task_run_id}
     ).one_or_none()
-    if row is None:
-        return
-    assert_dispatch(conn, row.pipeline_run_id, row.task_id)
+    if row is not None:
+        _dispatch(conn, DispatchScope(row.pipeline_id, row.pipeline_run_id, row.task_id))
 
 
-def guard_attempt(conn: Connection, attempt_id: int) -> None:
-    """Fence the queued-to-owned transition as well as initial queue creation."""
+def guard_attempt(conn: Connection, attempt_id: int, *, wait: bool = False) -> bool:
+    """Apply standing outcomes or fence the queued-to-owned transition before taking a slot."""
     row = conn.execute(
         statement(conn, "control_attempt_context"), {"attempt_id": attempt_id}
     ).one_or_none()
-    if row is None:
-        return
-    assert_dispatch(conn, row.pipeline_run_id, row.task_id)
+    return row is None or _dispatch(
+        conn,
+        DispatchScope(row.pipeline_id, row.pipeline_run_id, row.task_id),
+        wait=wait,
+        apply_pause=True,
+    )
 
 
 def affected(conn: Connection, attempt_ids: tuple[int, ...]) -> tuple[ControlAttempt, ...]:

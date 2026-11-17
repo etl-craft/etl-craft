@@ -638,20 +638,20 @@ def test_scoped_control_routes_share_durable_identity_and_role_policy(api):
     path = "/api/v1/projects/default/controls"
     body = {
         "pipeline_code": "P",
-        "action": "HOLD",
+        "action": "STOP",
         "task_code": "T",
         "run_id": run,
         "reason": "maintenance",
-        "request_key": "hold:T",
+        "request_key": "stop:first:T",
     }
     assert client.post(path, json=body, headers=headers(creds["viewer"])).status_code == 403
     first = client.post(path, json=body, headers=headers(creds["operator"]))
     assert first.status_code == 200
     document = first.json()
     assert document["schema"] == "etl-craft/control/1"
-    assert document["action"] == "HOLD" and document["status"] == "COMPLETED"
+    assert document["action"] == "STOP" and document["status"] == "COMPLETED"
     assert document["requested_by"] == "operator" and document["task_code"] == "T"
-    assert document["run_status"] == "IN-PROGRESS" and document["attempt_ids"] == []
+    assert document["run_status"] == "IN-PROGRESS" and document["attempt_ids"] == [attempt]
     repeated = client.post(path, json=body, headers=headers(creds["operator"]))
     assert repeated.json()["control_id"] == document["control_id"]
     read = client.get(
@@ -689,7 +689,7 @@ def test_recovery_capabilities_and_bulk_routes_share_exact_requests(api):
                 "pipeline_code": "P",
                 "run_id": run,
                 "task_code": "T",
-                "action": "HOLD",
+                "action": "STOP",
                 "reason": "selected task",
                 "request_key": "bulk:T",
             },
@@ -852,7 +852,7 @@ def test_api_run_labels_match_exactly_for_paths_queries_and_json(api):
     response = client.post(
         "/api/v1/projects/default/controls",
         headers=auth,
-        json={"pipeline_code": "P", "run_id": label, "action": "HOLD", "reason": "exact label"},
+        json={"pipeline_code": "P", "run_id": label, "action": "STOP", "reason": "exact label"},
     )
     assert response.status_code == 200, response.text
     for wrong in ("WRONG-" + label, label.lower()):
@@ -1034,3 +1034,52 @@ def test_alert_delivery_history_is_visible_without_secret_values(api, monkeypatc
     assert projects.status_code == 200, projects.text
     assert projects.json()["projects"][0]["alert_deliveries"]
     assert "private-url-token" not in projects.text and "private-signing-key" not in projects.text
+
+
+@pytest.mark.parametrize("action", ["HOLD", "RELEASE"])
+def test_removed_hold_controls_are_refused_and_holds_route_is_absent(api, action):
+    ctx, client, creds, run, _ = api
+    auth = headers(creds["operator"])
+    response = client.post(
+        "/api/v1/projects/default/controls",
+        headers=auth,
+        json={"pipeline_code": "P", "run_id": run, "action": action, "reason": "maintenance"},
+    )
+    assert response.status_code == 400, response.text
+    message = response.json()["message"]
+    assert "control" in message and "`action`" in message
+    assert action in message and "STOP" in message
+    assert "choose one of the expected values" in message
+    assert response.json()["exit_code"] == 2
+    assert client.get("/api/v1/projects/default/holds", headers=auth).status_code == 404
+    with ctx.engine.connect() as conn:
+        assert (
+            conn.execute(text("SELECT count(*) AS count FROM AUD_CONTROL_REQUESTS")).scalar_one()
+            == 0
+        )
+
+
+@pytest.mark.parametrize("with_mode", [False, True])
+def test_task_pause_api_requires_outcome_and_refuses_pipeline_mode_before_writes(api, with_mode):
+    ctx, client, creds, _, _ = api
+    body = {"pipeline_code": "P", "task_code": "T", "action": "PAUSE", "reason": "maintenance"}
+    if with_mode:
+        body.update(active_runs="DRAIN", outcome="SKIPPED")
+    response = client.post(
+        "/api/v1/projects/default/controls", headers=headers(creds["operator"]), json=body
+    )
+    assert response.status_code == 400, response.text
+    message = response.json()["message"]
+    assert "pipeline P task T" in message
+    assert (
+        "task pauses take an outcome, not --active-runs"
+        if with_mode
+        else "a task pause needs --outcome SUCCESS, SKIPPED or FAILED"
+    ) in message
+    assert ("active_runs=DRAIN" if with_mode else "outcome=None") in message
+    assert ("omit --active-runs" if with_mode else "supply --outcome") in message
+    with ctx.engine.connect() as conn:
+        assert (
+            conn.execute(text("SELECT count(*) AS count FROM AUD_PIPELINE_PAUSES")).scalar_one()
+            == 0
+        )

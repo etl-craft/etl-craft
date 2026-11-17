@@ -320,12 +320,15 @@ def seeded_tables(db):
                         value = datetime.now(UTC)
                     else:
                         value = 1 if "INT" in type_name or "NUMERIC" in type_name else "sample"
-                if table.upper() == "AUD_PIPELINE_PAUSES" and lower == "outcome":
-                    value = RunStatus.SUCCESS
+                if table.upper() == "AUD_PIPELINE_PAUSES":
+                    if lower == "outcome":
+                        value = RunStatus.SUCCESS
+                    elif lower == "active_runs":
+                        value = None
                 if table.upper() == "AUD_CONNECTION_RESERVATIONS" and lower == "role":
                     value = ProcessRole.UI
                 if table.upper() == "AUD_CONTROL_REQUESTS":
-                    value = {"status": ControlStatus.REQUESTED, "action": ControlAction.HOLD}.get(
+                    value = {"status": ControlStatus.REQUESTED, "action": ControlAction.STOP}.get(
                         lower, value
                     )
                 if table.upper() == "AUD_BUSINESS_RULES_RESULTS" and lower == "status":

@@ -119,7 +119,7 @@ def test_list(project, capsys):
     pipelines = {
         row["PIPELINE_CODE"]: row for row in csv.DictReader(out.splitlines(), delimiter="\t")
     }
-    assert pipelines["UP"]["PAUSED"].startswith("paused since ")
+    assert pipelines["UP"]["PAUSED"].startswith("paused (DRAIN) since ")
     assert pipelines["UP"]["PAUSED"].endswith(": source down")
 
 

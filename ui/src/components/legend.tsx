@@ -11,7 +11,7 @@ const STATUS_MEANING:Record<string,string>={
   "IN-PROGRESS":"Running now",RUNNING:"Running now",CLAIMED:"Claimed by an agent, about to start",
   QUEUED:"Waiting for a free slot",NOT_STARTED:"Has not started yet",SKIPPED:"Skipped on purpose",
   CANCELLED:"Stopped by a person",LOST:"The worker stopped reporting; the engine reconciles it",
-  STOPPED:"Stopped before it finished",ABORTED:"Ended early by the engine",HELD:"Held until someone releases it",
+  STOPPED:"Stopped before it finished",ABORTED:"Ended early by the engine",
   OTHER:"Runs not counted as succeeded or failed",
   MET:"Finished within its SLA",BREACHED:"Missed its SLA",
 };

@@ -20,7 +20,7 @@ pytestmark = pytest.mark.unit
         [{"action": "GUESS"}],
         [
             {
-                "action": "HOLD",
+                "action": "STOP",
                 "pipeline_code": "P",
                 "reason": "reason",
                 "request_key": "key",
@@ -45,7 +45,7 @@ def test_control_selection_retains_the_exact_object_and_idempotency_key(tmp_path
                     "pipeline_code": "P",
                     "task_code": "T",
                     "run_id": 12,
-                    "action": "HOLD",
+                    "action": "STOP",
                     "reason": "inspect",
                     "request_key": "stable",
                 }
@@ -54,6 +54,6 @@ def test_control_selection_retains_the_exact_object_and_idempotency_key(tmp_path
     )
     selected = read_selection(path)
     assert len(selected) == 1
-    assert selected[0].action == ControlAction.HOLD
+    assert selected[0].action == ControlAction.STOP
     assert selected[0].task_code == "T" and selected[0].selector.run_id == 12
     assert selected[0].request_key == "stable"

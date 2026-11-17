@@ -61,7 +61,7 @@ for the pipeline's single non-terminal run.
 | --- | --- |
 | `RunRequest` | `run`: a whole run, one task, a standalone selection, a rerun, a skip, a backfill (`backfill_from`, `backfill_to`) or a one-time full refresh (`full_refresh`, `empty_targets`); a refresh that would empty append targets answers HTTP `428` with `targets` until `empty_targets` names exactly them |
 | `MarkRequest` | `mark`: a run, a task, a stand-in run (`new_run`) or a watermark reset |
-| `ControlRequest` | `control`: `STOP`, `ABORT`, `HOLD`, `RELEASE`, `RECOVER`, `RESTART`, `RUN_PAUSED`, and `PAUSE`/`RESUME` of a definition |
+| `ControlRequest` | `control`: `STOP`, `ABORT`, `RECOVER`, `RESTART`, `RUN_PAUSED`, and `PAUSE`/`RESUME` of a definition |
 | `BulkControlRequest` | `control bulk`: up to 100 keyed controls, each invoked and recorded on its own |
 | `RunSelection`, `TaskSelection`, `CapabilitiesInput`, `HistoryInput` | `status`, `steps`, `explain`, `capabilities`, `history` |
 | `PipelineInput`, `NoInput`, `AuditInput`, `ValidateInput`, `LineageInput` | `graph`, `pipeline`, `pipelines`, `audit`, `validate`, `lineage` |
@@ -118,7 +118,7 @@ is never updated. This applies to manual and controller-scheduled catalog builds
 
 ## JSON on the command line
 
-These commands accept `--format json`: `run`, `mark`, `stop`, `abort`, `hold`, `release`, `pause`, `resume`,
+These commands accept `--format json`: `run`, `mark`, `stop`, `abort`, `pause`, `resume`,
 `reconcile`, `pipelines`, `graph`, `steps`, `history` and `audit`. Text remains the default.
 
 ```bash
@@ -188,3 +188,9 @@ The `capabilities` action exposes exact-run and task control availability and da
 accepted controls. `RECOVER`, `RESTART` and `RUN_PAUSED` go through `control`; preparation
 returns promptly with `execution_run_id`, separately from the actual execution outcome. Recovery preserves successful work; restart keeps current checkpoints
 in a new context. See the [control guide](run-control.md#recover-or-restart-an-exact-execution).
+
+Pipeline `ControlRequest` pauses accept `active_runs=ActiveRuns.DRAIN` (default) or `FINISH`,
+with `replace=True` to switch an open version atomically. Task pauses require a markable
+`outcome` and refuse `active_runs`; their outcome applies before the task starts, including
+under earlier admissions. All interfaces
+continue to invoke the same control operation for role checks and audit attribution.

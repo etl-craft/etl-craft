@@ -221,6 +221,9 @@ item's text, or work done early under another item.
 
 ### Handover notes
 
+- **S7.AB owner decision 2026-11-16.** Required task outcomes supersede wait pauses and the rule that earlier admissions inherit no new outcome; unstarted tasks receive the live outcome, while admitted versions remain pinned. Pipeline pause chooses DRAIN (default) or FINISH with atomic replacement.
+- **S5.Q owner decision 2026-11-16.** Pipeline DRAIN pause supersedes run/task holds and release; STOP, ABORT, RECOVER, RESTART and RUN_PAUSED retain their scopes. There is no longer a hold of one task to inspect its input.
+
 - **S7.AS shared interaction follow-up (#413).** Search selections stay visible and announced, failures offer keyboard retry, page navigation focuses content without disturbing workspace selections, and action feedback remains dismissible; the approved frames and navigation rules are unchanged.
 
 - **S7.AS action consolidation (#412).** Pipeline header and list rows share Pause/Resume; Held and paused keeps facts and links to that flow, while bulk/task controls, distinct Recover/Reconcile and Project Home remain unchanged.

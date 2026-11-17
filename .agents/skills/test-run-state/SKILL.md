@@ -1,6 +1,6 @@
 ---
 name: test-run-state
-description: Test etl-craft's run and attempt state - every allowed and refused transition, run identity and selection, leases and fencing, retries that resume, recorded gate and consumption decisions, trigger tasks, holds and operator controls - including races between two callers. Use when a change touches engine/transitions, execution/, controller/, run creation, leases, locks, gates, retries or operator controls, or when auditing orchestration coverage.
+description: Test etl-craft's run and attempt state - every allowed and refused transition, run identity and selection, leases and fencing, retries that resume, recorded gate and consumption decisions, trigger tasks, pauses and operator controls - including races between two callers. Use when a change touches engine/transitions, execution/, controller/, run creation, leases, locks, gates, retries or operator controls, or when auditing orchestration coverage.
 ---
 
 # Test run state

@@ -52,7 +52,7 @@ def test_run_log_lists_each_audited_event_in_time_order(ran, engine_db):
     started = next(line for line in log if " TASK_STARTED " in line)
     assert "attempt=1 host=worker-1 pid=41" in started
     held = next(line for line in log if " CONTROL_REQUESTED " in line)
-    assert all(part in held for part in ("task=LOAD", "action=HOLD", "actor=user:owner"))
+    assert all(part in held for part in ("task=LOAD", "action=STOP", "actor=user:owner"))
     assert 'reason="check the load"' in held
     with engine_db.engine.connect() as conn:
         audited = conn.execute(

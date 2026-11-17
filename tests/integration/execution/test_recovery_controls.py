@@ -184,8 +184,6 @@ def test_pending_stop_is_not_released_by_recovery_or_pause_permission(ctx):
     invoke(ctx, ActionName.CONTROL, request(run, ControlAction.RUN_PAUSED))
     with pytest.raises(RunRefusedError, match="ended ownership"):
         invoke(ctx, ActionName.CONTROL, request(run, ControlAction.RECOVER))
-    with pytest.raises(RunRefusedError, match="pending controls"):
-        invoke(ctx, ActionName.CONTROL, request(run, ControlAction.RELEASE))
     with ctx.engine.connect() as conn:
         assert controls.blocked(conn, run) == {None: ControlAction.STOP}
 
@@ -215,15 +213,6 @@ def test_task_restart_does_not_bypass_dependencies(ctx):
         add_dependency(conn, p, b, a)
     with pytest.raises(RunRefusedError, match="dependencies outside selection"):
         invoke(ctx, ActionName.CONTROL, request(run, ControlAction.RESTART, "b"))
-
-
-def test_task_recovery_preserves_other_scoped_holds(ctx):
-    _, run, _, _ = scene(ctx, RunStatus.IN_PROGRESS)
-    invoke(ctx, ActionName.CONTROL, request(run, ControlAction.HOLD, "a"))
-    invoke(ctx, ActionName.CONTROL, request(run, ControlAction.HOLD, "b"))
-    invoke(ctx, ActionName.CONTROL, request(run, ControlAction.RECOVER, "b"))
-    with ctx.engine.connect() as conn:
-        assert set(controls.blocked(conn, run)) == {1}
 
 
 def test_one_run_pause_permission_keeps_definition_pause_and_other_runs_blocked(ctx):
@@ -258,7 +247,7 @@ def test_capability_reasons_match_control_policy_and_preserve_state(ctx, role):
     assert not by_action[ControlAction.RESTART].preserves_successful_work
     expected = "new run" if role == ApiRole.OPERATOR else "controls need the operator role"
     assert expected in by_action[ControlAction.RESTART].reason
-    assert not by_action[ControlAction.HOLD].available
+    assert not by_action[ControlAction.STOP].available
     with ctx.engine.connect() as conn:
         assert controls.blocked(conn, run) == {}
     assert from_json(type(caps), to_json(caps)) == caps
@@ -267,7 +256,7 @@ def test_capability_reasons_match_control_policy_and_preserve_state(ctx, role):
 def test_bulk_is_selected_idempotent_and_returns_independent_refusals(ctx):
     _, run, a, b = scene(ctx, RunStatus.IN_PROGRESS)
     selected = (
-        request(run, ControlAction.HOLD, "a", "a"),
+        request(run, ControlAction.STOP, "a", "a"),
         request(run, ControlAction.RESTART, "b", "b"),
     )
     batch = act(ctx, ActionName.CONTROL_BULK, requests=tuple(selected))
@@ -276,7 +265,7 @@ def test_bulk_is_selected_idempotent_and_returns_independent_refusals(ctx):
     again = act(ctx, ActionName.CONTROL_BULK, requests=tuple(selected))
     assert again.outcomes[0].control.control_id == batch.outcomes[0].control.control_id
     with ctx.engine.connect() as conn:
-        assert controls.blocked(conn, run) == {a: ControlAction.HOLD}
+        assert controls.blocked(conn, run) == {a: ControlAction.STOP}
         assert runlog.fetch_task_run_status(conn, b, run) == RunStatus.FAILED
     assert from_json(type(batch), to_json(batch)) == batch
 
@@ -288,10 +277,10 @@ def test_bulk_rejects_implicit_identity_before_applying_any_object(ctx):
             ctx,
             ActionName.CONTROL_BULK,
             requests=(
-                request(run, ControlAction.HOLD, "a", "a"),
+                request(run, ControlAction.STOP, "a", "a"),
                 ControlRequest(
                     pipeline_code="P",
-                    action=ControlAction.HOLD,
+                    action=ControlAction.STOP,
                     reason="reason",
                     request_key="implicit",
                 ),

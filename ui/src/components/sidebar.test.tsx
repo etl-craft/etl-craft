@@ -22,7 +22,7 @@ describe("the navigation", () => {
   it("groups a project's pages as Overview, Operations and Platform", () => {
     nav("demo", true);
     expect(items("Overview")).toEqual(["Home", "Pipelines", "Catalog"]);
-    expect(items("Operations")).toEqual(["Runs", "Scheduled runs", "Held and paused", "Uploads", "Console", "Maintenance"]);
+    expect(items("Operations")).toEqual(["Runs", "Scheduled runs", "Paused", "Uploads", "Console", "Maintenance"]);
     expect(items("Platform")).toEqual(["Projects", "System health", "Agents", "Administration"]);
     expect(screen.queryByText("Insights")).toBeNull();
     expect(screen.queryByText("Project", { selector: "p" })).toBeNull();

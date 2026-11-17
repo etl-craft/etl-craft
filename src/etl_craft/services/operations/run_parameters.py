@@ -138,7 +138,7 @@ def admit(ctx: OperationContext, request: RunRequest) -> tuple[RunRequest, int, 
                     f"choose a new key"
                 )
             return request, int(existing.run_id), True
-        standing_pauses.lock(conn, pipeline_id)
+        standing_pauses.assert_admission(conn, pipeline_id)
         with base_definition(conn, pipeline_id) as base:
             validate(base, values, pipeline_id)
             key = f"override:{request.request_key}"

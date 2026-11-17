@@ -25,6 +25,7 @@ from etl_craft.core.errors import EtlCraftError
 from etl_craft.core.graph import DependencyGraph, TaskRunState
 from etl_craft.core.outage import OutageBudget
 from etl_craft.engine import controls, runlog, standing_pauses
+from etl_craft.engine.queries import statement
 from etl_craft.engine.repository import trackers
 from etl_craft.engine.repository.tasks import fetch_task_execution_detail, fetch_task_parameters
 from etl_craft.engine.retry import TRANSIENT_ERRORS
@@ -248,9 +249,7 @@ class Scheduler:
     def _standing(
         self, ready: list[int], waiting: list[datetime]
     ) -> tuple[list[int], list[datetime]]:
-        """Apply pinned outcomes and retain holds without occupying a worker slot."""
-        if not ready:
-            return ready, waiting
+        """Apply standing outcomes or wait for a DRAIN pause without occupying a slot."""
         from etl_craft.engine.alert_deliveries import event
 
         with self.engine.connect() as conn:
@@ -264,16 +263,22 @@ class Scheduler:
                 conn, self.pipeline_id, self.pipeline_run_id, self.clock.now()
             )
             for task_id in ready:
-                pause, holds = effects.get(task_id, (None, False))
-                if pause is not None and not holds:
+                pause = effects.get(task_id)
+                if pause is not None:
                     standing_pauses.apply(conn, pause, self.pipeline_run_id)
                     self.attempted.add(task_id)
                     self.completed.add(task_id)
-                elif pause is not None and holds:
-                    standing_pauses.hold(conn, pause, self.pipeline_run_id)
-                    waiting.append(self.clock.now() + timedelta(seconds=ENGINE_POLL_SECONDS))
                 else:
                     dispatch.append(task_id)
+            if standing_pauses.drains(conn, self.pipeline_id, self.pipeline_run_id):
+                waiting.append(self.clock.now() + timedelta(seconds=ENGINE_POLL_SECONDS))
+                admitted = set(
+                    conn.execute(
+                        statement(conn, "pause_admitted_wait_tasks"),
+                        {"run_id": self.pipeline_run_id},
+                    ).scalars()
+                )
+                return [task_id for task_id in dispatch if task_id in admitted], waiting
         return dispatch, waiting
 
     def _waiting(self, retries: dict[int, datetime]) -> list[datetime]:
@@ -404,7 +409,9 @@ class Scheduler:
             logger.error("%s: could not run: %s: %s", code, type(error).__name__, error)
             with self.engine.connect() as conn:
                 fences = controls.blocked(conn, self.pipeline_run_id)
-            if None in fences or task_id in fences:
+            with self.engine.connect() as conn:
+                draining = standing_pauses.drains(conn, self.pipeline_id, self.pipeline_run_id)
+            if None in fences or task_id in fences or draining:
                 self.attempted.discard(task_id)
             else:
                 self.completed.add(task_id)

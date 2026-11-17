@@ -22,7 +22,7 @@ export const pipelinePath = (project: string, pipeline: string, tab?: string): s
 export const pipelineRunPath = (project: string, pipeline: string, runId: number | string): string =>
   `/projects/${enc(project)}/pipelines/${enc(pipeline)}?run=${enc(String(runId))}`;
 export const scheduledPath = (project: string, pipeline?:string): string => `/projects/${enc(project)}/scheduled` + (pipeline ? `?pipeline=${enc(pipeline)}` : "");
-export const heldPath = (project: string): string => `/projects/${enc(project)}/held`;
+export const pausedPath = (project: string): string => `/projects/${enc(project)}/paused`;
 export const taskPath = (project: string, pipeline: string, task: string): string =>
   `/projects/${enc(project)}/pipelines/${enc(pipeline)}/tasks/${enc(task)}`;
 export const attemptPath = (project: string, pipeline: string, runId: number | string, task: string, attemptId: number | string): string =>

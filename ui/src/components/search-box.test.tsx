@@ -47,6 +47,18 @@ it("announces a failed search and retries without removing local navigation", as
   expect(input).toHaveFocus();
 });
 
+it("never offers matches for earlier text, and a still pointer under the list selects nothing", async () => {
+  vi.mocked(getJson).mockResolvedValue({ hits: [{ kind: "PIPELINE", label: "OPS", pipeline_code: "OPS" }], truncated: false });
+  const input = show();
+  fireEvent.change(input, { target: { value: "OPS" } });
+  const stale = await screen.findByRole("option", { name: /OPS/ });
+  fireEvent.mouseEnter(stale);
+  expect(stale).toHaveAttribute("aria-selected", "false");
+  fireEvent.change(input, { target: { value: "SALES" } });
+  expect(screen.queryByRole("option", { name: /OPS/ })).toBeNull();
+  expect(screen.getByText("Searching…")).toBeVisible();
+});
+
 it("closes search on Escape from retry and when keyboard focus leaves the popup", async () => {
   vi.mocked(getJson).mockRejectedValue(new ApiError("The server did not answer.", 503));
   const input = show();

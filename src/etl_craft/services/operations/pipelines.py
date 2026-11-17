@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from etl_craft.core.enums import ControlAction, RunStatus
+from etl_craft.core.enums import ActiveRuns, ControlAction, RunStatus
 from etl_craft.engine.connection import read_snapshot
 from etl_craft.engine.repository.pipelines import resolve_pipeline_id
 from etl_craft.execution import interventions
@@ -20,7 +20,13 @@ def set_pause(ctx: OperationContext, request: ControlRequest) -> OperationResult
 
             raise UsageError("--then applies only to scheduled pipeline resume; omit it for pause")
         message = interventions.pause_pipeline(
-            ctx.engine, ctx.config, request.pipeline_code, request.reason
+            ctx.engine,
+            ctx.config,
+            request.pipeline_code,
+            request.reason,
+            options=interventions.PauseOptions(
+                request.active_runs or ActiveRuns.DRAIN, request.replace
+            ),
         )
     else:
         from etl_craft.services.operations.pipeline_resume import resume

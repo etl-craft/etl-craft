@@ -152,8 +152,6 @@ class AttemptStatus(StrEnum):
 class ControlAction(StrEnum):
     """Run/task dispatch and agent controls."""
 
-    HOLD = "HOLD"
-    RELEASE = "RELEASE"
     STOP = "STOP"
     ABORT = "ABORT"
     RECOVER = "RECOVER"
@@ -165,6 +163,13 @@ class ControlAction(StrEnum):
 
 DEFINITION_CONTROLS = frozenset({ControlAction.PAUSE, ControlAction.RESUME})
 """Controls across runs rather than of one run; they are never stored as run requests."""
+
+
+class ActiveRuns(StrEnum):
+    """Dispatch policy for runs admitted before a pipeline pause."""
+
+    DRAIN = "DRAIN"
+    FINISH = "FINISH"
 
 
 class ResumeChoice(StrEnum):
@@ -266,7 +271,6 @@ class ActionName(StrEnum):
     PIPELINES = "pipelines"
     SEARCH = "search"
     OFFSET = "offset"
-    HOLDS = "holds"
     TASK = "task"
     PIPELINE_REFRESH = "pipelines refresh"
     PIPELINE_REFRESH_HISTORY = "pipeline refresh history"

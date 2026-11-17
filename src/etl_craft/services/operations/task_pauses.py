@@ -21,7 +21,7 @@ def change(ctx: OperationContext, request: ControlRequest) -> OperationResult:
         raise UsageError(
             f"task {request.pipeline_code}.{request.task_code}: "
             f"--then={str(request.then)!r} is refused; "
-            "tasks have no schedule ticks; omit --then to release held runs"
+            "tasks have no schedule ticks; omit --then to resume the task"
         )
     if request.expires_at is not None and as_utc(request.expires_at) <= now:
         raise UsageError(
@@ -85,10 +85,10 @@ def change(ctx: OperationContext, request: ControlRequest) -> OperationResult:
             ).scalar_one()
             message = (
                 f"{identity}: standing pause {pause_id}; actor={ctx.actor.name}, "
-                f"outcome={request.outcome or 'hold'}, "
+                f"outcome={request.outcome}, "
                 f"expiry={request.expires_at or 'until resume'}, "
                 f"reason={request.reason!r}"
             )
         else:
-            message = f"{identity}: resumed; task pause and outcome removed; held runs released"
+            message = f"{identity}: resumed; task pause and outcome removed"
     return OperationResult(RunStatus.SUCCESS, message, pipeline_id, request.pipeline_code)

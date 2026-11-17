@@ -10,9 +10,10 @@ from sqlalchemy.engine import Engine, Row
 
 from etl_craft.core.actor import acting_as, current_actor
 from etl_craft.core.enums import InterventionAction, RunStatus, TriggerKind
-from etl_craft.core.errors import MetadataFileError, StaleTransitionError
+from etl_craft.core.errors import MetadataFileError, RunRefusedError, StaleTransitionError
 from etl_craft.core.restart import restart_statuses
 from etl_craft.core.time import as_utc
+from etl_craft.engine import standing_pauses
 from etl_craft.engine.queries import statement
 from etl_craft.engine.repository.intervention_rows import record_intervention
 from etl_craft.engine.run_creation import RunCreation, create
@@ -82,6 +83,7 @@ def _restart(engine: Engine, row: Row[tuple[object, ...]]) -> None:
     """Commit the next run and why it started; a second controller's attempt loses on the key."""
     try:
         with engine.begin() as conn:
+            standing_pauses.assert_admission(conn, int(row.pipeline_id))
             run_id = create(
                 conn,
                 int(row.pipeline_id),
@@ -101,5 +103,7 @@ def _restart(engine: Engine, row: Row[tuple[object, ...]]) -> None:
                 requested_by=current_actor().name,
                 to_status=RunStatus.QUEUED,
             )
+    except RunRefusedError as error:
+        logger.info("%s", error)
     except StaleTransitionError:
         logger.info("pipeline %s: run %s already restarted", row.pipeline_code, row.last_run_id)

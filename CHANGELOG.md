@@ -6,6 +6,14 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+- **Breaking:** remove `hold`, `release`, `holds`, HOLD/RELEASE controls, the holds API and task
+  wait pauses. Pipeline pause now drains admitted runs by default (`--active-runs DRAIN`);
+  FINISH lets them complete, and existing pipeline pauses retain FINISH. Replace an open pause
+  atomically with `--replace`. Task pauses require an outcome and apply to tasks that have not
+  started, including in earlier-admitted runs. The Paused page replaces Held and paused, with
+  old browser addresses redirected. Migration 0096 refuses development-only holds/wait pauses
+  and asks for recreation of that development Engine DB.
+
 - Top-bar search keeps keyboard-selected results visible and announces the selected option;
   failed searches show their cause and a Retry search button without hiding page shortcuts.
 - Full-page navigation focuses the content pane; workspace tabs and run/task selections retain

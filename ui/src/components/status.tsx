@@ -1,4 +1,4 @@
-import { ArrowRightLeft, Ban, Check, Circle, CircleDashed, CircleStop, Clock, ClockAlert, Hand, LoaderCircle, Lock, Minus, TimerOff, TriangleAlert, X, type LucideIcon } from "lucide-react";
+import { ArrowRightLeft, Ban, Check, Circle, CircleDashed, CircleStop, Clock, ClockAlert, LoaderCircle, Lock, Minus, TimerOff, TriangleAlert, X, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type Tone = "ok" | "bad" | "run" | "warn" | "idle";
@@ -40,7 +40,6 @@ const META: Record<string, Meta> = {
   LOST: { label: "Lost", icon: TriangleAlert, tone: "warn" },
   STOPPED: { label: "Stopped", icon: CircleStop, tone: "idle" },
   ABORTED: { label: "Aborted", icon: Ban, tone: "idle" },
-  HELD: { label: "Held", icon: Hand, tone: "idle" },
   // SLA of a run.
   MET: { label: "Met", icon: Check, tone: "ok" },
   BREACHED: { label: "Breached", icon: ClockAlert, tone: "warn" },

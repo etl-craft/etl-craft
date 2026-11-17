@@ -1,3 +1,4 @@
+import { TaskPauseControl } from "@/components/task-pause";
 import { RunLabel } from "@/components/run-label";
 import { useQuery } from "@tanstack/react-query";
 import { When } from "@/components/when";
@@ -91,6 +92,7 @@ export function Task() {
           ]}
         />
       </Card>
+      <TaskPauseControl code={code} pipeline={pipeline} task={task} />
       <Card>
         <CardHeader>
           <CardTitle>Definition</CardTitle>

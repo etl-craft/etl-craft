@@ -17,7 +17,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { AppNavLink as NavLink } from "@/components/navigation";
-import { adminPath, agentsPath, systemPath, catalogPath, consolePath, heldPath, homePath, maintenancePath, pipelinesPath, projectHomePath, projectsPath, runsPath, scheduledPath, uploadsPath } from "@/lib/routes";
+import { adminPath, agentsPath, systemPath, catalogPath, consolePath, pausedPath, homePath, maintenancePath, pipelinesPath, projectHomePath, projectsPath, runsPath, scheduledPath, uploadsPath } from "@/lib/routes";
 import { cn } from "@/lib/utils";
 
 interface Item {
@@ -47,7 +47,7 @@ function sections(code: string | undefined, admin: boolean): { title: string; it
             items: [
               { label: "Runs", icon: ListChecks, to: runsPath(code) },
               { label: "Scheduled runs", icon: CalendarClock, to: scheduledPath(code) },
-              { label: "Held and paused", icon: PauseCircle, to: heldPath(code) },
+              { label: "Paused", icon: PauseCircle, to: pausedPath(code) },
               { label: "Uploads", icon: Upload, to: uploadsPath(code) },
               { label: "Console", icon: SquareTerminal, to: consolePath(code) },
               ...(admin ? [{ label: "Maintenance", icon: Wrench, to: maintenancePath(code) }] : []),

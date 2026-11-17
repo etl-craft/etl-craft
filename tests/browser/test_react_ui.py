@@ -466,12 +466,15 @@ def test_phone_run_cards_keep_labels_on_one_line_and_every_field_in_view(site):
         full = label.inner_text()
         assert full.startswith(code)
         expect(label).to_have_attribute("title", full)
-        assert label.evaluate("el => getComputedStyle(el).whiteSpace") == "nowrap"
-        assert label.evaluate(
-            """el => el.getBoundingClientRect().height <=
-                parseFloat(getComputedStyle(el).lineHeight) + 1"""
+        expect(label).to_have_css("white-space", "nowrap")
+        # Layout is measured once it settles; evaluate alone reads a single frame.
+        page.wait_for_function(
+            """code => [...document.querySelectorAll("[data-run-label]")].some(el =>
+                el.title.startsWith(code) && el.getBoundingClientRect().height <=
+                parseFloat(getComputedStyle(el).lineHeight) + 1)""",
+            arg=code,
         )
-        assert label.evaluate("el => getComputedStyle(el).textOverflow") == "ellipsis"
+        expect(label).to_have_css("text-overflow", "ellipsis")
         assert label.evaluate("el => el.scrollWidth > el.clientWidth")
         link.focus()
         expect(page.get_by_role("tooltip")).to_have_text(full)

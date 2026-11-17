@@ -13,8 +13,9 @@ from etl_craft.controller.catalog import CatalogSchedule
 from etl_craft.core.actor import acting_as, current_actor
 from etl_craft.core.calendars import Tick
 from etl_craft.core.enums import InterventionAction, RunStatus, TriggerKind, YesNo
-from etl_craft.core.errors import MetadataFileError
+from etl_craft.core.errors import MetadataFileError, RunRefusedError
 from etl_craft.core.restart import schedule_allowed
+from etl_craft.engine import standing_pauses
 from etl_craft.engine.queries import statement
 from etl_craft.engine.repository.intervention_rows import record_intervention
 from etl_craft.engine.run_creation import RunCreation, create
@@ -119,6 +120,11 @@ class Schedules:
 def _create_tick(engine: Engine, pipeline_id: int, tick: Tick, reason: str | None) -> None:
     """Commit one tick and its reason without holding the writer lock across catch-up."""
     with engine.begin() as conn:
+        try:
+            standing_pauses.assert_admission(conn, pipeline_id)
+        except RunRefusedError as error:
+            logger.info("%s", error)
+            return
         key = "schedule:" + tick.instant.isoformat()
         existing = conn.execute(
             statement(conn, "scheduled_tick_exists"),

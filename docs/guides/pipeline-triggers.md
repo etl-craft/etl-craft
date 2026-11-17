@@ -35,8 +35,7 @@ a committed handoff is resumed instead of launching a second child.
 
 Stopping or aborting the parent also stops or aborts its waiting `WAIT` children, with a
 separate intervention naming the parent run. Detached children continue. Marking a waiting
-trigger closes its wait and leaves its child running. Holds retain the ordinary scoped control
-behavior. `status` and `explain` name the child and the controller-held wait; run-detail JSON
+trigger closes its wait and leaves its child running. Pipeline pauses retain the ordinary DRAIN or FINISH policy. `status` and `explain` name the child and the controller-held wait; run-detail JSON
 exposes `parent_run_id`, `triggered_by_task_run_id` and `child_run_ids`. The catalog shows
 labelled trigger edges and links between parent and child run pages.
 
@@ -72,3 +71,7 @@ etl-craft validate
 etl-craft run --reason "requested data load" --pipeline-code PARENT --init-only
 etl-craft status --pipeline-code PARENT
 ```
+
+A target pipeline pause blocks new automatic/restart admissions. DRAIN also pauses dispatch
+inside already-admitted runs, without changing their identity or recorded consumption. FINISH
+allows admitted work to complete. RUN_PAUSED permission remains an explicit one-run exception.

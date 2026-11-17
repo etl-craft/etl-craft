@@ -12,7 +12,7 @@ from etl_craft.core.actor import current_actor
 from etl_craft.core.enums import InterventionAction, RunStatus
 from etl_craft.core.errors import RunRefusedError, RunStateError, StaleTransitionError
 from etl_craft.core.graph import build_graph
-from etl_craft.engine import run_scopes, runlog
+from etl_craft.engine import run_scopes, runlog, standing_pauses
 from etl_craft.engine.repository.dependencies import (
     fetch_pipeline_dependency_edges,
     fetch_pipeline_graph,
@@ -155,6 +155,7 @@ def _select_run(
     """Only an explicit identity may resume the same manual selection."""
     candidates = runlog.run_candidates(conn, pipeline_id)
     if selector.run_id is None and not any(r.run_key == selector.run_key for r in candidates):
+        standing_pauses.assert_admission(conn, pipeline_id)
         return None
     selected = runlog.select_run(conn, pipeline_id, selector)
     if run_date is not None and selected.run_date != run_date:
