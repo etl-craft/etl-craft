@@ -6,6 +6,13 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+- Every secret value the engine resolves (Engine DB, warehouse, email, cloning, docs-site and
+  privacy secrets) is masked as `[REDACTED]` in logs, stored task logs, errors and results for
+  the rest of that process. New `Redaction.Sensitive_patterns` (default `*TOKEN*`, `*SECRET*`,
+  `*PASSWORD*`, `*KEY*`) hides team-named task parameters and `INPUT_PARAMS` keys in the
+  catalog, the task read (UI, API, CLI) and warehouse clones, including run-captured
+  definitions. Package parameter names such as `MERGE_KEY` are always shown.
+
 - The run page has a **Timeline**: queue waits, dependency gates, event and child-run waits and
   attempts on one time axis per task, from recorded rows only. The run read
   (`GET /api/v1/projects/{project}/runs/{run}`) adds `timeline`, a list of segments with

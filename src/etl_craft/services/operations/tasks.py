@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import ClassVar
 
 from etl_craft.core.enums import Handler
+from etl_craft.core.redaction import public_parameters
 from etl_craft.core.text import pipe_list
 from etl_craft.engine.connection import read_snapshot
 from etl_craft.engine.repository.pipelines import resolve_pipeline_id
@@ -12,6 +13,7 @@ from etl_craft.engine.repository.tasks import (
     fetch_task_parameters,
     resolve_task_id,
 )
+from etl_craft.handlers.parameters import package_parameters
 from etl_craft.handlers.sql.spec import MERGES
 from etl_craft.services.operations.context import OperationContext
 from etl_craft.services.operations.offsets import TaskInput
@@ -42,7 +44,7 @@ def read_task(ctx: OperationContext, request: TaskInput) -> TaskDefinition:
         request.pipeline_code,
         request.task_code,
         handler,
-        parameters,
+        public_parameters(parameters, ctx.config.sensitive_patterns, package_parameters()),
         pipe_list(parameters.get("MERGE_KEY")) if merging else (),
         pipe_list(parameters.get("MERGE_COMPARE_COLUMNS")) if merging else (),
     )

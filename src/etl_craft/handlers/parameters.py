@@ -25,6 +25,16 @@ def known_parameters(handler: str) -> frozenset[str] | None:
     return frozenset(getattr(importlib.import_module(module), "PARAMETERS", ()))
 
 
+def package_parameters() -> frozenset[str]:
+    """Every parameter name etl-craft itself defines, across all handlers."""
+    from etl_craft.handlers import python_scripts
+
+    names: set[str] = set(COMMON_PARAMETERS) | set(python_scripts.PARAMETERS)
+    for handler in Handler:
+        names |= known_parameters(handler) or set()
+    return frozenset(name.upper() for name in names)
+
+
 def parameter_problems(handler: str, params: Mapping[str, str]) -> list[str]:
     """Refuse unknown inputs to built-in handlers without constraining team scripts."""
     known = known_parameters(handler)
