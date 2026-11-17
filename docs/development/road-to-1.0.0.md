@@ -10223,6 +10223,12 @@ and the endurance run on the example passed. A partial coverage matrix cannot pa
 - [ ] `etl-craft.dev` has a home page (owner, 2026-11-01): what etl-craft is, how to install
       it, and links to the docs at `docs.etl-craft.dev` and the repository. It is a static page
       served as the org's GitHub Pages site on the apex domain; the docs site stays separate.
+- [ ] The home page has a product video (owner, 2026-11-16): a 60–90 second captioned video and
+      a 15-second loop, with no voiceover, showing the running S8 demo (run, failure, recovery,
+      lineage and a DRAIN pause) in light and dark themes. Playwright records the real UI and
+      Remotion, with its official `remotion-dev/skills`, composes and renders it, so the video
+      re-renders when the UI changes. Its sources live in the `etl-craft.github.io` repository,
+      never in the package repository, and it is built after S8 runs and published at 0.9.0.
 - [ ] The UI shows the running package version on every page (owner, 2026-11-01): one line at
       the foot of the profile menu, linking to About, read from the version About already shows.
 
