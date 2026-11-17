@@ -101,6 +101,13 @@ class SourceConfig:
 
     type: SecretsSource
     path: str | None = None
+    """The ``.env`` file, the AWS secret name or ARN, or the Vault ``mount/path``."""
+    address: str | None = None
+    """The Vault server, from ``Secrets.Address`` or ``VAULT_ADDR``."""
+    region: str | None = None
+    """The AWS region; ``None`` uses the credential chain's region."""
+    cache_seconds: int = 300
+    """How long a secret manager's variables are reused before they are read again."""
 
 
 @dataclass(frozen=True)

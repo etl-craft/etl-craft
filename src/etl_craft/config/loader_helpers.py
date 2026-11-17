@@ -8,20 +8,20 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TypeVar
-from urllib.parse import parse_qsl, urlencode
+from urllib.parse import parse_qsl, urlencode, urlsplit
 
 from etl_craft.config.auth import AUTH_EXTRA_FIELDS
 from etl_craft.config.model import EXAMPLE_PATH, SourceConfig
 from etl_craft.config.resolve import Resolver
 from etl_craft.core.compatibility import input_refusal
-from etl_craft.core.enums import InputKind, SecretsSource, enum_value
+from etl_craft.core.enums import SECRET_MANAGERS, InputKind, SecretsSource, enum_value
 from etl_craft.core.errors import ConfigurationError
 from etl_craft.core.text import SECRET_KEYS, is_safe_identifier
 
 _NumberDefault = TypeVar("_NumberDefault", int, None)
 _FlagDefault = TypeVar("_FlagDefault", bool, None)
 
-SECRETS_KEYS = frozenset({"Source_type", "Path", "Profile"})
+SECRETS_KEYS = frozenset({"Source_type", "Path", "Profile", "Address", "Region", "Cache_seconds"})
 
 
 CONNECTION_FIELDS = frozenset(
@@ -189,13 +189,80 @@ def parse_source(secrets: dict[str, object], path: Path, environment: Resolver) 
         ),
     )
     raw_path = environment.text(secrets.get("Path"), "Secrets.Path")
+    manager_only = [key for key in ("Address", "Region", "Cache_seconds") if key in secrets]
+    if source_type not in SECRET_MANAGERS and manager_only:
+        raise ConfigurationError(
+            f"{path}: Secrets.{manager_only[0]} is only used with a secret manager "
+            f"(Source_type {' or '.join(SECRET_MANAGERS)}); remove it for {source_type}"
+        )
     if source_type == SecretsSource.ENVIRONMENT:
         if raw_path is not None:
-            raise ConfigurationError(f"{path}: Secrets.Path is only used with Source_type: FILE")
+            raise ConfigurationError(
+                f"{path}: Secrets.Path is not used with Source_type: ENVIRONMENT; remove it"
+            )
         return SourceConfig(type=source_type)
     if raw_path is None:
-        raise ConfigurationError(f"{path}: Secrets.Path is required when Source_type is FILE")
-    return SourceConfig(type=source_type, path=str(relative_to_config(raw_path, path)))
+        raise ConfigurationError(
+            f"{path}: Secrets.Path is required when Source_type is {source_type}; name the "
+            + (
+                ".env file"
+                if source_type == SecretsSource.FILE
+                else "secret that holds the variables"
+            )
+        )
+    if source_type == SecretsSource.FILE:
+        return SourceConfig(type=source_type, path=str(relative_to_config(raw_path, path)))
+    return parse_manager(secrets, source_type, raw_path, path, environment)
+
+
+def parse_manager(
+    secrets: dict[str, object],
+    source_type: SecretsSource,
+    secret: str,
+    path: Path,
+    environment: Resolver,
+) -> SourceConfig:
+    """Read a secret manager's address, region and cache period from settings or environment."""
+    cache = secrets.get("Cache_seconds", 300)
+    if not isinstance(cache, int) or isinstance(cache, bool) or not 0 <= cache <= 86400:
+        raise ConfigurationError(
+            f"{path}: Secrets.Cache_seconds is {cache!r}; expected whole seconds from 0 to "
+            "86400; correct Secrets.Cache_seconds"
+        )
+    region = environment.text(secrets.get("Region"), "Secrets.Region")
+    if source_type == SecretsSource.AWS_SECRETS_MANAGER:
+        if "Address" in secrets:
+            raise ConfigurationError(
+                f"{path}: Secrets.Address is only used with Source_type: VAULT; remove it"
+            )
+        return SourceConfig(type=source_type, path=secret, region=region, cache_seconds=cache)
+    if region is not None:
+        raise ConfigurationError(
+            f"{path}: Secrets.Region is only used with Source_type: AWS_SECRETS_MANAGER; remove it"
+        )
+    address = (
+        environment.text(secrets.get("Address"), "Secrets.Address")
+        or os.environ.get("VAULT_ADDR", "").strip()
+    )
+    if "/" not in secret.strip("/"):
+        raise ConfigurationError(
+            f"{path}: Secrets.Path is {secret!r}; expected the KV v2 mount and path, such as "
+            "secret/etl-craft/prod; correct Secrets.Path"
+        )
+    if not address:
+        raise ConfigurationError(
+            f"{path}: no Vault address; expected Secrets.Address or VAULT_ADDR; set one of them"
+        )
+    parsed = urlsplit(address)
+    local = parsed.hostname in {"localhost", "127.0.0.1", "::1"}
+    if parsed.scheme != "https" and not (parsed.scheme == "http" and local):
+        raise ConfigurationError(
+            f"{path}: Vault address {address!r}; expected https:// (plain http only to "
+            "localhost); use the server's TLS address"
+        )
+    return SourceConfig(
+        type=source_type, path=secret.strip("/"), address=address, cache_seconds=cache
+    )
 
 
 @dataclass(frozen=True)

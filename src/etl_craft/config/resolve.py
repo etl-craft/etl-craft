@@ -27,7 +27,7 @@ from etl_craft.config.model import (
     SettingSource,
     SourceConfig,
 )
-from etl_craft.core.enums import SecretsSource
+from etl_craft.core.enums import SECRET_MANAGERS, SecretsSource
 from etl_craft.core.errors import ConfigurationError
 from etl_craft.core.redaction import remember
 from etl_craft.core.text import is_env_name, parse_env_file, suggest
@@ -48,6 +48,10 @@ def source_values(source: SourceConfig) -> Mapping[str, str]:
     """Return the variables the secrets source defines."""
     if source.type == SecretsSource.FILE:
         return read_secrets_file(source.path)
+    if source.type in SECRET_MANAGERS:
+        from etl_craft.config.secret_managers import managed_values
+
+        return managed_values(source)
     return os.environ
 
 
@@ -89,6 +93,8 @@ class Resolver:
         """Build the resolver for everything after ``Secrets``."""
         if source.type == SecretsSource.FILE:
             origin = f"{source.path} (Secrets.Source_type: FILE)"
+        elif source.type in SECRET_MANAGERS:
+            origin = f"{source.path} (Secrets.Source_type: {source.type})"
         else:
             origin = "the process environment (Secrets.Source_type: ENVIRONMENT)"
         return cls(values=source_values(source), origin=origin, path=path)

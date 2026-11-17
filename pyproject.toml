@@ -158,7 +158,7 @@ warn_unreachable = true
 
 # boto3 is the one optional import (auth_mode sts) and ships no type information.
 [[tool.mypy.overrides]]
-module = ["boto3"]
+module = ["boto3", "botocore.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
@@ -260,11 +260,15 @@ forbidden_modules = ["fastapi", "pydantic", "uvicorn"]
 allow_indirect_imports = true
 
 [[tool.importlinter.contracts]]
-name = "The aws extra (boto3) is imported only by etl_craft.dialects.credentials"
+name = "The aws extra (boto3) is imported only by dialects.credentials and config.secret_managers"
 type = "forbidden"
 source_modules = ["etl_craft"]
 forbidden_modules = ["boto3", "botocore"]
-ignore_imports = ["etl_craft.dialects.credentials -> boto3"]
+ignore_imports = [
+    "etl_craft.dialects.credentials -> boto3",
+    "etl_craft.config.secret_managers -> boto3",
+    "etl_craft.config.secret_managers -> botocore",
+]
 allow_indirect_imports = true
 
 [[tool.importlinter.contracts]]

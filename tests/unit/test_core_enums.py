@@ -174,7 +174,7 @@ EXPECTED = {
     enums.AuthMode: {"NONE", "PASSWORD", "TOKEN", "KEY_FILE", "OAUTH", "SSO", "STS"},
     enums.TableFormat: {"NATIVE", "ICEBERG"},
     enums.CloningScope: {"CFG", "AUD", "ALL", "NONE"},
-    enums.SecretsSource: {"ENVIRONMENT", "FILE"},
+    enums.SecretsSource: {"ENVIRONMENT", "FILE", "AWS_SECRETS_MANAGER", "VAULT"},
     enums.GateOutcome: {"SATISFIED", "UNSATISFIED", "BYPASSED", "WAIT"},
     enums.WaitKind: {"DEPENDENCY", "EVENT", "PIPELINE_RUN"},
     enums.InterventionAction: {

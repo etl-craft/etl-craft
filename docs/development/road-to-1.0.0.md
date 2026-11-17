@@ -184,7 +184,7 @@ item's text, or work done early under another item.
 | S7.B Users, roles and identities | In progress | #203–#207, #231, #261, #263, #264, #277, #386 | Accounts, fixed roles, scoped grants, delegated pipeline grant UI, pool-bound agents and browser sign-in exist; custom roles, bindings and access explain remain |
 | S7.C Redaction | Done | #228, #309, S7.C PR | Recursive name masking, operation-scoped value masking, process-wide masking of every resolved secret, and Redaction.Sensitive_patterns for team-named parameters in the catalog, task read and clones |
 | S7.D Alert channels | Done | #387 | Admin-owned webhook/Slack routing, isolated event-admitted alert runs, bounded signed delivery and sanitized pipeline/project history |
-| S7.E Secrets providers | In progress | #84, #120, #323 | ENVIRONMENT/FILE task declarations, fenced TLS delivery and private child pipe; secret managers and Cache_seconds remain |
+| S7.E Secrets providers | Done | #84, #120, #323, S7.E PR | ENVIRONMENT/FILE task declarations, fenced TLS delivery and private child pipe; AWS Secrets Manager and Vault KV v2 sources with Secrets.Cache_seconds |
 | S7.F Packaging and deployment | Done | #227, #231, #316 | Wheel-built role images, tagged release smoke and publishing, Compose/Kubernetes manifests and systemd units |
 | S7.G Compatibility policy | In progress | #379; rolling checks | Policy, shared same-major admission, additive SQL/ledger checks and installed input registry implemented; actual mixed-version certification waits for the 0.9.0 release gate |
 | S7.H Cloud acceptance | In progress | #104–#110, #208, #231, #236, #247 | Native/Iceberg and managed-engine contracts exist; complete candidate evidence and unavailable provider cases remain |
@@ -1174,6 +1174,16 @@ empty-history-page handling defect, which was corrected and verified. No cloud w
   recovery repetitions. Local Semgrep found no issue. Generated warehouse SQL is unchanged,
   so cloud suites do not apply.
 
+- **S7.E secret managers (owner, 2026-11-17).** Choices that differ from the item text: no
+  `SecretsProvider` interface; the managers are further `Secrets.Source_type` values that
+  supply the same variable mapping as FILE. One secret holds every variable (owner's choice),
+  read once per `Secrets.Cache_seconds` per process. Credentials come from the platform (AWS
+  credential chain; `VAULT_TOKEN` or `~/.vault-token`); no Kubernetes or AppRole Vault login.
+  Vault KV v2 is read over the standard library with no `hvac` dependency (owner's choice); AWS
+  reuses the `aws` extra. Agents may keep `ENVIRONMENT` through an environment-selected
+  `Source_type`. Registering resolved values for masking is S7.C. Acceptance availability: no
+  warehouse SQL changed; Vault is tested against a local KV v2 HTTP server and AWS against a
+  stand-in client, not live cloud services.
 - **S7.C redaction (owner, 2026-11-17).** Choices that differ from the item text: the
   default `*KEY*` would hide `MERGE_KEY` and other package parameters, which never hold a
   secret (secrets are always variable names), so patterns apply only to team-named parameters
