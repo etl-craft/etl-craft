@@ -114,7 +114,7 @@ def project_changes(
                 for doc in (change["before_json"], change["after_json"])
                 if doc is not None and doc.get("pipeline_id") in pipelines
             )
-    scoped = {table.table for table in TABLES} | {"CFG_PROJECTS", "CFG_PIPELINE_GRANTS"}
+    scoped = {table.table for table in TABLES} | {"CFG_PROJECTS", "CFG_ACCESS_BINDINGS"}
     return [
         change
         for change in changes

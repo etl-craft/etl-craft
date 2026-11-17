@@ -197,6 +197,7 @@ def historical_rows(conn, tables):
         try:
             yield
         finally:
+            conn.exec_driver_sql("SET CONSTRAINTS ALL IMMEDIATE")
             for table in tables:
                 conn.exec_driver_sql(f'ALTER TABLE "{table}" ENABLE TRIGGER USER')
 

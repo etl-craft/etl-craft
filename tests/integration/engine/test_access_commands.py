@@ -44,17 +44,17 @@ def change(ctx, **values):
     return act(ctx, ActionName.ACCESS_GRANT, project="default", reason="test", **values)
 
 
-@pytest.mark.parametrize("principal", ["account", "group", "role"])
+@pytest.mark.parametrize("principal", ["account", "group", "audience"])
 @pytest.mark.parametrize("permission", list(Permission))
 @pytest.mark.parametrize("target", ["pipeline", "tag"])
 def test_principals_levels_and_securables(access_scene, principal, permission, target):
     ctx, alice = access_scene
     identity = {
-        principal: {"account": "alice", "group": "team", "role": "viewer"}[principal],
+        principal: {"account": "alice", "group": "team", "audience": "viewer"}[principal],
         target: "P" if target == "pipeline" else "team",
     }
-    result = change(ctx, **identity, permission=permission)
-    assert result.changes[0].grant.permission == permission
+    result = change(ctx, **identity, role=permission)
+    assert result.change.binding.role == permission
     with ctx.engine.connect() as conn:
         assert pipeline_access(conn, alice).levels["P"] == permission
     assert act(alice, ActionName.ACCESS_LIST, project="default").effective
@@ -63,8 +63,8 @@ def test_principals_levels_and_securables(access_scene, principal, permission, t
     with ctx.engine.connect() as conn:
         row = conn.execute(
             text(
-                "SELECT ACTOR AS actor,PERMISSION AS permission FROM "
-                "AUD_CFG_PIPELINE_GRANTS_HISTORY "
+                "SELECT ACTOR AS actor,ROLE_NAME AS permission FROM "
+                "AUD_CFG_ACCESS_BINDINGS_HISTORY "
                 "WHERE PIPELINE_CODE IS NOT NULL OR TAG IS NOT NULL"
             )
         ).one()
@@ -73,17 +73,17 @@ def test_principals_levels_and_securables(access_scene, principal, permission, t
 
 def test_delegation_never_escapes_managed_securable(access_scene):
     ctx, alice = access_scene
-    change(ctx, account="alice", pipeline="P", permission=Permission.CAN_MANAGE)
-    change(alice, group="team", pipeline="P", permission=Permission.CAN_RUN)
+    change(ctx, account="alice", pipeline="P", role=Permission.CAN_MANAGE)
+    change(alice, group="team", pipeline="P", role=Permission.CAN_RUN)
     for target in ({"pipeline": "OTHER"}, {"tag": "team"}, {"tag": "other"}):
         with pytest.raises(PermissionDeniedError) as caught:
-            change(alice, role="viewer", permission=Permission.CAN_MANAGE, **target)
+            change(alice, audience="viewer", role=Permission.CAN_MANAGE, **target)
         for part in ("alice", "effective level", "CAN_MANAGE", "administrator"):
             assert part in str(caught.value)
     with pytest.raises(PermissionDeniedError):
         act(alice, ActionName.PROJECT_ADD, project="escape", reason="test")
-    change(ctx, account="alice", tag="team", permission=Permission.CAN_MANAGE)
-    change(alice, role="viewer", tag="team", permission=Permission.CAN_VIEW)
+    change(ctx, account="alice", tag="team", role=Permission.CAN_MANAGE)
+    change(alice, audience="viewer", tag="team", role=Permission.CAN_VIEW)
     act(
         alice,
         ActionName.ACCESS_REVOKE,
@@ -96,8 +96,8 @@ def test_delegation_never_escapes_managed_securable(access_scene):
 
 def test_highest_level_and_immediate_revocation(access_scene):
     ctx, alice = access_scene
-    change(ctx, group="team", tag="team", permission=Permission.CAN_VIEW)
-    change(ctx, account="alice", pipeline="P", permission=Permission.CAN_MANAGE)
+    change(ctx, group="team", tag="team", role=Permission.CAN_VIEW)
+    change(ctx, account="alice", pipeline="P", role=Permission.CAN_MANAGE)
     with ctx.engine.connect() as conn:
         assert pipeline_access(conn, alice).levels["P"] == Permission.CAN_MANAGE
     act(
@@ -109,13 +109,13 @@ def test_highest_level_and_immediate_revocation(access_scene):
         reason="test",
     )
     with pytest.raises(PermissionDeniedError):
-        change(alice, role="viewer", pipeline="P", permission=Permission.CAN_RUN)
+        change(alice, audience="viewer", pipeline="P", role=Permission.CAN_RUN)
     with ctx.engine.connect() as conn:
         assert pipeline_access(conn, alice).levels["P"] == Permission.CAN_VIEW
         assert (
             conn.execute(
                 text(
-                    "SELECT COUNT(*) FROM CFG_PIPELINE_GRANTS WHERE (PIPELINE_CODE IS NOT "
+                    "SELECT COUNT(*) FROM CFG_ACCESS_BINDINGS WHERE (PIPELINE_CODE IS NOT "
                     "NULL OR TAG IS NOT NULL) AND ACTIVE_FLAG='N'"
                 )
             ).scalar_one()
@@ -123,48 +123,13 @@ def test_highest_level_and_immediate_revocation(access_scene):
         )
 
 
-def test_bulk_validates_every_line_before_writes_and_dry_run(access_scene):
-    ctx, alice = access_scene
-    header = "PROJECT,GROUP_NAME,ROLE,PIPELINE_CODE,TAG,PERMISSION,ACTION\n"
-    valid = "default,team,,P,,CAN_RUN,GRANT\n"
-    result = change(ctx, content=header + valid, dry_run=True)
-    assert result.changes[0].change == "added"
-    assert not any(
-        g.pipeline or g.tag for g in act(ctx, ActionName.ACCESS_LIST, project="default").grants
-    )
-    bad = (
-        "default,missing,,P,,CAN_RUN,GRANT\n"
-        "default,,invalid,P,,CAN_RUN,GRANT\n"
-        "default,team,,unknown,,CAN_RUN,GRANT\n"
-        "default,team,,,absent,CAN_RUN,GRANT\n"
-        "default,team,,P,,bad,GRANT\n"
-        "default,alice,,P,,CAN_RUN,GRANT\n"
-        "missing,team,,P,,CAN_RUN,GRANT\n"
-    )
-    with pytest.raises(UsageError) as caught:
-        change(ctx, content=header + valid + bad)
-    for line in range(3, 10):
-        assert f"line {line}" in str(caught.value)
-    assert "access grant --account" in str(caught.value)
-    assert not any(
-        g.pipeline or g.tag for g in act(ctx, ActionName.ACCESS_LIST, project="default").grants
-    )
-    with pytest.raises(PermissionDeniedError):
-        change(alice, content=header + valid, dry_run=True)
-    change(ctx, content=header + valid)
-    result = change(ctx, content=header + valid)
-    assert result.changes[0].change == "unchanged"
-    with pytest.raises(UsageError, match=r"ACCOUNT.*access grant --account"):
-        change(ctx, content=header.replace("GROUP_NAME", "ACCOUNT") + valid)
-
-
 @pytest.mark.parametrize("revoking", [False, True])
 def test_competing_granters_publish_one_identity(access_scene, revoking):
     ctx, _ = access_scene
-    change(ctx, group="team", pipeline="P", permission=Permission.CAN_VIEW)
+    change(ctx, group="team", pipeline="P", role=Permission.CAN_VIEW)
 
     def first():
-        return change(ctx, group="team", pipeline="P", permission=Permission.CAN_MANAGE)
+        return change(ctx, group="team", pipeline="P", role=Permission.CAN_MANAGE)
 
     def second():
         if revoking:
@@ -176,14 +141,14 @@ def test_competing_granters_publish_one_identity(access_scene, revoking):
                 pipeline="P",
                 reason="race",
             )
-        return change(ctx, group="team", pipeline="P", permission=Permission.CAN_RUN)
+        return change(ctx, group="team", pipeline="P", role=Permission.CAN_RUN)
 
-    two_at_once(first, second, at="etl_craft.services.operations.access.inputs")
+    two_at_once(first, second, at="etl_craft.services.operations.access._apply")
     with ctx.engine.connect() as conn:
         assert (
             conn.execute(
                 text(
-                    "SELECT COUNT(*) FROM CFG_PIPELINE_GRANTS WHERE PIPELINE_CODE IS NOT NULL "
+                    "SELECT COUNT(*) FROM CFG_ACCESS_BINDINGS WHERE PIPELINE_CODE IS NOT NULL "
                     "OR TAG IS NOT NULL"
                 )
             ).scalar_one()
@@ -192,7 +157,7 @@ def test_competing_granters_publish_one_identity(access_scene, revoking):
         assert (
             conn.execute(
                 text(
-                    "SELECT COUNT(*) FROM AUD_CFG_PIPELINE_GRANTS_HISTORY WHERE PIPELINE_CODE "
+                    "SELECT COUNT(*) FROM AUD_CFG_ACCESS_BINDINGS_HISTORY WHERE PIPELINE_CODE "
                     "IS NOT NULL OR TAG IS NOT NULL"
                 )
             ).scalar_one()
@@ -253,20 +218,20 @@ def test_a_project_names_what_may_start_its_runs_by_itself(access_scene):
         )
 
 
-@pytest.mark.parametrize("principal", ["account", "group", "role"])
+@pytest.mark.parametrize("principal", ["account", "group", "audience"])
 @pytest.mark.parametrize("level", list(Permission))
 @pytest.mark.parametrize("target", ["pipeline", "tag"])
 def test_granters_need_manage_on_the_target(access_scene, principal, level, target):
     ctx, alice = access_scene
     identity = {
-        principal: {"account": "alice", "group": "team", "role": "viewer"}[principal],
+        principal: {"account": "alice", "group": "team", "audience": "viewer"}[principal],
         target: "P" if target == "pipeline" else "team",
     }
-    change(ctx, **identity, permission=level)
+    change(ctx, **identity, role=level)
     kwargs = {
         "account": "alice",
         target: "P" if target == "pipeline" else "team",
-        "permission": Permission.CAN_MANAGE,
+        "role": Permission.CAN_MANAGE,
     }
     if level == Permission.CAN_MANAGE:
         change(alice, **kwargs)
@@ -326,14 +291,14 @@ def test_cli_mutations_require_explicit_project_and_thin_api(metadata_project, m
         "project": "default",
         "account": "reader",
         "pipeline": "P",
-        "permission": "CAN_MANAGE",
+        "role": "CAN_MANAGE",
         "reason": "test",
     }
     assert api.post("/api/v1/access/grants", json=payload, headers=reader).status_code == 403
     assert api.post("/api/v1/access/grants", json=payload, headers=admin).status_code == 200
     assert (
         api.post(
-            "/api/v1/access/grants", json={**payload, "permission": "CAN_RUN"}, headers=reader
+            "/api/v1/access/grants", json={**payload, "role": "CAN_RUN"}, headers=reader
         ).status_code
         == 200
     )
@@ -344,7 +309,7 @@ def test_cli_mutations_require_explicit_project_and_thin_api(metadata_project, m
     assert api.post("/api/v1/access/revocations", json=payload, headers=reader).status_code == 403
 
 
-@pytest.mark.parametrize("principal", ["account", "role"])
+@pytest.mark.parametrize("principal", ["account", "audience"])
 def test_admitted_children_recheck_account_and_role_grants(access_scene, principal):
     from etl_craft.core.enums import TriggerKind
     from etl_craft.engine import transitions
@@ -352,9 +317,9 @@ def test_admitted_children_recheck_account_and_role_grants(access_scene, princip
 
     ctx, alice = access_scene
     identity = {principal: "alice" if principal == "account" else "viewer"}
-    change(ctx, **identity, pipeline="P", permission=Permission.CAN_RUN)
+    change(ctx, **identity, pipeline="P", role=Permission.CAN_RUN)
     # A retained restriction remains when the caller's operating grant is revoked.
-    change(ctx, group="team", pipeline="P", permission=Permission.CAN_VIEW)
+    change(ctx, group="team", pipeline="P", role=Permission.CAN_VIEW)
     with acting_as(alice.actor), ctx.engine.begin() as conn:
         pipeline = conn.execute(
             text("SELECT PIPELINE_ID FROM CFG_PIPELINES WHERE PIPELINE_CODE='P'")
@@ -381,7 +346,7 @@ def test_admitted_children_recheck_account_and_role_grants(access_scene, princip
 def test_delegation_refusals_are_attributed_and_audited(access_scene):
     ctx, alice = access_scene
     with pytest.raises(PermissionDeniedError):
-        change(alice, account="alice", pipeline="P", permission=Permission.CAN_MANAGE)
+        change(alice, account="alice", pipeline="P", role=Permission.CAN_MANAGE)
     with ctx.engine.connect() as conn:
         rows = conn.execute(
             text(
@@ -396,7 +361,7 @@ def test_delegation_refusals_are_attributed_and_audited(access_scene):
 
 def test_permission_delegation_does_not_cross_projects(access_scene):
     ctx, alice = access_scene
-    change(ctx, account="alice", pipeline="P", permission=Permission.CAN_MANAGE)
+    change(ctx, account="alice", pipeline="P", role=Permission.CAN_MANAGE)
     act(ctx, ActionName.PROJECT_ADD, project="other", reason="test")
     with acting_as(OWNER), ctx.engine.begin() as conn:
         conn.execute(
@@ -413,70 +378,29 @@ def test_permission_delegation_does_not_cross_projects(access_scene):
             project="other",
             account="alice",
             pipeline="P",
-            permission=Permission.CAN_MANAGE,
+            role=Permission.CAN_MANAGE,
             reason="No cross-project delegation",
         )
-    assert act(ctx, ActionName.ACCESS_LIST, project="other").grants == ()
+    assert act(ctx, ActionName.ACCESS_LIST, project="other").bindings == ()
 
 
-def test_admin_bulk_projects_come_from_submitted_rows(access_scene):
+@pytest.mark.parametrize(
+    "values,found",
+    [
+        ({"group": "missing", "pipeline": "P", "role": "CAN_RUN"}, "missing"),
+        ({"audience": "invalid", "pipeline": "P", "role": "CAN_RUN"}, "invalid"),
+        ({"group": "team", "pipeline": "unknown", "role": "CAN_RUN"}, "unknown"),
+        ({"group": "team", "tag": "absent", "role": "CAN_RUN"}, "absent"),
+        ({"group": "team", "pipeline": "P", "role": "bad"}, "bad"),
+        ({"group": "alice", "pipeline": "P", "role": "CAN_RUN"}, "--account"),
+        ({"project": "missing", "group": "team", "pipeline": "P", "role": "CAN_RUN"}, "missing"),
+    ],
+)
+def test_invalid_single_bindings_leave_access_unchanged(access_scene, values, found):
     ctx, _ = access_scene
-    act(ctx, ActionName.PROJECT_ADD, project="other", reason="test")
-    with acting_as(OWNER), ctx.engine.begin() as conn:
-        conn.execute(
-            text(
-                "INSERT INTO CFG_PIPELINES (PROJECT_ID,PIPELINE_CODE,PIPELINE_NAME,REFRESH_TYPE) "
-                "SELECT PROJECT_ID,'P','Other P','FULL' FROM CFG_PROJECTS WHERE "
-                "PROJECT_CODE='other'"
-            )
-        )
-    content = (
-        "PROJECT,GROUP_NAME,ROLE,PIPELINE_CODE,TAG,PERMISSION,ACTION\n"
-        "default,team,,P,,CAN_VIEW,GRANT\nother,,viewer,P,,CAN_RUN,GRANT\n"
-    )
-    done = act(ctx, ActionName.ACCESS_GRANT, content=content, reason="Bulk onboarding")
-    assert {d.grant.project for d in done.changes} == {"default", "other"}
-    for project_code in ("default", "other"):
-        assert (
-            sum(
-                g.pipeline == "P"
-                for g in act(ctx, ActionName.ACCESS_LIST, project=project_code).grants
-            )
-            == 1
-        )
-
-
-def test_cli_bulk_reads_content_without_requiring_project_flag(
-    metadata_project, monkeypatch, capsys
-):
-    from etl_craft.cli import main
-    from etl_craft.core.errors import ExitCode
-
-    ctx = OperationContext(
-        metadata_project.engine, metadata_project.config, OWNER, role=ApiRole.ADMIN
-    )
-    credential = act(ctx, ActionName.TOKEN_CREATE, name="bulk-admin", role=ApiRole.ADMIN)
-    act(ctx, ActionName.GROUP_ADD, name="team")
-    with acting_as(OWNER), ctx.engine.begin() as conn:
-        add_pipeline(conn, "P")
-    path = metadata_project.root / "access.csv"
-    path.write_text(
-        "PROJECT,GROUP_NAME,ROLE,PIPELINE_CODE,TAG,PERMISSION,ACTION\n"
-        "default,team,,P,,CAN_RUN,GRANT\n"
-    )
-    monkeypatch.chdir(metadata_project.root)
-    monkeypatch.setenv("ETL_CRAFT_TOKEN", credential.token)
-    assert (
-        main(["access", "grant", "--file", str(path), "--dry-run", "--reason", "Review"])
-        == ExitCode.SUCCESS
-    )
-    assert "added" in capsys.readouterr().out
-    assert not any(
-        g.pipeline or g.tag for g in act(ctx, ActionName.ACCESS_LIST, project="default").grants
-    )
-    assert main(["access", "grant", "--file", str(path), "--reason", "Apply"]) == ExitCode.SUCCESS
-    capsys.readouterr()
-    assert (
-        sum(g.pipeline == "P" for g in act(ctx, ActionName.ACCESS_LIST, project="default").grants)
-        == 1
-    )
+    before = act(ctx, ActionName.ACCESS_LIST, project="default").bindings
+    request = {"project": "default", "reason": "Validate", **values}
+    with pytest.raises(UsageError) as caught:
+        act(ctx, ActionName.ACCESS_GRANT, **request)
+    assert found in str(caught.value)
+    assert act(ctx, ActionName.ACCESS_LIST, project="default").bindings == before

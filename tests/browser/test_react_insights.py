@@ -125,7 +125,7 @@ def test_a_viewer_is_offered_fewer_console_commands(scene):
         ActionName.ACCESS_GRANT,
         project="default",
         account="alice",
-        permission="CAN_VIEW",
+        role="CAN_VIEW",
         reason="read",
     )
     with sync_playwright() as pw:

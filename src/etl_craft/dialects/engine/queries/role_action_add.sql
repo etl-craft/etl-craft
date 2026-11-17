@@ -1,0 +1,1 @@
+INSERT INTO CFG_ROLE_ACTIONS (ROLE_ID, ACTION_NAME) VALUES (:role_id, :action_name)

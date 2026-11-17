@@ -9,10 +9,18 @@ from enum import StrEnum
 
 
 class AccessIntent(StrEnum):
-    """Bulk access command intent."""
+    """Access binding change intent."""
 
     GRANT = "GRANT"
     REVOKE = "REVOKE"
+
+
+class BindingScope(StrEnum):
+    """The reach of an access binding."""
+
+    DEPLOYMENT = "DEPLOYMENT"
+    ENVIRONMENT = "ENVIRONMENT"
+    PROJECT = "PROJECT"
 
 
 class AccessChange(StrEnum):

@@ -229,7 +229,7 @@ def test_developer_can_apply_project_migrations_but_not_engine_migrations(
         ActionName.ACCESS_GRANT,
         project="default",
         account="policy-developer",
-        permission="CAN_MANAGE",
+        role="CAN_MANAGE",
         reason="Manage project migrations",
     )
     directory = tmp_path / "migrations"

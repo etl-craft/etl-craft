@@ -546,15 +546,28 @@ export interface TokenRow {
   last_used_at: string | null;
 }
 
-export interface Grant {
-  project: string;
+/** One access binding: WHO (account, group or audience) gets WHAT (role or one action) WHERE. */
+export interface Binding {
+  scope: "DEPLOYMENT" | "ENVIRONMENT" | "PROJECT";
+  project: string | null;
+  environment: string | null;
   group: string | null;
   account: string | null;
-  role: string | null;
+  audience: string | null;
   pipeline: string | null;
   tag: string | null;
-  permission: string;
+  role: string | null;
+  action: string | null;
   active_flag: string;
+}
+
+/** A named set of actions; built-in CAN_* roles list what they allow but cannot change. */
+export interface RoleView {
+  name: string;
+  description: string | null;
+  built_in: boolean;
+  active_flag: string;
+  actions: string[];
 }
 
 export interface ProjectRow {

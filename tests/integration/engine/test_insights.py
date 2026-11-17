@@ -135,8 +135,8 @@ def test_window_filters_and_visibility(scene, engine_db):
     with acting_as(OWNER), engine_db.engine.begin() as conn:
         conn.execute(
             text(
-                "INSERT INTO CFG_PIPELINE_GRANTS (PIPELINE_CODE,GRANTEE_ROLE,PERMISSION) "
-                "VALUES ('SALES','operator','CAN_VIEW')"
+                "INSERT INTO CFG_ACCESS_BINDINGS (PROJECT_ID,PIPELINE_CODE,GRANTEE_ROLE,ROLE_NAME) "
+                "VALUES (1,'SALES','operator','CAN_VIEW')"
             )
         )
     hidden = act(reader, ActionName.INSIGHTS)

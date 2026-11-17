@@ -87,8 +87,8 @@ def test_insights_reads_the_stored_check_only_for_whole_project_viewers(project,
         add_pipeline(conn, "HIDDEN")
         conn.execute(
             text(
-                "INSERT INTO CFG_PIPELINE_GRANTS (PIPELINE_CODE,GRANTEE_ROLE,PERMISSION) "
-                "VALUES ('HIDDEN','operator','CAN_VIEW')"
+                "INSERT INTO CFG_ACCESS_BINDINGS (PROJECT_ID,PIPELINE_CODE,GRANTEE_ROLE,ROLE_NAME) "
+                "VALUES (1,'HIDDEN','operator','CAN_VIEW')"
             )
         )
     assert act(reader, ActionName.INSIGHTS).gaps_compared_at is None

@@ -1,38 +1,44 @@
-"""Validate submitted access rows against current project, group and pipeline identities."""
+"""Resolve one submitted binding against current projects, principals, roles and pipelines."""
 
-import csv
-import io
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+from typing import Any
 
 from sqlalchemy.engine import Connection
 
-from etl_craft.core.enums import ApiRole, YesNo
-from etl_craft.core.enums_access import AccessIntent, Permission
+from etl_craft.core.enums import ActionName, ApiRole, YesNo
+from etl_craft.core.enums_access import AccessIntent, BindingScope, EnvironmentType, Permission
 from etl_craft.core.errors import UsageError
 from etl_craft.core.tags import valid_tag
 from etl_craft.engine.queries import statement
 from etl_craft.engine.repository.pipelines import read_tags
-from etl_craft.services.operations.access_models import FIELDS, AccessWrite
+from etl_craft.services.operations.access_models import AccessFilter, AccessWrite
+
+AUDIENCES = (ApiRole.VIEWER, ApiRole.OPERATOR, ApiRole.DEVELOPER)
+BUILT_IN = frozenset(Permission)
 
 
 @dataclass(frozen=True)
-class InputRow:
-    """One physical command row, including malformed column counts."""
+class Resolved:
+    """A valid binding with its current identities, written in the transaction that checked it."""
 
-    line: int
-    values: dict[str, str | None]
-    well_formed: bool = True
-
-
-@dataclass(frozen=True)
-class Validated:
-    """Resolved identities which can be written only in their validating transaction."""
-
-    line: int
-    values: dict[str, str]
-    project_id: int
+    request: AccessWrite
+    project_id: int | None
     group_id: int | None
     account_id: int | None
+
+    @property
+    def scope(self) -> BindingScope:
+        """DEPLOYMENT, ENVIRONMENT or PROJECT: how far the binding reaches."""
+        if self.request.deployment:
+            return BindingScope.DEPLOYMENT
+        return BindingScope.ENVIRONMENT if self.request.environment else BindingScope.PROJECT
+
+    @property
+    def built_in(self) -> bool:
+        """A built-in CAN_* level, one per principal at each exact scope."""
+        return self.request.action is None and (
+            self.request.role is None or self.request.role in BUILT_IN
+        )
 
 
 def project(conn: Connection, code: str | None) -> int:
@@ -47,69 +53,124 @@ def project(conn: Connection, code: str | None) -> int:
     return int(row.project_id)
 
 
-def inputs(request: AccessWrite, intent: AccessIntent) -> list[InputRow]:
-    """Read submitted bytes, never a client's path or prevalidated plan."""
-    if request.content is None:
-        return [
-            InputRow(
-                1,
-                {
-                    "PROJECT": request.project,
-                    "GROUP_NAME": request.group,
-                    "ROLE": request.role,
-                    "PIPELINE_CODE": request.pipeline,
-                    "TAG": request.tag,
-                    "PERMISSION": request.permission,
-                    "ACTION": intent,
-                    "ACCOUNT": request.account,
-                },
-            )
-        ]
-    if any(
-        (
-            request.group,
-            request.pipeline,
-            request.tag,
-            request.role,
-            request.account,
-            request.permission,
+def resolve(conn: Connection, request: AccessWrite, intent: AccessIntent) -> Resolved:
+    """Name every invalid part of the binding at once, or return its resolved identities."""
+    if request.action is not None:
+        request = replace(request, action=request.action.strip())
+    bad = scope_problems(request)
+    project_id = None
+    if not bad and not request.reaches_beyond_project:
+        try:
+            project_id = project(conn, request.project)
+        except UsageError as error:
+            bad.append(str(error))
+    groups = {
+        row.name: int(row.group_id)
+        for row in conn.execute(statement(conn, "group_list"))
+        if row.active_flag == YesNo.YES
+    }
+    accounts = {row.name: row for row in conn.execute(statement(conn, "account_list"))}
+    bad.extend(principal_problems(request, groups, accounts))
+    bad.extend(grant_problems(conn, request, intent))
+    if project_id is not None:
+        bad.extend(target_problems(conn, request, project_id))
+    elif request.pipeline or request.tag:
+        bad.append("a pipeline or tag narrows a project; add --project or remove it")
+    if bad:
+        raise UsageError("access: " + "; ".join(bad))
+    account = accounts.get(request.account or "")
+    return Resolved(
+        request,
+        project_id,
+        groups.get(request.group or ""),
+        None if account is None else int(account.account_id),
+    )
+
+
+def scope_problems(request: AccessFilter) -> list[str]:
+    """Require exactly one reach: the deployment, one environment type, or one project."""
+    chosen = [
+        name
+        for name, given in (
+            ("--deployment", request.deployment),
+            ("--environment", request.environment),
+            ("--project", request.project),
         )
-    ):
-        raise UsageError("access grant: content conflicts with single-row fields; choose one form")
-    reader = csv.reader(io.StringIO(request.content), strict=True)
+        if given
+    ]
+    if len(chosen) != 1:
+        return [
+            f"scope {chosen or 'none'}; expected exactly one of --deployment, --environment or "
+            "--project; choose where the binding applies"
+        ]
+    if request.environment and request.environment not in tuple(EnvironmentType):
+        return [
+            f"environment {request.environment!r}; expected one of "
+            f"{', '.join(EnvironmentType)}; correct --environment"
+        ]
+    if request.pipeline and request.tag:
+        return ["a binding narrows to a pipeline or a tag, not both; choose one"]
+    return []
+
+
+def principal_problems(
+    request: AccessWrite, groups: dict[str, int], accounts: dict[str, Any]
+) -> list[str]:
+    """Require exactly one active account, active group or supported audience."""
+    given = [p for p in (request.group, request.account, request.audience) if p]
+    if len(given) != 1:
+        return ["expected exactly one of --account, --group or --audience; choose who"]
+    if request.group and request.group not in groups:
+        remedy = (
+            "use --account for an account"
+            if request.group in accounts
+            else "use `etl-craft group list` or `group add`"
+        )
+        return [f"group {request.group!r}: expected an active group; {remedy}"]
+    account = accounts.get(request.account or "")
+    if request.account and (account is None or account.active_flag != YesNo.YES):
+        return [f"account {request.account!r}: expected an active account; use account list"]
+    if request.audience and request.audience not in AUDIENCES:
+        return [
+            f"audience {request.audience!r}: expected viewer, operator or developer; "
+            "choose a supported audience"
+        ]
+    return []
+
+
+def grant_problems(conn: Connection, request: AccessWrite, intent: AccessIntent) -> list[str]:
+    """Require one existing role or one bindable action that fits the binding's reach."""
+    from etl_craft.services.operations.roles import bindable, deployment_only, role_actions
+
+    role, command = request.role, request.action
+    if role and command:
+        return ["expected --role or --action, not both; choose what the binding gives"]
+    if not role and not command:
+        if intent == AccessIntent.REVOKE:
+            return []
+        return ["expected --role or --action; choose what the binding gives"]
     try:
-        header = next(reader, [])
-        if "ACCOUNT" in header:
-            raise UsageError(
-                "access input line 1: ACCOUNT column is forbidden in bulk input; "
-                "use access grant --account for account permissions"
-            )
-        if set(header) != set(FIELDS) or len(header) != len(FIELDS):
-            raise UsageError(
-                f"access input line 1: found {header!r}; expected {','.join(FIELDS)}; "
-                f"fix the header"
-            )
-        result = []
-        for row in reader:
-            if row:
-                result.append(
-                    InputRow(
-                        reader.line_num,
-                        {
-                            name: row[index] if index < len(row) else None
-                            for index, name in enumerate(header)
-                        },
-                        len(row) == len(header),
-                    )
-                )
-        return result
-    except csv.Error as error:
-        raise UsageError(
-            f"access input line {reader.line_num}: invalid CSV {error}; fix the row"
-        ) from error
+        if command:
+            actions: tuple[str, ...] = (bindable(command),)
+        else:
+            known = role_actions(conn)
+            active = {
+                r.name
+                for r in conn.execute(statement(conn, "role_list"))
+                if r.active_flag == YesNo.YES
+            }
+            if role not in known or (intent == AccessIntent.GRANT and role not in active):
+                return [f"role {role!r}: not an active role; use `etl-craft role list`"]
+            actions = () if role in BUILT_IN else known[str(role)]
+    except UsageError as error:
+        return [str(error)]
+    wide = sorted(a for a in actions if deployment_only(ActionName(a)))
+    if wide and not request.deployment:
+        return [f"{role or command}: {wide} act on the whole deployment; bind it with --deployment"]
+    return []
 
 
-def target_problems(conn: Connection, values: dict[str, str], project_id: int) -> list[str]:
+def target_problems(conn: Connection, request: AccessWrite, project_id: int) -> list[str]:
     """Require current pipeline identities and existing, syntactically valid tags."""
     active = [
         row
@@ -117,105 +178,14 @@ def target_problems(conn: Connection, values: dict[str, str], project_id: int) -
         if row.active_flag == YesNo.YES
     ]
     tags = {tag for row in active for tag in read_tags(row.pipeline_parameters, row.pipeline_code)}
-    pipeline, tag = values["PIPELINE_CODE"], values["TAG"]
-    problems = []
-    if pipeline and pipeline not in {row.pipeline_code for row in active}:
-        problems.append(
-            f"pipeline {pipeline!r}; expected an active pipeline in "
-            f"{values['PROJECT']!r}; check the project"
-        )
-    if tag and (not valid_tag(tag) or tag not in tags):
-        problems.append(
-            f"tag {tag!r}; expected a tag on an active pipeline in "
-            f"{values['PROJECT']!r}; fix the tag"
-        )
-    return problems
-
-
-def row_problems(
-    conn: Connection, request: AccessWrite, row: InputRow, groups: dict[str, int]
-) -> tuple[Validated | None, list[str]]:
-    """Name all invalid fields of a row without writing any grant."""
-    values = {name: (row.values.get(name) or "").strip() for name in (*FIELDS, "ACCOUNT")}
-    bad = []
-    project_id = None
-    try:
-        project_id = project(conn, values["PROJECT"])
-    except UsageError as error:
-        bad.append(str(error))
-    if request.project is not None and values["PROJECT"] != request.project:
-        bad.append(
-            f"PROJECT={values['PROJECT']!r}; expected scope {request.project!r}; "
-            f"select that project"
-        )
-    group_id = groups.get(values["GROUP_NAME"])
-    accounts = {row.name: row for row in conn.execute(statement(conn, "account_list"))}
-    account = accounts.get(values["ACCOUNT"])
-    account_id = None if account is None else int(account.account_id)
-    if sum(bool(values[key]) for key in ("GROUP_NAME", "ROLE", "ACCOUNT")) != 1:
-        bad.append("expected exactly one group, deployment role or account; select one principal")
-    if values["GROUP_NAME"] and group_id is None:
-        remedy = (
-            "use access grant --account for account permissions"
-            if values["GROUP_NAME"] in accounts
-            else "use group add or group list"
-        )
-        bad.append(f"group {values['GROUP_NAME']!r}; expected an active group; {remedy}")
-    if values["ACCOUNT"] and (account is None or account.active_flag != YesNo.YES):
-        bad.append(f"account {values['ACCOUNT']!r}; expected an active account; use account list")
-    if values["ROLE"] and values["ROLE"] not in (ApiRole.VIEWER, ApiRole.OPERATOR):
-        bad.append(f"ROLE={values['ROLE']!r}; expected viewer or operator; choose a supported role")
-    optional_permission = values["ACTION"] == AccessIntent.REVOKE and not values["PERMISSION"]
-    if not optional_permission and values["PERMISSION"] not in tuple(Permission):
-        bad.append(
-            f"PERMISSION={values['PERMISSION']!r}; expected CAN_VIEW, CAN_UPLOAD, CAN_RUN "
-            f"or CAN_MANAGE; fix the permission"
-        )
-    if values["ACTION"] not in tuple(AccessIntent):
-        bad.append(f"ACTION={values['ACTION']!r}; expected GRANT or REVOKE; fix the intent")
-    if values["PIPELINE_CODE"] and values["TAG"]:
-        bad.append("expected a project, pipeline or tag; PIPELINE_CODE and TAG cannot both be set")
-    if project_id is not None:
-        bad.extend(target_problems(conn, values, project_id))
-    if not row.well_formed or (
-        any(row.values.get(name) is None for name in FIELDS) and request.content is not None
-    ):
-        bad.append("expected seven CSV fields; fix missing or extra cells")
-    if bad:
-        return None, bad
-    assert project_id is not None
-    return Validated(row.line, values, project_id, group_id, account_id), []
-
-
-def validate(conn: Connection, request: AccessWrite, rows: list[InputRow]) -> list[Validated]:
-    """Accumulate every bad line, including both sides of duplicate/conflicting identities."""
-    errors: list[str] = []
-    seen: dict[tuple[str, ...], int] = {}
-    checked = []
-    groups = {
-        row.name: int(row.group_id)
-        for row in conn.execute(statement(conn, "group_list"))
-        if row.active_flag == YesNo.YES
-    }
-    for row in rows:
-        valid, problems = row_problems(conn, request, row, groups)
-        identity = tuple(
-            (row.values.get(name) or "").strip()
-            for name in ("PROJECT", "GROUP_NAME", "ROLE", "ACCOUNT", "PIPELINE_CODE", "TAG")
-        )
-        if identity in seen:
-            previous = seen[identity]
-            problems.append(
-                f"identity repeats line {previous}; remove duplicate/conflicting identities"
-            )
-            errors.append(
-                f"access input line {previous}: identity repeats line {row.line}; "
-                f"remove duplicate/conflicting identities"
-            )
-        seen[identity] = row.line
-        errors.extend(f"access input line {row.line}: {problem}" for problem in problems)
-        if valid is not None:
-            checked.append(valid)
-    if errors:
-        raise UsageError("\n".join(errors))
-    return checked
+    if request.pipeline and request.pipeline not in {row.pipeline_code for row in active}:
+        return [
+            f"pipeline {request.pipeline!r}: expected an active pipeline in "
+            f"{request.project!r}; check the project"
+        ]
+    if request.tag and (not valid_tag(request.tag) or request.tag not in tags):
+        return [
+            f"tag {request.tag!r}: expected a tag on an active pipeline in "
+            f"{request.project!r}; fix the tag"
+        ]
+    return []

@@ -42,6 +42,7 @@ EXPECTED = {
     enums_access.Governance: {"STRICT", "RELAXED"},
     enums_access.Permission: {"CAN_VIEW", "CAN_UPLOAD", "CAN_RUN", "CAN_MANAGE"},
     enums_access.AccessIntent: {"GRANT", "REVOKE"},
+    enums_access.BindingScope: {"DEPLOYMENT", "ENVIRONMENT", "PROJECT"},
     enums_access.AccessChange: {"added", "changed permission", "revoked", "unchanged"},
     enums.IcebergMaintenance: {"expire_snapshots", "remove_orphan_files"},
     enums.ArchiveKind: {

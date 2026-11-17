@@ -150,8 +150,8 @@ def test_both_schemas_define_the_same_tables_and_columns_in_order():
         "AUD_LINEAGE_VERSION_EDGES",
     } <= postgres.keys()
     assert postgres == sqlite
-    grants = postgres["CFG_PIPELINE_GRANTS"]
-    assert {"PERMISSION", "GROUP_ID", "ACCOUNT_ID", "GRANTEE_ROLE"} <= set(grants)
+    grants = postgres["CFG_ACCESS_BINDINGS"]
+    assert {"ROLE_NAME", "GROUP_ID", "ACCOUNT_ID", "GRANTEE_ROLE"} <= set(grants)
     assert not {"ROLE", "CASE"} & set(grants)
     assert len(grants) == len(set(grants))
 

@@ -75,9 +75,9 @@ def test_every_engine_db_table_is_described_and_read_whole(dialect):
         assert [c.name for c in table.columns] == [
             name for name in declared if name not in dropped
         ], table.name
-        if table.name in {"CFG_PIPELINE_GRANTS", "AUD_CFG_PIPELINE_GRANTS_HISTORY"}:
+        if table.name in {"CFG_ACCESS_BINDINGS", "AUD_CFG_ACCESS_BINDINGS_HISTORY"}:
             columns = {column.name for column in table.columns}
-            assert {"PERMISSION", "ACCOUNT_ID", "GRANTEE_ROLE"} <= columns
+            assert {"ROLE_NAME", "ACCOUNT_ID", "GRANTEE_ROLE"} <= columns
             assert not {"ROLE", "CASE"} & columns
         if table.name == "CFG_BUSINESS_RULES":
             assert "TARGET_TABLE_ID" in [column.name for column in table.columns]

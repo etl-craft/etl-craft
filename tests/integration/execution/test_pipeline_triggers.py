@@ -925,8 +925,9 @@ def test_retained_claims_recheck_current_restrictions_before_each_child(trigger_
         )
         conn.execute(
             text(
-                "INSERT INTO CFG_PIPELINE_GRANTS (GROUP_ID, PIPELINE_CODE, PERMISSION) "
-                "VALUES (:id, 'CHILD', 'CAN_RUN')"
+                "INSERT INTO CFG_ACCESS_BINDINGS "
+                "(PROJECT_ID,GROUP_ID,PIPELINE_CODE,ROLE_NAME) "
+                "VALUES (1,:id, 'CHILD', 'CAN_RUN')"
             ),
             {"id": group.group_id},
         )
@@ -934,7 +935,7 @@ def test_retained_claims_recheck_current_restrictions_before_each_child(trigger_
             "other-group": "CFG_GROUPS",
             "account": "CFG_ACCOUNTS",
             "group": "CFG_GROUPS",
-            "grant": "CFG_PIPELINE_GRANTS",
+            "grant": "CFG_ACCESS_BINDINGS",
         }[disabled]
         condition = f" WHERE GROUP_ID={other.group_id}" if disabled == "other-group" else ""
         conn.execute(text(f"UPDATE {target} SET ACTIVE_FLAG='N'{condition}"))
@@ -979,8 +980,9 @@ def test_children_and_grandchildren_copy_the_admitted_group_ids(trigger_scene):
         for code in ("CHILD", "GRANDCHILD"):
             conn.execute(
                 text(
-                    "INSERT INTO CFG_PIPELINE_GRANTS (GROUP_ID, PIPELINE_CODE, PERMISSION) "
-                    "VALUES (:id, :code, 'CAN_RUN')"
+                    "INSERT INTO CFG_ACCESS_BINDINGS "
+                    "(PROJECT_ID,GROUP_ID,PIPELINE_CODE,ROLE_NAME) "
+                    "VALUES (1,:id, :code, 'CAN_RUN')"
                 ),
                 {"id": group.group_id, "code": code},
             )
@@ -1018,8 +1020,9 @@ def test_queued_child_rechecks_permission_when_it_reaches_admission(trigger_scen
         )
         conn.execute(
             text(
-                "INSERT INTO CFG_PIPELINE_GRANTS (GROUP_ID, PIPELINE_CODE, PERMISSION) "
-                "VALUES (:id, 'CHILD', 'CAN_RUN')"
+                "INSERT INTO CFG_ACCESS_BINDINGS "
+                "(PROJECT_ID,GROUP_ID,PIPELINE_CODE,ROLE_NAME) "
+                "VALUES (1,:id, 'CHILD', 'CAN_RUN')"
             ),
             {"id": group.group_id},
         )
@@ -1029,7 +1032,7 @@ def test_queued_child_rechecks_permission_when_it_reaches_admission(trigger_scen
             "other-group": "CFG_GROUPS",
             "account": "CFG_ACCOUNTS",
             "group": "CFG_GROUPS",
-            "grant": "CFG_PIPELINE_GRANTS",
+            "grant": "CFG_ACCESS_BINDINGS",
         }[disabled]
         condition = f" WHERE GROUP_ID={other.group_id}" if disabled == "other-group" else ""
         conn.execute(text(f"UPDATE {target} SET ACTIVE_FLAG='N'{condition}"))

@@ -302,21 +302,23 @@ new projects use the current `*_contracts.sql` examples.
 
 ## Pipeline permissions
 
-Permission changes use `etl-craft access grant|revoke|list` and their API actions, independently
-of configuration deployment. See [Pipeline permission groups](../deploying/security.md#pipeline-permission-groups)
-and the [bulk command input](../examples/access.csv). Configuration export writes only the eight
-metadata files; it does not export administrator identities or permissions.
+Access changes use `etl-craft role` and `etl-craft access grant|revoke|list|explain` and their
+API actions, independently of configuration deployment. See
+[Access: roles and bindings](../deploying/security.md#access-roles-and-bindings). Configuration
+export writes only the eight metadata files; it does not export identities or access.
 
 ## Tag edits and access
 
 Tags are the only pipeline grouping; there are no pipeline folders. Editing `TAGS` in a
-pipeline's `PIPELINE_PARAMETERS` can change which access grants match it. Both `config plan`
-and `config apply` report each grant that starts or stops matching, naming its principal,
-tag, permission and pipeline. JSON returns these under `tag_access_changes`.
+pipeline's `PIPELINE_PARAMETERS` can change which access bindings match it. Both `config plan`
+and `config apply` report each binding that starts or stops matching, naming its principal,
+tag, role or command and pipeline. JSON returns these under `tag_access_changes`, with
+`role`/`action` fields and `audience:` identifying an audience principal.
 
-The report also names open/restricted switches. When a pipeline becomes restricted,
+The report also names open/restricted switches; only built-in `CAN_*` bindings restrict a
+pipeline. Custom bindings change command access without changing that policy. When a pipeline becomes restricted,
 project-level access no longer applies: only matching pipeline/tag grants and project
-CAN_MANAGE reach it. When its last matching grant disappears, the project level applies again.
+CAN_MANAGE reach it. When its last matching built-in binding disappears, the project level applies again.
 An ungranted tag edit reports no access change. This report neither changes grants nor refuses
 a deploy. It reports grants rather than accounts, because SSO group membership cannot be
 completely enumerated at plan time. Per-project repository folders are deployment layout,

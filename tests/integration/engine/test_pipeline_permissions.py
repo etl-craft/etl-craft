@@ -51,8 +51,9 @@ def grant(ctx, *, tag=False):
     with acting_as(OWNER), ctx.engine.begin() as conn:
         conn.execute(
             text(
-                "INSERT INTO CFG_PIPELINE_GRANTS (GROUP_ID, PIPELINE_CODE, TAG, PERMISSION) "
-                "VALUES ((SELECT GROUP_ID FROM CFG_GROUPS WHERE GROUP_NAME='sales'), "
+                "INSERT INTO CFG_ACCESS_BINDINGS "
+                "(PROJECT_ID,GROUP_ID,PIPELINE_CODE,TAG,ROLE_NAME) "
+                "VALUES (1,(SELECT GROUP_ID FROM CFG_GROUPS WHERE GROUP_NAME='sales'), "
                 ":code, :tag, 'CAN_RUN')"
             ),
             {"code": None if tag else "PRIVATE", "tag": "sales" if tag else None},
@@ -107,7 +108,7 @@ def test_disabled_groups_keep_pipelines_restricted_and_changes_are_audited(scene
         assert (
             conn.execute(
                 text(
-                    "SELECT COUNT(*) AS n FROM AUD_CFG_PIPELINE_GRANTS_HISTORY "
+                    "SELECT COUNT(*) AS n FROM AUD_CFG_ACCESS_BINDINGS_HISTORY "
                     "WHERE PIPELINE_CODE IS NOT NULL OR TAG IS NOT NULL"
                 )
             ).scalar_one()
@@ -163,8 +164,9 @@ def test_sso_ids_survive_rename_refresh_and_logout_but_current_restrictions_appl
         add_pipeline(conn, "OTHER")
         conn.execute(
             text(
-                "INSERT INTO CFG_PIPELINE_GRANTS (GROUP_ID, PIPELINE_CODE, PERMISSION) "
-                "VALUES (:id, 'OTHER', 'CAN_RUN')"
+                "INSERT INTO CFG_ACCESS_BINDINGS "
+                "(PROJECT_ID,GROUP_ID,PIPELINE_CODE,ROLE_NAME) "
+                "VALUES (1,:id, 'OTHER', 'CAN_RUN')"
             ),
             {"id": replacement.group_id},
         )
@@ -242,8 +244,9 @@ def test_run_admission_persists_sso_ids_after_session_revocation(metadata_projec
     with acting_as(OWNER), ctx.engine.begin() as conn:
         conn.execute(
             text(
-                "INSERT INTO CFG_PIPELINE_GRANTS (GROUP_ID, PIPELINE_CODE, PERMISSION) "
-                "VALUES (:group, :code, 'CAN_RUN')"
+                "INSERT INTO CFG_ACCESS_BINDINGS "
+                "(PROJECT_ID,GROUP_ID,PIPELINE_CODE,ROLE_NAME) "
+                "VALUES (1,:group, :code, 'CAN_RUN')"
             ),
             {"group": group.group_id, "code": code},
         )

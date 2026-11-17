@@ -11,12 +11,14 @@ from etl_craft.core.errors import PermissionDeniedError, ResourceNotFoundError
 from etl_craft.engine.queries import statement
 from etl_craft.engine.repository.group_claims import decode_groups
 from etl_craft.execution.attempt_types import ChildOptions
+from etl_craft.services.operations.bindings import allows
 from etl_craft.services.operations.context import OperationContext
 from etl_craft.services.operations.permissions import (
     pipeline_access,
     require_child_groups,
     require_project,
 )
+from etl_craft.services.operations.requests import RunRequest
 
 
 def initiating_context(conn: Connection, ctx: OperationContext, run_id: int) -> OperationContext:
@@ -51,9 +53,10 @@ def check_child_start(
     required = ACTIONS[ActionName.RUN].role
     assert required is not None
     try:
-        require_project(conn, ctx)
         require_child_groups(conn, ctx, row.pipeline_code)
-        pipeline_access(conn, ctx).require(ctx, row.pipeline_code, required)
+        if not allows(ctx, ActionName.RUN, RunRequest(pipeline_code=row.pipeline_code), conn=conn):
+            require_project(conn, ctx)
+            pipeline_access(conn, ctx).require(ctx, row.pipeline_code, required)
     except (PermissionDeniedError, ResourceNotFoundError) as error:
         return str(error)
     return None

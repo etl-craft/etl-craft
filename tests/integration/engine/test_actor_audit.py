@@ -220,7 +220,9 @@ def seeded_tables(db):
             "current_flag": "Y",
             "table_id": contract,
             "role": "viewer",
-            "permission": Permission.CAN_VIEW,
+            "role_name": Permission.CAN_VIEW,
+            "role_id": 1,
+            "action_name": "run",
             "grantee_role": ApiRole.VIEWER,
             "business_rule_key_column": "id",
             "account_kind": AccountKind.SERVICE,
@@ -438,7 +440,9 @@ def test_plain_connections_cannot_mutate_any_protected_table(engine_db):
                 if table.upper() in (
                     "CFG_GROUPS",
                     "CFG_GROUP_MEMBERS",
-                    "CFG_PIPELINE_GRANTS",
+                    "CFG_ACCESS_BINDINGS",
+                    "CFG_ROLES",
+                    "CFG_ROLE_ACTIONS",
                 ) and sql.startswith(("DELETE", "TRUNCATE")):
                     refusal = rf"{expected}|{table.upper()}: use ACTIVE_FLAG=N instead of deleting"
                 with pytest.raises(error, match=refusal):

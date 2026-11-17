@@ -68,8 +68,8 @@ def test_pipeline_limited_reader_sees_only_granted_pipelines_and_no_tables(scene
     with acting_as(OWNER), engine_db.engine.begin() as conn:
         conn.execute(
             text(
-                "INSERT INTO CFG_PIPELINE_GRANTS (PIPELINE_CODE,GRANTEE_ROLE,PERMISSION) "
-                "VALUES ('HR_SALES','operator','CAN_VIEW')"
+                "INSERT INTO CFG_ACCESS_BINDINGS (PROJECT_ID,PIPELINE_CODE,GRANTEE_ROLE,ROLE_NAME) "
+                "VALUES (1,'HR_SALES','operator','CAN_VIEW')"
             )
         )
     hits = found(act(reader, ActionName.SEARCH, q="sales"))

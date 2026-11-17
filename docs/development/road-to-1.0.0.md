@@ -181,7 +181,7 @@ item's text, or work done early under another item.
 | S7.AH Renames keep identity | Done | #273 | Atomic attributed renames retain IDs, offsets, events and grants; stale config inserts refuse |
 | S7.AI Fixes from the 2026-10-27 audit | Done | #264 | Pool/attempt credentials, bounded SSO, publishing, sign-in, dependency bounds, setup and first-ending metrics. |
 | S7.AK Schema checker | Done | S7.AK PR | Optional per-project schedule plus an on-demand check that compare declared tables with the warehouse; Insights and the catalog show the last check |
-| S7.B Users, roles and identities | In progress | #203–#207, #231, #261, #263, #264, #277, #386 | Accounts, fixed roles, scoped grants, delegated pipeline grant UI, pool-bound agents and browser sign-in exist; custom roles, bindings and access explain remain |
+| S7.B Users, roles and identities | Done | #203–#207, #231, #261, #263, #264, #277, #386, #421 | Custom roles and command bindings, deployment/environment/project/pipeline/tag scopes, groups and audiences, access explain and Administration Roles |
 | S7.C Redaction | Done | #228, #309, S7.C PR | Recursive name masking, operation-scoped value masking, process-wide masking of every resolved secret, and Redaction.Sensitive_patterns for team-named parameters in the catalog, task read and clones |
 | S7.D Alert channels | Done | #387 | Admin-owned webhook/Slack routing, isolated event-admitted alert runs, bounded signed delivery and sanitized pipeline/project history |
 | S7.E Secrets providers | Done | #84, #120, #323, S7.E PR | ENVIRONMENT/FILE task declarations, fenced TLS delivery and private child pipe; AWS Secrets Manager and Vault KV v2 sources with Secrets.Cache_seconds |
@@ -262,6 +262,24 @@ item's text, or work done early under another item.
   the block wordmark and aligned facts beside it. The favicon uses the pixel-grid variant.
   Acceptance availability: full unit tests, static checks, strict docs and UI checks run
   locally; CI owns the complete platform matrix. No schema, warehouse or service behavior changes.
+
+- **S7.B custom roles and bindings (owner, 2026-11-17).** Choices that differ from the item
+  text: one `CFG_ACCESS_BINDINGS` table replaces pipeline grants, rather than introducing a
+  separate `CFG_ROLE_BINDINGS` table. Account deployment roles remain in `CFG_ACCOUNTS.ROLE`;
+  the built-in binding levels are `CAN_VIEW`, `CAN_UPLOAD`, `CAN_RUN` and `CAN_MANAGE`.
+  Accounts, groups and role audiences receive roles or single actions on the deployment, an
+  environment type, a project, a pipeline or a tag. Bulk access CSV import is removed; access
+  uses `--audience` and `--role`, with `etl-craft/access/2` bindings/change output.
+  Custom bindings imply view only where bound, including the project container for a narrowed
+  pipeline/tag binding, never deployment-wide; only built-in levels restrict pipelines.
+  Only deployment admins change roles or deployment/environment bindings. Identity, access
+  grant/revoke and project administration, sign-in, agent-only and controller-host actions
+  cannot be custom authority; `CAN_MANAGE` holders delegate within their managed scope.
+  Acceptance availability: SQLite/PostgreSQL released-schema upgrades, preserved grant history,
+  actor guards and query plans run locally, with action-table CLI/API admission coverage,
+  unit/API/touched engine suites and desktop/mobile light/dark browser checks. Binding races
+  run twenty times. No warehouse SQL changes; cloud acceptance does not apply. Platform and
+  installed-wheel coverage remain with CI.
 
 - **S7.B delegated pipeline grants (#386).** Choices that differ from the item text: this
   owner-requested slice exposes existing scoped grants on each pipeline, without introducing

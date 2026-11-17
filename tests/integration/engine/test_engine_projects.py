@@ -198,7 +198,7 @@ def test_developer_cannot_change_a_projects_approved_connections(engine_db, tmp_
     with engine_db.engine.begin() as conn:
         conn.execute(
             text(
-                "UPDATE CFG_PIPELINE_GRANTS SET PERMISSION='CAN_MANAGE' "
+                "UPDATE CFG_ACCESS_BINDINGS SET ROLE_NAME='CAN_MANAGE' "
                 "WHERE GRANTEE_ROLE='operator' AND PIPELINE_CODE IS NULL AND TAG IS NULL"
             )
         )
@@ -362,7 +362,7 @@ def test_a_grant_for_a_code_cannot_restrict_the_same_code_in_another_project(eng
         ).scalar_one()
         conn.execute(
             text(
-                "INSERT INTO CFG_PIPELINE_GRANTS (PROJECT_ID,GROUP_ID,PIPELINE_CODE,PERMISSION) "
+                "INSERT INTO CFG_ACCESS_BINDINGS (PROJECT_ID,GROUP_ID,PIPELINE_CODE,ROLE_NAME) "
                 "VALUES (1,:group,'P','CAN_VIEW')"
             ),
             {"group": group},
@@ -372,7 +372,7 @@ def test_a_grant_for_a_code_cannot_restrict_the_same_code_in_another_project(eng
     with engine_db.engine.begin() as conn:
         conn.execute(
             text(
-                "INSERT INTO CFG_PIPELINE_GRANTS (PROJECT_ID,GRANTEE_ROLE,PERMISSION) "
+                "INSERT INTO CFG_ACCESS_BINDINGS (PROJECT_ID,GRANTEE_ROLE,ROLE_NAME) "
                 "VALUES (:id,'viewer','CAN_VIEW')"
             ),
             {"id": other},
@@ -464,7 +464,7 @@ def test_delayed_developer_publication_cannot_restore_a_superseded_contract(
         with engine_db.engine.begin() as conn:
             conn.execute(
                 text(
-                    "UPDATE CFG_PIPELINE_GRANTS SET PERMISSION='CAN_MANAGE' "
+                    "UPDATE CFG_ACCESS_BINDINGS SET ROLE_NAME='CAN_MANAGE' "
                     "WHERE GRANTEE_ROLE='operator' AND PIPELINE_CODE IS NULL AND TAG IS NULL"
                 )
             )

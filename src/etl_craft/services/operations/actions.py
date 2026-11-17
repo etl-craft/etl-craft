@@ -34,7 +34,6 @@ from etl_craft.engine.migrations import pending_migrations
 from etl_craft.engine.queries import statement
 from etl_craft.engine.repository.group_claims import token_groups
 from etl_craft.engine.repository.pipelines import selected_project
-from etl_craft.engine.repository.tasks import fetch_admitted_parameters
 from etl_craft.engine.schema import InitResult
 from etl_craft.services.catalog.gaps import GapSnapshot
 from etl_craft.services.config_files import ConfigExport, ConfigSync
@@ -52,6 +51,7 @@ from etl_craft.services.operations import (
     agents,
     alert_channels,
     announcements,
+    bindings,
     bundles,
     capabilities,
     catalog,
@@ -122,6 +122,7 @@ from etl_craft.services.operations.requests import (
     ValidateInput,
     arguments,
 )
+from etl_craft.services.operations.role_actions import ROLE_ACTIONS
 from etl_craft.services.operations.run_identity import resolve_run_reference
 from etl_craft.services.operations.run_labels import with_run_labels
 from etl_craft.services.operations.seed_actions import SEED_ACTIONS
@@ -130,7 +131,6 @@ from etl_craft.services.operations.upload_actions import UPLOAD_ACTIONS
 from etl_craft.services.operations.visibility import visible_result
 from etl_craft.services.rehash import RehashResult
 from etl_craft.services.setup import SetupResult
-from etl_craft.services.trigger_validation import trigger_definition
 from etl_craft.services.validate import Report
 
 ON_HOST = "run it on the controller's host"
@@ -192,7 +192,7 @@ _ROWS = (
            agent_models.AgentReply, ApiRole.AGENT, POST, f"{API}/agent/report", BY_ACTION),
     Action(ActionName.AGENT_LOG, agent_logs.upload, agent_models.AgentLog,
            agent_models.AgentReply, ApiRole.AGENT, POST, f"{API}/agent/log"),
-    *UPLOAD_ACTIONS, *SEED_ACTIONS, *ERASURE_ACTIONS,
+    *UPLOAD_ACTIONS, *SEED_ACTIONS, *ERASURE_ACTIONS, *ROLE_ACTIONS,
     *SIGN_IN_ACTIONS,
     Action(ActionName.WHOAMI, sessions.whoami, sessions.IdentityInput, sessions.Identity,
            VIEWER, GET, f"{API}/whoami"),
@@ -349,7 +349,7 @@ _ROWS = (
            admin_metadata.Pools,
            ADMIN, POST, f"{API}/pools/disable", REQUEST),
     Action(ActionName.ACCESS_GRANT, access.grant_access, access.AccessWrite, access.AccessView,
-           VIEWER, POST, f"{API}/access/grants", BY_ACTION, escalate=access.required_role),
+           VIEWER, POST, f"{API}/access/grants", BY_ACTION),
     Action(ActionName.ACCESS_REVOKE, access.revoke_access, access.AccessWrite, access.AccessView,
            VIEWER, POST, f"{API}/access/revocations", BY_ACTION),
     Action(ActionName.ACCESS_LIST, access.list_access, access.AccessFilter, access.AccessView,
@@ -470,7 +470,8 @@ def admitted(ctx: OperationContext, name: ActionName, request: object) -> Iterat
         given = arguments(request)
         required = action.required_role(ctx, request)
         try:
-            _authorize(ctx, action, request, required)
+            authorize_identity(ctx, action, request)
+            bindings.authorize(ctx, action, request, required)
         except (PermissionDeniedError, ResourceNotFoundError) as error:
             record_refusal(ctx, name, given, error)
             raise
@@ -482,20 +483,25 @@ def admitted(ctx: OperationContext, name: ActionName, request: object) -> Iterat
                 yield
 
 
-def _authorize(
+def authorize_identity(ctx: OperationContext, action: Action, request: object) -> None:
+    """Identity and target checks that no custom binding can bypass."""
+    personal.require_password_change(ctx, action.name)
+    _require_trigger_groups(ctx, action, request)
+    _require_project_identity(ctx, action, request)
+
+
+def authorize_base(
     ctx: OperationContext, action: Action, request: object, required: ApiRole | None
 ) -> None:
-    personal.require_password_change(ctx, action.name)
+    """Apply the account role and built-in level policy before custom bindings."""
     if ApiRole.AGENT in {ctx.role, required}:
         _require_role(ctx, action, required)
         return
-    _require_trigger_groups(ctx, action, request)
-    _require_project_identity(ctx, action, request)
     if ctx.role == ApiRole.ADMIN or (action.provisioning and ctx.provisioning):
         return
     scoped = action.scope != ActionScope.DEPLOYMENT or isinstance(request, access.AccessFilter)
-    bulk = isinstance(request, access.AccessWrite) and request.content is not None
-    if scoped and not bulk:
+    wide = isinstance(request, access.AccessFilter) and request.reaches_beyond_project
+    if scoped and not wide:
         with ctx.engine.connect() as conn:
             needed = (
                 Permission.CAN_MANAGE
@@ -529,7 +535,7 @@ def _authorize_pipeline(
                 ):
                     return True
                 policy.require(ctx, request.requests[0].pipeline_code, required)
-            codes = _request_codes(conn, action, request)
+            codes = bindings.request_codes(conn, action, request)
             for selected in codes:
                 policy.require(ctx, selected, required)
             if codes:
@@ -559,7 +565,7 @@ def _require_project_identity(ctx: OperationContext, action: Action, request: ob
         and getattr(request, "pipeline_code", None) is None
     ):
         with ctx.engine.connect() as conn:
-            if not _request_codes(conn, action, request):
+            if not bindings.request_codes(conn, action, request):
                 raise ResourceNotFoundError(
                     f"project {ctx.project!r}: requested execution identity is outside this "
                     "project or missing; expected an identity in the selected project; "
@@ -581,7 +587,7 @@ def _require_trigger_groups(ctx: OperationContext, action: Action, request: obje
     """Check retained groups even when the initiating account is currently an admin."""
     if isinstance(request, triggers.TriggerRequest) and ctx.sso_group_ids:
         with ctx.engine.connect() as conn:
-            for selected in _request_codes(conn, action, request):
+            for selected in bindings.request_codes(conn, action, request):
                 require_child_groups(conn, ctx, selected)
 
 
@@ -699,12 +705,21 @@ def _legacy_project(conn: Connection, ctx: OperationContext, action: Action) -> 
     )
 
 
+def _require_project_access(conn: Connection, ctx: OperationContext, action: Action) -> None:
+    """Keep hidden projects masked unless a whole-scope custom binding allows the action."""
+    try:
+        require_project(conn, ctx)
+    except ResourceNotFoundError:
+        if not bindings.allows(ctx, action.name, NoInput(), conn=conn):
+            raise
+
+
 def _project_context(ctx: OperationContext, action: Action, request: object) -> OperationContext:
     """Resolve one active project before a project-owned operation reads any object."""
     ctx = _access_project(ctx, request)
     if action.scope == ActionScope.DEPLOYMENT and not isinstance(request, access.AccessFilter):
         return ctx
-    if isinstance(request, access.AccessWrite) and request.content is not None:
+    if isinstance(request, access.AccessFilter) and request.reaches_beyond_project:
         return ctx
     if not ctx.project:
         ctx = replace(ctx, project=ctx.config.project)
@@ -726,7 +741,8 @@ def _project_context(ctx: OperationContext, action: Action, request: object) -> 
             and ctx.role not in (ApiRole.ADMIN, ApiRole.AGENT)
             and not (action.provisioning and ctx.provisioning)
         ):
-            require_project(conn, replace(ctx, project_id=int(row.project_id)))
+            scoped = replace(ctx, project_id=int(row.project_id))
+            _require_project_access(conn, scoped, action)
     if row is None or (
         row.active_flag == YesNo.NO
         and action.name
@@ -770,27 +786,3 @@ def _request_context(ctx: OperationContext, name: ActionName, request: object) -
                 if ctx.actor == initiator.actor:
                     ctx = initiator
     return agents.attempt_context(ctx, request)
-
-
-def _request_codes(conn: Connection, action: Action, request: object) -> list[str]:
-    """Resolve exact identities, and the requested child rather than an implicit parent run."""
-    if isinstance(request, triggers.TriggerRequest):
-        row = conn.execute(
-            statement(conn, "trigger_context"), {"task_run_id": request.task_run_id}
-        ).one_or_none()
-        if row is None:
-            return []
-        child = trigger_definition(
-            conn, row.pipeline_id, fetch_admitted_parameters(conn, row.task_id, row.pipeline_run_id)
-        )
-        return [child.pipeline_code]
-    code = getattr(request, "pipeline_code", None)
-    if code is not None:
-        return [code]
-    identities = {
-        key: getattr(request, key, None)
-        for key in ("run_id", "attempt_id", "control_id", "task_run_id")
-    }
-    if any(value is not None for value in identities.values()):
-        return list(conn.execute(statement(conn, "permission_scope"), identities).scalars())
-    return []

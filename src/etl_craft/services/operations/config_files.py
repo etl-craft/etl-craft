@@ -10,7 +10,7 @@ from sqlalchemy.engine import Connection
 
 from etl_craft.config import ConnectorConfig
 from etl_craft.config.project import project_config
-from etl_craft.core.enums import ApiRole, Transport
+from etl_craft.core.enums import ActionName, ApiRole, Transport
 from etl_craft.core.enums_access import Permission
 from etl_craft.core.errors import PermissionDeniedError, ResourceNotFoundError, UsageError
 from etl_craft.core.time import as_utc
@@ -18,6 +18,7 @@ from etl_craft.engine.bundles import Bundle
 from etl_craft.engine.queries import statement
 from etl_craft.services import config_files
 from etl_craft.services.config_models import TagAccessChange
+from etl_craft.services.operations.bindings import allows
 from etl_craft.services.operations.context import OperationContext
 from etl_craft.services.operations.permissions import (
     pipeline_access,
@@ -210,7 +211,8 @@ def check_dependencies(
     conn: Connection, files: config_files.ConfigFiles, *, ctx: OperationContext
 ) -> None:
     """Recheck deployment rights and upstream project access before publishing file changes."""
-    require_project(conn, ctx, Permission.CAN_MANAGE)
+    if not allows(ctx, ActionName.CONFIG_APPLY, ConfigDirectory(), conn=conn):
+        require_project(conn, ctx, Permission.CAN_MANAGE)
     for filename in ("pipeline_dependencies.csv", "task_dependencies.csv"):
         for row in files.rows.get(filename, {}).values():
             code = row.values["DEPENDS_ON_PROJECT_CODE"]

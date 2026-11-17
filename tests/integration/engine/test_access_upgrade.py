@@ -79,14 +79,17 @@ def test_released_grants_and_history_convert(empty_engine_db, release, tmp_path,
     check_preserved_accounts(db, expected, credentials, second)
     with db.engine.connect() as conn:
         retained = for_engine(conn).table_rows(
-            conn, "AUD_CFG_PIPELINE_GRANTS_HISTORY", order_by="CHANGE_ID"
+            conn, "AUD_CFG_ACCESS_BINDINGS_HISTORY", order_by="CHANGE_ID"
         )
-        assert retained[: len(historical)] == historical
+        assert len(retained) >= len(historical)
+        for original, converted in zip(historical, retained, strict=False):
+            renamed = {"pipeline_grant_id": "binding_id", "permission": "role_name"}
+            assert all(converted[renamed.get(key, key)] == value for key, value in original.items())
         after = conn.execute(
             text(
-                "SELECT CHANGE_ID AS id,PIPELINE_GRANT_ID AS grant_id,PERMISSION "
-                "AS permission,ACTOR AS actor FROM AUD_CFG_PIPELINE_GRANTS_HISTORY "
-                "WHERE PIPELINE_GRANT_ID IN (:first,:second) ORDER BY CHANGE_ID"
+                "SELECT CHANGE_ID AS id,BINDING_ID AS grant_id,ROLE_NAME "
+                "AS permission,ACTOR AS actor FROM AUD_CFG_ACCESS_BINDINGS_HISTORY "
+                "WHERE BINDING_ID IN (:first,:second) ORDER BY CHANGE_ID"
             ),
             {"first": before[0].grant_id, "second": before[1].grant_id},
         ).all()
@@ -235,7 +238,7 @@ def check_preserved_accounts(db, expected, credentials, second):
         projects = (
             conn.execute(
                 text(
-                    "SELECT PERMISSION AS permission FROM CFG_PIPELINE_GRANTS WHERE "
+                    "SELECT ROLE_NAME AS permission FROM CFG_ACCESS_BINDINGS WHERE "
                     "PIPELINE_CODE IS NULL AND TAG IS NULL"
                 )
             )
@@ -246,7 +249,7 @@ def check_preserved_accounts(db, expected, credentials, second):
 
         seeded = conn.execute(
             text(
-                "SELECT COUNT(*) AS value FROM AUD_CFG_PIPELINE_GRANTS_HISTORY "
+                "SELECT COUNT(*) AS value FROM AUD_CFG_ACCESS_BINDINGS_HISTORY "
                 "WHERE PIPELINE_CODE IS NULL AND TAG IS NULL AND OPERATION='INSERT'"
             )
         ).scalar_one()

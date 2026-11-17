@@ -61,8 +61,8 @@ TABLES = (
         "config_history_days",
     ),
     HistoryTable(
-        "AUD_CFG_PIPELINE_GRANTS_HISTORY",
-        "retention_aud_cfg_pipeline_grants_history",
+        "AUD_CFG_ACCESS_BINDINGS_HISTORY",
+        "retention_aud_cfg_access_bindings_history",
         "config_history_days",
     ),
     HistoryTable(

@@ -163,7 +163,7 @@ def test_temporary_password_identity_uses_the_selected_project_environment(
         ActionName.ACCESS_GRANT,
         project="other",
         account="alice",
-        permission="CAN_VIEW",
+        role="CAN_VIEW",
         reason="environment identity check",
     )
     code, out, _ = run(
@@ -644,7 +644,7 @@ def test_a_runner_holding_only_a_token_publishes_and_applies_a_bundle(
         ActionName.ACCESS_GRANT,
         project="default",
         account="ci-developer",
-        permission="CAN_MANAGE",
+        role="CAN_MANAGE",
         reason="ci deploys this project",
     )
     folder = tmp_path / "project"

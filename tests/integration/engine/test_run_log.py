@@ -97,8 +97,8 @@ def test_a_viewer_without_the_pipeline_cannot_read_its_run_log(ran, engine_db):
     with acting_as(OWNER), engine_db.engine.begin() as conn:
         conn.execute(
             text(
-                "INSERT INTO CFG_PIPELINE_GRANTS (PIPELINE_CODE,GRANTEE_ROLE,PERMISSION) "
-                "VALUES ('ORDERS','operator','CAN_VIEW')"
+                "INSERT INTO CFG_ACCESS_BINDINGS (PROJECT_ID,PIPELINE_CODE,GRANTEE_ROLE,ROLE_NAME) "
+                "VALUES (1,'ORDERS','operator','CAN_VIEW')"
             )
         )
     with pytest.raises(ResourceNotFoundError, match=r"ORDERS.*missing or not permitted"):

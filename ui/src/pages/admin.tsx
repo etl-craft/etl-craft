@@ -10,10 +10,11 @@ import { AccountsTab } from "./admin/accounts";
 import { AnnouncementsTab } from "./admin/announcements";
 import { ErasureTab } from "./admin/erasure";
 import { GroupsTab } from "./admin/groups";
+import { RolesTab } from "./admin/roles";
 import { PoolsTab, ProjectsTab } from "./admin/projects";
 import { TokensTab } from "./admin/tokens";
 
-const TABS = ["accounts", "groups", "tokens", "access", "alert-channels", "projects", "pools", "announcements", "erasure"];
+const TABS = ["accounts", "groups", "roles", "tokens", "access", "alert-channels", "projects", "pools", "announcements", "erasure"];
 
 export function Admin() {
   const admin = useRoleAtLeast("admin");
@@ -39,6 +40,7 @@ export function Admin() {
       <div id="tabpanel" role="tabpanel" aria-labelledby={`tab-${tab}`} className="grid grid-cols-1">
         {tab === "accounts" ? <AccountsTab /> : null}
         {tab === "groups" ? <GroupsTab /> : null}
+        {tab === "roles" ? <RolesTab /> : null}
         {tab === "tokens" ? <TokensTab /> : null}
         {tab === "alert-channels" && project ? <AlertChannelsTab key={project} project={project} /> : null}
         {tab === "access" ? <AccessTab project={project} projects={codes} /> : null}

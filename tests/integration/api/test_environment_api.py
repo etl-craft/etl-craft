@@ -22,7 +22,7 @@ def test_api_governance_and_admin_environment_fields(engine_db, policy):
         ActionName.ACCESS_GRANT,
         project="default",
         account="manager",
-        permission="CAN_MANAGE",
+        role="CAN_MANAGE",
         reason="delegate",
     )
     with ctx.engine.begin() as conn:
