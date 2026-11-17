@@ -184,8 +184,14 @@ The graph reads task statuses for the selected run and refreshes them every five
 the run is in progress, even when the run-details tab is closed. Recorded skipped tasks say
 Skipped with the shared slate colour; running tasks stay blue and successful tasks green.
 
-A run's page draws its tasks as a graph coloured by status, with the same tasks in a table;
-the **Timeline** view puts each attempt on one time axis, its wait to start apart from its run.
+A run's page draws its tasks as a graph coloured by status, with the same tasks in a table.
+Its **Timeline** puts every recorded interval on one time axis, a row per task: the wait for an
+agent slot, dependency gates (from the first check to the recorded decision: satisfied,
+bypassed, refused or timed out at the deadline), event and child-run waits, and each attempt
+coloured by its status. Waits are patterns, never solid bars. An open wait runs to now and
+fades at its end; a wait that stopped with its run says so. Every bar is a button: tab to it or
+select it to read its times, deadline and outcome below the chart. The timeline uses only
+recorded rows, never today's dependency configuration or gaps between timestamps.
 Select a task in the graph or the table to open its panel (status, rows, rejects, attempts and
 what it waits for); the page address keeps the selection, so a link or Back returns to it.
 Actions act on the selection only: the whole run, or the selected task in it. Each action comes

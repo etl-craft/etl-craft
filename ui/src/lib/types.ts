@@ -54,6 +54,21 @@ export interface RunView {
   parent_run_id: number | null;
   child_run_ids: number[];
   newer_metadata_available: boolean;
+  /** Recorded queue, wait and execution intervals; only the single-run read fills it. */
+  timeline?: TimelineSegment[];
+}
+
+export type TimelineKind = "QUEUE" | "GATE" | "EVENT" | "CHILD_RUN" | "EXECUTION";
+
+/** One recorded interval of a run; `ended_at` is null while open or when the wait stopped with its run. */
+export interface TimelineSegment {
+  task_code: string | null;
+  kind: TimelineKind;
+  started_at: string;
+  ended_at: string | null;
+  outcome: string;
+  attempt_number: number | null;
+  deadline: string | null;
 }
 
 export interface History {

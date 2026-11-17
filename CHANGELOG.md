@@ -6,6 +6,12 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+- The run page has a **Timeline**: queue waits, dependency gates, event and child-run waits and
+  attempts on one time axis per task, from recorded rows only. The run read
+  (`GET /api/v1/projects/{project}/runs/{run}`) adds `timeline`, a list of segments with
+  `task_code`, `kind` (QUEUE, GATE, EVENT, CHILD_RUN, EXECUTION), `started_at`, `ended_at`,
+  `outcome` (the attempt status, or OPEN, SATISFIED, BYPASSED, REFUSED, TIMED_OUT, ENDED for a
+  wait), `attempt_number` and `deadline`. Run lists and other reads leave it empty.
 - Erase results, previews and ERASURE attempt results state, per table, where erased rows stay
   readable through time travel (`old_versions`: Iceberg snapshots, Delta table history or
   Snowflake Time Travel), whether that retention is `bounded`, and a `retention` statement naming

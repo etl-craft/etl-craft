@@ -355,3 +355,12 @@ html[data-density="compact"] td:has([data-run-chart]) { padding-block: 2px; }
   .app-scrollbar-thumb { background: ButtonText; border-color: Canvas; forced-color-adjust: none; }
   .app-scrollbar { background: Canvas; outline: 1px solid ButtonText; outline-offset: -1px; }
 }
+
+/* Run timeline: waits are patterns, never solid status bars; an open interval fades out at its moving end. */
+.timeline-queue { border: 1px dashed var(--border-strong); background: var(--surface); }
+.timeline-gate { border: 1px solid color-mix(in srgb, var(--accent) 60%, transparent); background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--accent) 30%, transparent) 0 4px, transparent 4px 8px); }
+.timeline-event { border: 1px dotted var(--fg); background: repeating-linear-gradient(90deg, color-mix(in srgb, var(--fg) 18%, transparent) 0 2px, transparent 2px 6px); }
+.timeline-child { border: 3px double var(--border-strong); background: var(--surface); }
+.timeline-attempt { background: linear-gradient(90deg, var(--ok-solid) 0 50%, var(--bad-solid) 50%); }
+.timeline-bar[data-open] { mask-image: linear-gradient(to right, #000 80%, transparent); }
+.timeline-bar:focus-visible { outline: 2px solid var(--accent); }

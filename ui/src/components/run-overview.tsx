@@ -16,6 +16,7 @@ import { Table, Td, Th } from "@/components/ui/table";
 import { useCanRun } from "@/hooks";
 import { getJson, project } from "@/lib/api";
 import { formatDuration } from "@/lib/format";
+import { RunTimeline } from "@/components/run-timeline";
 import { handlerLabel, runConditionLabel, words } from "@/lib/labels";
 import { When } from "@/components/when";
 import { attemptPath, itemsPath, taskPath } from "@/lib/routes";
@@ -342,6 +343,10 @@ export function RunOverview({ code, pipeline, runId, task, onTask }: { code: str
         <Fact inline label="Started by">{r.started_by ?? "—"}</Fact>
         {slaVerdict(r) ? <Fact inline label="SLA"><StatusBadge status={slaVerdict(r)!} /></Fact> : null}
       </FactList>
+      <section aria-labelledby="run-timeline" className="grid gap-2">
+        <h3 id="run-timeline" className="m-0 text-sm font-medium">Timeline</h3>
+        <RunTimeline run={r} />
+      </section>
       <div data-card className="overflow-hidden rounded-sm border border-border">
         <Table aria-label="Task list">
           <thead>
