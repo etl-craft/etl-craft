@@ -113,8 +113,13 @@ def test_recent_run_strip_has_one_touch_target_and_a_keyboard_run_chooser(scene)
         sign_in(page, url, "/ui/projects/default/pipelines")
         chooser = page.get_by_role("button", name="Recent runs for OPS", exact=True)
         expect(chooser).to_be_visible()
-        box = chooser.bounding_box()
-        assert box["width"] >= 24 and box["height"] >= 24
+        box = page.wait_for_function(
+            """() => {
+                const r = document.querySelector('[aria-label="Recent runs for OPS"]')
+                    ?.getBoundingClientRect();
+                return r && r.width >= 24 && r.height >= 24 && {width: r.width, height: r.height};
+            }"""
+        ).json_value()
         chooser.tap(position={"x": box["width"] / 2, "y": 1})
         expect(page.get_by_role("menu")).to_be_visible()
         page.keyboard.press("Escape")
