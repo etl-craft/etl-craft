@@ -191,7 +191,7 @@ item's text, or work done early under another item.
 | S7.I The endurance run | Planned |  | 72-hour accelerated Support Insights candidate run, faults and bounded growth evidence after S8 is running |
 | S7.J Documentation to finish | In progress | #85, #227, #277 | Generated references and guides exist; supported public contracts, complete reference and recipes remain |
 | S7.L ETL Craft logo and CLI banner | In progress | #277, #400 | Owner-supplied logo, vector sources, theme-aware favicon and documentation assets, and the taller CLI banner are done; branding guidance remains |
-| S7.AL Pre-demo package gaps | In progress | #314, #315 | Slices 1–3 ship duplicate counts, current references and guarded-table validation guidance. Slice 4 (event-file validation) is in review; slices 5–6 remain. |
+| S7.AL Pre-demo package gaps | In progress | #314, #315, #337, S7.AL.6 PR | Slices 1–4 and 6 ship duplicate counts, current references, guarded-table validation guidance, event-file validation and erasure physical-retention reporting. Slice 5 (timeline waits) remains; the React UI has no timeline yet (owner, 2026-11-17: rebuild it with the wait segments). |
 | S7.AM Protection on every warehouse | Done | #311, #312, #313 | Atomic SCD merges, in-row protection and recovery, private audit identities and provider acceptance |
 | S7.AN Always show the environment | Done | #328 | CLI context and production confirmation; designed, sandboxed alert/SLA templates and catalog environment |
 | S7.AO UI rebuild | Done | #329–#335, #368, #371, #372, #373, #374, #375 | Seven slices: shell, Home, runs, pipelines, tasks, uploads, insights, console, catalog, system, agents, administration, maintenance, settings, search, sign-in; the new interface is the only one, served at `/ui`, and the old pages are deleted; audit follow-ups align time preferences, human labels, automatic grid sizing and phone date controls; remaining audit closes sparse summaries, controls, lazy loading and CLI operability |
@@ -1693,6 +1693,17 @@ empty-history-page handling defect, which was corrected and verified. No cloud w
   select/disclosure primitives retain platform keyboard semantics.
   Acceptance availability: no warehouse SQL or schema migration changes; cloud suites are not applicable.
 
+- **S7.AL.6 erasure physical retention (owner, 2026-11-17).** Choices that differ from the item text:
+  the bound shown is the one etl-craft can confirm, not one read from warehouse table
+  properties. Trino over Iceberg reports `SNAPSHOT_RETENTION_DAYS`, which `purge` enforces;
+  Snowflake (native and Iceberg) is always bounded by `DATA_RETENTION_TIME_IN_DAYS` plus
+  Fail-safe; DuckDB over Iceberg and Databricks Delta report "no expiry bound is configured" with
+  the setting to configure. Snowflake native Time Travel is included although the item names
+  only Iceberg and Delta, because erased rows stay readable there too. Doctor reports unbounded
+  tables as a warning (Erasure physical retention), not a failure: the logical erasure succeeded.
+  Acceptance availability: no warehouse SQL changed (format detection reuses the existing
+  `existing_table_format` reads), so the Snowflake and Databricks suites were not run; the
+  per-warehouse mapping is unit-tested and local Iceberg (DuckDB, Trino) ran end to end.
 - **S7.AL.4 event-file validation (owner, 2026-11-06).** Choices that differ from the item text:
   the opt-in is the FILE_VALIDATION parameter `SOURCE_EVENT=<EVENT_WAIT task code>`, for waits
   with `EVENT_FILE` (the filesystem glob that records admitted paths in `AUD_EVENT_FILES`). One

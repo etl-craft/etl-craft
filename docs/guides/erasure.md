@@ -78,7 +78,25 @@ retain the erasure outcome. Ordinary hard deletion respects those locks instead;
 key before deleting it. Doctor accounts for committed ERASURE and HARD_DELETE events rather
 than reporting those keys as outside deletions.
 
-On Iceberg and Delta, old values remain readable through time travel until their snapshots
-expire. Erasure never expires snapshots implicitly. [S7.AL slice 6](../development/road-to-1.0.0.md#s7al-pre-demo-package-gaps)
-owns per-table retention-bound reporting and doctor checks; those reports are not implemented
-by protection acceptance. Configure and operate bounded snapshot retention in the warehouse.
+Erasure deletes current rows; it does not remove older versions of a table. On Iceberg tables,
+Delta tables (Databricks) and Snowflake tables, erased rows stay readable through time travel
+until those versions expire. Erasure never expires snapshots, runs `VACUUM`, restores or rolls
+back a table as a side effect.
+
+Each table in an erase result, preview and ERASURE attempt result says where its erased rows
+remain (`old_versions`), whether that retention is bounded (`bounded`), and a `retention`
+statement naming the bound or how to set one:
+
+| Warehouse | Erased rows remain in | Bound |
+|---|---|---|
+| Trino over Iceberg | Iceberg snapshots | `SNAPSHOT_RETENTION_DAYS` in `tables.csv`, enforced by `etl-craft purge` |
+| DuckDB over Iceberg | Iceberg snapshots | Expire snapshots in the catalog's own maintenance; etl-craft cannot read that bound |
+| Databricks (Delta, UniForm) | Delta table history | `delta.deletedFileRetentionDuration` and a scheduled `VACUUM`; etl-craft cannot read that bound |
+| Snowflake (native, Iceberg) | Time Travel and Fail-safe | Always bounded by `DATA_RETENTION_TIME_IN_DAYS` (at most 90 days) plus 7 days of Fail-safe |
+| PostgreSQL, DuckDB | Nowhere | Deleted rows are not readable through SQL |
+
+`doctor` warns, under **Erasure physical retention**, for each table reached by an active erasure
+entry whose old versions have no bound it can confirm, naming the table and the setting to
+configure. Removing old versions also needs the warehouse permissions for snapshot expiry or
+`VACUUM`; time travel queries need read access to the table. Database backups and source
+systems keep their own copies; protect and expire them separately.
