@@ -6,6 +6,14 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+- `Secrets.Source_type` accepts `AWS_SECRETS_MANAGER` and `VAULT` (HashiCorp Vault KV v2). One
+  secret holds every variable as a JSON object or KV entry; `Secrets.Path` names it,
+  `Secrets.Region` (AWS) and `Secrets.Address` (Vault, else `VAULT_ADDR`) locate it, and
+  `Secrets.Cache_seconds` (default 300) bounds how long a process reuses the values.
+  Credentials come from the AWS credential chain or `VAULT_TOKEN`/`~/.vault-token`; Vault must
+  use HTTPS except on localhost. No new dependency: AWS uses the existing `aws` extra.
+  Error wording changed: `Secrets.Path` with `ENVIRONMENT` now says it is not used.
+
 - The run page has a **Timeline**: queue waits, dependency gates, event and child-run waits and
   attempts on one time axis per task, from recorded rows only. The run read
   (`GET /api/v1/projects/{project}/runs/{run}`) adds `timeline`, a list of segments with

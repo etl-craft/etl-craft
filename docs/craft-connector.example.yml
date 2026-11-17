@@ -33,8 +33,11 @@
 # authentication type.
 
 Secrets:
-  Source_type: ENVIRONMENT             # value — ENVIRONMENT | FILE
-  # Path: .env                    # Source_type: FILE only — relative to this file
+  Source_type: ENVIRONMENT             # value — ENVIRONMENT | FILE | AWS_SECRETS_MANAGER | VAULT
+  # Path: .env                    # FILE: relative to this file; AWS: secret name; VAULT: mount/path
+  # Region: eu-west-1             # AWS_SECRETS_MANAGER only
+  # Address: https://vault:8200   # VAULT only; omitted uses VAULT_ADDR
+  # Cache_seconds: 300            # secret managers only — reuse the read values this long
   Profile: dev                         # value — the default profile for every section below;
                                        # write ETL_CRAFT_PROFILE to set it per environment
 

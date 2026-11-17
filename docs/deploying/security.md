@@ -12,7 +12,7 @@ that runs etl-craft.
 Secrets never appear in logs, in error messages, or in the connection URLs etl-craft logs. An
 Python script receives its own settings through `CFG_TASK_PARAMETERS`, which are not secret:
 a Python task declares provider names in `SECRETS` and reads them with `task.secret(name)`.
-The controller/API resolves names from ENVIRONMENT or FILE; agent children receive only
+The controller/API resolves names from its secrets source; agent children receive only
 these values through a private pipe, never inherited environment variables. Values in
 `CFG_TASK_PARAMETERS` and anything a script prints or logs are the team's responsibility.
 
@@ -30,6 +30,34 @@ Duplicate YAML keys are refused with their section and both line numbers. Relati
 certificate, CA and sendmail paths, including `sslrootcert`, `sslcert` and `sslkey` URL settings,
 start at the directory holding `craft-connector.yml`. A symlinked config uses the link's
 folder. `doctor` reports missing or unreadable files at their resolved paths.
+
+### Secret managers
+
+`Secrets.Source_type` can also read the variables from AWS Secrets Manager or HashiCorp Vault.
+One secret holds every variable the file names, as a `.env` file would: an AWS secret whose
+`SecretString` is a JSON object, or a Vault KV v2 entry, each mapping variable names to text.
+
+```yaml
+Secrets:
+  Source_type: AWS_SECRETS_MANAGER    # or VAULT
+  Path: etl-craft/prod                # AWS: secret name or ARN; Vault: mount/path, secret/etl-craft/prod
+  # Region: eu-west-1                 # AWS only; omitted uses the AWS credential chain's region
+  # Address: https://vault.internal:8200   # Vault only; omitted uses VAULT_ADDR
+  Cache_seconds: 300                  # reuse the read values this long; 0 reads every time
+```
+
+Credentials never come from `craft-connector.yml`. AWS uses the standard credential chain (an
+IAM role, pod or instance identity, or `AWS_*` variables) and needs
+`secretsmanager:GetSecretValue` on that secret; install the `aws` extra. Vault reads a token
+from `VAULT_TOKEN` or `~/.vault-token` and needs read access to the entry. The Vault address must
+use `https://`; plain `http://` is accepted only for `localhost`. Each process keeps the values
+for at most `Cache_seconds` (default 300, at most 86400), so a rotated secret is used within
+that period without a restart. Failures name the source, the secret and the remedy, never a value.
+
+`Secrets.Source_type`, `Path`, `Region` and `Address` can name environment variables, so one
+`craft-connector.yml` can select a manager on the controller and UI copies while agents keep
+`ENVIRONMENT`: agents resolve only their own connection secrets, and task `SECRETS` reach them
+through the claim as before.
 
 ## Deployment accounts
 

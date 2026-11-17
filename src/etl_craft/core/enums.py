@@ -518,10 +518,18 @@ class AuthMode(StrEnum):
 
 
 class SecretsSource(StrEnum):
-    """Where ``craft-connector.yml``'s variables come from: the environment or a ``.env`` file."""
+    """Where ``craft-connector.yml``'s variables come from."""
 
     ENVIRONMENT = "ENVIRONMENT"
     FILE = "FILE"
+    AWS_SECRETS_MANAGER = "AWS_SECRETS_MANAGER"
+    """One secret holding a JSON object of variables."""
+    VAULT = "VAULT"
+    """One HashiCorp Vault KV v2 entry holding the variables."""
+
+
+SECRET_MANAGERS = frozenset({SecretsSource.AWS_SECRETS_MANAGER, SecretsSource.VAULT})
+"""Sources read over the network and cached for ``Secrets.Cache_seconds``."""
 
 
 class TableFormat(StrEnum):

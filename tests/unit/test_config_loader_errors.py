@@ -30,10 +30,10 @@ def postgres_warehouse(**fields):
         (["a", "list"], "must contain a top-level mapping"),
         (config(Secrets=None), "missing the Secrets section"),
         (config(Secrets="environment"), "Secrets must be a mapping"),
-        (config(Secrets={"Source_type": "vault"}), "Secrets.Source_type must be one of"),
+        (config(Secrets={"Source_type": "keepass"}), "Secrets.Source_type must be one of"),
         (
             config(Secrets={"Source_type": "ENVIRONMENT", "Path": "x.env"}),
-            "Secrets.Path is only used with Source_type: FILE",
+            "Secrets.Path is not used with Source_type: ENVIRONMENT",
         ),
         (config(Secrets={"Source_type": "FILE"}), "Secrets.Path is required"),
         (config(Engine={"dev": {"User": "u"}}), "Engine.dev needs Jdbc_url"),
