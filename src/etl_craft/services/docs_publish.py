@@ -43,6 +43,7 @@ from etl_craft.config import ConnectorConfig, DocsSiteConfig
 from etl_craft.config.resolve import source_values
 from etl_craft.core.errors import ConfigurationError, LockTimeoutError, UsageError
 from etl_craft.core.http import forwarded_visitor
+from etl_craft.core.redaction import remember
 from etl_craft.engine.repository.docs_site import fetch_publication, record_publication
 from etl_craft.services.catalog.storage import MARKER, prepare_site_lock, site_lock
 
@@ -330,6 +331,8 @@ def authtoken(config: ConnectorConfig) -> str:
             "holding your ngrok authtoken (or publish on this machine with `local_only`)"
         )
     value = source_values(config.source).get(name)
+    if value:
+        remember(value)
     if not value:
         raise ConfigurationError(
             f"Docs_site.Authtoken names the variable {name!r}, which is not set in the "

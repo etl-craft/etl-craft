@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import time
-from collections.abc import Iterator, Mapping
+from collections.abc import Iterator, Mapping, Sequence
 from contextlib import ExitStack
 from dataclasses import dataclass, replace
 from datetime import UTC, date, datetime
@@ -23,6 +23,7 @@ from etl_craft.config.targets import active_catalog, parse_warehouse_url
 from etl_craft.core.enums import ActionName, ActionOutcome, CloningScope
 from etl_craft.core.errors import CloningError, ConfigurationError, LockTimeoutError
 from etl_craft.core.faults import fault_point
+from etl_craft.core.redaction import public_parameters
 from etl_craft.core.text import parse_jdbc_url, qualify, sha256_hex
 from etl_craft.dialects.engine import for_engine
 from etl_craft.dialects.engine.cloning import INTERNAL, changed_statement, source_keys
@@ -36,6 +37,7 @@ from etl_craft.engine.audit import ActionRequest
 from etl_craft.engine.cloning import CloneState
 from etl_craft.engine.repository.pipelines import current_project_id
 from etl_craft.execution.run_types import RunHooks, default_hooks
+from etl_craft.handlers.parameters import package_parameters
 from etl_craft.handlers.resources import LocalLocker
 from etl_craft.warehouse.connection import open_warehouse, warehouse_dialect
 
@@ -246,12 +248,14 @@ def _clone_table(
             with warehouse.begin() as conn:
                 conn.execute(text(f"TRUNCATE TABLE {mirror}"))
                 rows = 0
-                for batch in _batches(engine, table, columns):
+                for batch in _batches(engine, table, columns, config.sensitive_patterns):
                     write_rows(conn, mirror, names, batch)
                     rows += len(batch)
             fault_point("clone.after_mirror_commit")
         else:
-            rows = _incremental(engine, warehouse, state, (mirror, columns, keys))
+            rows = _incremental(
+                engine, warehouse, state, (mirror, columns, keys), config.sensitive_patterns
+            )
         if table.startswith("AUD_"):
             state.complete(engine)
     except SQLAlchemyError as error:
@@ -302,6 +306,7 @@ def _incremental(
     warehouse: Engine,
     state: CloneState,
     target: tuple[str, list[tuple[str, TypeEngine[Any]]], list[str]],
+    patterns: tuple[str, ...],
 ) -> int:
     mirror, columns, keys = target
     names = [name for name, _ in columns]
@@ -315,7 +320,7 @@ def _incremental(
                 for_engine(source), state.table_name, names, keys, values
             ).columns(*(column(name, kind) for name, kind in columns))
             batch = [
-                tuple(_value(v) for v in row)
+                _public(state.table_name, names, row, patterns)
                 for row in source.execute(query, {"project_id": current_project_id()})
             ]
         with warehouse.begin() as destination:
@@ -329,7 +334,10 @@ def _incremental(
 
 
 def _batches(
-    engine: Engine, table: str, columns: list[tuple[str, TypeEngine[Any]]]
+    engine: Engine,
+    table: str,
+    columns: list[tuple[str, TypeEngine[Any]]],
+    patterns: tuple[str, ...],
 ) -> Iterator[list[tuple[object, ...]]]:
     names = [name for name, _ in columns]
     with engine.connect() as conn:
@@ -340,11 +348,45 @@ def _batches(
             {"project_id": current_project_id()},
         )
         for partition in result.partitions(BATCH_ROWS):
-            yield [tuple(_value(v) for v in row) for row in partition]
+            yield [_public(table, names, row, patterns) for row in partition]
 
 
 def _value(value: object) -> object:
     return json.dumps(value) if isinstance(value, dict | list) else value
+
+
+PARAMETER_TABLES = frozenset({"CFG_TASK_PARAMETERS", "AUD_CFG_TASK_PARAMETERS_HISTORY"})
+SNAPSHOT_TABLES = frozenset({"AUD_PIPELINES_RUN_LOG", "AUD_PIPELINE_REFRESHES"})
+
+
+def _public(
+    table: str, names: list[str], row: Sequence[object], patterns: tuple[str, ...]
+) -> tuple[object, ...]:
+    """Copy a row with team-named sensitive parameter values hidden, as the catalog shows them."""
+    values = [_value(v) for v in row]
+    package = package_parameters()
+    if table in PARAMETER_TABLES:
+        name, value = names.index("PARAMETER_NAME"), names.index("PARAMETER_VALUE")
+        if isinstance(values[name], str) and isinstance(values[value], str):
+            values[value] = public_parameters(
+                {str(values[name]): str(values[value])}, patterns, package
+            )[str(values[name])]
+    elif table in SNAPSHOT_TABLES and "METADATA_SNAPSHOT" in names:
+        at = names.index("METADATA_SNAPSHOT")
+        if isinstance(values[at], str):
+            values[at] = _public_snapshot(str(values[at]), patterns, package)
+    return tuple(values)
+
+
+def _public_snapshot(snapshot: str, patterns: tuple[str, ...], package: frozenset[str]) -> str:
+    """Hide the same parameter values inside a run's captured definition."""
+    document = json.loads(snapshot)
+    table = document.get("CFG_TASK_PARAMETERS") if isinstance(document, dict) else None
+    for row in table.get("rows", []) if isinstance(table, dict) else []:
+        name, value = row.get("parameter_name"), row.get("parameter_value")
+        if isinstance(name, str) and isinstance(value, str):
+            row["parameter_value"] = public_parameters({name: value}, patterns, package)[name]
+    return json.dumps(document)
 
 
 def _mirror_columns(

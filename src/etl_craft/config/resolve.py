@@ -29,6 +29,7 @@ from etl_craft.config.model import (
 )
 from etl_craft.core.enums import SECRET_MANAGERS, SecretsSource
 from etl_craft.core.errors import ConfigurationError
+from etl_craft.core.redaction import remember
 from etl_craft.core.text import is_env_name, parse_env_file, suggest
 
 
@@ -213,7 +214,7 @@ def resolve_named_secret(config: ConnectorConfig, name: str) -> str:
         raise ConfigurationError(
             f"variable {name} in {config.source.path or 'the process environment'} is {state}"
         )
-    return value
+    return remember(value)
 
 
 def profile_needs_secret(profile: ConnectionProfile | EmailProfile) -> bool:

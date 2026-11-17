@@ -1,5 +1,7 @@
 """Suite-wide pytest configuration: evidence, the suite-marker rule, Engine DB fixtures."""
 
+import pytest
+
 pytest_plugins = [
     "pytester",
     "plugins.evidence",
@@ -16,3 +18,12 @@ pytest_plugins = [
     "fixtures.smtp",
     "fixtures.oidc",
 ]
+
+
+@pytest.fixture(autouse=True)
+def forget_resolved_secrets():
+    """Each test starts without secrets another test's process resolved and remembered."""
+    from etl_craft.core import redaction
+
+    yield
+    redaction._RESOLVED.clear()

@@ -37,6 +37,7 @@ from etl_craft.core.business_rules import RuleObservation
 from etl_craft.core.enums import GapState, Handler, ScriptKind, SqlAction, YesNo
 from etl_craft.core.enums_lineage import LineageState
 from etl_craft.core.errors import EtlCraftError, MetadataError
+from etl_craft.core.redaction import public_parameters
 from etl_craft.core.text import is_safe_identifier
 from etl_craft.core.time import as_utc
 from etl_craft.engine.environment import project_environment
@@ -77,6 +78,7 @@ from etl_craft.engine.repository.validation import (
 )
 from etl_craft.handlers.lineage_mapping import MappingStep
 from etl_craft.handlers.mapping_logic import MappingLogic
+from etl_craft.handlers.parameters import package_parameters
 from etl_craft.handlers.resources import LocalLocker
 from etl_craft.handlers.sql.creation import writer_action
 from etl_craft.handlers.sql.spec import read_action, read_setup_for
@@ -368,7 +370,7 @@ def collect_catalog(
         task_params = params.get(row.task_id, {})
         task = TaskAsset(
             row,
-            task_params,
+            public_parameters(task_params, config.sensitive_patterns, package_parameters()),
             (task_params.get("DOCUMENTATION") or "").strip() or None,
             versions.get(row.task_id),
             runs=task_runs.get(row.task_id, []),

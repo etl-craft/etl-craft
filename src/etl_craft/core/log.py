@@ -21,6 +21,7 @@ from enum import StrEnum
 from typing import IO, Any
 
 from etl_craft.core.errors import UsageError
+from etl_craft.core.redaction import mask_log
 from etl_craft.core.text import mask_arguments
 
 ROOT_LOGGER = "etl_craft"
@@ -65,11 +66,11 @@ class ContextFilter(logging.Filter):
             record.args = tuple(mask_arguments({"value": item})["value"] for item in record.args)
         elif record.args is not None:
             record.args = mask_arguments(record.args)
-        record.msg = mask_arguments({"message": record.getMessage()})["message"]
+        record.msg = mask_log(str(mask_arguments({"message": record.getMessage()})["message"]))
         record.args = ()
         if record.exc_info:
             detail = logging.Formatter().formatException(record.exc_info)
-            record.exc_text = str(mask_arguments({"exception": detail})["exception"])
+            record.exc_text = mask_log(str(mask_arguments({"exception": detail})["exception"]))
         if record.stack_info:
             record.stack_info = str(mask_arguments({"stack": record.stack_info})["stack"])
         for name in vars(record).keys() - _RECORD_ATTRIBUTES:

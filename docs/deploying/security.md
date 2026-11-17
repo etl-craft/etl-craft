@@ -16,6 +16,32 @@ The controller/API resolves names from its secrets source; agent children receiv
 these values through a private pipe, never inherited environment variables. Values in
 `CFG_TASK_PARAMETERS` and anything a script prints or logs are the team's responsibility.
 
+### What etl-craft masks, and what it cannot
+
+etl-craft guarantees that its own secrets stay out of what it writes. Every secret value the
+engine resolves itself (the Engine DB, warehouse, email, cloning, docs-site and privacy secrets,
+and task `SECRETS`) is remembered by the process that resolved it and replaced with
+`[REDACTED]` in its log lines, stored task logs and attempt log files for the rest of that
+process. Errors, audit arguments and API results mask the secrets of the operation that
+produced them, and keep other text exact. Values shorter than four characters are not
+remembered, because masking them would rewrite ordinary words.
+
+Task parameters a team names itself are hidden by name. `Redaction.Sensitive_patterns` lists
+case-insensitive globs (default `*TOKEN*`, `*SECRET*`, `*PASSWORD*`, `*KEY*`); a matching Python
+script parameter, or a matching key inside `INPUT_PARAMS`, shows `[REDACTED]` in the catalog,
+the task read used by the UI, API and CLI, and the warehouse clones (the parameter tables, their
+history and the definitions captured with each run). Parameter names etl-craft defines, such as
+`MERGE_KEY` and `SQL_ACTION`, never hold a secret and are always shown.
+
+```yaml
+Redaction:
+  Sensitive_patterns: ["*TOKEN*", "*SECRET*", "*PASSWORD*", "*KEY*", "*_REF"]
+```
+
+etl-craft cannot mask what it never resolved: a value a script reads from elsewhere and prints,
+a secret pasted into a parameter whose name matches no pattern, or a short value. Keep secrets
+in the secrets source and read them through `SECRETS` and `task.secret(name)`.
+
 Audit arguments and structured log fields mask secret-named keys recursively, including mappings
 inside lists. Connection URL passwords and secret query parameters are redacted in audit
 arguments and log messages, including exception text. Safe connection settings remain visible.
