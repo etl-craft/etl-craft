@@ -1,4 +1,9 @@
-"""Access command contracts shared by CLI, HTTP and service validation."""
+"""Access command contracts shared by the CLI, the HTTP API and the UI.
+
+Every binding gives WHO (an account, a group, or every account with an audience's deployment
+role) WHAT (a role, built-in CAN_* or custom, or one action) WHERE (the deployment, every project
+of one environment type, or one project, optionally narrowed to a pipeline or a tag).
+"""
 
 from dataclasses import dataclass
 from typing import ClassVar
@@ -6,52 +11,59 @@ from typing import ClassVar
 from etl_craft.core.enums_access import AccessChange, Permission
 from etl_craft.services.operations.requests import Request
 
-FIELDS = ("PROJECT", "GROUP_NAME", "ROLE", "PIPELINE_CODE", "TAG", "PERMISSION", "ACTION")
-
 
 @dataclass(frozen=True, kw_only=True)
 class AccessFilter(Request):
-    """Explicit project scope and optional exact identity filters."""
+    """Where to look, and optional exact identity filters."""
 
     project: str | None = None
+    environment: str | None = None
+    deployment: bool = False
     group: str | None = None
     account: str | None = None
-    role: str | None = None
+    audience: str | None = None
     pipeline: str | None = None
     tag: str | None = None
+
+    @property
+    def reaches_beyond_project(self) -> bool:
+        """Deployment and environment bindings are not owned by one project."""
+        return self.deployment or self.environment is not None
 
 
 @dataclass(frozen=True, kw_only=True)
 class AccessWrite(AccessFilter):
-    """One access identity or submitted bulk content; no server-side client path."""
+    """One binding to grant or revoke."""
 
     reason: str
-    permission: str | None = None
-    content: str | None = None
+    role: str | None = None
+    action: str | None = None
     dry_run: bool = False
 
 
 @dataclass(frozen=True)
-class Grant:
-    """One current grant, retained even after revocation."""
+class Binding:
+    """One binding, retained after it is revoked."""
 
-    project: str
+    scope: str
+    project: str | None
+    environment: str | None
     group: str | None
     account: str | None
-    role: str | None
+    audience: str | None
     pipeline: str | None
     tag: str | None
-    permission: str
+    role: str | None
+    action: str | None
     active_flag: str
 
 
 @dataclass(frozen=True)
-class Diff:
-    """A complete submitted row and its actual change, including its previous permission."""
+class Change:
+    """What a grant or revoke did, including the built-in level it replaced."""
 
-    line: int
-    grant: Grant
-    previous_permission: str | None
+    binding: Binding
+    previous_role: str | None
     change: AccessChange
 
 
@@ -59,10 +71,10 @@ class Diff:
 class AccessView:
     """Access administration output shared by the CLI and API."""
 
-    SCHEMA: ClassVar[str] = "etl-craft/access/1"
-    grants: tuple[Grant, ...] = ()
+    SCHEMA: ClassVar[str] = "etl-craft/access/2"
+    bindings: tuple[Binding, ...] = ()
     effective: tuple[tuple[str, str | None, tuple[str, ...]], ...] = ()
-    project_permission: Permission | None = None
+    project_level: Permission | None = None
     project_sources: tuple[str, ...] = ()
-    changes: tuple[Diff, ...] = ()
+    change: Change | None = None
     dry_run: bool = False

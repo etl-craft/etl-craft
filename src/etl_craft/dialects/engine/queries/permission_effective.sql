@@ -1,7 +1,8 @@
 WITH eligible AS ({{permission_eligible}}), selected_projects AS ({{permission_projects}}), applicable AS (
- SELECT p.PIPELINE_ID AS pipeline_id,x.PIPELINE_GRANT_ID AS grant_id
+ SELECT p.PIPELINE_ID AS pipeline_id,x.BINDING_ID AS grant_id
  FROM CFG_PIPELINES p JOIN selected_projects pr ON pr.project_id=p.PROJECT_ID
- JOIN CFG_PIPELINE_GRANTS x ON x.PROJECT_ID=p.PROJECT_ID AND x.ACTIVE_FLAG='Y'
+ JOIN CFG_ACCESS_BINDINGS x ON x.PROJECT_ID=p.PROJECT_ID AND x.ACTIVE_FLAG='Y'
+ AND x.ROLE_NAME IN ('CAN_VIEW','CAN_UPLOAD','CAN_RUN','CAN_MANAGE')
  AND (x.PIPELINE_CODE=p.PIPELINE_CODE OR x.TAG IN (
  SELECT value AS tag FROM json_each(COALESCE(p.PIPELINE_PARAMETERS,'{}'),'$.TAGS')))
 ), pipeline_levels AS (

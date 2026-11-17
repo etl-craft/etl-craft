@@ -133,55 +133,67 @@ account, its current role, the required role and the administrator who can grant
 returns exit **26**, HTTP returns **403**, and the immutable action record has outcome
 `REFUSED` with the same exit code. No operation runs after refusal. The permission check adds no records for allowed reads. Unregistered operations fail closed until the shared policy names them.
 
-### Pipeline permission groups
+### Access: roles and bindings
 
-Admins manage groups with `etl-craft group add --name sales`, `group disable --name sales`,
-`group add-member --name sales --account alice`, `group remove-member --name sales --account
-alice`, and `group list`. Matching HTTP actions use `/api/v1/groups` and its `disable`,
-`members`, and `members/remove` routes. Group identities and memberships are retired with
-`ACTIVE_FLAG=N`, never deleted; all changes have typed, actor-attributed history.
+Every access decision comes from **bindings**. A binding gives **who** a **role or one
+command**, **where**:
 
-Pipeline permissions use three levels: `CAN_VIEW` reads, `CAN_RUN` adds execution and operator
-controls, and `CAN_MANAGE` adds permission delegation. Principals are an active group, an
-account, or a deployment role (`viewer` includes everyone with at least viewer; `operator`
-includes everyone with at least operator). Each grant names a project, optionally narrowed to one pipeline or tag.
+| Part | Choices |
+| --- | --- |
+| Who | `--account A`, `--group G`, or `--audience viewer\|operator\|developer` (every account whose deployment role is at least that) |
+| What | `--role R` (a built-in `CAN_VIEW`, `CAN_UPLOAD`, `CAN_RUN`, `CAN_MANAGE`, or a custom role) or `--action "run"` (one command) |
+| Where | `--deployment` (every project), `--environment PROD` (every project of that environment type), or `--project P`, optionally narrowed with `--pipeline X` or `--tag T` |
+
+An account may run a command when its deployment role and built-in grants allow it, or when any
+binding of the account, one of its groups or its audience includes the command on the
+deployment, the project's environment type, the project, or every pipeline the request names
+(directly or through one of its tags). One account can therefore hold a large role on one
+project, a small one on another, read-only access to every PROD project, and one extra command
+on a single pipeline.
 
 ```bash
-etl-craft access grant --project sales --group analysts --permission CAN_VIEW --reason "Project access"
-etl-craft access grant --project sales --group analysts --pipeline DAILY --permission CAN_VIEW --reason "Reporting"
-etl-craft access grant --project sales --account alice --tag reporting --permission CAN_MANAGE --reason "Reporting owner"
-etl-craft access revoke --project sales --group analysts --pipeline DAILY --reason "Team changed"
+etl-craft role create data-analyst --description "Runs and inspects reporting loads" --action run --action mark
+etl-craft role add-action data-analyst --action control
+etl-craft role describe CAN_RUN
+etl-craft access grant --account ana --role data-analyst --project sales --reason "Sales analyst"
+etl-craft access grant --account ana --role CAN_VIEW --environment PROD --reason "Read production"
+etl-craft access grant --account ana --action run --project hr --pipeline PAYROLL --reason "Payroll reruns"
+etl-craft access grant --group platform --role pool-keeper --deployment --reason "Pool owners"
+etl-craft access revoke --account ana --action run --project hr --pipeline PAYROLL --reason "Done"
 etl-craft access list --project sales
-etl-craft access grant --project sales --file access.csv --dry-run --reason "Review permissions"
-etl-craft access grant --project sales --file access.csv --reason "Apply permissions"
+etl-craft access explain --account ana --action run --project hr --pipeline PAYROLL
 ```
 
-The exact HTTP actions are `POST /api/v1/access/grants`, `POST /api/v1/access/revocations`,
-and `GET /api/v1/access/grants`. Lists include the caller's effective levels and their contributing sources.
-An administrator or a holder of `CAN_MANAGE` on the pipeline can grant or revoke any level on
-it. Granting on a tag requires `CAN_MANAGE` on that tag; managing one tagged pipeline is
-insufficient. A project CAN_MANAGE holder can administer all project, pipeline and tag grants there,
-including restricted pipelines, and can deploy that project's configuration. A pipeline or tag
-manager cannot edit the project or reach another project. Only deployment admins manage
-accounts, groups, pools and project creation/settings/disable.
+**Built-in roles.** `CAN_VIEW` reads, `CAN_UPLOAD` adds stewarded uploads, `CAN_RUN` adds
+execution and operator controls, and `CAN_MANAGE` adds access delegation and project
+definitions. They cannot be changed or disabled; `role describe` lists what each allows. A
+principal holds one built-in level at each exact place, so granting another replaces it.
 
-In the web interface, open a pipeline’s **Access** tab to inspect its pipeline-specific grants.
-A holder of `CAN_MANAGE` on that pipeline can grant or revoke access there, choosing exactly
-one group, account or role and a permission. The pipeline target is fixed; the server checks
-the submitted request and displays a refusal if the manager lacks the required rights.
-Viewers can inspect grants but have no grant or revoke controls. Administration keeps the
-project-wide and tag grant form for deployment admins. Changes require a reason and retain
-the actor-attributed audit history.
+**Custom roles** are named sets of commands. Commands that act on the whole deployment
+(`pool`, `alert-channel`, `announce`, `agent control`) can only be bound with `--deployment`.
+Identity, access and project administration (`account`, `token`, `group`, `role`,
+`access grant`/`revoke`, `project add/set/disable`) stay with deployment administrators and
+cannot be put in a role; neither can sign-in, agent or controller-host commands. A custom role
+or single command implies read access where it is bound (except deployment-wide), so the
+account can see what it may act on. Custom bindings sit beside built-in ones; each is granted
+and revoked on its own. Disabling a role, or revoking a binding, takes effect on the next
+request.
 
-Bulk input is admin-only, with columns `PROJECT,GROUP_NAME,ROLE,PIPELINE_CODE,TAG,PERMISSION,ACTION`.
-Choose exactly one group or role; leave both pipeline and tag empty for a project grant,
-or select one pipeline or tag; `ACTION` is `GRANT` or `REVOKE`.
-Rows name their project; if --project is supplied, every row must match that scope. Account grants use the single-row `--account` form,
-never the bulk file. The CLI sends content; the server validates every row and diffs the current
-state inside the apply transaction. All bad lines are reported and nothing is applied.
-Dry-run returns added, changed permission, revoked and unchanged rows without changing grants;
-its request is still audited. Writes require a reason, retain attribution and history, and
-revocation marks `ACTIVE_FLAG=N` without deleting rows.
+**Who manages access.** Deployment administrators manage roles and every binding, and are the
+only ones who bind on `--deployment` or `--environment`. A holder of `CAN_MANAGE` on a project,
+pipeline or tag can grant and revoke bindings there; granting on a tag requires `CAN_MANAGE` on
+that tag. `access explain` (administrators) shows whether an account may run a command, the
+binding or role that allows it, or the refusal and the roles that would allow it.
+
+The HTTP actions are `POST /api/v1/access/grants`, `POST /api/v1/access/revocations`,
+`GET /api/v1/access/grants`, `GET /api/v1/access/explain` and the `/api/v1/roles` routes. In the
+web interface, **Administration → Roles** manages roles and deployment and environment bindings;
+the **Access** tab of a project or pipeline manages the bindings there. Every change requires a
+reason and keeps actor-attributed history; revoked bindings are retained with `ACTIVE_FLAG=N`.
+
+Groups are managed with `etl-craft group add --name sales`, `group disable`, `group add-member
+--name sales --account alice`, `group remove-member` and `group list`, under `/api/v1/groups`.
+Group identities and memberships are retired with `ACTIVE_FLAG=N`, never deleted.
 
 Project access is default deny. Deployment admins have CAN_MANAGE everywhere. Other accounts
 need a matching project grant even when they have a direct pipeline or tag grant. Missing and

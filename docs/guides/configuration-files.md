@@ -302,10 +302,10 @@ new projects use the current `*_contracts.sql` examples.
 
 ## Pipeline permissions
 
-Permission changes use `etl-craft access grant|revoke|list` and their API actions, independently
-of configuration deployment. See [Pipeline permission groups](../deploying/security.md#pipeline-permission-groups)
-and the [bulk command input](../examples/access.csv). Configuration export writes only the eight
-metadata files; it does not export administrator identities or permissions.
+Access changes use `etl-craft role` and `etl-craft access grant|revoke|list|explain` and their
+API actions, independently of configuration deployment. See
+[Access: roles and bindings](../deploying/security.md#access-roles-and-bindings). Configuration
+export writes only the eight metadata files; it does not export identities or access.
 
 ## Tag edits and access
 

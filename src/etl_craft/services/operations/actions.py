@@ -52,6 +52,7 @@ from etl_craft.services.operations import (
     agents,
     alert_channels,
     announcements,
+    bindings,
     bundles,
     capabilities,
     catalog,
@@ -122,6 +123,7 @@ from etl_craft.services.operations.requests import (
     ValidateInput,
     arguments,
 )
+from etl_craft.services.operations.role_actions import ROLE_ACTIONS
 from etl_craft.services.operations.run_identity import resolve_run_reference
 from etl_craft.services.operations.run_labels import with_run_labels
 from etl_craft.services.operations.seed_actions import SEED_ACTIONS
@@ -192,7 +194,7 @@ _ROWS = (
            agent_models.AgentReply, ApiRole.AGENT, POST, f"{API}/agent/report", BY_ACTION),
     Action(ActionName.AGENT_LOG, agent_logs.upload, agent_models.AgentLog,
            agent_models.AgentReply, ApiRole.AGENT, POST, f"{API}/agent/log"),
-    *UPLOAD_ACTIONS, *SEED_ACTIONS, *ERASURE_ACTIONS,
+    *UPLOAD_ACTIONS, *SEED_ACTIONS, *ERASURE_ACTIONS, *ROLE_ACTIONS,
     *SIGN_IN_ACTIONS,
     Action(ActionName.WHOAMI, sessions.whoami, sessions.IdentityInput, sessions.Identity,
            VIEWER, GET, f"{API}/whoami"),
@@ -349,7 +351,7 @@ _ROWS = (
            admin_metadata.Pools,
            ADMIN, POST, f"{API}/pools/disable", REQUEST),
     Action(ActionName.ACCESS_GRANT, access.grant_access, access.AccessWrite, access.AccessView,
-           VIEWER, POST, f"{API}/access/grants", BY_ACTION, escalate=access.required_role),
+           VIEWER, POST, f"{API}/access/grants", BY_ACTION),
     Action(ActionName.ACCESS_REVOKE, access.revoke_access, access.AccessWrite, access.AccessView,
            VIEWER, POST, f"{API}/access/revocations", BY_ACTION),
     Action(ActionName.ACCESS_LIST, access.list_access, access.AccessFilter, access.AccessView,
@@ -470,7 +472,7 @@ def admitted(ctx: OperationContext, name: ActionName, request: object) -> Iterat
         given = arguments(request)
         required = action.required_role(ctx, request)
         try:
-            _authorize(ctx, action, request, required)
+            bindings.authorize(ctx, action, request, required, _authorize, _request_codes)
         except (PermissionDeniedError, ResourceNotFoundError) as error:
             record_refusal(ctx, name, given, error)
             raise
@@ -494,8 +496,8 @@ def _authorize(
     if ctx.role == ApiRole.ADMIN or (action.provisioning and ctx.provisioning):
         return
     scoped = action.scope != ActionScope.DEPLOYMENT or isinstance(request, access.AccessFilter)
-    bulk = isinstance(request, access.AccessWrite) and request.content is not None
-    if scoped and not bulk:
+    wide = isinstance(request, access.AccessFilter) and request.reaches_beyond_project
+    if scoped and not wide:
         with ctx.engine.connect() as conn:
             needed = (
                 Permission.CAN_MANAGE
@@ -704,7 +706,7 @@ def _project_context(ctx: OperationContext, action: Action, request: object) -> 
     ctx = _access_project(ctx, request)
     if action.scope == ActionScope.DEPLOYMENT and not isinstance(request, access.AccessFilter):
         return ctx
-    if isinstance(request, access.AccessWrite) and request.content is not None:
+    if isinstance(request, access.AccessFilter) and request.reaches_beyond_project:
         return ctx
     if not ctx.project:
         ctx = replace(ctx, project=ctx.config.project)
