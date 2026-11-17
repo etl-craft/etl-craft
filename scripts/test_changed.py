@@ -5,7 +5,7 @@ import subprocess
 import sys
 from pathlib import PurePosixPath
 
-ROOTS = ("examples/", "templates/", "docs/examples/", "tests/fixtures/schemas/")
+ROOTS = ("examples/", "templates/", "docs/examples/")
 SERVICE_MARKERS = (
     "engine_sqlite or engine_postgres or warehouse_duckdb or warehouse_postgres "
     "or warehouse_duckdb_iceberg or warehouse_trino_iceberg"

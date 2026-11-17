@@ -10,7 +10,7 @@ from etl_craft.core.actor import SYSTEM_ACTOR, acting_as
 from etl_craft.core.errors import EngineDbError, MigrationError
 from etl_craft.dialects.engine import for_engine
 from etl_craft.dialects.engine.base import EngineDialect
-from etl_craft.engine import migration_steps, migrations
+from etl_craft.engine import migrations
 from etl_craft.engine.migrations import apply_pending_migrations, mark_packaged_migrations_applied
 from etl_craft.engine.schema import SENTINEL_TABLES, existing_engine_tables, init_db
 
@@ -20,12 +20,19 @@ def write(directory, name, sql):
     (directory / name).write_text(sql, encoding="utf-8")
 
 
-def ledger(engine):
+def recorded(engine):
     with engine.connect() as conn:
         rows = conn.execute(
             text("SELECT SOURCE AS source, VERSION AS version FROM SCHEMA_MIGRATIONS")
         ).all()
     return [(row.source, row.version) for row in rows]
+
+
+def ledger(engine):
+    """The migrations recorded after the baseline every Engine DB starts from."""
+    return [
+        entry for entry in recorded(engine) if entry != (migrations.ENGINE, migrations.BASELINE)
+    ]
 
 
 def table_exists(engine, name):
@@ -214,9 +221,8 @@ def test_initialization_rolls_back_schema_and_ledger_when_recording_fails(
     assert existing_engine_tables(empty_engine_db.engine) == []
     assert not table_exists(empty_engine_db.engine, "SCHEMA_MIGRATIONS")
     monkeypatch.setattr(schema, "mark_packaged_migrations_applied", original)
-    result = init_db(empty_engine_db.engine)
-    assert result.recorded_migrations
-    assert len(ledger(empty_engine_db.engine)) == len(result.recorded_migrations)
+    init_db(empty_engine_db.engine)
+    assert (migrations.ENGINE, migrations.BASELINE) in recorded(empty_engine_db.engine)
 
 
 def test_initialization_checks_existing_tables_only_while_holding_the_lock(
@@ -246,63 +252,52 @@ def test_initialization_checks_existing_tables_only_while_holding_the_lock(
     init_db(empty_engine_db.engine)
 
 
-def test_engine_header_markers_drive_policy_for_a_new_filename(initialized, packaged, monkeypatch):
-    from contextlib import contextmanager
-
-    dialect = for_engine(initialized)
-    transaction = type(dialect).migration_transaction
-    checks = []
-    rebuilds = []
-    check_codes = migration_steps.check_metadata_codes
-
-    def checked(conn):
-        checks.append(True)
-        check_codes(conn)
-
-    @contextmanager
-    def recorded(self, engine, *, rebuild_metadata=None):
-        assert checks == [True]
-        rebuilds.append(rebuild_metadata)
-        with transaction(self, engine, rebuild_metadata=rebuild_metadata) as conn:
-            yield conn
-
-    monkeypatch.setattr(migration_steps, "check_metadata_codes", checked)
-    monkeypatch.setattr(type(dialect), "migration_transaction", recorded)
-    sql = "-- etl-craft: rebuild-metadata\n-- etl-craft: check-metadata-codes\nSELECT 1;"
-    write(packaged, "0099_new_policy.sql", sql)
-    assert apply_pending_migrations(initialized) == ["0099_new_policy.sql"]
-    assert rebuilds == [sql]
-    assert ledger(initialized) == [("ENGINE", "0099_new_policy.sql")]
+def test_init_db_records_the_baseline_and_migrate_refuses_an_engine_db_without_it(initialized):
+    assert recorded(initialized) == [(migrations.ENGINE, migrations.BASELINE)]
+    with acting_as(SYSTEM_ACTOR), initialized.begin() as conn:
+        conn.execute(text("DELETE FROM SCHEMA_MIGRATIONS"))
+        conn.execute(
+            text("INSERT INTO SCHEMA_MIGRATIONS (SOURCE, VERSION, CHECKSUM) VALUES (:s, :v, :c)"),
+            {"s": migrations.ENGINE, "v": "0097_old.sql", "c": "0" * 64},
+        )
+    with pytest.raises(
+        MigrationError,
+        match=r"development build before 0\.9\.0.*recreate it with `etl-craft init-db`",
+    ):
+        apply_pending_migrations(initialized)
 
 
-def test_a_new_migration_converts_where_the_registry_says_without_python(
-    initialized, packaged, monkeypatch, tmp_path
-):
-    registry = tmp_path / "migration-markers.toml"
-    registry.write_text(
-        f'[convert-at.{for_engine(initialized).name}]\n"0099_new_conversion.sql" = 1\n',
-        encoding="utf-8",
-    )
-    monkeypatch.setattr(migrations, "PACKAGED_MARKERS", registry)
-    seen = []
-
-    def convert(conn, rows, target):
-        tables = sql_inspect(conn)
-        seen.append((rows, tables.has_table("marker_first"), tables.has_table("marker_second")))
-
-    monkeypatch.setitem(
-        migration_steps.STEPS,
-        "convert-rule-targets",
-        migration_steps.MarkerStep(
-            check=lambda conn, target: [{"read": "before"}], convert=convert
-        ),
-    )
+def test_a_rebuild_marker_runs_the_file_and_an_unknown_marker_is_refused(initialized, packaged):
     write(
         packaged,
-        "0099_new_conversion.sql",
-        "-- etl-craft: convert-rule-targets\n"
-        "CREATE TABLE marker_first (id INTEGER);\nCREATE TABLE marker_second (id INTEGER);",
+        "0001_rebuild.sql",
+        "-- etl-craft: rebuild-metadata\nCREATE TABLE MARKED (ID INT);",
     )
-    assert apply_pending_migrations(initialized) == ["0099_new_conversion.sql"]
-    assert seen == [([{"read": "before"}], True, False)]
-    assert table_exists(initialized, "marker_second")
+    assert apply_pending_migrations(initialized) == ["0001_rebuild.sql"]
+    assert table_exists(initialized, "marked")
+    write(packaged, "0002_unknown.sql", "-- etl-craft: convert-everything\nSELECT 1;")
+    with pytest.raises(MigrationError, match=r"0002_unknown\.sql: unknown migration markers"):
+        apply_pending_migrations(initialized)
+
+
+def test_the_backfill_check_has_one_name_on_every_dialect(initialized):
+    table = for_engine(initialized).stored_name("AUD_PIPELINES_RUN_LOG")
+    names = {check["name"] for check in sql_inspect(initialized).get_check_constraints(table)}
+    assert "ck_pipeline_run_backfill" in names
+    assert "aud_pipelines_run_log_backfill_check" not in names
+
+
+@pytest.mark.parametrize("change", ["deleted", "edited"])
+def test_a_missing_or_changed_baseline_entry_stops_every_migration_check(initialized, change):
+    with acting_as(SYSTEM_ACTOR), initialized.begin() as conn:
+        conn.execute(
+            text("DELETE FROM SCHEMA_MIGRATIONS")
+            if change == "deleted"
+            else text("UPDATE SCHEMA_MIGRATIONS SET CHECKSUM=:c"),
+            {"c": "0" * 64},
+        )
+    message = "no baseline-0\\.9\\.0 entry" if change == "deleted" else "has checksum 0{64}"
+    with pytest.raises(MigrationError, match=message):
+        migrations.pending_files(initialized)
+    with pytest.raises(MigrationError, match=message):
+        apply_pending_migrations(initialized)

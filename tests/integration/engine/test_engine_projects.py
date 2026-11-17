@@ -323,32 +323,6 @@ def test_project_default_pool_is_recorded_on_queued_attempts(engine_db):
         )
 
 
-def test_pre_project_admitted_images_keep_their_default_project(engine_db):
-    import json
-
-    from etl_craft.core.definitions import Definition, using
-
-    with engine_db.engine.begin() as conn:
-        own = add_pipeline(conn, "P")
-        add_task(conn, own, "T", "PYTHON")
-        run = start_run(conn, own)
-        image = json.loads(
-            conn.execute(
-                text(
-                    "SELECT METADATA_SNAPSHOT AS snapshot FROM AUD_PIPELINES_RUN_LOG "
-                    "WHERE PIPELINE_RUN_ID=:id"
-                ),
-                {"id": run},
-            ).scalar_one()
-        )
-        for name in ("CFG_PIPELINES", "CFG_TABLES"):
-            image[name]["columns"].remove("project_id")
-            for row in image[name]["rows"]:
-                row.pop("project_id")
-        with using(Definition.read(json.dumps(image), run)):
-            assert resolve_pipeline_id(conn, "P") == own
-
-
 def test_a_grant_for_a_code_cannot_restrict_the_same_code_in_another_project(engine_db):
     with engine_db.engine.begin() as conn:
         add_pipeline(conn, "P")

@@ -57,12 +57,6 @@ class Output:
         line = " ".join(text.split())
         print("".join(char for char in line if char.isprintable()), file=self.stderr)
 
-    def unknown_environment(self, engine: str, *, json: bool) -> None:
-        """Make legacy schema uncertainty explicit without inventing a project environment."""
-        self.environment_reason = "Engine DB predates environment metadata"
-        if not json:
-            self.context_line(f"{engine} · environment unknown ({self.environment_reason})")
-
     def confirm(self, action: str, *, yes: bool) -> None:
         """Confirm production changes once per command before an operation is called."""
         if (

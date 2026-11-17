@@ -379,7 +379,11 @@ def test_tokens_store_hash_only_expiry_validation_and_audit(api):
 
 def test_log_streaming_offsets_and_path_boundaries(api, tmp_path):
     ctx, client, creds, run, attempt = api
-    path = ctx.config.log_dir / "P" / f"run-{run}" / "T.attempt-1.log"
+    with ctx.engine.connect() as conn:
+        project_id = conn.execute(
+            text("SELECT PROJECT_ID AS project_id FROM CFG_PROJECTS WHERE PROJECT_CODE='default'")
+        ).scalar_one()
+    path = ctx.config.log_dir / f"project-{project_id}" / "P" / f"run-{run}" / "T.attempt-1.log"
     path.parent.mkdir(parents=True)
     path.write_bytes(b"first\nsecond\n")
     url = f"/api/v1/projects/default/attempts/{attempt}/log"
@@ -526,22 +530,6 @@ def test_live_http_trigger_is_executed_by_controller_and_shutdown_is_clean(cli_p
         ).scalar_one()
         arguments = json.loads(arguments) if isinstance(arguments, str) else arguments
         assert arguments["reason"] == "HTTP refresh"
-
-
-def test_tokens_work_after_released_schema_upgrade(empty_engine_db, tmp_path, monkeypatch):
-    from etl_craft.engine.migrations import apply_pending_migrations
-    from fixtures.released_schema import install
-
-    db = empty_engine_db
-    install(db, "0.2.0")
-    monkeypatch.chdir(tmp_path)
-    monkeypatch.delenv("ETL_CRAFT_MIGRATIONS_DIR", raising=False)
-    applied = apply_pending_migrations(db.engine)
-    assert "0018_api_tokens.sql" in applied
-    ctx = OperationContext(db.engine, db.config, current_actor(), role=ApiRole.ADMIN)
-    created = create_token(ctx, "upgraded", "viewer", "1d")
-    assert tokens.authenticate(ctx, created.token).name == "upgraded"
-    assert apply_pending_migrations(db.engine) == []
 
 
 @pytest.mark.parametrize(

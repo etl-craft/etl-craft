@@ -206,25 +206,6 @@ columns or task/parameter triggers require repair with the previous package befo
 Export after migrating, then move edits from old target parameter rows to `tasks.csv`. Keep
 already-applied project migrations unchanged; update pending uploads to use the scoped reference.
 
-### Upgrading source contracts
-
-Migration `0028_source_contracts.sql` converts existing source rows to the two contract tables.
-It retains column IDs and audit stamps, leaves typed legacy history unchanged and keeps the
-source rows at conversion time in immutable `AUD_SOURCE_COLUMNS_BASELINE` evidence. These
-audit tables reconstruct historical exports; they are not another writable source contract.
-The configured warehouse catalog resolves relative current names once. Historical exports
-retain catalog absence in earlier evidence and never infer today's catalog. Unknown object
-kind and nullability remain undeclared.
-
-Duplicates, malformed legacy names and custom source columns/indexes/triggers/dependents stop
-the upgrade before any pending migration changes the schema or ledger. Repair them using the
-previous installed package. Already-applied project SQL must remain byte-for-byte unchanged;
-move legacy source writes from pending project SQL to `CFG_TABLES`/`CFG_COLUMNS`.
-
-Move an old `source_columns.csv` out of the config folder and export after upgrading, then
-reapply your edits to `tables.csv` and `columns.csv`. Config apply explicitly refuses the old
-file so it cannot silently ignore those edits.
-
 ## Configuration as of a moment
 
 `etl-craft config export --as-of WHEN` writes the config files as the rows stood at `WHEN`, rebuilt

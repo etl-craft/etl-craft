@@ -276,38 +276,6 @@ class EngineDialect(ABC):
         rows = conn.execute(text(self.query("table_indexes")), {"name": self.stored_name(table)})
         return [(row.name, row.definition) for row in rows]
 
-    def drop_trigger(self, conn: Connection, trigger: str, table: str) -> None:
-        """Drop ``trigger`` from ``table``."""
-        conn.exec_driver_sql(f"DROP TRIGGER {conn.dialect.identifier_preparer.quote(trigger)}")
-
-    def index_names(self, conn: Connection, table: str) -> list[str]:
-        """Return the names of the indexes on ``table``, its primary key's excluded."""
-        return [str(index["name"]) for index in inspect(conn).get_indexes(self.stored_name(table))]
-
-    @abstractmethod
-    def legacy_source_id_high_water(self, conn: Connection) -> int:
-        """Return the highest ``SOURCE_COLUMN_ID`` the legacy table's id generator handed out."""
-
-    @abstractmethod
-    def set_column_id_high_water(self, conn: Connection, high_water: int) -> None:
-        """Make ``CFG_COLUMNS`` ids continue after ``high_water``."""
-
-    def record_config_conversion(
-        self, conn: Connection, table: str, primary: str, *, migration: str, actor: Actor
-    ) -> None:
-        """Close ``table``'s current versions and record its rows again, stamps unchanged."""
-        now = datetime.now(UTC)
-        conn.execute(
-            text(
-                f"UPDATE AUD_{table}_HISTORY SET VALID_TO=:now,CURRENT_FLAG='N' "
-                f"WHERE CURRENT_FLAG='Y' AND {primary} IN "
-                f"(SELECT {primary} FROM {table})"
-            ),
-            {"now": now},
-        )
-        self._insert_history(conn, table, primary, ("UPDATE", migration, actor, now))
-        conn.exec_driver_sql("DROP VIEW IF EXISTS AUD_METADATA_CHANGES")
-
     def record_config_baseline(
         self, conn: Connection, tables: tuple[str, ...], *, migration: str, actor: Actor
     ) -> None:
@@ -333,11 +301,6 @@ class EngineDialect(ABC):
             ("TABLE_ID", "SELECT TABLE_ID FROM project_tables"),
         )
         condition = next((f"{name} IN ({query})" for name, query in owners if name in fields), None)
-        if condition is None and table in {
-            "AUD_SOURCE_COLUMNS_BASELINE",
-            "AUD_CFG_SOURCE_COLUMNS_HISTORY",
-        }:
-            condition = ":project_id=1"
         sql = f"SELECT {', '.join(columns)} FROM {table}"
         return text(
             self.query("clone_project_scope")

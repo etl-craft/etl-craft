@@ -2,7 +2,6 @@
 
 import threading
 from contextvars import Context
-from dataclasses import replace
 
 import pytest
 from sqlalchemy import text
@@ -18,7 +17,6 @@ from etl_craft.execution.context import build_task_context
 from etl_craft.services.operations import OperationContext, tokens
 from fixtures.actions import act
 from fixtures.metadata import add_pipeline, add_task
-from fixtures.released_schema import SCHEMAS, install
 
 
 def test_account_proof_selects_user_or_service_kind(engine_db):
@@ -86,68 +84,6 @@ def test_server_refuses_a_user_account(engine_db):
     )
     with pytest.raises(ConfigurationError, match=r"person.*USER.*SERVICE.*ETL_CRAFT_TOKEN"):
         serve(ctx, threading.Event())
-
-
-@pytest.mark.parametrize("release", sorted(p.name for p in SCHEMAS.iterdir() if p.is_dir()))
-def test_upgrade_keeps_legacy_actor_and_adds_run_writer(
-    empty_engine_db, release, monkeypatch, tmp_path
-):
-    db = empty_engine_db
-    monkeypatch.chdir(tmp_path)
-    monkeypatch.delenv("ETL_CRAFT_MIGRATIONS_DIR", raising=False)
-    install(db, release)
-    original = migrations.migration_streams
-    with monkeypatch.context() as patch:
-        patch.setattr(
-            migrations,
-            "migration_streams",
-            lambda *args, **kwargs: [
-                replace(stream, files=tuple(f for f in stream.files if f.version < "0035"))
-                for stream in original(*args, **kwargs)
-            ],
-        )
-        migrations.apply_pending_migrations(db.engine)
-    with db.engine.begin() as conn:
-        pipeline = add_pipeline(conn, "LEGACY")
-        run = conn.execute(
-            text(
-                "INSERT INTO AUD_PIPELINES_RUN_LOG "
-                "(PIPELINE_ID, STATUS, STARTED_BY, STARTED_BY_KIND) "
-                "VALUES (:p, 'SUCCESS', 'original-person', 'HUMAN') RETURNING PIPELINE_RUN_ID AS id"
-            ),
-            {"p": pipeline},
-        ).scalar_one()
-        conn.execute(
-            text(
-                "INSERT INTO AUD_ACTIONS "
-                "(ACTOR, ACTOR_KIND, HOST, COMMAND, ARGUMENTS, OUTCOME) "
-                "VALUES ('original-agent', 'WORKER', 'host', 'run', '{}', 'REQUESTED')"
-            )
-        )
-    assert "0035_explicit_actors.sql" in migrations.apply_pending_migrations(db.engine)
-    with db.engine.connect() as conn:
-        row = conn.execute(
-            text(
-                "SELECT STARTED_BY AS name, STARTED_BY_KIND AS kind, "
-                "WRITER AS writer FROM AUD_PIPELINES_RUN_LOG "
-                "WHERE PIPELINE_RUN_ID=:run"
-            ),
-            {"run": run},
-        ).one()
-        action = conn.execute(
-            text(
-                "SELECT ACTOR AS name, ACTOR_KIND AS kind FROM AUD_ACTIONS "
-                "WHERE ACTOR='original-agent'"
-            )
-        ).one()
-    assert row.name == "original-person"
-    assert row.kind == "HUMAN"
-    assert row.writer == "etl-craft"
-    assert action.name == "original-agent"
-    assert action.kind == "WORKER"
-    with acting_as(Actor("new-person", ActorKind.USER)), db.engine.begin() as conn:
-        new_run = transitions.create_active_run(conn, pipeline)
-    assert new_run > run
 
 
 def test_automatic_retry_uses_system_account_and_restores_requester(engine_db):

@@ -745,19 +745,18 @@ def _guard_checks(conn: Connection, config: ConnectorConfig) -> list[Check]:
             )
         )
 
-    if dialect.has_table(conn, "AUD_TEAM_TABLES"):
-        checks.extend(
-            Check(
-                "Team table owner",
-                Status.INFO,
-                f"{table} has no owning project; the first project migration that changes it "
-                "claims it for its project",
-            )
-            for table in unowned_team_tables(conn)
+    checks.extend(
+        Check(
+            "Team table owner",
+            Status.INFO,
+            f"{table} has no owning project; the first project migration that changes it "
+            "claims it for its project",
         )
-    if project is not None and dialect.has_table(conn, "AUD_PIPELINE_REFRESHES"):
+        for table in unowned_team_tables(conn)
+    )
+    if project is not None:
         checks.extend(_refresh_checks(conn, int(project.project_id)))
-    if project is not None and dialect.has_table(conn, "CFG_CALENDARS"):
+    if project is not None:
         ending = holiday_lists_ending(conn, datetime.now(UTC), DOCTOR_DAYS)
         checks.extend(warn(f"Holiday list ({where})", problem) for where, problem in ending)
 
@@ -769,7 +768,7 @@ def _scope_problems(
 ) -> list[str]:
     """Name pending project statements that would change another project's tables."""
     with engine.connect() as conn:
-        if not files or not for_engine(conn).has_table(conn, "AUD_TEAM_TABLES"):
+        if not files:
             return []
         project = conn.execute(
             statement(conn, "project_by_code"), {"code": config.project}

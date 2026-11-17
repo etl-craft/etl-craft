@@ -260,21 +260,7 @@ def prepare_context(
     ):
         return
     if name == ActionName.MIGRATE:
-        from etl_craft.dialects.engine import for_engine
-        from etl_craft.services.credentials import database_key
-
         with command_context(args) as ctx, ctx.engine.connect() as conn:
-            columns = (
-                for_engine(conn).column_names(conn, "CFG_PROJECTS")
-                if for_engine(conn).has_table(conn, "CFG_PROJECTS")
-                else []
-            )
-            if "environment_type" not in {column.lower() for column in columns}:
-                out.unknown_environment(
-                    database_key(ctx.engine, ctx.config.engine.schema),
-                    json=getattr(args, "output_format", "text") == "json",
-                )
-                return
             scoped = command_identity.get()
             if scoped is not None and (
                 scoped.provisioning

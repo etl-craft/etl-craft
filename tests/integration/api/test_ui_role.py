@@ -213,7 +213,7 @@ def test_controller_refuses_mismatched_package_schema_before_supervising(cli_pro
     for part in ("Engine DB", "etl-craft migrate"):
         assert part in output
     if mismatch == "missing":
-        assert "is at migration" in output and "this etl-craft needs" in output
+        assert "no baseline-0.9.0 entry" in output
     else:
         assert "package version" in output and __version__ in output
     with p.engine.connect() as conn:
@@ -221,7 +221,8 @@ def test_controller_refuses_mismatched_package_schema_before_supervising(cli_pro
     if p.config.engine.auth_mode != "NONE":
         code, output = p.run("ui")
         assert code == 13, output
-        assert "is at migration" in output if mismatch == "missing" else "package version" in output
+        expected = "no baseline-0.9.0 entry" if mismatch == "missing" else "package version"
+        assert expected in output
 
 
 def test_ui_missing_extra_is_refused_and_plain_controller_keeps_health_only(

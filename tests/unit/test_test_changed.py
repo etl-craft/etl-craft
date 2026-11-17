@@ -19,7 +19,6 @@ changed = load("test_changed")
         "examples/demo/config/pipelines.csv",
         "docs/examples/craft-connector.yml",
         "templates/project/config/tasks.csv",
-        "tests/fixtures/schemas/0.3.0/postgres.sql",
     ],
 )
 def test_files_loaded_as_data_force_full_engine_and_warehouse_suites(path):

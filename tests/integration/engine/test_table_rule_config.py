@@ -252,33 +252,6 @@ def test_table_output_validation_findings_keep_last_good_version(rule_project, s
     assert done.status == RunStatus.SUCCESS, done.message
 
 
-def test_legacy_rule_snapshot_defaults_to_row_without_rewriting_text(rule_project):
-    import json
-
-    from etl_craft.core.definitions import Definition, using
-    from etl_craft.engine.queries import statement
-
-    ctx, pipeline, task, _ = rule_project
-    with ctx.engine.connect() as conn:
-        image = json.loads(
-            conn.execute(
-                statement(conn, "metadata_capture"), {"pipeline_id": pipeline}
-            ).scalar_one()
-        )
-        rules = image["CFG_BUSINESS_RULES"]
-        rules["columns"].remove("business_rule_level")
-        for rule in rules["rows"]:
-            rule.pop("business_rule_level")
-            rule["business_rule_key_column"] = "id"
-            rule["business_rule_sql"] = "SELECT id FROM $$rows_in_scope"
-        legacy = json.dumps(image)
-        definition = Definition.read(legacy)
-        with using(definition):
-            stored = fetch_business_rules_for_task(conn, task)[0]
-        assert stored.business_rule_level == "ROW" and stored.business_rule_key_column == "id"
-        assert definition.text == legacy
-
-
 def test_rule_observation_history_is_bounded_and_exact_runs_remain_readable(rule_project):
     from datetime import UTC, datetime
 

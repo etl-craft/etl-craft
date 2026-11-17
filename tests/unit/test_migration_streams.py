@@ -81,23 +81,14 @@ def test_verify_ledger_accepts_matching_files(tmp_path):
     migrations.verify_ledger({("PROJECT", "0001_a.sql"): sha256_hex(b"SELECT 1;")}, [stream])
 
 
-@pytest.mark.parametrize(
-    "name, sql",
-    [
-        (
-            "0099_named_without_python.sql",
-            "-- etl-craft: rebuild-metadata\n-- etl-craft: check-metadata-codes\nSELECT 1;",
-        ),
-        ("0005_metadata_codes.sql", "SELECT 1;"),
-    ],
-)
 @pytest.mark.parametrize("newline", ["\n", "\r\n"])
-def test_engine_markers_preserve_the_original_checksum(tmp_path, name, sql, newline):
-    payload = sql.replace("\n", newline).encode()
+def test_engine_markers_preserve_the_original_checksum(tmp_path, newline):
+    name = "0099_rebuild.sql"
+    payload = "-- etl-craft: rebuild-metadata\nSELECT 1;".replace("\n", newline).encode()
     (tmp_path / name).write_bytes(payload)
     stream = migrations.read_stream(migrations.ENGINE, tmp_path)
     (migration,) = stream.files
-    assert migration.markers == {"rebuild-metadata", "check-metadata-codes"}
+    assert migration.markers == {"rebuild-metadata"}
     assert migration.checksum == sha256_hex(payload)
     migrations.verify_ledger({(migrations.ENGINE, name): sha256_hex(payload)}, [stream])
 

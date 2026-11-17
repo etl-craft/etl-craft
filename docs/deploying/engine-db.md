@@ -20,12 +20,10 @@ apart from a leftover table.
 
 ## Upgrading
 
-Account authentication replaces the former `ETL_CRAFT_ACTOR` and `ETL_CRAFT_ACTOR_KIND`
-environment overrides. After installing this version, run `etl-craft setup` locally with
-writer credentials to migrate and provision your first admin, then `etl-craft login`.
-Existing service tokens keep their values and inherited account roles. If all migrated
-accounts are non-admin, local interactive setup provisions a recovery admin; no HTTP route
-can do so. Replace actor overrides in CI with a registered service token in `ETL_CRAFT_TOKEN`.
+Every Engine DB starts from the 0.9.0 baseline that `init-db` (or `setup`) creates and records
+in `SCHEMA_MIGRATIONS`. An Engine DB created by a development build before 0.9.0 has no
+baseline entry; `migrate` refuses it and names the remedy: recreate it with `init-db` and apply
+the project's config files again.
 
 After installing a new etl-craft version, and whenever your own migrations change, run:
 
@@ -48,12 +46,10 @@ Before applying anything, `migrate` checks every file it has applied before: a f
 removed or edited stops the run. Released migrations are never edited; add a new file instead.
 Keep your project migrations directory for every later run, since `migrate` needs it for that check.
 
-Packaged ENGINE migrations declare special policies with SQL header comments:
-`-- etl-craft: rebuild-metadata` enables SQLite's guarded metadata rebuild, and
-`-- etl-craft: check-metadata-codes` validates existing codes before applying pending migrations.
-`-- etl-craft: check-metadata-identities` checks stable config keys before applying any pending
-migration and again inside the identity migration transaction before changing indexes. The packaged `migration-markers.toml` supplies these markers for existing files without changing
-any SQL bytes or stored checksums. These internal markers are refused in PROJECT migrations.
+A packaged ENGINE migration that rebuilds a SQLite config table starts with the header
+comment `-- etl-craft: rebuild-metadata`, which runs it inside SQLite's guarded metadata
+rebuild. Any other `-- etl-craft:` header is refused, and the marker is refused in PROJECT
+migrations.
 
 Name project files `NNNN_short_description.sql` so they sort in the order they must apply. Each
 statement runs exactly as written: colons, percent signs and semicolons inside string literals
@@ -64,8 +60,8 @@ finds nothing left to apply.
 
 ## Query indexes
 
-Migration `0046_query_indexes.sql` adds indexes for pending runs, gate decisions, rule runs,
-upstream consumption, interventions and documentation requests on SQLite and PostgreSQL.
+The Engine DB indexes pending runs, gate decisions, rule runs, upstream consumption,
+interventions and documentation requests on SQLite and PostgreSQL.
 It also covers run and consumption retention. The existing attempt-number index already
 starts with `TASK_RUN_ID`, so attempt writes gain no additional index to maintain.
 

@@ -1,6 +1,5 @@
 """Admin governance, PostgreSQL direct changes, and complete package guards."""
 
-import shutil
 import sqlite3
 from contextvars import Context
 from dataclasses import replace
@@ -12,14 +11,12 @@ from sqlalchemy.exc import DBAPIError
 from etl_craft.core.actor import SYSTEM_ACTOR
 from etl_craft.core.enums import ActionName, ApiRole, ControlAction
 from etl_craft.core.errors import MigrationError, PermissionDeniedError, UsageError
-from etl_craft.dialects.engine.base import EngineDialect
 from etl_craft.engine import migrations
 from etl_craft.services import doctor
 from etl_craft.services.operations import OperationContext
 from etl_craft.services.operations.processes import check_package_schema
 from fixtures.actions import act
 from fixtures.metadata import add_pipeline
-from fixtures.released_schema import SCHEMAS, install
 
 
 def context(db):
@@ -203,43 +200,6 @@ def test_missing_guard_fails_doctor_and_startup(engine_db):
     with db.engine.begin() as conn:
         db.dialect.refresh_metadata_triggers(conn)
     check_package_schema(context(db))
-
-
-@pytest.mark.parametrize(
-    "release", sorted(path.name for path in SCHEMAS.iterdir() if path.is_dir())
-)
-def test_environment_upgrade_preserves_real_projects(
-    empty_engine_db, release, tmp_path, monkeypatch
-):
-    db = empty_engine_db
-    install(db, release)
-    previous = tmp_path / "previous"
-    previous.mkdir()
-    for file in db.dialect.migrations_dir().glob("*.sql"):
-        if file.name < "0066":
-            shutil.copyfile(file, previous / file.name)
-    with monkeypatch.context() as patch:
-        patch.setattr(EngineDialect, "migrations_dir", lambda self: previous)
-        migrations.apply_pending_migrations(db.engine)
-    with db.engine.begin() as conn:
-        identity = conn.execute(
-            text(
-                "INSERT INTO CFG_PROJECTS (PROJECT_CODE,PROJECT_NAME,DEFAULT_POOL) "
-                "VALUES ('legacy','Legacy','default') RETURNING PROJECT_ID AS "
-                "project_id"
-            )
-        ).scalar_one()
-    migrations.apply_pending_migrations(db.engine)
-    with db.engine.connect() as conn:
-        row = conn.execute(
-            text(
-                "SELECT PROJECT_ID AS project_id,ENVIRONMENT_TYPE AS "
-                "environment,GOVERNANCE AS governance FROM CFG_PROJECTS WHERE "
-                "PROJECT_CODE='legacy'"
-            )
-        ).one()
-        assert row.project_id == identity
-        assert row.environment == "CUSTOM" and row.governance == "STRICT"
 
 
 @pytest.mark.parametrize(

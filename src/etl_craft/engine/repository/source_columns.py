@@ -4,13 +4,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from sqlalchemy import text
 from sqlalchemy.engine import Connection
 from sqlglot import exp
 from sqlglot.errors import SqlglotError
 
 from etl_craft.core.text import is_safe_identifier, is_safe_object_ref
-from etl_craft.dialects.engine import for_engine
 from etl_craft.engine.queries import statement
 
 
@@ -28,18 +26,6 @@ class SourceColumn:
 
 def fetch_source_columns(conn: Connection) -> list[SourceColumn]:
     """Read source definitions without connecting to the warehouse."""
-    if not for_engine(conn).has_table(conn, "CFG_COLUMNS"):
-        return [
-            SourceColumn(*row)
-            for row in conn.execute(
-                text(
-                    "SELECT TABLE_NAME AS table_name, COLUMN_NAME AS column_name, "
-                    "DATA_TYPE AS data_type, "
-                    "COLUMN_POSITION AS column_position FROM CFG_SOURCE_COLUMNS "
-                    "WHERE ACTIVE_FLAG='Y' ORDER BY lower(TABLE_NAME), COLUMN_POSITION"
-                )
-            )
-        ]
     return [
         SourceColumn(
             ".".join(

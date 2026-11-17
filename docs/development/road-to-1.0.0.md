@@ -182,9 +182,9 @@ item's text, or work done early under another item.
 | S7.AI Fixes from the 2026-10-27 audit | Done | #264 | Pool/attempt credentials, bounded SSO, publishing, sign-in, dependency bounds, setup and first-ending metrics. |
 | S7.AK Schema checker | Done | S7.AK PR | Optional per-project schedule plus an on-demand check that compare declared tables with the warehouse; Insights and the catalog show the last check |
 | S7.B Users, roles and identities | Done | #203–#207, #231, #261, #263, #264, #277, #386, #421 | Custom roles and command bindings, deployment/environment/project/pipeline/tag scopes, groups and audiences, access explain and Administration Roles |
-| S7.C Redaction | Done | #228, #309, S7.C PR | Recursive name masking, operation-scoped value masking, process-wide masking of every resolved secret, and Redaction.Sensitive_patterns for team-named parameters in the catalog, task read and clones |
+| S7.C Redaction | Done | #228, #309, #420 | Recursive name masking, operation-scoped value masking, process-wide masking of every resolved secret, and Redaction.Sensitive_patterns for team-named parameters in the catalog, task read and clones |
 | S7.D Alert channels | Done | #387 | Admin-owned webhook/Slack routing, isolated event-admitted alert runs, bounded signed delivery and sanitized pipeline/project history |
-| S7.E Secrets providers | Done | #84, #120, #323, S7.E PR | ENVIRONMENT/FILE task declarations, fenced TLS delivery and private child pipe; AWS Secrets Manager and Vault KV v2 sources with Secrets.Cache_seconds |
+| S7.E Secrets providers | Done | #84, #120, #323, #419 | ENVIRONMENT/FILE task declarations, fenced TLS delivery and private child pipe; AWS Secrets Manager and Vault KV v2 sources with Secrets.Cache_seconds |
 | S7.F Packaging and deployment | Done | #227, #231, #316 | Wheel-built role images, tagged release smoke and publishing, Compose/Kubernetes manifests and systemd units |
 | S7.G Compatibility policy | In progress | #379; rolling checks | Policy, shared same-major admission, additive SQL/ledger checks and installed input registry implemented; actual mixed-version certification waits for the 0.9.0 release gate |
 | S7.H Cloud acceptance | In progress | #104–#110, #208, #231, #236, #247 | Native/Iceberg and managed-engine contracts exist; complete candidate evidence and unavailable provider cases remain |
@@ -220,6 +220,15 @@ item's text, or work done early under another item.
 | S8.H Support Insights scenario coverage | Planned | | Deterministic mixed-quality generators, every-feature demonstrations, business-rule and stewardship cases, and runnable README coverage |
 
 ### Handover notes
+
+- **Engine DB baseline (owner decision 2026-11-17).** Not a listed item: the owner approved
+  dropping the upgrade path from pre-0.9 Engine DBs. Every Engine DB starts from the 0.9.0
+  baseline (`init-db` records `baseline-0.9.0`); `migrate` refuses a ledger without it or with
+  a changed checksum. Until `v0.9.0` is tagged, Engine DB changes edit both `schema.sql` files
+  directly and development Engine DBs (the demo's included) are recreated. The S7.G
+  compatibility inventory's conversion rows are gone; `rehash`, `upgrade-targets` and
+  `refuse_legacy` remain for the warehouse cleanup, and retired team-history freezing for the
+  readable `schema.sql` regeneration. `current_project_id()` still falls back to project 1.
 
 - **S7.AB owner decision 2026-11-16.** Required task outcomes supersede wait pauses and the rule that earlier admissions inherit no new outcome; unstarted tasks receive the live outcome, while admitted versions remain pinned. Pipeline pause chooses DRAIN (default) or FINISH with atomic replacement.
 - **S5.Q owner decision 2026-11-16.** Pipeline DRAIN pause supersedes run/task holds and release; STOP, ABORT, RECOVER, RESTART and RUN_PAUSED retain their scopes. There is no longer a hold of one task to inspect its input.

@@ -29,15 +29,16 @@ def log_identity(tmp_path):
     return config, row, path
 
 
-@pytest.mark.parametrize("legacy", [False, True])
-def test_recorded_old_codes_and_legacy_layout_remain_readable(log_identity, legacy):
+def test_recorded_old_codes_remain_readable_and_a_log_outside_the_project_folder_is_refused(
+    log_identity,
+):
     config, row, path = log_identity
-    if legacy:
-        path = config.log_dir / "OLD" / "run-11" / "OLD_TASK.attempt-2.log"
-        path.parent.mkdir(parents=True)
-        path.write_text("legacy bytes")
-        row = replace(row, log_path=str(path))
     assert local_attempt_log(config, row) == path
+    outside = config.log_dir / "OLD" / "run-11" / "OLD_TASK.attempt-2.log"
+    outside.parent.mkdir(parents=True)
+    outside.write_text("bytes")
+    with pytest.raises(ResourceNotFoundError, match=r"project-\d+/<pipeline>/run-"):
+        local_attempt_log(config, replace(row, log_path=str(outside)))
 
 
 @pytest.mark.parametrize(

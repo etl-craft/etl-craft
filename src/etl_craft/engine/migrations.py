@@ -13,7 +13,6 @@ from __future__ import annotations
 import logging
 import os
 import re
-import tomllib
 from collections.abc import Callable
 from contextlib import nullcontext
 from contextvars import ContextVar
@@ -30,16 +29,9 @@ from etl_craft.core.actor import migration as current_migration
 from etl_craft.core.errors import MigrationError
 from etl_craft.core.text import sha256_hex, strip_comments_and_literals
 from etl_craft.dialects.engine import for_engine
-from etl_craft.dialects.engine.tables import AUDIT_TABLES, OWNED_CONFIG_TABLES
+from etl_craft.dialects.engine.tables import AUDIT_TABLES, CONFIG_TABLES
 from etl_craft.engine import locks
-from etl_craft.engine.migration_steps import (
-    MARKERS,
-    NO_TARGET,
-    STEPS,
-    MarkerStep,
-    Target,
-    TargetOptions,
-)
+from etl_craft.engine.migration_steps import MARKERS, NO_TARGET, Target, TargetOptions
 from etl_craft.engine.queries import run_script, statement
 
 logger = logging.getLogger(__name__)
@@ -52,7 +44,9 @@ before_project_migrations: ContextVar[Callable[[], None] | None] = ContextVar(
 MIGRATIONS_DIR_ENV_VAR = "ETL_CRAFT_MIGRATIONS_DIR"
 ENGINE = "ENGINE"
 PROJECT = "PROJECT"
-PACKAGED_MARKERS = Path(__file__).parents[1] / "dialects/engine/migration-markers.toml"
+BASELINE = "baseline-0.9.0"
+BASELINE_CHECKSUM = sha256_hex(BASELINE.encode())
+"""Recorded by init-db: the Engine DB was created from the 0.9.0 baseline schema."""
 
 
 @dataclass(frozen=True)
@@ -64,7 +58,6 @@ class MigrationFile:
     sql: str
     checksum: str
     markers: frozenset[str] = frozenset()
-    convert_at: int | None = None
 
     @property
     def version(self) -> str:
@@ -102,12 +95,8 @@ def resolve_project_migrations_dir(
 def read_stream(source: str, directory: Path, dialect: str = "") -> Stream:
     """Read every ``*.sql`` file in ``directory``, in filename order.
 
-    ``dialect`` names the Engine DB (``postgresql``, ``sqlite``) whose ``convert-at``
-    positions apply to the packaged stream.
+    ``dialect`` is accepted for callers that read one Engine DB's stream.
     """
-    registry = tomllib.loads(PACKAGED_MARKERS.read_text()) if source == ENGINE else {}
-    defaults = registry.get("markers", {})
-    positions = registry.get("convert-at", {}).get(dialect, {})
     files = []
     for path in sorted(p for p in directory.glob("*.sql") if p.is_file()):
         try:
@@ -118,7 +107,6 @@ def read_stream(source: str, directory: Path, dialect: str = "") -> Stream:
         markers = frozenset(
             marker.strip() for marker in re.findall(r"^-- etl-craft: (.*)$", sql, re.MULTILINE)
         )
-        markers |= {marker for marker, names in defaults.items() if path.name in names}
         if markers and source != ENGINE:
             raise MigrationError(f"{path.name}: etl-craft migration markers are ENGINE-only")
         if markers - MARKERS:
@@ -126,9 +114,7 @@ def read_stream(source: str, directory: Path, dialect: str = "") -> Stream:
                 f"{path.name}: unknown migration markers {sorted(markers - MARKERS)}; "
                 f"use {sorted(MARKERS)}"
             )
-        files.append(
-            MigrationFile(source, path, sql, sha256_hex(payload), markers, positions.get(path.name))
-        )
+        files.append(MigrationFile(source, path, sql, sha256_hex(payload), markers))
     return Stream(source, directory, tuple(files))
 
 
@@ -162,16 +148,9 @@ def migration_streams(
     return streams
 
 
-def _project_ledger(conn: Connection) -> bool:
-    """Read released ledgers until the packaged project migration adds their scope."""
-    return "project_id" in {
-        name.lower() for name in for_engine(conn).column_names(conn, "SCHEMA_MIGRATIONS")
-    }
-
-
 def _load_ledger(conn: Connection) -> dict[tuple[str, str], str]:
     try:
-        query = "scoped_applied_migrations" if _project_ledger(conn) else "applied_migrations"
+        query = "scoped_applied_migrations"
         rows = conn.execute(statement(conn, query)).all()
     except SQLAlchemyError as error:
         raise MigrationError(
@@ -186,6 +165,8 @@ def verify_ledger(ledger: dict[tuple[str, str], str], streams: list[Stream]) -> 
     files = {(f.source, f.version): f for stream in streams for f in stream.files}
     directories = {stream.source: stream.directory for stream in streams}
     for (source, version), checksum in sorted(ledger.items()):
+        if (source, version) == (ENGINE, BASELINE):
+            continue
         migration = files.get((source, version))
         if migration is None:
             if source == ENGINE and _future_additive_version(version, streams):
@@ -224,9 +205,7 @@ def _record(conn: Connection, migration: MigrationFile) -> None:
     conn.execute(
         statement(
             conn,
-            "record_project_migration"
-            if migration.source == PROJECT and _project_ledger(conn)
-            else "record_migration",
+            "record_project_migration" if migration.source == PROJECT else "record_migration",
         ),
         {"source": migration.source, "version": migration.version, "checksum": migration.checksum},
     )
@@ -234,14 +213,7 @@ def _record(conn: Connection, migration: MigrationFile) -> None:
 
 def _apply(engine: Engine, migration: MigrationFile, target: Target = NO_TARGET) -> None:
     dialect = for_engine(engine)
-    steps = [step for marker, step in STEPS.items() if marker in migration.markers]
-    token = current_migration.set(
-        migration.version
-        if migration.source == PROJECT
-        else f"engine/{migration.version}"
-        if any(step.names_migration for step in steps)
-        else ""
-    )
+    token = current_migration.set(migration.version if migration.source == PROJECT else "")
     try:
         with dialect.migration_transaction(
             engine,
@@ -252,7 +224,7 @@ def _apply(engine: Engine, migration: MigrationFile, target: Target = NO_TARGET)
             if migration.source == PROJECT:
                 _run_project(conn, migration, target)
             else:
-                _run_engine(conn, migration, steps, target)
+                _run_engine(conn, migration)
             _record(conn, migration)
     except Exception as error:
         raise MigrationError(f"{migration.version} failed to apply: {error}") from error
@@ -278,19 +250,10 @@ def _run_project(conn: Connection, migration: MigrationFile, target: Target) -> 
     resolve_project_sources(conn, target.catalog, target.warehouse_dialect)
 
 
-def _run_engine(
-    conn: Connection, migration: MigrationFile, steps: list[MarkerStep], target: Target
-) -> None:
-    """Run a packaged migration with its markers' checks and conversion at its position."""
+def _run_engine(conn: Connection, migration: MigrationFile) -> None:
+    """Run a packaged migration, then rebuild the generated guards for any table it changed."""
     dialect = for_engine(conn)
-    states = [(step, step.check(conn, target)) for step in steps if step.check is not None]
-    statements = dialect.split_statements(migration.sql)
-    at = len(statements) if migration.convert_at is None else migration.convert_at
-    run_script(conn, statements[:at])
-    for step, state in states:
-        if step.convert is not None and state is not None:
-            step.convert(conn, state, target)
-    run_script(conn, statements[at:])
+    run_script(conn, dialect.split_statements(migration.sql))
     dialect.refresh_metadata_triggers(conn)
 
 
@@ -331,6 +294,7 @@ def pending_files(
     streams = migration_streams(engine, project_dir, project_default, package_only=package_only)
     with nullcontext(connection) if connection is not None else engine.connect() as conn:
         ledger = _load_ledger(conn)
+    require_baseline(ledger)
     if package_only:
         ledger = {key: checksum for key, checksum in ledger.items() if key[0] == ENGINE}
     verify_ledger(ledger, streams)
@@ -364,6 +328,7 @@ def apply_pending_migrations(
     with locks.MIGRATE.hold(engine, wait_seconds):
         with engine.connect() as conn:
             ledger = _load_ledger(conn)
+        require_baseline(ledger)
         verify_ledger(ledger, streams)
         pending = [
             file
@@ -373,10 +338,6 @@ def apply_pending_migrations(
         ]
         with engine.connect() as conn:
             _check_package_collisions(conn, pending)
-        for marker, step in STEPS.items():
-            if step.check is not None and any(marker in file.markers for file in pending):
-                with engine.connect() as conn:
-                    step.check(conn, target)
         for stream in streams:
             if (
                 stream.source == PROJECT
@@ -401,9 +362,12 @@ def mark_packaged_migrations_applied(conn: Connection) -> list[str]:
     MIGRATE lock and owns the transaction that creates the schema and records this ledger.
     """
     stream = migration_streams(conn.engine)[0]
-    if not stream.files:
-        return []
     ledger = _load_ledger(conn)
+    if (ENGINE, BASELINE) not in ledger:
+        conn.execute(
+            statement(conn, "record_migration"),
+            {"source": ENGINE, "version": BASELINE, "checksum": BASELINE_CHECKSUM},
+        )
     verify_ledger(ledger, [stream])
     for migration in stream.files:
         if (migration.source, migration.version) not in ledger:
@@ -411,10 +375,28 @@ def mark_packaged_migrations_applied(conn: Connection) -> list[str]:
     return [migration.version for migration in stream.files]
 
 
+def require_baseline(ledger: dict[tuple[str, str], str]) -> None:
+    """Refuse a ledger without the unchanged baseline entry that ``init-db`` records."""
+    checksum = ledger.get((ENGINE, BASELINE))
+    if checksum is None:
+        raise MigrationError(
+            f"SCHEMA_MIGRATIONS has no {BASELINE} entry; expected the entry `init-db` records "
+            "for every Engine DB from 0.9.0 on (an Engine DB created by an etl-craft "
+            "development build before 0.9.0 has none); recreate it with `etl-craft init-db` "
+            "(or `setup`) and apply the project's config files again"
+        )
+    if checksum != BASELINE_CHECKSUM:
+        raise MigrationError(
+            f"SCHEMA_MIGRATIONS entry {BASELINE} has checksum {checksum}; expected "
+            f"{BASELINE_CHECKSUM}, the value `init-db` records; the ledger was changed outside "
+            "etl-craft; restore SCHEMA_MIGRATIONS from a backup or recreate the Engine DB"
+        )
+
+
 def _check_package_collisions(conn: Connection, pending: list[MigrationFile]) -> None:
     """Refuse conflicting package table creation before any pending migration can write."""
     present = {name.upper() for name in inspect(conn).get_table_names()}
-    owned = OWNED_CONFIG_TABLES | AUDIT_TABLES
+    owned = CONFIG_TABLES | AUDIT_TABLES
     for file in pending:
         if file.source != ENGINE:
             continue

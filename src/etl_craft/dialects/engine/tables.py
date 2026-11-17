@@ -84,10 +84,8 @@ AUDIT_TABLES = frozenset(
         "AUD_EVENT_FILES",
         "AUD_EVENT_FILE_DECISIONS",
         "AUD_EVENT_KEYS",
-        "AUD_SOURCE_COLUMNS_BASELINE",
         "AUD_CFG_TABLES_HISTORY",
         "AUD_CFG_COLUMNS_HISTORY",
-        "AUD_CFG_SOURCE_COLUMNS_HISTORY",
         "AUD_CFG_ACCOUNTS_HISTORY",
         "AUD_CFG_GROUPS_HISTORY",
         "AUD_CFG_GROUP_MEMBERS_HISTORY",
@@ -106,14 +104,9 @@ AUDIT_TABLES = frozenset(
 )
 
 
-LEGACY_CONFIG_TABLES = frozenset({"CFG_SOURCE_COLUMNS"})
-OWNED_CONFIG_TABLES = CONFIG_TABLES | LEGACY_CONFIG_TABLES
-
-
-def team_config(table: str, *, legacy: bool = False) -> bool:
+def team_config(table: str) -> bool:
     """Recognize a team table without inspecting its columns or values."""
-    owned = OWNED_CONFIG_TABLES if legacy else CONFIG_TABLES
-    return table.upper().startswith("CFG_") and table.upper() not in owned
+    return table.upper().startswith("CFG_") and table.upper() not in CONFIG_TABLES
 
 
 def retired_history(table: str) -> bool:
@@ -122,17 +115,12 @@ def retired_history(table: str) -> bool:
     return name.startswith("AUD_CFG_") and name.endswith("_HISTORY") and name not in AUDIT_TABLES
 
 
-LEGACY_AUDIT_TABLES = frozenset(
-    {"AUD_PIPELINE_DEPENDENCY_TRACKER", "AUD_TASK_DEPENDENCY_TRACKER", "AUD_OVERSEERS"}
-)
-
-
 def validate_audit_table(table: str, triggers: set[str]) -> None:
     """Refuse a new team audit table without mistaking retained history for team data."""
     from etl_craft.core.errors import MetadataError
 
     name = table.upper()
-    if not name.startswith("AUD_") or name in AUDIT_TABLES | LEGACY_AUDIT_TABLES:
+    if not name.startswith("AUD_") or name in AUDIT_TABLES:
         return
     known = {
         f"trg_actor_guard_{table.lower()}",
