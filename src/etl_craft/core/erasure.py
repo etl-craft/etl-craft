@@ -32,6 +32,12 @@ class ErasedTable:
     column: str
     key_hmac: str
     rows: int
+    old_versions: str | None = None
+    """Where deleted rows stay readable (snapshots, table history), or ``None`` when nowhere."""
+    bounded: bool | None = None
+    """Whether those old versions expire within a known bound; ``None`` when there are none."""
+    retention: str | None = None
+    """The physical-retention statement shown with the result, naming the bound or its remedy."""
 
 
 @dataclass(frozen=True)

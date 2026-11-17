@@ -11,7 +11,7 @@ from sqlalchemy.engine import Engine
 from etl_craft.config import ConnectorConfig
 from etl_craft.config.targets import active_catalog
 from etl_craft.core.definitions import using
-from etl_craft.core.enums import Handler, ScriptKind, SqlAction
+from etl_craft.core.enums import Handler, IcebergMaintenance, ScriptKind, SqlAction
 from etl_craft.core.erasure import (
     ErasedTable,
     ErasureEntry,
@@ -23,7 +23,7 @@ from etl_craft.core.errors import HandlerError
 from etl_craft.core.faults import fault_point
 from etl_craft.core.redaction import mask_text, registering
 from etl_craft.dialects.business_rules import quote_output_key
-from etl_craft.dialects.warehouse.erasure import resolved_column, selection_columns
+from etl_craft.dialects.warehouse.erasure import old_versions, resolved_column, selection_columns
 from etl_craft.engine import locks
 from etl_craft.engine.queries import statement
 from etl_craft.engine.repository.normalization import object_identity
@@ -285,6 +285,7 @@ def apply_entries(
                                 mask_text("|".join(selection.columns)),
                                 entry.key_hmac,
                                 count,
+                                *_retention(engine, config, warehouse, name),
                             )
                         )
                 if not dry_run:
@@ -301,6 +302,55 @@ def apply_entries(
                 }
             )
     return ErasureReport(tuple(tables), tuple(boundaries.values()), dry_run)
+
+
+def _retention(
+    engine: Engine, config: ConnectorConfig, warehouse: Engine, table: str
+) -> tuple[str | None, bool | None, str | None]:
+    """State where erased rows stay readable and what bounds them; never expire anything."""
+    dialect = warehouse_dialect(config)
+    with warehouse.connect() as conn:
+        native = dialect.erasure_table(conn, table)
+        found = old_versions(dialect, dialect.existing_table_format(conn, native))
+    if found is None:
+        return None, None, None
+    days = _expiry_days(engine, config, table)
+    if days is not None:
+        text = (
+            f"Erased rows stay readable in {found.kept_in} until etl-craft maintenance expires "
+            f"snapshots older than {days} days (SNAPSHOT_RETENTION_DAYS)."
+        )
+    elif found.warehouse_bound:
+        text = (
+            f"Erased rows stay readable in {found.kept_in}, bounded by {found.warehouse_bound}; "
+            f"to shorten it, {found.remedy}."
+        )
+    else:
+        text = (
+            f"Erased rows stay readable in {found.kept_in} until they expire, and no expiry "
+            f"bound is configured; {found.remedy}."
+        )
+    return found.kept_in, days is not None or found.warehouse_bound is not None, text
+
+
+def _expiry_days(engine: Engine, config: ConnectorConfig, table: str) -> int | None:
+    """Return the table's SNAPSHOT_RETENTION_DAYS when etl-craft maintenance enforces it."""
+    wanted = identity(config, table).lower()
+    with engine.connect() as conn:
+        rows = conn.execute(statement(conn, "retention_warehouse_targets")).all()
+    for row in rows:
+        name = ".".join(p for p in (row.catalog_name, row.schema_name, row.table_name) if p)
+        days = row.snapshot_retention_days
+        if (
+            days is not None
+            and identity(config, name).lower() == wanted
+            and warehouse_dialect(config).retention_maintenance(
+                name, IcebergMaintenance.EXPIRE_SNAPSHOTS, days
+            )
+            is not None
+        ):
+            return int(days)
+    return None
 
 
 def check_column(

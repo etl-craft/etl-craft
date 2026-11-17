@@ -7,6 +7,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlglot import Dialect, exp, parse_one
 from sqlglot.errors import SqlglotError
 
+from etl_craft.core.enums import TableFormat
 from etl_craft.core.erasure import ErasureSelection
 from etl_craft.core.errors import HandlerError
 from etl_craft.dialects.business_rules import quote_output_key
@@ -115,6 +116,41 @@ def deletion_plan(
         for column in selected
     )
     return ErasureDelete(target, native, f"({predicate})", types)
+
+
+@dataclass(frozen=True)
+class OldVersions:
+    """Where a warehouse keeps deleted rows readable, and how their expiry is bounded."""
+
+    kept_in: str
+    remedy: str
+    warehouse_bound: str | None = None
+    """The bound the warehouse always applies, when it has one."""
+
+
+_ICEBERG = OldVersions(
+    "Iceberg snapshots",
+    "set SNAPSHOT_RETENTION_DAYS in tables.csv (Trino over Iceberg) or expire snapshots "
+    "in the catalog's own maintenance",
+)
+_DELTA = OldVersions(
+    "Delta table history",
+    "set delta.deletedFileRetentionDuration on the table and run VACUUM on a schedule",
+)
+_SNOWFLAKE = OldVersions(
+    "Snowflake Time Travel and Fail-safe",
+    "lower DATA_RETENTION_TIME_IN_DAYS on the table",
+    "DATA_RETENTION_TIME_IN_DAYS (at most 90 days) plus 7 days of Fail-safe",
+)
+
+
+def old_versions(dialect: WarehouseDialect, table_format: TableFormat) -> OldVersions | None:
+    """Name the time-travel store that still holds erased rows, or ``None`` when none does."""
+    if dialect.spec.key.startswith("databricks"):
+        return _DELTA
+    if dialect.spec.key.startswith("snowflake"):
+        return _SNOWFLAKE
+    return _ICEBERG if table_format == TableFormat.ICEBERG else None
 
 
 def column_identity(value: str, dialect: WarehouseDialect) -> str:

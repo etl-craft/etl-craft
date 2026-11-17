@@ -6,6 +6,13 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+- Erase results, previews and ERASURE attempt results state, per table, where erased rows stay
+  readable through time travel (`old_versions`: Iceberg snapshots, Delta table history or
+  Snowflake Time Travel), whether that retention is `bounded`, and a `retention` statement naming
+  the bound (`SNAPSHOT_RETENTION_DAYS` on Trino over Iceberg, Snowflake's
+  `DATA_RETENTION_TIME_IN_DAYS`) or the setting to configure. `doctor` warns, under
+  **Erasure physical retention**, for each erased table with no bound it can confirm. Erasure
+  still never expires snapshots, vacuums, restores or rolls back a table.
 - **Breaking:** remove `hold`, `release`, `holds`, HOLD/RELEASE controls, the holds API and task
   wait pauses. Pipeline pause now drains admitted runs by default (`--active-runs DRAIN`);
   FINISH lets them complete, and existing pipeline pauses retain FINISH. Replace an open pause
