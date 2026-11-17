@@ -485,15 +485,7 @@ def test_controller_start_removes_uncommitted_leftovers_and_logs_them(upload_api
     with caplog.at_level(logging.INFO):
         serve(caller(ctx), stop)
     assert not incoming.exists() and not final.exists()
-    chain = [logging.getLogger(n) for n in ("etl_craft.engine.upload_recovery", "etl_craft", "")]
-    state = [
-        (lg.name, lg.level, lg.disabled, lg.propagate, [type(h).__name__ for h in lg.handlers])
-        for lg in chain
-    ]
-    assert str(incoming) in caplog.text and str(final) in caplog.text, (
-        f"logging state {state}, disable={logging.root.manager.disable}, "
-        f"records={[(r.name, r.levelname, r.getMessage()[:80]) for r in caplog.records]}"
-    )
+    assert str(incoming) in caplog.text and str(final) in caplog.text
 
 
 def test_oversized_archive_is_bounded_before_restoration(upload_api, monkeypatch, tmp_path):

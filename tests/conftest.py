@@ -1,5 +1,7 @@
 """Suite-wide pytest configuration: evidence, the suite-marker rule, Engine DB fixtures."""
 
+import logging
+
 import pytest
 
 pytest_plugins = [
@@ -27,3 +29,14 @@ def forget_resolved_secrets():
 
     yield
     redaction._RESOLVED.clear()
+
+
+@pytest.fixture(autouse=True)
+def restore_package_logger():
+    """Undo a CLI test's logging setup: a later test's caplog must see etl_craft INFO records."""
+    logger = logging.getLogger("etl_craft")
+    level, handlers = logger.level, list(logger.handlers)
+    yield
+    logger.setLevel(level)
+    for handler in [h for h in logger.handlers if h not in handlers]:
+        logger.removeHandler(handler)
