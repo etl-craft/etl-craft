@@ -151,6 +151,8 @@ VALUES = {
     "role": "operator",
     "grantee_role": ApiRole.VIEWER,
     "permission": Permission.CAN_VIEW,
+    "action_name": "run",
+    "environment": "CUSTOM",
     "max_running_tasks": 8,
     "schema_check_on_demand": "Y",
     "all": 0,
@@ -200,6 +202,7 @@ VALUES = {
 
 def bindings(sql, name=""):
     overrides = {
+        "access_allowed": {"action": "run"},
         "access_list": {"project": "default"},
         "alert_channel_add": {"kind": "WEBHOOK"},
         "alert_channel_set": {"kind": "WEBHOOK"},
@@ -625,8 +628,8 @@ FULL_READS.update(
             "aud_cfg_pipeline_dependency_history",
         ): "Counts all eligible rows for the explicit retention snapshot.",
         (
-            "retention_aud_cfg_pipeline_grants_history_count",
-            "aud_cfg_pipeline_grants_history",
+            "retention_aud_cfg_access_bindings_history_count",
+            "aud_cfg_access_bindings_history",
         ): "Counts all eligible rows for the explicit retention snapshot.",
         (
             "retention_aud_cfg_projects_history_count",

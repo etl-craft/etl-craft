@@ -198,9 +198,10 @@ def test_a_malformed_value_is_refused_by_name_before_the_operation_runs(server, 
 def operations(monkeypatch):
     """Every action's operation replaced by one that records it ran."""
     from etl_craft.core.governance import ProjectPolicy
-    from etl_craft.services.operations import governance
+    from etl_craft.services.operations import bindings, governance
 
     monkeypatch.setattr(governance, "project_policy", lambda ctx, request: ProjectPolicy())
+    monkeypatch.setattr(bindings, "covering", lambda *args: ())
     ran = []
     # Transport tests isolate identity lookup; grant resolution is exercised on both Engine DBs.
     monkeypatch.setattr(actions, "_request_context", lambda ctx, name, request: ctx)
@@ -212,7 +213,7 @@ def operations(monkeypatch):
             raise PermissionDeniedError("project requires CAN_MANAGE")
 
     monkeypatch.setattr(actions, "require_project", project_check)
-    monkeypatch.setattr(actions, "_request_codes", lambda conn, action, request: ["x"])
+    monkeypatch.setattr(bindings, "request_codes", lambda conn, action, request: ["x"])
     monkeypatch.setattr(
         actions, "pipeline_access", lambda conn, ctx: PipelineAccess({"x": ctx.role})
     )

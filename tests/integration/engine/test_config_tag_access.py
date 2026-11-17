@@ -17,7 +17,7 @@ from fixtures.metadata import add_pipeline
 
 
 @pytest.mark.parametrize("output_format", ["text", "json"])
-@pytest.mark.parametrize("principal", ["group", "role", "account"])
+@pytest.mark.parametrize("principal", ["group", "audience", "account"])
 def test_tag_edits_report_grant_matches_and_open_restricted_switches(
     metadata_project, monkeypatch, capsys, output_format, principal
 ):
@@ -34,7 +34,7 @@ def test_tag_edits_report_grant_matches_and_open_restricted_switches(
             {"tags": json.dumps({"TAGS": ["sensitive"]}), "id": holder},
         )
     identity = {
-        principal: {"group": "auditors", "role": "viewer", "account": "test-admin"}[principal]
+        principal: {"group": "auditors", "audience": "viewer", "account": "test-admin"}[principal]
     }
     label = f"{principal}:{identity[principal]}"
     act(
@@ -43,7 +43,7 @@ def test_tag_edits_report_grant_matches_and_open_restricted_switches(
         project="default",
         **identity,
         tag="sensitive",
-        permission=Permission.CAN_RUN,
+        role=Permission.CAN_RUN,
         reason="Review tagged pipelines",
     )
     folder = project.root / "patch"
@@ -87,7 +87,8 @@ def test_tag_edits_report_grant_matches_and_open_restricted_switches(
                                 {
                                     "principal": label,
                                     "tag": "sensitive",
-                                    "permission": "CAN_RUN",
+                                    "role": "CAN_RUN",
+                                    "action": None,
                                     "starts_matching": restricted,
                                 }
                             ],
@@ -113,8 +114,44 @@ def test_tag_edits_report_grant_matches_and_open_restricted_switches(
         with project.engine.connect() as conn:
             active = conn.execute(
                 text(
-                    "SELECT PERMISSION AS permission FROM CFG_PIPELINE_GRANTS "
+                    "SELECT ROLE_NAME AS permission FROM CFG_ACCESS_BINDINGS "
                     "WHERE TAG='sensitive' AND ACTIVE_FLAG='Y'"
                 )
             ).scalar_one()
             assert active == Permission.CAN_RUN
+
+
+@pytest.mark.parametrize("binding", [{"role": "runner"}, {"action": "run"}])
+def test_custom_tag_bindings_report_commands_without_restricting_pipeline(
+    metadata_project, binding
+):
+
+    project = metadata_project
+    ctx = OperationContext(project.engine, project.config, SYSTEM_ACTOR, role=ApiRole.ADMIN)
+    act(ctx, ActionName.ROLE_CREATE, name="runner", actions=("run",))
+    with acting_as(SYSTEM_ACTOR), project.engine.begin() as conn:
+        pipeline = add_pipeline(conn, "P")
+        conn.execute(
+            text("UPDATE CFG_PIPELINES SET PIPELINE_PARAMETERS=:tags WHERE PIPELINE_ID=:id"),
+            {"tags": json.dumps({"TAGS": ["sensitive"]}), "id": pipeline},
+        )
+    act(
+        ctx,
+        ActionName.ACCESS_GRANT,
+        audience="viewer",
+        project="default",
+        tag="sensitive",
+        reason="Custom tag command",
+        **binding,
+    )
+    folder = project.root / "patch"
+    folder.mkdir()
+    (folder / "pipelines.csv").write_text("PIPELINE_CODE,PIPELINE_PARAMETERS\nP,{}\n")
+    done = act(ctx, ActionName.CONFIG_PLAN, config_dir=folder)
+    change = done.tag_access_changes[0]
+    assert not change.was_restricted and not change.is_restricted
+    assert change.policy_change is None
+    match = change.grants[0]
+    assert match.role == binding.get("role")
+    assert match.action == binding.get("action")
+    assert not match.starts_matching

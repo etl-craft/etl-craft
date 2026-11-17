@@ -200,7 +200,7 @@ def test_account_upgrade_preserves_legacy_credentials(
         assert len(versions) == 2
         assert all(v.account_id and v.migration == "engine/0034_accounts.sql" for v in versions)
     with db.engine.connect() as conn:
-        assert {"cfg_groups", "cfg_group_members", "cfg_pipeline_grants"} <= {
+        assert {"cfg_groups", "cfg_group_members", "cfg_access_bindings"} <= {
             name.lower() for name in inspect(conn).get_table_names()
         }
         claims = conn.execute(text("SELECT SSO_GROUP_IDS AS ids FROM CFG_API_TOKENS")).all()

@@ -84,7 +84,9 @@ def _render(out: Output, done: ConfigSync, verb: str) -> None:
         out.line(f"  access {access.pipeline}:")
         for grant in access.grants:
             match = "starts matching" if grant.starts_matching else "stops matching"
-            out.line(f"    {grant.principal} tag={grant.tag!r} {grant.permission}: {match}")
+            out.line(
+                f"    {grant.principal} tag={grant.tag!r} {grant.role or grant.action}: {match}"
+            )
         if access.policy_change is not None:
             out.line(f"    {access.policy_change}")
     for pause in done.task_pauses:

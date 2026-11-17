@@ -150,7 +150,7 @@ def test_a_viewer_sees_the_failed_run_but_no_recover_action(scene):
         ActionName.ACCESS_GRANT,
         project="default",
         account="alice",
-        permission="CAN_VIEW",
+        role="CAN_VIEW",
         reason="view the runs",
     )
     with sync_playwright() as pw:

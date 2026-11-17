@@ -86,6 +86,24 @@ SEEDS = [
         "generate_series(1,:pipelines) p",
     ),
     (
+        "CFG_ROLES",
+        "ROLE_ID,ROLE_NAME,DESCRIPTION",
+        "1000000+p,'plan-role-'||p,'Plan role '||p",
+        "generate_series(1,:pipelines) p",
+    ),
+    (
+        "CFG_ROLE_ACTIONS",
+        "ROLE_ACTION_ID,ROLE_ID,ACTION_NAME",
+        "1000000+p,1000000+p,'run'",
+        "generate_series(1,:pipelines) p",
+    ),
+    (
+        "CFG_ACCESS_BINDINGS",
+        "BINDING_ID,GRANTEE_ROLE,ROLE_NAME,PROJECT_ID,PIPELINE_CODE",
+        "1000000+p,'viewer','plan-role-'||p,1,'PLAN_'||p",
+        "generate_series(1,:pipelines) p",
+    ),
+    (
         "AUD_PIPELINE_REFRESHES",
         "REFRESH_ID,PROJECT_ID,PIPELINE_ID,REFRESHED_AT,ACTOR,ACTOR_KIND,STATUS,"
         "METADATA_VERSION,METADATA_SNAPSHOT,BUNDLE_ID,FINDINGS",

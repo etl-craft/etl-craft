@@ -147,7 +147,7 @@ def test_a_viewer_reads_task_pages_without_controls(scene):
         ActionName.ACCESS_GRANT,
         project="default",
         account="alice",
-        permission="CAN_VIEW",
+        role="CAN_VIEW",
         reason="read",
     )
     with sync_playwright() as pw:

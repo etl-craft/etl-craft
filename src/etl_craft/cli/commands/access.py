@@ -31,24 +31,24 @@ def configure(parser: argparse.ArgumentParser) -> None:
         sub.add_argument("--project", default=argparse.SUPPRESS)
         if name == "explain":
             sub.add_argument("--account", required=True)
-            sub.add_argument("--action", required=True, help="the command, such as 'run'")
+            sub.add_argument("--action", required=True, help="The command, such as 'run'.")
             sub.add_argument("--pipeline")
             configure_output(sub)
             continue
         reach = sub.add_mutually_exclusive_group()
-        reach.add_argument("--environment", help="every project of this environment type")
-        reach.add_argument("--deployment", action="store_true", help="every project")
+        reach.add_argument("--environment", help="Every project of this environment type.")
+        reach.add_argument("--deployment", action="store_true", help="Every project.")
         principal = sub.add_mutually_exclusive_group()
         principal.add_argument("--group")
         principal.add_argument("--account")
-        principal.add_argument("--audience", help="every account with this deployment role")
+        principal.add_argument("--audience", help="Every account with this deployment role.")
         target = sub.add_mutually_exclusive_group()
         target.add_argument("--pipeline")
         target.add_argument("--tag")
         if name != "list":
             what = sub.add_mutually_exclusive_group()
-            what.add_argument("--role", help="CAN_VIEW, CAN_UPLOAD, CAN_RUN, CAN_MANAGE or custom")
-            what.add_argument("--action", help="one command, such as 'run'")
+            what.add_argument("--role", help="CAN_VIEW, CAN_UPLOAD, CAN_RUN, CAN_MANAGE or custom.")
+            what.add_argument("--action", help="One command, such as 'run'.")
             sub.add_argument("--reason", required=True)
         if name == "grant":
             sub.add_argument("--dry-run", action="store_true")
@@ -56,7 +56,7 @@ def configure(parser: argparse.ArgumentParser) -> None:
 
 
 def run(args: argparse.Namespace, out: Output) -> int:
-    """Read a bulk file once, then let the service validate and diff the submitted content."""
+    """Submit one binding or explanation to the shared operation."""
     if args.access_verb == "explain":
         args.project = getattr(args, "project", None) or command_project(args)
         explained = call(args, VERBS["explain"], request_from(args, ExplainInput))

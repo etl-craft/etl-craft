@@ -224,7 +224,7 @@ def test_can_run_grant_does_not_grant_attestation(legacy_writer):
         ActionName.ACCESS_GRANT,
         project="default",
         account="runner",
-        permission=Permission.CAN_RUN,
+        role=Permission.CAN_RUN,
         reason="Fixture grant",
     )
     viewer = replace(ctx, actor=Actor("runner", ActorKind.SERVICE), role=ApiRole.VIEWER)

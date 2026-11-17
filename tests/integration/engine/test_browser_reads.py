@@ -75,8 +75,8 @@ def test_project_health_matches_independent_audit_counts_and_window_edges(reads,
             transitions.queue_attempt(conn, summary, OWNER)
         conn.execute(
             text(
-                "INSERT INTO CFG_PIPELINE_GRANTS (PIPELINE_CODE,GRANTEE_ROLE,PERMISSION) "
-                "VALUES ('HIDDEN','operator','CAN_VIEW')"
+                "INSERT INTO CFG_ACCESS_BINDINGS (PROJECT_ID,PIPELINE_CODE,GRANTEE_ROLE,ROLE_NAME) "
+                "VALUES (1,'HIDDEN','operator','CAN_VIEW')"
             )
         )
         conn.execute(
@@ -211,8 +211,8 @@ def test_catalog_refuses_symlinks_and_pipeline_limited_accounts(reads, tmp_path)
         add_pipeline(conn, "PRIVATE")
         conn.execute(
             text(
-                "INSERT INTO CFG_PIPELINE_GRANTS (PIPELINE_CODE,GRANTEE_ROLE,PERMISSION) "
-                "VALUES ('PRIVATE','operator','CAN_VIEW')"
+                "INSERT INTO CFG_ACCESS_BINDINGS (PROJECT_ID,PIPELINE_CODE,GRANTEE_ROLE,ROLE_NAME) "
+                "VALUES (1,'PRIVATE','operator','CAN_VIEW')"
             )
         )
     with pytest.raises(PermissionDeniedError, match=r"every pipeline.*limited.*whole-project"):

@@ -7,6 +7,7 @@ from typing import ClassVar
 from sqlalchemy.engine import Connection
 
 from etl_craft.core.actor import migration
+from etl_craft.core.enums import ActionName
 from etl_craft.core.enums_access import Permission
 from etl_craft.core.errors import ResourceNotFoundError, RunRefusedError, SqlGuardError, UsageError
 from etl_craft.core.governance import check_reason
@@ -17,6 +18,7 @@ from etl_craft.engine.queries import statement
 from etl_craft.handlers.resources import LocalLocker
 from etl_craft.handlers.sql.watermarks import source_pipelines
 from etl_craft.services.config_renames import mentioned_files
+from etl_craft.services.operations.bindings import allows
 from etl_craft.services.operations.context import OperationContext
 from etl_craft.services.operations.permissions import require_project
 from etl_craft.services.operations.pipeline_refresh import RefreshInput, refresh_on
@@ -103,7 +105,8 @@ def rename(ctx: OperationContext, request: RenameInput) -> RenameResult:
 
 def _quiescent_pipeline(conn: Connection, ctx: OperationContext, request: RenameInput) -> int:
     """Refuse busy identities before waiting for resources and again under admission fencing."""
-    require_project(conn, ctx, Permission.CAN_MANAGE)
+    if not allows(ctx, ActionName.RENAME, request, conn=conn):
+        require_project(conn, ctx, Permission.CAN_MANAGE)
     params = {"project_id": ctx.project_id, "code": request.pipeline_code}
     pipeline = conn.execute(statement(conn, "rename_pipeline"), params).one_or_none()
     if pipeline is None:

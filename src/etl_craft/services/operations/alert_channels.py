@@ -1,10 +1,10 @@
-"""Administrator-owned routing and secret references, independent of project configuration."""
+"""Deployment routing and secret references, independent of project configuration."""
 
 from dataclasses import dataclass
 from typing import ClassVar
 
 from etl_craft.core.alerts import AlertKind, AlertTrigger, triggers
-from etl_craft.core.enums import ApiRole
+from etl_craft.core.enums import ActionName, ApiRole
 from etl_craft.core.enums_alerts import AlertBodyFormat
 from etl_craft.core.errors import PermissionDeniedError, UsageError
 from etl_craft.core.text import is_env_name, is_metadata_code
@@ -13,6 +13,7 @@ from etl_craft.engine.alert_channels import AlertChannel
 from etl_craft.engine.queries import statement
 from etl_craft.services.operations.access_inputs import project
 from etl_craft.services.operations.admin_metadata import reason
+from etl_craft.services.operations.bindings import allows
 from etl_craft.services.operations.context import OperationContext
 from etl_craft.services.operations.requests import Request
 
@@ -45,15 +46,15 @@ class ChannelDisable(ChannelIdentity):
 
 @dataclass(frozen=True)
 class Channels:
-    """Only administrators may read channel reference names."""
+    """Channel reference names for an authorized deployment actor."""
 
     SCHEMA: ClassVar[str] = "etl-craft/alert-channels/1"
     channels: tuple[AlertChannel, ...]
 
 
-def require_admin(ctx: OperationContext) -> None:
+def require_admin(ctx: OperationContext, action: ActionName, request: ChannelIdentity) -> None:
     """Keep direct Python calls under the same administrative boundary as HTTP and CLI."""
-    if ctx.role != ApiRole.ADMIN:
+    if ctx.role != ApiRole.ADMIN and not allows(ctx, action, request):
         raise PermissionDeniedError(
             f"alert channels: account {ctx.actor.name!r} role={ctx.role}; expected admin; "
             "ask a deployment administrator to manage routing and secret references"
@@ -62,7 +63,7 @@ def require_admin(ctx: OperationContext) -> None:
 
 def list_channels(ctx: OperationContext, request: ChannelIdentity) -> Channels:
     """List reference names, never resolved values."""
-    require_admin(ctx)
+    require_admin(ctx, ActionName.ALERT_CHANNEL_LIST, request)
     with ctx.engine.connect() as conn:
         identity = project(conn, request.project)
         rows = conn.execute(statement(conn, "alert_channels_list"), {"project_id": identity})
@@ -77,7 +78,7 @@ def list_channels(ctx: OperationContext, request: ChannelIdentity) -> Channels:
 
 def set_channel(ctx: OperationContext, request: ChannelWrite) -> Channels:
     """Create or replace an approved routing definition under the metadata lock."""
-    require_admin(ctx)
+    require_admin(ctx, ActionName.ALERT_CHANNEL_SET, request)
     reason(request.reason)
     if request.name is None or not is_metadata_code(request.name):
         raise UsageError(
@@ -127,7 +128,7 @@ def set_channel(ctx: OperationContext, request: ChannelWrite) -> Channels:
 
 def disable_channel(ctx: OperationContext, request: ChannelDisable) -> Channels:
     """Disable future admission and delivery without removing the retained channel."""
-    require_admin(ctx)
+    require_admin(ctx, ActionName.ALERT_CHANNEL_DISABLE, request)
     reason(request.reason)
     with locks.MIGRATE.hold(ctx.engine, wait_seconds=30), ctx.engine.begin() as conn:
         identity = project(conn, request.project)

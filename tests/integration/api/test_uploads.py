@@ -220,7 +220,7 @@ def test_can_upload_grant_accepts_files_but_does_not_grant_run(upload_api):
         project="default",
         account="viewer",
         pipeline="P",
-        permission="CAN_UPLOAD",
+        role="CAN_UPLOAD",
         reason="assign stewardship",
     )
     response = client.post(
@@ -248,3 +248,36 @@ def test_unsigned_upload_is_refused_and_recorded_before_reading_body(upload_api)
     with ctx.engine.connect() as conn:
         row = conn.execute(text("SELECT STATUS AS status,REASON AS reason FROM AUD_UPLOADS")).one()
     assert row.status == "REFUSED" and "pipeline P" in row.reason and "CAN_UPLOAD" in row.reason
+
+
+@pytest.mark.parametrize("deployment", [False, True])
+def test_single_action_upload_bindings_accept_files_with_only_their_implied_view(
+    upload_api, deployment
+):
+    from fixtures.actions import act
+
+    ctx, client, _, viewer = upload_api
+    act(
+        ctx, ActionName.ACCESS_REVOKE, audience="viewer", project="default", reason="isolate access"
+    )
+    scope = {"deployment": True} if deployment else {"project": "default", "pipeline": "P"}
+    act(
+        ctx,
+        ActionName.ACCESS_GRANT,
+        account="viewer",
+        action="upload",
+        reason="stewardship",
+        **scope,
+    )
+    if not deployment:
+        eligible = client.get("/api/v1/uploads/pipelines", headers=authorization(viewer))
+        assert eligible.status_code == 200, eligible.text
+        assert [p["pipeline_code"] for p in eligible.json()["pipelines"]] == ["P"]
+    response = client.post(
+        "/api/v1/uploads?pipeline_code=P",
+        headers=authorization(viewer),
+        files={"file": ("data.csv", b"id|name\n1|one\n", "text/csv")},
+    )
+    assert response.status_code == 200, response.text
+    hidden = client.get("/api/v1/projects/default/pipelines", headers=authorization(viewer))
+    assert hidden.status_code == (404 if deployment else 200), hidden.text

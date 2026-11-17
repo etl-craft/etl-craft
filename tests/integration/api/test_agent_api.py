@@ -1669,7 +1669,7 @@ def test_project_revocation_refuses_agent_dispatch(agent_scene):
         attempt = transitions.queue_attempt(conn, summary, identity)
         agent_id = conn.execute(text("SELECT AGENT_ID AS agent_id FROM AUD_AGENTS")).scalar_one()
     for role in (ApiRole.VIEWER, ApiRole.OPERATOR):
-        act(admin, ActionName.ACCESS_REVOKE, project="default", role=role, reason="Withdraw")
+        act(admin, ActionName.ACCESS_REVOKE, project="default", audience=role, reason="Withdraw")
     agent_ctx = replace(admin, actor=Actor("agent-a", ActorKind.SERVICE), role=ApiRole.AGENT)
     assert (
         claim_once(

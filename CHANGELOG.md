@@ -6,6 +6,23 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+- Access uses one binding model: accounts, groups and role audiences receive a built-in
+  `CAN_VIEW`/`CAN_UPLOAD`/`CAN_RUN`/`CAN_MANAGE` level, a custom role, or one action on the
+  deployment, an environment type, a project, a pipeline or a tag. New `role` commands manage
+  named action sets; `access explain` shows an account's decision. Administration → Roles
+  manages custom roles and deployment/environment bindings. Account base roles remain.
+  Migration 0097 converts pipeline grants into `CFG_ACCESS_BINDINGS`, keeping identities and
+  typed history, and adds guarded role and role-action tables.
+- **Breaking:** access's old audience flag `--role` is now `--audience`; `--permission` is now
+  `--role`. Access API fields use `audience`, `role`, `action`, `environment` and `deployment`;
+  output schema `etl-craft/access/2` returns `bindings` and a single `change`, with
+  `previous_role` and `project_level`. Config tag-match diagnostics use `audience:` principals
+  and `role`/`action` fields, and custom matches do not make pipelines restricted. Bulk access CSV input (`access grant --file` and
+  `docs/examples/access.csv`) is removed. Bindings of custom roles/actions imply read access
+  only within their scope, never deployment-wide; only built-in levels restrict pipelines.
+  Role changes and bindings beyond one project require a deployment administrator; identity,
+  access and project administration, agent and host-only actions cannot be custom authority.
+
 - `Secrets.Source_type` accepts `AWS_SECRETS_MANAGER` and `VAULT` (HashiCorp Vault KV v2). One
   secret holds every variable as a JSON object or KV entry; `Secrets.Path` names it,
   `Secrets.Region` (AWS) and `Secrets.Address` (Vault, else `VAULT_ADDR`) locate it, and

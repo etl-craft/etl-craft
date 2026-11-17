@@ -418,7 +418,7 @@ def test_refresh_api_requires_project_management_and_history_requires_view(refre
             ActionName.ACCESS_GRANT,
             project="default",
             account=account,
-            permission=permission,
+            role=permission,
             reason="refresh test",
         )
     client = TestClient(create_app(ctx))

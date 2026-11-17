@@ -84,12 +84,18 @@ def control_capabilities(ctx: OperationContext, request: CapabilitiesInput) -> C
 def _role_refusal(ctx: OperationContext, pipeline_code: str) -> str | None:
     """Describe a role restriction without recording a refused change on a read."""
     from etl_craft.services.operations.actions import ACTIONS
+    from etl_craft.services.operations.bindings import allows
     from etl_craft.services.operations.permissions import pipeline_access
+    from etl_craft.services.operations.requests import ControlRequest
 
     required = ACTIONS[ActionName.CONTROL].role
     with ctx.engine.connect() as conn:
         allowed = required is None or pipeline_access(conn, ctx).permits(pipeline_code, required)
-    if not allowed:
+    if not allowed and not allows(
+        ctx,
+        ActionName.CONTROL,
+        ControlRequest(pipeline_code=pipeline_code, action=ControlAction.PAUSE),
+    ):
         return (
             f"account {ctx.actor.name!r}: role={ctx.role or 'unproven'}; controls need the "
             f"{required} role; ask an administrator to grant it"

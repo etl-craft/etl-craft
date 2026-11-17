@@ -368,9 +368,9 @@ def test_grants_follow_identity_without_widening_project_access(rename_project):
         ctx,
         ActionName.ACCESS_GRANT,
         project="OTHER",
-        role=ApiRole.VIEWER,
+        audience=ApiRole.VIEWER,
         pipeline="P",
-        permission=Permission.CAN_MANAGE,
+        role=Permission.CAN_MANAGE,
         reason="other project only",
     )
     viewer = replace(ctx, role=ApiRole.VIEWER)
@@ -380,15 +380,15 @@ def test_grants_follow_identity_without_widening_project_access(rename_project):
         ctx,
         ActionName.ACCESS_GRANT,
         project="default",
-        role=ApiRole.VIEWER,
+        audience=ApiRole.VIEWER,
         pipeline="P",
-        permission=Permission.CAN_RUN,
+        role=Permission.CAN_RUN,
         reason="direct access",
     )
     with ctx.engine.connect() as conn:
         before = conn.execute(
             text(
-                "SELECT PIPELINE_GRANT_ID AS id FROM CFG_PIPELINE_GRANTS "
+                "SELECT BINDING_ID AS id FROM CFG_ACCESS_BINDINGS "
                 "WHERE PROJECT_ID=1 AND PIPELINE_CODE='P'"
             )
         ).scalar_one()
@@ -398,8 +398,8 @@ def test_grants_follow_identity_without_widening_project_access(rename_project):
         assert pipeline_access(conn, viewer).levels["NEW"] == Permission.CAN_RUN
         row = conn.execute(
             text(
-                "SELECT PIPELINE_GRANT_ID AS id,PIPELINE_CODE AS code,PERMISSION AS "
-                "permission FROM CFG_PIPELINE_GRANTS WHERE PIPELINE_GRANT_ID=:id"
+                "SELECT BINDING_ID AS id,PIPELINE_CODE AS code,ROLE_NAME AS "
+                "permission FROM CFG_ACCESS_BINDINGS WHERE BINDING_ID=:id"
             ),
             {"id": before},
         ).one()
@@ -407,7 +407,7 @@ def test_grants_follow_identity_without_widening_project_access(rename_project):
         history = conn.execute(
             text(
                 "SELECT PIPELINE_CODE AS code,ACTOR AS actor FROM "
-                "AUD_CFG_PIPELINE_GRANTS_HISTORY WHERE PIPELINE_GRANT_ID=:id ORDER BY "
+                "AUD_CFG_ACCESS_BINDINGS_HISTORY WHERE BINDING_ID=:id ORDER BY "
                 "CHANGE_ID"
             ),
             {"id": before},
@@ -416,8 +416,8 @@ def test_grants_follow_identity_without_widening_project_access(rename_project):
         assert history[-2].code == "P"
         untouched = conn.execute(
             text(
-                "SELECT PIPELINE_CODE AS code,PERMISSION AS permission "
-                "FROM CFG_PIPELINE_GRANTS WHERE PROJECT_ID=:id"
+                "SELECT PIPELINE_CODE AS code,ROLE_NAME AS permission "
+                "FROM CFG_ACCESS_BINDINGS WHERE PROJECT_ID=:id"
             ),
             {"id": other},
         ).one()
@@ -439,8 +439,8 @@ def test_rename_requires_management_in_the_selected_project(rename_project):
         ctx,
         ActionName.ACCESS_GRANT,
         project="default",
-        role=ApiRole.OPERATOR,
-        permission=Permission.CAN_MANAGE,
+        audience=ApiRole.OPERATOR,
+        role=Permission.CAN_MANAGE,
         reason="project manager",
     )
     act(ctx, ActionName.PIPELINE_REFRESH)
@@ -555,7 +555,7 @@ def test_generated_api_rename_uses_project_permission_and_reason(rename_project,
         ActionName.ACCESS_GRANT,
         project="default",
         account="api-manager",
-        permission="CAN_MANAGE",
+        role="CAN_MANAGE",
         reason="delegate",
     )
     act(ctx, ActionName.PROJECT_SET, project="default", governance=policy, reason="policy")
@@ -806,7 +806,7 @@ def test_api_rename_uses_the_selected_projects_published_files(rename_project):
         ActionName.ACCESS_GRANT,
         project="OTHER",
         account="other-manager",
-        permission="CAN_MANAGE",
+        role="CAN_MANAGE",
         reason="delegate this project",
     )
     client = TestClient(create_app(ctx))

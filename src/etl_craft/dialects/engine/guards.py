@@ -25,6 +25,7 @@ ADMIN_TABLES = frozenset(
         "CFG_GROUPS",
         "CFG_GROUP_MEMBERS",
         "CFG_ACCESS_BINDINGS",
+        "CFG_PIPELINE_GRANTS",
         "CFG_ROLES",
         "CFG_ROLE_ACTIONS",
         "CFG_API_TOKENS",

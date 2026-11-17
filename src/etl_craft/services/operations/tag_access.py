@@ -39,16 +39,18 @@ def tag_access_changes(
                 if grant.group_name
                 else f"account:{grant.account}"
                 if grant.account
-                else f"role:{grant.role}",
+                else f"audience:{grant.audience}",
                 grant.tag,
-                Permission(grant.permission),
+                grant.role,
+                grant.action,
                 grant.tag in after,
             )
             for grant in grants
             if grant.tag is not None and (grant.tag in before) != (grant.tag in after)
         )
-        was_restricted = any(g.pipeline == code or g.tag in before for g in grants)
-        is_restricted = any(g.pipeline == code or g.tag in after for g in grants)
+        levels = [g for g in grants if g.role in {p.value for p in Permission}]
+        was_restricted = any(g.pipeline == code or g.tag in before for g in levels)
+        is_restricted = any(g.pipeline == code or g.tag in after for g in levels)
         if matches or was_restricted != is_restricted:
             policy = None
             if was_restricted != is_restricted:

@@ -1,17 +1,17 @@
 """Resolve one submitted binding against current projects, principals, roles and pipelines."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
 from sqlalchemy.engine import Connection
 
 from etl_craft.core.enums import ActionName, ApiRole, YesNo
-from etl_craft.core.enums_access import AccessIntent, EnvironmentType, Permission
+from etl_craft.core.enums_access import AccessIntent, BindingScope, EnvironmentType, Permission
 from etl_craft.core.errors import UsageError
 from etl_craft.core.tags import valid_tag
 from etl_craft.engine.queries import statement
 from etl_craft.engine.repository.pipelines import read_tags
-from etl_craft.services.operations.access_models import AccessWrite
+from etl_craft.services.operations.access_models import AccessFilter, AccessWrite
 
 AUDIENCES = (ApiRole.VIEWER, ApiRole.OPERATOR, ApiRole.DEVELOPER)
 BUILT_IN = frozenset(Permission)
@@ -27,11 +27,11 @@ class Resolved:
     account_id: int | None
 
     @property
-    def scope(self) -> str:
+    def scope(self) -> BindingScope:
         """DEPLOYMENT, ENVIRONMENT or PROJECT: how far the binding reaches."""
         if self.request.deployment:
-            return "DEPLOYMENT"
-        return "ENVIRONMENT" if self.request.environment else "PROJECT"
+            return BindingScope.DEPLOYMENT
+        return BindingScope.ENVIRONMENT if self.request.environment else BindingScope.PROJECT
 
     @property
     def built_in(self) -> bool:
@@ -55,6 +55,8 @@ def project(conn: Connection, code: str | None) -> int:
 
 def resolve(conn: Connection, request: AccessWrite, intent: AccessIntent) -> Resolved:
     """Name every invalid part of the binding at once, or return its resolved identities."""
+    if request.action is not None:
+        request = replace(request, action=request.action.strip())
     bad = scope_problems(request)
     project_id = None
     if not bad and not request.reaches_beyond_project:
@@ -85,7 +87,7 @@ def resolve(conn: Connection, request: AccessWrite, intent: AccessIntent) -> Res
     )
 
 
-def scope_problems(request: AccessWrite) -> list[str]:
+def scope_problems(request: AccessFilter) -> list[str]:
     """Require exactly one reach: the deployment, one environment type, or one project."""
     chosen = [
         name
@@ -152,7 +154,12 @@ def grant_problems(conn: Connection, request: AccessWrite, intent: AccessIntent)
             actions: tuple[str, ...] = (bindable(command),)
         else:
             known = role_actions(conn)
-            if role not in known:
+            active = {
+                r.name
+                for r in conn.execute(statement(conn, "role_list"))
+                if r.active_flag == YesNo.YES
+            }
+            if role not in known or (intent == AccessIntent.GRANT and role not in active):
                 return [f"role {role!r}: not an active role; use `etl-craft role list`"]
             actions = () if role in BUILT_IN else known[str(role)]
     except UsageError as error:

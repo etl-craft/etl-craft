@@ -31,6 +31,7 @@ from etl_craft.engine.upload_storage import (
     unlink_file,
 )
 from etl_craft.engine.uploads import admit_queued
+from etl_craft.services.operations.bindings import allows
 from etl_craft.services.operations.context import OperationContext
 from etl_craft.services.operations.permissions import pipeline_access
 from etl_craft.services.operations.recording import recorded
@@ -252,12 +253,16 @@ def _require_pipeline(ctx: OperationContext, request: UploadRequest) -> int:
             )
         ctx = replace(ctx, role=min(ctx.role, ApiRole(account.role), key=tuple(ApiRole).index))
         access = pipeline_access(conn, ctx)
-        access.require(ctx, request.pipeline_code, ApiRole.VIEWER)
+        custom = allows(ctx, ActionName.UPLOAD, request, conn=conn)
+        if not custom:
+            access.require(ctx, request.pipeline_code, ApiRole.VIEWER)
         level = access.levels.get(request.pipeline_code)
-        if (
-            ctx.actor.kind == ActorKind.SYSTEM
-            or level is None
-            or tuple(Permission).index(level) < tuple(Permission).index(Permission.CAN_UPLOAD)
+        if ctx.actor.kind == ActorKind.SYSTEM or (
+            not custom
+            and (
+                level is None
+                or tuple(Permission).index(level) < tuple(Permission).index(Permission.CAN_UPLOAD)
+            )
         ):
             raise PermissionDeniedError(
                 f"account {ctx.actor.name}, pipeline {request.pipeline_code}: permission={level}; "
@@ -347,7 +352,8 @@ def receive(ctx: OperationContext, request: UploadRequest) -> Iterator[UploadRec
 def history(ctx: OperationContext, request: UploadRequest) -> UploadHistory:
     """Return the latest hundred receipts with per-file reasons and their run outcomes."""
     with ctx.engine.connect() as conn:
-        pipeline_access(conn, ctx).require(ctx, request.pipeline_code, ApiRole.VIEWER)
+        if not allows(ctx, ActionName.UPLOADS, request, conn=conn):
+            pipeline_access(conn, ctx).require(ctx, request.pipeline_code, ApiRole.VIEWER)
         pipeline_id = resolve_pipeline_id(conn, request.pipeline_code)
         rows = conn.execute(statement(conn, "upload_history"), {"pipeline_id": pipeline_id})
         return UploadHistory(tuple(dict(row._mapping) for row in rows))
@@ -368,5 +374,11 @@ def eligible(ctx: OperationContext, request: NoInput) -> UploadPipelines:
                     Permission.CAN_RUN,
                     Permission.CAN_MANAGE,
                 }
+                or allows(
+                    ctx,
+                    ActionName.UPLOAD,
+                    UploadRequest(pipeline_code=row.pipeline_code),
+                    conn=conn,
+                )
             )
         )

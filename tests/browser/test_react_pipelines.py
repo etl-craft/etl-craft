@@ -284,7 +284,7 @@ def test_a_viewer_can_read_the_pipelines_but_not_change_them(scene):
         ActionName.ACCESS_GRANT,
         project="default",
         account="alice",
-        permission="CAN_VIEW",
+        role="CAN_VIEW",
         reason="read",
     )
     with sync_playwright() as pw:
@@ -687,7 +687,7 @@ def test_run_now_records_task_inputs_through_the_shared_operation(scene, appeara
 @pytest.mark.parametrize("width", [1280, 390])
 def test_pipeline_manager_delegates_only_here_and_revokes_with_audit(scene, scheme, width):
     ctx, url, _ = scene
-    baseline = act(ctx, ActionName.ACCESS_LIST, project="default").grants
+    baseline = act(ctx, ActionName.ACCESS_LIST, project="default").bindings
     for target, permission in ((None, "CAN_VIEW"), ("OPS", "CAN_MANAGE")):
         act(
             ctx,
@@ -695,7 +695,7 @@ def test_pipeline_manager_delegates_only_here_and_revokes_with_audit(scene, sche
             project="default",
             account="alice",
             pipeline=target,
-            permission=permission,
+            role=permission,
             reason="Delegate pipeline management",
         )
     with sync_playwright() as pw:
@@ -710,14 +710,14 @@ def test_pipeline_manager_delegates_only_here_and_revokes_with_audit(scene, sche
         expect(dialog.get_by_text("All projects", exact=True)).to_have_count(0)
         expect(dialog.get_by_label("Pipeline", exact=True)).to_have_count(0)
         expect(dialog.get_by_label("Tag", exact=True)).to_have_count(0)
-        dialog.get_by_label("Role", exact=False).select_option("operator")
-        dialog.get_by_label("Permission", exact=False).select_option("CAN_RUN")
+        dialog.get_by_label("Every account with role", exact=False).select_option("operator")
+        dialog.get_by_label(re.compile(r"^Role")).select_option("CAN_RUN")
         dialog.get_by_label("Reason (kept in the audit trail)").fill("Operations team")
         shoot(page, f"pipeline-grant-dialog-{scheme}-{width}")
         dialog.get_by_role("button", name="Grant access", exact=True).click()
-        table = page.get_by_role("table", name="Access grants")
-        row = table.get_by_role("row").filter(has_text="role operator")
-        expect(row).to_contain_text("Can run")
+        table = page.get_by_role("table", name="Access bindings")
+        row = table.get_by_role("row").filter(has_text="every operator")
+        expect(row).to_contain_text("CAN_RUN")
         expect(row).to_contain_text("pipeline OPS")
         shoot(page, f"pipeline-grants-{scheme}-{width}")
         assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
@@ -736,7 +736,8 @@ def test_pipeline_manager_delegates_only_here_and_revokes_with_audit(scene, sche
 
             page.route("**/api/v1/access/grants", forge)
             page.get_by_role("button", name="Grant access", exact=True).click()
-            dialog.get_by_label("Role", exact=False).select_option("operator")
+            dialog.get_by_label("Every account with role", exact=False).select_option("operator")
+            dialog.get_by_label(re.compile(r"^Role")).select_option("CAN_RUN")
             dialog.get_by_label("Reason (kept in the audit trail)").fill("Forged target")
             dialog.get_by_role("button", name="Grant access", exact=True).click()
             expect(dialog.get_by_role("alert")).to_contain_text(target or "default")
@@ -753,15 +754,15 @@ def test_pipeline_manager_delegates_only_here_and_revokes_with_audit(scene, sche
             audit = conn.execute(
                 text(
                     "SELECT ACTOR AS actor, ACTIVE_FLAG AS active_flag "
-                    "FROM AUD_CFG_PIPELINE_GRANTS_HISTORY "
+                    "FROM AUD_CFG_ACCESS_BINDINGS_HISTORY "
                     "WHERE GRANTEE_ROLE='operator' AND PIPELINE_CODE='OPS' "
                     "AND CURRENT_FLAG='Y'"
                 )
             ).one()
             assert audit.actor == "alice" and audit.active_flag == "N"
-        untouched = act(ctx, ActionName.ACCESS_LIST, project="default").grants
-        assert [g for g in untouched if g.role == "operator" and g.pipeline != "OPS"] == [
-            g for g in baseline if g.role == "operator" and g.pipeline != "OPS"
+        untouched = act(ctx, ActionName.ACCESS_LIST, project="default").bindings
+        assert [g for g in untouched if g.audience == "operator" and g.pipeline != "OPS"] == [
+            g for g in baseline if g.audience == "operator" and g.pipeline != "OPS"
         ]
         page.goto(url + "/ui/projects/default/pipelines/SALES?tab=access")
         expect(page.get_by_role("heading", name=re.compile("Access to SALES"))).to_be_visible()
@@ -771,9 +772,9 @@ def test_pipeline_manager_delegates_only_here_and_revokes_with_audit(scene, sche
         sign_in(page, url, "/ui/admin?tab=access")
         expect(page.get_by_role("heading", name=re.compile("Access to default"))).to_be_visible()
         expect(
-            page.get_by_role("table", name="Access grants")
+            page.get_by_role("table", name="Access bindings")
             .get_by_role("row")
-            .filter(has_text="role viewer")
+            .filter(has_text="every viewer")
         ).to_be_visible()
         shoot(page, f"admin-grants-{scheme}-{width}")
         page.get_by_role("button", name="Grant access", exact=True).click()

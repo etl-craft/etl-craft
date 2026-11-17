@@ -56,7 +56,7 @@ def grant(admin, project, account, permission, **target):
         ActionName.ACCESS_GRANT,
         project=project,
         account=account,
-        permission=permission,
+        role=permission,
         reason="Test permission",
         **target,
     )
@@ -377,11 +377,11 @@ def test_revoked_project_refuses_a_local_claim_before_process_dispatch(isolation
     assert row.task_log == done.message
 
 
-@pytest.mark.parametrize("principal", ["account", "group", "role"])
+@pytest.mark.parametrize("principal", ["account", "group", "audience"])
 @pytest.mark.parametrize("level", list(Permission))
 def test_project_principals_and_levels_keep_restricted_rules(isolation, principal, level):
     admin, _ = isolation
-    identity = {"account": "reader"} if principal == "account" else {"role": "viewer"}
+    identity = {"account": "reader"} if principal == "account" else {"audience": "viewer"}
     if principal == "group":
         act(admin, ActionName.GROUP_ADD, name="project-readers")
         act(admin, ActionName.GROUP_ADD_MEMBER, name="project-readers", account="reader")
@@ -390,7 +390,7 @@ def test_project_principals_and_levels_keep_restricted_rules(isolation, principa
         admin,
         ActionName.ACCESS_GRANT,
         project="finance",
-        permission=level,
+        role=level,
         reason="Principal matrix",
         **identity,
     )
@@ -429,14 +429,14 @@ def test_project_revoke_and_delegated_grant_race(isolation):
             reason="Race revoke",
         )
 
-    first, _ = two_at_once(delegated, revoke, at="etl_craft.services.operations.access.inputs")
+    first, _ = two_at_once(delegated, revoke, at="etl_craft.services.operations.access._apply")
     with pytest.raises(ResourceNotFoundError):
         act(manager, ActionName.PIPELINES)
     with admin.engine.connect() as conn:
         rows = (
             conn.execute(
                 text(
-                    "SELECT g.PERMISSION AS permission FROM CFG_PIPELINE_GRANTS g JOIN "
+                    "SELECT g.ROLE_NAME AS permission FROM CFG_ACCESS_BINDINGS g JOIN "
                     "CFG_ACCOUNTS a ON a.ACCOUNT_ID=g.ACCOUNT_ID WHERE "
                     "a.ACCOUNT_NAME='operator' AND g.PIPELINE_CODE='PRIVATE' AND "
                     "g.ACTIVE_FLAG='Y'"
@@ -461,26 +461,21 @@ def test_full_config_export_never_discloses_a_hidden_pipeline(isolation, tmp_pat
     assert "PRIVATE" in (target / "pipelines.csv").read_text()
 
 
-def test_bulk_project_grants_are_atomic_and_new_projects_are_closed(isolation):
+def test_project_grant_dry_run_preserves_new_projects_default_denial(isolation):
     admin, _ = isolation
-    assert act(admin, ActionName.ACCESS_LIST, project="finance").grants == ()
-    content = (
-        "PROJECT,GROUP_NAME,ROLE,PIPELINE_CODE,TAG,PERMISSION,ACTION\n"
-        "finance,,viewer,,,CAN_VIEW,GRANT\n"
-    )
-    preview = act(admin, ActionName.ACCESS_GRANT, content=content, dry_run=True, reason="Review")
-    assert preview.dry_run and len(preview.changes) == 1
+    assert act(admin, ActionName.ACCESS_LIST, project="finance").bindings == ()
+    binding = {"project": "finance", "audience": "viewer", "role": "CAN_VIEW"}
+    preview = act(admin, ActionName.ACCESS_GRANT, **binding, dry_run=True, reason="Review")
+    assert preview.dry_run and preview.change is not None
     with pytest.raises(ResourceNotFoundError):
         act(caller(admin, "reader", project="finance"), ActionName.PIPELINES)
-    act(admin, ActionName.ACCESS_GRANT, content=content, reason="Apply")
+    act(admin, ActionName.ACCESS_GRANT, **binding, reason="Apply")
     assert {
         p.pipeline_code
         for p in act(caller(admin, "reader", project="finance"), ActionName.PIPELINES).pipelines
     } == {"OPEN", "PRIVATE"}
     assert (
-        act(admin, ActionName.ACCESS_GRANT, content=content, reason="Again")
-        .changes[0]
-        .previous_permission
+        act(admin, ActionName.ACCESS_GRANT, **binding, reason="Again").change.previous_role
         is not None
     )
 
@@ -520,9 +515,9 @@ def test_grant_errors_do_not_disclose_restricted_pipeline_names(isolation):
                 headers={"Authorization": "Bearer " + tokens["operator"]},
                 json={
                     "project": "sales",
-                    "role": "viewer",
+                    "audience": "viewer",
                     "pipeline": pipeline,
-                    "permission": "CAN_RUN",
+                    "role": "CAN_RUN",
                     "reason": "Probe",
                 },
             )

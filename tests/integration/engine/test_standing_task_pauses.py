@@ -267,7 +267,7 @@ def test_standing_pause_api_uses_grants_and_refuses_cross_project(paused_task):
             ActionName.ACCESS_GRANT,
             project="default",
             account=name,
-            permission=permission,
+            role=permission,
             reason="role matrix",
         )
     client = TestClient(create_app(ctx))

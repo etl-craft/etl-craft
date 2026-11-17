@@ -6,13 +6,13 @@ from typing import Any
 from sqlalchemy.engine import Connection, Row
 
 from etl_craft.core.enums import ActionName, ActionOutcome, ApiRole, YesNo
-from etl_craft.core.enums_access import AccessChange, AccessIntent, Permission
+from etl_craft.core.enums_access import AccessChange, AccessIntent, BindingScope, Permission
 from etl_craft.core.errors import PermissionDeniedError, ResourceNotFoundError, UsageError
 from etl_craft.engine import locks
 from etl_craft.engine.audit import command_request
 from etl_craft.engine.queries import statement
 from etl_craft.engine.repository.pipelines import read_tags
-from etl_craft.services.operations.access_inputs import Resolved, project, resolve
+from etl_craft.services.operations.access_inputs import Resolved, project, resolve, scope_problems
 from etl_craft.services.operations.access_models import AccessFilter as AccessFilter
 from etl_craft.services.operations.access_models import AccessView as AccessView
 from etl_craft.services.operations.access_models import AccessWrite as AccessWrite
@@ -30,6 +30,8 @@ from etl_craft.services.operations.requests import arguments
 
 def list_access(ctx: OperationContext, request: AccessFilter) -> AccessView:
     """List the bindings that apply to a project, or that sit at one wider reach (admins)."""
+    if problems := scope_problems(request):
+        raise UsageError("access: " + "; ".join(problems))
     if request.reaches_beyond_project:
         return _list_wide(ctx, request)
     with ctx.engine.connect() as conn:
@@ -39,7 +41,11 @@ def list_access(ctx: OperationContext, request: AccessFilter) -> AccessView:
         require_project(conn, scoped)
         access = pipeline_access(conn, scoped)
         bindings = tuple(
-            _binding(row, row.scope, row.project if row.scope == "PROJECT" else None)
+            _binding(
+                row,
+                BindingScope(row.scope),
+                row.project if row.scope == BindingScope.PROJECT else None,
+            )
             for row in conn.execute(statement(conn, "access_list"), {"project": request.project})
             if _matches(request, row)
             and (
@@ -85,7 +91,7 @@ def _list_wide(ctx: OperationContext, request: AccessFilter) -> AccessView:
             f"account {ctx.actor.name!r}: deployment and environment bindings are listed by "
             "deployment administrators; list one project's bindings with --project"
         )
-    scope = "DEPLOYMENT" if request.deployment else "ENVIRONMENT"
+    scope = BindingScope.DEPLOYMENT if request.deployment else BindingScope.ENVIRONMENT
     with ctx.engine.connect() as conn:
         rows = conn.execute(
             statement(conn, "access_at_scope"),
@@ -106,11 +112,11 @@ def _matches(request: AccessFilter, row: Row[Any]) -> bool:
     )
 
 
-def _binding(row: Row[Any], scope: str, project_code: str | None) -> Binding:
+def _binding(row: Row[Any], scope: BindingScope, project_code: str | None) -> Binding:
     return Binding(
         scope,
         project_code,
-        getattr(row, "environment", None),
+        row.environment,
         row.group_name,
         row.account,
         row.audience,
@@ -155,8 +161,11 @@ def _apply(ctx: OperationContext, request: AccessWrite, intent: AccessIntent) ->
         locks.ACCOUNTS.hold(ctx.engine, wait_seconds=30),
         ctx.engine.begin() as conn,
     ):
+        if problems := scope_problems(request):
+            raise UsageError("access: " + "; ".join(problems))
+        project_id = None if request.reaches_beyond_project else project(conn, request.project)
+        authorize(conn, ctx, Resolved(request, project_id, None, None))
         resolved = resolve(conn, request, intent)
-        authorize(conn, ctx, resolved)
         change = publish(conn, resolved, intent)
     return AccessView(change=change, dry_run=request.dry_run)
 
@@ -175,13 +184,16 @@ def authorize(conn: Connection, ctx: OperationContext, resolved: Resolved) -> No
     require_project(conn, scoped)
     if project_permission(conn, scoped) == Permission.CAN_MANAGE:
         return
-    level = (
-        pipeline_access(conn, scoped).levels.get(request.pipeline)
-        if request.pipeline
-        else tag_permission(conn, scoped, request.tag)
-        if request.tag
-        else project_permission(conn, scoped)
-    )
+    if request.pipeline:
+        access = pipeline_access(conn, scoped)
+        access.require(scoped, request.pipeline, ApiRole.VIEWER)
+        level = access.levels.get(request.pipeline)
+    else:
+        level = (
+            tag_permission(conn, scoped, request.tag)
+            if request.tag
+            else project_permission(conn, scoped)
+        )
     if level != Permission.CAN_MANAGE:
         raise PermissionDeniedError(
             f"account {ctx.actor.name!r}: {request.pipeline or request.tag or request.project!r} "

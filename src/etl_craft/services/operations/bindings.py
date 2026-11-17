@@ -6,8 +6,9 @@ action, through a custom role or by name, on the deployment, the project's envir
 project, or every pipeline the request names (directly or through one of its tags).
 """
 
-from collections.abc import Callable
+from contextlib import nullcontext
 from dataclasses import dataclass, replace
+from types import SimpleNamespace
 from typing import Any, ClassVar
 
 from sqlalchemy.engine import Connection, Row
@@ -19,11 +20,7 @@ from etl_craft.engine.queries import statement
 from etl_craft.engine.repository.pipelines import read_tags
 from etl_craft.services.operations.action_types import Action
 from etl_craft.services.operations.context import OperationContext
-from etl_craft.services.operations.requests import Request
-
-Check = Callable[[OperationContext, Action, Any, ApiRole | None], None]
-Codes = Callable[[Connection, Action, Any], list[str]]
-_SHARED: dict[str, Any] = {}
+from etl_craft.services.operations.requests import BulkControlRequest, Request
 
 
 def authorize(
@@ -31,30 +28,46 @@ def authorize(
     action: Action,
     request: object,
     required: ApiRole | None,
-    check: Check,
-    codes: Codes,
 ) -> None:
-    """Allow when the existing check or any custom binding allows; otherwise keep its refusal.
+    """Allow the base policy or a covering custom binding; otherwise keep the refusal."""
+    from etl_craft.services.operations.actions import authorize_base
 
-    Every action is admitted here before it runs, so the action table's own check and pipeline
-    resolution are kept for ``explain``, which evaluates them for another account.
-    """
-    _SHARED.update(check=check, codes=codes)
     try:
-        _SHARED["check"](ctx, action, request, required)
+        authorize_base(ctx, action, request, required)
     except (PermissionDeniedError, ResourceNotFoundError):
         if not covering(ctx, action, request):
             raise
 
 
-def covering(ctx: OperationContext, action: Action, request: object) -> tuple[Row[Any], ...]:
+def allows(
+    ctx: OperationContext, name: ActionName, request: object, *, conn: Connection | None = None
+) -> bool:
+    """Whether a current custom binding allows an operation's scoped authorization recheck."""
+    from etl_craft.services.operations.actions import ACTIONS
+
+    return bool(covering(ctx, ACTIONS[name], request, conn=conn))
+
+
+def covering(
+    ctx: OperationContext, action: Action, request: object, *, conn: Connection | None = None
+) -> tuple[Row[Any], ...]:
     """Return the custom bindings that allow this request, or nothing."""
     if ctx.role in (None, ApiRole.AGENT) or action.role in (None, ApiRole.AGENT):
         return ()
     deployment = action.scope == ActionScope.DEPLOYMENT
     if not deployment and ctx.project_id is None:
         return ()
-    with ctx.engine.connect() as conn:
+    with nullcontext(conn) if conn is not None else ctx.engine.connect() as conn:
+        if not deployment:
+            project = conn.execute(
+                statement(conn, "project_by_code"), {"code": ctx.project}
+            ).one_or_none()
+            if (
+                project is None
+                or project.active_flag != YesNo.YES
+                or project.project_id != ctx.project_id
+            ):
+                return ()
         rows = conn.execute(
             statement(conn, "access_allowed"),
             {
@@ -67,9 +80,9 @@ def covering(ctx: OperationContext, action: Action, request: object) -> tuple[Ro
         ).all()
         if deployment:
             return tuple(r for r in rows if r.project_id is None and r.environment is None)
-        codes = _SHARED["codes"](conn, action, request)
+        codes = request_codes(conn, action, request)
         whole = tuple(r for r in rows if r.pipeline_code is None and r.tag is None)
-        if not codes:
+        if whole or not codes:
             return whole
         tags = _tags(conn, ctx.project_id)
         found: list[Row[Any]] = []
@@ -126,7 +139,7 @@ class Explanation:
 
 def explain(ctx: OperationContext, request: ExplainInput) -> Explanation:
     """Evaluate the same check the account's own request would meet, without running it."""
-    from etl_craft.services.operations.actions import ACTIONS
+    from etl_craft.services.operations.actions import ACTIONS, authorize_base, authorize_identity
     from etl_craft.services.operations.roles import role_actions
 
     try:
@@ -140,16 +153,36 @@ def explain(ctx: OperationContext, request: ExplainInput) -> Explanation:
     target = _account_context(ctx, request)
     probe = _probe(action, request)
     with ctx.engine.connect() as conn:
+        active = {
+            row.name
+            for row in conn.execute(statement(conn, "role_list"))
+            if row.active_flag == YesNo.YES
+        }
         holders = tuple(
-            role for role, actions in sorted(role_actions(conn).items()) if str(name) in actions
+            role
+            for role, actions in sorted(role_actions(conn).items())
+            if role in active and str(name) in actions
         )
     allowed_by: tuple[str, ...] = ()
     refusal = None
+    identity_allowed = False
     try:
-        _SHARED["check"](target, action, probe, action.required_role(target, probe))
+        authorize_identity(target, action, probe)
+        identity_allowed = True
+        authorize_base(target, action, probe, action.required_role(target, probe))
+        if name in {ActionName.ACCESS_GRANT, ActionName.ACCESS_REVOKE}:
+            from etl_craft.services.operations.access import authorize
+            from etl_craft.services.operations.access_inputs import Resolved
+            from etl_craft.services.operations.access_models import AccessWrite
+
+            binding = AccessWrite(
+                project=request.project, pipeline=request.pipeline, reason="explain"
+            )
+            with ctx.engine.connect() as conn:
+                authorize(conn, target, Resolved(binding, target.project_id, None, None))
         allowed_by = (f"account role {target.role} or a built-in CAN_* grant",)
     except (PermissionDeniedError, ResourceNotFoundError) as error:
-        rows = covering(target, action, probe)
+        rows = covering(target, action, probe) if identity_allowed else ()
         allowed_by = tuple(
             f"binding {r.binding_id}: {r.granted} to {r.principal} on {_where(r)}" for r in rows
         )
@@ -204,8 +237,10 @@ def _probe(action: Action, request: ExplainInput) -> object:
     try:
         return action.request(**values)
     except (TypeError, UsageError):
+        if action.escalate is None:
+            return SimpleNamespace(pipeline_code=request.pipeline)
         raise UsageError(
-            f"action {action.name!r}: explain builds the request from --pipeline-code alone, "
+            f"action {action.name!r}: explain builds the request from --pipeline alone, "
             "and this action needs more inputs; run the command itself to see its decision"
         ) from None
 
@@ -218,3 +253,39 @@ def _where(row: Row[Any]) -> str:
     if row.project_id is not None:
         return "the project"
     return f"environment {row.environment}" if row.environment else "the deployment"
+
+
+def request_codes(conn: Connection, action: Action, request: object) -> list[str]:
+    """Resolve exact identities, and the requested child rather than an implicit parent run."""
+    from etl_craft.engine.repository.tasks import fetch_admitted_parameters
+    from etl_craft.services.operations import triggers
+    from etl_craft.services.trigger_validation import trigger_definition
+
+    if isinstance(request, BulkControlRequest):
+        return list(
+            dict.fromkeys(
+                code
+                for selected in request.requests
+                for code in request_codes(conn, action, selected)
+            )
+        )
+    if isinstance(request, triggers.TriggerRequest):
+        row = conn.execute(
+            statement(conn, "trigger_context"), {"task_run_id": request.task_run_id}
+        ).one_or_none()
+        if row is None:
+            return []
+        child = trigger_definition(
+            conn, row.pipeline_id, fetch_admitted_parameters(conn, row.task_id, row.pipeline_run_id)
+        )
+        return [child.pipeline_code]
+    code = getattr(request, "pipeline_code", None)
+    if code is not None:
+        return [code]
+    identities = {
+        key: getattr(request, key, None)
+        for key in ("run_id", "attempt_id", "control_id", "task_run_id")
+    }
+    if any(value is not None for value in identities.values()):
+        return list(conn.execute(statement(conn, "permission_scope"), identities).scalars())
+    return []

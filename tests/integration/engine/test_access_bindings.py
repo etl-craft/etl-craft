@@ -137,3 +137,142 @@ def test_built_in_levels_still_replace_and_custom_bindings_add(estate):
     assert sorted(b.role for b in listed if b.active_flag == "Y") == ["CAN_RUN", "runner"]
     roles = act(admin, ActionName.ROLE_DESCRIBE, name="CAN_RUN").roles[0]
     assert roles.built_in and "run" in roles.actions and "config apply" not in roles.actions
+    assert "config plan" not in roles.actions
+
+
+def test_custom_authority_does_not_bypass_temporary_password_replacement(estate):
+    from sqlalchemy import text
+
+    admin, ana, projects = estate
+    grant(admin, account="ana", action="run", project="sales")
+    with acting_as(OWNER), admin.engine.begin() as conn:
+        conn.execute(
+            text("UPDATE CFG_ACCOUNTS SET MUST_CHANGE_PASSWORD='Y' WHERE ACCOUNT_NAME='ana'")
+        )
+    scoped = replace(ana, project="sales", project_id=projects["sales"])
+    with (
+        pytest.raises(PermissionDeniedError, match="temporary password requires replacement"),
+        admitted(scoped, ActionName.RUN, RunRequest(pipeline_code="P1")),
+    ):
+        pytest.fail("a custom binding bypassed the password boundary")
+    explained = explain(admin, project="sales", pipeline="P1")
+    assert not explained.allowed and "temporary password" in explained.refusal
+
+
+def test_custom_pipeline_view_is_narrow_and_survives_another_principals_restriction(estate):
+    admin, ana, projects = estate
+    grant(admin, account="ana", action="run", project="sales", pipeline="P1")
+    grant(admin, audience="developer", role="CAN_RUN", project="sales", pipeline="P1")
+    scoped = replace(ana, project="sales", project_id=projects["sales"])
+    assert {p.pipeline_code for p in act(scoped, ActionName.PIPELINES).pipelines} == {"P1"}
+    act(admin, ActionName.ROLE_CREATE, name="narrow", actions=("run",))
+    grant(admin, account="ana", role="narrow", project="hr", pipeline="P2")
+    hr = replace(ana, project="hr", project_id=projects["hr"])
+    assert {p.pipeline_code for p in act(hr, ActionName.PIPELINES).pipelines} == {"P2"}
+    act(admin, ActionName.ROLE_DISABLE, name="narrow")
+    with pytest.raises(ResourceNotFoundError):
+        act(hr, ActionName.PIPELINES)
+
+
+def test_deployment_custom_actions_do_not_imply_deployment_read_access(estate):
+    admin, ana, projects = estate
+    grant(admin, account="ana", action="run", deployment=True)
+    assert may_run(ana, "sales", projects["sales"], "P1")
+    assert may_run(ana, "hr", projects["hr"], "P2")
+    with pytest.raises(ResourceNotFoundError):
+        act(replace(ana, project="sales", project_id=projects["sales"]), ActionName.PIPELINES)
+    act(admin, ActionName.ROLE_CREATE, name="pool-reader", actions=("pool list",))
+    grant(admin, account="ana", role="pool-reader", deployment=True)
+    assert act(ana, ActionName.POOL_LIST, reason="test").pools
+
+
+def test_disabled_roles_cannot_receive_new_bindings(estate):
+    admin, _, _ = estate
+    grant(admin, account="ana", role="runner", project="sales")
+    act(admin, ActionName.ROLE_DISABLE, name="runner")
+    with pytest.raises(UsageError, match="not an active role"):
+        grant(admin, account="ana", role="runner", project="hr")
+    revoked = act(
+        admin,
+        ActionName.ACCESS_REVOKE,
+        account="ana",
+        role="runner",
+        project="sales",
+        reason="retire disabled role",
+    )
+    assert revoked.change.binding.active_flag == "N"
+
+
+def test_adding_a_deployment_action_refuses_a_role_with_narrower_bindings(estate):
+    admin, _, _ = estate
+    grant(admin, account="ana", role="runner", project="sales")
+    with pytest.raises(UsageError, match=r"runner.*pool list.*deployment-only.*revoke"):
+        act(admin, ActionName.ROLE_ADD_ACTION, name="runner", action="pool list")
+    assert act(admin, ActionName.ROLE_DESCRIBE, name="runner").roles[0].actions == ("run",)
+
+
+def test_access_lists_refuse_ambiguous_or_unknown_scopes(estate):
+    admin, _, _ = estate
+    with pytest.raises(UsageError, match="exactly one"):
+        act(admin, ActionName.ACCESS_LIST, project="sales", deployment=True)
+    with pytest.raises(UsageError, match=r"environment 'PRDO'.*expected one of.*correct"):
+        act(admin, ActionName.ACCESS_LIST, environment="PRDO")
+
+
+def test_explain_handles_action_inputs_and_checks_delegation_rights(estate):
+    admin, _, _ = estate
+    grant(admin, account="ana", action="mark", project="sales", pipeline="P1")
+    marked = act(
+        admin,
+        ActionName.ACCESS_EXPLAIN,
+        account="ana",
+        action="mark",
+        project="sales",
+        pipeline="P1",
+    )
+    assert marked.allowed and marked.allowed_by
+    delegated = act(
+        admin,
+        ActionName.ACCESS_EXPLAIN,
+        account="ana",
+        action="access grant",
+        project="sales",
+        pipeline="P1",
+    )
+    assert not delegated.allowed and "CAN_MANAGE" in delegated.refusal
+
+
+def test_single_action_bindings_store_the_canonical_command(estate):
+    admin, ana, projects = estate
+    given = grant(admin, account="ana", action=" run ", project="sales")
+    assert given.change.binding.action == "run"
+    assert may_run(ana, "sales", projects["sales"], "P1")
+    act(
+        admin,
+        ActionName.ACCESS_REVOKE,
+        account="ana",
+        action=" run ",
+        project="sales",
+        reason="done",
+    )
+    assert not may_run(ana, "sales", projects["sales"], "P1")
+
+
+def test_custom_batch_admission_requires_every_named_pipeline(estate):
+    from etl_craft.core.enums import ControlAction
+    from etl_craft.services.operations.requests import BulkControlRequest, ControlRequest
+
+    admin, ana, projects = estate
+    scoped = replace(ana, project="sales", project_id=projects["sales"])
+    batch = BulkControlRequest(
+        requests=tuple(
+            ControlRequest(pipeline_code=code, action=ControlAction.PAUSE, reason="test")
+            for code in ("P1", "P2")
+        )
+    )
+    grant(admin, account="ana", action="control bulk", project="sales", pipeline="P1")
+    with pytest.raises(PermissionDeniedError), admitted(scoped, ActionName.CONTROL_BULK, batch):
+        pytest.fail("one binding admitted a batch naming an unbound pipeline")
+    grant(admin, account="ana", action="control bulk", project="sales", pipeline="P2")
+    with admitted(scoped, ActionName.CONTROL_BULK, batch):
+        pass

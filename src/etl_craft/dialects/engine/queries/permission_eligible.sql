@@ -1,5 +1,5 @@
 SELECT x.binding_id AS grant_id,x.PROJECT_ID AS project_id,
-x.PIPELINE_CODE AS pipeline_code,x.TAG AS tag,x.permission AS permission,
+x.PIPELINE_CODE AS pipeline_code,x.TAG AS tag,x.permission AS permission,x.custom AS custom,
 CASE WHEN x.GROUP_ID IS NOT NULL THEN 'group:' || CAST(x.GROUP_ID AS text)
      WHEN x.ACCOUNT_ID IS NOT NULL THEN 'account:' || a.ACCOUNT_NAME
      ELSE 'role:' || x.GRANTEE_ROLE END AS source

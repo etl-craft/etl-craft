@@ -46,7 +46,12 @@ class RoleName(Request):
 
     def __post_init__(self) -> None:
         """Keep names short, printable and distinct from action names."""
-        if not self.name.strip() or len(self.name) > 64 or " " in self.name.strip():
+        if (
+            not self.name
+            or len(self.name) > 64
+            or not self.name.isprintable()
+            or any(char.isspace() for char in self.name)
+        ):
             raise UsageError(
                 f"role {self.name!r}: expected 1 to 64 characters without spaces; "
                 "choose a name such as data-analyst"
@@ -114,6 +119,7 @@ def built_in_actions(permission: Permission) -> tuple[str, ...]:
         if spec.scope != ActionScope.DEPLOYMENT
         and spec.role in allowed
         and spec.placement == Placement.ANYWHERE
+        and name not in PROJECT_MANAGE_ACTIONS
         and (name != ActionName.UPLOAD or level >= 1)
     }
     if permission == Permission.CAN_MANAGE:
@@ -122,7 +128,7 @@ def built_in_actions(permission: Permission) -> tuple[str, ...]:
 
 
 def role_actions(conn: Connection) -> dict[str, tuple[str, ...]]:
-    """Return every active role's allowed actions, built-in roles included."""
+    """Return retained roles' configured actions, built-in levels included."""
     by_id: dict[int, list[str]] = {}
     for row in conn.execute(statement(conn, "role_actions")):
         by_id.setdefault(int(row.role_id), []).append(str(row.action_name))
@@ -190,6 +196,15 @@ def add_action(ctx: OperationContext, request: RoleAction) -> Roles:
     action = bindable(request.action)
     with locks.ACCOUNTS.hold(ctx.engine, wait_seconds=30), ctx.engine.begin() as conn:
         role_id = _custom_role_id(conn, request.name)
+        if (
+            deployment_only(action)
+            and conn.execute(statement(conn, "role_narrow_binding"), {"name": request.name}).first()
+        ):
+            raise UsageError(
+                f"role {request.name!r}, action {action!r}: existing bindings narrow the role; "
+                "expected deployment-only bindings; revoke the narrower bindings first "
+                "or use another role"
+            )
         if str(action) not in role_actions(conn)[request.name]:
             conn.execute(
                 statement(conn, "role_action_add"),

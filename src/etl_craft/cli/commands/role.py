@@ -23,7 +23,7 @@ def _configure(parser: argparse.ArgumentParser) -> None:
     for name in VERBS:
         sub = verbs.add_parser(name)
         if name != "list":
-            sub.add_argument("name", help="the role, such as data-analyst or CAN_RUN")
+            sub.add_argument("name", help="The role, such as data-analyst or CAN_RUN.")
         if name == "create":
             sub.add_argument("--description")
             sub.add_argument(
@@ -31,10 +31,10 @@ def _configure(parser: argparse.ArgumentParser) -> None:
                 dest="actions",
                 action="append",
                 default=[],
-                help="an action the role allows, such as 'run'; repeat for more",
+                help="An action the role allows, such as 'run'; repeat for more.",
             )
         if name in ("add-action", "remove-action"):
-            sub.add_argument("--action", required=True, help="one action, such as 'run'")
+            sub.add_argument("--action", required=True, help="One action, such as 'run'.")
         configure_output(sub)
 
 

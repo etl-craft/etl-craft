@@ -135,8 +135,8 @@ returns exit **26**, HTTP returns **403**, and the immutable action record has o
 
 ### Access: roles and bindings
 
-Every access decision comes from **bindings**. A binding gives **who** a **role or one
-command**, **where**:
+Access combines an account’s base role with **bindings**. A binding gives **who** a **role or
+one command**, **where**:
 
 | Part | Choices |
 | --- | --- |
@@ -182,21 +182,24 @@ request.
 **Who manages access.** Deployment administrators manage roles and every binding, and are the
 only ones who bind on `--deployment` or `--environment`. A holder of `CAN_MANAGE` on a project,
 pipeline or tag can grant and revoke bindings there; granting on a tag requires `CAN_MANAGE` on
-that tag. `access explain` (administrators) shows whether an account may run a command, the
+that tag. `access explain` shows whether an account may run a command, the
 binding or role that allows it, or the refusal and the roles that would allow it.
 
 The HTTP actions are `POST /api/v1/access/grants`, `POST /api/v1/access/revocations`,
 `GET /api/v1/access/grants`, `GET /api/v1/access/explain` and the `/api/v1/roles` routes. In the
 web interface, **Administration → Roles** manages roles and deployment and environment bindings;
-the **Access** tab of a project or pipeline manages the bindings there. Every change requires a
-reason and keeps actor-attributed history; revoked bindings are retained with `ACTIVE_FLAG=N`.
+the **Access** tab of a project or pipeline manages the bindings there. Binding changes require
+a reason. Every role and binding change keeps actor-attributed history; revoked bindings are
+retained with `ACTIVE_FLAG=N`.
 
 Groups are managed with `etl-craft group add --name sales`, `group disable`, `group add-member
 --name sales --account alice`, `group remove-member` and `group list`, under `/api/v1/groups`.
 Group identities and memberships are retired with `ACTIVE_FLAG=N`, never deleted.
 
 Project access is default deny. Deployment admins have CAN_MANAGE everywhere. Other accounts
-need a matching project grant even when they have a direct pipeline or tag grant. Missing and
+need a matching project built-in binding to use built-in pipeline or tag levels. A custom
+pipeline or tag binding includes read access to that scope and its project container, without
+revealing other pipelines. Missing and
 inaccessible projects answer identically, as do missing and inaccessible pipelines (exit 24,
 HTTP 404). Lists and searches omit hidden objects.
 
