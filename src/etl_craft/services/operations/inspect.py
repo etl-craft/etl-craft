@@ -352,7 +352,10 @@ def get_run(ctx: OperationContext, request: RunId) -> RunView:
         ).scalar_one_or_none()
         if code is None:
             raise ResourceNotFoundError(f"pipeline_run_id={request.run_id}: run does not exist")
-        return run_view(conn, resolve_pipeline_id(conn, str(code)), request.run_id)
+        from etl_craft.services.operations.timeline import run_timeline
+
+        view = run_view(conn, resolve_pipeline_id(conn, str(code)), request.run_id)
+        return replace(view, timeline=run_timeline(conn, request.run_id))
 
 
 def get_attempt(ctx: OperationContext, request: AttemptId) -> AttemptView:

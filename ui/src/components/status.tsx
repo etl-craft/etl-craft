@@ -60,6 +60,10 @@ const META: Record<string, Meta> = {
   LOCKED: { label: "Locked", icon: Lock, tone: "bad" },
   REVOKED: { label: "Revoked", icon: Minus, tone: "idle" },
   ENDED: { label: "Ended", icon: Minus, tone: "idle" },
+  // Recorded gate, event and child-run waits.
+  OPEN: { label: "Waiting", icon: Clock, tone: "idle" },
+  SATISFIED: { label: "Satisfied", icon: Check, tone: "ok" },
+  BYPASSED: { label: "Bypassed", icon: TriangleAlert, tone: "warn" },
 };
 
 /** A status this map does not know keeps its own words, without a symbol that would claim a meaning. */
@@ -108,6 +112,9 @@ const SOLID: Record<Tone, string> = {
   warn: "bg-warn-solid text-warn-glyph",
   idle: "bg-idle-solid text-idle-glyph",
 };
+
+/** The solid fill and glyph colour of a status, for bars that carry its symbol. */
+export const statusSolid = (status: string): string => SOLID[statusMeta(status).tone];
 
 const EDGE: Record<Tone, string> = {
   ok: "border-l-ok-solid",

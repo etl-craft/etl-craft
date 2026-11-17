@@ -191,7 +191,7 @@ item's text, or work done early under another item.
 | S7.I The endurance run | Planned |  | 72-hour accelerated Support Insights candidate run, faults and bounded growth evidence after S8 is running |
 | S7.J Documentation to finish | In progress | #85, #227, #277 | Generated references and guides exist; supported public contracts, complete reference and recipes remain |
 | S7.L ETL Craft logo and CLI banner | In progress | #277, #400 | Owner-supplied logo, vector sources, theme-aware favicon and documentation assets, and the taller CLI banner are done; branding guidance remains |
-| S7.AL Pre-demo package gaps | In progress | #314, #315, #337, S7.AL.6 PR | Slices 1–4 and 6 ship duplicate counts, current references, guarded-table validation guidance, event-file validation and erasure physical-retention reporting. Slice 5 (timeline waits) remains; the React UI has no timeline yet (owner, 2026-11-17: rebuild it with the wait segments). |
+| S7.AL Pre-demo package gaps | Done | #314, #315, #337, #417, S7.AL.5 PR | Duplicate counts, current references, guarded-table validation guidance, event-file validation, the run timeline with recorded gate and event waits, and erasure physical-retention reporting. |
 | S7.AM Protection on every warehouse | Done | #311, #312, #313 | Atomic SCD merges, in-row protection and recovery, private audit identities and provider acceptance |
 | S7.AN Always show the environment | Done | #328 | CLI context and production confirmation; designed, sandboxed alert/SLA templates and catalog environment |
 | S7.AO UI rebuild | Done | #329–#335, #368, #371, #372, #373, #374, #375 | Seven slices: shell, Home, runs, pipelines, tasks, uploads, insights, console, catalog, system, agents, administration, maintenance, settings, search, sign-in; the new interface is the only one, served at `/ui`, and the old pages are deleted; audit follow-ups align time preferences, human labels, automatic grid sizing and phone date controls; remaining audit closes sparse summaries, controls, lazy loading and CLI operability |
@@ -1693,6 +1693,14 @@ empty-history-page handling defect, which was corrected and verified. No cloud w
   select/disclosure primitives retain platform keyboard semantics.
   Acceptance availability: no warehouse SQL or schema migration changes; cloud suites are not applicable.
 
+- **S7.AL.5 timeline waits (owner, 2026-11-17).** Choices that differ from the item text: the
+  React UI had no timeline (the S7.A one was removed with the old interface), so this slice
+  rebuilds it as a section of the run tab. Gate end and outcome come from `AUD_GATE_DECISIONS`
+  (the last decision; UNSATISFIED at or after `WAIT_UNTIL` is a timeout, BYPASSED is an
+  override); event and child-run waits end with their task's recorded run. A wait whose run
+  ended without a decision is `ENDED`. No Engine DB change. Only the single-run read carries
+  the timeline, so run lists and status reads cost no extra queries. Acceptance availability:
+  no warehouse SQL changed.
 - **S7.AL.6 erasure physical retention (owner, 2026-11-17).** Choices that differ from the item text:
   the bound shown is the one etl-craft can confirm, not one read from warehouse table
   properties. Trino over Iceberg reports `SNAPSHOT_RETENTION_DAYS`, which `purge` enforces;

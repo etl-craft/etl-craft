@@ -21,7 +21,7 @@ function subscribe(listener: () => void) {
     }
   };
 }
-const useNow = () => React.useSyncExternalStore(subscribe, () => tick, () => tick);
+export const useNow = () => React.useSyncExternalStore(subscribe, () => tick, () => tick);
 
 /**
  * Every moment on a page is shown here, as the account's "Time display" setting says: relative with the exact

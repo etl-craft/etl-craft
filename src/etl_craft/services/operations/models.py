@@ -16,10 +16,26 @@ from etl_craft.core.enums import (
     SlaStatus,
     TriggerKind,
 )
+from etl_craft.core.enums_timeline import TimelineKind, WaitOutcome
 from etl_craft.engine.repository.intervention_rows import Intervention
 from etl_craft.engine.repository.pauses import Pause, Resume
 from etl_craft.engine.standing_pauses import TaskPause
 from etl_craft.services.operations.alert_history import AlertDelivery
+
+
+@dataclass(frozen=True)
+class TimelineSegment:
+    """One recorded interval of a run: a queue wait, a gate or event wait, or an execution."""
+
+    task_code: str | None
+    """The task, or ``None`` for the pipeline's own dependency gate."""
+    kind: TimelineKind
+    started_at: datetime
+    ended_at: datetime | None
+    """``None`` while open, or for an ``ENDED`` wait that stopped with its run."""
+    outcome: AttemptStatus | WaitOutcome
+    attempt_number: int | None = None
+    deadline: datetime | None = None
 
 
 @dataclass(frozen=True)
@@ -62,6 +78,8 @@ class RunView:
     parent_run_label: str = ""
     child_run_labels: tuple[str, ...] = ()
     parameter_overrides: dict[str, dict[str, str]] | None = None
+    timeline: tuple[TimelineSegment, ...] = ()
+    """Recorded queue, wait and execution intervals; filled only by the single-run read."""
 
 
 @dataclass(frozen=True)
