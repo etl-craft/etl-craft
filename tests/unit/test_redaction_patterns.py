@@ -6,6 +6,7 @@ import pytest
 
 from etl_craft.core.redaction import (
     DEFAULT_SENSITIVE_PATTERNS,
+    mask_log,
     mask_text,
     public_parameters,
     remember,
@@ -48,13 +49,15 @@ def test_custom_patterns_replace_the_defaults_and_bad_json_is_left_for_validatio
     assert shown == {"ACCOUNT_REF": "[REDACTED]", "api_token": "kept", "INPUT_PARAMS": "{not json"}
 
 
-def test_a_resolved_secret_is_masked_for_the_rest_of_the_process_but_short_values_are_not():
+def test_a_resolved_secret_is_masked_in_later_logs_only_and_short_values_are_not():
     remember("resolved-warehouse-password-9")
     remember("abc")
-    assert mask_text("login with resolved-warehouse-password-9 failed") == (
+    assert mask_log("login with resolved-warehouse-password-9 failed") == (
         "login with [REDACTED] failed"
     )
-    assert mask_text("abc def") == "abc def"
+    assert mask_log("abc def") == "abc def"
+    # Results and errors keep exact text: a secret that is an ordinary word cannot rewrite them.
+    assert mask_text("resolved-warehouse-password-9") == "resolved-warehouse-password-9"
 
 
 def test_a_resolved_connection_secret_is_masked_in_later_log_text(tmp_path, monkeypatch):

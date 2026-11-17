@@ -7,8 +7,8 @@ All notable changes are recorded here. The format follows
 ## [Unreleased]
 
 - Every secret value the engine resolves (Engine DB, warehouse, email, cloning, docs-site and
-  privacy secrets) is masked as `[REDACTED]` in logs, stored task logs, errors and results for
-  the rest of that process. New `Redaction.Sensitive_patterns` (default `*TOKEN*`, `*SECRET*`,
+  privacy secrets) is masked as `[REDACTED]` in that process's logs, stored task logs and
+  attempt log files. New `Redaction.Sensitive_patterns` (default `*TOKEN*`, `*SECRET*`,
   `*PASSWORD*`, `*KEY*`) hides team-named task parameters and `INPUT_PARAMS` keys in the
   catalog, the task read (UI, API, CLI) and warehouse clones, including run-captured
   definitions. Package parameter names such as `MERGE_KEY` are always shown.

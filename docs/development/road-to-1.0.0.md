@@ -1178,8 +1178,9 @@ empty-history-page handling defect, which was corrected and verified. No cloud w
   default `*KEY*` would hide `MERGE_KEY` and other package parameters, which never hold a
   secret (secrets are always variable names), so patterns apply only to team-named parameters
   (Python script parameters) and `INPUT_PARAMS` keys. Masked values read `[REDACTED]`, the
-  existing marker, not `***`. Resolved secrets are remembered per process (values under four
-  characters are not, to avoid rewriting ordinary words). Clones mask the parameter tables,
+  existing marker, not `***`. Resolved secrets are remembered per process and masked in its
+  logs, stored task logs and attempt log files only (values under four characters are not
+  remembered); errors and results keep operation-scoped masking so ordinary words stay exact. Clones mask the parameter tables,
   their history and the `METADATA_SNAPSHOT` of runs and refreshes. Acceptance availability: no
   warehouse SQL changed; clone masking ran on all four local warehouses.
 - **S7.E task-secret slice (owner).** SECRETS and task.secret use ENVIRONMENT/FILE;

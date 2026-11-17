@@ -22,7 +22,7 @@ from etl_craft.core.actor import SYSTEM_ACTOR
 from etl_craft.core.counts import Counts
 from etl_craft.core.definitions import Definition
 from etl_craft.core.errors import HandlerError
-from etl_craft.core.redaction import mask_text
+from etl_craft.core.redaction import mask_log
 from etl_craft.core.uploads import UploadInfo, UploadWriter
 from etl_craft.engine.repository.offsets import StoredOffset
 from etl_craft.engine.task_store import LocalTaskStore, TaskIdentity, TaskStore
@@ -109,7 +109,7 @@ def format_task_log(result: HandlerResult) -> str | None:
         **result.variables,
     }
     lines = [f"{name} = {value}" for name, value in values.items() if value is not None]
-    return mask_text("\n".join(lines)) or None
+    return mask_log("\n".join(lines)) or None
 
 
 Handler = Callable[[TaskContext, Engine | TaskStore], HandlerResult]

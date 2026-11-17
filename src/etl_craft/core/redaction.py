@@ -6,7 +6,7 @@ from contextvars import ContextVar
 
 _VALUES: ContextVar[tuple[str, ...]] = ContextVar("redacted_values", default=())
 _RESOLVED: set[str] = set()
-"""Secrets this process resolved itself; masked for the life of the process."""
+"""Secrets this process resolved itself; masked in its logs for the life of the process."""
 SHORTEST_REMEMBERED = 4
 """Shorter values would mask ordinary words everywhere; they are not remembered."""
 DEFAULT_SENSITIVE_PATTERNS = ("*TOKEN*", "*SECRET*", "*PASSWORD*", "*KEY*")
@@ -14,7 +14,7 @@ REDACTED = "[REDACTED]"
 
 
 def remember(value: str) -> str:
-    """Mask a secret this process resolved in every later log line, error and result."""
+    """Mask a secret this process resolved in every later log line and stored task log."""
     if len(value) >= SHORTEST_REMEMBERED:
         _RESOLVED.add(value)
     return value
@@ -47,9 +47,20 @@ def registering(*values: str) -> Iterator[None]:
 
 
 def mask_text(value: str) -> str:
-    """Remove registered and resolved secret values before text leaves the operation."""
-    secrets = set(_VALUES.get()) | _RESOLVED
-    for secret in sorted(secrets, key=len, reverse=True):
+    """Remove registered values before text leaves the operation."""
+    for secret in _VALUES.get():
+        value = value.replace(secret, REDACTED)
+    return value
+
+
+def mask_log(value: str) -> str:
+    """Remove registered values and every secret this process resolved, before a log is kept.
+
+    Only logs get the process-wide set: results and errors keep exact text, so a secret that
+    happens to be an ordinary word does not rewrite them.
+    """
+    value = mask_text(value)
+    for secret in sorted(_RESOLVED, key=len, reverse=True):
         value = value.replace(secret, REDACTED)
     return value
 

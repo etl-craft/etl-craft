@@ -21,8 +21,9 @@ these values through a private pipe, never inherited environment variables. Valu
 etl-craft guarantees that its own secrets stay out of what it writes. Every secret value the
 engine resolves itself (the Engine DB, warehouse, email, cloning, docs-site and privacy secrets,
 and task `SECRETS`) is remembered by the process that resolved it and replaced with
-`[REDACTED]` in log lines, stored task logs, attempt log files, error messages, audit arguments
-and API results for the rest of that process. Values shorter than four characters are not
+`[REDACTED]` in its log lines, stored task logs and attempt log files for the rest of that
+process. Errors, audit arguments and API results mask the secrets of the operation that
+produced them, and keep other text exact. Values shorter than four characters are not
 remembered, because masking them would rewrite ordinary words.
 
 Task parameters a team names itself are hidden by name. `Redaction.Sensitive_patterns` lists
