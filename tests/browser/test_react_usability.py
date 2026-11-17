@@ -48,6 +48,8 @@ def test_table_and_pane_resize_targets_work_away_from_the_exact_border(scene):
     with sync_playwright() as pw:
         browser, page, problems = open_page(pw, viewport={"width": 1440, "height": 1000})
         sign_in(page, url, "/ui/projects/default/pipelines")
+        # The header is drawn before the rows; their arrival moves it, so drag after they load.
+        expect(page.get_by_role("link", name="OPS", exact=True).first).to_be_visible()
         grip = page.get_by_role("separator", name="Resize the Pipeline column", exact=True)
         grip.hover(position={"x": 2, "y": 12})
         box = grip.bounding_box()
