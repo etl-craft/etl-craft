@@ -1,4 +1,4 @@
-# Authentication types for the SMTP relay EMAIL_ALERT tasks send through.
+# Authentication types for the SMTP relay that alerts on EMAIL channels send through.
 #
 # One profile per type: set ETL_CRAFT_AUTH to the one you use.
 #   NONE      verified: an internal relay that accepts mail unauthenticated

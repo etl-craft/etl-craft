@@ -527,7 +527,7 @@ admin. Password resets require the local user to choose a replacement at next si
 
 ## Webhook and Slack alert channels
 
-[Alert channels](../guides/alert-channels.md) keep the endpoint and signing key in the existing
+[Alert channels](../guides/alerts.md#channels) keep the endpoint and signing key in the existing
 secrets provider. Only deployment admins manage channel routing, defaults and secret variable references.
 Developer config selects approved channel names; no task `SECRETS` declaration is used.
 Missing variables refuse naming the channel and variable,

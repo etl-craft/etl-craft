@@ -34,7 +34,7 @@ in the project directory. A systemd timer works the same way.
 - **The exit status says what happened**: `0` for `SUCCESS` or `SKIPPED`, `1` for a run that
   failed or was cancelled, and one status per kind of error (see
   [Exit codes](../reference/exit-codes.md)), so the scheduler can alert on it. The pipeline's
-  own [alert tasks](../guides/email-alerts.md) and SLA emails say more.
+  own [alert tasks](../guides/alerts.md) say more.
 
 ## When a run needs a hand
 

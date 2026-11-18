@@ -33,7 +33,7 @@ def create(conn, pipeline_id, task_id, key):
 def test_manual_identity_never_replaces_implicit_pipeline_selection(engine_db):
     with engine_db.engine.begin() as conn:
         pipeline = add_pipeline(conn, "P")
-        task = add_task(conn, pipeline, "mail", "EMAIL_ALERT")
+        task = add_task(conn, pipeline, "mail", "ALERT")
         normal = transitions.create_run(conn, pipeline, current_actor())
         first = create(conn, pipeline, task, "manual-first")
         second = create(conn, pipeline, task, "manual-second")
@@ -50,8 +50,8 @@ def test_manual_identity_never_replaces_implicit_pipeline_selection(engine_db):
 def test_manual_run_cannot_bind_an_unselected_task(engine_db):
     with engine_db.engine.begin() as conn:
         pipeline = add_pipeline(conn, "P")
-        selected = add_task(conn, pipeline, "selected", "EMAIL_ALERT")
-        other = add_task(conn, pipeline, "other", "EMAIL_ALERT")
+        selected = add_task(conn, pipeline, "selected", "ALERT")
+        other = add_task(conn, pipeline, "other", "ALERT")
         run_id = create(conn, pipeline, selected, "manual")
         with pytest.raises(RunStateError, match="outside selected tasks"):
             transitions.find_or_create_task_run(conn, other, run_id)
@@ -156,7 +156,7 @@ def test_manual_result_does_not_publish_upstream_success(engine_db):
 def test_metadata_change_cannot_turn_overlapping_manual_run_into_a_writer(engine_db):
     with engine_db.engine.begin() as conn:
         pipeline = add_pipeline(conn, "P")
-        task = add_task(conn, pipeline, "T", "EMAIL_ALERT")
+        task = add_task(conn, pipeline, "T", "ALERT")
         transitions.create_run(conn, pipeline, current_actor())
         run_id = create(conn, pipeline, task, "manual")
         conn.execute(text("UPDATE CFG_TASKS SET HANDLER='SQL' WHERE TASK_ID=:task"), {"task": task})
@@ -164,7 +164,7 @@ def test_metadata_change_cannot_turn_overlapping_manual_run_into_a_writer(engine
     from etl_craft.execution.context import build_task_context
 
     context = build_task_context(engine_db.engine, engine_db.config, binding.task_run_id)
-    assert context.handler == "EMAIL_ALERT"
+    assert context.handler == "ALERT"
     assert context.task_params.get("SQL_ACTION") is None
 
 
@@ -174,14 +174,14 @@ def test_child_context_keeps_admitted_handler_after_binding(engine_db):
     db = engine_db
     with db.engine.begin() as conn:
         pipeline = add_pipeline(conn, "P")
-        task = add_task(conn, pipeline, "T", "EMAIL_ALERT")
+        task = add_task(conn, pipeline, "T", "ALERT")
         run_id = create(conn, pipeline, task, "manual")
         binding = transitions.find_or_create_task_run(conn, task, run_id)
         conn.execute(
             text("UPDATE CFG_TASKS SET HANDLER='PYTHON' WHERE TASK_ID=:task"), {"task": task}
         )
     context = build_task_context(db.engine, db.config, binding.task_run_id)
-    assert context.handler == "EMAIL_ALERT"
+    assert context.handler == "ALERT"
 
 
 def test_overlapping_email_does_not_block_scheduled_dispatch(engine_db):
@@ -189,7 +189,7 @@ def test_overlapping_email_does_not_block_scheduled_dispatch(engine_db):
 
     with engine_db.engine.begin() as conn:
         pipeline = add_pipeline(conn, "P")
-        task = add_task(conn, pipeline, "T", "EMAIL_ALERT")
+        task = add_task(conn, pipeline, "T", "ALERT")
         manual_run = create(conn, pipeline, task, "manual")
         queued = transitions.create_run(conn, pipeline, current_actor(), status=RunStatus.QUEUED)
         active = [

@@ -4,7 +4,8 @@
     python prepare.py metadata    # the pipelines, as CFG_ rows, in engine.db (after setup)
 
 The team creates warehouse schemas and authors CFG_ rows as project migrations. This script
-prepares both from warehouse_schemas.sql and metadata/demo.sql, then runs migrate.
+prepares both from warehouse_schemas.sql and metadata/demo.sql, sets the two email alert
+channels the alert tasks name, then runs migrate.
 """
 
 from __future__ import annotations
@@ -17,6 +18,11 @@ import duckdb
 from etl_craft.cli import main
 
 HERE = Path(__file__).resolve().parent
+CHANNELS = (
+    ("oncall", "support-oncall@example.com"),
+    ("leads", "support-leads@example.com"),
+)
+"""The demo's email alert channels; administrators own routing, so they are not metadata."""
 
 
 def warehouse() -> None:
@@ -51,7 +57,16 @@ def metadata(files: list[str]) -> None:
                 )
         else:
             destination.write_text(sql, encoding="utf-8")
-    result = main(["--config", str(HERE / "craft-connector.yml"), "migrate"])
+    config = ["--config", str(HERE / "craft-connector.yml")]
+    result = 0
+    for name, recipients in CHANNELS:
+        if result == 0:
+            result = main(
+                [*config, "alert-channel", "set", "--project", "default", "--name", name,
+                 "--kind", "EMAIL", "--recipients", recipients, "--reason", "demo alerts"]
+            )  # fmt: skip
+    if result == 0:
+        result = main([*config, "migrate"])
     for command in (("bundle", "publish"), ("seed", "apply"), ("pipelines", "refresh")):
         if result == 0:
             result = main(["--config", str(HERE / "craft-connector.yml"), *command])

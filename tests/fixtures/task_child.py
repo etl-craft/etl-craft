@@ -72,8 +72,6 @@ def handler(context, engine):
 
 if __name__ == "__main__":
     HANDLERS.update(
-        dict.fromkeys(
-            ("PYTHON", "SQL", "BUSINESS_RULES", "EMAIL_ALERT"), "fixtures.task_child:handler"
-        )
+        dict.fromkeys(("PYTHON", "SQL", "BUSINESS_RULES", "ALERT"), "fixtures.task_child:handler")
     )
     child.run_as_process()

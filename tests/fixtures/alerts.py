@@ -15,12 +15,12 @@ from fixtures.metadata import add_task
 def failed_delivery(ctx, pipeline, source):
     """Admit a real event, then append a controlled failure without contacting a receiver."""
     with acting_as(SYSTEM_ACTOR), ctx.engine.begin() as conn:
-        add_task(conn, pipeline, "notify", "EMAIL_ALERT", ALERT_CHANNEL="ops", ALERT_ON="FAILURE")
+        add_task(conn, pipeline, "notify", "ALERT", ALERT_CHANNEL="ops", ALERT_ON="FAILURE")
         conn.execute(
             text(
                 "INSERT INTO CFG_ALERT_CHANNELS(PROJECT_ID,CHANNEL_NAME,KIND,URL_SECRET,"
-                "SIGNING_SECRET,BODY_FORMAT,DEFAULT_ALERT_ON) VALUES"
-                "(1,'ops','WEBHOOK','ALERT_URL','ALERT_KEY','JSON','FAILURE')"
+                "SIGNING_SECRET,DEFAULT_ALERT_ON) VALUES"
+                "(1,'ops','WEBHOOK','ALERT_URL','ALERT_KEY','FAILURE')"
             )
         )
         transitions.finalize_pipeline_run(conn, source, RunStatus.FAILED)

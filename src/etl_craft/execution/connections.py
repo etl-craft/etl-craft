@@ -1,13 +1,10 @@
 """Connection tests run before a pipeline run starts.
 
 ``run --pipeline-code`` and ``run --init-only`` test the connections the run will use before they
-start or resume it. A warehouse failure stops the run before any task starts; email failures
-are logged and left to the alert task or SLA hook to report:
-
-- the warehouse, when a task's handler is ``SQL`` or ``BUSINESS_RULES`` or cloning is on, and
-  with cloning on, that the warehouse profile's ``schema``, where cloning writes, exists;
-- the email relay, when a task's handler is ``EMAIL_ALERT``, or SLA emails are on and the
-  pipeline has an SLA.
+start or resume it. A warehouse failure stops the run before any task starts. That is the
+warehouse, when a task's handler is ``SQL`` or ``BUSINESS_RULES`` or cloning is on, and with
+cloning on, that the warehouse profile's ``schema``, where cloning writes, exists. Alerts are
+separate runs that record their own delivery failures; ``doctor`` tests the email relay.
 
 The Engine DB needs no test of its own: finding the pipeline already used it. ``PYTHON`` scripts
 connect by themselves, so they add nothing. A single-writer warehouse (a DuckDB file) is not
@@ -90,8 +87,6 @@ def check_run_connections(
     config: ConnectorConfig,
     pipeline_code: str,
     handlers: set[str],
-    *,
-    sends_sla_email: bool = False,
 ) -> None:
     """Test each connection a run of the pipeline uses; ``ConnectionTestError`` names failures."""
     failures: list[str] = []
@@ -100,15 +95,6 @@ def check_run_connections(
         problem = probe_warehouse(config, engine, schema=config.cloning.enabled)
         if problem is not None:
             failures.append(f"warehouse: {problem}")
-    uses_email = Handler.EMAIL_ALERT in handlers or sends_sla_email
-    if config.email is not None and uses_email:
-        problem = probe_email_relay(config)
-        if problem is not None:
-            logger.warning(
-                "%s: email relay: %s; data tasks may run; alerts record delivery failures",
-                pipeline_code,
-                problem,
-            )
     if failures:
         raise ConnectionTestError(
             f"{pipeline_code}: a connection test failed, so no run was started — "

@@ -42,7 +42,7 @@ FROM (VALUES
     ('SALES_MART', 'region_totals', 'ETL', 'SQL', NULL, NULL),
     ('SALES_MART', 'customer_totals', 'ETL', 'SQL', NULL, NULL),
     ('SALES_MART', 'publish', 'ETL', 'PYTHON', 'N', 2),
-    ('SALES_MART', 'alert', 'ETL', 'EMAIL_ALERT', NULL, NULL)
+    ('SALES_MART', 'alert', 'ETL', 'ALERT', NULL, NULL)
 ) v
 LEFT JOIN CFG_PIPELINES p ON p.PROJECT_ID = (SELECT PROJECT_ID FROM ETL_CRAFT_PROJECT)
     AND p.PIPELINE_CODE = v.column1 AND p.ACTIVE_FLAG = 'Y';
@@ -76,9 +76,10 @@ FROM (VALUES
      'SELECT customer_id, SUM(amount) AS total_amount FROM sales.orders_uk GROUP BY customer_id'),
     ('SALES_MART', 'publish', 'SCRIPT_KIND', 'UTILITY'),
     ('SALES_MART', 'publish', 'SCRIPT_FILE', 'python_scripts/sales/publish.py'),
-    ('SALES_MART', 'alert', 'EMAIL_TO', 'sales-data@example.com'),
-    ('SALES_MART', 'alert', 'EMAIL_SUBJECT', '$$pipeline_code: $$status'),
-    ('SALES_MART', 'alert', 'EMAIL_BODY', 'Run $$pipeline_run_id ended $$status.')
+    ('SALES_MART', 'alert', 'ALERT_CHANNEL', 'sales_data'),
+    ('SALES_MART', 'alert', 'ALERT_ON', 'SUCCESS|COMPLETED_WITH_ERRORS|FAILURE'),
+    ('SALES_MART', 'alert', 'ALERT_SUBJECT', '$$pipeline_code: $$trigger'),
+    ('SALES_MART', 'alert', 'ALERT_BODY', 'Run $$pipeline_run_id ended $$status.')
 ) v
 LEFT JOIN CFG_PIPELINES p ON p.PROJECT_ID = (SELECT PROJECT_ID FROM ETL_CRAFT_PROJECT)
     AND p.PIPELINE_CODE = v.column1 AND p.ACTIVE_FLAG = 'Y'
@@ -93,8 +94,7 @@ FROM (VALUES
     ('SALES_MART', 'customer_totals', 'SALES_DAILY', 'load_orders', 'HAS_DATA'),
     ('SALES_MART', 'publish', 'SALES_MART', 'daily_totals', 'SUCCESS'),
     ('SALES_MART', 'publish', 'SALES_MART', 'region_totals', 'SUCCESS'),
-    ('SALES_MART', 'publish', 'SALES_MART', 'customer_totals', 'SUCCESS'),
-    ('SALES_MART', 'alert', 'SALES_MART', 'publish', 'ALWAYS')
+    ('SALES_MART', 'publish', 'SALES_MART', 'customer_totals', 'SUCCESS')
 ) v
 LEFT JOIN CFG_PIPELINES p ON p.PROJECT_ID = (SELECT PROJECT_ID FROM ETL_CRAFT_PROJECT)
     AND p.PIPELINE_CODE = v.column1 AND p.ACTIVE_FLAG = 'Y'

@@ -16,7 +16,7 @@ from pathlib import Path
 from etl_craft.config.loader import settings_by_section
 from etl_craft.dialects.warehouse.base import STORAGE_PARAMETERS
 from etl_craft.handlers import (
-    email_alert,
+    alert_message,
     event_wait,
     file_validation,
     python_scripts,
@@ -36,16 +36,10 @@ HANDLER_GUIDES = {
     "PYTHON": "../guides/python-scripts.md",
     "FILE_VALIDATION": "../guides/stewardship.md",
     "SQL_SCRIPT": "../guides/sql-scripts.md",
-    "EMAIL_ALERT": "../guides/email-alerts.md",
+    "ALERT": "../guides/alerts.md",
     "EVENT_WAIT": "../guides/event-waits.md",
     "RUN_PIPELINE": "../guides/pipeline-triggers.md",
 }
-OUTCOME_PATTERNS = {
-    f"EMAIL_{part}_{outcome}": f"EMAIL_{part}_<OUTCOME>"
-    for part in ("SUBJECT", "BODY")
-    for outcome in email_alert.OUTCOMES
-}
-"""Per-outcome alert parameters, and the pattern their guide documents them under."""
 
 
 def written_in(key: str, text: str) -> bool:
@@ -102,16 +96,16 @@ def handler_parameters() -> dict[str, list[tuple[str, str]]]:
         else:
             applies = ""
         sql.append((name, applies))
-    alert = []
-    for name in sorted(email_alert.PARAMETERS):
-        pattern = OUTCOME_PATTERNS.get(name)
-        alert.append((name, f"one outcome: `{pattern}`" if pattern else ""))
+    alert = [
+        (name, "EMAIL channels" if name in alert_message.EMAIL_PARAMETERS else "")
+        for name in sorted(alert_message.PARAMETERS)
+    ]
     return {
         "Every task": [(name, "") for name in sorted(COMMON_PARAMETERS)],
         "SQL": sql,
         "PYTHON": [(name, "") for name in sorted(python_scripts.PARAMETERS)],
         "FILE_VALIDATION": [(name, "") for name in sorted(file_validation.PARAMETERS)],
-        "EMAIL_ALERT": alert,
+        "ALERT": alert,
         "EVENT_WAIT": [(name, "local mode") for name in sorted(event_wait.PARAMETERS)],
         "RUN_PIPELINE": [(name, "") for name in sorted(run_pipeline.PARAMETERS)],
     }

@@ -309,7 +309,7 @@ def test_unsatisfiable_still_dooms_an_all_task_whose_same_pipeline_edge_is_hopel
 
 
 def test_unsatisfiable_flags_a_failure_edge_whose_upstream_succeeded():
-    # The recommended EMAIL_ALERT pattern, on a run where nothing failed.
+    # A failure watcher, on a run where nothing failed.
     graph = build_graph(nodes(1, 2), [edge(2, 1, dependency_type="FAILURE")])
     assert graph.unsatisfiable({1: TaskRunState(status="SUCCESS")}) == [2]
 

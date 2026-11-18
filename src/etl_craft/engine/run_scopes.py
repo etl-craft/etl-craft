@@ -52,7 +52,7 @@ class TaskSelection:
 
 def task_exclusive(detail: TaskExecutionDetail, params: Mapping[str, str]) -> bool:
     """Validate the actual handler inputs and report whether they need exclusive admission."""
-    if detail.handler not in {Handler.SQL, Handler.EMAIL_ALERT} or any(
+    if detail.handler not in {Handler.SQL, Handler.ALERT} or any(
         name.startswith("WATERMARK_") for name in params
     ):
         raise RunRefusedError(

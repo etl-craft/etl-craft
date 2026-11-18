@@ -177,8 +177,7 @@ def prepare(
         with engine.connect() as conn:
             if event(conn, run_id) is not None:
                 return pipeline_id, replace(detail, sla_in_hours=None), config
-    sends_sla_email = config.limits.enforce_sla and detail.sla_in_hours is not None
-    check_run_connections(engine, config, pipeline_code, handlers, sends_sla_email=sends_sla_email)
+    check_run_connections(engine, config, pipeline_code, handlers)
     return pipeline_id, detail, config
 
 
@@ -348,13 +347,7 @@ def _wait_gate(
     with engine.connect() as conn, for_run(conn, queued):
         handlers = fetch_pipeline_handlers(conn, pipeline_id)
         detail = fetch_pipeline_detail(conn, pipeline_id)
-    check_run_connections(
-        engine,
-        config,
-        detail.pipeline_code,
-        handlers,
-        sends_sla_email=config.limits.enforce_sla and detail.sla_in_hours is not None,
-    )
+    check_run_connections(engine, config, detail.pipeline_code, handlers)
     while True:
         if run_cancelled(engine, queued):
             return None

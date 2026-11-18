@@ -485,7 +485,7 @@ def test_control_of_manual_run_does_not_fence_same_task_in_whole_pipeline(ctx):
 
     pipeline, whole, _, _ = seed(ctx)
     with ctx.engine.begin() as conn:
-        email = add_task(conn, pipeline, "notify", "EMAIL_ALERT")
+        email = add_task(conn, pipeline, "notify", "ALERT")
         manual = create_manual_run(
             conn,
             pipeline,

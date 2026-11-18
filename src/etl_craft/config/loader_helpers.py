@@ -420,19 +420,6 @@ def flag(settings: Profiled, key: str, default: _FlagDefault, path: Path) -> boo
     return parse_bool(value, settings.where(key), path, default=bool(default))
 
 
-def string_list(settings: Profiled, key: str, path: Path) -> list[str] | None:
-    """Read a YAML string list or comma-separated text."""
-    value = settings.value(key)
-    if value is None:
-        return None
-    if isinstance(value, str):
-        # A variable, or a value, holding a comma-separated list.
-        return [item.strip() for item in value.split(",") if item.strip()]
-    if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
-        raise ConfigurationError(f"{path}: Orchestration.{key} must be a list of strings")
-    return value
-
-
 def parse_bool(value: object, name: str, path: Path, *, default: bool) -> bool:
     """Accept YAML booleans and the usual environment spellings (true/false, 1/0, yes/no)."""
     if value is None or value == "":

@@ -169,7 +169,7 @@ def started_context(context: TaskContext, started: object) -> TaskContext:
 
 
 def _handler(context: TaskContext, store: RemoteTaskStore) -> HandlerResult:
-    if context.handler == Handler.EMAIL_ALERT and context.task_params.get("ALERT_CHANNEL"):
+    if context.handler == Handler.ALERT:
         reply = store.client.call(
             ActionName.AGENT_REPORT,
             store.request(AgentReport.ALERT),

@@ -98,7 +98,7 @@ def seeded(engine_db):
             conn, a, "load_dim", SQL_ACTION="SCD1_MERGE", TARGET_OBJECT="core.dim"
         )
         ids["rules"] = add_task(conn, a, "check_dim", "BUSINESS_RULES")
-        ids["alert"] = add_task(conn, a, "alert", "EMAIL_ALERT")
+        ids["alert"] = add_task(conn, a, "alert", "ALERT")
         ids["retired"] = add_task(conn, a, "old_task", active="N")
         ids["upstream"] = add_task(conn, ids["beta"], "publish")
         conn.execute(
@@ -217,13 +217,12 @@ def test_pipeline_detail_reads_its_json_parameters(seeded):
             "INCREMENTAL",
         )
         assert detail.tags == ["daily"]
-        assert detail.email_recipients is None
         assert pipelines.fetch_pipeline_detail(conn, ids["beta"]).tags is None
         assert pipelines.fetch_pipeline_handlers(conn, ids["alpha"]) == {
             "PYTHON",
             "SQL",
             "BUSINESS_RULES",
-            "EMAIL_ALERT",
+            "ALERT",
         }
 
 
@@ -466,20 +465,6 @@ def test_run_state_and_statuses(seeded):
         assert statuses["extract"].status == RunStatus.SUCCESS
         assert statuses["load_dim"].status == runs.PENDING
         assert statuses["load_dim"].attempt_count == 1
-
-
-def test_failure_watch_reads_the_latest_error(seeded):
-    engine, ids = seeded
-    with engine.begin() as conn:
-        run_id = start_run(conn, ids["alpha"])
-        binding = transitions.find_or_create_task_run(conn, ids["load"], run_id)
-        transitions.finish_task_run(
-            conn, binding.task_run_id, status=RunStatus.FAILED, error_message="merge failed"
-        )
-        assert tasks.fetch_failure_watch_messages(conn, ids["alert"]) == [
-            tasks.FailureWatchMessage("load_dim", "merge failed")
-        ]
-        assert tasks.fetch_failure_watch_messages(conn, ids["extract"]) == []
 
 
 @pytest.mark.parametrize(

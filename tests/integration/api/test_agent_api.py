@@ -3081,14 +3081,14 @@ def test_agent_alert_delivery_uses_scoped_attempt_and_server_credentials(agent_s
             conn,
             pipeline,
             "notify",
-            "EMAIL_ALERT",
+            "ALERT",
             ALERT_CHANNEL="ops",
         )
         conn.execute(
             text(
                 "INSERT INTO CFG_ALERT_CHANNELS(PROJECT_ID,CHANNEL_NAME,KIND,URL_SECRET,"
-                "SIGNING_SECRET,BODY_FORMAT,DEFAULT_ALERT_ON) VALUES"
-                "(1,'ops','WEBHOOK','ALERT_URL','ALERT_KEY','JSON','FAILURE')"
+                "SIGNING_SECRET,DEFAULT_ALERT_ON) VALUES"
+                "(1,'ops','WEBHOOK','ALERT_URL','ALERT_KEY','FAILURE')"
             )
         )
         source = transitions.create_run(conn, pipeline, SYSTEM_ACTOR)

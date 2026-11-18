@@ -16,6 +16,7 @@ def known_parameters(handler: str) -> frozenset[str] | None:
     target = HANDLERS.get(handler) or {
         Handler.EVENT_WAIT.value: "etl_craft.handlers.event_wait:run",
         Handler.RUN_PIPELINE.value: "etl_craft.handlers.run_pipeline:run",
+        Handler.ALERT.value: "etl_craft.handlers.alert_message:compose",
     }.get(handler)
     if target is None:
         return None

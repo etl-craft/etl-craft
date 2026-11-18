@@ -218,9 +218,6 @@ def test_rule_reporting_uses_admitted_rules_after_they_are_disabled(engine_db):
         binding = transitions.find_or_create_task_run(conn, task, run)
         conn.execute(text("UPDATE CFG_BUSINESS_RULES SET ACTIVE_FLAG='N'"))
         conn.execute(text("UPDATE CFG_TASKS SET ACTIVE_FLAG='N' WHERE TASK_ID=:id"), {"id": task})
-        other = add_pipeline(conn, "OTHER")
-        add_task(conn, other, "new", "EMAIL_ALERT")
-        start_run(conn, other)
     context = build_task_context(engine, config, binding.task_run_id)
     store = LocalTaskStore(
         engine,
@@ -229,9 +226,6 @@ def test_rule_reporting_uses_admitted_rules_after_they_are_disabled(engine_db):
         LocalLocker(engine, config),
         definition=context._definition,
     )
-    alert = store.alert("OTHER")
-    assert [row.task_code for row in alert.statuses] == ["rules"]
-    assert [row.task_code for row in alert.digests[0].tasks] == ["new"]
     recorded = store.begin_rule(rule)
     assert store.rule_keys(rule) == set()
     store.end_rule(RuleEnding(rule, recorded.business_rule_run_id, RunStatus.SUCCESS, ("7",)))

@@ -79,22 +79,23 @@ def probes(monkeypatch):
 
 @pytest.mark.unit
 @pytest.mark.parametrize(
-    ("handlers", "kwargs", "tested"),
+    ("handlers", "tested"),
     [
-        ({"PYTHON"}, {}, []),
-        ({"SQL"}, {}, ["warehouse"]),
-        ({"BUSINESS_RULES", "EMAIL_ALERT"}, {}, ["warehouse", "relay"]),
-        ({"PYTHON"}, {"sends_sla_email": True}, ["relay"]),
+        ({"PYTHON"}, []),
+        ({"SQL"}, ["warehouse"]),
+        # Alerts send in their own runs, so a run never waits on the relay.
+        ({"BUSINESS_RULES", "ALERT"}, ["warehouse"]),
+        ({"ALERT"}, []),
     ],
 )
-def test_only_the_connections_a_run_uses_are_tested(probes, handlers, kwargs, tested):
+def test_only_the_connections_a_run_uses_are_tested(probes, handlers, tested):
     both = config("jdbc:postgresql://127.0.0.1:1/x", ("127.0.0.1", 1))
     if "warehouse" in tested:
         with pytest.raises(ConnectionTestError) as error:
-            check_run_connections(None, both, "P", handlers, **kwargs)
+            check_run_connections(None, both, "P", handlers)
         assert str(error.value).startswith("P: a connection test failed, so no run was started")
     else:
-        check_run_connections(None, both, "P", handlers, **kwargs)
+        check_run_connections(None, both, "P", handlers)
     assert probes == tested
 
 
@@ -108,7 +109,7 @@ def test_cloning_needs_the_warehouse_and_a_duckdb_file_is_not_tested(probes, tmp
     duckdb = config(f"jdbc:duckdb:{tmp_path / 'w.duckdb'}")
     check_run_connections(None, duckdb, "P", {"SQL"})
     # Nothing configured, nothing to test.
-    check_run_connections(None, config(), "P", {"SQL", "EMAIL_ALERT"})
+    check_run_connections(None, config(), "P", {"SQL", "ALERT"})
     assert probes == []
 
 

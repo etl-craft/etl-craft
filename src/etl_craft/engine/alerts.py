@@ -1,4 +1,4 @@
-"""Run and SLA evidence read for an attempt's email report."""
+"""Run and SLA evidence read for an alert email."""
 
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -18,8 +18,7 @@ from etl_craft.engine.repository.runs import (
     fetch_latest_pipeline_run,
     fetch_task_statuses_for_run,
 )
-from etl_craft.engine.repository.tasks import FailureWatchMessage, fetch_failure_watch_messages
-from etl_craft.engine.runlog import SlaResult, elapsed_hours, fetch_run_sla
+from etl_craft.engine.runlog import SlaResult, elapsed_hours
 
 
 @dataclass(frozen=True)
@@ -61,11 +60,10 @@ def latest_run_of(conn: Connection, pipeline_code: str) -> PipelineDigest:
 
 @dataclass(frozen=True)
 class AlertState:
-    """The task's permitted report, independently of the machine sending SMTP."""
+    """A source run's report and the requested pipeline digests."""
 
     statuses: tuple[TaskStatus, ...]
     sla: SlaResult | None
-    watched: tuple[FailureWatchMessage, ...]
     digests: tuple[PipelineDigest, ...]
     project: str = ""
     environment: Environment | None = None
@@ -76,18 +74,9 @@ def read_alert(
     conn: Connection,
     pipeline_id: int,
     run_id: int,
-    task_id: int | None,
-    enforce_sla: bool,
     pipelines: str | None,
 ) -> AlertState:
-    """Read the selected run and the digest requested by its admitted task."""
-    sla = None
-    if enforce_sla:
-        hours = fetch_pipeline_detail(conn, pipeline_id).sla_in_hours
-        if hours is not None:
-            elapsed = elapsed_hours(fetch_run_sla(conn, run_id).start_date, datetime.now(UTC))
-            if elapsed > hours:
-                sla = SlaResult(SlaStatus.BREACHED, hours, elapsed)
+    """Read the source run and the digest the alert task requests."""
     codes = []
     if pipelines:
         codes = (
@@ -104,10 +93,15 @@ def read_alert(
     recorded = conn.execute(statement(conn, "email_run_context"), {"pipeline_run_id": run_id}).one()
     start = as_utc(recorded.start_date)
     end = as_utc(recorded.end_date) if recorded.end_date else None
+    sla = None
+    hours = fetch_pipeline_detail(conn, pipeline_id).sla_in_hours
+    if hours is not None:
+        elapsed = elapsed_hours(start, end or datetime.now(UTC))
+        if elapsed > hours:
+            sla = SlaResult(SlaStatus.BREACHED, hours, elapsed)
     return AlertState(
         tuple(fetch_task_statuses_for_run(conn, pipeline_id, run_id)),
         sla,
-        tuple(fetch_failure_watch_messages(conn, task_id)) if task_id is not None else (),
         tuple(latest_run_of(conn, code) for code in codes),
         project,
         environment,

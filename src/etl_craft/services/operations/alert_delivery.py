@@ -1,4 +1,4 @@
-"""One server-owned webhook delivery operation for local and agent alert tasks."""
+"""One server-owned delivery operation for local and agent alert tasks, for every channel kind."""
 
 import hashlib
 import hmac
@@ -6,10 +6,11 @@ import json
 import logging
 import ssl
 import threading
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from http.client import HTTPException
+from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
 from urllib.request import HTTPRedirectHandler, HTTPSHandler, Request, build_opener
@@ -25,7 +26,7 @@ from etl_craft.core.alerts import (
     AlertKind,
     AlertStatus,
 )
-from etl_craft.core.enums import ApiRole, Handler, YesNo
+from etl_craft.core.enums import ApiRole, Handler, RunStatus, YesNo
 from etl_craft.core.errors import (
     ConfigurationError,
     EtlCraftError,
@@ -37,8 +38,13 @@ from etl_craft.core.redaction import mask, registering
 from etl_craft.core.task_secrets import read
 from etl_craft.engine.alert_channels import AlertChannel
 from etl_craft.engine.alert_deliveries import AlertEvent, DeliveryAttempt, append, event
+from etl_craft.engine.alerts import read_alert
 from etl_craft.engine.queries import statement
 from etl_craft.engine.repository.pipelines import selected_project
+from etl_craft.handlers.alert_message import Message, compose, run_status
+from etl_craft.handlers.email_context import email_context
+from etl_craft.handlers.email_templates import render
+from etl_craft.handlers.mail import parse_recipients, safe_subject, send_email
 from etl_craft.handlers.registry import HandlerResult, TaskContext
 from etl_craft.services.operations.context import OperationContext
 
@@ -75,6 +81,11 @@ def post(
 
 def credentials(ctx: OperationContext, task: TaskContext, channel: AlertChannel) -> tuple[str, str]:
     """Resolve only references authorized by the administrator-owned channel."""
+    if channel.url_secret is None or channel.signing_secret is None:
+        raise ConfigurationError(
+            f"channel {channel.channel_name}: kind={channel.kind} without URL_SECRET and "
+            "SIGNING_SECRET; expected both variable names; set the channel again with them"
+        )
     names = (channel.url_secret, channel.signing_secret)
     values = []
     for name in names:
@@ -127,10 +138,10 @@ def credentials(ctx: OperationContext, task: TaskContext, channel: AlertChannel)
 
 def deliver(ctx: OperationContext, task: TaskContext) -> HandlerResult:
     """Deliver for an ordinary alert task; never send from event observation."""
-    if ctx.role not in {ApiRole.ADMIN, ApiRole.AGENT} or task.handler != Handler.EMAIL_ALERT:
+    if ctx.role not in {ApiRole.ADMIN, ApiRole.AGENT} or task.handler != Handler.ALERT:
         raise PermissionDeniedError(
             f"alert task {task.task_code}: role={ctx.role}, handler={task.handler}; expected the "
-            "server-owned EMAIL_ALERT operation; dispatch the recorded alert task"
+            "server-owned ALERT operation; dispatch the recorded alert task"
         )
     if ctx.role == ApiRole.AGENT and (
         task.attempt_id is None or ctx.credential_attempt_id != task.attempt_id
@@ -174,13 +185,53 @@ def deliver(ctx: OperationContext, task: TaskContext) -> HandlerResult:
     if any(item.status == AlertStatus.SENT for item in previous):
         return HandlerResult(variables={"ALERT_SENT": True})
     configured = AlertChannel(**channel._mapping)
+    message = compose(
+        task.task_params,
+        {
+            "trigger": source.trigger,
+            "status": str(row.status),
+            "pipeline_id": str(row.pipeline_id),
+            "pipeline_run_id": str(row.run_id),
+            "task_run_id": str(task.task_run_id),
+            "pipeline_code": row.pipeline_code,
+            "task_code": task.task_code,
+            "error_message": row.error_message or "",
+        },
+    )
+    if configured.kind == AlertKind.EMAIL:
+        sender = Sender(_email(ctx, task, configured, source, row, message), "a relay acceptance")
+        return _attempts(Delivery(ctx, task, source, configured.channel_name, sender), previous)
     url, key = credentials(ctx, task, configured)
     with registering(url, key), acting_as(ctx.actor), selected_project(ctx.project_id):
+        body = _https_body(ctx, task, configured.kind, source, row, message)
+        sender = Sender(lambda: _post_signed(url, key, body), "an HTTPS 2xx response")
+        return _attempts(Delivery(ctx, task, source, configured.channel_name, sender), previous)
+
+
+def _https_body(
+    ctx: OperationContext,
+    task: TaskContext,
+    kind: AlertKind,
+    source: AlertEvent,
+    row: Row[Any],
+    message: Message,
+) -> bytes:
+    """Return the exact bytes a webhook or Slack receiver is sent, with secrets masked."""
+    if kind == AlertKind.SLACK:
+        payload: object = {
+            "text": mask(f"{message.subject}\n{message.body}"),
+            "link_names": False,
+            "unfurl_links": False,
+            "unfurl_media": False,
+        }
+    else:
         payload = mask(
             {
                 "schema": "etl-craft/alert/1",
                 "event_id": source.event_id,
                 "trigger": source.trigger,
+                "subject": message.subject,
+                "body": message.body,
                 "run": {"id": row.run_id, "label": row.run_label},
                 "task": {
                     "alert": task.task_code,
@@ -194,37 +245,97 @@ def deliver(ctx: OperationContext, task: TaskContext) -> HandlerResult:
                 },
             }
         )
-        if configured.kind == AlertKind.SLACK:
-            payload = {
-                "text": f"etl-craft {row.pipeline_code}: {source.trigger} · run {row.run_id}",
-                "link_names": False,
-                "unfurl_links": False,
-                "unfurl_media": False,
-            }
-        body = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode()
-        return _attempts(
-            Delivery(ctx, task, source, configured.channel_name, url, key, body), previous
+    return json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode()
+
+
+def _email(
+    ctx: OperationContext,
+    task: TaskContext,
+    channel: AlertChannel,
+    source: AlertEvent,
+    row: Row[Any],
+    message: Message,
+) -> Callable[[], tuple[int | None, AlertErrorClass | None]]:
+    """Render the whole email before the first attempt; each attempt only hands it to the relay."""
+    if ctx.config.email is None:
+        raise ConfigurationError(
+            f"channel {channel.channel_name}: kind=EMAIL, but craft-connector.yml has no "
+            "Orchestration Email block; expected the relay's host, port and from address; add it"
         )
+    recipients = parse_recipients(channel.recipients, f"channel {channel.channel_name} RECIPIENTS")
+    with selected_project(ctx.project_id), ctx.engine.connect() as conn:
+        state = read_alert(
+            conn,
+            row.pipeline_id,
+            row.run_id,
+            task.task_params.get("EMAIL_PIPELINES"),
+        )
+    data = email_context(
+        state, pipeline=row.pipeline_code, status=run_status(source.trigger, str(row.status))
+    )
+    assert state.environment is not None
+    subject = safe_subject(f"[{state.environment.label.split(' · ')[0]}] {message.subject}")
+    data.update(
+        subject=subject,
+        body=message.body,
+        task={
+            "code": task.task_code,
+            "run_id": task.task_run_id,
+            "status": RunStatus.IN_PROGRESS,
+            "attempt": task.attempt,
+        },
+        recipients=recipients,
+        recipient_reason=f"channel {channel.channel_name}",
+    )
+    html = render(ctx.config, task.task_params.get("EMAIL_TEMPLATE"), data)
+    text = render(ctx.config, task.task_params.get("EMAIL_TEMPLATE_TEXT"), data, text=True)
+
+    def send() -> tuple[int | None, AlertErrorClass | None]:
+        try:
+            send_email(ctx.config, recipients, subject, html, body_text=text)
+        except HandlerError as error:
+            logger.error("channel %s: %s", channel.channel_name, error)
+            return None, AlertErrorClass.TRANSPORT
+        return None, None
+
+    return send
+
+
+def _post_signed(url: str, key: str, body: bytes) -> tuple[int | None, AlertErrorClass | None]:
+    timestamp = str(int(datetime.now(UTC).timestamp()))
+    signature = hmac.new(key.encode(), timestamp.encode() + b"." + body, hashlib.sha256).hexdigest()
+    return post(
+        url,
+        body,
+        {
+            "Content-Type": "application/json",
+            "X-ETL-Craft-Timestamp": timestamp,
+            "X-ETL-Craft-Signature": "v1=" + signature,
+        },
+    )
+
+
+@dataclass(frozen=True)
+class Sender:
+    """One delivery attempt for a channel kind, and what success looks like for it."""
+
+    send: Callable[[], tuple[int | None, AlertErrorClass | None]]
+    expected: str
 
 
 @dataclass(frozen=True)
 class Delivery:
-    """Only the active operation holds resolved credentials and exact signed bytes."""
+    """Only the active operation holds the resolved credentials, inside its sender."""
 
     ctx: OperationContext
     task: TaskContext
     source: AlertEvent
     channel_name: str
-    url: str
-    key: str
-    body: bytes
+    sender: Sender
 
 
 def _attempts(delivery: Delivery, previous: Sequence[Row[tuple[object, ...]]]) -> HandlerResult:
-    ctx, task = delivery.ctx, delivery.task
-    channel_name, url, key, body = delivery.channel_name, delivery.url, delivery.key, delivery.body
-    if any(row.status == AlertStatus.SENT for row in previous):
-        return HandlerResult(variables={"ALERT_SENT": True})
+    ctx, task, channel_name = delivery.ctx, delivery.task, delivery.channel_name
     last = previous[-1] if previous else None
     if last is not None and last.status == AlertStatus.FAILED:
         raise HandlerError(
@@ -238,21 +349,9 @@ def _attempts(delivery: Delivery, previous: Sequence[Row[tuple[object, ...]]]) -
                 f"channel {channel_name}: delivery stopped; resume the recorded alert run"
             )
         _record(delivery, AlertStatus.STARTED, DeliveryAttempt(number, task.task_run_id))
-        timestamp = str(int(datetime.now(UTC).timestamp()))
-        signature = hmac.new(
-            key.encode(), timestamp.encode() + b"." + body, hashlib.sha256
-        ).hexdigest()
-        code, error = post(
-            url,
-            body,
-            {
-                "Content-Type": "application/json",
-                "X-ETL-Craft-Timestamp": timestamp,
-                "X-ETL-Craft-Signature": "v1=" + signature,
-            },
-        )
-        sent = code is not None and 200 <= code < 300
-        retry = code is None or code in (408, 429) or (code is not None and code >= 500)
+        code, error = delivery.sender.send()
+        sent = error is None and (code is None or 200 <= code < 300)
+        retry = error is not None or code in (408, 429) or (code is not None and code >= 500)
         status = (
             AlertStatus.SENT
             if sent
@@ -273,7 +372,7 @@ def _attempts(delivery: Delivery, previous: Sequence[Row[tuple[object, ...]]]) -
         if status == AlertStatus.FAILED:
             break
     raise HandlerError(
-        f"channel {channel_name}: delivery failed; expected an HTTPS 2xx response; "
+        f"channel {channel_name}: delivery failed; expected {delivery.sender.expected}; "
         "repair the receiver and submit a new alert event"
     )
 

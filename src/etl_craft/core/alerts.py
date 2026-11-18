@@ -17,13 +17,9 @@ def triggers(value: str | None) -> tuple[str, ...]:
     """Refuse unknown selectors rather than quietly omitting an alert."""
     result = tuple(value.split("|")) if value else ()
     for item in result:
-        if item not in {
-            AlertTrigger.FAILURE,
-            AlertTrigger.SLA_BREACH,
-            AlertTrigger.LOST,
-        } and not re.fullmatch(r"GATE_WAIT_OVER_[1-9][0-9]*", item):
+        if item not in set(AlertTrigger) and not re.fullmatch(r"GATE_WAIT_OVER_[1-9][0-9]*", item):
             raise MetadataError(
-                f"ALERT_ON={item!r}: expected FAILURE, SLA_BREACH, LOST or "
+                f"ALERT_ON={item!r}: expected {', '.join(AlertTrigger)} or "
                 "GATE_WAIT_OVER_<positive minutes>; correct the alert task or channel default"
             )
         if item.startswith("GATE_WAIT_OVER_"):

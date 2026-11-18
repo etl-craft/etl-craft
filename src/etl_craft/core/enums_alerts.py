@@ -6,8 +6,9 @@ from etl_craft.core.enums import DependencyType, RunStatus
 
 
 class AlertKind(StrEnum):
-    """Supported receiver protocols."""
+    """How a channel delivers: email through the Email relay, or an HTTPS receiver."""
 
+    EMAIL = "EMAIL"
     WEBHOOK = "WEBHOOK"
     SLACK = "SLACK"
 
@@ -26,15 +27,10 @@ class AlertTrigger(StrEnum):
     """Recorded source event categories."""
 
     FAILURE = DependencyType.FAILURE
+    SUCCESS = RunStatus.SUCCESS
+    COMPLETED_WITH_ERRORS = "COMPLETED_WITH_ERRORS"
     SLA_BREACH = "SLA_BREACH"
     LOST = "LOST"
-
-
-class AlertBodyFormat(StrEnum):
-    """Wire shapes supported by the channel's selected receiver protocol."""
-
-    JSON = "JSON"
-    SLACK = AlertKind.SLACK
 
 
 class AlertErrorClass(StrEnum):

@@ -2,9 +2,10 @@
 
 import pytest
 
+from etl_craft.core.alerts import AlertKind
 from etl_craft.core.graph import cycles
 from etl_craft.engine.repository.pipelines import pipeline_parameter_problems
-from etl_craft.handlers.email_alert import alert_parameter_problems
+from etl_craft.handlers.alert_message import compose, parameter_problems
 from etl_craft.handlers.python_scripts import script_definition_problem
 
 pytestmark = pytest.mark.unit
@@ -32,39 +33,45 @@ def test_a_script_is_read_without_running_it(tmp_path, source, problem):
     assert found == problem if problem is None else found.startswith(problem)
 
 
-def test_an_alert_is_checked_for_every_outcome_it_can_send_on():
+def test_alert_settings_are_checked_against_the_channel_kind():
     assert (
-        alert_parameter_problems({"EMAIL_TO": "a@x.io", "EMAIL_SUBJECT": "s", "EMAIL_BODY": "b"})
-        == []
+        parameter_problems({"ALERT_SUBJECT": "$$pipeline_code: $$trigger"}, AlertKind.SLACK) == []
     )
-    assert (
-        alert_parameter_problems(
-            {
-                "EMAIL_TO": "a@x.io",
-                "EMAIL_SUBJECT_FAILED": "s",
-                "EMAIL_PIPELINES": "ALL",
-                "EMAIL_ON_STATUS": "FAILED",
-            }
-        )
-        == []
-    )
-    assert alert_parameter_problems({"EMAIL_ON_STATUS": "FAILD", "EMAIL_SUBJECT": "$$x"}) == [
-        "EMAIL_TO is required: one or more addresses separated by '|'",
-        "EMAIL_ON_STATUS names unknown outcome(s) FAILD; the outcomes are "
-        "FAILED, COMPLETED_WITH_ERRORS, SUCCESS",
-        "no EMAIL_BODY for outcome(s) FAILED, COMPLETED_WITH_ERRORS, SUCCESS: set EMAIL_BODY, "
-        "or EMAIL_BODY_<OUTCOME> for each, or leave them out of EMAIL_ON_STATUS",
-        "EMAIL_SUBJECT uses unknown token(s) $$x; the tokens are $$status, $$pipeline_id, "
-        "$$pipeline_run_id, $$task_run_id, "
-        "$$pipeline_code, $$task_code, $$error_message",
+    assert parameter_problems({"EMAIL_PIPELINES": "ALL"}, AlertKind.EMAIL) == []
+    assert parameter_problems(
+        {"ALERT_BODY": "$$x", "EMAIL_TEMPLATE": "email_templates/a.html"}, AlertKind.WEBHOOK
+    ) == [
+        "ALERT_BODY uses unknown token(s) $$x; the tokens are $$trigger, $$status, $$pipeline_id, "
+        "$$pipeline_run_id, $$task_run_id, $$pipeline_code, $$task_code, $$error_message",
+        "EMAIL_TEMPLATE applies to EMAIL channels only; this task's channel is WEBHOOK; remove "
+        "EMAIL_TEMPLATE or select an EMAIL channel",
     ]
+
+
+def test_an_alert_message_fills_its_tokens_or_the_built_in_wording():
+    values = {
+        "trigger": "FAILURE",
+        "status": "FAILED",
+        "pipeline_id": "3",
+        "pipeline_run_id": "41",
+        "task_run_id": "90",
+        "pipeline_code": "SALES",
+        "task_code": "notify",
+        "error_message": "load: boom",
+    }
+    built_in = compose({}, values)
+    assert built_in.subject == "SALES: FAILURE · run 41"
+    assert built_in.body.endswith("\nload: boom")
+    own = compose({"ALERT_SUBJECT": "$$pipeline_code\n$$status", "ALERT_BODY": "$$trigger"}, values)
+    assert (own.subject, own.body) == ("SALES FAILED", "FAILURE")
 
 
 def test_pipeline_parameters_are_typed():
     assert pipeline_parameter_problems(None) == ([], [])
-    assert pipeline_parameter_problems('{"TAGS": ["a"], "EMAIL_RECIPIENTS": ["a@x.io"]}') == (
+    assert pipeline_parameter_problems('{"TAGS": ["a"]}') == ([], [])
+    assert pipeline_parameter_problems('{"EMAIL_RECIPIENTS": ["a@x.io"]}') == (
         [],
-        [],
+        ["EMAIL_RECIPIENTS"],
     )
     assert pipeline_parameter_problems({"TAGS": "a", "CATCHUP": False}) == (
         [

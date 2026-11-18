@@ -18,7 +18,7 @@ from fixtures.metadata import add_pipeline, add_task
 @pytest.fixture
 def paused_task(engine_db):
     with engine_db.engine.begin() as conn:
-        add_task(conn, add_pipeline(conn, "P"), "T", "EMAIL_ALERT")
+        add_task(conn, add_pipeline(conn, "P"), "T", "ALERT")
     ctx = OperationContext(engine_db.engine, engine_db.config, SYSTEM_ACTOR, role=ApiRole.ADMIN)
     request = ControlRequest(
         pipeline_code="P",
@@ -320,7 +320,7 @@ def test_standing_pause_api_uses_grants_and_refuses_cross_project(paused_task):
             text("SELECT PROJECT_ID FROM CFG_PROJECTS WHERE PROJECT_CODE='hidden'")
         ).scalar_one()
         hidden_pipeline = add_pipeline(conn, "P", project_id=hidden_id)
-        add_task(conn, hidden_pipeline, "T", "EMAIL_ALERT")
+        add_task(conn, hidden_pipeline, "T", "ALERT")
     response = client.post(hidden, json=body, headers=headers)
     assert response.status_code == 404, response.text
     assert response.json() == missing.json()

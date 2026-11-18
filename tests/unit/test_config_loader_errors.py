@@ -42,10 +42,7 @@ def postgres_warehouse(**fields):
             config(Warehouse=postgres_warehouse(User="u", Auth_mode="PASSWORD")),
             r"needs Secret \(a variable name\) for Auth_mode PASSWORD",
         ),
-        (
-            config(Orchestration={"Email_recipients": 5}),
-            "Orchestration.Email_recipients must be a list of strings",
-        ),
+        (config(Orchestration={"Email_recipients": ["a@example.com"]}), "Email_recipients"),
         (
             config(Orchestration={"Email": "smtp.internal"}),
             "Orchestration.Email must be a mapping",

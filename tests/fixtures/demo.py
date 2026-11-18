@@ -56,6 +56,20 @@ from fixtures.services import (
 
 REPO = Path(__file__).resolve().parents[2]
 DEMO = REPO / "examples" / "demo"
+
+
+def _demo_channels() -> tuple[tuple[str, str], ...]:
+    """The email channels the demo's ``prepare.py`` sets, read from it."""
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("demo_prepare", DEMO / "prepare.py")
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return tuple(module.CHANNELS)
+
+
+CHANNELS = _demo_channels()
 SCHEMAS = ("lnd", "prs", "ds", "cdc", "pre_dm", "dm", "aud")
 PASSWORD_VAR = "ETL_CRAFT_DEMO_SECRET"
 S3_VAR = "ETL_CRAFT_DEMO_S3_SECRET"
@@ -351,6 +365,10 @@ class Demo:
                 run_script(conn, for_engine(engine).split_statements(sql))
         finally:
             engine.dispose()
+        for name, recipients in CHANNELS:
+            self.ok("alert-channel", "set", "--project", "default", "--name", name, "--kind",
+                    "EMAIL", "--recipients", recipients.replace("@example.com",
+                    f"+{self.tag}@example.com"), "--reason", "demo alerts")  # fmt: skip
         self.ok("bundle", "publish")
         self.ok("seed", "apply")
         self.ok("pipelines", "refresh")

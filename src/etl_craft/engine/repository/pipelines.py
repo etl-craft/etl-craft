@@ -80,7 +80,6 @@ class PipelineDetail:
     schedule_timezone: str | None = None
     schedule_start_date: date | None = None
     tags: list[str] | None = None
-    email_recipients: list[str] | None = None
 
 
 def fetch_pipeline_detail(conn: Connection, pipeline_id: int) -> PipelineDetail:
@@ -112,7 +111,6 @@ def _is_strings(value: object) -> bool:
 
 PIPELINE_PARAMETER_KINDS: dict[str, tuple[str, Callable[[object], bool]]] = {
     "TAGS": ("a list of strings", _is_strings),
-    "EMAIL_RECIPIENTS": ("a list of strings", _is_strings),
 }
 """Each ``PIPELINE_PARAMETERS`` key, what its value must be, and the test for it."""
 

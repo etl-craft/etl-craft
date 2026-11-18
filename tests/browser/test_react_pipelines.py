@@ -828,6 +828,7 @@ def test_alert_history_on_pipeline_and_project_has_status_time_and_no_secrets(
         page.get_by_role("button", name="Set channel", exact=True).click()
         dialog = page.locator("dialog[open]")
         dialog.get_by_label("Channel name", exact=True).fill("team")
+        dialog.get_by_label("Kind", exact=True).select_option("WEBHOOK")
         dialog.get_by_label("URL variable name", exact=False).fill("TEAM_URL")
         dialog.get_by_label("Signing key variable name", exact=False).fill("TEAM_KEY")
         dialog.get_by_label("Reason (kept in the audit trail)").fill("Approve team receiver")

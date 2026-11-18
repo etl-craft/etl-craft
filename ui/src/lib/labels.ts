@@ -1,6 +1,6 @@
 /** Engine codes in the words a page shows: the code stays in the data, exports and the CLI. */
 
-/** `EMAIL_ALERT` → "Email alert": a code nobody has given a label, in words. */
+/** `FILE_VALIDATION` → "File validation": a code nobody has given a label, in words. */
 export function words(code: string | null | undefined): string {
   if (!code) return "";
   const text = code.replace(/[_-]+/g, " ").toLowerCase();
@@ -13,7 +13,7 @@ const HANDLERS: Record<string, string> = {
   SQL_SCRIPT: "SQL script",
   FILE_VALIDATION: "File validation",
   BUSINESS_RULES: "Business rules",
-  EMAIL_ALERT: "Email alert",
+  ALERT: "Alert",
   EVENT_WAIT: "Event wait",
   RUN_PIPELINE: "Run pipeline",
 };

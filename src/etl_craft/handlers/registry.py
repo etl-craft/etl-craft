@@ -120,7 +120,6 @@ HANDLERS: dict[str, str] = {
     enums.Handler.BUSINESS_RULES: "etl_craft.handlers.business_rules:run",
     enums.Handler.FILE_VALIDATION: "etl_craft.handlers.file_validation:run",
     enums.Handler.PYTHON: "etl_craft.handlers.python_scripts:run",
-    enums.Handler.EMAIL_ALERT: "etl_craft.handlers.email_alert:run",
 }
 """Each ``HANDLER`` value and the ``module:function`` that runs it."""
 

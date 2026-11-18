@@ -210,9 +210,8 @@ class ExecutionLimits:
     A process that has reached the Engine DB waits up to ``engine_db_outage_seconds`` for it to
     answer again after a restart or failover; 0 fails at the first refused connection.
 
-    Every run of a pipeline with ``SLA_IN_HOURS`` is marked ``MET`` or ``BREACHED``. With
-    ``enforce_sla`` on, a run that misses its SLA also sends an SLA email, through the Email
-    settings.
+    Every run of a pipeline with ``SLA_IN_HOURS`` is marked ``MET`` or ``BREACHED``. Only with
+    ``enforce_sla`` on does this environment admit ``SLA_BREACH`` alert events.
     """
 
     task_timeout_seconds: int = DEFAULT_TASK_TIMEOUT_SECONDS
@@ -304,14 +303,12 @@ class ConnectorConfig:
     warehouse_table_format: TableFormat = TableFormat.NATIVE
     max_warehouse_queries: int | None = None
     retries: int | None = None
-    email_recipients: list[str] | None = None
     allowed_auto_restarts: str = EVERYTHING
     """What this environment's controller may start on its own: schedule ticks and run endings.
 
     A pipeline's ``AUTO_RESTART_CONDITION`` stays valid everywhere; this only suppresses starts.
     """
     email: EmailProfile | None = None
-    email_template: str | None = None
     limits: ExecutionLimits = field(default_factory=ExecutionLimits)
     config_path: Path | None = None
     _host_config_path: Path | None = field(default=None, repr=False)

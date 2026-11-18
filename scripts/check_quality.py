@@ -69,7 +69,6 @@ METRICS = {
 # Enums whose values are status-like words that should never appear as bare strings.
 ENUMS = (
     "DependencyType",
-    "EmailFlavour",
     "Handler",
     "InterventionAction",
     "RefreshType",

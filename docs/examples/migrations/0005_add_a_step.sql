@@ -1,6 +1,6 @@
 -- A step added between two others, and parameters added to and retired from existing tasks.
 -- validate_feed now runs between fetch_orders and load_orders in SALES_DAILY: the new task, its
--- parameters, its dependencies, on_failure told about it, and the dependency it replaces retired.
+-- parameters, its dependencies, and the dependency it replaces retired.
 
 CREATE TEMPORARY TABLE codes_in_use (CODE VARCHAR(300) NOT NULL, ID BIGINT NOT NULL);
 
@@ -42,8 +42,7 @@ INSERT INTO CFG_TASK_DEPENDENCY (PIPELINE_ID, TASK_ID, DEPENDS_ON_PIPELINE_ID, D
 SELECT t.PIPELINE_ID, t.TASK_ID, u.PIPELINE_ID, u.TASK_ID, v.column5
 FROM (VALUES
     ('SALES_DAILY', 'validate_feed', 'SALES_DAILY', 'fetch_orders', 'SUCCESS'),
-    ('SALES_DAILY', 'load_orders', 'SALES_DAILY', 'validate_feed', 'SUCCESS'),
-    ('SALES_DAILY', 'on_failure', 'SALES_DAILY', 'validate_feed', 'FAILURE')
+    ('SALES_DAILY', 'load_orders', 'SALES_DAILY', 'validate_feed', 'SUCCESS')
 ) v
 LEFT JOIN CFG_PIPELINES p ON p.PROJECT_ID = (SELECT PROJECT_ID FROM ETL_CRAFT_PROJECT)
     AND p.PIPELINE_CODE = v.column1 AND p.ACTIVE_FLAG = 'Y'

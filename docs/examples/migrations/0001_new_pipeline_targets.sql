@@ -30,10 +30,10 @@ INSERT INTO CFG_PIPELINES (PROJECT_ID, PIPELINE_CODE, PIPELINE_NAME, DESCRIPTION
 VALUES
     ((SELECT PROJECT_ID FROM ETL_CRAFT_PROJECT), 'SALES_DAILY', 'Daily sales, UK', 'Fetches the day''s UK orders, loads them and checks them.',
      'INCREMENTAL', '0 6 * * *', 'Europe/London', 'Y', 3, 'QUEUE', '2026-11-01', 2,
-     '{"TAGS": ["sales"], "EMAIL_RECIPIENTS": ["sales-data@example.com"]}');
+     '{"TAGS": ["sales"]}');
 
 -- Tasks: pipeline code, task code, TASK_TYPE (INGESTION or ETL), HANDLER (PYTHON, SQL,
--- BUSINESS_RULES or EMAIL_ALERT), then RUN_CONDITION and RUN_CONDITION_COUNT: NULL and NULL to
+-- BUSINESS_RULES or ALERT), then RUN_CONDITION and RUN_CONDITION_COUNT: NULL and NULL to
 -- wait for every dependency, 'ANY' and NULL for any one of them, 'N' and a number for that many.
 INSERT INTO CFG_TASKS (PIPELINE_ID, TASK_CODE, TASK_TYPE, HANDLER, RUN_CONDITION,
                        RUN_CONDITION_COUNT)
@@ -43,8 +43,8 @@ FROM (VALUES
     ('SALES_DAILY', 'setup_orders', 'ETL', 'SQL', NULL, NULL),
     ('SALES_DAILY', 'load_orders', 'ETL', 'SQL', NULL, NULL),
     ('SALES_DAILY', 'check_orders', 'ETL', 'BUSINESS_RULES', NULL, NULL),
-    ('SALES_DAILY', 'on_failure', 'ETL', 'EMAIL_ALERT', 'ANY', NULL),
-    ('SALES_DAILY', 'alert', 'ETL', 'EMAIL_ALERT', NULL, NULL)
+    ('SALES_DAILY', 'on_failure', 'ETL', 'ALERT', NULL, NULL),
+    ('SALES_DAILY', 'alert', 'ETL', 'ALERT', NULL, NULL)
 ) v
 LEFT JOIN CFG_PIPELINES p ON p.PROJECT_ID = (SELECT PROJECT_ID FROM ETL_CRAFT_PROJECT)
     AND p.PIPELINE_CODE = v.column1 AND p.ACTIVE_FLAG = 'Y';
@@ -81,13 +81,14 @@ FROM (VALUES
     ('SALES_DAILY', 'load_orders', 'SQL_ACTION', 'APPEND_TABLE'),
     ('SALES_DAILY', 'load_orders', 'SCRIPT_FILE', 'sql_scripts/sales/orders_uk.sql'),
     ('SALES_DAILY', 'load_orders', 'DOCUMENTATION', 'Appends the day''s orders to the region''s table.'),
-    ('SALES_DAILY', 'on_failure', 'EMAIL_TO', 'sales-oncall@example.com'),
-    ('SALES_DAILY', 'on_failure', 'EMAIL_ON_STATUS', 'FAILED'),
-    ('SALES_DAILY', 'on_failure', 'EMAIL_SUBJECT', '$$pipeline_code: a step failed'),
-    ('SALES_DAILY', 'on_failure', 'EMAIL_BODY', 'Run $$pipeline_run_id failed: $$error_message'),
-    ('SALES_DAILY', 'alert', 'EMAIL_TO', 'sales-data@example.com'),
-    ('SALES_DAILY', 'alert', 'EMAIL_SUBJECT', '$$pipeline_code: $$status'),
-    ('SALES_DAILY', 'alert', 'EMAIL_BODY', 'Run $$pipeline_run_id ended $$status.')
+    ('SALES_DAILY', 'on_failure', 'ALERT_CHANNEL', 'sales_oncall'),
+    ('SALES_DAILY', 'on_failure', 'ALERT_ON', 'FAILURE'),
+    ('SALES_DAILY', 'on_failure', 'ALERT_SUBJECT', '$$pipeline_code: a step failed'),
+    ('SALES_DAILY', 'on_failure', 'ALERT_BODY', 'Run $$pipeline_run_id failed: $$error_message'),
+    ('SALES_DAILY', 'alert', 'ALERT_CHANNEL', 'sales_data'),
+    ('SALES_DAILY', 'alert', 'ALERT_ON', 'SUCCESS|COMPLETED_WITH_ERRORS|FAILURE'),
+    ('SALES_DAILY', 'alert', 'ALERT_SUBJECT', '$$pipeline_code: $$trigger'),
+    ('SALES_DAILY', 'alert', 'ALERT_BODY', 'Run $$pipeline_run_id ended $$status.')
 ) v
 LEFT JOIN CFG_PIPELINES p ON p.PROJECT_ID = (SELECT PROJECT_ID FROM ETL_CRAFT_PROJECT)
     AND p.PIPELINE_CODE = v.column1 AND p.ACTIVE_FLAG = 'Y'
@@ -96,17 +97,14 @@ LEFT JOIN CFG_TASKS t ON t.PIPELINE_ID = p.PIPELINE_ID AND t.TASK_CODE = v.colum
 
 -- Task dependencies: the task (pipeline code, task code), the task it waits on (pipeline code,
 -- task code, in this pipeline or another), and DEPENDENCY_TYPE: SUCCESS, FAILURE, ALWAYS, or
--- HAS_DATA for a success that wrote rows. on_failure runs when ANY of its upstreams fails.
+-- HAS_DATA for a success that wrote rows. Alert tasks need none: the events they name start them.
 INSERT INTO CFG_TASK_DEPENDENCY (PIPELINE_ID, TASK_ID, DEPENDS_ON_PIPELINE_ID, DEPENDS_ON_TASK_ID,
                                  DEPENDENCY_TYPE)
 SELECT t.PIPELINE_ID, t.TASK_ID, u.PIPELINE_ID, u.TASK_ID, v.column5
 FROM (VALUES
     ('SALES_DAILY', 'load_orders', 'SALES_DAILY', 'fetch_orders', 'SUCCESS'),
     ('SALES_DAILY', 'load_orders', 'SALES_DAILY', 'setup_orders', 'SUCCESS'),
-    ('SALES_DAILY', 'check_orders', 'SALES_DAILY', 'load_orders', 'HAS_DATA'),
-    ('SALES_DAILY', 'on_failure', 'SALES_DAILY', 'fetch_orders', 'FAILURE'),
-    ('SALES_DAILY', 'on_failure', 'SALES_DAILY', 'load_orders', 'FAILURE'),
-    ('SALES_DAILY', 'alert', 'SALES_DAILY', 'check_orders', 'ALWAYS')
+    ('SALES_DAILY', 'check_orders', 'SALES_DAILY', 'load_orders', 'HAS_DATA')
 ) v
 LEFT JOIN CFG_PIPELINES p ON p.PROJECT_ID = (SELECT PROJECT_ID FROM ETL_CRAFT_PROJECT)
     AND p.PIPELINE_CODE = v.column1 AND p.ACTIVE_FLAG = 'Y'

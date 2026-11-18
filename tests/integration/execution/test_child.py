@@ -30,7 +30,10 @@ def restore_logger():
 
 @pytest.fixture
 def bound(engine_db, tmp_path, request):
-    """A config file, a task T with parameter DOCUMENTATION=1, and its row bound under a run."""
+    """A config file, a task T with parameter DOCUMENTATION=1, and its row bound under a run.
+
+    A ``PYTHON`` task gets a script that raises.
+    """
     profile = engine_db.config.engine
     schema = "public" if profile.jdbc_url.startswith("jdbc:postgresql") else "main"
     block = {"Jdbc_url": profile.jdbc_url, "Schema": schema}
@@ -67,6 +70,23 @@ def bound(engine_db, tmp_path, request):
             ),
             {"t": task},
         )
+        if getattr(request, "param", None) == "PYTHON":
+            scripts = config_path.parent / "python_scripts"
+            scripts.mkdir(exist_ok=True)
+            (scripts / "fail.py").write_text(
+                "def run(task):\n    raise RuntimeError('expected handler failure')\n"
+            )
+            for name, value in (
+                ("SCRIPT_KIND", "INGESTION"),
+                ("SCRIPT_FILE", "python_scripts/fail.py"),
+            ):
+                conn.execute(
+                    text(
+                        "INSERT INTO CFG_TASK_PARAMETERS (TASK_ID, PARAMETER_NAME, "
+                        "PARAMETER_VALUE) VALUES (:t, :n, :v)"
+                    ),
+                    {"t": task, "n": name, "v": value},
+                )
         run_id = start_run(conn, pipeline)
         binding = transitions.find_or_create_task_run(conn, task, run_id)
     return engine, config_path, binding.task_run_id, run_id
@@ -143,7 +163,7 @@ def test_an_unknown_task_run(bound):
     assert child.main(args(config_path, 999999)) == ExitCode.RUN_STATE
 
 
-@pytest.mark.parametrize("bound", ["EMAIL_ALERT"], indirect=True)
+@pytest.mark.parametrize("bound", ["PYTHON"], indirect=True)
 def test_the_command_line_records_a_handler_failure(bound, capsys, monkeypatch, engine_db):
     monkeypatch.setenv("ETL_CRAFT_TOKEN", service_token(engine_db.engine))
     engine, config_path, task_run_id, _ = bound
@@ -155,7 +175,8 @@ def test_the_command_line_records_a_handler_failure(bound, capsys, monkeypatch, 
         ["run", "--pipeline-code", "P", "--task-code", "T", "--reason", "test requested run"]
     )
     assert code == ExitCode.FAILURE
-    message = "EMAIL_TO is required: one or more addresses separated by '|'"
+    message = status(engine, task_run_id).error_message
+    assert "expected handler failure" in message
     assert capsys.readouterr().out == f"T: FAILED — {message}\n"
     assert status(engine, task_run_id).error_message == message
     # A settled task is skipped and exits 0.

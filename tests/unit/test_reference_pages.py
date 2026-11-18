@@ -16,7 +16,7 @@ GUIDE_FILES = {
     "SQL": "sql-tasks.md",
     "PYTHON": "python-scripts.md",
     "FILE_VALIDATION": "stewardship.md",
-    "EMAIL_ALERT": "email-alerts.md",
+    "ALERT": "alerts.md",
     "EVENT_WAIT": "event-waits.md",
     "RUN_PIPELINE": "pipeline-triggers.md",
 }
@@ -51,7 +51,7 @@ def test_the_parameter_page_lists_what_each_handler_reads():
     page = pages.task_parameters_page()
     assert "| `SCHEMA_EVOLUTION` | `OVERWRITE_TABLE`, `SCD1_MERGE`, `SCD2_MERGE` |" in page
     assert "| `SCRIPT_FILE` |  |" in page
-    assert "| `EMAIL_SUBJECT_FAILED` | one outcome: `EMAIL_SUBJECT_<OUTCOME>` |" in page
+    assert "| `EMAIL_PIPELINES` | EMAIL channels |" in page
     assert "| `TASK_TIMEOUT_SECONDS` |  |" in page
     assert "| `REQUIRE_UPLOADS` |  |" in page
 
