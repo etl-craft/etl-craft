@@ -41,7 +41,4 @@ error class has its own status; every error etl-craft raises on purpose belongs 
 | `31` | `CONFIRMATION_REQUIRED` | A request would empty data and needs those exact targets confirmed first (`ConfirmationRequiredError`). Review the listed targets, then repeat the request confirming them: `--yes` unattended, or answer the prompt. |
 
 Task pause without `--outcome SUCCESS|SKIPPED|FAILED`, or task pause with `--active-runs`, is
-`UsageError` (exit 2). A DRAIN dispatch refusal is `RunRefusedError` (exit 10). Migration 0096
-refuses development-only HOLD/RELEASE records or outcome-free task pauses as `MigrationError`
-(exit 13), with the remedy to recreate that unreleased development Engine DB. SQLite reports
-the static refusal; PostgreSQL also reports both record counts.
+`UsageError` (exit 2). A DRAIN dispatch refusal is `RunRefusedError` (exit 10).

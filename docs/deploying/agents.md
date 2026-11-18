@@ -184,9 +184,8 @@ one resource budget.
 
 ### Existing token upgrade
 
-Migration 0065 binds each agent token to AUD_AGENTS' latest recorded pool. Unregistered agent
-tokens are revoked. Before rotating a token used across pools, list its earlier successful
-registrations (the ARGUMENTS document includes each pool):
+Each agent token is bound to one pool. Before rotating a token used across pools, list its
+earlier successful registrations (the ARGUMENTS document includes each pool):
 
 ```sql
 SELECT ACTOR, STARTED_AT, ARGUMENTS
@@ -264,7 +263,6 @@ process/query evidence kind, actor and reason; migrated old observations remain 
 Agent registration records `ETL_CRAFT_AGENT_INSTANCE_ID` (the pod UID in Kubernetes through
 the downward API); a native host process uses its birth and a fresh process instance identity.
 Each claim retains the registration identity, so replacing a pod cannot impersonate its exit.
-Roll controller, API and agents together after migration 0085.
 
 An old failed, timed-out, cancelled or lost attempt without ending evidence can hold a
 timestamp reader's high mark. Successful commits retain their existing window semantics.

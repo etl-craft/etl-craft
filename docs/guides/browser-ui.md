@@ -394,15 +394,7 @@ Run `etl-craft migrate` before starting the new server. Normal login and UI star
 pending Engine migrations, naming the Engine DB key and applied/required migration. If no
 admin session is available, the local `migrate` command prompts for the admin account and
 password. Its upgrade-only proof reads the original account fields, issues no session and
-never applies lockout counters; wrong passwords and non-admins are refused and audited. Engine migration
-`0075_browser_accounts.sql` follows business calendars (0074) in both dialects. It adds
-`FAILED_SIGNINS` (0), `LOCKED_DATE` (NULL), `MUST_CHANGE_PASSWORD` (N) and validated
-`UI_SETTINGS` ({}) to existing `CFG_ACCOUNTS` rows. Existing passwords and accounts remain;
-a later admin password reset sets the temporary-password requirement. The migration also
-adds partial indexes for recent health counts and successful sign-in/catalog audit reads.
-
-Migration `0078_announcements.sql` adds the `AUD_ANNOUNCEMENTS` audit table; existing data is
-unchanged.
+never applies lockout counters; wrong passwords and non-admins are refused and audited.
 
 ## Audit presentation
 

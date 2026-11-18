@@ -213,49 +213,6 @@ def test_a_queued_scheduled_run_can_be_cancelled_before_admission(cli_project):
     p.wait_for("SELECT STATUS FROM AUD_PIPELINES_RUN_LOG", expected="CANCELLED")
 
 
-def test_upgrade_preserves_runs_and_audits_new_schedule_columns(
-    empty_engine_db, tmp_path, monkeypatch
-):
-    import json
-
-    from etl_craft.engine.migrations import apply_pending_migrations
-    from fixtures.released_schema import install
-
-    monkeypatch.chdir(tmp_path)
-    monkeypatch.delenv("ETL_CRAFT_MIGRATIONS_DIR", raising=False)
-    db = empty_engine_db
-    install(db, "0.2.0")
-    with db.engine.begin() as conn:
-        pipeline = add_pipeline(conn, "P")
-        original = conn.execute(
-            text(
-                "INSERT INTO AUD_PIPELINES_RUN_LOG (PIPELINE_ID,STATUS,RUN_DATE) "
-                "VALUES (:id,'IN-PROGRESS',:day) RETURNING PIPELINE_RUN_ID AS pipeline_run_id"
-            ),
-            {"id": pipeline, "day": date(2026, 1, 1)},
-        ).scalar_one()
-    apply_pending_migrations(db.engine)
-    with db.engine.begin() as conn:
-        conn.execute(
-            text("UPDATE CFG_PIPELINES SET SCHEDULE_TIMEZONE='Asia/Kolkata' WHERE PIPELINE_ID=:id"),
-            {"id": pipeline},
-        )
-    with db.engine.connect() as conn:
-        assert (
-            conn.execute(text("SELECT PIPELINE_RUN_ID FROM AUD_PIPELINES_RUN_LOG")).scalar_one()
-            == original
-        )
-        after = conn.execute(
-            text(
-                "SELECT AFTER_JSON AS after_json FROM AUD_METADATA_CHANGES "
-                "WHERE TABLE_NAME='CFG_PIPELINES' AND OPERATION='UPDATE' "
-                "ORDER BY CHANGE_ID DESC LIMIT 1"
-            )
-        ).scalar_one()
-        after = json.loads(after) if isinstance(after, str) else after
-        assert after["schedule_timezone"] == "Asia/Kolkata"
-
-
 def test_sqlite_catchup_bound_requires_a_positive_whole_number(engine_db):
     from sqlalchemy.exc import IntegrityError
 

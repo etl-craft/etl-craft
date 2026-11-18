@@ -2,7 +2,6 @@
 
 import json
 import re
-from contextlib import contextmanager, nullcontext
 from datetime import UTC, datetime
 
 from sqlalchemy import bindparam, text
@@ -13,8 +12,6 @@ from etl_craft.core.enums_access import Permission
 UTILITIES = {
     "controller_listen": "LISTEN has no query plan.",
     "controller_unlisten": "UNLISTEN has no query plan.",
-    "drop_metadata_changes_view": "DROP VIEW has no query plan.",
-    "source_contract_drop_legacy": "DROP TABLE has no query plan.",
 }
 INTEGER_NAMES = frozenset(
     {
@@ -226,7 +223,6 @@ def bindings(sql, name=""):
         "latest_finished_pipeline_run": {"ended_by": MOMENT},
         "pipeline_run_history": {"before": 1000000000},
         "task_run_history": {"before": 1000000000},
-        "target_contract_update_rule": {"table": 1},
         "lineage_cache_edges": {"confirmed_keys": [(1, "plan")]},
         "clear_rule_results": {"keys": '["key_1"]'},
         "table_rule_result": {"passed": "Y"},
@@ -283,76 +279,18 @@ def bindings(sql, name=""):
     return statement, values
 
 
-def migration_query(name):
-    return (
-        name.endswith("_legacy")
-        or name.startswith(("config_history_", "source_contract_", "target_contract_"))
-        or name
-        in {
-            "account_legacy_tokens",
-            "recorded_hash_version_names",
-            "recorded_rule_result_names",
-            "recorded_view_statement_names",
-        }
-    )
-
-
-@contextmanager
-def migration_schema(conn):
-    """Shadow only shapes used before identity enforcement and column normalization."""
-    transaction = conn.begin_nested()
-    try:
-        for table in (
-            "cfg_tables",
-            "cfg_columns",
-            "cfg_api_tokens",
-            "cfg_business_rules",
-            "aud_target_hash_version",
-            "aud_target_view_statement",
-            "aud_business_rules_results",
-        ):
-            conn.exec_driver_sql(
-                f"CREATE TEMP TABLE {table} (LIKE public.{table} INCLUDING ALL EXCLUDING IDENTITY)"
-            )
-            conn.exec_driver_sql(f"INSERT INTO {table} SELECT * FROM public.{table}")
-        for table, column in (
-            ("cfg_api_tokens", "role"),
-            ("cfg_business_rules", "target_table"),
-            ("aud_target_hash_version", "target_object"),
-            ("aud_target_view_statement", "target_object"),
-            ("aud_business_rules_results", "target_table"),
-        ):
-            conn.exec_driver_sql(f"ALTER TABLE {table} ADD COLUMN {column} VARCHAR")
-        conn.exec_driver_sql(
-            "CREATE TEMP TABLE CFG_SOURCE_COLUMNS "
-            "(LIKE public.AUD_SOURCE_COLUMNS_BASELINE INCLUDING ALL)"
-        )
-        conn.exec_driver_sql(
-            "INSERT INTO CFG_SOURCE_COLUMNS SELECT * FROM public.AUD_SOURCE_COLUMNS_BASELINE"
-        )
-        conn.exec_driver_sql(
-            "CREATE INDEX plan_legacy_pipeline_code ON CFG_PIPELINES (PIPELINE_CODE)"
-        )
-        conn.exec_driver_sql("ANALYZE")
-        yield
-    finally:
-        transaction.rollback()
-
-
 def catalog_plans(conn, dialect):
     names = dialect.query_names() - UTILITIES.keys()
-    for historical in (False, True):
-        with migration_schema(conn) if historical else nullcontext():
-            for name in sorted(name for name in names if migration_query(name) == historical):
-                sql = (
-                    dialect.clone_statement("CFG_PIPELINES", ["PIPELINE_ID"]).text
-                    if name == "clone_project_scope"
-                    else dialect.query(name)
-                )
-                statement, values = bindings(sql, name)
-                with conn.begin_nested():
-                    plan = conn.execute(statement, values).scalar_one()[0]["Plan"]
-                yield name, plan
+    for name in sorted(names):
+        sql = (
+            dialect.clone_statement("CFG_PIPELINES", ["PIPELINE_ID"]).text
+            if name == "clone_project_scope"
+            else dialect.query(name)
+        )
+        statement, values = bindings(sql, name)
+        with conn.begin_nested():
+            plan = conn.execute(statement, values).scalar_one()[0]["Plan"]
+        yield name, plan
 
 
 def full_scans(plan, partial_indexes=frozenset(), limited=False):
@@ -481,10 +419,6 @@ FULL_READS = {
         "active_pipeline_dependency_edges",
         "cfg_pipelines",
     ): "Builds the complete active dependency graph.",
-    (
-        "all_pipeline_dependency_edges",
-        "cfg_pipelines",
-    ): "Validates the complete pipeline dependency graph.",
     ("catalog_interventions", "cfg_pipelines"): "Builds bounded history for every active pipeline.",
     ("catalog_tasks", "cfg_pipelines"): "Builds the catalog for every active pipeline.",
     (
@@ -517,38 +451,17 @@ FULL_READS = {
         "controller_restarts",
         "cfg_pipelines",
     ): "Checks the restart condition of every active pipeline.",
-    ("metadata_codes", "cfg_pipelines"): "Loads the complete identifier-to-code map.",
     ("permission_pipelines", "cfg_pipelines"): "Lists all pipelines for permission evaluation.",
     ("sql_tasks", "cfg_pipelines"): "Validates SQL tasks across all active pipelines.",
     ("catalog_lineage_cache", "aud_column_lineage"): "Loads the complete current lineage cache.",
-    (
-        "recorded_hash_version_names",
-        "aud_target_hash_version",
-    ): "Normalizes every legacy target name once during migration.",
-    (
-        "recorded_rule_result_names",
-        "aud_business_rules_results",
-    ): "Normalizes every legacy target name once during migration.",
-    (
-        "recorded_view_statement_names",
-        "aud_target_view_statement",
-    ): "Normalizes every legacy target name once during migration.",
 }
 
 FULL_READS.update(
     {
         (
-            "business_rule_legacy_sql",
-            "cfg_business_rules",
-        ): "Converts every stored legacy predicate once during the rule-query upgrade.",
-        (
             "team_tables",
             "aud_team_tables",
         ): "Lists every claimed team table once for doctor's unowned-table check.",
-        (
-            "business_rule_duplicate_flags",
-            "aud_business_rules_results",
-        ): "Checks all active flags before upgrades; no legacy duplicate can be ignored.",
     }
 )
 

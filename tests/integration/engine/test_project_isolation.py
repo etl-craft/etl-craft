@@ -235,8 +235,7 @@ def test_project_edit_and_dependency_permissions(isolation, tmp_path):
 
 def test_project_log_paths(isolation, tmp_path):
     from etl_craft.engine import transitions
-    from etl_craft.engine.logs import read_log_attempt
-    from etl_craft.execution.attempt_records import attempt_log_path, local_attempt_log
+    from etl_craft.execution.attempt_records import attempt_log_path
     from fixtures.metadata import add_task, start_run
 
     admin, _ = isolation
@@ -276,19 +275,6 @@ def test_project_log_paths(isolation, tmp_path):
             "T.attempt-1.log",
         )
         ctx = replace(admin, config=replace(config, project=code), project=code)
-        assert (
-            b"".join(act(ctx, ActionName.LOGS, attempt_id=attempt)) == (code + " full log").encode()
-        )
-        legacy = config.log_dir / path.relative_to(config.log_dir / f"project-{project}")
-        legacy.parent.mkdir(parents=True, exist_ok=True)
-        path.rename(legacy)
-        with acting_as(OWNER), admin.engine.begin() as conn:
-            conn.execute(
-                text("UPDATE AUD_TASK_ATTEMPTS SET LOG_PATH=:path WHERE ATTEMPT_ID=:id"),
-                {"id": attempt, "path": str(legacy)},
-            )
-            row = read_log_attempt(conn, attempt)
-            assert local_attempt_log(config, row) == legacy
         assert (
             b"".join(act(ctx, ActionName.LOGS, attempt_id=attempt)) == (code + " full log").encode()
         )

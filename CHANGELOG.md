@@ -6,6 +6,14 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+- The Engine DB starts from one 0.9.0 baseline. The 97 development migrations, their
+  conversion steps and markers, and the upgrade path from 0.1.0–0.3.0 Engine DBs are removed;
+  `init-db` records `baseline-0.9.0`, and `migrate` refuses an Engine DB created by an earlier
+  build, naming the remedy: recreate it with `init-db` and apply the config files again. The
+  only migration marker is `-- etl-craft: rebuild-metadata`. Removed with it: the
+  `unknown environment` notice for pre-environment Engine DBs, `validate`'s metadata
+  normalization warnings, and attempt logs outside the `project-<id>` folder.
+
 - Access uses one binding model: accounts, groups and role audiences receive a built-in
   `CAN_VIEW`/`CAN_UPLOAD`/`CAN_RUN`/`CAN_MANAGE` level, a custom role, or one action on the
   deployment, an environment type, a project, a pipeline or a tag. New `role` commands manage

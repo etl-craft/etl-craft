@@ -66,26 +66,8 @@ are dropped deliberately. `validate` warns when the scope token is absent becaus
 whole target can cost more, even though the intersection still enforces scope. The key is one
 column; composite keys are not supported. A trailing semicolon or SQL comment is allowed.
 
-Upgrading converts stored legacy fragments to
-`SELECT t.<quoted key> FROM $$rows_in_scope t WHERE EXISTS (<old fragment>)`, preserving the
-old predicate and recorded results. The configured Warehouse dialect quotes the key, so run
-`migrate` with the project's connector configuration. For a shared Engine DB, supply each
-other project's connector config with repeatable `--project-config PATH`. Every project with
-stored rules, including inactive rules, needs its actual Warehouse dialect. Missing configs
-stop the upgrade before any pending file runs; no other project's dialect is substituted.
-The files are read on the executing host and must name the same Engine DB address and schema.
-The shared operation input is `MigrateInput.project_configs`; migration stays host-only.
-For example:
-
-```bash
-etl-craft --config /srv/first/craft-connector.yml migrate \
-  --project-config /srv/second/craft-connector.yml
-```
-
-Export configuration again after
-upgrading to replace old CSV fragments with the converted queries. `validate` refuses an old
-fragment and shows its converted SQL as the remedy. EXISTS is used for this conversion only;
-new rules do not need it. Explicit projections are checked statically. Wildcard projections
+`validate` refuses a correlated
+fragment and shows the equivalent complete SELECT as the remedy. Explicit projections are checked statically. Wildcard projections
 and SQL whose output cannot be inferred are checked with a zero-row warehouse query; the
 target and warehouse connection must be available for `validate` to verify those outputs.
 

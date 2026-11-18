@@ -42,12 +42,12 @@ Engine DB migrations are forward-only. Every release after the baseline must upg
 earlier supported released baseline, including every earlier 1.x release once such releases
 exist. There is no promise about nonexistent past 1.x releases and no down-migration path.
 
-The upgrade tests start from the tagged snapshots in
-[`tests/fixtures/schemas/`](https://github.com/etl-craft/etl-craft/tree/main/tests/fixtures/schemas),
-installed by [`released_schema.py`](https://github.com/etl-craft/etl-craft/blob/main/tests/fixtures/released_schema.py).
-[`test_upgrade.py`](https://github.com/etl-craft/etl-craft/blob/main/tests/integration/engine/test_upgrade.py)
-checks upgraded structure against fresh initialization and retained data by named columns on
-SQLite and PostgreSQL. Released migration files remain immutable; corrections ship forward.
+Every Engine DB starts from the 0.9.0 baseline, which `init-db` records in
+`SCHEMA_MIGRATIONS`. Engine DBs created by development builds before 0.9.0 are not upgraded:
+`migrate` refuses them and names the remedy, recreating them with `init-db`. From 0.9.0 the
+upgrade tests start from each tagged schema snapshot in `tests/fixtures/schemas/` and check
+upgraded structure against fresh initialization and retained data by named columns on SQLite
+and PostgreSQL. Released migration files remain immutable; corrections ship forward.
 
 From 0.9.0, rolling upgrades across controller, UI, agent and CLI use declared same-major
 compatible ranges and additive API contracts instead of exact-version equality. The explicit
@@ -89,10 +89,7 @@ rewrites, Python conversion markers and non-null column additions (including tho
 [repository test](https://github.com/etl-craft/etl-craft/blob/main/tests/unit/test_additive_compatibility.py)
 scans migrations absent from the `v0.9.0` tag once that tag exists (fetch the baseline tag in
 the gate checkout). Until then it exercises
-synthetic allowed/refused SQL. The 74 migration pairs `0019`–`0092` since `v0.3.0` are
-**unreleased**: 65 PostgreSQL and 66 SQLite files contain changes outside this strict additive
-subset. They stay unchanged; they are not post-baseline migrations. No released migration
-has been rewritten and no previous-binary acceptance is claimed for these pre-baseline files.
+synthetic allowed/refused SQL.
 
 ### Release-aware input refusals
 
@@ -193,9 +190,7 @@ breaking it. The following candidate families are retained rather than silently 
 
 | Candidate family | Evidence and disposition |
 | --- | --- |
-| Pre-project query variants, legacy source/target conversion, account identity conversion | [`engine/queries.py`](https://github.com/etl-craft/etl-craft/blob/main/src/etl_craft/engine/queries.py), [`migration_steps.py`](https://github.com/etl-craft/etl-craft/blob/main/src/etl_craft/engine/migration_steps.py), repository conversion modules and the tagged-schema upgrade tests still use them. Retain: removing them changes upgrades from released databases; it needs an owner decision, not an alias purge. |
-| Historical configuration reconstruction and old attempt-log paths | [`config_history.py`](https://github.com/etl-craft/etl-craft/blob/main/src/etl_craft/engine/repository/config_history.py) reconstructs retained history; [`attempt_records.py`](https://github.com/etl-craft/etl-craft/blob/main/src/etl_craft/execution/attempt_records.py) accepts recorded old paths. Retain: deletion changes historical exports or access to existing logs. |
-| `rehash`, `upgrade-targets` and protection's `refuse_legacy` | The released 0.3.0 changelog documents warehouse upgrade commands. [`protection.py`](https://github.com/etl-craft/etl-craft/blob/main/src/etl_craft/handlers/sql/protection.py) refuses obsolete side tables before writing. Retain: removing these changes an operator contract or a safety refusal. |
+| `rehash`, `upgrade-targets` and protection's `refuse_legacy` | Warehouse upgrade commands and a refusal for targets created by builds before 0.9.0. [`protection.py`](https://github.com/etl-craft/etl-craft/blob/main/src/etl_craft/handlers/sql/protection.py) refuses obsolete side tables before writing. Retained until the warehouse cleanup removes them together. |
 | Package/configuration/operation/dialect exports | Explicit `__all__` exports in [`etl_craft`](https://github.com/etl-craft/etl-craft/blob/main/src/etl_craft/__init__.py), [`config`](https://github.com/etl-craft/etl-craft/blob/main/src/etl_craft/config/__init__.py), [`operations`](https://github.com/etl-craft/etl-craft/blob/main/src/etl_craft/services/operations/__init__.py) and both dialect package initializers. All 31 export entries were inventoried; these include active internal callers and documented entry points, not proven unused aliases. `load_config`, `OperationContext`, JSON converters and scripting contracts appear in the Python/service guides. Retain; any public removal needs contract-specific evidence and an owner decision. |
 | Exact agent-version and current-schema checks | Retain current pre-0.9 safeguards while the rolling contract is implemented and tested. Deleting a check alone would allow unverified combinations, not implement compatibility. |
 | SQL type aliases, PostgreSQL pre-15 fallbacks and SQLite legacy ALTER handling | Warehouse type normalization and dialect-specific data preservation are active database behaviors, not obsolete CLI aliases. Retain; removal changes supported operations or upgrades. |

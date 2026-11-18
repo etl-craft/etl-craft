@@ -357,12 +357,6 @@ SEEDS = [
         RUNS + " CROSS JOIN generate_series(1,1) t",
     ),
     (
-        "AUD_SOURCE_COLUMNS_BASELINE",
-        "SOURCE_COLUMN_ID,TABLE_NAME,COLUMN_NAME,DATA_TYPE,COLUMN_POSITION,CREATED_BY,CREATE_DATE,UPDATED_BY,UPDATED_DATE",
-        f"{TASK_ID},'plan.table_'||p,'column_'||t,'INTEGER',t,'plan',{STAMP},'plan',{STAMP}",
-        TASKS,
-    ),
-    (
         "CFG_ACCOUNTS",
         "ACCOUNT_ID,ACCOUNT_NAME,ACCOUNT_KIND,ROLE",
         "p,'agent_'||p,'SERVICE','viewer'",

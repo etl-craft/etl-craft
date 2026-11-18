@@ -443,7 +443,12 @@ def test_the_migration_ledger(engine_db, source, checksum, accepted):
     if accepted:
         run(engine_db, statement, **params)
         with engine_db.engine.connect() as conn:
-            row = conn.execute(text(engine_db.dialect.query("applied_migrations"))).one()
+            row = conn.execute(
+                text(
+                    "SELECT SOURCE AS source, VERSION AS version, CHECKSUM AS checksum, "
+                    "APPLIED_AT AS applied_at FROM SCHEMA_MIGRATIONS WHERE VERSION='0001_x.sql'"
+                )
+            ).one()
         assert (row.source, row.version, row.checksum) == (source, "0001_x.sql", checksum)
         assert row.applied_at.tzinfo is not None
     else:

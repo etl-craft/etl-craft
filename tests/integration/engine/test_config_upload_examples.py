@@ -131,20 +131,6 @@ def test_every_example_applies_in_order_and_validates(metadata_project):
     assert [name for name, _ in changes] == [path.name for path in examples]
 
 
-def test_legacy_retire_and_reuse_is_refused_atomically(metadata_project):
-    metadata_project.load_examples("0005")
-    before = metadata_project.rows("SELECT COUNT(*) FROM AUD_METADATA_CHANGES")
-    tasks = metadata_project.rows("SELECT TASK_ID,ACTIVE_FLAG FROM CFG_TASKS ORDER BY TASK_ID")
-    legacy = EXAMPLES.parent / "legacy-migrations" / "0006_retire_and_reuse.sql"
-    shutil.copy(legacy, metadata_project.migrations)
-    with pytest.raises(MigrationError, match=r"0006_retire_and_reuse\.sql"):
-        apply_pending_migrations(metadata_project.engine, metadata_project.migrations)
-    assert metadata_project.rows("SELECT COUNT(*) FROM AUD_METADATA_CHANGES") == before
-    assert (
-        metadata_project.rows("SELECT TASK_ID,ACTIVE_FLAG FROM CFG_TASKS ORDER BY TASK_ID") == tasks
-    )
-
-
 @pytest.mark.parametrize("example", ["0001_new_pipeline_targets.sql", "0004_change_values.sql"])
 def test_a_code_with_no_active_row_stops_the_upload(metadata_project, example):
     engine, migrations = metadata_project.engine, metadata_project.migrations

@@ -692,19 +692,6 @@ def _access_project(ctx: OperationContext, request: object) -> OperationContext:
     return ctx
 
 
-def _legacy_project(conn: Connection, ctx: OperationContext, action: Action) -> bool:
-    """Only the explicitly selected legacy project can bootstrap project metadata."""
-    from etl_craft.dialects.engine import for_engine
-
-    if action.name != ActionName.MIGRATE or for_engine(conn).has_table(conn, "CFG_PROJECTS"):
-        return False
-    if ctx.project == "default":
-        return True
-    raise UsageError(
-        "project metadata is absent; migrate --project default before selecting another project"
-    )
-
-
 def _require_project_access(conn: Connection, ctx: OperationContext, action: Action) -> None:
     """Keep hidden projects masked unless a whole-scope custom binding allows the action."""
     try:
@@ -733,8 +720,6 @@ def _project_context(ctx: OperationContext, action: Action, request: object) -> 
     if ctx.transport == Transport.LOCAL:
         ctx = replace(ctx, config=replace(ctx.config, project=ctx.project))
     with ctx.engine.connect() as conn:
-        if _legacy_project(conn, ctx, action):
-            return ctx
         row = conn.execute(statement(conn, "project_by_code"), {"code": ctx.project}).one_or_none()
         if (
             row is not None

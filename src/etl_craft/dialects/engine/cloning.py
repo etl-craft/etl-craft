@@ -23,10 +23,8 @@ def source_keys(conn: Connection, table: str) -> list[str]:
 
 
 def sources(conn: Connection) -> list[tuple[str, list[str], list[str]]]:
-    """Return installed audit tables, their keys and columns after schema upgrades."""
+    """Return installed audit tables, their keys and columns."""
     inspector = inspect(conn)
-    if not inspector.has_table("aud_clone_state"):
-        return []
     return [
         (
             name,

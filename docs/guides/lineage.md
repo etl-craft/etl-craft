@@ -72,12 +72,8 @@ validity intervals and added/removed column sources. Tables never traced have an
 no-versions message. Writing tasks retain their stable IDs; displayed task labels use their
 current metadata names.
 
-Upgrade the Engine DB with `etl-craft migrate` before using these commands. Plain-SQL migration
-`0031_lineage_versions.sql` replaces the derived cache with separate catalog/schema/table
-components and creates `AUD_LINEAGE_VERSIONS` and `AUD_LINEAGE_VERSION_EDGES`, guarded against
-outside writes and rewriting history. It discards old cached rows, which were never history.
-History begins with version 1 at the first computation after the upgrade; earlier lineage
-cannot be reconstructed from this cache.
+`AUD_LINEAGE_VERSIONS` and `AUD_LINEAGE_VERSION_EDGES` hold lineage history, guarded against
+outside writes and rewriting. History begins with version 1 at the first computation.
 
 ## Source definitions and stars
 

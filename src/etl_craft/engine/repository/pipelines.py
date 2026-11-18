@@ -16,7 +16,7 @@ from etl_craft.core.errors import MetadataError
 from etl_craft.core.tags import tag_problems
 from etl_craft.core.text import suggest
 from etl_craft.core.time import as_utc
-from etl_craft.engine.queries import project_statement, statement
+from etl_craft.engine.queries import statement
 
 _project_id: ContextVar[int | None] = ContextVar("etl_craft_project_id", default=None)
 
@@ -42,11 +42,9 @@ def with_suggestions(message: str, unknown: str, candidates: list[str]) -> str:
     return f"{message} — did you mean: {', '.join(hints)}" if hints else message
 
 
-def resolve_pipeline_id(
-    conn: Connection, pipeline_code: str, *, before_projects: bool = False
-) -> int:
+def resolve_pipeline_id(conn: Connection, pipeline_code: str) -> int:
     """Return the id of active pipeline ``pipeline_code``; ``MetadataError`` if there is none."""
-    query = project_statement if before_projects else statement
+    query = statement
     pipeline_id = conn.execute(
         query(conn, "pipeline_id_by_code"),
         {"pipeline_code": pipeline_code, "project_id": current_project_id()},

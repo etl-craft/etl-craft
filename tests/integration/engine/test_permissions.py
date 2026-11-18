@@ -12,6 +12,7 @@ from etl_craft.api.app import create_app
 from etl_craft.cli import main
 from etl_craft.core.actor import SYSTEM_ACTOR
 from etl_craft.core.enums import ActionName, ApiRole, Audit, ControlAction
+from etl_craft.dialects.engine.base import EngineDialect
 from etl_craft.services.operations import OperationContext, accounts, tokens
 from etl_craft.services.operations.actions import ACTIONS, admitted
 from etl_craft.services.operations.config_files import ConfigDirectory
@@ -237,13 +238,10 @@ def test_developer_can_apply_project_migrations_but_not_engine_migrations(
     (directory / "0001_project.sql").write_text("CREATE TABLE PROJECT_NOTE (ID INTEGER)\n")
     monkeypatch.setenv("ETL_CRAFT_TOKEN", creds[ApiRole.DEVELOPER].token)
     assert main(["migrate", "--migrations-dir", str(directory)]) == 0, capsys.readouterr()
-    with p.engine.begin() as conn:
-        conn.execute(
-            text(
-                "DELETE FROM SCHEMA_MIGRATIONS WHERE SOURCE='ENGINE' "
-                "AND VERSION=(SELECT MAX(VERSION) FROM SCHEMA_MIGRATIONS WHERE SOURCE='ENGINE')"
-            )
-        )
+    packaged = tmp_path / "packaged"
+    packaged.mkdir()
+    (packaged / "0001_engine.sql").write_text("CREATE TABLE ENGINE_NOTE (ID INTEGER)\n")
+    monkeypatch.setattr(EngineDialect, "migrations_dir", lambda self: packaged)
     assert main(["migrate", "--migrations-dir", str(directory)]) == 26
     assert "admin role is required" in capsys.readouterr().err
     assert actions(p.engine)[-1].outcome == "REFUSED"

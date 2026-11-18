@@ -41,13 +41,11 @@ from etl_craft.core.placement import ResourceRequest, resource_request
 from etl_craft.core.script_kinds import script_kind
 from etl_craft.core.text import is_metadata_code, qualify
 from etl_craft.dialects.business_rules import expand_scope, output_key
-from etl_craft.dialects.engine import for_engine
 from etl_craft.dialects.query_analysis import managed_select_problem, output_columns, read_query
 from etl_craft.engine.connection import read_snapshot
-from etl_craft.engine.queries import project_statement
+from etl_craft.engine.queries import statement
 from etl_craft.engine.repository.business_rules import fetch_business_rules_for_task
 from etl_craft.engine.repository.dependencies import fetch_pipeline_graph
-from etl_craft.engine.repository.normalization import normalization_problems
 from etl_craft.engine.repository.pipelines import (
     PIPELINE_PARAMETER_KINDS,
     pipeline_parameter_problems,
@@ -221,11 +219,7 @@ def validate_on(
 ) -> Report:
     """``validate`` on an open connection, including any changes it has not committed yet."""
     if pipeline_code is not None:
-        resolve_pipeline_id(
-            conn,
-            pipeline_code,
-            before_projects=not for_engine(conn).has_table(conn, "CFG_PROJECTS"),
-        )
+        resolve_pipeline_id(conn, pipeline_code)
     tasks = fetch_active_tasks(conn)
     pipeline_parameters = fetch_pipeline_parameters(conn)
     data = _Metadata(
@@ -242,17 +236,13 @@ def validate_on(
 
     for template_problem in validate_templates(config, {}):
         report.fail("Orchestration.Email_template", template_problem)
-    dialect, catalog = dialect_and_catalog(config)
-    if pipeline_code is None and not for_engine(conn).has_table(conn, "CFG_PROJECTS"):
-        for readiness_problem in normalization_problems(conn, catalog=catalog, dialect=dialect):
-            report.warn("metadata normalization", readiness_problem)
-    if for_engine(conn).has_table(conn, "CFG_COLUMNS"):
-        for row in conn.execute(project_statement(conn, "inactive_table_columns")):
-            report.fail(
-                "source contract",
-                f"COLUMN_ID={row.column_id} is active under inactive "
-                f"TABLE_ID={row.table_id}; retire its columns or reactivate the table",
-            )
+    dialect, _ = dialect_and_catalog(config)
+    for row in conn.execute(statement(conn, "inactive_table_columns")):
+        report.fail(
+            "source contract",
+            f"COLUMN_ID={row.column_id} is active under inactive "
+            f"TABLE_ID={row.table_id}; retire its columns or reactivate the table",
+        )
     for definition in fetch_source_columns(conn):
         problem = definition_problem(definition, dialect)
         if problem:
@@ -275,14 +265,13 @@ def validate_on(
 
 def _schedules(conn: Connection, config: ConnectorConfig, report: Report) -> None:
     """Check each active schedule's settings, and the calendars schedules use."""
-    schedules = conn.execute(project_statement(conn, "active_schedule_definitions")).all()
-    if for_engine(conn).has_table(conn, "CFG_CALENDARS"):
-        now = datetime.now(UTC)
-        for where, problem in [
-            *holiday_lists_ending(conn, now, VALIDATE_DAYS),
-            *schedule_problems(conn, schedules, config.timezone, now),
-        ]:
-            report.fail(where, problem)
+    schedules = conn.execute(statement(conn, "active_schedule_definitions")).all()
+    now = datetime.now(UTC)
+    for where, problem in [
+        *holiday_lists_ending(conn, now, VALIDATE_DAYS),
+        *schedule_problems(conn, schedules, config.timezone, now),
+    ]:
+        report.fail(where, problem)
     for schedule in schedules:
         zone = (
             schedule.schedule_timezone
@@ -321,9 +310,7 @@ def _pipelines(conn: Connection, config: ConnectorConfig, data: _Metadata, repor
                 + input_refusal(InputKind.PARAMETER, name),
             )
         try:
-            pipeline_id = resolve_pipeline_id(
-                conn, code, before_projects=not for_engine(conn).has_table(conn, "CFG_PROJECTS")
-            )
+            pipeline_id = resolve_pipeline_id(conn, code)
             for where, message in graph_problems(conn, pipeline_id, data.tasks, data.edges):
                 report.fail(where, message)
             graph = fetch_pipeline_graph(conn, pipeline_id)

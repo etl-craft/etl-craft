@@ -31,7 +31,6 @@ from etl_craft.core.enums_ui import AnnouncementLevel
 from etl_craft.engine import migrations, transitions
 from etl_craft.engine.audit import command_request, register_engine
 from fixtures.metadata import add_pipeline, add_pipeline_dependency, add_task
-from fixtures.released_schema import install
 from fixtures.services import POSTGRES_PASSWORD, POSTGRES_USER, require
 
 ALICE = Actor("alice", ActorKind.USER)
@@ -144,21 +143,6 @@ def test_project_changes_record_before_after_actor_and_migration(engine_db, tmp_
 
 def seeded_tables(db):
     engine = db.engine
-    from etl_craft.core.actor import purpose
-
-    token = purpose.set("retention")
-    try:
-        with engine.begin() as conn:
-            conn.execute(
-                text(
-                    "INSERT INTO AUD_SOURCE_COLUMNS_BASELINE (SOURCE_COLUMN_ID,TABLE_NAME, "
-                    "COLUMN_NAME,DATA_TYPE,COLUMN_POSITION,CREATED_BY,CREATE_DATE,UPDATED_BY, "
-                    "UPDATED_DATE) VALUES (1,'raw.orders','id','INT',1,'test',CURRENT_TIMESTAMP, "
-                    "'test',CURRENT_TIMESTAMP)"
-                )
-            )
-    finally:
-        purpose.reset(token)
     with engine.begin() as conn:
         p1 = add_pipeline(conn, "DOWN")
         p2 = add_pipeline(conn, "UP")
@@ -450,63 +434,6 @@ def test_plain_connections_cannot_mutate_any_protected_table(engine_db):
                 plain.rollback()
     finally:
         plain.close()
-
-
-def test_guarded_upgrade_rolls_back_with_the_ledger(empty_engine_db, monkeypatch):
-    from fixtures.catalog import snapshot
-
-    db = empty_engine_db
-    install(db, "0.2.0")
-    seven = next(
-        f
-        for f in migrations.migration_streams(db.engine)[0].files
-        if f.version == "0007_identity.sql"
-    )
-    migrations._apply(db.engine, seven)
-    with db.engine.begin() as conn:
-        add_pipeline(conn, "P")
-    before = snapshot(db.engine)
-    original = migrations._record
-
-    def refuse(conn, file):
-        original(conn, file)
-        raise RuntimeError("ledger refused")
-
-    monkeypatch.setattr(migrations, "_record", refuse)
-    from etl_craft.core.errors import MigrationError
-
-    with pytest.raises(MigrationError, match="ledger refused"):
-        migrations.apply_pending_migrations(db.engine)
-    assert snapshot(db.engine) == before
-    monkeypatch.setattr(migrations, "_record", original)
-    applied = migrations.apply_pending_migrations(db.engine)
-    assert {
-        "0008_actors_and_audit_guards.sql",
-        "0009_preserve_request_actors.sql",
-        "0010_gate_repairs.sql",
-        "0011_target_hash_version.sql",
-        "0013_execution_identity_comment.sql",
-        "0014_overseers.sql",
-        "0015_schedules.sql",
-        "0016_gate_waits.sql",
-        "0017_retries.sql",
-        "0018_api_tokens.sql",
-        "0019_target_view_statement.sql",
-        "0020_reject_count.sql",
-        "0021_config_history.sql",
-        "0022_watermarks.sql",
-        "0023_event_waits.sql",
-        "0024_source_columns.sql",
-        "0025_token_audit_names.sql",
-        "0026_config_base_contract.sql",
-        "0027_config_identities.sql",
-        "0028_source_contracts.sql",
-        "0029_rule_target_contracts.sql",
-        "0030_task_target_contracts.sql",
-        "0031_lineage_versions.sql",
-    } <= set(applied)
-    assert applied == sorted(applied)
-    assert migrations.apply_pending_migrations(db.engine) == []
 
 
 @pytest.mark.parametrize(

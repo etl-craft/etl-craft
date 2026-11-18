@@ -15,13 +15,11 @@ from sqlalchemy.engine import Connection
 
 from etl_craft.dialects.engine.metadata import (
     CREDENTIAL_COLUMNS,
-    config_base_enabled,
-    legacy_team_tables,
     require_config_base,
 )
 from etl_craft.dialects.engine.tables import (
+    CONFIG_TABLES,
     HISTORYLESS_TABLES,
-    OWNED_CONFIG_TABLES,
     retired_history,
     team_config,
     validate_audit_table,
@@ -58,10 +56,6 @@ def _kind(conn: Connection, name: str) -> str | None:
 
 def refresh_metadata_triggers(conn: Connection) -> None:
     """Install guards and metadata capture on project tables using reserved prefixes."""
-    history = _kind(conn, history_table("CFG_PIPELINES")) == "r"
-    log = _kind(conn, "aud_metadata_changes") == "r"
-    if not history and not log:
-        return
     configs: list[str] = []
     rows = conn.execute(
         text(
@@ -71,51 +65,14 @@ def refresh_metadata_triggers(conn: Connection) -> None:
             "OR upper(c.relname) LIKE 'AUD\\_%' ESCAPE '\\')"
         )
     ).all()
-    quote = conn.dialect.identifier_preparer.quote
-    enforce_base = config_base_enabled(conn)
     for row in rows:
-        if _configure_table(conn, row.name, row.id, history, enforce_base):
+        if _configure_table(conn, row.name, row.id):
             configs.append(row.name)
-    if not history:
-        return
-    # Sorted, so a migrated Engine DB gets the same view as a new one.
+    # Sorted, so every Engine DB gets the same view.
     configs.sort()
     for table in configs:
         _ensure_history(conn, table)
-    if log:
-        team_logs = legacy_team_tables(conn, {row.name for row in rows})
-        for table in team_logs:
-            _ensure_history(conn, table)
-        for table in configs + team_logs:
-            name = quote(history_table(table))
-            literal = table.upper().replace("'", "''")
-            conn.exec_driver_sql(
-                f"INSERT INTO {name} SELECT r.* FROM (SELECT c.*, CASE WHEN c.operation = "
-                "'DELETE' THEN c.changed_at ELSE COALESCE(LEAD(c.changed_at) OVER w, "
-                "'9999-12-31 23:59:59+00'::timestamptz) END AS valid_to, CASE WHEN c.operation "
-                "<> 'DELETE' AND LEAD(c.change_id) OVER w IS NULL THEN 'Y' ELSE 'N' END "
-                f"AS current_flag FROM aud_metadata_changes c WHERE c.table_name = '{literal}' "
-                "WINDOW w AS (PARTITION BY c.row_key ORDER BY c.change_id)) c, "
-                f"jsonb_populate_record(NULL::{name}, COALESCE(c.after_json, c.before_json) "
-                "|| jsonb_build_object('change_id', c.change_id, 'valid_from', c.changed_at, "
-                "'valid_to', c.valid_to, 'current_flag', c.current_flag, 'operation', "
-                "c.operation, 'actor', c.actor, 'actor_kind', c.actor_kind, 'migration', "
-                "c.migration)) r ORDER BY c.change_id"
-            )
-        conn.execute(
-            text(
-                "SELECT setval('etl_craft_change_id', COALESCE((SELECT MAX(change_id) "
-                "FROM aud_metadata_changes), 0) + 1, false)"
-            )
-        )
-        conn.exec_driver_sql("DROP TABLE aud_metadata_changes")
-    histories = configs + (
-        ["cfg_source_columns"]
-        if _kind(conn, history_table("cfg_source_columns")) == "r"
-        and "cfg_source_columns" not in configs
-        else []
-    )
-    _change_view(conn, histories)
+    _change_view(conn, configs)
     _freeze_archived(conn)
 
 
@@ -171,11 +128,7 @@ def _change_view(conn: Connection, configs: list[str]) -> None:
     dropped = ", ".join(f"'{name}'" for name in (*CHANGE_COLUMNS, "updated_at"))
     parts = []
     for table in configs:
-        key = quote(
-            "source_column_id"
-            if table == "cfg_source_columns"
-            else (_primary(conn, table) or _columns(conn, table)[0][0])
-        )
+        key = quote(_primary(conn, table) or _columns(conn, table)[0][0])
         parts.append(
             "SELECT change_id, valid_from AS changed_at, actor, actor_kind, "
             f"CAST('{table.upper()}' AS VARCHAR) AS table_name, "
@@ -229,9 +182,7 @@ def _freeze_history(conn: Connection, table: str) -> None:
     )
 
 
-def _configure_table(
-    conn: Connection, table: str, table_id: int, history: bool, enforce_base: bool
-) -> bool:
+def _configure_table(conn: Connection, table: str, table_id: int) -> bool:
     """Install package guards and return whether this table supplies current config history."""
     quote = conn.dialect.identifier_preparer.quote
     triggers = set(
@@ -245,7 +196,7 @@ def _configure_table(
         ).scalars()
     )
     validate_audit_table(table, triggers)
-    if team_config(table, legacy=_kind(conn, "cfg_tables") is None):
+    if team_config(table):
         _release_team(conn, table, triggers)
         return False
     for prefix, event, level, function in (
@@ -258,10 +209,9 @@ def _configure_table(
                 f"CREATE TRIGGER {quote(trigger)} BEFORE {event} ON {quote(table)} "
                 f"FOR EACH {level} EXECUTE FUNCTION {function}"
             )
-    if table.upper() not in OWNED_CONFIG_TABLES:
+    if table.upper() not in CONFIG_TABLES:
         return False
-    if enforce_base:
-        require_config_base(conn, table)
+    require_config_base(conn, table)
     columns = conn.execute(
         text(
             "SELECT attname AS name, attnum AS position FROM pg_attribute "
@@ -303,7 +253,7 @@ def _configure_table(
 
 
 def _freeze_archived(conn: Connection) -> None:
-    """Freeze retained team history after legacy-log conversion has finished."""
+    """Keep retained team history read-only."""
     from sqlalchemy import inspect
 
     for table in inspect(conn).get_table_names():

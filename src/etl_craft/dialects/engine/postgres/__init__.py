@@ -80,18 +80,6 @@ class PostgresEngineDialect(EngineDialect):
             ("" if project_id is None else str(project_id),),
         )
 
-    def drop_trigger(self, conn: Connection, trigger: str, table: str) -> None:
-        """Drop ``trigger`` from ``table``."""
-        quoted = conn.dialect.identifier_preparer.quote(trigger)
-        conn.exec_driver_sql(f"DROP TRIGGER {quoted} ON {self.stored_name(table)}")
-
-    def record_config_conversion(
-        self, conn: Connection, table: str, primary: str, *, migration: str, actor: Actor
-    ) -> None:
-        """Record the conversion, then move the change-id sequence past it."""
-        super().record_config_conversion(conn, table, primary, migration=migration, actor=actor)
-        self._advance_change_id(conn)
-
     def record_config_baseline(
         self, conn: Connection, tables: tuple[str, ...], *, migration: str, actor: Actor
     ) -> None:
@@ -102,28 +90,6 @@ class PostgresEngineDialect(EngineDialect):
     def _advance_change_id(self, conn: Connection) -> None:
         conn.execute(
             text(f"SELECT setval('etl_craft_change_id', {self._last_change_id(conn)}+1, false)")
-        )
-
-    def legacy_source_id_high_water(self, conn: Connection) -> int:
-        """Return the legacy id sequence's last handed-out value."""
-        sequence = conn.execute(
-            text(
-                "SELECT pg_get_serial_sequence('cfg_source_columns','source_column_id') AS sequence"
-            )
-        ).scalar_one()
-        last, called = conn.execute(
-            text(f"SELECT last_value AS last_value, is_called AS is_called FROM {sequence}")
-        ).one()
-        return int(last) if called else int(last) - 1
-
-    def set_column_id_high_water(self, conn: Connection, high_water: int) -> None:
-        """Set ``CFG_COLUMNS``' identity sequence to continue after ``high_water``."""
-        conn.execute(
-            text(
-                "SELECT setval(pg_get_serial_sequence('cfg_columns','column_id'), :value, :called)"
-                " AS value"
-            ),
-            {"value": max(1, high_water), "called": high_water > 0},
         )
 
     def refresh_metadata_triggers(self, conn: Connection) -> None:

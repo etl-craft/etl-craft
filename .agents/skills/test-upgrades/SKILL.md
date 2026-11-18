@@ -11,7 +11,8 @@ out is found in production. This skill proves the path from every release.
 ## How every check is written
 
 - **Every released schema.** `tests/fixtures/schemas/<version>/` holds each tag's packaged
-  schema; `tests/fixtures/released_schema.py` (`install`) applies it with its migration ledger. Loop
+  schema, starting at 0.9.0 (earlier development schemas are not upgraded; `migrate` refuses
+  them). Add the fixture, its installer and the upgrade test when `v0.9.0` is tagged. Loop
   over the folder, never a hand-written list.
 - **Real rows, not an empty schema.** Seed each released schema with rows a team of that
   release would have: pipelines, tasks, dependencies, runs, attempts, audit, history, tokens.

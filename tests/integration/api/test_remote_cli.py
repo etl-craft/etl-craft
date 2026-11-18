@@ -421,7 +421,12 @@ def test_only_https_is_accepted_except_on_this_machine(server, monkeypatch, caps
 
 def test_attempt_logs_stream_from_the_server_within_the_role(server, monkeypatch, capsys):
     url, ctx = server["url"], server["ctx"]
-    path = ctx.config.log_dir / "P" / f"run-{server['run']}" / "T.attempt-1.log"
+    with ctx.engine.connect() as conn:
+        project_id = conn.execute(
+            text("SELECT PROJECT_ID AS project_id FROM CFG_PROJECTS WHERE PROJECT_CODE='default'")
+        ).scalar_one()
+    run_dir = ctx.config.log_dir / f"project-{project_id}" / "P" / f"run-{server['run']}"
+    path = run_dir / "T.attempt-1.log"
     path.parent.mkdir(parents=True)
     path.write_bytes("first\nsecond é\n".encode())
     with acting_as(SYSTEM_ACTOR), ctx.engine.begin() as conn:

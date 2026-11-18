@@ -96,10 +96,13 @@ def apply_schema(engine: Engine) -> int:
     """
     dialect = for_engine(engine)
     statements = dialect.split_statements(dialect.schema_path().read_text(encoding="utf-8"))
+    from etl_craft.engine.migrations import mark_packaged_migrations_applied
+
     with engine.begin() as conn:
         for statement in statements:
             conn.exec_driver_sql(statement)
         dialect.refresh_metadata_triggers(conn)
+        mark_packaged_migrations_applied(conn)
     return len(statements)
 
 

@@ -56,35 +56,14 @@ def projection(sql: str, definition: Definition, *, postgres: bool, name: str = 
         name = name.upper()
         if name not in definition.columns:
             continue
-        # Images without project fields belong to the migrated default project.
-        legacy_project = name in {"CFG_PIPELINES", "CFG_TABLES"} and (
-            "project_id" not in definition.columns[name]
-        )
-        legacy_rule = name == "CFG_BUSINESS_RULES" and (
-            "business_rule_level" not in definition.columns[name]
-        )
         if postgres:
             rows = f"CAST(:_admitted_metadata AS jsonb)->'{name}'->'rows'"
-            if legacy_project:
-                rows = (
-                    f"(SELECT jsonb_agg(value || jsonb_build_object('project_id',1)) "
-                    f"FROM jsonb_array_elements({rows}))"
-                )
-            if legacy_rule:
-                rows = (
-                    f"(SELECT jsonb_agg(value || jsonb_build_object('business_rule_level','ROW')) "
-                    f"FROM jsonb_array_elements({rows}))"
-                )
             query = f"SELECT * FROM jsonb_populate_recordset(NULL::{name}, {rows})"
         else:
             fields = ",".join(
                 f"json_extract(entry.value,'$.{column}') AS {column}"
                 for column in definition.columns[name]
             )
-            if legacy_project:
-                fields += ",1 AS project_id"
-            if legacy_rule:
-                fields += ",'ROW' AS business_rule_level"
             query = f"SELECT {fields} FROM json_each(:_admitted_metadata,'$.{name}.rows') entry"
         ctes.append(f"{name} AS ({query})")
     if not ctes:

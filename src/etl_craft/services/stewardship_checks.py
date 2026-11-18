@@ -5,7 +5,6 @@ from collections.abc import Sequence
 from sqlalchemy.engine import Connection
 
 from etl_craft.core.enums import DependencyType, Handler, SqlAction, YesNo
-from etl_craft.dialects.engine import for_engine
 from etl_craft.dialects.query_analysis import output_columns
 from etl_craft.engine.protection_events import target_identity
 from etl_craft.engine.queries import statement
@@ -17,17 +16,10 @@ from etl_craft.handlers.sql.protection_columns import type_problems
 from etl_craft.handlers.sql.spec import MERGES, WRITERS, SqlTask
 
 
-def _stewardship_schema(conn: Connection) -> bool:
-    """Whether the Engine DB has stewardship; before its migration no pipeline is stewardable."""
-    return for_engine(conn).has_table(conn, "AUD_UPLOADS")
-
-
 def graph_problems(
     conn: Connection, pipeline_id: int, tasks: Sequence[ActiveTask], edges: Sequence[DependencyEdge]
 ) -> list[tuple[str, str]]:
     """Require HAS_DATA after validation, and one validation task where uploads arrive."""
-    if not _stewardship_schema(conn):
-        return []
     validators = {
         task.task_code
         for task in tasks
@@ -100,8 +92,6 @@ def validation_problems(conn: Connection, context: TaskContext) -> list[str]:
 
 def sql_problems(conn: Connection, context: TaskContext, spec: SqlTask) -> list[str]:
     """Refuse unsupported protection and writes that lose their file identity."""
-    if not _stewardship_schema(conn):
-        return []
     pipeline = conn.execute(
         statement(conn, "stewardship_pipeline"), {"pipeline_id": context.pipeline_id}
     ).one()

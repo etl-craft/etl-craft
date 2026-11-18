@@ -190,10 +190,6 @@ finish the same work. The source survives until its replacement is durable and v
 an interrupted archive can leave two copies. A failed commit checks whether the row actually
 committed before deleting any bytes or returning an upload id.
 
-Migration 0079 has not shipped in a release and now includes these storage columns and guards.
-Development Engine DBs that already applied its earlier form must be recreated; released
-versions upgrade through the normal migration path.
-
 
 ## Reference tables seeded from a repository
 

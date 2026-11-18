@@ -121,12 +121,6 @@ Your team owns the constraints, access permissions and contents of these tables.
 variable-name requirement for connector secrets remains unchanged. `AUD_` is reserved:
 rename team tables outside that prefix before migrating.
 
-On upgrade, migration `0040` removes etl-craft's generated triggers from team tables while
-preserving team-defined triggers. Existing typed history stays as read-only audit evidence;
-it receives no new versions and is omitted from the package's metadata change view. Earlier
-JSON audit records are converted before the old log is retired; missing definitions that
-prevent lossless conversion cause an actionable failure rather than discarded history.
-
 If a later package migration needs a config table name your team already uses, migration
 preflight stops before applying pending changes, naming the table and the package migration.
 Rename that team table and update its scripts before retrying the upgrade.
@@ -230,40 +224,12 @@ A file can apply cleanly and still describe a pipeline that cannot run, such as 
 does not exist or a dependency cycle. `etl-craft validate` finds those; see
 [Validating pipelines](validating.md).
 
-## Upgrading legacy identities
-
-Engine migration `0027_config_identities.sql` reserves pipeline, task, parameter, dependency and
-rule keys across active and inactive rows. It refuses duplicate identities before changing any
-index, naming every conflicting row ID and active flag. The same preflight runs before any
-pending Engine migration, leaving the original schema and ledger available for a repair. Assign distinct keys and repair their
-references through an actor-scoped project migration using the previous installed package
-version, then retry the Engine migration with the new package. ENGINE migrations run before
-PROJECT migrations, so adding a repair only to the pending project stream cannot bypass this guard. No row
-is selected, merged or deleted automatically. Source table/column normalization remains pending.
-
-The original [retire-and-reuse example](../examples/legacy-migrations/0006_retire_and_reuse.sql)
-is retained unchanged for deployments that already applied it. Keep applied project files in
-place with their original bytes and names; do not replace them with the reactivation example.
-That legacy example creates a duplicate `publish` identity and cannot be newly applied after
-0027. For a fresh project use the reactivation example above.
+## Project scope
 
 Project migration filenames and checksums are scoped to `--project` (default
 `Orchestration.Project`, then `default`). Two projects may each have `0001_setup.sql`.
-Packaged ENGINE migrations are applied once for the whole deployment. Existing project
-migration records migrate to `default`; create a project with `config apply` before
-applying its migrations.
+Packaged ENGINE migrations are applied once for the whole deployment. Create a project with
+`config apply` before applying its migrations.
 
 Project migration SQL must name the selected project when inserting project-owned metadata.
 Use `config apply` for code-based CSV merging; a scoped ledger does not rewrite arbitrary SQL.
-
-## Upgrading business rules in a shared Engine DB
-
-S6.D converts stored rule fragments to complete SELECTs and checks active-flag uniqueness.
-A shared Engine DB can hold projects using different warehouses. Run `migrate` with the first
-project's connector config and repeat `--project-config PATH` for the others. The files must
-be readable UTF-8 connector configurations on the executing host, name distinct projects,
-and resolve to the same Engine DB address and schema. Their Warehouse profiles determine
-identifier quoting; warehouse connections are not opened. Supply configurations for inactive
-projects too when they retain stored rules. A missing dialect refuses all pending upgrades
-before writes; restore/provide that project's configuration and retry. Existing migration
-roles and host-only placement apply; no HTTP migration route is added.

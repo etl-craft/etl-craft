@@ -232,9 +232,8 @@ Scheduled pipelines still require `--then run-now|catch-up|wait`; unscheduled pi
 A repeated pause requires `--replace`, which closes and opens the pause version atomically.
 FINISH to DRAIN takes effect at the next dispatch boundary; DRAIN to FINISH releases waiting work.
 
-`AUD_PIPELINE_PAUSES` retains the mode, versions, actor, reason and resume decision. Existing
-pipeline pauses created before migration 0096 retain **FINISH**. To stop dispatch for
-maintenance, pause the pipeline with DRAIN.
+`AUD_PIPELINE_PAUSES` retains the mode, versions, actor, reason and resume decision. To stop
+dispatch for maintenance, pause the pipeline with DRAIN.
 
 HTTP clients use `POST /api/v1/projects/{project}/controls` with `pipeline_code`, `action`
 (`PAUSE` or `RESUME`), `reason` and optional pipeline `active_runs` (`DRAIN` or `FINISH`).

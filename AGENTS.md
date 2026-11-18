@@ -173,15 +173,14 @@ Each package imports only the packages below it; `lint-imports` enforces the ord
   `dialects/warehouse/base.py`). Do not branch on `dialect.name` outside `dialects/`.
 
 **Migrations.**
-- An Engine DB change ships as a migration in both `dialects/engine/postgres/migrations/` and
-  `dialects/engine/sqlite/migrations/`, with both `schema.sql` files updated to match. The
-  upgrade test must pass from every released schema in `tests/fixtures/schemas/`.
+- Every Engine DB starts from the 0.9.0 baseline (`schema.sql` in each dialect). Until
+  `v0.9.0` is tagged, an Engine DB change edits both `schema.sql` files directly, and
+  development Engine DBs are recreated. From `v0.9.0` on, a change ships as a migration in
+  both `dialects/engine/postgres/migrations/` and `dialects/engine/sqlite/migrations/`, with
+  both `schema.sql` files updated to match, and the upgrade test passes from every released
+  schema fixture.
 - Released migration files are immutable: a file is released once a version tag (`v*`)
-  contains it. Correct an unreleased migration in place before its first release, and
-  recreate any development Engine DB that already applied it. Behaviour that Python must run
-  around a released migration is attached with markers
-  (`dialects/engine/migration-markers.toml` and SQL headers, read by
-  `engine/migrations.py`).
+  contains it. The only migration marker is the SQL header `-- etl-craft: rebuild-metadata`.
 - A migration that needs a new marker, or a Python branch for one file, is a design change:
   stop and ask.
 

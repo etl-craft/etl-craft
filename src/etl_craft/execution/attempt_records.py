@@ -65,7 +65,7 @@ def local_attempt_log(config: ConnectorConfig, row: LogAttempt) -> Path:
             relative = path.absolute().relative_to(config.log_dir.absolute())
     parts = () if relative is None else relative.parts
     scoped = len(parts) == 4 and parts[0] == f"project-{row.project_id}"
-    identity = parts[1:] if scoped else parts
+    identity = parts[1:] if scoped else ()
     suffix = f".attempt-{row.attempt_number}.log"
     shape = (
         len(identity) == 3
@@ -74,7 +74,7 @@ def local_attempt_log(config: ConnectorConfig, row: LogAttempt) -> Path:
         and identity[2].endswith(suffix)
         and is_metadata_code(identity[2][: -len(suffix)])
     )
-    boundary = root / f"project-{row.project_id}" if scoped else root
+    boundary = root / f"project-{row.project_id}"
     contained = False
     if path is not None and shape:
         with suppress(OSError, RuntimeError, ValueError):
@@ -89,7 +89,7 @@ def local_attempt_log(config: ConnectorConfig, row: LogAttempt) -> Path:
         raise ResourceNotFoundError(
             f"attempt_id={row.attempt_id}: LOG_PATH={row.log_path!r}; expected "
             f"{root}/project-{row.project_id}/<pipeline>/run-{row.pipeline_run_id}/"
-            f"<task>{suffix} (or the recorded legacy layout without project directory), "
+            f"<task>{suffix}, "
             "with valid codes, no traversal and no symlink escaping its root; "
             "restore the recorded canonical attempt path inside Orchestration.Log_dir"
         )

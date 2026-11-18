@@ -22,14 +22,11 @@ from sqlalchemy.engine import Connection
 from etl_craft.core.text import quote_identifier as quote
 from etl_craft.dialects.engine.metadata import (
     CREDENTIAL_COLUMNS,
-    config_base_enabled,
-    legacy_team_tables,
     require_config_base,
 )
 from etl_craft.dialects.engine.tables import (
     CONFIG_TABLES,
     HISTORYLESS_TABLES,
-    OWNED_CONFIG_TABLES,
     retired_history,
     team_config,
     validate_audit_table,
@@ -84,10 +81,6 @@ def _stamp_historyless(conn: Connection, tables: list[str]) -> None:
 
 def refresh_metadata_triggers(conn: Connection) -> None:
     """Rebuild the change triggers from every current column, including project columns."""
-    history = _exists(conn, history_table("CFG_PIPELINES"))
-    log = _exists(conn, "AUD_METADATA_CHANGES")
-    if not history and not log:
-        return
     tables = [
         row.name
         for row in conn.exec_driver_sql(
@@ -102,47 +95,28 @@ def refresh_metadata_triggers(conn: Connection) -> None:
         history_of_config = name.startswith("AUD_CFG_") and name.endswith("_HISTORY")
         if (name.startswith("AUD_") and not history_of_config) or name == "CFG_API_TOKENS":
             _guard_writes(conn, table)
-    # Sorted, so a migrated Engine DB gets the same triggers and view as a new one.
-    owned = CONFIG_TABLES if _exists(conn, "CFG_TABLES") else OWNED_CONFIG_TABLES
+    # Sorted, so every Engine DB gets the same triggers and view.
     configs = sorted(
         table
         for table in tables
-        if table.upper() in owned and table.upper() not in HISTORYLESS_TABLES
+        if table.upper() in CONFIG_TABLES and table.upper() not in HISTORYLESS_TABLES
     )
     _stamp_historyless(conn, tables)
-    if config_base_enabled(conn):
-        for table in configs:
-            require_config_base(conn, table)
-    if not history:
-        for table in configs:
-            _change_triggers(conn, table, _log_capture(table))
-        return
     for table in configs:
+        require_config_base(conn, table)
         _ensure_history(conn, table)
-        _history_guards(conn, history_table(table))
-    if log:
-        archived.extend(_copy_legacy_team_log(conn, tables, configs))
-    histories = configs + (
-        ["CFG_SOURCE_COLUMNS"]
-        if _exists(conn, history_table("CFG_SOURCE_COLUMNS"))
-        and "CFG_SOURCE_COLUMNS" not in {table.upper() for table in configs}
-        else []
-    )
-    for table in histories:
         _history_guards(conn, history_table(table))
     next_id = (
         "(SELECT COALESCE(MAX(m), 0) + 1 FROM ("
         + " UNION ALL ".join(
             f"SELECT MAX(CHANGE_ID) AS m FROM {quote(table)}"
-            for table in [history_table(name) for name in histories] + archived
+            for table in [history_table(name) for name in configs] + archived
         )
         + "))"
     )
     for table in configs:
         _change_triggers(conn, table, _history_capture(table, next_id))
-    if log:
-        conn.exec_driver_sql("DROP TABLE AUD_METADATA_CHANGES")
-    _change_view(conn, histories)
+    _change_view(conn, configs)
     _freeze_histories(conn, archived)
 
 
@@ -156,17 +130,11 @@ def _guard_writes(conn: Connection, table: str) -> None:
     )
     for operation in ("INSERT", "UPDATE", "DELETE"):
         guard = f"trg_actor_guard_{table.lower()}_{operation.lower()}"
-        immutable = (
-            "SELECT CASE WHEN etl_craft_purpose() <> 'retention' THEN RAISE(ABORT, "
-            "'source conversion baseline is immutable') END;"
-            if table.upper() == "AUD_SOURCE_COLUMNS_BASELINE"
-            else ""
-        )
         conn.exec_driver_sql(
             f"CREATE TRIGGER IF NOT EXISTS {quote(guard)} BEFORE {operation} "
             f"ON {quote(table)} BEGIN SELECT CASE WHEN etl_craft_actor() IS NULL "
             f"THEN RAISE(ABORT, '{kind} are written only by etl-craft; "
-            f"{remedy}') END; {immutable} END"
+            f"{remedy}') END; END"
         )
 
 
@@ -225,28 +193,6 @@ def _history_guards(conn: Connection, history: str) -> None:
         )
 
 
-def _move_log(conn: Connection, configs: list[str]) -> None:
-    """Copy the JSON change rows of each ``CFG_`` table into its history table."""
-    for table in configs:
-        names = [name for name, _, _ in _columns(conn, table)]
-        values = ", ".join(
-            "(SELECT value FROM json_each(COALESCE(c.AFTER_JSON, c.BEFORE_JSON)) WHERE key=?)"
-            for name in names
-        )
-        conn.exec_driver_sql(
-            f"INSERT INTO {quote(history_table(table))} ({', '.join(CHANGE_COLUMNS)}, "
-            f"{', '.join(quote(name) for name in names)}) SELECT c.CHANGE_ID, c.CHANGED_AT, "
-            "CASE WHEN c.OPERATION = 'DELETE' THEN c.CHANGED_AT "
-            f"ELSE COALESCE(LEAD(c.CHANGED_AT) OVER w, {OPEN}) END, "
-            "CASE WHEN c.OPERATION <> 'DELETE' AND LEAD(c.CHANGE_ID) OVER w IS NULL "
-            "THEN 'Y' ELSE 'N' END, "
-            f"c.OPERATION, c.ACTOR, c.ACTOR_KIND, c.MIGRATION, {values} "
-            "FROM AUD_METADATA_CHANGES c WHERE c.TABLE_NAME=? "
-            "WINDOW w AS (PARTITION BY c.ROW_KEY ORDER BY c.CHANGE_ID) ORDER BY c.CHANGE_ID",
-            (*[name.lower() for name in names], table.upper()),
-        )
-
-
 Capture = Callable[[str, list[str], str, str], str]
 """Render the statement recording one change: (operation, columns, key, changed predicate)."""
 
@@ -276,41 +222,6 @@ def _history_capture(table: str, next_id: str) -> Capture:
             f"{', '.join(quote(name) for name in names)}) SELECT {next_id}, {NOW}, {valid_to}, "
             f"{current}, '{operation}', etl_craft_actor(), etl_craft_actor_kind(), "
             f"NULLIF(etl_craft_migration(), ''), {values}{where};"
-        )
-
-    return capture
-
-
-def _log_capture(table: str) -> Capture:
-    def capture(operation: str, names: list[str], primary: str, changed: str) -> str:
-        def object_json(prefix: str) -> str:
-            return (
-                "json_object("
-                + ", ".join(f"'{name.lower()}', {prefix}.{quote(name)}" for name in names)
-                + ")"
-            )
-
-        before = "NULL" if operation == "INSERT" else object_json("OLD")
-        after = (
-            "NULL"
-            if operation == "DELETE"
-            else (
-                f"(SELECT {object_json('row')} FROM {quote(table)} row "
-                f"WHERE row.{quote(primary)}=NEW.{quote(primary)})"
-            )
-        )
-        key = f"{'OLD' if operation == 'DELETE' else 'NEW'}.{quote(primary)}"
-        predicate = (
-            f" WHERE ({changed}) AND NOT etl_craft_inserting('{table.upper()}')"
-            if operation == "UPDATE"
-            else ""
-        )
-        return (
-            "INSERT INTO AUD_METADATA_CHANGES (ACTOR, ACTOR_KIND, TABLE_NAME, ROW_KEY, "
-            "OPERATION, BEFORE_JSON, AFTER_JSON, MIGRATION) SELECT "
-            f"etl_craft_actor(), etl_craft_actor_kind(), '{table.upper()}', "
-            f"CAST({key} AS TEXT), '{operation}', {before}, {after}, "
-            f"NULLIF(etl_craft_migration(), ''){predicate};"
         )
 
     return capture
@@ -375,13 +286,7 @@ def _change_view(conn: Connection, configs: list[str]) -> None:
     parts = []
     for table in configs:
         history = history_table(table)
-        columns = [] if table.upper() == "CFG_SOURCE_COLUMNS" else _columns(conn, table)
-        if not columns and table.upper() == "CFG_SOURCE_COLUMNS":
-            columns = [
-                (name, kind, name.upper() == "SOURCE_COLUMN_ID")
-                for name, kind, _ in _columns(conn, history)
-                if name.upper() not in (*CHANGE_COLUMNS, "UPDATED_AT")
-            ]
+        columns = _columns(conn, table)
         primary = next((name for name, _, pk in columns if pk), columns[0][0])
         if table.upper() == "CFG_BUSINESS_RULES":
             columns = [
@@ -440,7 +345,7 @@ def _release_team_tables(conn: Connection, tables: list[str]) -> list[str]:
             )
         }
         validate_audit_table(table, triggers)
-        if team_config(table, legacy=not _exists(conn, "CFG_TABLES")):
+        if team_config(table):
             _release_team(conn, table, triggers)
         if retired_history(table):
             archived.append(table)
@@ -451,12 +356,3 @@ def _freeze_histories(conn: Connection, tables: list[str]) -> None:
     """Keep every retired history table read-only after refresh."""
     for table in tables:
         _freeze_history(conn, table)
-
-
-def _copy_legacy_team_log(conn: Connection, tables: list[str], configs: list[str]) -> list[str]:
-    """Convert recorded team changes before retiring the legacy log table."""
-    team_logs = legacy_team_tables(conn, set(tables))
-    for table in team_logs:
-        _ensure_history(conn, table)
-    _move_log(conn, configs + team_logs)
-    return [history_table(table) for table in team_logs]

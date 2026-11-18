@@ -7,11 +7,9 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
 
-from etl_craft.core.actor import SYSTEM_ACTOR, Actor, ActorKind, acting_as
+from etl_craft.core.actor import Actor, ActorKind, acting_as
 from etl_craft.core.time import as_utc
-from etl_craft.engine import migrations
 from fixtures.metadata import add_pipeline, add_task
-from fixtures.released_schema import install
 
 ALICE = Actor("github:alice", ActorKind.USER)
 
@@ -98,64 +96,3 @@ def test_each_change_is_a_typed_version_and_the_view_gives_before_and_after(engi
             engine_db.engine.begin() as conn,
         ):
             conn.execute(text(statement))
-
-
-def test_an_upgrade_moves_the_change_log_into_the_history_tables(empty_engine_db):
-    db = empty_engine_db
-    install(db, "0.2.0")
-    for migration in migrations.migration_streams(db.engine)[0].files:
-        if "0007" <= migration.version < "0021":
-            migrations._apply(db.engine, migration)
-    with acting_as(SYSTEM_ACTOR), db.engine.begin() as conn:
-        pipeline = add_pipeline(conn, "SALES")
-        conn.execute(
-            text("UPDATE CFG_PIPELINES SET PIPELINE_NAME = 'Sales' WHERE PIPELINE_ID = :p"),
-            {"p": pipeline},
-        )
-    with db.engine.connect() as conn:
-        logged = changes(conn, "CFG_PIPELINES")
-    assert [row["operation"] for row in logged] == ["INSERT", "UPDATE"]
-
-    migrations.apply_pending_migrations(db.engine)
-    with db.engine.connect() as conn:
-        moved = changes(conn, "CFG_PIPELINES")
-        versions = (
-            conn.execute(
-                text(
-                    "SELECT PIPELINE_NAME AS name FROM AUD_CFG_PIPELINES_HISTORY ORDER BY CHANGE_ID"
-                )
-            )
-            .scalars()
-            .all()
-        )
-    keep = ("change_id", "operation", "actor", "row_key")
-    assert [{k: row[k] for k in keep} for row in moved] == [
-        {k: row[k] for k in keep} for row in logged
-    ]
-    assert moved[1]["before_json"]["pipeline_name"] == logged[1]["before_json"]["pipeline_name"]
-    assert versions == ["SALES", "Sales"]
-    with db.engine.connect() as conn:
-        flags = (
-            conn.execute(
-                text(
-                    "SELECT CURRENT_FLAG AS current FROM AUD_CFG_PIPELINES_HISTORY "
-                    "ORDER BY CHANGE_ID"
-                )
-            )
-            .scalars()
-            .all()
-        )
-    assert flags == ["N", "Y"]
-
-    with acting_as(ALICE), db.engine.begin() as conn:
-        conn.execute(
-            text("UPDATE CFG_PIPELINES SET PIPELINE_NAME = 'Sales mart' WHERE PIPELINE_ID = :p"),
-            {"p": pipeline},
-        )
-    with db.engine.connect() as conn:
-        [*_, latest] = changes(conn, "CFG_PIPELINES")
-    assert latest["change_id"] > moved[-1]["change_id"]
-    assert (latest["before_json"]["pipeline_name"], latest["after_json"]["pipeline_name"]) == (
-        "Sales",
-        "Sales mart",
-    )

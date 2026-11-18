@@ -27,7 +27,7 @@ SHIPPED = (
     "etl_craft/cli/__init__.py",
     "etl_craft/dialects/engine/postgres/schema.sql",
     "etl_craft/dialects/engine/sqlite/schema.sql",
-    "etl_craft/dialects/engine/queries/applied_migrations.sql",
+    "etl_craft/dialects/engine/queries/scoped_applied_migrations.sql",
     "etl_craft/core/static/catalog.css",
     "etl_craft/core/static/catalog.js",
     "etl_craft/core/static/mark.html",

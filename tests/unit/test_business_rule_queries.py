@@ -123,29 +123,3 @@ def test_rule_targets_cannot_inject_generated_scope_sql(target):
         "correct the CFG_TABLES",
     ):
         assert part in str(failure.value)
-
-
-def test_cli_project_config_is_repeatable_and_the_operation_input_round_trips(
-    tmp_path, monkeypatch
-):
-    import argparse
-
-    from etl_craft.cli.commands import migrate as command
-    from etl_craft.cli.output import Output
-    from etl_craft.services.operations.maintenance import MigrateInput
-    from etl_craft.services.operations.serialization import encode, from_json
-
-    parser = argparse.ArgumentParser()
-    command.COMMAND.configure(parser)
-    paths = (tmp_path / "first.yml", tmp_path / "second.yml")
-    args = parser.parse_args(["--project-config", str(paths[0]), "--project-config", str(paths[1])])
-    captured = []
-
-    def call(args, action, request):
-        captured.append(request)
-        return []
-
-    monkeypatch.setattr(command, "call", call)
-    assert command.COMMAND.run(args, Output()) == 0
-    assert captured == [MigrateInput(project_configs=paths)]
-    assert from_json(MigrateInput, encode(captured[0])) == captured[0]

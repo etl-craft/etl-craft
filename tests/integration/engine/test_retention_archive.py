@@ -57,7 +57,7 @@ def test_verified_archive_preserves_complete_rows_before_purge(archived):
         ).one()
     assert row.attempt_id == ids[-1]
     assert row.status == RunStatus.SUCCESS
-    assert row.version.endswith(".sql")
+    assert row.version == "baseline-0.9.0"
 
 
 def test_archive_dry_run_never_creates_destination_tables(archived):

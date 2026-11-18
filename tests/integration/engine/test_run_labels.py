@@ -30,35 +30,3 @@ def test_a_run_and_its_task_run_are_labelled_when_created_and_shown(engine_db):
     ctx = OperationContext(engine_db.engine, engine_db.config, SYSTEM_ACTOR, role=ApiRole.ADMIN)
     shown = act(ctx, ActionName.STATUS, pipeline_code="ORDERS", run_id=run)
     assert shown.run.run_label == label
-
-
-def test_the_migration_backfill_names_existing_runs_as_creation_does(engine_db):
-    from etl_craft.dialects.engine import for_engine
-
-    with engine_db.engine.begin() as conn:
-        pipeline = add_pipeline(conn, "ORDERS")
-        task = add_task(conn, pipeline, "extract")
-        run = start_run(conn, pipeline)
-        transitions.find_or_create_task_run(conn, task, run)
-        created = conn.execute(
-            text(
-                "SELECT RUN_LABEL AS a, (SELECT TASK_RUN_LABEL FROM AUD_TASK_RUN_LOG) AS b "
-                "FROM AUD_PIPELINES_RUN_LOG"
-            )
-        ).one()
-        conn.execute(text("UPDATE AUD_PIPELINES_RUN_LOG SET RUN_LABEL=''"))
-        conn.execute(text("UPDATE AUD_TASK_RUN_LOG SET TASK_RUN_LABEL=''"))
-        migration = for_engine(engine_db.engine).migrations_dir() / "0087_run_labels.sql"
-        backfill = migration.read_text().split("CREATE TRIGGER")[
-            0
-        ]  # the statements before the triggers
-        for step in backfill.split(";"):
-            if step.strip().startswith("UPDATE"):
-                conn.execute(text(step))
-        backfilled = conn.execute(
-            text(
-                "SELECT RUN_LABEL AS a, (SELECT TASK_RUN_LABEL FROM AUD_TASK_RUN_LOG) AS b "
-                "FROM AUD_PIPELINES_RUN_LOG"
-            )
-        ).one()
-    assert tuple(backfilled) == tuple(created)

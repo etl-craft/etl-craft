@@ -293,45 +293,6 @@ def test_consumption_from_decisions_is_idempotent(cli_project):
         )
 
 
-def test_migration_preserves_a_pending_historical_repair(empty_engine_db):
-    from etl_craft.engine.migrations import apply_pending_migrations
-    from fixtures.released_schema import install
-
-    db = empty_engine_db
-    install(db, "0.2.0")
-    with db.engine.begin() as conn:
-        pipeline = add_pipeline(conn, "UP")
-        run = conn.execute(
-            text(
-                "INSERT INTO AUD_PIPELINES_RUN_LOG (PIPELINE_ID, STATUS) "
-                "VALUES (:pipeline, 'IN-PROGRESS') RETURNING PIPELINE_RUN_ID"
-            ),
-            {"pipeline": pipeline},
-        ).scalar_one()
-        conn.execute(
-            text(
-                "INSERT INTO AUD_RUN_INTERVENTIONS (PIPELINE_ID, PIPELINE_RUN_ID, "
-                "ACTION, FROM_STATUS, TO_STATUS, REASON, REQUESTED_BY) "
-                "VALUES (:pipeline, :run, 'REOPEN', 'SUCCESS', 'IN-PROGRESS', "
-                "'historical repair', 'operator')"
-            ),
-            {"pipeline": pipeline, "run": run},
-        )
-    apply_pending_migrations(db.engine)
-    with db.engine.begin() as conn:
-        assert tuple(
-            conn.execute(
-                text("SELECT OUTPUT_REVISION, REPAIR_PENDING FROM AUD_PIPELINES_RUN_LOG")
-            ).one()
-        ) == (1, "Y")
-        tr.finish_run(conn, run, "SUCCESS", current_actor())
-        assert tuple(
-            conn.execute(
-                text("SELECT OUTPUT_REVISION, REPAIR_PENDING FROM AUD_PIPELINES_RUN_LOG")
-            ).one()
-        ) == (2, "N")
-
-
 @pytest.mark.parametrize("point", ["pipeline.before_consumption", "pipeline.after_consumption"])
 @pytest.mark.parametrize("crash", [False, True])
 @pytest.mark.chaos
