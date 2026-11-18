@@ -1,4 +1,4 @@
-"""Seed apply uses the project action through the authenticated HTTP interface."""
+"""Deploy, including its seed loads, goes through the authenticated HTTP interface."""
 
 from fastapi.testclient import TestClient
 
@@ -8,30 +8,33 @@ from fixtures.actions import act
 from fixtures.seeds import seed_project as seed_project
 
 
-def test_project_seed_route_and_role(seed_project):
+def test_project_deploy_route_loads_seeds_and_checks_the_role(seed_project):
+    from etl_craft.engine.project_files import collect
+
     ctx, _, _ = seed_project
-    developer = act(ctx, ActionName.TOKEN_CREATE, name="deployer", role=ApiRole.DEVELOPER)
+    admin = act(ctx, ActionName.TOKEN_CREATE, name="deployer", role=ApiRole.ADMIN)
     viewer = act(ctx, ActionName.TOKEN_CREATE, name="reader", role=ApiRole.VIEWER)
+    body = {"files": collect(ctx.config.project_dir)}
     with TestClient(create_app(ctx)) as client:
         denied = client.post(
-            "/api/v1/projects/default/seeds",
+            "/api/v1/projects/default/deploy",
             headers={"Authorization": f"Bearer {viewer.token}"},
-            json={},
+            json=body,
         )
         assert denied.status_code == 403
         result = client.post(
-            "/api/v1/projects/default/seeds",
-            headers={"Authorization": f"Bearer {developer.token}"},
-            json={},
+            "/api/v1/projects/default/deploy",
+            headers={"Authorization": f"Bearer {admin.token}"},
+            json=body,
         )
         assert result.status_code == 200, result.text
-        assert result.json()["loads"][0]["status"] == "LOADED"
+        assert result.json()["seed_loads"][0]["status"] == "LOADED"
 
 
 def test_developer_validation_retains_seed_failures(seed_project):
-    ctx, folder, publish = seed_project
+    ctx, folder, deploy = seed_project
     (folder / "data.csv").write_text("id|name\nnot-an-integer|Ada\n")
-    publish()
+    deploy()  # publishes, then its seed load fails
     developer = act(ctx, ActionName.TOKEN_CREATE, name="deployer", role=ApiRole.DEVELOPER)
     with TestClient(create_app(ctx)) as client:
         response = client.get(

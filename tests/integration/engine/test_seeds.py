@@ -1,4 +1,4 @@
-"""Reference publication, validation refusals and immutable stewardship decisions."""
+"""Seed loads through deploy, validation refusals and immutable stewardship decisions."""
 
 from dataclasses import replace
 
@@ -11,6 +11,8 @@ from etl_craft.core.enums import ActionName, ApiRole, RunStatus
 from etl_craft.core.enums_uploads import SeedStatus
 from etl_craft.core.errors import PermissionDeniedError
 from etl_craft.engine import transitions
+from etl_craft.engine.project_files import collect
+from etl_craft.services.operations import bundles
 from fixtures.actions import act
 from fixtures.metadata import add_pipeline, add_task
 from fixtures.seeds import seed_project as seed_project
@@ -24,16 +26,14 @@ def rows(ctx):
 
 
 def test_changed_seed_replaces_exact_rows_and_unchanged_creates_no_run(seed_project):
-    ctx, folder, publish = seed_project
-    first = act(ctx, ActionName.SEED_APPLY).loads[0]
+    ctx, folder, deploy = seed_project
+    first = deploy().seed_loads[0]
     assert first.status == SeedStatus.LOADED, first.message
     assert rows(ctx) == [(1, "Ada"), (2, "Bob")]
-    # Working-tree bytes are not deployment bytes.
     (folder / "data.csv").write_text("id|name\n3|Cy\n")
-    assert act(ctx, ActionName.SEED_APPLY).loads[0].status == SeedStatus.UNCHANGED
-    publish()
-    assert act(ctx, ActionName.SEED_APPLY).loads[0].status == SeedStatus.LOADED
+    assert deploy().seed_loads[0].status == SeedStatus.LOADED
     assert rows(ctx) == [(3, "Cy")]
+    assert deploy().seed_loads[0].status == SeedStatus.UNCHANGED
     with ctx.engine.connect() as conn:
         assert conn.execute(text("SELECT COUNT(*) FROM AUD_PIPELINES_RUN_LOG")).scalar_one() == 0
         records = (
@@ -46,13 +46,13 @@ def test_changed_seed_replaces_exact_rows_and_unchanged_creates_no_run(seed_proj
             .mappings()
             .all()
         )
-    assert [row["status"] for row in records] == ["LOADED", "UNCHANGED", "LOADED"]
+    assert [row["status"] for row in records] == ["LOADED", "LOADED", "UNCHANGED"]
     assert all(row["actor"] == ctx.actor.name and row["error"] is None for row in records)
 
 
 @pytest.mark.parametrize("broken", ["catalog", "columns", "value"])
 def test_validate_refuses_bad_seed_with_file_row_column_value_and_remedy(seed_project, broken):
-    ctx, folder, publish = seed_project
+    ctx, folder, _ = seed_project
     if broken == "catalog":
         folder.parent.parent.rename(folder.parent.parent.with_name("foreign"))
         expected = ("foreign", "catalog", "warehouse", "move")
@@ -62,7 +62,8 @@ def test_validate_refuses_bad_seed_with_file_row_column_value_and_remedy(seed_pr
     else:
         (folder / "data.csv").write_text("id|name\nno-integer|Ada\n")
         expected = ("data.csv", "row 2", "column id", "no-integer", "INT", "correct")
-    publish()
+    with acting_as(ctx.actor):
+        bundles.publish(ctx, bundles.PublishBundle(files=collect(ctx.config.project_dir)))
     report = act(replace(ctx, role=ApiRole.DEVELOPER), ActionName.VALIDATE)
     assert report.failed
     messages = " ".join(f.message for f in report.findings)
@@ -73,11 +74,11 @@ def test_validate_refuses_bad_seed_with_file_row_column_value_and_remedy(seed_pr
 
 
 def test_failed_load_records_the_reported_masked_message(seed_project, monkeypatch):
-    ctx, _, _ = seed_project
+    ctx, _, deploy = seed_project
     monkeypatch.setenv("ETL_CRAFT_FAULT", "sql.replace.after_clear")
-    result = act(ctx, ActionName.SEED_APPLY).loads[0]
+    result = deploy().seed_loads[0]
     assert result.status == SeedStatus.FAILED
-    for part in ("warehouse.ds.agents", result.seed_load_id, "value=", "expected", "retry"):
+    for part in ("warehouse.ds.agents", result.seed_load_id, "value=", "expected", "deploy again"):
         assert part in result.message
     with ctx.engine.connect() as conn:
         assert (
@@ -91,8 +92,8 @@ def test_failed_load_records_the_reported_masked_message(seed_project, monkeypat
 
 
 def test_seed_audit_is_append_only_and_checks_error_pairing(seed_project):
-    ctx, _, _ = seed_project
-    act(ctx, ActionName.SEED_APPLY)
+    ctx, _, deploy = seed_project
+    deploy()
     for sql in ("UPDATE AUD_SEED_LOADS SET STATUS='UNCHANGED'", "DELETE FROM AUD_SEED_LOADS"):
         with (
             pytest.raises(DBAPIError, match="append-only"),
@@ -113,17 +114,17 @@ def test_seed_audit_is_append_only_and_checks_error_pairing(seed_project):
             )
 
 
-def test_seed_apply_requires_developer(seed_project):
-    ctx, _, _ = seed_project
+def test_deploy_requires_developer(seed_project):
+    ctx, _, deploy = seed_project
     with pytest.raises(PermissionDeniedError):
-        act(replace(ctx, role=ApiRole.OPERATOR), ActionName.SEED_APPLY)
+        deploy(replace(ctx, role=ApiRole.OPERATOR))
 
 
 @pytest.mark.parametrize("status", [RunStatus.SUCCESS, RunStatus.FAILED])
 @pytest.mark.parametrize("retarget", [False, True])
 def test_lock_uses_successful_upload_run_pinned_target(seed_project, status, retarget):
-    ctx, folder, publish = seed_project
-    assert act(ctx, ActionName.SEED_APPLY).loads[0].status == SeedStatus.LOADED
+    ctx, folder, deploy = seed_project
+    assert deploy().seed_loads[0].status == SeedStatus.LOADED
     with acting_as(ctx.actor), ctx.engine.begin() as conn:
         pipeline = add_pipeline(conn, "STEWARD")
         task = add_task(
@@ -157,8 +158,7 @@ def test_lock_uses_successful_upload_run_pinned_target(seed_project, status, ret
                 {"target": target, "task": task},
             )
     (folder / "data.csv").write_text("id|name\n3|Cy\n")
-    publish()
-    outcome = act(ctx, ActionName.SEED_APPLY).loads[0]
+    outcome = deploy().seed_loads[0]
     if status == RunStatus.SUCCESS:
         assert outcome.status == SeedStatus.LOCKED, outcome.message
         assert rows(ctx) == [(1, "Ada"), (2, "Bob")]
@@ -169,7 +169,7 @@ def test_lock_uses_successful_upload_run_pinned_target(seed_project, status, ret
 
 
 def test_retargeting_toward_a_seed_does_not_add_a_lock(seed_project):
-    ctx, _, _ = seed_project
+    ctx, _, deploy = seed_project
     with acting_as(ctx.actor), ctx.engine.begin() as conn:
         pipeline = add_pipeline(conn, "STEWARD")
         task = add_task(
@@ -192,7 +192,7 @@ def test_retargeting_toward_a_seed_does_not_add_a_lock(seed_project):
             text("UPDATE CFG_TASKS SET TARGET_TABLE_ID=:target WHERE TASK_ID=:task"),
             {"target": target, "task": task},
         )
-    result = act(ctx, ActionName.SEED_APPLY).loads[0]
+    result = deploy().seed_loads[0]
     assert result.status == SeedStatus.LOADED, result.message
 
 
@@ -200,7 +200,7 @@ def test_retargeting_toward_a_seed_does_not_add_a_lock(seed_project):
 def test_lock_normalizes_case_and_quoting_and_ignores_unaccepted_uploads(
     seed_project, upload_status
 ):
-    ctx, _, _ = seed_project
+    ctx, _, deploy = seed_project
     with acting_as(ctx.actor), ctx.engine.begin() as conn:
         pipeline = add_pipeline(conn, "STEWARD")
         add_task(
@@ -224,7 +224,7 @@ def test_lock_normalizes_case_and_quoting_and_ignores_unaccepted_uploads(
             text("UPDATE AUD_UPLOADS SET STATUS=:status WHERE PIPELINE_RUN_ID=:run"),
             {"status": upload_status, "run": run},
         )
-    outcome = act(ctx, ActionName.SEED_APPLY).loads[0]
+    outcome = deploy().seed_loads[0]
     assert outcome.status == (
         SeedStatus.LOCKED if upload_status == "LOADED" else SeedStatus.LOADED
     ), outcome.message
@@ -239,7 +239,7 @@ def test_seed_and_merge_serialize_on_the_same_target(seed_project, monkeypatch):
     from etl_craft.handlers.resources import LocalLocker
     from fixtures.races import two_at_once
 
-    ctx, folder, publish = seed_project
+    ctx, folder, deploy = seed_project
     with acting_as(ctx.actor), ctx.engine.begin() as conn:
         pipeline = add_pipeline(conn, "MERGE")
         task_id = add_task(
@@ -254,9 +254,8 @@ def test_seed_and_merge_serialize_on_the_same_target(seed_project, monkeypatch):
         )
         run = transitions.create_active_run(conn, pipeline)
         task_run = transitions.find_or_create_task_run(conn, task_id, run).task_run_id
-    assert act(ctx, ActionName.SEED_APPLY).loads[0].status == SeedStatus.LOADED
+    assert deploy().seed_loads[0].status == SeedStatus.LOADED
     (folder / "data.csv").write_text("id|name\n3|Cy\n")
-    publish()
     from datetime import UTC, datetime
 
     context = TaskContext(
@@ -302,12 +301,12 @@ def test_seed_and_merge_serialize_on_the_same_target(seed_project, monkeypatch):
 
     monkeypatch.setattr(LocalLocker, "hold", observed)
     result, _ = two_at_once(
-        lambda: act(ctx, ActionName.SEED_APPLY),
+        lambda: deploy(),
         lambda: sql.run(context, ctx.engine),
         at=(LocalLocker, "hold"),
         timeout=30,
     )
-    assert result.loads[0].status == SeedStatus.LOADED, result.loads[0].message
+    assert result.seed_loads[0].status == SeedStatus.LOADED, result.seed_loads[0].message
     assert len(acquired) == 2 and len(set(acquired)) == 1
     assert rows(ctx) in ([(3, "Cy")], [(3, "Cy"), (9, "Nine")])
 
@@ -318,7 +317,7 @@ def test_failed_load_masks_urls_and_secret_values_before_return_and_audit(
     from etl_craft.core.errors import HandlerError
     from etl_craft.services.operations import seeds
 
-    ctx, _, _ = seed_project
+    ctx, _, deploy = seed_project
     monkeypatch.setenv("SEED_TEST_SECRET", "do-not-record-this")
 
     def refuse(*args):
@@ -328,7 +327,7 @@ def test_failed_load_masks_urls_and_secret_values_before_return_and_audit(
         )
 
     monkeypatch.setattr(seeds, "replace_seed", refuse)
-    result = act(ctx, ActionName.SEED_APPLY).loads[0]
+    result = deploy().seed_loads[0]
     assert result.status == SeedStatus.FAILED
     assert "Traceback" not in result.message
     for secret in ("url-password", "url-token", "do-not-record-this"):
@@ -385,7 +384,7 @@ def test_demo_reference_seeds_lock_after_real_stewardship_upload(
     from etl_craft.execution.pipeline import run_pipeline
     from etl_craft.services.operations.uploads import UploadRequest, receive
 
-    ctx, _, publish = seed_project
+    ctx, _, deploy = seed_project
     demo = Path(__file__).resolve().parents[3] / "tests/fixtures/seed_demo"
     for name in ("seeds", "python_scripts", "validation_scripts"):
         shutil.copytree(demo / name, ctx.config.project_dir / name, dirs_exist_ok=True)
@@ -396,10 +395,9 @@ def test_demo_reference_seeds_lock_after_real_stewardship_upload(
             conn,
             for_engine(conn).split_statements((demo / "metadata/seed_stewardship.sql").read_text()),
         )
-    publish()
-    first = act(ctx, ActionName.SEED_APPLY)
-    assert len(first.loads) == 5
-    assert all(load.status == SeedStatus.LOADED for load in first.loads), first
+    first = deploy()
+    assert len(first.seed_loads) == 5
+    assert all(load.status == SeedStatus.LOADED for load in first.seed_loads), first
     act(ctx, ActionName.ACCOUNT_ADD, name="steward", role=ApiRole.ADMIN, oidc_subject="steward")
     uploader = replace(ctx, actor=Actor("steward", ActorKind.USER))
     pipeline_code = f"SI_STEWARD_DS_{table.upper()}"
@@ -415,7 +413,7 @@ def test_demo_reference_seeds_lock_after_real_stewardship_upload(
             selector=RunSelector(run_id=run_id),
         )
     assert result.status == RunStatus.SUCCESS
-    outcomes = {load.table: load for load in act(ctx, ActionName.SEED_APPLY).loads}
+    outcomes = {load.table: load for load in deploy().seed_loads}
     assert outcomes[f"warehouse.ds.{table}"].status == SeedStatus.LOCKED
     assert outcomes["warehouse.ds.sources"].status == SeedStatus.UNCHANGED
     with duckdb.connect(str(ctx.config.project_dir / "warehouse.db")) as conn:
@@ -429,7 +427,7 @@ def test_first_successful_completion_owns_handover_even_after_an_older_upload_is
 ):
     from datetime import UTC, datetime
 
-    ctx, _, _ = seed_project
+    ctx, _, deploy = seed_project
     with acting_as(ctx.actor), ctx.engine.begin() as conn:
         for code, day in (("OLDER_UPLOAD", 3), ("FIRST_SUCCESS", 2)):
             pipeline = add_pipeline(conn, code)
@@ -448,7 +446,7 @@ def test_first_successful_completion_owns_handover_even_after_an_older_upload_is
                 text("UPDATE AUD_PIPELINES_RUN_LOG SET END_DATE=:ended WHERE PIPELINE_RUN_ID=:run"),
                 {"ended": datetime(2020, 1, day, tzinfo=UTC), "run": run},
             )
-    outcome = act(ctx, ActionName.SEED_APPLY).loads[0]
+    outcome = deploy().seed_loads[0]
     assert outcome.status == SeedStatus.LOCKED
     assert "FIRST_SUCCESS" in outcome.message and "upload 2" in outcome.message
 
@@ -459,7 +457,7 @@ def test_reopening_and_failing_a_successful_upload_run_never_unlocks_its_seed(se
     from etl_craft.core.actor import purpose
     from etl_craft.engine.queries import statement
 
-    ctx, _, _ = seed_project
+    ctx, _, deploy = seed_project
     with acting_as(ctx.actor), ctx.engine.begin() as conn:
         pipeline = add_pipeline(conn, "STEWARD")
         add_task(conn, pipeline, "write", TARGET_OBJECT="ds.agents", SQL_ACTION="CREATE_TABLE")
@@ -474,10 +472,10 @@ def test_reopening_and_failing_a_successful_upload_run_never_unlocks_its_seed(se
         )
         transitions.finalize_pipeline_run(conn, run, RunStatus.SUCCESS)
         transitions.reopen_run(conn, run, ctx.actor, reason="correct a task")
-    assert act(ctx, ActionName.SEED_APPLY).loads[0].status == SeedStatus.LOCKED
+    assert deploy().seed_loads[0].status == SeedStatus.LOCKED
     with acting_as(ctx.actor), ctx.engine.begin() as conn:
         transitions.finalize_pipeline_run(conn, run, RunStatus.FAILED)
-    assert act(ctx, ActionName.SEED_APPLY).loads[0].status == SeedStatus.LOCKED
+    assert deploy().seed_loads[0].status == SeedStatus.LOCKED
     token = purpose.set("retention")
     try:
         with acting_as(ctx.actor), ctx.engine.begin() as conn:
@@ -496,17 +494,16 @@ def test_reopening_and_failing_a_successful_upload_run_never_unlocks_its_seed(se
             )
     finally:
         purpose.reset(token)
-    assert act(ctx, ActionName.SEED_APPLY).loads[0].status == SeedStatus.LOCKED
+    assert deploy().seed_loads[0].status == SeedStatus.LOCKED
 
 
 def test_omitted_seed_column_is_unchanged_on_reapplication(seed_project):
-    ctx, folder, publish = seed_project
+    ctx, folder, deploy = seed_project
     with (folder / "columns.csv").open("a") as stream:
         stream.write("upload_id|BIGINT|N\n")
-    publish()
-    loaded = act(ctx, ActionName.SEED_APPLY).loads[0]
+    loaded = deploy().seed_loads[0]
     assert loaded.status == SeedStatus.LOADED, loaded.message
-    assert act(ctx, ActionName.SEED_APPLY).loads[0].status == SeedStatus.UNCHANGED
+    assert deploy().seed_loads[0].status == SeedStatus.UNCHANGED
     import duckdb
 
     with duckdb.connect(str(ctx.config.project_dir / "warehouse.db")) as conn:

@@ -251,7 +251,7 @@ def test_api_publication_needs_only_project_files_and_a_person_token(cluster, mo
     project, url, _, _ = cluster
     with monkeypatch.context() as isolated:
         isolated.delenv(SECRET_VAR)
-        code, output = project.run("bundle", "publish", "--api", url, "--format", "json")
+        code, output = project.run("deploy", "--api", url, "--format", "json")
     assert code == 0, output
     with project.engine.connect() as conn:
         bundle = conn.execute(

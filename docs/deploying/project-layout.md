@@ -12,7 +12,7 @@ etl-craft/
 │   └── sales/orders.sql
 ├── python_scripts/          # Python scripts that PYTHON tasks name
 │   └── load_orders.py
-├── config/                 # pipelines as CSV files, one per CFG_ table, for `etl-craft config apply`
+├── config/                 # pipelines as CSV files, one per CFG_ table, for `etl-craft deploy`
 │   └── pipelines.csv, tasks.csv, task_parameters.csv, ...
 ├── migrations/             # your own Engine DB migrations, applied by `etl-craft migrate`
 │   └── 0001_add_sales_tables.sql
@@ -51,7 +51,7 @@ SCRIPT_FILE='sql_scripts/sales/order.sql': no such file /srv/etl/etl-craft/sql_s
 
 ## Configuration files
 
-`etl-craft config apply` merges the CSV files in `config/` into the Engine DB's `CFG_` tables.
+`etl-craft deploy` merges the CSV files in `config/` into the Engine DB's `CFG_` tables.
 See [Configuration files](../guides/configuration-files.md).
 
 ## Project migrations
@@ -69,7 +69,7 @@ use the same Engine DB, with separate warehouse connections.
 
 ```bash
 etl-craft config plan --project-dir sales/
-etl-craft config apply --project-dir sales/
+etl-craft deploy --project-dir sales/
 ```
 
 Project commands require `--project` or `Orchestration.Project`; there is no implicit `default`.

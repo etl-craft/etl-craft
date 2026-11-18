@@ -1,12 +1,13 @@
-"""Published seed project using either Engine DB and a real local warehouse."""
+"""A seed project using either Engine DB and a real local warehouse, and its deploy."""
 
 import pytest
 import yaml
 
 from etl_craft.config import ConnectionProfile, load_config
-from etl_craft.core.actor import Actor
+from etl_craft.core.actor import Actor, acting_as
 from etl_craft.core.enums import ActionName, ActorKind, ApiRole
 from etl_craft.engine.project_files import collect
+from etl_craft.services.operations import bundles
 from etl_craft.services.operations.context import OperationContext
 from fixtures.actions import act
 from fixtures.engine_db import profile_block
@@ -48,8 +49,11 @@ def seed_project(engine_db, tmp_path, monkeypatch):
     with duckdb.connect(str(tmp_path / "warehouse.db")) as conn:
         conn.execute("CREATE SCHEMA ds")
 
-    def publish():
-        return act(ctx, ActionName.BUNDLE_PUBLISH, files=collect(tmp_path))
+    def deploy(caller=ctx):
+        """Publish the project folder as it is now and load its seeds."""
+        return act(caller, ActionName.DEPLOY, files=collect(tmp_path))
 
-    publish()
-    return ctx, folder, publish
+    # Runs a test starts before deploying are pinned to this first publication.
+    with acting_as(ctx.actor):
+        bundles.publish(ctx, bundles.PublishBundle(files=collect(tmp_path)))
+    return ctx, folder, deploy

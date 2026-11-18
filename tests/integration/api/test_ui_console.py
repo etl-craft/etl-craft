@@ -124,7 +124,7 @@ def test_refuses_hidden_host_metadata_file_and_other_server_commands(site):
         hidden: "not a command you can run in the console",
         "pause --pipeline-code ORDERS --reason x": "needs operator role",
         "controller": "not a command you can run in the console",
-        "config apply": "not a command you can run in the console",
+        "deploy": "not a command you can run in the console",
         "logs --pipeline-code ORDERS --zip /tmp/run.zip": "reads or writes a file on the server",
         "pipelines --api https://elsewhere": "`--api` is not used in the console",
         "pipelines --project other": "this console runs in project 'default'",

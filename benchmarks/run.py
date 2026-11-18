@@ -41,7 +41,7 @@ def command(config: Path, project: str, *args: str) -> str:
 
 
 def prepare(root: Path) -> Path:
-    """Apply and publish every generated project before starting schedules."""
+    """Deploy every generated project before starting schedules."""
     projects = sorted(root.glob("bench_*/craft-connector.yml"))
     if not projects:
         raise SystemExit(f"{root}: no generated projects; run benchmarks.generate first")
@@ -61,8 +61,7 @@ def prepare(root: Path) -> Path:
         )
         if not any(row["project"] == project for row in current["projects"]):
             command(config, project, "project", "add", "--reason", "Benchmark setup")
-        command(config, project, "config", "apply")
-        command(config, project, "bundle", "publish")
+        command(config, project, "deploy")
     return projects[0]
 
 

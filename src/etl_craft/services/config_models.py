@@ -10,7 +10,6 @@ from typing import ClassVar, Literal
 from etl_craft.core.enums import YesNo
 from etl_craft.engine.repository.config_rows import ACTIVE_FLAG, Key, Value
 from etl_craft.engine.standing_pauses import TaskPause
-from etl_craft.services.refresh_models import PipelineRefresh
 from etl_craft.services.validate import Finding
 
 
@@ -48,7 +47,7 @@ class ColumnChange:
 
 @dataclass(frozen=True)
 class Change:
-    """One row ``config apply`` inserts, updates, makes active again or retires, and why."""
+    """One row ``deploy`` inserts, updates, makes active again or retires, and why."""
 
     file: str
     table: str
@@ -90,7 +89,6 @@ class ConfigSync:
     changes: tuple[Change, ...]
     findings: tuple[Finding, ...] = ()
     tag_access_changes: tuple[TagAccessChange, ...] = ()
-    refreshes: tuple[PipelineRefresh, ...] = ()
     task_pauses: tuple[TaskPause, ...] = ()
 
 

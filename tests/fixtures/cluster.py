@@ -57,7 +57,7 @@ def cluster(cli_project, monkeypatch, tmp_path):
 def publish_project(project, agent_dir):
     """Publish execution bytes, then leave an agent with only its bootstrap config."""
     from etl_craft.engine.project_files import collect
-    from etl_craft.services.operations.bundles import PublishBundle
+    from etl_craft.services.operations.deploy import DeployInput
 
     uploaded = collect(agent_dir)
     raw = yaml.safe_load((agent_dir / "craft-connector.yml").read_text())
@@ -70,7 +70,7 @@ def publish_project(project, agent_dir):
     from etl_craft.engine.bundles import Bundle
     from etl_craft.services.operations.pipeline_refresh import RefreshInput
 
-    publication = invoke(ctx, ActionName.BUNDLE_PUBLISH, PublishBundle(files=uploaded))
+    publication = invoke(ctx, ActionName.DEPLOY, DeployInput(files=uploaded))
     with project.engine.connect() as conn:
         root = Bundle.load(conn, publication.bundle_id).materialize(project.config)
     checked = invoke(

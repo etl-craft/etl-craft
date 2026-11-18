@@ -219,8 +219,7 @@ class ActionName(StrEnum):
     """Every action an interface can request; the value is its audit and role-policy name."""
 
     RENAME = "rename"
-    BUNDLE_PUBLISH = "bundle publish"
-    SEED_APPLY = "seed apply"
+    DEPLOY = "deploy"
     ERASE = "erase"
     ERASURE_LIST = "erase list"
     AGENT_DOCTOR = "agent doctor"
@@ -303,7 +302,6 @@ class ActionName(StrEnum):
     LINEAGE_REFRESH = "lineage refresh"
     CONFIG_PLAN = "config plan"
     CONFIG_EXPORT = "config export"
-    CONFIG_APPLY = "config apply"
     RUN = "run"
     TRIGGER_PIPELINE = "trigger-pipeline"
     MARK = "mark"

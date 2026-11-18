@@ -58,7 +58,7 @@ revoked:
 etl-craft login --api https://etl.example.com
 etl-craft whoami --api https://etl.example.com          # analyst operator
 etl-craft run --pipeline-code SALES --reason "late file" --api https://etl.example.com
-etl-craft --api https://etl.example.com config apply    # refused: apply config files on the server
+etl-craft --api https://etl.example.com config export   # refused: export config files on the server
 etl-craft logout --api https://etl.example.com
 ```
 

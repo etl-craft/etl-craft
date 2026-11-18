@@ -31,9 +31,8 @@ PROJECT_MANAGE_ACTIONS = frozenset(
         ActionName.RENAME,
         ActionName.CONFIG_PLAN,
         ActionName.PIPELINE_REFRESH,
-        ActionName.CONFIG_APPLY,
         ActionName.MIGRATE,
-        ActionName.BUNDLE_PUBLISH,
+        ActionName.DEPLOY,
         ActionName.GENERATE_DOCS,
     }
 )

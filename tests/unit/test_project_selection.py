@@ -76,8 +76,9 @@ def test_remote_project_actions_require_selection_but_admin_actions_do_not(monke
         client.invoke(ActionName.PIPELINES, build(ACTIONS[ActionName.PIPELINES].request))
 
 
-def test_remote_bundle_project_directory_is_one_source(tmp_path, monkeypatch, capsys):
-    from etl_craft.services.operations.bundles import BundleView
+def test_remote_deploy_project_directory_is_one_source(tmp_path, monkeypatch, capsys):
+    from etl_craft.services.config_files import ConfigSync
+    from etl_craft.services.operations.deploy import Deployment
 
     config(tmp_path, "sales")
     calls = []
@@ -90,22 +91,21 @@ def test_remote_bundle_project_directory_is_one_source(tmp_path, monkeypatch, ca
                 (Project("sales", "Sales", "UTC", "default", 1, "Y", "DEV", None, "STRICT"),)
             )
         calls.append((client.project, name, request))
-        return BundleView("published", {})
+        return Deployment(False, "published", ConfigSync("bundle published", "r", True, False, ()))
 
     monkeypatch.setattr(ApiClient, "invoke", publish)
     assert (
-        main(["bundle", "publish", "--project-dir", str(tmp_path), "--api", "http://localhost:9"])
+        main(["deploy", "--project-dir", str(tmp_path), "--api", "http://localhost:9"])
         == ExitCode.SUCCESS
     )
-    assert calls[0][0:2] == ("sales", ActionName.BUNDLE_PUBLISH)
+    assert calls[0][0:2] == ("sales", ActionName.DEPLOY)
     assert "craft-connector.yml" in calls[0][2].files
-    assert "Published" in capsys.readouterr().out
+    assert "published bundle published" in capsys.readouterr().out
 
     assert (
         main(
             [
-                "bundle",
-                "publish",
+                "deploy",
                 "--project-dir",
                 str(tmp_path),
                 "--api",

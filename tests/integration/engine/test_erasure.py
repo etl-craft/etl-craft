@@ -291,7 +291,7 @@ def test_opaque_python_and_unmanaged_sql_targets_are_reported_and_untouched(eras
     with duckdb.connect(str(ctx.config.project_dir / "warehouse.db")) as conn:
         conn.execute("CREATE TABLE ds.opaque AS SELECT * FROM ds.people")
         conn.execute("CREATE TABLE ds.team AS SELECT * FROM ds.people")
-    act(ctx, ActionName.BUNDLE_PUBLISH, files=collect(ctx.config.project_dir))
+    act(ctx, ActionName.DEPLOY, files=collect(ctx.config.project_dir))
     result = act(
         ctx,
         ActionName.ERASE,
@@ -376,7 +376,7 @@ def test_unmanaged_target_cannot_be_made_managed_by_stray_parameters(erasure_pro
         )
     with duckdb.connect(str(ctx.config.project_dir / "warehouse.db")) as conn:
         conn.execute("CREATE TABLE ds.team AS SELECT * FROM ds.people")
-    act(ctx, ActionName.BUNDLE_PUBLISH, files=collect(ctx.config.project_dir))
+    act(ctx, ActionName.DEPLOY, files=collect(ctx.config.project_dir))
     result = act(
         ctx,
         ActionName.ERASE,

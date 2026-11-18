@@ -167,7 +167,7 @@ after an insert or update, or its values when deleted. With them are:
 | `CURRENT_FLAG` | `Y` for the version that holds now; `N` for the rest and for a deletion |
 | `OPERATION` | `INSERT`, `UPDATE` or `DELETE` |
 | `ACTOR`, `ACTOR_KIND` | who made the change |
-| `MIGRATION` | the project migration's filename, or `config@<revision>` for `etl-craft config apply` |
+| `MIGRATION` | the project migration's filename, or `config@<revision>` for `etl-craft deploy` |
 
 A version never changes, except that the next change closes it: its `VALID_TO` is set and its
 `CURRENT_FLAG` becomes `N`. The Engine DB refuses every other update and every delete, except by
@@ -198,7 +198,7 @@ to a `CFG_` table is added to its history table as the migration runs, and a pro
 `CFG_` table gets a history table of its own. Project-created `CFG_` and `AUD_` tables receive
 write guards as their DDL runs. Make metadata changes in the
 project's [configuration files](../guides/configuration-files.md) and run
-`etl-craft config apply`, or in a new project migration and run `etl-craft migrate`.
+`etl-craft deploy`, or in a new project migration and run `etl-craft migrate`.
 
 A plain connection cannot write `CFG_` or `AUD_` tables. PostgreSQL requires the engine's
 transaction-local actor marker, including for `TRUNCATE`. SQLite requires functions registered
@@ -384,7 +384,7 @@ explicit `--archive-to` retry before daily maintenance can continue.
 
 ### Warehouse auxiliary retention
 
-Set optional periods on the intended rows of `config/tables.csv`, then run `config apply`:
+Set optional periods on the intended rows of `config/tables.csv`, then run `deploy`:
 
 | Column | Whole days | What it expires |
 |---|---|---|

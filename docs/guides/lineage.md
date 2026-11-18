@@ -111,7 +111,7 @@ timezone mapping; use `TIMESTAMP_NTZ`, `TIMESTAMP_LTZ` or `TIMESTAMP_TZ` to chec
 report mismatches or unavailable observations when these are declared. Export seeds known
 kinds and nullability and keeps existing expectations when an observation is unavailable.
 Positions are positive and distinct per
-active table, and determine star expansion order. Definitions participate in config apply,
+active table, and determine star expansion order. Definitions participate in deploy,
 retirement, actor auditing and `config export --as-of`, like the other config rows. Older projects
 can omit both files: applying their other files leaves existing source definitions unchanged.
 An empty file with its header explicitly retires the active definitions.

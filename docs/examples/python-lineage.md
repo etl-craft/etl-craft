@@ -23,7 +23,7 @@ SALES_DAILY,fetch_orders,LINEAGE_SOURCE,orders.api,Y
 SALES_DAILY,fetch_orders,LINEAGE_COLUMNS,Id:order_id,Y
 ```
 
-Run `etl-craft config apply`, `etl-craft validate`, then rebuild the catalog. The Mapping tab
+Run `etl-craft deploy`, `etl-craft validate`, then rebuild the catalog. The Mapping tab
 shows a **declared** `Id` → `order_id` path. The source name is opaque external documentation;
 the target must be an active column of this task's declared target. The engine does not verify
 that the Python script actually performs this mapping. Do not put credentials in either parameter.

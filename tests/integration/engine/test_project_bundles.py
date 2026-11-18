@@ -56,7 +56,7 @@ def test_publication_pins_bytes_and_admission_refuses_an_empty_store(engine_db, 
     with engine_db.engine.begin() as conn:
         pipeline = add_pipeline(conn, "P")
         add_task(conn, pipeline, "T", "PYTHON", SCRIPT_FILE="python_scripts/a.py")
-        with pytest.raises(ConfigurationError, match="bundle publish"):
+        with pytest.raises(ConfigurationError, match="etl-craft deploy"):
             transitions.create_run(conn, pipeline, SYSTEM_ACTOR)
         assert (
             conn.execute(text("SELECT count(*) AS count FROM AUD_PIPELINES_RUN_LOG")).scalar_one()

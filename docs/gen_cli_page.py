@@ -29,7 +29,7 @@ sections = [
     "presentation check does not change API authorization.\n",
     "When `CI` is set, production confirmation never prompts, even with a terminal; pass "
     "`--yes`. For command groups put it before the group, for example "
-    "`etl-craft --yes config apply`.\n",
+    "`etl-craft --yes project set`.\n",
     "A legacy `migrate` reports `environment unknown (Engine DB predates environment metadata)` "
     "alongside the credential-free Engine DB identity. Its JSON has `environment: null` and "
     "`environment_reason`. Packaged migrations run first; any PROD project migrations confirm "

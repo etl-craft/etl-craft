@@ -186,7 +186,7 @@ def test_values_are_written_as_the_files_hold_them(value, written):
     assert cell(value) == written
 
 
-@pytest.mark.parametrize("verb", ["plan", "apply", "export"])
+@pytest.mark.parametrize("verb", ["plan", "export"])
 def test_the_config_option_after_a_verb_is_refused_not_taken_for_the_folder(verb, capsys):
     with pytest.raises(SystemExit) as stopped:
         main(["config", verb, "--config", "elsewhere/craft-connector.yml"])

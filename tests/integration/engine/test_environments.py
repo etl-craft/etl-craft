@@ -318,7 +318,7 @@ def test_shared_warehouses_are_informational_and_store_outages_are_reported(
         }
         act(
             replace(ctx, project=code),
-            ActionName.BUNDLE_PUBLISH,
+            ActionName.DEPLOY,
             files={
                 "craft-connector.yml": base64.b64encode(
                     yaml.safe_dump(raw, sort_keys=False).encode()
@@ -428,7 +428,7 @@ def test_malformed_manifest_cannot_block_admin_changes(engine_db, tmp_path, monk
     raw = {"Secrets": {"Source_type": "ENVIRONMENT"}, "Orchestration": {"Project": "default"}}
     act(
         ctx,
-        ActionName.BUNDLE_PUBLISH,
+        ActionName.DEPLOY,
         files={
             "craft-connector.yml": base64.b64encode(
                 yaml.safe_dump(raw, sort_keys=False).encode()

@@ -324,17 +324,18 @@ def test_the_command_plans_applies_and_exports(metadata_project, capsys, monkeyp
     assert "SALES_MART  (SLA_IN_HOURS: '' -> '4')" in planned
     assert planned.endswith("plan only: nothing was changed\n")
 
-    assert main(["config", "apply", "--format", "json"]) == ExitCode.SUCCESS
-    document = json.loads(capsys.readouterr().out)
-    assert (document["schema"], document["applied"], len(document["changes"])) == (
-        "etl-craft/config-sync/1",
+    assert main(["deploy", "--format", "json"]) == ExitCode.SUCCESS
+    deployed = json.loads(capsys.readouterr().out)
+    document = deployed["config"]
+    assert (deployed["schema"], document["applied"], len(document["changes"])) == (
+        "etl-craft/deploy/1",
         True,
         2,
     )
     assert metadata_project.rows(
         "SELECT COMMAND AS command, OUTCOME AS outcome FROM AUD_ACTIONS "
-        "WHERE COMMAND = 'config apply' ORDER BY ACTION_ID"
-    ) == [("config apply", "REQUESTED"), ("config apply", "SUCCESS")]
+        "WHERE COMMAND = 'deploy' ORDER BY ACTION_ID"
+    ) == [("deploy", "REQUESTED"), ("deploy", "SUCCESS")]
 
 
 def flag(code, value):

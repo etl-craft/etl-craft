@@ -60,7 +60,7 @@ class Bundle:
         if found is None:
             raise ResourceNotFoundError(
                 f"bundle={selector!r}: no such published bundle; expected `latest` or a bundle "
-                "id recorded for this project; run `etl-craft bundle publish`"
+                "id recorded for this project; run `etl-craft deploy`"
             )
         return cls.load(conn, found)
 

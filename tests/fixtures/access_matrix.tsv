@@ -406,17 +406,6 @@ audit	rehash_action	P1	allow
 audit	rehash_action	P2	allow
 audit	agent	P1	deny
 audit	agent	P2	deny
-bundle publish	admin	-	allow
-bundle publish	developer	-	refused:ConfigurationError
-bundle publish	operator	-	refused:ConfigurationError
-bundle publish	viewer	-	refused:ConfigurationError
-bundle publish	view_p1	-	refused:ConfigurationError
-bundle publish	upload_t1	-	refused:ConfigurationError
-bundle publish	run_p1	-	refused:ConfigurationError
-bundle publish	manage_sales	-	refused:ConfigurationError
-bundle publish	runner_role	-	refused:ConfigurationError
-bundle publish	rehash_action	-	refused:ConfigurationError
-bundle publish	agent	-	refused:ConfigurationError
 capabilities	admin	P1	allow
 capabilities	admin	P2	allow
 capabilities	developer	P1	allow
@@ -472,17 +461,6 @@ clone	manage_sales	-	deny
 clone	runner_role	-	deny
 clone	rehash_action	-	deny
 clone	agent	-	deny
-config apply	admin	-	allow
-config apply	developer	-	deny
-config apply	operator	-	deny
-config apply	viewer	-	deny
-config apply	view_p1	-	deny
-config apply	upload_t1	-	deny
-config apply	run_p1	-	deny
-config apply	manage_sales	-	allow
-config apply	runner_role	-	deny
-config apply	rehash_action	-	deny
-config apply	agent	-	deny
 config export	admin	-	allow
 config export	developer	-	allow
 config export	operator	-	allow
@@ -626,6 +604,17 @@ data unlock	rehash_action	P1	deny
 data unlock	rehash_action	P2	deny
 data unlock	agent	P1	deny
 data unlock	agent	P2	deny
+deploy	admin	-	allow
+deploy	developer	-	deny
+deploy	operator	-	deny
+deploy	viewer	-	deny
+deploy	view_p1	-	deny
+deploy	upload_t1	-	deny
+deploy	run_p1	-	deny
+deploy	manage_sales	-	allow
+deploy	runner_role	-	deny
+deploy	rehash_action	-	deny
+deploy	agent	-	deny
 docs-version	admin	-	allow
 docs-version	developer	-	deny
 docs-version	operator	-	deny
@@ -1506,17 +1495,6 @@ search	manage_sales	-	allow
 search	runner_role	-	allow
 search	rehash_action	-	allow
 search	agent	-	deny
-seed apply	admin	-	allow
-seed apply	developer	-	allow
-seed apply	operator	-	deny
-seed apply	viewer	-	deny
-seed apply	view_p1	-	deny
-seed apply	upload_t1	-	deny
-seed apply	run_p1	-	deny
-seed apply	manage_sales	-	deny
-seed apply	runner_role	-	deny
-seed apply	rehash_action	-	deny
-seed apply	agent	-	deny
 setup	admin	-	allow
 setup	developer	-	deny
 setup	operator	-	deny

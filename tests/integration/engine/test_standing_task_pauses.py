@@ -12,6 +12,7 @@ from etl_craft.core.errors import RunStateError, UsageError
 from etl_craft.services.operations import OperationContext
 from etl_craft.services.operations.actions import invoke
 from etl_craft.services.operations.requests import ControlRequest
+from fixtures.actions import deploy_config
 from fixtures.metadata import add_pipeline, add_task
 
 
@@ -700,8 +701,10 @@ def test_metadata_graph_and_config_reads_show_the_standing_pause(cli_project):
     folder = project.config.project_dir / "config"
     folder.mkdir()
     (folder / "pipelines.csv").write_text("PIPELINE_CODE,ACTIVE_FLAG\nP,Y\n")
-    for action in (ActionName.CONFIG_PLAN, ActionName.CONFIG_APPLY):
-        result = invoke(ctx, action, ConfigDirectory(config_dir=folder))
+    for result in (
+        invoke(ctx, ActionName.CONFIG_PLAN, ConfigDirectory(config_dir=folder)),
+        deploy_config(ctx, folder).config,
+    ):
         assert not result.failed
         assert len(result.task_pauses) == 1
         assert "visible maintenance" in result.task_pauses[0].describe()

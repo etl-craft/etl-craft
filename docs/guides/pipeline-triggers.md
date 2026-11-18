@@ -66,7 +66,7 @@ Use the IDs assigned by your project's exported configuration. Apply through the
 
 ```bash
 etl-craft config plan
-etl-craft config apply
+etl-craft deploy
 etl-craft validate
 etl-craft run --reason "requested data load" --pipeline-code PARENT --init-only
 etl-craft status --pipeline-code PARENT

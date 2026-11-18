@@ -67,9 +67,8 @@ def metadata(files: list[str]) -> None:
             )  # fmt: skip
     if result == 0:
         result = main([*config, "migrate"])
-    for command in (("bundle", "publish"), ("seed", "apply"), ("pipelines", "refresh")):
-        if result == 0:
-            result = main(["--config", str(HERE / "craft-connector.yml"), *command])
+    if result == 0:
+        result = main([*config, "deploy"])
     if result:
         raise SystemExit(result)
 

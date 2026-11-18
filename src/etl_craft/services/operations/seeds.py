@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import ClassVar
 from uuid import uuid4
@@ -31,8 +31,7 @@ from etl_craft.handlers.resources import LocalLocker
 from etl_craft.handlers.sql.seed import replace_seed
 from etl_craft.handlers.sql.session import Session
 from etl_craft.services.operations.context import OperationContext
-from etl_craft.services.operations.requests import NoInput
-from etl_craft.services.seeds import Seed, cast_rows, discover
+from etl_craft.services.seeds import Seed, cast_rows
 from etl_craft.warehouse.connection import open_warehouse, warehouse_dialect
 
 
@@ -54,20 +53,10 @@ class SeedLoads:
     loads: tuple[SeedLoad, ...]
 
 
-def apply(ctx: OperationContext, request: NoInput) -> SeedLoads:
-    """Read once from the pinned publication; serialize each decision with target writers."""
-    with ctx.engine.connect() as conn:
-        identity = conn.execute(statement(conn, "bundle_latest")).scalar_one_or_none()
-        if identity is None:
-            raise ConfigurationError(
-                f"project {ctx.project!r}: bundle=missing; expected an approved publication; "
-                "run etl-craft bundle publish before seed apply"
-            )
-        bundle = Bundle.load(conn, identity)
-    config = project_config(ctx.config, bundle.materialize(ctx.config) / "craft-connector.yml")
-    ctx = replace(ctx, config=config)
+def apply_seeds(ctx: OperationContext, seeds: tuple[Seed, ...]) -> SeedLoads:
+    """Load each seed table of ``ctx.config``'s project; serialize each with target writers."""
     with acting_as(ctx.actor):
-        return SeedLoads(tuple(_apply_table(ctx, seed) for seed in discover(config)))
+        return SeedLoads(tuple(_apply_table(ctx, seed) for seed in seeds))
 
 
 def _apply_table(ctx: OperationContext, seed: Seed) -> SeedLoad:
@@ -100,7 +89,7 @@ def _apply_table(ctx: OperationContext, seed: Seed) -> SeedLoad:
         failure = HandlerError(
             f"{seed.target}, seed load {identity}: value=load failed ({detail}); "
             "expected valid seed files and a writable warehouse target; correct the files "
-            "or restore the warehouse connection, publish the corrected bundle and retry seed apply"
+            "or restore the warehouse connection, then deploy again"
         )
         message = str(mask_arguments({"message": str(failure)})["message"])
         profiles = (ctx.config.engine, ctx.config.warehouse, ctx.config.email)
@@ -157,12 +146,12 @@ def _locked(conn: Connection, ctx: OperationContext, seed: Seed) -> str | None:
                     raise ConfigurationError(
                         f"run {run.run_id}: snapshot=missing; "
                         "expected the upload run's pinned metadata; "
-                        "restore its metadata snapshot before seed apply"
+                        "restore its metadata snapshot before deploying"
                     )
                 if run.bundle_id is None:
                     raise ConfigurationError(
                         f"run {run.run_id}: bundle=missing; expected its pinned warehouse catalog; "
-                        "restore the recorded bundle before seed apply"
+                        "restore the recorded bundle before deploying"
                     )
                 bundle = Bundle.load(conn, run.bundle_id)
                 pinned = project_config(

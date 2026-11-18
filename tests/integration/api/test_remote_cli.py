@@ -664,21 +664,18 @@ def test_a_runner_holding_only_a_token_publishes_and_applies_a_bundle(
     with Served(served) as url:
         api = ("--api", url, "--project", "default")
         monkeypatch.setenv("ETL_CRAFT_TOKEN", server["service"][ApiRole.ADMIN])
-        code, _, err = run(capsys, *api, "bundle", "publish", "--project-dir", str(folder))
+        code, _, err = run(capsys, *api, "deploy", "--project-dir", str(folder))
         assert code == 0, err  # an admin approves the project's connection contract once
         monkeypatch.setenv("ETL_CRAFT_TOKEN", server["service"][ApiRole.DEVELOPER])
-        code, _, err = run(capsys, *api, "bundle", "publish", "--project-dir", str(folder))
+        code, _, err = run(capsys, *api, "deploy", "--project-dir", str(folder))
         assert code == 0, err  # the same contract: a developer publishes from then on
-        code, _, err = run(capsys, *api, "config", "apply")  # a folder is not accepted over HTTP
-        assert code == ExitCode.USAGE and "reads a published bundle" in err, err
+        assert _pipelines(served, "Q")  # the published config/ was applied
         code, out, err = run(capsys, *api, "config", "plan", "--bundle", "latest")
-        assert code == 0 and "insert" in out and "Q" in out, (out, err)
-        assert not _pipelines(served, "Q")
-        code, out, err = run(capsys, *api, "config", "apply", "--bundle", "latest")
-        assert code == 0 and "from bundle " in out, (out, err)
-        assert _pipelines(served, "Q")
+        assert code == 0 and "0 change(s)" in out, (out, err)
         monkeypatch.setenv("ETL_CRAFT_TOKEN", server["service"][ApiRole.VIEWER])
         code, _, err = run(capsys, *api, "config", "plan", "--bundle", "latest")
+        assert code == ExitCode.PERMISSION_DENIED, err
+        code, _, err = run(capsys, *api, "deploy", "--project-dir", str(folder))
         assert code == ExitCode.PERMISSION_DENIED, err
 
 

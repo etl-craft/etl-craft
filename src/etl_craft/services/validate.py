@@ -576,7 +576,7 @@ def _business_rules(conn: Connection, context: TaskContext, data: _Metadata) -> 
                 or output_key(rule.business_rule_sql, rule.business_rule_key_column or "", dialect)
                 is None
             ):
-                # Schema-only reads cannot reserve the Engine DB during config apply's transaction.
+                # Schema-only reads cannot reserve the Engine DB during a deploy's config step.
                 with open_warehouse(config) as warehouse:
                     check_output(checked, context, warehouse)
         except EtlCraftError as error:

@@ -31,7 +31,7 @@ agent = invoke(
 )
 assert isinstance(operator, CreatedToken) and isinstance(agent, CreatedToken)
 engine.dispose()
-for command in (["migrate"], ["bundle", "publish"], ["pipelines", "refresh"]):
+for command in (["migrate"], ["deploy"]):
     subprocess.run(
         ["etl-craft", *command],
         env={**os.environ, "ETL_CRAFT_TOKEN": operator.token},

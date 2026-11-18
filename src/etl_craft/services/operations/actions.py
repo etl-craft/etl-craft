@@ -52,12 +52,12 @@ from etl_craft.services.operations import (
     alert_channels,
     announcements,
     authorization,
-    bundles,
     capabilities,
     catalog,
     catalog_pages,
     config_files,
     controls,
+    deploy,
     diagnostics,
     documents,
     governance,
@@ -127,7 +127,6 @@ from etl_craft.services.operations.requests import (
 from etl_craft.services.operations.role_actions import ROLE_ACTIONS
 from etl_craft.services.operations.run_identity import resolve_run_reference
 from etl_craft.services.operations.run_labels import with_run_labels
-from etl_craft.services.operations.seed_actions import SEED_ACTIONS
 from etl_craft.services.operations.signin_actions import SIGN_IN_ACTIONS
 from etl_craft.services.operations.upload_actions import UPLOAD_ACTIONS
 from etl_craft.services.operations.visibility import visible_result
@@ -138,7 +137,7 @@ from etl_craft.services.validate import Report
 ON_HOST = "run it on the controller's host"
 CONFIG_ON_HOST = (
     "commit the config files to the project the controller deploys and run "
-    "`etl-craft config apply` there, by CI or an admin"
+    "`etl-craft deploy` there, by CI or an admin"
 )
 MIGRATION_ON_HOST = (
     "commit the migration to the project the controller deploys and run `etl-craft migrate` "
@@ -175,9 +174,9 @@ _ROWS = (
     Action(ActionName.AGENT_DOCTOR, agent_doctor.inspect, agent_doctor.AgentDoctor,
            agent_doctor.AgentImports, ApiRole.AGENT, POST, f"{API}/agent/doctor", REQUEST,
            scope=ActionScope.PROJECT),
-    Action(ActionName.BUNDLE_PUBLISH, bundles.publish, bundles.PublishBundle, bundles.BundleView,
-           DEVELOPER, POST, f"{API}/bundles", REQUEST, scope=ActionScope.PROJECT,
-           escalate=bundles.required_role),
+    Action(ActionName.DEPLOY, deploy.deploy, deploy.DeployInput, deploy.Deployment, DEVELOPER,
+           POST, f"{API}/deploy", REQUEST, scope=ActionScope.PROJECT,
+           escalate=deploy.required_role),
     Action(ActionName.AGENTS, agents.list_agents, NoInput, agents.AgentsView, VIEWER, GET,
            f"{API}/agents"),
     Action(ActionName.AGENT_CONTROL, agents.command, agent_models.AgentControl,
@@ -194,7 +193,7 @@ _ROWS = (
            agent_models.AgentReply, ApiRole.AGENT, POST, f"{API}/agent/report", BY_ACTION),
     Action(ActionName.AGENT_LOG, agent_logs.upload, agent_models.AgentLog,
            agent_models.AgentReply, ApiRole.AGENT, POST, f"{API}/agent/log"),
-    *UPLOAD_ACTIONS, *SEED_ACTIONS, *ERASURE_ACTIONS, *ROLE_ACTIONS,
+    *UPLOAD_ACTIONS, *ERASURE_ACTIONS, *ROLE_ACTIONS,
     *SIGN_IN_ACTIONS,
     Action(ActionName.WHOAMI, sessions.whoami, sessions.IdentityInput, sessions.Identity,
            VIEWER, GET, f"{API}/whoami"),
@@ -417,9 +416,6 @@ _ROWS = (
            scope=ActionScope.PROJECT),
     Action(ActionName.CONFIG_EXPORT, config_files.export_config, config_files.ConfigExportInput,
            ConfigExport, VIEWER, placement=HOST, remedy=CONFIG_ON_HOST,
-           scope=ActionScope.PROJECT),
-    Action(ActionName.CONFIG_APPLY, config_files.apply_config, config_files.ConfigDirectory,
-           ConfigSync, DEVELOPER, POST, f"{API}/config/apply", REQUEST,
            scope=ActionScope.PROJECT),
     Action(ActionName.SETUP_GRANTS, maintenance.grants, NoInput, maintenance.Grants, VIEWER,
            placement=HOST, remedy=ON_HOST),
@@ -648,14 +644,14 @@ def _project_context(ctx: OperationContext, action: Action, request: object) -> 
         and action.name
         not in {
             ActionName.CONFIG_PLAN,
-            ActionName.CONFIG_APPLY,
+            ActionName.DEPLOY,
             ActionName.CONFIG_EXPORT,
             ActionName.PURGE,
         }
     ):
         if ctx.role not in (ApiRole.ADMIN, ApiRole.AGENT):
             raise project_not_found(ctx.project)
-        if action.name in (ActionName.CONFIG_PLAN, ActionName.CONFIG_APPLY):
+        if action.name in (ActionName.CONFIG_PLAN, ActionName.DEPLOY):
             return ctx
         raise UsageError(
             f"project={ctx.project!r}; expected an active CFG_PROJECTS row; add it to "

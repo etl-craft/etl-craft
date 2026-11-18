@@ -32,7 +32,7 @@ def test_every_action_is_reachable_from_the_cli_or_a_route():
         (ActionName.CONTROL, ApiRole.OPERATOR),
         (ActionName.ACCOUNT_LIST, ApiRole.ADMIN),
         (ActionName.TOKEN_CREATE, ApiRole.ADMIN),
-        (ActionName.CONFIG_APPLY, ApiRole.DEVELOPER),
+        (ActionName.DEPLOY, ApiRole.DEVELOPER),
         (ActionName.RENAME, ApiRole.DEVELOPER),
         (ActionName.CONFIG_PLAN, ApiRole.VIEWER),
         (ActionName.CONFIG_EXPORT, ApiRole.VIEWER),
@@ -137,7 +137,7 @@ def test_pipeline_selections_use_pipeline_scope_and_identity_administration_stay
         assert ACTIONS[name].scope == ActionScope.DEPLOYMENT
 
 
-@pytest.mark.parametrize("name", [ActionName.CONFIG_APPLY, ActionName.RENAME])
+@pytest.mark.parametrize("name", [ActionName.DEPLOY, ActionName.RENAME])
 def test_metadata_identity_changes_require_project_management(name):
     assert ACTIONS[name].scope == ActionScope.PROJECT
     assert name in PROJECT_MANAGE_ACTIONS

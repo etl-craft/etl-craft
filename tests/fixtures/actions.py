@@ -34,7 +34,6 @@ def sample(hint):
 
 # Requests whose checks need more than one value of each required field's type.
 GIVEN = {
-    "PublishBundle": {"files": {"craft-connector.yml": "eA=="}},
     "ItemControl": {"item_key": "x"},
     "MarkRequest": {"status": RunStatus.SUCCESS},
     "ControlRequest": {"run_id": 1, "request_key": "k"},
@@ -56,3 +55,38 @@ def build(cls):
         and f.name not in GIVEN.get(cls.__name__, {})
     }
     return cls(**{**required, **GIVEN.get(cls.__name__, {})})
+
+
+def deploy_config(ctx: OperationContext, folder: object = None) -> object:
+    """Deploy ``folder``'s config files: copied into the project's ``config/``, then ``deploy``.
+
+    The project's files are sent when the deployment has an artifact store, as the CLI does; a
+    project with no ``craft-connector.yml`` on disk sends a minimal one naming its project.
+    """
+    import base64
+    import shutil
+    from pathlib import Path
+
+    from etl_craft.engine.project_files import collect
+
+    target = ctx.config.project_dir / "config"
+    if folder is not None and Path(str(folder)).resolve() != target.resolve():
+        shutil.rmtree(target, ignore_errors=True)
+        shutil.copytree(Path(str(folder)), target)
+    files: dict[str, str] = {}
+    if ctx.config.artifacts.store:
+        if (ctx.config.project_dir / "craft-connector.yml").is_file():
+            files = collect(ctx.config.project_dir)
+        else:
+            files = {"craft-connector.yml": connector_file(str(ctx.project))}
+            for path in sorted(target.glob("*.csv")):
+                files[f"config/{path.name}"] = base64.b64encode(path.read_bytes()).decode()
+    return act(ctx, ActionName.DEPLOY, files=files)
+
+
+def connector_file(project: str) -> str:
+    """A minimal ``craft-connector.yml`` naming ``project``, encoded as a deploy uploads it."""
+    import base64
+
+    text = f"Secrets: {{Source_type: ENVIRONMENT}}\nOrchestration: {{Project: {project}}}\n"
+    return base64.b64encode(text.encode()).decode()

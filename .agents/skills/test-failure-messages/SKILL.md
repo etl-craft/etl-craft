@@ -1,6 +1,6 @@
 ---
 name: test-failure-messages
-description: Test etl-craft's "fail rather than guess" rule - every bad metadata row, file, connection, credential, upload or data value fails before work starts, with a message naming the object, the value found, what was expected and the remedy, an exit code of its own class, and a record in the audit tables and the attempt log; nothing warns and continues. Use when a change adds or changes a validation, an error, a refusal, validate, doctor or config apply, or when auditing operability before a release.
+description: Test etl-craft's "fail rather than guess" rule - every bad metadata row, file, connection, credential, upload or data value fails before work starts, with a message naming the object, the value found, what was expected and the remedy, an exit code of its own class, and a record in the audit tables and the attempt log; nothing warns and continues. Use when a change adds or changes a validation, an error, a refusal, validate, doctor or deploy, or when auditing operability before a release.
 ---
 
 # Test failure messages
@@ -20,7 +20,7 @@ run continue on a guess is a defect, even when the run succeeds.
 - **Assert where it is recorded.** A refusal of a request has its audit row; a failed attempt
   has the message in `AUD_` and in the attempt log.
 - **Assert it failed early.** Nothing was written: no run, no attempt, no target change, no
-  partial file. The earliest place that can know (`validate`, `doctor`, `config apply`, the
+  partial file. The earliest place that can know (`validate`, `doctor`, `deploy`, the
   request check) refuses it.
 - **Prove the test bites:** replace the refusal with a warning and see the test fail.
 
@@ -46,8 +46,8 @@ Each row: the bad input, and the command that must refuse it.
 | A SQL file with no SELECT, two statements or a write | `validate`, `SqlGuardError` |
 | Unknown target, schema or column; a type that cannot hold the source | `validate` |
 | A dependency on an unknown or inactive task or pipeline; a cycle | `validate`, `GraphError` |
-| Unknown `PIPELINE_PARAMETERS` key or task parameter; a bad Y/N flag | `validate`, `config apply` |
-| A config CSV with an unknown column, a duplicate key or a missing required value | `config apply` |
+| Unknown `PIPELINE_PARAMETERS` key or task parameter; a bad Y/N flag | `validate`, `deploy` |
+| A config CSV with an unknown column, a duplicate key or a missing required value | `deploy` |
 | A missing environment variable named in `craft-connector.yml`; a literal secret | `doctor`, load |
 | An unreachable warehouse or expired credential | `doctor`, attempt start |
 | An unwritable logs or uploads directory, a full disk | attempt start (S7.P) |

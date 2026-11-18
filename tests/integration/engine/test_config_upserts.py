@@ -12,7 +12,7 @@ from etl_craft.core.errors import ExitCode, MetadataFileError
 from etl_craft.dialects.engine import for_engine
 from etl_craft.engine.repository.config_rows import TABLES
 from etl_craft.services.operations import OperationContext
-from fixtures.actions import act
+from fixtures.actions import act, deploy_config
 from fixtures.metadata import add_pipeline
 
 DEPLOYER = Actor("deployer", ActorKind.USER)
@@ -34,7 +34,9 @@ def write(folder: Path, name: str, header: str, rows: list[tuple]) -> None:
 
 def apply(project, folder, *, plan=False):
     ctx = OperationContext(project.engine, project.config, DEPLOYER, role=ApiRole.ADMIN)
-    return act(ctx, ActionName.CONFIG_PLAN if plan else ActionName.CONFIG_APPLY, config_dir=folder)
+    if plan:
+        return act(ctx, ActionName.CONFIG_PLAN, config_dir=folder)
+    return deploy_config(ctx, folder).config
 
 
 def snapshot(project):
@@ -185,7 +187,7 @@ def test_new_inactive_key_fails_without_writes(populated, tmp_path):
                 "SELECT ACTOR AS actor, OUTCOME AS outcome FROM AUD_ACTIONS "
                 "WHERE COMMAND=:command ORDER BY ACTION_ID"
             ),
-            {"command": ActionName.CONFIG_APPLY},
+            {"command": ActionName.DEPLOY},
         ).all()
     assert [row.actor for row in requests] == [DEPLOYER.name, DEPLOYER.name]
     assert [row.outcome for row in requests] == ["REQUESTED", "FAILURE"]
@@ -204,7 +206,7 @@ def test_empty_folder_names_nothing_to_apply(populated, tmp_path):
     folder = tmp_path / "empty"
     folder.mkdir()
     with pytest.raises(MetadataFileError) as caught:
-        apply(populated, folder)
+        apply(populated, folder, plan=True)
     assert str(folder) in str(caught.value) and "nothing to apply" in str(caught.value)
 
 

@@ -109,8 +109,8 @@ def run_demo(config: Path) -> tuple[str, ...]:
                     writer = csv.DictWriter(stream, fieldnames=list(rows[0]), lineterminator="\n")
                     writer.writeheader()
                     writer.writerows(rows)
-            command(project_file, "config", "plan")
-            command(project_file, "config", "apply")
+            command(project_file, "deploy", "--plan")
+            command(project_file, "deploy")
             command(
                 project_file,
                 "run",

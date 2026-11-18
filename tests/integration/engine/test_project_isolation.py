@@ -16,7 +16,7 @@ from etl_craft.services.operations import OperationContext
 from etl_craft.services.operations.actions import ACTIONS, action_path, invoke
 from etl_craft.services.operations.permissions import pipeline_access
 from etl_craft.services.operations.serialization import encode
-from fixtures.actions import act, build
+from fixtures.actions import act, build, connector_file, deploy_config
 from fixtures.metadata import add_pipeline
 
 OWNER = Actor("owner", ActorKind.USER)
@@ -181,12 +181,19 @@ def test_project_edit_and_dependency_permissions(isolation, tmp_path):
     )
     for name, role in (("reader", ApiRole.VIEWER), ("operator", ApiRole.OPERATOR)):
         ctx = caller(admin, name, role)
-        for action in (ActionName.CONFIG_PLAN, ActionName.CONFIG_APPLY):
-            with pytest.raises(PermissionDeniedError, match="CAN_MANAGE"):
-                act(ctx, action, config_dir=folder)
+        with pytest.raises(PermissionDeniedError, match="CAN_MANAGE"):
+            act(ctx, ActionName.CONFIG_PLAN, config_dir=folder)
+        with pytest.raises(PermissionDeniedError):
+            deploy_config(ctx, folder)
+    # An admin approves the project's connection contract once; managers deploy from then on.
+    act(
+        caller(admin, "owner", ApiRole.ADMIN),
+        ActionName.DEPLOY,
+        files={"craft-connector.yml": connector_file("sales")},
+    )
     manager = caller(admin, "manager")
     with pytest.raises(ResourceNotFoundError) as caught:
-        act(manager, ActionName.CONFIG_APPLY, config_dir=folder)
+        deploy_config(manager, folder)
     for part in ("pipeline_dependencies.csv line 2", "sales", "finance", "CAN_VIEW", "manager"):
         assert part in str(caught.value)
     (folder / "pipeline_dependencies.csv").write_text(
@@ -194,7 +201,7 @@ def test_project_edit_and_dependency_permissions(isolation, tmp_path):
         "OPEN,missing,OPEN,SUCCESS\n"
     )
     with pytest.raises(ResourceNotFoundError) as missing:
-        act(manager, ActionName.CONFIG_APPLY, config_dir=folder)
+        deploy_config(manager, folder)
     assert str(caught.value).replace("'finance'", "'selected'") == str(missing.value).replace(
         "'missing'", "'selected'"
     )
@@ -203,11 +210,16 @@ def test_project_edit_and_dependency_permissions(isolation, tmp_path):
         "OPEN,finance,OPEN,SUCCESS\n"
     )
     grant(admin, "finance", "manager", Permission.CAN_VIEW)
-    done = act(manager, ActionName.CONFIG_APPLY, config_dir=folder)
+    done = deploy_config(manager, folder).config
     assert done.applied and not done.failed, done.findings
-    assert act(manager, ActionName.CONFIG_APPLY, config_dir=folder).changes == ()
+    assert deploy_config(manager, folder).config.changes == ()
     from fixtures.metadata import add_task, start_run
 
+    act(
+        caller(admin, "owner", ApiRole.ADMIN, project="finance"),
+        ActionName.DEPLOY,
+        files={"craft-connector.yml": connector_file("finance")},
+    )
     with acting_as(OWNER), admin.engine.begin() as conn:
         project = conn.execute(
             text("SELECT PROJECT_ID AS project_id FROM CFG_PROJECTS WHERE PROJECT_CODE='finance'")

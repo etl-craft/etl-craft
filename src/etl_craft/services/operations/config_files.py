@@ -1,4 +1,7 @@
-"""``etl-craft config``: plan, apply and export the project's config files as the caller."""
+"""``etl-craft config``: plan and export the project's config files as the caller.
+
+``deploy`` applies them, through :func:`sync_folder`.
+"""
 
 from __future__ import annotations
 
@@ -75,7 +78,7 @@ def _config_folder(
             raise UsageError(
                 "config over the API reads a published bundle: expected bundle=latest or a "
                 "bundle id, since a folder is a path on the server's host; run `etl-craft "
-                "bundle publish`, then `etl-craft config apply --bundle latest`"
+                "deploy`, then `etl-craft config plan --bundle latest`"
             )
         return config_files.config_directory(ctx.config, request.config_dir), None, ctx.config
     with ctx.engine.connect() as conn:
@@ -95,28 +98,23 @@ def plan_config(ctx: OperationContext, request: ConfigDirectory) -> config_files
     return _sync(ctx, request, apply=False)
 
 
-def apply_config(ctx: OperationContext, request: ConfigDirectory) -> config_files.ConfigSync:
-    """Merge submitted ``CFG_`` changes, unless ``validate`` fails the result."""
-    result = _sync(ctx, request, apply=True)
-    if result.failed:
-        return result
-    from etl_craft.core.enums import ActionName
-    from etl_craft.services.operations.actions import invoke
-    from etl_craft.services.operations.pipeline_refresh import RefreshInput
-    from etl_craft.services.refresh_models import RefreshResults
-
-    pinned = result.directory.removeprefix("bundle ") if request.bundle is not None else None
-    checked = invoke(ctx, ActionName.PIPELINE_REFRESH, RefreshInput(bundle=pinned))
-    assert isinstance(checked, RefreshResults)
-    return replace(result, refreshes=checked.refreshes)
-
-
 def _sync(
     ctx: OperationContext, request: ConfigDirectory, *, apply: bool
 ) -> config_files.ConfigSync:
-    """Capture tag effects in the same locked snapshot used to validate submitted changes."""
     target, bundle_id, config = _config_folder(ctx, request)
-    files = config_files.read_config_files(target)
+    return sync_folder(ctx, target, config, bundle_id, apply=apply)
+
+
+def sync_folder(
+    ctx: OperationContext,
+    folder: Path,
+    config: ConnectorConfig,
+    bundle_id: str | None,
+    *,
+    apply: bool,
+) -> config_files.ConfigSync:
+    """Merge (or plan) one folder's config files; tag effects use the validating snapshot."""
+    files = config_files.read_config_files(folder)
     changes: list[TagAccessChange] = []
 
     def authorize(conn: Connection, completed: config_files.ConfigFiles) -> None:
@@ -211,7 +209,7 @@ def check_dependencies(
     conn: Connection, files: config_files.ConfigFiles, *, ctx: OperationContext
 ) -> None:
     """Recheck deployment rights and upstream project access before publishing file changes."""
-    if not allows(ctx, ActionName.CONFIG_APPLY, ConfigDirectory(), conn=conn):
+    if not allows(ctx, ActionName.DEPLOY, ConfigDirectory(), conn=conn):
         require_project(conn, ctx, Permission.CAN_MANAGE)
     for filename in ("pipeline_dependencies.csv", "task_dependencies.csv"):
         for row in files.rows.get(filename, {}).values():
