@@ -6,6 +6,17 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+- Access is decided by one evaluator over stored action sets. The built-in `CAN_VIEW`,
+  `CAN_UPLOAD`, `CAN_RUN` and `CAN_MANAGE` roles store their actions in `CFG_ROLE_ACTIONS` like
+  custom roles (`role describe` shows them; they cannot be changed). Grants only add: a pipeline
+  or tag grant raises access on that pipeline and no longer hides it from accounts with project
+  access, and a pipeline or tag grant alone now opens its project, limited to that pipeline.
+  `CAN_VIEW` alone is refused `upload` at admission (the upload itself already required
+  `CAN_UPLOAD`); a batch control needs the action on every pipeline it names; an action escalated
+  to admin (such as an Engine DB migration) is refused to custom roles too. `config plan` and
+  `config apply` no longer report open/restricted switches: `tag_access_changes` entries drop
+  `was_restricted`, `is_restricted` and `policy_change`.
+
 - Both Engine DB `schema.sql` files are regenerated as the schema itself rather than a log of
   migrations: one `CREATE TABLE` per table with its comment and indexes, then functions, built-in
   rows and triggers. A fresh `init-db` builds the same catalog as before; the built-in history rows

@@ -16,7 +16,7 @@ from etl_craft.engine import transitions
 from etl_craft.services.operations import OperationContext
 from etl_craft.services.operations.identity import authenticated_context
 from fixtures.actions import act
-from fixtures.metadata import add_pipeline, add_task, start_run
+from fixtures.metadata import add_pipeline, add_task, hide_from_viewers, start_run
 
 OWNER = Actor("owner", ActorKind.USER)
 
@@ -73,12 +73,7 @@ def test_project_health_matches_independent_audit_counts_and_window_edges(reads,
             run = start_run(conn, pipeline)
             summary = transitions.find_or_create_task_run(conn, task, run).task_run_id
             transitions.queue_attempt(conn, summary, OWNER)
-        conn.execute(
-            text(
-                "INSERT INTO CFG_ACCESS_BINDINGS (PROJECT_ID,PIPELINE_CODE,GRANTEE_ROLE,ROLE_NAME) "
-                "VALUES (1,'HIDDEN','operator','CAN_VIEW')"
-            )
-        )
+        hide_from_viewers(conn, "HIDDEN")
         conn.execute(
             text(
                 "INSERT INTO CFG_PROJECTS (PROJECT_CODE,PROJECT_NAME,DEFAULT_POOL) SELECT "
@@ -209,12 +204,8 @@ def test_catalog_refuses_symlinks_and_pipeline_limited_accounts(reads, tmp_path)
         act(reader, ActionName.CATALOG_PAGE, path="inside.html")
     with acting_as(OWNER), owner.engine.begin() as conn:
         add_pipeline(conn, "PRIVATE")
-        conn.execute(
-            text(
-                "INSERT INTO CFG_ACCESS_BINDINGS (PROJECT_ID,PIPELINE_CODE,GRANTEE_ROLE,ROLE_NAME) "
-                "VALUES (1,'PRIVATE','operator','CAN_VIEW')"
-            )
-        )
+        add_pipeline(conn, "OPEN")
+        hide_from_viewers(conn, "PRIVATE")
     with pytest.raises(PermissionDeniedError, match=r"every pipeline.*limited.*whole-project"):
         act(reader, ActionName.CATALOG_PAGE)
 

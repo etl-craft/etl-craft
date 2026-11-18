@@ -1956,6 +1956,77 @@ INSERT INTO CFG_ROLES (ROLE_NAME, DESCRIPTION, BUILT_IN_FLAG) VALUES
     ('CAN_RUN', 'CAN_UPLOAD and start, stop and recover runs', 'Y'),
     ('CAN_MANAGE', 'CAN_RUN and manage access and definitions', 'Y');
 
+-- CAN_VIEW and every higher built-in role read pipelines, runs, logs and the catalog.
+INSERT INTO CFG_ROLE_ACTIONS (ROLE_ID, ACTION_NAME)
+SELECT r.ROLE_ID, v.column1 FROM CFG_ROLES r, (VALUES
+    ('attempt'),
+    ('audit'),
+    ('capabilities'),
+    ('catalog gaps'),
+    ('catalog page'),
+    ('control-request'),
+    ('data provenance'),
+    ('docs-version check'),
+    ('explain'),
+    ('graph'),
+    ('history'),
+    ('insights'),
+    ('items'),
+    ('lineage'),
+    ('logs'),
+    ('offset'),
+    ('pipeline'),
+    ('pipeline refresh history'),
+    ('pipelines'),
+    ('rehash plan'),
+    ('run detail'),
+    ('run log'),
+    ('run zip'),
+    ('search'),
+    ('status'),
+    ('steps'),
+    ('task'),
+    ('upload pipelines'),
+    ('uploads'),
+    ('validate')
+) v
+WHERE r.ROLE_NAME IN ('CAN_VIEW', 'CAN_UPLOAD', 'CAN_RUN', 'CAN_MANAGE');
+
+-- CAN_UPLOAD and higher also upload stewarded files.
+INSERT INTO CFG_ROLE_ACTIONS (ROLE_ID, ACTION_NAME)
+SELECT r.ROLE_ID, v.column1 FROM CFG_ROLES r, (VALUES
+    ('upload')
+) v
+WHERE r.ROLE_NAME IN ('CAN_UPLOAD', 'CAN_RUN', 'CAN_MANAGE');
+
+-- CAN_RUN and higher also start, stop, mark and recover runs.
+INSERT INTO CFG_ROLE_ACTIONS (ROLE_ID, ACTION_NAME)
+SELECT r.ROLE_ID, v.column1 FROM CFG_ROLES r, (VALUES
+    ('control'),
+    ('control bulk'),
+    ('item control'),
+    ('mark'),
+    ('reconcile'),
+    ('run'),
+    ('trigger-pipeline')
+) v
+WHERE r.ROLE_NAME IN ('CAN_RUN', 'CAN_MANAGE');
+
+-- CAN_MANAGE also manages access and the project's definitions.
+INSERT INTO CFG_ROLE_ACTIONS (ROLE_ID, ACTION_NAME)
+SELECT r.ROLE_ID, v.column1 FROM CFG_ROLES r, (VALUES
+    ('access grant'),
+    ('access revoke'),
+    ('bundle publish'),
+    ('config apply'),
+    ('config plan'),
+    ('generate-docs'),
+    ('migrate'),
+    ('pipelines refresh'),
+    ('rename')
+) v
+WHERE r.ROLE_NAME IN ('CAN_MANAGE');
+
 INSERT INTO CFG_ACCESS_BINDINGS (PROJECT_ID, GRANTEE_ROLE, ROLE_NAME) VALUES
     (1, 'viewer', 'CAN_VIEW'),
     (1, 'operator', 'CAN_RUN');

@@ -196,23 +196,24 @@ Groups are managed with `etl-craft group add --name sales`, `group disable`, `gr
 --name sales --account alice`, `group remove-member` and `group list`, under `/api/v1/groups`.
 Group identities and memberships are retired with `ACTIVE_FLAG=N`, never deleted.
 
-Project access is default deny. Deployment admins have CAN_MANAGE everywhere. Other accounts
-need a matching project built-in binding to use built-in pipeline or tag levels. A custom
-pipeline or tag binding includes read access to that scope and its project container, without
-revealing other pipelines. Missing and
+Project access is default deny. Deployment admins hold every action everywhere. Every other
+access comes from bindings: a built-in `CAN_*` role, a custom role or one named action, granted
+to an account, a group or an audience on the deployment, an environment type, a project, or one
+of its pipelines or tags. Each role is a stored set of actions; `etl-craft role describe CAN_RUN`
+lists the built-in ones, which cannot be changed. One evaluator decides every request from them.
+
+Grants only add. A pipeline's actions are those of every binding that reaches it, project-wide
+or on the pipeline or one of its tags, so granting one person access to a pipeline never hides it
+from anyone else. Any binding in a project makes the project visible, limited to what the binding
+reaches: a pipeline or tag grant alone shows that pipeline and nothing else. Missing and
 inaccessible projects answer identically, as do missing and inaccessible pipelines (exit 24,
-HTTP 404). Lists and searches omit hidden objects.
+HTTP 404). Lists and searches omit hidden objects. An action a visible pipeline's bindings do not
+include is a permission refusal (exit 26 / HTTP 403). Disabled groups' grants stop applying, and
+revocation takes effect on the next request, without a cache.
 
-Project CAN_MANAGE covers every pipeline in that project. Otherwise an open pipeline (no active
-pipeline/tag grants) uses the account's project level. A restricted pipeline uses only its
-highest matching pipeline/tag grant, with no project-level fallback; no match means hidden.
-Disabled groups' active grants keep pipelines restricted. Revocation takes effect on the next
-request, without a cache. Revoking the last active pipeline/tag grant restores the project-level
-fallback. An insufficient level on a visible object is a permission refusal (exit 26 / HTTP 403).
-
-Tags remain the only pipeline grouping. Config plan/apply report grants starting or stopping
-their match after tag edits, and open/restricted switches, in text and JSON. This is a report
-only; it does not enumerate accounts or change grant rows.
+Tags remain the only pipeline grouping. Config plan/apply report the tag grants a tag edit makes
+start or stop matching a pipeline, in text and JSON. This is a report only; it does not enumerate
+accounts or change grant rows.
 
 Every authenticated account has a deployment role; service tokens and SSO sessions use that
 account role. Projects created with `project add` have no grants: an admin must grant access
@@ -220,7 +221,7 @@ explicitly.
 
 `config plan`, `config apply`, project migrations, `bundle publish` and `generate-docs` require
 project CAN_MANAGE. A full config export requires CAN_VIEW on every pipeline, so it cannot
-disclose a restricted pipeline. Engine migrations and changed connection approvals still require
+disclose a pipeline the account cannot see. Engine migrations and changed connection approvals still require
 deployment admin. Declaring a cross-project dependency also requires CAN_VIEW on the upstream project.
 Without upstream access, a recorded dependency reveals only its project/pipeline code and
 decision, never upstream runs, logs or data. Incoming dependents are shown only when both sides

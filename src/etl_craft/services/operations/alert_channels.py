@@ -13,7 +13,7 @@ from etl_craft.engine.alert_channels import AlertChannel
 from etl_craft.engine.queries import statement
 from etl_craft.services.operations.access_inputs import project
 from etl_craft.services.operations.admin_metadata import reason
-from etl_craft.services.operations.bindings import allows
+from etl_craft.services.operations.authorization import allows
 from etl_craft.services.operations.context import OperationContext
 from etl_craft.services.operations.requests import Request
 

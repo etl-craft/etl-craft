@@ -21,7 +21,6 @@ from etl_craft.core.enums import (
     Transport,
     YesNo,
 )
-from etl_craft.core.enums_access import Permission
 from etl_craft.core.errors import (
     ConfigurationError,
     PermissionDeniedError,
@@ -52,7 +51,7 @@ from etl_craft.services.operations import (
     agents,
     alert_channels,
     announcements,
-    bindings,
+    authorization,
     bundles,
     capabilities,
     catalog,
@@ -89,11 +88,13 @@ from etl_craft.services.operations import (
 )
 from etl_craft.services.operations.action_types import Action as Action
 from etl_craft.services.operations.agent_uploads import attempt_request
+from etl_craft.services.operations.authorization import (
+    PROJECT_MANAGE_ACTIONS as PROJECT_MANAGE_ACTIONS,
+)
 from etl_craft.services.operations.context import OperationContext
 from etl_craft.services.operations.erasure_actions import ERASURE_ACTIONS
 from etl_craft.services.operations.permissions import has_role as has_role
 from etl_craft.services.operations.permissions import (
-    pipeline_access,
     project_not_found,
     require_child_groups,
     require_project,
@@ -437,18 +438,6 @@ _ROWS = (
            placement=HOST, remedy=STARTED_ON_HOST, scope=ActionScope.PROJECT),
 )  # fmt: skip
 
-PROJECT_MANAGE_ACTIONS = frozenset(
-    {
-        ActionName.RENAME,
-        ActionName.CONFIG_PLAN,
-        ActionName.PIPELINE_REFRESH,
-        ActionName.CONFIG_APPLY,
-        ActionName.MIGRATE,
-        ActionName.BUNDLE_PUBLISH,
-        ActionName.GENERATE_DOCS,
-    }
-)
-
 ACTIONS: dict[ActionName, Action] = {row.name: row for row in _ROWS}
 """Every action, by name."""
 
@@ -471,7 +460,7 @@ def admitted(ctx: OperationContext, name: ActionName, request: object) -> Iterat
         required = action.required_role(ctx, request)
         try:
             authorize_identity(ctx, action, request)
-            bindings.authorize(ctx, action, request, required)
+            authorization.authorize(ctx, action, request, required)
         except (PermissionDeniedError, ResourceNotFoundError) as error:
             record_refusal(ctx, name, given, error)
             raise
@@ -490,70 +479,6 @@ def authorize_identity(ctx: OperationContext, action: Action, request: object) -
     _require_project_identity(ctx, action, request)
 
 
-def authorize_base(
-    ctx: OperationContext, action: Action, request: object, required: ApiRole | None
-) -> None:
-    """Apply the account role and built-in level policy before custom bindings."""
-    if ApiRole.AGENT in {ctx.role, required}:
-        _require_role(ctx, action, required)
-        return
-    if ctx.role == ApiRole.ADMIN or (action.provisioning and ctx.provisioning):
-        return
-    scoped = action.scope != ActionScope.DEPLOYMENT or isinstance(request, access.AccessFilter)
-    wide = isinstance(request, access.AccessFilter) and request.reaches_beyond_project
-    if scoped and not wide:
-        with ctx.engine.connect() as conn:
-            needed = (
-                Permission.CAN_MANAGE
-                if action.name in PROJECT_MANAGE_ACTIONS
-                else Permission.CAN_VIEW
-            )
-            require_project(conn, ctx, needed)
-        if action.name in PROJECT_MANAGE_ACTIONS and required != ApiRole.ADMIN:
-            return
-    if _authorize_pipeline(ctx, action, request, required):
-        return
-    _require_role(ctx, action, required)
-
-
-def _authorize_pipeline(
-    ctx: OperationContext, action: Action, request: object, required: ApiRole | None
-) -> bool:
-    """Apply pipeline grants without granting deployment-wide privileges."""
-    if action.scope == ActionScope.PIPELINE and required is not None:
-        if isinstance(request, ReconcileInput) and request.attest_ended:
-            return False
-        if action.name == ActionName.LINEAGE_REFRESH:
-            _require_role(ctx, action, required)
-            required = ApiRole.VIEWER
-        with ctx.engine.connect() as conn:
-            policy = pipeline_access(conn, ctx)
-            if isinstance(request, BulkControlRequest):
-                if has_role(ctx.role, required) or any(
-                    policy.permits(selection.pipeline_code, required)
-                    for selection in request.requests
-                ):
-                    return True
-                policy.require(ctx, request.requests[0].pipeline_code, required)
-            codes = bindings.request_codes(conn, action, request)
-            for selected in codes:
-                policy.require(ctx, selected, required)
-            if codes:
-                return True
-            if action.name in (ActionName.RECONCILE, ActionName.LINEAGE_REFRESH):
-                if any(not policy.permits(code, required) for code in policy.roles):
-                    raise PermissionDeniedError(
-                        f"account {ctx.actor.name!r}: {action.name} requires {required} role "
-                        f"on every pipeline in project {ctx.project!r}; ask its project manager "
-                        "for the required permission or select an accessible pipeline"
-                    )
-                if policy.roles:
-                    return True
-            if not codes and required == ApiRole.VIEWER and ctx.role is not None:
-                return True
-    return False
-
-
 def _require_project_identity(ctx: OperationContext, action: Action, request: object) -> None:
     """Require an exact run or attempt id to belong to the selected project."""
     if (
@@ -565,7 +490,7 @@ def _require_project_identity(ctx: OperationContext, action: Action, request: ob
         and getattr(request, "pipeline_code", None) is None
     ):
         with ctx.engine.connect() as conn:
-            if not bindings.request_codes(conn, action, request):
+            if not authorization.request_codes(conn, action, request):
                 raise ResourceNotFoundError(
                     f"project {ctx.project!r}: requested execution identity is outside this "
                     "project or missing; expected an identity in the selected project; "
@@ -573,21 +498,11 @@ def _require_project_identity(ctx: OperationContext, action: Action, request: ob
                 )
 
 
-def _require_role(ctx: OperationContext, action: Action, required: ApiRole | None) -> None:
-    """Refuse both insufficient account roles and a different credential protocol."""
-    if not has_role(ctx.role, required):
-        raise PermissionDeniedError(
-            f"account {ctx.actor.name!r}: role={ctx.role or 'unproven'}; action '{action.name}': "
-            f"{required} role is required; ask an administrator to grant {required} or a higher "
-            "role"
-        )
-
-
 def _require_trigger_groups(ctx: OperationContext, action: Action, request: object) -> None:
     """Check retained groups even when the initiating account is currently an admin."""
     if isinstance(request, triggers.TriggerRequest) and ctx.sso_group_ids:
         with ctx.engine.connect() as conn:
-            for selected in bindings.request_codes(conn, action, request):
+            for selected in authorization.request_codes(conn, action, request):
                 require_child_groups(conn, ctx, selected)
 
 
@@ -693,11 +608,11 @@ def _access_project(ctx: OperationContext, request: object) -> OperationContext:
 
 
 def _require_project_access(conn: Connection, ctx: OperationContext, action: Action) -> None:
-    """Keep hidden projects masked unless a whole-scope custom binding allows the action."""
+    """Keep hidden projects masked unless a project-wide binding there holds the action."""
     try:
         require_project(conn, ctx)
     except ResourceNotFoundError:
-        if not bindings.allows(ctx, action.name, NoInput(), conn=conn):
+        if action.name not in authorization.held(conn, ctx, ctx.project_id).project:
             raise
 
 

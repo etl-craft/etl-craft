@@ -322,7 +322,7 @@ def test_remote_controls_follow_the_role_and_record_refusals(server, monkeypatch
     monkeypatch.setenv("ETL_CRAFT_TOKEN", server["service"]["viewer"])
     code, _, err = run(capsys, "pause", "--pipeline-code", "P", "--reason", "x", "--api", url)
     assert code == ExitCode.PERMISSION_DENIED
-    assert "pipeline 'P' needs operator role" in err
+    assert "pipeline 'P': action 'control' needs operator role" in err
     assert "permission" in err
     with ctx.engine.connect() as conn:
         refused = conn.execute(

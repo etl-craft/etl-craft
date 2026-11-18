@@ -107,38 +107,15 @@ def deployment_only(action: ActionName) -> bool:
     return ACTIONS[action].scope == ActionScope.DEPLOYMENT
 
 
-def built_in_actions(permission: Permission) -> tuple[str, ...]:
-    """Describe what a built-in CAN_* role allows, from the same rules authorization applies."""
-    from etl_craft.services.operations.actions import ACTIONS, PROJECT_MANAGE_ACTIONS
-
-    level = tuple(Permission).index(permission)
-    allowed = {ApiRole.VIEWER} | ({ApiRole.OPERATOR} if level >= 2 else set())
-    names = {
-        name
-        for name, spec in ACTIONS.items()
-        if spec.scope != ActionScope.DEPLOYMENT
-        and spec.role in allowed
-        and spec.placement == Placement.ANYWHERE
-        and name not in PROJECT_MANAGE_ACTIONS
-        and (name != ActionName.UPLOAD or level >= 1)
-    }
-    if permission == Permission.CAN_MANAGE:
-        names |= set(PROJECT_MANAGE_ACTIONS) | ADMIN_ONLY
-    return tuple(sorted(names))
-
-
 def role_actions(conn: Connection) -> dict[str, tuple[str, ...]]:
-    """Return retained roles' configured actions, built-in levels included."""
+    """Return every retained role's stored actions; built-in roles store theirs too."""
     by_id: dict[int, list[str]] = {}
     for row in conn.execute(statement(conn, "role_actions")):
         by_id.setdefault(int(row.role_id), []).append(str(row.action_name))
-    result = {}
-    for row in conn.execute(statement(conn, "role_list")):
-        if row.built_in == YesNo.YES:
-            result[str(row.name)] = built_in_actions(Permission(row.name))
-        else:
-            result[str(row.name)] = tuple(by_id.get(int(row.role_id), ()))
-    return result
+    return {
+        str(row.name): tuple(sorted(by_id.get(int(row.role_id), ())))
+        for row in conn.execute(statement(conn, "role_list"))
+    }
 
 
 def list_roles(ctx: OperationContext, request: NoInput) -> Roles:

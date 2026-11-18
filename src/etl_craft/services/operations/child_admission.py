@@ -11,7 +11,7 @@ from etl_craft.core.errors import PermissionDeniedError, ResourceNotFoundError
 from etl_craft.engine.queries import statement
 from etl_craft.engine.repository.group_claims import decode_groups
 from etl_craft.execution.attempt_types import ChildOptions
-from etl_craft.services.operations.bindings import allows
+from etl_craft.services.operations.authorization import allows
 from etl_craft.services.operations.context import OperationContext
 from etl_craft.services.operations.permissions import (
     pipeline_access,

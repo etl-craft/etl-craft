@@ -18,7 +18,7 @@ from etl_craft.engine.bundles import Bundle
 from etl_craft.engine.queries import statement
 from etl_craft.services import config_files
 from etl_craft.services.config_models import TagAccessChange
-from etl_craft.services.operations.bindings import allows
+from etl_craft.services.operations.authorization import allows
 from etl_craft.services.operations.context import OperationContext
 from etl_craft.services.operations.permissions import (
     pipeline_access,

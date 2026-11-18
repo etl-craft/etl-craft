@@ -13,7 +13,7 @@ from etl_craft.core.time import as_utc
 from etl_craft.engine import transitions
 from etl_craft.services.operations.identity import authenticated_context
 from fixtures.actions import act
-from fixtures.metadata import add_pipeline, add_task, start_run
+from fixtures.metadata import add_pipeline, add_task, hide_from_viewers, start_run
 from fixtures.run_scene import OWNER, seed
 
 
@@ -133,12 +133,7 @@ def test_window_filters_and_visibility(scene, engine_db):
     token = act(ctx, ActionName.TOKEN_CREATE, name="reader", role=ApiRole.VIEWER)
     reader = authenticated_context(ctx, token.metadata)
     with acting_as(OWNER), engine_db.engine.begin() as conn:
-        conn.execute(
-            text(
-                "INSERT INTO CFG_ACCESS_BINDINGS (PROJECT_ID,PIPELINE_CODE,GRANTEE_ROLE,ROLE_NAME) "
-                "VALUES (1,'SALES','operator','CAN_VIEW')"
-            )
-        )
+        hide_from_viewers(conn, "SALES")
     hidden = act(reader, ActionName.INSIGHTS)
     assert hidden.pipelines == ("ORDERS",)
     with pytest.raises(UsageError, match="SALES"):

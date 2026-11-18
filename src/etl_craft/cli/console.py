@@ -24,8 +24,8 @@ from etl_craft.cli.prompts import CONSOLE
 from etl_craft.core.enums import ActionName, ApiRole
 from etl_craft.core.errors import EtlCraftError, ExitCode, UsageError
 from etl_craft.services.operations import OperationContext
-from etl_craft.services.operations.actions import ACTIONS, has_role
-from etl_craft.services.operations.permissions import pipeline_access
+from etl_craft.services.operations.actions import ACTIONS
+from etl_craft.services.operations.authorization import held_anywhere
 
 KEPT_IN_FILES = frozenset(
     {
@@ -74,23 +74,13 @@ def _reachable(command: Command) -> bool:
     )
 
 
-def _best_role(caller: OperationContext) -> ApiRole | None:
-    """Return the highest role the caller holds: the account's, or one a pipeline grant gives."""
-    with caller.engine.connect() as conn:
-        granted = [role for role in pipeline_access(conn, caller).roles.values() if role]
-    roles = [role for role in (caller.role, *granted) if role is not None]
-    return max(roles, key=tuple(ApiRole).index, default=None)
-
-
 def allowed(caller: OperationContext) -> tuple[Command, ...]:
     """Return the console commands at least one of whose actions the caller may run."""
-    role = _best_role(caller)
-    return tuple(
-        command
-        for command in COMMANDS
-        if _reachable(command)
-        and any(has_role(role, ACTIONS[name].role) for name in command.actions)
+    reachable = tuple(command for command in COMMANDS if _reachable(command))
+    held = held_anywhere(
+        caller, frozenset(name for command in reachable for name in command.actions)
     )
+    return tuple(command for command in reachable if held & set(command.actions))
 
 
 def listed(caller: OperationContext) -> Mapping[str, tuple[str, ...]]:

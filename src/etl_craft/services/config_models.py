@@ -71,13 +71,10 @@ class TagGrantMatch:
 
 @dataclass(frozen=True)
 class TagAccessChange:
-    """Grant matches and open/restricted policy changed by a submitted tag edit."""
+    """Tag grants a submitted tag edit makes start or stop matching one pipeline."""
 
     pipeline: str
-    was_restricted: bool
-    is_restricted: bool
     grants: tuple[TagGrantMatch, ...]
-    policy_change: str | None = None
 
 
 @dataclass(frozen=True)

@@ -12,7 +12,7 @@ from etl_craft.core.enums import ActionName, ApiRole, YesNo
 from etl_craft.core.errors import PermissionDeniedError, UsageError
 from etl_craft.services.operations import OperationContext
 from fixtures.actions import act
-from fixtures.metadata import add_pipeline, add_table, add_task
+from fixtures.metadata import add_pipeline, add_table, add_task, hide_from_viewers
 
 OWNER = Actor("owner", ActorKind.USER)
 
@@ -73,7 +73,6 @@ def test_on_demand_checks_refused_when_off_but_the_schedule_still_runs(project):
 
 
 def test_insights_reads_the_stored_check_only_for_whole_project_viewers(project, engine_db):
-    from sqlalchemy import text
 
     from etl_craft.services.operations.identity import authenticated_context
 
@@ -85,10 +84,5 @@ def test_insights_reads_the_stored_check_only_for_whole_project_viewers(project,
     reader = authenticated_context(ctx, token.metadata)
     with acting_as(OWNER), engine_db.engine.begin() as conn:
         add_pipeline(conn, "HIDDEN")
-        conn.execute(
-            text(
-                "INSERT INTO CFG_ACCESS_BINDINGS (PROJECT_ID,PIPELINE_CODE,GRANTEE_ROLE,ROLE_NAME) "
-                "VALUES (1,'HIDDEN','operator','CAN_VIEW')"
-            )
-        )
+        hide_from_viewers(conn, "HIDDEN")
     assert act(reader, ActionName.INSIGHTS).gaps_compared_at is None

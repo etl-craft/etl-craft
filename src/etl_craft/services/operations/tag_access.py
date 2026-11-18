@@ -3,7 +3,6 @@
 from sqlalchemy.engine import Connection
 
 from etl_craft.core.enums import YesNo
-from etl_craft.core.enums_access import Permission
 from etl_craft.engine.queries import statement
 from etl_craft.engine.repository.pipelines import read_tags
 from etl_craft.services.config_models import ConfigFiles, TagAccessChange, TagGrantMatch
@@ -48,17 +47,6 @@ def tag_access_changes(
             for grant in grants
             if grant.tag is not None and (grant.tag in before) != (grant.tag in after)
         )
-        levels = [g for g in grants if g.role in {p.value for p in Permission}]
-        was_restricted = any(g.pipeline == code or g.tag in before for g in levels)
-        is_restricted = any(g.pipeline == code or g.tag in after for g in levels)
-        if matches or was_restricted != is_restricted:
-            policy = None
-            if was_restricted != is_restricted:
-                policy = (
-                    "open -> restricted: project-level access no longer applies; only matching "
-                    "pipeline and tag grants (plus project CAN_MANAGE) reach this pipeline"
-                    if is_restricted
-                    else "restricted -> open: the project level now applies"
-                )
-            changes.append(TagAccessChange(code, was_restricted, is_restricted, matches, policy))
+        if matches:
+            changes.append(TagAccessChange(code, matches))
     return tuple(changes)

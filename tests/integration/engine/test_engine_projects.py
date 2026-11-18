@@ -2,10 +2,12 @@
 
 from dataclasses import replace
 
+import pytest
 from sqlalchemy import text
 
 from etl_craft.core.actor import SYSTEM_ACTOR
 from etl_craft.core.enums import ActionName, ApiRole
+from etl_craft.core.errors import ResourceNotFoundError
 from etl_craft.engine.repository.hash_versions import fetch_hash_version, save_hash_version
 from etl_craft.engine.repository.pipelines import resolve_pipeline_id, selected_project
 from etl_craft.engine.run_definitions import for_run
@@ -323,26 +325,20 @@ def test_project_default_pool_is_recorded_on_queued_attempts(engine_db):
         )
 
 
-def test_a_grant_for_a_code_cannot_restrict_the_same_code_in_another_project(engine_db):
+def test_a_grant_for_a_code_reaches_only_its_own_project(engine_db):
     with engine_db.engine.begin() as conn:
         add_pipeline(conn, "P")
         other = project(conn, "other")
         other_pipeline = pipeline(conn, other, "P")
-        group = conn.execute(
-            text(
-                "INSERT INTO CFG_GROUPS (GROUP_NAME) VALUES ('restricted') "
-                "RETURNING GROUP_ID AS group_id"
-            )
-        ).scalar_one()
         conn.execute(
             text(
-                "INSERT INTO CFG_ACCESS_BINDINGS (PROJECT_ID,GROUP_ID,PIPELINE_CODE,ROLE_NAME) "
-                "VALUES (1,:group,'P','CAN_VIEW')"
-            ),
-            {"group": group},
+                "INSERT INTO CFG_ACCESS_BINDINGS (PROJECT_ID,PIPELINE_CODE,GRANTEE_ROLE,ROLE_NAME) "
+                "VALUES (1,'P','viewer','CAN_VIEW')"
+            )
         )
     ctx = OperationContext(engine_db.engine, engine_db.config, SYSTEM_ACTOR, role=ApiRole.VIEWER)
-    assert invoke(ctx, ActionName.PIPELINES, TagFilter()).pipelines == ()
+    with pytest.raises(ResourceNotFoundError, match="other"):
+        invoke(replace(ctx, project="other"), ActionName.PIPELINES, TagFilter())
     with engine_db.engine.begin() as conn:
         conn.execute(
             text(

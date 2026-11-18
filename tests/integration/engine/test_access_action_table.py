@@ -23,7 +23,7 @@ from etl_craft.core.actor import SYSTEM_ACTOR, Actor, ActorKind, acting_as
 from etl_craft.core.enums import ActionName, ActionScope, ApiRole, HttpMethod, Placement
 from etl_craft.core.enums_access import Permission
 from etl_craft.core.errors import PermissionDeniedError, ResourceNotFoundError, UsageError
-from etl_craft.services.operations import OperationContext, bindings
+from etl_craft.services.operations import OperationContext, authorization
 from etl_craft.services.operations.actions import (
     ACTIONS,
     PROJECT_MANAGE_ACTIONS,
@@ -59,7 +59,7 @@ def matrix(engine_db, monkeypatch):
     )
     # Identity-to-pipeline resolution is covered by the real ID and cross-project refusal tests.
     monkeypatch.setattr(
-        bindings,
+        authorization,
         "request_codes",
         lambda conn, spec, request: ["P"] if spec.scope == ActionScope.PIPELINE else [],
     )
@@ -118,6 +118,9 @@ def built_in_allows(spec, role, reach, required):
             if role in {Permission.CAN_RUN, Permission.CAN_MANAGE}
             else ApiRole.VIEWER
         )
+        # Upload is CAN_UPLOAD's own action: CAN_VIEW alone never admits it.
+        if spec.name == ActionName.UPLOAD and role == Permission.CAN_VIEW:
+            return False
         return tuple(ApiRole).index(effective) >= tuple(ApiRole).index(required)
     return required == ApiRole.VIEWER
 
@@ -224,7 +227,11 @@ def test_action_table_role_admission_through_cli_and_api(matrix, monkeypatch, ro
 
 
 def test_every_action_is_either_bindable_or_refused_by_its_action_table_policy(matrix):
+    from etl_craft.services.operations.roles import role_actions
+
     _, caller, _, _ = matrix
+    with caller.engine.connect() as conn:
+        stored = {action for actions in role_actions(conn).values() for action in actions}
     for name, spec in ACTIONS.items():
         forbidden = (
             spec.role in {None, ApiRole.AGENT}
@@ -237,4 +244,27 @@ def test_every_action_is_either_bindable_or_refused_by_its_action_table_policy(m
                 bindable(name)
         else:
             assert bindable(name) == name
-        assert not bindings.allows(caller, name, SimpleNamespace(pipeline_code="P"))
+        if authorization.allows(caller, name, SimpleNamespace(pipeline_code="P")):
+            assert str(name) in stored, name
+
+
+def test_every_delegable_project_action_belongs_to_a_built_in_role(engine_db):
+    """A new view- or run-level project action must be placed in a stored CAN_* role."""
+    from etl_craft.services.operations.roles import role_actions
+
+    with engine_db.engine.connect() as conn:
+        stored = {
+            action
+            for role, actions in role_actions(conn).items()
+            if role in {str(p) for p in Permission}
+            for action in actions
+        }
+    missing = sorted(
+        str(name)
+        for name, spec in ACTIONS.items()
+        if spec.scope != ActionScope.DEPLOYMENT
+        and spec.role in {ApiRole.VIEWER, ApiRole.OPERATOR}
+        and spec.placement == Placement.ANYWHERE
+        and str(name) not in stored
+    )
+    assert missing == [], "add these actions to a built-in role in both schema.sql files"

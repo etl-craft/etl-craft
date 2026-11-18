@@ -22,9 +22,9 @@ access explain	runner_role	-	deny
 access explain	rehash_action	-	deny
 access explain	agent	-	deny
 access grant	admin	-	allow
-access grant	developer	-	hidden
-access grant	operator	-	hidden
-access grant	viewer	-	hidden
+access grant	developer	-	deny
+access grant	operator	-	deny
+access grant	viewer	-	deny
 access grant	view_p1	-	deny
 access grant	upload_t1	-	deny
 access grant	run_p1	-	deny
@@ -44,9 +44,9 @@ access list	runner_role	-	allow
 access list	rehash_action	-	allow
 access list	agent	-	deny
 access revoke	admin	-	refused:UsageError
-access revoke	developer	-	hidden
-access revoke	operator	-	hidden
-access revoke	viewer	-	hidden
+access revoke	developer	-	deny
+access revoke	operator	-	deny
+access revoke	viewer	-	deny
 access revoke	view_p1	-	deny
 access revoke	upload_t1	-	deny
 access revoke	run_p1	-	deny
@@ -364,11 +364,11 @@ announce list	rehash_action	-	allow
 announce list	agent	-	deny
 attempt	admin	P1	allow
 attempt	admin	P2	allow
-attempt	developer	P1	hidden
+attempt	developer	P1	allow
 attempt	developer	P2	allow
-attempt	operator	P1	hidden
+attempt	operator	P1	allow
 attempt	operator	P2	allow
-attempt	viewer	P1	hidden
+attempt	viewer	P1	allow
 attempt	viewer	P2	allow
 attempt	view_p1	P1	allow
 attempt	view_p1	P2	allow
@@ -386,11 +386,11 @@ attempt	agent	P1	deny
 attempt	agent	P2	deny
 audit	admin	P1	allow
 audit	admin	P2	allow
-audit	developer	P1	hidden
+audit	developer	P1	allow
 audit	developer	P2	allow
-audit	operator	P1	hidden
+audit	operator	P1	allow
 audit	operator	P2	allow
-audit	viewer	P1	hidden
+audit	viewer	P1	allow
 audit	viewer	P2	allow
 audit	view_p1	P1	allow
 audit	view_p1	P2	allow
@@ -419,11 +419,11 @@ bundle publish	rehash_action	-	refused:ConfigurationError
 bundle publish	agent	-	refused:ConfigurationError
 capabilities	admin	P1	allow
 capabilities	admin	P2	allow
-capabilities	developer	P1	hidden
+capabilities	developer	P1	allow
 capabilities	developer	P2	allow
-capabilities	operator	P1	hidden
+capabilities	operator	P1	allow
 capabilities	operator	P2	allow
-capabilities	viewer	P1	hidden
+capabilities	viewer	P1	allow
 capabilities	viewer	P2	allow
 capabilities	view_p1	P1	allow
 capabilities	view_p1	P2	allow
@@ -507,11 +507,11 @@ config plan	rehash_action	-	deny
 config plan	agent	-	deny
 control	admin	P1	allow
 control	admin	P2	allow
-control	developer	P1	hidden
+control	developer	P1	allow
 control	developer	P2	allow
-control	operator	P1	hidden
+control	operator	P1	allow
 control	operator	P2	allow
-control	viewer	P1	hidden
+control	viewer	P1	deny
 control	viewer	P2	deny
 control	view_p1	P1	deny
 control	view_p1	P2	deny
@@ -530,7 +530,7 @@ control	agent	P2	deny
 control bulk	admin	-	allow
 control bulk	developer	-	allow
 control bulk	operator	-	allow
-control bulk	viewer	-	hidden
+control bulk	viewer	-	deny
 control bulk	view_p1	-	deny
 control bulk	upload_t1	-	deny
 control bulk	run_p1	-	allow
@@ -562,11 +562,11 @@ controller	rehash_action	-	deny
 controller	agent	-	deny
 data edit	admin	P1	allow
 data edit	admin	P2	allow
-data edit	developer	P1	hidden
+data edit	developer	P1	deny
 data edit	developer	P2	deny
-data edit	operator	P1	hidden
+data edit	operator	P1	deny
 data edit	operator	P2	deny
-data edit	viewer	P1	hidden
+data edit	viewer	P1	deny
 data edit	viewer	P2	deny
 data edit	view_p1	P1	deny
 data edit	view_p1	P2	deny
@@ -584,11 +584,11 @@ data edit	agent	P1	deny
 data edit	agent	P2	deny
 data provenance	admin	P1	allow
 data provenance	admin	P2	allow
-data provenance	developer	P1	hidden
+data provenance	developer	P1	allow
 data provenance	developer	P2	allow
-data provenance	operator	P1	hidden
+data provenance	operator	P1	allow
 data provenance	operator	P2	allow
-data provenance	viewer	P1	hidden
+data provenance	viewer	P1	allow
 data provenance	viewer	P2	allow
 data provenance	view_p1	P1	allow
 data provenance	view_p1	P2	allow
@@ -606,11 +606,11 @@ data provenance	agent	P1	deny
 data provenance	agent	P2	deny
 data unlock	admin	P1	allow
 data unlock	admin	P2	allow
-data unlock	developer	P1	hidden
+data unlock	developer	P1	deny
 data unlock	developer	P2	deny
-data unlock	operator	P1	hidden
+data unlock	operator	P1	deny
 data unlock	operator	P2	deny
-data unlock	viewer	P1	hidden
+data unlock	viewer	P1	deny
 data unlock	viewer	P2	deny
 data unlock	view_p1	P1	deny
 data unlock	view_p1	P2	deny
@@ -683,11 +683,11 @@ erase list	rehash_action	-	deny
 erase list	agent	-	deny
 explain	admin	P1	allow
 explain	admin	P2	allow
-explain	developer	P1	hidden
+explain	developer	P1	allow
 explain	developer	P2	allow
-explain	operator	P1	hidden
+explain	operator	P1	allow
 explain	operator	P2	allow
-explain	viewer	P1	hidden
+explain	viewer	P1	allow
 explain	viewer	P2	allow
 explain	view_p1	P1	allow
 explain	view_p1	P2	allow
@@ -716,11 +716,11 @@ generate-docs	rehash_action	-	deny
 generate-docs	agent	-	deny
 graph	admin	P1	allow
 graph	admin	P2	allow
-graph	developer	P1	hidden
+graph	developer	P1	allow
 graph	developer	P2	allow
-graph	operator	P1	hidden
+graph	operator	P1	allow
 graph	operator	P2	allow
-graph	viewer	P1	hidden
+graph	viewer	P1	allow
 graph	viewer	P2	allow
 graph	view_p1	P1	allow
 graph	view_p1	P2	allow
@@ -804,11 +804,11 @@ health	rehash_action	-	allow
 health	agent	-	deny
 history	admin	P1	allow
 history	admin	P2	allow
-history	developer	P1	hidden
+history	developer	P1	allow
 history	developer	P2	allow
-history	operator	P1	hidden
+history	operator	P1	allow
 history	operator	P2	allow
-history	viewer	P1	hidden
+history	viewer	P1	allow
 history	viewer	P2	allow
 history	view_p1	P1	allow
 history	view_p1	P2	allow
@@ -848,11 +848,11 @@ insights	rehash_action	-	allow
 insights	agent	-	deny
 item control	admin	P1	allow
 item control	admin	P2	allow
-item control	developer	P1	hidden
+item control	developer	P1	allow
 item control	developer	P2	allow
-item control	operator	P1	hidden
+item control	operator	P1	allow
 item control	operator	P2	allow
-item control	viewer	P1	hidden
+item control	viewer	P1	deny
 item control	viewer	P2	deny
 item control	view_p1	P1	deny
 item control	view_p1	P2	deny
@@ -870,11 +870,11 @@ item control	agent	P1	deny
 item control	agent	P2	deny
 items	admin	P1	allow
 items	admin	P2	allow
-items	developer	P1	hidden
+items	developer	P1	allow
 items	developer	P2	allow
-items	operator	P1	hidden
+items	operator	P1	allow
 items	operator	P2	allow
-items	viewer	P1	hidden
+items	viewer	P1	allow
 items	viewer	P2	allow
 items	view_p1	P1	allow
 items	view_p1	P2	allow
@@ -902,7 +902,7 @@ lineage	runner_role	-	allow
 lineage	rehash_action	-	allow
 lineage	agent	-	deny
 lineage refresh	admin	-	allow
-lineage refresh	developer	-	deny
+lineage refresh	developer	-	allow
 lineage refresh	operator	-	deny
 lineage refresh	viewer	-	deny
 lineage refresh	view_p1	-	deny
@@ -991,11 +991,11 @@ logout	rehash_action	-	allow
 logout	agent	-	deny
 logs	admin	P1	allow
 logs	admin	P2	allow
-logs	developer	P1	hidden
+logs	developer	P1	allow
 logs	developer	P2	allow
-logs	operator	P1	hidden
+logs	operator	P1	allow
 logs	operator	P2	allow
-logs	viewer	P1	hidden
+logs	viewer	P1	allow
 logs	viewer	P2	allow
 logs	view_p1	P1	allow
 logs	view_p1	P2	allow
@@ -1013,11 +1013,11 @@ logs	agent	P1	deny
 logs	agent	P2	deny
 mark	admin	P1	allow
 mark	admin	P2	allow
-mark	developer	P1	hidden
+mark	developer	P1	allow
 mark	developer	P2	allow
-mark	operator	P1	hidden
+mark	operator	P1	allow
 mark	operator	P2	allow
-mark	viewer	P1	hidden
+mark	viewer	P1	deny
 mark	viewer	P2	deny
 mark	view_p1	P1	deny
 mark	view_p1	P2	deny
@@ -1046,11 +1046,11 @@ migrate	rehash_action	-	deny
 migrate	agent	-	deny
 offset	admin	P1	allow
 offset	admin	P2	allow
-offset	developer	P1	hidden
+offset	developer	P1	allow
 offset	developer	P2	allow
-offset	operator	P1	hidden
+offset	operator	P1	allow
 offset	operator	P2	allow
-offset	viewer	P1	hidden
+offset	viewer	P1	allow
 offset	viewer	P2	allow
 offset	view_p1	P1	allow
 offset	view_p1	P2	allow
@@ -1068,11 +1068,11 @@ offset	agent	P1	deny
 offset	agent	P2	deny
 pipeline	admin	P1	allow
 pipeline	admin	P2	allow
-pipeline	developer	P1	hidden
+pipeline	developer	P1	allow
 pipeline	developer	P2	allow
-pipeline	operator	P1	hidden
+pipeline	operator	P1	allow
 pipeline	operator	P2	allow
-pipeline	viewer	P1	hidden
+pipeline	viewer	P1	allow
 pipeline	viewer	P2	allow
 pipeline	view_p1	P1	allow
 pipeline	view_p1	P2	allow
@@ -1090,11 +1090,11 @@ pipeline	agent	P1	deny
 pipeline	agent	P2	deny
 pipeline refresh history	admin	P1	allow
 pipeline refresh history	admin	P2	allow
-pipeline refresh history	developer	P1	hidden
+pipeline refresh history	developer	P1	allow
 pipeline refresh history	developer	P2	allow
-pipeline refresh history	operator	P1	hidden
+pipeline refresh history	operator	P1	allow
 pipeline refresh history	operator	P2	allow
-pipeline refresh history	viewer	P1	hidden
+pipeline refresh history	viewer	P1	allow
 pipeline refresh history	viewer	P2	allow
 pipeline refresh history	view_p1	P1	allow
 pipeline refresh history	view_p1	P2	allow
@@ -1266,11 +1266,11 @@ purge	rehash_action	-	deny
 purge	agent	-	deny
 reconcile	admin	P1	allow
 reconcile	admin	P2	allow
-reconcile	developer	P1	hidden
+reconcile	developer	P1	allow
 reconcile	developer	P2	allow
-reconcile	operator	P1	hidden
+reconcile	operator	P1	allow
 reconcile	operator	P2	allow
-reconcile	viewer	P1	hidden
+reconcile	viewer	P1	deny
 reconcile	viewer	P2	deny
 reconcile	view_p1	P1	deny
 reconcile	view_p1	P2	deny
@@ -1409,11 +1409,11 @@ role remove-action	rehash_action	-	deny
 role remove-action	agent	-	deny
 run	admin	P1	allow
 run	admin	P2	allow
-run	developer	P1	hidden
+run	developer	P1	allow
 run	developer	P2	allow
-run	operator	P1	hidden
+run	operator	P1	allow
 run	operator	P2	allow
-run	viewer	P1	hidden
+run	viewer	P1	deny
 run	viewer	P2	deny
 run	view_p1	P1	deny
 run	view_p1	P2	deny
@@ -1431,11 +1431,11 @@ run	agent	P1	deny
 run	agent	P2	deny
 run detail	admin	P1	allow
 run detail	admin	P2	allow
-run detail	developer	P1	hidden
+run detail	developer	P1	allow
 run detail	developer	P2	allow
-run detail	operator	P1	hidden
+run detail	operator	P1	allow
 run detail	operator	P2	allow
-run detail	viewer	P1	hidden
+run detail	viewer	P1	allow
 run detail	viewer	P2	allow
 run detail	view_p1	P1	allow
 run detail	view_p1	P2	allow
@@ -1453,11 +1453,11 @@ run detail	agent	P1	deny
 run detail	agent	P2	deny
 run log	admin	P1	allow
 run log	admin	P2	allow
-run log	developer	P1	hidden
+run log	developer	P1	allow
 run log	developer	P2	allow
-run log	operator	P1	hidden
+run log	operator	P1	allow
 run log	operator	P2	allow
-run log	viewer	P1	hidden
+run log	viewer	P1	allow
 run log	viewer	P2	allow
 run log	view_p1	P1	allow
 run log	view_p1	P2	allow
@@ -1475,11 +1475,11 @@ run log	agent	P1	deny
 run log	agent	P2	deny
 run zip	admin	P1	allow
 run zip	admin	P2	allow
-run zip	developer	P1	hidden
+run zip	developer	P1	allow
 run zip	developer	P2	allow
-run zip	operator	P1	hidden
+run zip	operator	P1	allow
 run zip	operator	P2	allow
-run zip	viewer	P1	hidden
+run zip	viewer	P1	allow
 run zip	viewer	P2	allow
 run zip	view_p1	P1	allow
 run zip	view_p1	P2	allow
@@ -1541,11 +1541,11 @@ setup grants	rehash_action	-	allow
 setup grants	agent	-	deny
 status	admin	P1	allow
 status	admin	P2	allow
-status	developer	P1	hidden
+status	developer	P1	allow
 status	developer	P2	allow
-status	operator	P1	hidden
+status	operator	P1	allow
 status	operator	P2	allow
-status	viewer	P1	hidden
+status	viewer	P1	allow
 status	viewer	P2	allow
 status	view_p1	P1	allow
 status	view_p1	P2	allow
@@ -1563,11 +1563,11 @@ status	agent	P1	deny
 status	agent	P2	deny
 steps	admin	P1	allow
 steps	admin	P2	allow
-steps	developer	P1	hidden
+steps	developer	P1	allow
 steps	developer	P2	allow
-steps	operator	P1	hidden
+steps	operator	P1	allow
 steps	operator	P2	allow
-steps	viewer	P1	hidden
+steps	viewer	P1	allow
 steps	viewer	P2	allow
 steps	view_p1	P1	allow
 steps	view_p1	P2	allow
@@ -1596,11 +1596,11 @@ table preview	rehash_action	-	deny
 table preview	agent	-	deny
 task	admin	P1	allow
 task	admin	P2	allow
-task	developer	P1	hidden
+task	developer	P1	allow
 task	developer	P2	allow
-task	operator	P1	hidden
+task	operator	P1	allow
 task	operator	P2	allow
-task	viewer	P1	hidden
+task	viewer	P1	allow
 task	viewer	P2	allow
 task	view_p1	P1	allow
 task	view_p1	P2	allow
@@ -1684,24 +1684,24 @@ ui	rehash_action	-	deny
 ui	agent	-	deny
 upload	admin	P1	allow
 upload	admin	P2	allow
-upload	developer	P1	hidden
+upload	developer	P1	allow
 upload	developer	P2	allow
-upload	operator	P1	hidden
+upload	operator	P1	allow
 upload	operator	P2	allow
-upload	viewer	P1	hidden
-upload	viewer	P2	allow
-upload	view_p1	P1	allow
-upload	view_p1	P2	allow
+upload	viewer	P1	deny
+upload	viewer	P2	deny
+upload	view_p1	P1	deny
+upload	view_p1	P2	deny
 upload	upload_t1	P1	allow
-upload	upload_t1	P2	allow
+upload	upload_t1	P2	deny
 upload	run_p1	P1	allow
-upload	run_p1	P2	allow
+upload	run_p1	P2	deny
 upload	manage_sales	P1	allow
 upload	manage_sales	P2	allow
-upload	runner_role	P1	allow
-upload	runner_role	P2	allow
-upload	rehash_action	P1	allow
-upload	rehash_action	P2	allow
+upload	runner_role	P1	deny
+upload	runner_role	P2	deny
+upload	rehash_action	P1	deny
+upload	rehash_action	P2	deny
 upload	agent	P1	deny
 upload	agent	P2	deny
 upload pipelines	admin	-	allow
@@ -1717,11 +1717,11 @@ upload pipelines	rehash_action	-	allow
 upload pipelines	agent	-	deny
 uploads	admin	P1	allow
 uploads	admin	P2	allow
-uploads	developer	P1	hidden
+uploads	developer	P1	allow
 uploads	developer	P2	allow
-uploads	operator	P1	hidden
+uploads	operator	P1	allow
 uploads	operator	P2	allow
-uploads	viewer	P1	hidden
+uploads	viewer	P1	allow
 uploads	viewer	P2	allow
 uploads	view_p1	P1	allow
 uploads	view_p1	P2	allow
@@ -1739,11 +1739,11 @@ uploads	agent	P1	deny
 uploads	agent	P2	deny
 validate	admin	P1	allow
 validate	admin	P2	allow
-validate	developer	P1	hidden
+validate	developer	P1	allow
 validate	developer	P2	allow
-validate	operator	P1	hidden
+validate	operator	P1	allow
 validate	operator	P2	allow
-validate	viewer	P1	hidden
+validate	viewer	P1	allow
 validate	viewer	P2	allow
 validate	view_p1	P1	allow
 validate	view_p1	P2	allow
