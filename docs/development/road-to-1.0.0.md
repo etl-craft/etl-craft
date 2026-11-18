@@ -221,7 +221,7 @@ item's text, or work done early under another item.
 
 ### Handover notes
 
-- **Readable schema.sql (2026-11-18).** Not a listed item. Both files were regenerated from the
+- **Readable schema.sql.** Not a listed item. Both files were regenerated from the
   0.9.0 baseline log; a full `init-db` from the old and new file gives an identical `pg_dump` and
   identical SQLite DDL and pragmas. Physical column order is kept so the catalogs match. The
   default project's first history row still has NULL in the history columns that
