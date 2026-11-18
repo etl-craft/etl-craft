@@ -1,0 +1,1772 @@
+action	principal	pipeline	outcome
+about	admin	-	allow
+about	developer	-	allow
+about	operator	-	allow
+about	viewer	-	allow
+about	view_p1	-	allow
+about	upload_t1	-	allow
+about	run_p1	-	allow
+about	manage_sales	-	allow
+about	runner_role	-	allow
+about	rehash_action	-	allow
+about	agent	-	deny
+access explain	admin	-	allow
+access explain	developer	-	deny
+access explain	operator	-	deny
+access explain	viewer	-	deny
+access explain	view_p1	-	deny
+access explain	upload_t1	-	deny
+access explain	run_p1	-	deny
+access explain	manage_sales	-	deny
+access explain	runner_role	-	deny
+access explain	rehash_action	-	deny
+access explain	agent	-	deny
+access grant	admin	-	allow
+access grant	developer	-	hidden
+access grant	operator	-	hidden
+access grant	viewer	-	hidden
+access grant	view_p1	-	deny
+access grant	upload_t1	-	deny
+access grant	run_p1	-	deny
+access grant	manage_sales	-	allow
+access grant	runner_role	-	deny
+access grant	rehash_action	-	deny
+access grant	agent	-	deny
+access list	admin	-	allow
+access list	developer	-	allow
+access list	operator	-	allow
+access list	viewer	-	allow
+access list	view_p1	-	allow
+access list	upload_t1	-	allow
+access list	run_p1	-	allow
+access list	manage_sales	-	allow
+access list	runner_role	-	allow
+access list	rehash_action	-	allow
+access list	agent	-	deny
+access revoke	admin	-	refused:UsageError
+access revoke	developer	-	hidden
+access revoke	operator	-	hidden
+access revoke	viewer	-	hidden
+access revoke	view_p1	-	deny
+access revoke	upload_t1	-	deny
+access revoke	run_p1	-	deny
+access revoke	manage_sales	-	refused:UsageError
+access revoke	runner_role	-	deny
+access revoke	rehash_action	-	deny
+access revoke	agent	-	deny
+account add	admin	-	allow
+account add	developer	-	deny
+account add	operator	-	deny
+account add	viewer	-	deny
+account add	view_p1	-	deny
+account add	upload_t1	-	deny
+account add	run_p1	-	deny
+account add	manage_sales	-	deny
+account add	runner_role	-	deny
+account add	rehash_action	-	deny
+account add	agent	-	deny
+account change-password	admin	-	allow
+account change-password	developer	-	allow
+account change-password	operator	-	allow
+account change-password	viewer	-	allow
+account change-password	view_p1	-	allow
+account change-password	upload_t1	-	allow
+account change-password	run_p1	-	allow
+account change-password	manage_sales	-	allow
+account change-password	runner_role	-	allow
+account change-password	rehash_action	-	allow
+account change-password	agent	-	deny
+account disable	admin	-	allow
+account disable	developer	-	deny
+account disable	operator	-	deny
+account disable	viewer	-	deny
+account disable	view_p1	-	deny
+account disable	upload_t1	-	deny
+account disable	run_p1	-	deny
+account disable	manage_sales	-	deny
+account disable	runner_role	-	deny
+account disable	rehash_action	-	deny
+account disable	agent	-	deny
+account list	admin	-	allow
+account list	developer	-	deny
+account list	operator	-	deny
+account list	viewer	-	deny
+account list	view_p1	-	deny
+account list	upload_t1	-	deny
+account list	run_p1	-	deny
+account list	manage_sales	-	deny
+account list	runner_role	-	deny
+account list	rehash_action	-	deny
+account list	agent	-	deny
+account reset-password	admin	-	allow
+account reset-password	developer	-	deny
+account reset-password	operator	-	deny
+account reset-password	viewer	-	deny
+account reset-password	view_p1	-	deny
+account reset-password	upload_t1	-	deny
+account reset-password	run_p1	-	deny
+account reset-password	manage_sales	-	deny
+account reset-password	runner_role	-	deny
+account reset-password	rehash_action	-	deny
+account reset-password	agent	-	deny
+account set-role	admin	-	allow
+account set-role	developer	-	deny
+account set-role	operator	-	deny
+account set-role	viewer	-	deny
+account set-role	view_p1	-	deny
+account set-role	upload_t1	-	deny
+account set-role	run_p1	-	deny
+account set-role	manage_sales	-	deny
+account set-role	runner_role	-	deny
+account set-role	rehash_action	-	deny
+account set-role	agent	-	deny
+account settings	admin	-	allow
+account settings	developer	-	allow
+account settings	operator	-	allow
+account settings	viewer	-	allow
+account settings	view_p1	-	allow
+account settings	upload_t1	-	allow
+account settings	run_p1	-	allow
+account settings	manage_sales	-	allow
+account settings	runner_role	-	allow
+account settings	rehash_action	-	allow
+account settings	agent	-	deny
+account unlock	admin	-	allow
+account unlock	developer	-	deny
+account unlock	operator	-	deny
+account unlock	viewer	-	deny
+account unlock	view_p1	-	deny
+account unlock	upload_t1	-	deny
+account unlock	run_p1	-	deny
+account unlock	manage_sales	-	deny
+account unlock	runner_role	-	deny
+account unlock	rehash_action	-	deny
+account unlock	agent	-	deny
+adopt-target	admin	-	allow
+adopt-target	developer	-	deny
+adopt-target	operator	-	deny
+adopt-target	viewer	-	deny
+adopt-target	view_p1	-	deny
+adopt-target	upload_t1	-	deny
+adopt-target	run_p1	-	deny
+adopt-target	manage_sales	-	deny
+adopt-target	runner_role	-	deny
+adopt-target	rehash_action	-	deny
+adopt-target	agent	-	deny
+agent claim	admin	-	deny
+agent claim	developer	-	deny
+agent claim	operator	-	deny
+agent claim	viewer	-	deny
+agent claim	view_p1	-	deny
+agent claim	upload_t1	-	deny
+agent claim	run_p1	-	deny
+agent claim	manage_sales	-	deny
+agent claim	runner_role	-	deny
+agent claim	rehash_action	-	deny
+agent claim	agent	-	allow
+agent control	admin	-	allow
+agent control	developer	-	allow
+agent control	operator	-	allow
+agent control	viewer	-	deny
+agent control	view_p1	-	deny
+agent control	upload_t1	-	deny
+agent control	run_p1	-	deny
+agent control	manage_sales	-	deny
+agent control	runner_role	-	deny
+agent control	rehash_action	-	deny
+agent control	agent	-	deny
+agent deregister	admin	-	deny
+agent deregister	developer	-	deny
+agent deregister	operator	-	deny
+agent deregister	viewer	-	deny
+agent deregister	view_p1	-	deny
+agent deregister	upload_t1	-	deny
+agent deregister	run_p1	-	deny
+agent deregister	manage_sales	-	deny
+agent deregister	runner_role	-	deny
+agent deregister	rehash_action	-	deny
+agent deregister	agent	-	allow
+agent doctor	admin	-	deny
+agent doctor	developer	-	deny
+agent doctor	operator	-	deny
+agent doctor	viewer	-	deny
+agent doctor	view_p1	-	deny
+agent doctor	upload_t1	-	deny
+agent doctor	run_p1	-	deny
+agent doctor	manage_sales	-	deny
+agent doctor	runner_role	-	deny
+agent doctor	rehash_action	-	deny
+agent doctor	agent	-	allow
+agent log	admin	P1	deny
+agent log	admin	P2	deny
+agent log	developer	P1	deny
+agent log	developer	P2	deny
+agent log	operator	P1	deny
+agent log	operator	P2	deny
+agent log	viewer	P1	deny
+agent log	viewer	P2	deny
+agent log	view_p1	P1	deny
+agent log	view_p1	P2	deny
+agent log	upload_t1	P1	deny
+agent log	upload_t1	P2	deny
+agent log	run_p1	P1	deny
+agent log	run_p1	P2	deny
+agent log	manage_sales	P1	deny
+agent log	manage_sales	P2	deny
+agent log	runner_role	P1	deny
+agent log	runner_role	P2	deny
+agent log	rehash_action	P1	deny
+agent log	rehash_action	P2	deny
+agent log	agent	P1	allow
+agent log	agent	P2	allow
+agent register	admin	-	deny
+agent register	developer	-	deny
+agent register	operator	-	deny
+agent register	viewer	-	deny
+agent register	view_p1	-	deny
+agent register	upload_t1	-	deny
+agent register	run_p1	-	deny
+agent register	manage_sales	-	deny
+agent register	runner_role	-	deny
+agent register	rehash_action	-	deny
+agent register	agent	-	allow
+agent renew	admin	-	deny
+agent renew	developer	-	deny
+agent renew	operator	-	deny
+agent renew	viewer	-	deny
+agent renew	view_p1	-	deny
+agent renew	upload_t1	-	deny
+agent renew	run_p1	-	deny
+agent renew	manage_sales	-	deny
+agent renew	runner_role	-	deny
+agent renew	rehash_action	-	deny
+agent renew	agent	-	allow
+agent report	admin	P1	deny
+agent report	admin	P2	deny
+agent report	developer	P1	deny
+agent report	developer	P2	deny
+agent report	operator	P1	deny
+agent report	operator	P2	deny
+agent report	viewer	P1	deny
+agent report	viewer	P2	deny
+agent report	view_p1	P1	deny
+agent report	view_p1	P2	deny
+agent report	upload_t1	P1	deny
+agent report	upload_t1	P2	deny
+agent report	run_p1	P1	deny
+agent report	run_p1	P2	deny
+agent report	manage_sales	P1	deny
+agent report	manage_sales	P2	deny
+agent report	runner_role	P1	deny
+agent report	runner_role	P2	deny
+agent report	rehash_action	P1	deny
+agent report	rehash_action	P2	deny
+agent report	agent	P1	allow
+agent report	agent	P2	allow
+agent upload content	admin	P1	deny
+agent upload content	admin	P2	deny
+agent upload content	developer	P1	deny
+agent upload content	developer	P2	deny
+agent upload content	operator	P1	deny
+agent upload content	operator	P2	deny
+agent upload content	viewer	P1	deny
+agent upload content	viewer	P2	deny
+agent upload content	view_p1	P1	deny
+agent upload content	view_p1	P2	deny
+agent upload content	upload_t1	P1	deny
+agent upload content	upload_t1	P2	deny
+agent upload content	run_p1	P1	deny
+agent upload content	run_p1	P2	deny
+agent upload content	manage_sales	P1	deny
+agent upload content	manage_sales	P2	deny
+agent upload content	runner_role	P1	deny
+agent upload content	runner_role	P2	deny
+agent upload content	rehash_action	P1	deny
+agent upload content	rehash_action	P2	deny
+agent upload content	agent	P1	deny
+agent upload content	agent	P2	deny
+agents	admin	-	allow
+agents	developer	-	allow
+agents	operator	-	allow
+agents	viewer	-	allow
+agents	view_p1	-	allow
+agents	upload_t1	-	allow
+agents	run_p1	-	allow
+agents	manage_sales	-	allow
+agents	runner_role	-	allow
+agents	rehash_action	-	allow
+agents	agent	-	deny
+alert-channel disable	admin	-	allow
+alert-channel disable	developer	-	deny
+alert-channel disable	operator	-	deny
+alert-channel disable	viewer	-	deny
+alert-channel disable	view_p1	-	deny
+alert-channel disable	upload_t1	-	deny
+alert-channel disable	run_p1	-	deny
+alert-channel disable	manage_sales	-	deny
+alert-channel disable	runner_role	-	deny
+alert-channel disable	rehash_action	-	deny
+alert-channel disable	agent	-	deny
+alert-channel list	admin	-	allow
+alert-channel list	developer	-	deny
+alert-channel list	operator	-	deny
+alert-channel list	viewer	-	deny
+alert-channel list	view_p1	-	deny
+alert-channel list	upload_t1	-	deny
+alert-channel list	run_p1	-	deny
+alert-channel list	manage_sales	-	deny
+alert-channel list	runner_role	-	deny
+alert-channel list	rehash_action	-	deny
+alert-channel list	agent	-	deny
+alert-channel set	admin	-	allow
+alert-channel set	developer	-	deny
+alert-channel set	operator	-	deny
+alert-channel set	viewer	-	deny
+alert-channel set	view_p1	-	deny
+alert-channel set	upload_t1	-	deny
+alert-channel set	run_p1	-	deny
+alert-channel set	manage_sales	-	deny
+alert-channel set	runner_role	-	deny
+alert-channel set	rehash_action	-	deny
+alert-channel set	agent	-	deny
+announce add	admin	-	allow
+announce add	developer	-	deny
+announce add	operator	-	deny
+announce add	viewer	-	deny
+announce add	view_p1	-	deny
+announce add	upload_t1	-	deny
+announce add	run_p1	-	deny
+announce add	manage_sales	-	deny
+announce add	runner_role	-	deny
+announce add	rehash_action	-	deny
+announce add	agent	-	deny
+announce end	admin	-	allow
+announce end	developer	-	deny
+announce end	operator	-	deny
+announce end	viewer	-	deny
+announce end	view_p1	-	deny
+announce end	upload_t1	-	deny
+announce end	run_p1	-	deny
+announce end	manage_sales	-	deny
+announce end	runner_role	-	deny
+announce end	rehash_action	-	deny
+announce end	agent	-	deny
+announce list	admin	-	allow
+announce list	developer	-	allow
+announce list	operator	-	allow
+announce list	viewer	-	allow
+announce list	view_p1	-	allow
+announce list	upload_t1	-	allow
+announce list	run_p1	-	allow
+announce list	manage_sales	-	allow
+announce list	runner_role	-	allow
+announce list	rehash_action	-	allow
+announce list	agent	-	deny
+attempt	admin	P1	allow
+attempt	admin	P2	allow
+attempt	developer	P1	hidden
+attempt	developer	P2	allow
+attempt	operator	P1	hidden
+attempt	operator	P2	allow
+attempt	viewer	P1	hidden
+attempt	viewer	P2	allow
+attempt	view_p1	P1	allow
+attempt	view_p1	P2	allow
+attempt	upload_t1	P1	allow
+attempt	upload_t1	P2	allow
+attempt	run_p1	P1	allow
+attempt	run_p1	P2	allow
+attempt	manage_sales	P1	allow
+attempt	manage_sales	P2	allow
+attempt	runner_role	P1	allow
+attempt	runner_role	P2	allow
+attempt	rehash_action	P1	allow
+attempt	rehash_action	P2	allow
+attempt	agent	P1	deny
+attempt	agent	P2	deny
+audit	admin	P1	allow
+audit	admin	P2	allow
+audit	developer	P1	hidden
+audit	developer	P2	allow
+audit	operator	P1	hidden
+audit	operator	P2	allow
+audit	viewer	P1	hidden
+audit	viewer	P2	allow
+audit	view_p1	P1	allow
+audit	view_p1	P2	allow
+audit	upload_t1	P1	allow
+audit	upload_t1	P2	allow
+audit	run_p1	P1	allow
+audit	run_p1	P2	allow
+audit	manage_sales	P1	allow
+audit	manage_sales	P2	allow
+audit	runner_role	P1	allow
+audit	runner_role	P2	allow
+audit	rehash_action	P1	allow
+audit	rehash_action	P2	allow
+audit	agent	P1	deny
+audit	agent	P2	deny
+bundle publish	admin	-	allow
+bundle publish	developer	-	refused:ConfigurationError
+bundle publish	operator	-	refused:ConfigurationError
+bundle publish	viewer	-	refused:ConfigurationError
+bundle publish	view_p1	-	refused:ConfigurationError
+bundle publish	upload_t1	-	refused:ConfigurationError
+bundle publish	run_p1	-	refused:ConfigurationError
+bundle publish	manage_sales	-	refused:ConfigurationError
+bundle publish	runner_role	-	refused:ConfigurationError
+bundle publish	rehash_action	-	refused:ConfigurationError
+bundle publish	agent	-	refused:ConfigurationError
+capabilities	admin	P1	allow
+capabilities	admin	P2	allow
+capabilities	developer	P1	hidden
+capabilities	developer	P2	allow
+capabilities	operator	P1	hidden
+capabilities	operator	P2	allow
+capabilities	viewer	P1	hidden
+capabilities	viewer	P2	allow
+capabilities	view_p1	P1	allow
+capabilities	view_p1	P2	allow
+capabilities	upload_t1	P1	allow
+capabilities	upload_t1	P2	allow
+capabilities	run_p1	P1	allow
+capabilities	run_p1	P2	allow
+capabilities	manage_sales	P1	allow
+capabilities	manage_sales	P2	allow
+capabilities	runner_role	P1	allow
+capabilities	runner_role	P2	allow
+capabilities	rehash_action	P1	allow
+capabilities	rehash_action	P2	allow
+capabilities	agent	P1	deny
+capabilities	agent	P2	deny
+catalog gaps	admin	-	allow
+catalog gaps	developer	-	allow
+catalog gaps	operator	-	allow
+catalog gaps	viewer	-	allow
+catalog gaps	view_p1	-	allow
+catalog gaps	upload_t1	-	allow
+catalog gaps	run_p1	-	allow
+catalog gaps	manage_sales	-	allow
+catalog gaps	runner_role	-	allow
+catalog gaps	rehash_action	-	allow
+catalog gaps	agent	-	deny
+catalog page	admin	-	allow
+catalog page	developer	-	allow
+catalog page	operator	-	allow
+catalog page	viewer	-	allow
+catalog page	view_p1	-	allow
+catalog page	upload_t1	-	allow
+catalog page	run_p1	-	allow
+catalog page	manage_sales	-	allow
+catalog page	runner_role	-	allow
+catalog page	rehash_action	-	allow
+catalog page	agent	-	deny
+clone	admin	-	allow
+clone	developer	-	deny
+clone	operator	-	deny
+clone	viewer	-	deny
+clone	view_p1	-	deny
+clone	upload_t1	-	deny
+clone	run_p1	-	deny
+clone	manage_sales	-	deny
+clone	runner_role	-	deny
+clone	rehash_action	-	deny
+clone	agent	-	deny
+config apply	admin	-	allow
+config apply	developer	-	deny
+config apply	operator	-	deny
+config apply	viewer	-	deny
+config apply	view_p1	-	deny
+config apply	upload_t1	-	deny
+config apply	run_p1	-	deny
+config apply	manage_sales	-	allow
+config apply	runner_role	-	deny
+config apply	rehash_action	-	deny
+config apply	agent	-	deny
+config export	admin	-	allow
+config export	developer	-	allow
+config export	operator	-	allow
+config export	viewer	-	allow
+config export	view_p1	-	allow
+config export	upload_t1	-	allow
+config export	run_p1	-	allow
+config export	manage_sales	-	allow
+config export	runner_role	-	allow
+config export	rehash_action	-	allow
+config export	agent	-	deny
+config plan	admin	-	allow
+config plan	developer	-	deny
+config plan	operator	-	deny
+config plan	viewer	-	deny
+config plan	view_p1	-	deny
+config plan	upload_t1	-	deny
+config plan	run_p1	-	deny
+config plan	manage_sales	-	allow
+config plan	runner_role	-	deny
+config plan	rehash_action	-	deny
+config plan	agent	-	deny
+control	admin	P1	allow
+control	admin	P2	allow
+control	developer	P1	hidden
+control	developer	P2	allow
+control	operator	P1	hidden
+control	operator	P2	allow
+control	viewer	P1	hidden
+control	viewer	P2	deny
+control	view_p1	P1	deny
+control	view_p1	P2	deny
+control	upload_t1	P1	deny
+control	upload_t1	P2	deny
+control	run_p1	P1	allow
+control	run_p1	P2	deny
+control	manage_sales	P1	allow
+control	manage_sales	P2	allow
+control	runner_role	P1	allow
+control	runner_role	P2	allow
+control	rehash_action	P1	deny
+control	rehash_action	P2	deny
+control	agent	P1	deny
+control	agent	P2	deny
+control bulk	admin	-	allow
+control bulk	developer	-	allow
+control bulk	operator	-	allow
+control bulk	viewer	-	hidden
+control bulk	view_p1	-	deny
+control bulk	upload_t1	-	deny
+control bulk	run_p1	-	allow
+control bulk	manage_sales	-	allow
+control bulk	runner_role	-	deny
+control bulk	rehash_action	-	deny
+control bulk	agent	-	deny
+control-request	admin	-	hidden
+control-request	developer	-	hidden
+control-request	operator	-	hidden
+control-request	viewer	-	hidden
+control-request	view_p1	-	hidden
+control-request	upload_t1	-	hidden
+control-request	run_p1	-	hidden
+control-request	manage_sales	-	hidden
+control-request	runner_role	-	hidden
+control-request	rehash_action	-	hidden
+control-request	agent	-	hidden
+controller	admin	-	allow
+controller	developer	-	deny
+controller	operator	-	deny
+controller	viewer	-	deny
+controller	view_p1	-	deny
+controller	upload_t1	-	deny
+controller	run_p1	-	deny
+controller	manage_sales	-	deny
+controller	runner_role	-	deny
+controller	rehash_action	-	deny
+controller	agent	-	deny
+data edit	admin	P1	allow
+data edit	admin	P2	allow
+data edit	developer	P1	hidden
+data edit	developer	P2	deny
+data edit	operator	P1	hidden
+data edit	operator	P2	deny
+data edit	viewer	P1	hidden
+data edit	viewer	P2	deny
+data edit	view_p1	P1	deny
+data edit	view_p1	P2	deny
+data edit	upload_t1	P1	deny
+data edit	upload_t1	P2	deny
+data edit	run_p1	P1	deny
+data edit	run_p1	P2	deny
+data edit	manage_sales	P1	deny
+data edit	manage_sales	P2	deny
+data edit	runner_role	P1	deny
+data edit	runner_role	P2	deny
+data edit	rehash_action	P1	deny
+data edit	rehash_action	P2	deny
+data edit	agent	P1	deny
+data edit	agent	P2	deny
+data provenance	admin	P1	allow
+data provenance	admin	P2	allow
+data provenance	developer	P1	hidden
+data provenance	developer	P2	allow
+data provenance	operator	P1	hidden
+data provenance	operator	P2	allow
+data provenance	viewer	P1	hidden
+data provenance	viewer	P2	allow
+data provenance	view_p1	P1	allow
+data provenance	view_p1	P2	allow
+data provenance	upload_t1	P1	allow
+data provenance	upload_t1	P2	allow
+data provenance	run_p1	P1	allow
+data provenance	run_p1	P2	allow
+data provenance	manage_sales	P1	allow
+data provenance	manage_sales	P2	allow
+data provenance	runner_role	P1	allow
+data provenance	runner_role	P2	allow
+data provenance	rehash_action	P1	allow
+data provenance	rehash_action	P2	allow
+data provenance	agent	P1	deny
+data provenance	agent	P2	deny
+data unlock	admin	P1	allow
+data unlock	admin	P2	allow
+data unlock	developer	P1	hidden
+data unlock	developer	P2	deny
+data unlock	operator	P1	hidden
+data unlock	operator	P2	deny
+data unlock	viewer	P1	hidden
+data unlock	viewer	P2	deny
+data unlock	view_p1	P1	deny
+data unlock	view_p1	P2	deny
+data unlock	upload_t1	P1	deny
+data unlock	upload_t1	P2	deny
+data unlock	run_p1	P1	deny
+data unlock	run_p1	P2	deny
+data unlock	manage_sales	P1	deny
+data unlock	manage_sales	P2	deny
+data unlock	runner_role	P1	deny
+data unlock	runner_role	P2	deny
+data unlock	rehash_action	P1	deny
+data unlock	rehash_action	P2	deny
+data unlock	agent	P1	deny
+data unlock	agent	P2	deny
+docs-version	admin	-	allow
+docs-version	developer	-	deny
+docs-version	operator	-	deny
+docs-version	viewer	-	deny
+docs-version	view_p1	-	deny
+docs-version	upload_t1	-	deny
+docs-version	run_p1	-	deny
+docs-version	manage_sales	-	deny
+docs-version	runner_role	-	deny
+docs-version	rehash_action	-	deny
+docs-version	agent	-	deny
+docs-version check	admin	-	allow
+docs-version check	developer	-	allow
+docs-version check	operator	-	allow
+docs-version check	viewer	-	allow
+docs-version check	view_p1	-	allow
+docs-version check	upload_t1	-	allow
+docs-version check	run_p1	-	allow
+docs-version check	manage_sales	-	allow
+docs-version check	runner_role	-	allow
+docs-version check	rehash_action	-	allow
+docs-version check	agent	-	deny
+doctor	admin	-	allow
+doctor	developer	-	allow
+doctor	operator	-	allow
+doctor	viewer	-	allow
+doctor	view_p1	-	allow
+doctor	upload_t1	-	allow
+doctor	run_p1	-	allow
+doctor	manage_sales	-	allow
+doctor	runner_role	-	allow
+doctor	rehash_action	-	allow
+doctor	agent	-	deny
+erase	admin	-	allow
+erase	developer	-	deny
+erase	operator	-	deny
+erase	viewer	-	deny
+erase	view_p1	-	deny
+erase	upload_t1	-	deny
+erase	run_p1	-	deny
+erase	manage_sales	-	deny
+erase	runner_role	-	deny
+erase	rehash_action	-	deny
+erase	agent	-	deny
+erase list	admin	-	allow
+erase list	developer	-	deny
+erase list	operator	-	deny
+erase list	viewer	-	deny
+erase list	view_p1	-	deny
+erase list	upload_t1	-	deny
+erase list	run_p1	-	deny
+erase list	manage_sales	-	deny
+erase list	runner_role	-	deny
+erase list	rehash_action	-	deny
+erase list	agent	-	deny
+explain	admin	P1	allow
+explain	admin	P2	allow
+explain	developer	P1	hidden
+explain	developer	P2	allow
+explain	operator	P1	hidden
+explain	operator	P2	allow
+explain	viewer	P1	hidden
+explain	viewer	P2	allow
+explain	view_p1	P1	allow
+explain	view_p1	P2	allow
+explain	upload_t1	P1	allow
+explain	upload_t1	P2	allow
+explain	run_p1	P1	allow
+explain	run_p1	P2	allow
+explain	manage_sales	P1	allow
+explain	manage_sales	P2	allow
+explain	runner_role	P1	allow
+explain	runner_role	P2	allow
+explain	rehash_action	P1	allow
+explain	rehash_action	P2	allow
+explain	agent	P1	deny
+explain	agent	P2	deny
+generate-docs	admin	-	allow
+generate-docs	developer	-	deny
+generate-docs	operator	-	deny
+generate-docs	viewer	-	deny
+generate-docs	view_p1	-	deny
+generate-docs	upload_t1	-	deny
+generate-docs	run_p1	-	deny
+generate-docs	manage_sales	-	allow
+generate-docs	runner_role	-	deny
+generate-docs	rehash_action	-	deny
+generate-docs	agent	-	deny
+graph	admin	P1	allow
+graph	admin	P2	allow
+graph	developer	P1	hidden
+graph	developer	P2	allow
+graph	operator	P1	hidden
+graph	operator	P2	allow
+graph	viewer	P1	hidden
+graph	viewer	P2	allow
+graph	view_p1	P1	allow
+graph	view_p1	P2	allow
+graph	upload_t1	P1	allow
+graph	upload_t1	P2	allow
+graph	run_p1	P1	allow
+graph	run_p1	P2	allow
+graph	manage_sales	P1	allow
+graph	manage_sales	P2	allow
+graph	runner_role	P1	allow
+graph	runner_role	P2	allow
+graph	rehash_action	P1	allow
+graph	rehash_action	P2	allow
+graph	agent	P1	deny
+graph	agent	P2	deny
+group add	admin	-	allow
+group add	developer	-	deny
+group add	operator	-	deny
+group add	viewer	-	deny
+group add	view_p1	-	deny
+group add	upload_t1	-	deny
+group add	run_p1	-	deny
+group add	manage_sales	-	deny
+group add	runner_role	-	deny
+group add	rehash_action	-	deny
+group add	agent	-	deny
+group add-member	admin	-	allow
+group add-member	developer	-	deny
+group add-member	operator	-	deny
+group add-member	viewer	-	deny
+group add-member	view_p1	-	deny
+group add-member	upload_t1	-	deny
+group add-member	run_p1	-	deny
+group add-member	manage_sales	-	deny
+group add-member	runner_role	-	deny
+group add-member	rehash_action	-	deny
+group add-member	agent	-	deny
+group disable	admin	-	allow
+group disable	developer	-	deny
+group disable	operator	-	deny
+group disable	viewer	-	deny
+group disable	view_p1	-	deny
+group disable	upload_t1	-	deny
+group disable	run_p1	-	deny
+group disable	manage_sales	-	deny
+group disable	runner_role	-	deny
+group disable	rehash_action	-	deny
+group disable	agent	-	deny
+group list	admin	-	allow
+group list	developer	-	deny
+group list	operator	-	deny
+group list	viewer	-	deny
+group list	view_p1	-	deny
+group list	upload_t1	-	deny
+group list	run_p1	-	deny
+group list	manage_sales	-	deny
+group list	runner_role	-	deny
+group list	rehash_action	-	deny
+group list	agent	-	deny
+group remove-member	admin	-	allow
+group remove-member	developer	-	deny
+group remove-member	operator	-	deny
+group remove-member	viewer	-	deny
+group remove-member	view_p1	-	deny
+group remove-member	upload_t1	-	deny
+group remove-member	run_p1	-	deny
+group remove-member	manage_sales	-	deny
+group remove-member	runner_role	-	deny
+group remove-member	rehash_action	-	deny
+group remove-member	agent	-	deny
+health	admin	-	allow
+health	developer	-	allow
+health	operator	-	allow
+health	viewer	-	allow
+health	view_p1	-	allow
+health	upload_t1	-	allow
+health	run_p1	-	allow
+health	manage_sales	-	allow
+health	runner_role	-	allow
+health	rehash_action	-	allow
+health	agent	-	deny
+history	admin	P1	allow
+history	admin	P2	allow
+history	developer	P1	hidden
+history	developer	P2	allow
+history	operator	P1	hidden
+history	operator	P2	allow
+history	viewer	P1	hidden
+history	viewer	P2	allow
+history	view_p1	P1	allow
+history	view_p1	P2	allow
+history	upload_t1	P1	allow
+history	upload_t1	P2	allow
+history	run_p1	P1	allow
+history	run_p1	P2	allow
+history	manage_sales	P1	allow
+history	manage_sales	P2	allow
+history	runner_role	P1	allow
+history	runner_role	P2	allow
+history	rehash_action	P1	allow
+history	rehash_action	P2	allow
+history	agent	P1	deny
+history	agent	P2	deny
+init-db	admin	-	allow
+init-db	developer	-	deny
+init-db	operator	-	deny
+init-db	viewer	-	deny
+init-db	view_p1	-	deny
+init-db	upload_t1	-	deny
+init-db	run_p1	-	deny
+init-db	manage_sales	-	deny
+init-db	runner_role	-	deny
+init-db	rehash_action	-	deny
+init-db	agent	-	deny
+insights	admin	-	allow
+insights	developer	-	allow
+insights	operator	-	allow
+insights	viewer	-	allow
+insights	view_p1	-	allow
+insights	upload_t1	-	allow
+insights	run_p1	-	allow
+insights	manage_sales	-	allow
+insights	runner_role	-	allow
+insights	rehash_action	-	allow
+insights	agent	-	deny
+item control	admin	P1	allow
+item control	admin	P2	allow
+item control	developer	P1	hidden
+item control	developer	P2	allow
+item control	operator	P1	hidden
+item control	operator	P2	allow
+item control	viewer	P1	hidden
+item control	viewer	P2	deny
+item control	view_p1	P1	deny
+item control	view_p1	P2	deny
+item control	upload_t1	P1	deny
+item control	upload_t1	P2	deny
+item control	run_p1	P1	allow
+item control	run_p1	P2	deny
+item control	manage_sales	P1	allow
+item control	manage_sales	P2	allow
+item control	runner_role	P1	deny
+item control	runner_role	P2	deny
+item control	rehash_action	P1	deny
+item control	rehash_action	P2	deny
+item control	agent	P1	deny
+item control	agent	P2	deny
+items	admin	P1	allow
+items	admin	P2	allow
+items	developer	P1	hidden
+items	developer	P2	allow
+items	operator	P1	hidden
+items	operator	P2	allow
+items	viewer	P1	hidden
+items	viewer	P2	allow
+items	view_p1	P1	allow
+items	view_p1	P2	allow
+items	upload_t1	P1	allow
+items	upload_t1	P2	allow
+items	run_p1	P1	allow
+items	run_p1	P2	allow
+items	manage_sales	P1	allow
+items	manage_sales	P2	allow
+items	runner_role	P1	allow
+items	runner_role	P2	allow
+items	rehash_action	P1	allow
+items	rehash_action	P2	allow
+items	agent	P1	deny
+items	agent	P2	deny
+lineage	admin	-	allow
+lineage	developer	-	allow
+lineage	operator	-	allow
+lineage	viewer	-	allow
+lineage	view_p1	-	allow
+lineage	upload_t1	-	allow
+lineage	run_p1	-	allow
+lineage	manage_sales	-	allow
+lineage	runner_role	-	allow
+lineage	rehash_action	-	allow
+lineage	agent	-	deny
+lineage refresh	admin	-	allow
+lineage refresh	developer	-	deny
+lineage refresh	operator	-	deny
+lineage refresh	viewer	-	deny
+lineage refresh	view_p1	-	deny
+lineage refresh	upload_t1	-	deny
+lineage refresh	run_p1	-	deny
+lineage refresh	manage_sales	-	deny
+lineage refresh	runner_role	-	deny
+lineage refresh	rehash_action	-	deny
+lineage refresh	agent	-	deny
+login	admin	-	allow
+login	developer	-	allow
+login	operator	-	allow
+login	viewer	-	allow
+login	view_p1	-	allow
+login	upload_t1	-	allow
+login	run_p1	-	allow
+login	manage_sales	-	allow
+login	runner_role	-	allow
+login	rehash_action	-	allow
+login	agent	-	deny
+login browser callback	admin	-	allow
+login browser callback	developer	-	allow
+login browser callback	operator	-	allow
+login browser callback	viewer	-	allow
+login browser callback	view_p1	-	allow
+login browser callback	upload_t1	-	allow
+login browser callback	run_p1	-	allow
+login browser callback	manage_sales	-	allow
+login browser callback	runner_role	-	allow
+login browser callback	rehash_action	-	allow
+login browser callback	agent	-	deny
+login browser start	admin	-	allow
+login browser start	developer	-	allow
+login browser start	operator	-	allow
+login browser start	viewer	-	allow
+login browser start	view_p1	-	allow
+login browser start	upload_t1	-	allow
+login browser start	run_p1	-	allow
+login browser start	manage_sales	-	allow
+login browser start	runner_role	-	allow
+login browser start	rehash_action	-	allow
+login browser start	agent	-	deny
+login methods	admin	-	allow
+login methods	developer	-	allow
+login methods	operator	-	allow
+login methods	viewer	-	allow
+login methods	view_p1	-	allow
+login methods	upload_t1	-	allow
+login methods	run_p1	-	allow
+login methods	manage_sales	-	allow
+login methods	runner_role	-	allow
+login methods	rehash_action	-	allow
+login methods	agent	-	deny
+login sso	admin	-	allow
+login sso	developer	-	allow
+login sso	operator	-	allow
+login sso	viewer	-	allow
+login sso	view_p1	-	allow
+login sso	upload_t1	-	allow
+login sso	run_p1	-	allow
+login sso	manage_sales	-	allow
+login sso	runner_role	-	allow
+login sso	rehash_action	-	allow
+login sso	agent	-	deny
+login sso poll	admin	-	allow
+login sso poll	developer	-	allow
+login sso poll	operator	-	allow
+login sso poll	viewer	-	allow
+login sso poll	view_p1	-	allow
+login sso poll	upload_t1	-	allow
+login sso poll	run_p1	-	allow
+login sso poll	manage_sales	-	allow
+login sso poll	runner_role	-	allow
+login sso poll	rehash_action	-	allow
+login sso poll	agent	-	deny
+logout	admin	-	allow
+logout	developer	-	allow
+logout	operator	-	allow
+logout	viewer	-	allow
+logout	view_p1	-	allow
+logout	upload_t1	-	allow
+logout	run_p1	-	allow
+logout	manage_sales	-	allow
+logout	runner_role	-	allow
+logout	rehash_action	-	allow
+logout	agent	-	deny
+logs	admin	P1	allow
+logs	admin	P2	allow
+logs	developer	P1	hidden
+logs	developer	P2	allow
+logs	operator	P1	hidden
+logs	operator	P2	allow
+logs	viewer	P1	hidden
+logs	viewer	P2	allow
+logs	view_p1	P1	allow
+logs	view_p1	P2	allow
+logs	upload_t1	P1	allow
+logs	upload_t1	P2	allow
+logs	run_p1	P1	allow
+logs	run_p1	P2	allow
+logs	manage_sales	P1	allow
+logs	manage_sales	P2	allow
+logs	runner_role	P1	allow
+logs	runner_role	P2	allow
+logs	rehash_action	P1	allow
+logs	rehash_action	P2	allow
+logs	agent	P1	deny
+logs	agent	P2	deny
+mark	admin	P1	allow
+mark	admin	P2	allow
+mark	developer	P1	hidden
+mark	developer	P2	allow
+mark	operator	P1	hidden
+mark	operator	P2	allow
+mark	viewer	P1	hidden
+mark	viewer	P2	deny
+mark	view_p1	P1	deny
+mark	view_p1	P2	deny
+mark	upload_t1	P1	deny
+mark	upload_t1	P2	deny
+mark	run_p1	P1	allow
+mark	run_p1	P2	deny
+mark	manage_sales	P1	allow
+mark	manage_sales	P2	allow
+mark	runner_role	P1	deny
+mark	runner_role	P2	deny
+mark	rehash_action	P1	deny
+mark	rehash_action	P2	deny
+mark	agent	P1	deny
+mark	agent	P2	deny
+migrate	admin	-	allow
+migrate	developer	-	deny
+migrate	operator	-	deny
+migrate	viewer	-	deny
+migrate	view_p1	-	deny
+migrate	upload_t1	-	deny
+migrate	run_p1	-	deny
+migrate	manage_sales	-	allow
+migrate	runner_role	-	deny
+migrate	rehash_action	-	deny
+migrate	agent	-	deny
+offset	admin	P1	allow
+offset	admin	P2	allow
+offset	developer	P1	hidden
+offset	developer	P2	allow
+offset	operator	P1	hidden
+offset	operator	P2	allow
+offset	viewer	P1	hidden
+offset	viewer	P2	allow
+offset	view_p1	P1	allow
+offset	view_p1	P2	allow
+offset	upload_t1	P1	allow
+offset	upload_t1	P2	allow
+offset	run_p1	P1	allow
+offset	run_p1	P2	allow
+offset	manage_sales	P1	allow
+offset	manage_sales	P2	allow
+offset	runner_role	P1	allow
+offset	runner_role	P2	allow
+offset	rehash_action	P1	allow
+offset	rehash_action	P2	allow
+offset	agent	P1	deny
+offset	agent	P2	deny
+pipeline	admin	P1	allow
+pipeline	admin	P2	allow
+pipeline	developer	P1	hidden
+pipeline	developer	P2	allow
+pipeline	operator	P1	hidden
+pipeline	operator	P2	allow
+pipeline	viewer	P1	hidden
+pipeline	viewer	P2	allow
+pipeline	view_p1	P1	allow
+pipeline	view_p1	P2	allow
+pipeline	upload_t1	P1	allow
+pipeline	upload_t1	P2	allow
+pipeline	run_p1	P1	allow
+pipeline	run_p1	P2	allow
+pipeline	manage_sales	P1	allow
+pipeline	manage_sales	P2	allow
+pipeline	runner_role	P1	allow
+pipeline	runner_role	P2	allow
+pipeline	rehash_action	P1	allow
+pipeline	rehash_action	P2	allow
+pipeline	agent	P1	deny
+pipeline	agent	P2	deny
+pipeline refresh history	admin	P1	allow
+pipeline refresh history	admin	P2	allow
+pipeline refresh history	developer	P1	hidden
+pipeline refresh history	developer	P2	allow
+pipeline refresh history	operator	P1	hidden
+pipeline refresh history	operator	P2	allow
+pipeline refresh history	viewer	P1	hidden
+pipeline refresh history	viewer	P2	allow
+pipeline refresh history	view_p1	P1	allow
+pipeline refresh history	view_p1	P2	allow
+pipeline refresh history	upload_t1	P1	allow
+pipeline refresh history	upload_t1	P2	allow
+pipeline refresh history	run_p1	P1	allow
+pipeline refresh history	run_p1	P2	allow
+pipeline refresh history	manage_sales	P1	allow
+pipeline refresh history	manage_sales	P2	allow
+pipeline refresh history	runner_role	P1	allow
+pipeline refresh history	runner_role	P2	allow
+pipeline refresh history	rehash_action	P1	allow
+pipeline refresh history	rehash_action	P2	allow
+pipeline refresh history	agent	P1	deny
+pipeline refresh history	agent	P2	deny
+pipelines	admin	-	allow
+pipelines	developer	-	allow
+pipelines	operator	-	allow
+pipelines	viewer	-	allow
+pipelines	view_p1	-	allow
+pipelines	upload_t1	-	allow
+pipelines	run_p1	-	allow
+pipelines	manage_sales	-	allow
+pipelines	runner_role	-	allow
+pipelines	rehash_action	-	allow
+pipelines	agent	-	deny
+pipelines refresh	admin	P1	allow
+pipelines refresh	admin	P2	allow
+pipelines refresh	developer	P1	deny
+pipelines refresh	developer	P2	deny
+pipelines refresh	operator	P1	deny
+pipelines refresh	operator	P2	deny
+pipelines refresh	viewer	P1	deny
+pipelines refresh	viewer	P2	deny
+pipelines refresh	view_p1	P1	deny
+pipelines refresh	view_p1	P2	deny
+pipelines refresh	upload_t1	P1	deny
+pipelines refresh	upload_t1	P2	deny
+pipelines refresh	run_p1	P1	deny
+pipelines refresh	run_p1	P2	deny
+pipelines refresh	manage_sales	P1	allow
+pipelines refresh	manage_sales	P2	allow
+pipelines refresh	runner_role	P1	deny
+pipelines refresh	runner_role	P2	deny
+pipelines refresh	rehash_action	P1	deny
+pipelines refresh	rehash_action	P2	deny
+pipelines refresh	agent	P1	deny
+pipelines refresh	agent	P2	deny
+pool add	admin	-	allow
+pool add	developer	-	deny
+pool add	operator	-	deny
+pool add	viewer	-	deny
+pool add	view_p1	-	deny
+pool add	upload_t1	-	deny
+pool add	run_p1	-	deny
+pool add	manage_sales	-	deny
+pool add	runner_role	-	deny
+pool add	rehash_action	-	deny
+pool add	agent	-	deny
+pool disable	admin	-	allow
+pool disable	developer	-	deny
+pool disable	operator	-	deny
+pool disable	viewer	-	deny
+pool disable	view_p1	-	deny
+pool disable	upload_t1	-	deny
+pool disable	run_p1	-	deny
+pool disable	manage_sales	-	deny
+pool disable	runner_role	-	deny
+pool disable	rehash_action	-	deny
+pool disable	agent	-	deny
+pool list	admin	-	allow
+pool list	developer	-	deny
+pool list	operator	-	deny
+pool list	viewer	-	deny
+pool list	view_p1	-	deny
+pool list	upload_t1	-	deny
+pool list	run_p1	-	deny
+pool list	manage_sales	-	deny
+pool list	runner_role	-	deny
+pool list	rehash_action	-	deny
+pool list	agent	-	deny
+pool set	admin	-	allow
+pool set	developer	-	deny
+pool set	operator	-	deny
+pool set	viewer	-	deny
+pool set	view_p1	-	deny
+pool set	upload_t1	-	deny
+pool set	run_p1	-	deny
+pool set	manage_sales	-	deny
+pool set	runner_role	-	deny
+pool set	rehash_action	-	deny
+pool set	agent	-	deny
+project add	admin	-	allow
+project add	developer	-	deny
+project add	operator	-	deny
+project add	viewer	-	deny
+project add	view_p1	-	deny
+project add	upload_t1	-	deny
+project add	run_p1	-	deny
+project add	manage_sales	-	deny
+project add	runner_role	-	deny
+project add	rehash_action	-	deny
+project add	agent	-	deny
+project disable	admin	-	allow
+project disable	developer	-	deny
+project disable	operator	-	deny
+project disable	viewer	-	deny
+project disable	view_p1	-	deny
+project disable	upload_t1	-	deny
+project disable	run_p1	-	deny
+project disable	manage_sales	-	deny
+project disable	runner_role	-	deny
+project disable	rehash_action	-	deny
+project disable	agent	-	deny
+project list	admin	-	allow
+project list	developer	-	allow
+project list	operator	-	allow
+project list	viewer	-	allow
+project list	view_p1	-	allow
+project list	upload_t1	-	allow
+project list	run_p1	-	allow
+project list	manage_sales	-	allow
+project list	runner_role	-	allow
+project list	rehash_action	-	allow
+project list	agent	-	deny
+project set	admin	-	allow
+project set	developer	-	deny
+project set	operator	-	deny
+project set	viewer	-	deny
+project set	view_p1	-	deny
+project set	upload_t1	-	deny
+project set	run_p1	-	deny
+project set	manage_sales	-	deny
+project set	runner_role	-	deny
+project set	rehash_action	-	deny
+project set	agent	-	deny
+project-health	admin	-	allow
+project-health	developer	-	allow
+project-health	operator	-	allow
+project-health	viewer	-	allow
+project-health	view_p1	-	allow
+project-health	upload_t1	-	allow
+project-health	run_p1	-	allow
+project-health	manage_sales	-	allow
+project-health	runner_role	-	allow
+project-health	rehash_action	-	allow
+project-health	agent	-	deny
+publish-docs	admin	-	allow
+publish-docs	developer	-	deny
+publish-docs	operator	-	deny
+publish-docs	viewer	-	deny
+publish-docs	view_p1	-	deny
+publish-docs	upload_t1	-	deny
+publish-docs	run_p1	-	deny
+publish-docs	manage_sales	-	deny
+publish-docs	runner_role	-	deny
+publish-docs	rehash_action	-	deny
+publish-docs	agent	-	deny
+purge	admin	-	allow
+purge	developer	-	deny
+purge	operator	-	deny
+purge	viewer	-	deny
+purge	view_p1	-	deny
+purge	upload_t1	-	deny
+purge	run_p1	-	deny
+purge	manage_sales	-	deny
+purge	runner_role	-	deny
+purge	rehash_action	-	deny
+purge	agent	-	deny
+reconcile	admin	P1	allow
+reconcile	admin	P2	allow
+reconcile	developer	P1	hidden
+reconcile	developer	P2	allow
+reconcile	operator	P1	hidden
+reconcile	operator	P2	allow
+reconcile	viewer	P1	hidden
+reconcile	viewer	P2	deny
+reconcile	view_p1	P1	deny
+reconcile	view_p1	P2	deny
+reconcile	upload_t1	P1	deny
+reconcile	upload_t1	P2	deny
+reconcile	run_p1	P1	allow
+reconcile	run_p1	P2	deny
+reconcile	manage_sales	P1	allow
+reconcile	manage_sales	P2	allow
+reconcile	runner_role	P1	deny
+reconcile	runner_role	P2	deny
+reconcile	rehash_action	P1	deny
+reconcile	rehash_action	P2	deny
+reconcile	agent	P1	deny
+reconcile	agent	P2	deny
+refresh	admin	-	allow
+refresh	developer	-	allow
+refresh	operator	-	allow
+refresh	viewer	-	allow
+refresh	view_p1	-	allow
+refresh	upload_t1	-	allow
+refresh	run_p1	-	allow
+refresh	manage_sales	-	allow
+refresh	runner_role	-	allow
+refresh	rehash_action	-	allow
+refresh	agent	-	deny
+rehash	admin	-	allow
+rehash	developer	-	deny
+rehash	operator	-	deny
+rehash	viewer	-	deny
+rehash	view_p1	-	deny
+rehash	upload_t1	-	deny
+rehash	run_p1	-	deny
+rehash	manage_sales	-	deny
+rehash	runner_role	-	deny
+rehash	rehash_action	-	allow
+rehash	agent	-	deny
+rehash plan	admin	-	allow
+rehash plan	developer	-	allow
+rehash plan	operator	-	allow
+rehash plan	viewer	-	allow
+rehash plan	view_p1	-	allow
+rehash plan	upload_t1	-	allow
+rehash plan	run_p1	-	allow
+rehash plan	manage_sales	-	allow
+rehash plan	runner_role	-	allow
+rehash plan	rehash_action	-	allow
+rehash plan	agent	-	deny
+rename	admin	P1	allow
+rename	admin	P2	allow
+rename	developer	P1	deny
+rename	developer	P2	deny
+rename	operator	P1	deny
+rename	operator	P2	deny
+rename	viewer	P1	deny
+rename	viewer	P2	deny
+rename	view_p1	P1	deny
+rename	view_p1	P2	deny
+rename	upload_t1	P1	deny
+rename	upload_t1	P2	deny
+rename	run_p1	P1	deny
+rename	run_p1	P2	deny
+rename	manage_sales	P1	allow
+rename	manage_sales	P2	allow
+rename	runner_role	P1	deny
+rename	runner_role	P2	deny
+rename	rehash_action	P1	deny
+rename	rehash_action	P2	deny
+rename	agent	P1	deny
+rename	agent	P2	deny
+role add-action	admin	-	allow
+role add-action	developer	-	deny
+role add-action	operator	-	deny
+role add-action	viewer	-	deny
+role add-action	view_p1	-	deny
+role add-action	upload_t1	-	deny
+role add-action	run_p1	-	deny
+role add-action	manage_sales	-	deny
+role add-action	runner_role	-	deny
+role add-action	rehash_action	-	deny
+role add-action	agent	-	deny
+role create	admin	-	allow
+role create	developer	-	deny
+role create	operator	-	deny
+role create	viewer	-	deny
+role create	view_p1	-	deny
+role create	upload_t1	-	deny
+role create	run_p1	-	deny
+role create	manage_sales	-	deny
+role create	runner_role	-	deny
+role create	rehash_action	-	deny
+role create	agent	-	deny
+role describe	admin	-	allow
+role describe	developer	-	allow
+role describe	operator	-	allow
+role describe	viewer	-	allow
+role describe	view_p1	-	allow
+role describe	upload_t1	-	allow
+role describe	run_p1	-	allow
+role describe	manage_sales	-	allow
+role describe	runner_role	-	allow
+role describe	rehash_action	-	allow
+role describe	agent	-	deny
+role disable	admin	-	allow
+role disable	developer	-	deny
+role disable	operator	-	deny
+role disable	viewer	-	deny
+role disable	view_p1	-	deny
+role disable	upload_t1	-	deny
+role disable	run_p1	-	deny
+role disable	manage_sales	-	deny
+role disable	runner_role	-	deny
+role disable	rehash_action	-	deny
+role disable	agent	-	deny
+role list	admin	-	allow
+role list	developer	-	allow
+role list	operator	-	allow
+role list	viewer	-	allow
+role list	view_p1	-	allow
+role list	upload_t1	-	allow
+role list	run_p1	-	allow
+role list	manage_sales	-	allow
+role list	runner_role	-	allow
+role list	rehash_action	-	allow
+role list	agent	-	deny
+role remove-action	admin	-	allow
+role remove-action	developer	-	deny
+role remove-action	operator	-	deny
+role remove-action	viewer	-	deny
+role remove-action	view_p1	-	deny
+role remove-action	upload_t1	-	deny
+role remove-action	run_p1	-	deny
+role remove-action	manage_sales	-	deny
+role remove-action	runner_role	-	deny
+role remove-action	rehash_action	-	deny
+role remove-action	agent	-	deny
+run	admin	P1	allow
+run	admin	P2	allow
+run	developer	P1	hidden
+run	developer	P2	allow
+run	operator	P1	hidden
+run	operator	P2	allow
+run	viewer	P1	hidden
+run	viewer	P2	deny
+run	view_p1	P1	deny
+run	view_p1	P2	deny
+run	upload_t1	P1	deny
+run	upload_t1	P2	deny
+run	run_p1	P1	allow
+run	run_p1	P2	deny
+run	manage_sales	P1	allow
+run	manage_sales	P2	allow
+run	runner_role	P1	allow
+run	runner_role	P2	allow
+run	rehash_action	P1	deny
+run	rehash_action	P2	deny
+run	agent	P1	deny
+run	agent	P2	deny
+run detail	admin	P1	allow
+run detail	admin	P2	allow
+run detail	developer	P1	hidden
+run detail	developer	P2	allow
+run detail	operator	P1	hidden
+run detail	operator	P2	allow
+run detail	viewer	P1	hidden
+run detail	viewer	P2	allow
+run detail	view_p1	P1	allow
+run detail	view_p1	P2	allow
+run detail	upload_t1	P1	allow
+run detail	upload_t1	P2	allow
+run detail	run_p1	P1	allow
+run detail	run_p1	P2	allow
+run detail	manage_sales	P1	allow
+run detail	manage_sales	P2	allow
+run detail	runner_role	P1	allow
+run detail	runner_role	P2	allow
+run detail	rehash_action	P1	allow
+run detail	rehash_action	P2	allow
+run detail	agent	P1	deny
+run detail	agent	P2	deny
+run log	admin	P1	allow
+run log	admin	P2	allow
+run log	developer	P1	hidden
+run log	developer	P2	allow
+run log	operator	P1	hidden
+run log	operator	P2	allow
+run log	viewer	P1	hidden
+run log	viewer	P2	allow
+run log	view_p1	P1	allow
+run log	view_p1	P2	allow
+run log	upload_t1	P1	allow
+run log	upload_t1	P2	allow
+run log	run_p1	P1	allow
+run log	run_p1	P2	allow
+run log	manage_sales	P1	allow
+run log	manage_sales	P2	allow
+run log	runner_role	P1	allow
+run log	runner_role	P2	allow
+run log	rehash_action	P1	allow
+run log	rehash_action	P2	allow
+run log	agent	P1	deny
+run log	agent	P2	deny
+run zip	admin	P1	allow
+run zip	admin	P2	allow
+run zip	developer	P1	hidden
+run zip	developer	P2	allow
+run zip	operator	P1	hidden
+run zip	operator	P2	allow
+run zip	viewer	P1	hidden
+run zip	viewer	P2	allow
+run zip	view_p1	P1	allow
+run zip	view_p1	P2	allow
+run zip	upload_t1	P1	allow
+run zip	upload_t1	P2	allow
+run zip	run_p1	P1	allow
+run zip	run_p1	P2	allow
+run zip	manage_sales	P1	allow
+run zip	manage_sales	P2	allow
+run zip	runner_role	P1	allow
+run zip	runner_role	P2	allow
+run zip	rehash_action	P1	allow
+run zip	rehash_action	P2	allow
+run zip	agent	P1	deny
+run zip	agent	P2	deny
+search	admin	-	allow
+search	developer	-	allow
+search	operator	-	allow
+search	viewer	-	allow
+search	view_p1	-	allow
+search	upload_t1	-	allow
+search	run_p1	-	allow
+search	manage_sales	-	allow
+search	runner_role	-	allow
+search	rehash_action	-	allow
+search	agent	-	deny
+seed apply	admin	-	allow
+seed apply	developer	-	allow
+seed apply	operator	-	deny
+seed apply	viewer	-	deny
+seed apply	view_p1	-	deny
+seed apply	upload_t1	-	deny
+seed apply	run_p1	-	deny
+seed apply	manage_sales	-	deny
+seed apply	runner_role	-	deny
+seed apply	rehash_action	-	deny
+seed apply	agent	-	deny
+setup	admin	-	allow
+setup	developer	-	deny
+setup	operator	-	deny
+setup	viewer	-	deny
+setup	view_p1	-	deny
+setup	upload_t1	-	deny
+setup	run_p1	-	deny
+setup	manage_sales	-	deny
+setup	runner_role	-	deny
+setup	rehash_action	-	deny
+setup	agent	-	deny
+setup grants	admin	-	allow
+setup grants	developer	-	allow
+setup grants	operator	-	allow
+setup grants	viewer	-	allow
+setup grants	view_p1	-	allow
+setup grants	upload_t1	-	allow
+setup grants	run_p1	-	allow
+setup grants	manage_sales	-	allow
+setup grants	runner_role	-	allow
+setup grants	rehash_action	-	allow
+setup grants	agent	-	deny
+status	admin	P1	allow
+status	admin	P2	allow
+status	developer	P1	hidden
+status	developer	P2	allow
+status	operator	P1	hidden
+status	operator	P2	allow
+status	viewer	P1	hidden
+status	viewer	P2	allow
+status	view_p1	P1	allow
+status	view_p1	P2	allow
+status	upload_t1	P1	allow
+status	upload_t1	P2	allow
+status	run_p1	P1	allow
+status	run_p1	P2	allow
+status	manage_sales	P1	allow
+status	manage_sales	P2	allow
+status	runner_role	P1	allow
+status	runner_role	P2	allow
+status	rehash_action	P1	allow
+status	rehash_action	P2	allow
+status	agent	P1	deny
+status	agent	P2	deny
+steps	admin	P1	allow
+steps	admin	P2	allow
+steps	developer	P1	hidden
+steps	developer	P2	allow
+steps	operator	P1	hidden
+steps	operator	P2	allow
+steps	viewer	P1	hidden
+steps	viewer	P2	allow
+steps	view_p1	P1	allow
+steps	view_p1	P2	allow
+steps	upload_t1	P1	allow
+steps	upload_t1	P2	allow
+steps	run_p1	P1	allow
+steps	run_p1	P2	allow
+steps	manage_sales	P1	allow
+steps	manage_sales	P2	allow
+steps	runner_role	P1	allow
+steps	runner_role	P2	allow
+steps	rehash_action	P1	allow
+steps	rehash_action	P2	allow
+steps	agent	P1	deny
+steps	agent	P2	deny
+table preview	admin	-	allow
+table preview	developer	-	allow
+table preview	operator	-	deny
+table preview	viewer	-	deny
+table preview	view_p1	-	deny
+table preview	upload_t1	-	deny
+table preview	run_p1	-	deny
+table preview	manage_sales	-	deny
+table preview	runner_role	-	deny
+table preview	rehash_action	-	deny
+table preview	agent	-	deny
+task	admin	P1	allow
+task	admin	P2	allow
+task	developer	P1	hidden
+task	developer	P2	allow
+task	operator	P1	hidden
+task	operator	P2	allow
+task	viewer	P1	hidden
+task	viewer	P2	allow
+task	view_p1	P1	allow
+task	view_p1	P2	allow
+task	upload_t1	P1	allow
+task	upload_t1	P2	allow
+task	run_p1	P1	allow
+task	run_p1	P2	allow
+task	manage_sales	P1	allow
+task	manage_sales	P2	allow
+task	runner_role	P1	allow
+task	runner_role	P2	allow
+task	rehash_action	P1	allow
+task	rehash_action	P2	allow
+task	agent	P1	deny
+task	agent	P2	deny
+token create	admin	-	allow
+token create	developer	-	deny
+token create	operator	-	deny
+token create	viewer	-	deny
+token create	view_p1	-	deny
+token create	upload_t1	-	deny
+token create	run_p1	-	deny
+token create	manage_sales	-	deny
+token create	runner_role	-	deny
+token create	rehash_action	-	deny
+token create	agent	-	deny
+token list	admin	-	allow
+token list	developer	-	deny
+token list	operator	-	deny
+token list	viewer	-	deny
+token list	view_p1	-	deny
+token list	upload_t1	-	deny
+token list	run_p1	-	deny
+token list	manage_sales	-	deny
+token list	runner_role	-	deny
+token list	rehash_action	-	deny
+token list	agent	-	deny
+token revoke	admin	-	allow
+token revoke	developer	-	deny
+token revoke	operator	-	deny
+token revoke	viewer	-	deny
+token revoke	view_p1	-	deny
+token revoke	upload_t1	-	deny
+token revoke	run_p1	-	deny
+token revoke	manage_sales	-	deny
+token revoke	runner_role	-	deny
+token revoke	rehash_action	-	deny
+token revoke	agent	-	deny
+trigger-pipeline	admin	P1	refused:MetadataError
+trigger-pipeline	admin	P2	refused:MetadataError
+trigger-pipeline	developer	P1	refused:MetadataError
+trigger-pipeline	developer	P2	refused:MetadataError
+trigger-pipeline	operator	P1	refused:MetadataError
+trigger-pipeline	operator	P2	refused:MetadataError
+trigger-pipeline	viewer	P1	refused:MetadataError
+trigger-pipeline	viewer	P2	refused:MetadataError
+trigger-pipeline	view_p1	P1	refused:MetadataError
+trigger-pipeline	view_p1	P2	refused:MetadataError
+trigger-pipeline	upload_t1	P1	refused:MetadataError
+trigger-pipeline	upload_t1	P2	refused:MetadataError
+trigger-pipeline	run_p1	P1	refused:MetadataError
+trigger-pipeline	run_p1	P2	refused:MetadataError
+trigger-pipeline	manage_sales	P1	refused:MetadataError
+trigger-pipeline	manage_sales	P2	refused:MetadataError
+trigger-pipeline	runner_role	P1	refused:MetadataError
+trigger-pipeline	runner_role	P2	refused:MetadataError
+trigger-pipeline	rehash_action	P1	refused:MetadataError
+trigger-pipeline	rehash_action	P2	refused:MetadataError
+trigger-pipeline	agent	P1	refused:MetadataError
+trigger-pipeline	agent	P2	refused:MetadataError
+ui	admin	-	allow
+ui	developer	-	deny
+ui	operator	-	deny
+ui	viewer	-	deny
+ui	view_p1	-	deny
+ui	upload_t1	-	deny
+ui	run_p1	-	deny
+ui	manage_sales	-	deny
+ui	runner_role	-	deny
+ui	rehash_action	-	deny
+ui	agent	-	deny
+upload	admin	P1	allow
+upload	admin	P2	allow
+upload	developer	P1	hidden
+upload	developer	P2	allow
+upload	operator	P1	hidden
+upload	operator	P2	allow
+upload	viewer	P1	hidden
+upload	viewer	P2	allow
+upload	view_p1	P1	allow
+upload	view_p1	P2	allow
+upload	upload_t1	P1	allow
+upload	upload_t1	P2	allow
+upload	run_p1	P1	allow
+upload	run_p1	P2	allow
+upload	manage_sales	P1	allow
+upload	manage_sales	P2	allow
+upload	runner_role	P1	allow
+upload	runner_role	P2	allow
+upload	rehash_action	P1	allow
+upload	rehash_action	P2	allow
+upload	agent	P1	deny
+upload	agent	P2	deny
+upload pipelines	admin	-	allow
+upload pipelines	developer	-	allow
+upload pipelines	operator	-	allow
+upload pipelines	viewer	-	allow
+upload pipelines	view_p1	-	allow
+upload pipelines	upload_t1	-	allow
+upload pipelines	run_p1	-	allow
+upload pipelines	manage_sales	-	allow
+upload pipelines	runner_role	-	allow
+upload pipelines	rehash_action	-	allow
+upload pipelines	agent	-	deny
+uploads	admin	P1	allow
+uploads	admin	P2	allow
+uploads	developer	P1	hidden
+uploads	developer	P2	allow
+uploads	operator	P1	hidden
+uploads	operator	P2	allow
+uploads	viewer	P1	hidden
+uploads	viewer	P2	allow
+uploads	view_p1	P1	allow
+uploads	view_p1	P2	allow
+uploads	upload_t1	P1	allow
+uploads	upload_t1	P2	allow
+uploads	run_p1	P1	allow
+uploads	run_p1	P2	allow
+uploads	manage_sales	P1	allow
+uploads	manage_sales	P2	allow
+uploads	runner_role	P1	allow
+uploads	runner_role	P2	allow
+uploads	rehash_action	P1	allow
+uploads	rehash_action	P2	allow
+uploads	agent	P1	deny
+uploads	agent	P2	deny
+validate	admin	P1	allow
+validate	admin	P2	allow
+validate	developer	P1	hidden
+validate	developer	P2	allow
+validate	operator	P1	hidden
+validate	operator	P2	allow
+validate	viewer	P1	hidden
+validate	viewer	P2	allow
+validate	view_p1	P1	allow
+validate	view_p1	P2	allow
+validate	upload_t1	P1	allow
+validate	upload_t1	P2	allow
+validate	run_p1	P1	allow
+validate	run_p1	P2	allow
+validate	manage_sales	P1	allow
+validate	manage_sales	P2	allow
+validate	runner_role	P1	allow
+validate	runner_role	P2	allow
+validate	rehash_action	P1	allow
+validate	rehash_action	P2	allow
+validate	agent	P1	deny
+validate	agent	P2	deny
+whoami	admin	-	allow
+whoami	developer	-	allow
+whoami	operator	-	allow
+whoami	viewer	-	allow
+whoami	view_p1	-	allow
+whoami	upload_t1	-	allow
+whoami	run_p1	-	allow
+whoami	manage_sales	-	allow
+whoami	runner_role	-	allow
+whoami	rehash_action	-	allow
+whoami	agent	-	deny
