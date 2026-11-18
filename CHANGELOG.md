@@ -6,6 +6,16 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+- Erasure happens at write time. Every managed SQL action whose target an active erasure entry
+  covers filters its SELECT with `(column IS NULL OR column NOT IN (erased keys))` on each
+  covered column, keys cast to the column's type and bound as parameters, so a resent
+  identifier is never written and never reaches a new time-travel version. A Python script
+  task deletes erased identifiers from its `TARGET_OBJECT` in the same attempt, after the script
+  returns or fails. `HANDLER=ERASURE` is removed (and with it doctor's "no ERASURE task"
+  finding); `erase` keeps its one-time delete of existing rows. API-only agents receive the
+  keys for their attempt's own target through the new `ERASURE_FILTERS` agent report; the
+  `ERASURE` report now serves Python script attempts.
+
 - `etl-craft adopt-target --target T [--select SQL] [--keep-original] [--dry-run]` replaces
   `upgrade-targets`. It takes over a table etl-craft did not create as the target of its
   configured SQL writer: it builds a new table with the writer's managed columns and `ROW_ID`,

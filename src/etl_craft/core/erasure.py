@@ -1,7 +1,7 @@
-"""Private register entries and safe erasure reports shared across task transports."""
+"""Private register entries, write filters and safe erasure reports shared across transports."""
 
 from dataclasses import dataclass, field
-from typing import ClassVar
+from typing import ClassVar, Protocol, runtime_checkable
 
 
 @dataclass(frozen=True)
@@ -60,3 +60,24 @@ class ErasureReport:
     tables: tuple[ErasedTable, ...] = ()
     unfollowed: tuple[Unfollowed, ...] = ()
     dry_run: bool = False
+
+
+@dataclass(frozen=True)
+class ErasureFilter:
+    """One column of a write target and the erased keys its writer must not write."""
+
+    column: str
+    keys: tuple[str, ...] = field(repr=False)
+
+
+@runtime_checkable
+class HostErasure(Protocol):
+    """An agent task store, whose host computes filters and deletes for the attempt's target."""
+
+    def erasure_filters(self, target: str) -> tuple[ErasureFilter, ...]:
+        """Return the erased keys this attempt's admitted target must not be written with."""
+        ...
+
+    def erase_written(self, target: str) -> ErasureReport:
+        """Delete erased keys a script just wrote to its admitted target; return HMAC counts."""
+        ...

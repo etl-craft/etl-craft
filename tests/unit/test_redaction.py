@@ -49,9 +49,10 @@ def test_agent_erasure_waits_for_host_without_transmitting_a_key():
             return AgentReply(to_json(ErasureReport()))
 
     store = RemoteTaskStore(Client(), 7, lambda _: None, "holder")
-    assert store.erasure() == ErasureReport()
+    assert store.erase_written("ds.people") == ErasureReport()
     assert sent["name"] == ActionName.AGENT_REPORT
     assert sent["request"].operation == AgentReport.ERASURE
+    assert sent["request"].target == "ds.people"
     assert sent["request"].attempt_id == 7
     assert sent["timeout"] is None
 

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from contextlib import nullcontext
-from dataclasses import asdict, dataclass, replace
+from dataclasses import dataclass, replace
 from graphlib import CycleError, TopologicalSorter
 
 from sqlalchemy.engine import Engine
@@ -15,8 +15,10 @@ from etl_craft.core.enums import Handler, IcebergMaintenance, ScriptKind, SqlAct
 from etl_craft.core.erasure import (
     ErasedTable,
     ErasureEntry,
+    ErasureFilter,
     ErasureReport,
     ErasureSelection,
+    HostErasure,
     Unfollowed,
 )
 from etl_craft.core.errors import HandlerError
@@ -32,7 +34,6 @@ from etl_craft.engine.task_store import TaskStore
 from etl_craft.handlers.erasure_delete import count_or_delete
 from etl_craft.handlers.erasure_lineage import boundaries, project_graph
 from etl_craft.handlers.lineage import COPY, TaskLineage, collect, table_name
-from etl_craft.handlers.registry import HandlerResult, TaskContext, task_store
 from etl_craft.handlers.resources import LocalLocker
 from etl_craft.handlers.sql.spec import WRITERS
 from etl_craft.warehouse.connection import open_warehouse, warehouse_dialect, warehouse_task
@@ -227,6 +228,40 @@ def _selections(
     return selections
 
 
+def active_entries(engine: Engine) -> tuple[ErasureEntry, ...]:
+    """Read the project's active register entries, with their private keys."""
+    with engine.connect() as conn:
+        return tuple(
+            ErasureEntry(r.table_name, r.column_name, r.subject_key, r.key_hmac)
+            for r in conn.execute(statement(conn, "erasure_entries"), {"all_entries": False})
+        )
+
+
+def write_filters(
+    engine: Engine, config: ConnectorConfig, target: str
+) -> tuple[ErasureFilter, ...]:
+    """Name each column of ``target`` that carries an erased identifier, with its keys.
+
+    Coverage follows the same direct-copy lineage as erasure itself, so a writer filters
+    exactly the columns an erasure would delete from. No active entry means no filter.
+    """
+    entries = active_entries(engine)
+    if not entries:
+        return ()
+    wanted = identity(config, target).lower()
+    keys: dict[str, list[str]] = {}
+    # ponytail: coverage is recomputed per write; cache it per run if many entries make it slow.
+    graph = project_coverage(engine, config)
+    for entry in entries:
+        reached, _ = coverage(config, entry, graph)
+        for table, column in reached:
+            if identity(config, table).lower() == wanted:
+                keys.setdefault(column, []).append(entry.value)
+    return tuple(
+        ErasureFilter(column, tuple(dict.fromkeys(values))) for column, values in keys.items()
+    )
+
+
 def apply_entries(
     engine: Engine,
     config: ConnectorConfig,
@@ -234,8 +269,12 @@ def apply_entries(
     *,
     dry_run: bool = False,
     store: TaskStore | None = None,
+    only: str | None = None,
 ) -> ErasureReport:
-    """Preflight all coverage before deleting, then commit tables in upstream-first order."""
+    """Preflight all coverage before deleting, then commit tables in upstream-first order.
+
+    ``only`` restricts deletion to one table a script just wrote; its rejects are not written.
+    """
     from etl_craft.engine.privacy import check
 
     with engine.connect() as conn:
@@ -264,6 +303,8 @@ def apply_entries(
             assert graph is not None
             for selection in _selections(entry, reached, graph, unfollowed):
                 name = selection.entry.table
+                if only is not None and identity(config, name).lower() != only.lower():
+                    continue
                 locker = store or LocalLocker(engine, config)
                 with (
                     locks.target(selection.parent, active_catalog(config)).hold(locker)
@@ -290,18 +331,18 @@ def apply_entries(
                         )
                 if not dry_run:
                     fault_point("erasure.after_table")
-            boundaries.update(
-                {
-                    b.table: replace(
-                        b,
-                        table=mask_text(b.table),
-                        reason=mask_text(b.reason),
-                        remedy=mask_text(b.remedy),
-                    )
-                    for b in unfollowed
-                }
-            )
+            boundaries.update({b.table: _masked(b) for b in unfollowed})
     return ErasureReport(tuple(tables), tuple(boundaries.values()), dry_run)
+
+
+def _masked(boundary: Unfollowed) -> Unfollowed:
+    """Mask registered keys in a boundary's table, reason and remedy."""
+    return replace(
+        boundary,
+        table=mask_text(boundary.table),
+        reason=mask_text(boundary.reason),
+        remedy=mask_text(boundary.remedy),
+    )
 
 
 def _retention(
@@ -360,31 +401,32 @@ def check_column(
     return resolved_column(warehouse, warehouse_dialect(config), table, column, lineage=lineage)
 
 
-def run(context: TaskContext, backend: Engine | TaskStore) -> HandlerResult:
-    """Reapply every active project entry using the run's pinned metadata."""
-    if not isinstance(backend, Engine):
-        report = backend.erasure()
-    else:
-        with using(context._definition):
-            with backend.connect() as conn:
-                entries = tuple(
-                    ErasureEntry(r.table_name, r.column_name, r.subject_key, r.key_hmac)
-                    for r in conn.execute(
-                        statement(conn, "erasure_entries"), {"all_entries": False}
-                    )
-                )
-            report = apply_entries(
-                backend,
-                context.config,
-                entries,
-                store=task_store(context, backend, with_warehouse=False),
-            )
-    return HandlerResult(
-        delete_count=sum(t.rows for t in report.tables),
-        variables={
-            Handler.ERASURE: {
-                "tables": [asdict(t) for t in report.tables],
-                "unfollowed": [asdict(t) for t in report.unfollowed],
-            }
-        },
-    )
+def store_filters(store: TaskStore, target: str) -> tuple[ErasureFilter, ...]:
+    """Return the attempt's target filters: computed here locally, by the host for agents."""
+    from etl_craft.engine.task_store import LocalTaskStore
+
+    if not isinstance(store, LocalTaskStore):
+        if not isinstance(store, HostErasure):
+            raise HandlerError(f"{target}: this task store cannot reach erasure; run the task")
+        return store.erasure_filters(target)
+    store.admit_target(target)
+    with using(store.definition):
+        return write_filters(store.engine, store.config, target)
+
+
+def store_erase_written(store: TaskStore, target: str) -> ErasureReport:
+    """Delete erased keys a script wrote: here locally, by the host for agents."""
+    from etl_craft.engine.task_store import LocalTaskStore
+
+    if not isinstance(store, LocalTaskStore):
+        if not isinstance(store, HostErasure):
+            raise HandlerError(f"{target}: this task store cannot reach erasure; run the task")
+        return store.erase_written(target)
+    store.admit_target(target)
+    with using(store.definition):
+        entries = active_entries(store.engine)
+        if not entries:
+            return ErasureReport()
+        return apply_entries(
+            store.engine, store.config, entries, store=store, only=identity(store.config, target)
+        )

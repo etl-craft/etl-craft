@@ -2,8 +2,6 @@
 
 from enum import StrEnum
 
-from etl_craft.core.enums import Handler
-
 
 class ProtectionStatus(StrEnum):
     """Name the immutable intent lifecycle outcomes."""
@@ -25,7 +23,7 @@ class ProtectionKind(StrEnum):
     UNLOCK = "UNLOCK"
     REHASH = "REHASH"
     HARD_DELETE = "HARD_DELETE"
-    ERASURE = Handler.ERASURE
+    ERASURE = "ERASURE"
 
 
 class ProtectionEvidence(StrEnum):

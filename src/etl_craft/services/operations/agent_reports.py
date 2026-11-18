@@ -51,6 +51,7 @@ from etl_craft.engine.repository.pipelines import selected_project
 from etl_craft.engine.task_store import LocalTaskStore, TaskIdentity
 from etl_craft.execution.bundle_files import prepare_task
 from etl_craft.execution.context import build_task_context
+from etl_craft.handlers.erasure import store_erase_written, store_filters
 from etl_craft.handlers.registry import TaskContext
 from etl_craft.handlers.resources import LocalLocker
 from etl_craft.services.operations import log_storage
@@ -275,7 +276,7 @@ def report(ctx: OperationContext, request: AgentTask) -> AgentReply | Awaitable[
     ):
         return _alert_delivery(ctx, task)
     if request.operation == AgentReport.ERASURE:
-        return _erasure(ctx, task)
+        return _erasure(ctx, task, required(request.target, "target"))
     store = _store(ctx, task)
     if (
         request.operation in {AgentReport.ITEMS, AgentReport.ITEM_EVENT, AgentReport.ITEM_PREPARE}
@@ -301,6 +302,9 @@ def report(ctx: OperationContext, request: AgentTask) -> AgentReply | Awaitable[
         ),
         AgentReport.BUNDLE: lambda: bundle_report(ctx, task, request),
         AgentReport.STATE: lambda: store.state(task.task_params.get("SQL_ACTION")),
+        AgentReport.ERASURE_FILTERS: lambda: store_filters(
+            store, required(request.target, "target")
+        ),
         AgentReport.ALERT: lambda: store.alert(task.task_params.get("EMAIL_PIPELINES")),
         AgentReport.WATERMARK: lambda: _watermark(store, task, request),
         AgentReport.ITEMS: store.items,
@@ -529,28 +533,21 @@ def _watermark(store: LocalTaskStore, task: TaskContext, request: AgentTask) -> 
     return None
 
 
-def _erasure(ctx: OperationContext, task: TaskContext) -> AgentReply:
-    """Execute only the admitted ERASURE task; personal keys never cross the agent API."""
-    from etl_craft.core.erasure import ErasureEntry
+def _erasure(ctx: OperationContext, task: TaskContext, target: str) -> AgentReply:
+    """Delete erased keys a Python script wrote to its admitted target, on the host."""
     from etl_craft.engine.run_definitions import for_run
-    from etl_craft.handlers.erasure import apply_entries
 
-    if task.handler != Handler.ERASURE:
+    if task.handler != Handler.PYTHON:
         raise PermissionDeniedError(
-            f"{task.pipeline_code}.{task.task_code}: handler={task.handler}; expected ERASURE; "
-            "use the ERASURE task's own live attempt credential"
+            f"{task.pipeline_code}.{task.task_code}: handler={task.handler}; expected PYTHON; "
+            "SQL actions filter erased keys as they write"
         )
     store = _store(ctx, task)
     holder = resource_locks.Holder(
         store.identity.holder_id, task.owner or "", ctx.actor, task.attempt_id
     )
     with for_run(ctx.engine, task.pipeline_run_id), resource_locks.holder_scope(holder):
-        with ctx.engine.connect() as conn:
-            entries = tuple(
-                ErasureEntry(r.table_name, r.column_name, r.subject_key, r.key_hmac)
-                for r in conn.execute(statement(conn, "erasure_entries"), {"all_entries": False})
-            )
-        return AgentReply(apply_entries(ctx.engine, task.config, entries, store=store))
+        return AgentReply(store_erase_written(store, target))
 
 
 async def _alert_delivery(ctx: OperationContext, task: TaskContext) -> AgentReply:

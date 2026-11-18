@@ -5,12 +5,10 @@ from typing import TYPE_CHECKING
 from sqlalchemy.engine import Connection, Engine
 
 from etl_craft.config import ConnectorConfig
-from etl_craft.core.enums import Handler
 from etl_craft.core.erasure import ErasureEntry
 from etl_craft.core.errors import EtlCraftError
 from etl_craft.core.redaction import registering
 from etl_craft.engine.queries import statement
-from etl_craft.engine.repository.validation import fetch_active_tasks
 from etl_craft.handlers.erasure import apply_entries, check_column, secret
 from etl_craft.handlers.resources import LocalLocker
 from etl_craft.warehouse.connection import open_warehouse
@@ -30,8 +28,8 @@ def problems(engine: Engine, config: ConnectorConfig, *, check_coverage: bool = 
 def findings(engine: Engine, config: ConnectorConfig, *, check_coverage: bool = True) -> Findings:
     """Run one dry erasure pass for both the coverage failures and the retention warnings."""
     with engine.connect() as conn:
-        entries, has_task = _registered(conn)
-    return _checked(engine, config, entries, has_task, check_coverage)
+        entries = _registered(conn)
+    return _checked(engine, config, entries, check_coverage)
 
 
 def doctor_checks(engine: Engine, config: ConnectorConfig) -> list["Check"]:
@@ -48,31 +46,27 @@ def problems_on(
     conn: Connection, engine: Engine, config: ConnectorConfig, *, check_coverage: bool = True
 ) -> list[str]:
     """Check erasure entries in the caller's stable metadata transaction."""
-    entries, has_task = _registered(conn)
-    return _checked(engine, config, entries, has_task, check_coverage)[0]
+    return _checked(engine, config, _registered(conn), check_coverage)[0]
 
 
-def _registered(conn: Connection) -> tuple[tuple[ErasureEntry, ...], bool]:
-    entries = tuple(
+def _registered(conn: Connection) -> tuple[ErasureEntry, ...]:
+    return tuple(
         ErasureEntry(r.table_name, r.column_name, r.subject_key, r.key_hmac)
         for r in conn.execute(statement(conn, "erasure_entries"), {"all_entries": False})
     )
-    tasks = fetch_active_tasks(conn)
-    return entries, any(task.handler == Handler.ERASURE for task in tasks)
 
 
 def _checked(
     engine: Engine,
     config: ConnectorConfig,
     entries: tuple[ErasureEntry, ...],
-    has_task: bool,
     check_coverage: bool,
 ) -> Findings:
-    if not entries and not has_task:
+    if not entries:
         return [], []
     try:
         with registering(*(entry.value for entry in entries)):
-            return _problems(engine, config, entries, has_task, check_coverage)
+            return _problems(engine, config, entries, check_coverage)
     except EtlCraftError as error:
         return [str(error)], []
 
@@ -81,7 +75,6 @@ def _problems(
     engine: Engine,
     config: ConnectorConfig,
     entries: tuple[ErasureEntry, ...],
-    has_task: bool,
     check_coverage: bool,
 ) -> Findings:
     if not check_coverage:
@@ -92,8 +85,6 @@ def _problems(
         return [], []
     report = apply_entries(engine, config, entries, dry_run=True)
     found = [f"{b.table}: {b.reason} {b.remedy}" for b in report.unfollowed]
-    if entries and not has_task:
-        found.append("active erasure entries have no ERASURE task; add one after loads or nightly")
     unbounded = {
         t.table: (
             f"{t.table}: erased rows remain in {t.old_versions} with no bounded expiry; "

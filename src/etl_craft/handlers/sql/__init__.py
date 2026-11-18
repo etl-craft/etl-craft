@@ -19,6 +19,7 @@ from etl_craft.core.actor import Actor
 from etl_craft.core.enums import ActorKind, SqlAction
 from etl_craft.core.errors import ConfigurationError, SqlGuardError
 from etl_craft.core.faults import fault_point
+from etl_craft.core.redaction import registering
 from etl_craft.core.text import qualify as qualify
 from etl_craft.dialects.warehouse import WarehouseDialect
 from etl_craft.dialects.warehouse.uploads import writer_parameters
@@ -86,6 +87,7 @@ def run(context: TaskContext, engine_db: Engine | TaskStore) -> HandlerResult:
             session.protection_store = store
             _recover_protection(session, store)
             session.uploads, session.bindings = context.uploads, writer_parameters(context.uploads)
+            task, erased = _erasure_filtered(task, session, store)
             action = ActionContext(
                 task=task,
                 context=context,
@@ -95,7 +97,8 @@ def run(context: TaskContext, engine_db: Engine | TaskStore) -> HandlerResult:
                 state=state,
                 uploads=context.uploads,
             )
-            outcome = _apply(session, action)
+            with registering(*erased):
+                outcome = _apply(session, action)
             conn.commit()
         from etl_craft.handlers.protection_recovery import committed
 
@@ -108,6 +111,60 @@ def run(context: TaskContext, engine_db: Engine | TaskStore) -> HandlerResult:
             raise outcome
         _publish(session, store)
     return replace(outcome, offset=session.watermark_to) if task.watermark is not None else outcome
+
+
+def _erasure_filtered(
+    task: SqlTask, session: Session, store: TaskStore
+) -> tuple[SqlTask, tuple[str, ...]]:
+    """Keep erased identifiers out of the rows this action writes.
+
+    Each covered column must be NULL or none of the erased keys, each cast to the column's
+    type. NULL identifiers are kept: ``NOT IN`` alone would drop them.
+    """
+    from etl_craft.core.redaction import remember
+    from etl_craft.dialects.business_rules import quote_output_key
+    from etl_craft.handlers.sql.spec import WRITERS
+
+    if task.select_sql is None or task.action not in WRITERS:
+        return task, ()
+    from etl_craft.handlers.erasure import store_filters
+
+    filters = store_filters(store, task.target_object)
+    if not filters:
+        return task, ()
+    types = _output_types(session, task.select_sql)
+    conditions, keys = [], []
+    for i, erased in enumerate(filters):
+        kind = types.get(erased.column.lower())
+        if kind is None:
+            raise SqlGuardError(
+                f"{session.target}: erasure covers column {erased.column}, but the SELECT does "
+                "not return it; expected the covered identifier column; correct the SELECT or "
+                "the erasure entry"
+            )
+        column = quote_output_key(erased.column, session.dialect.sqlglot_dialect)
+        values = []
+        for j, key in enumerate(erased.keys):
+            session.bindings[f"erased_{i}_{j}"] = remember(key)
+            values.append(f"CAST(:erased_{i}_{j} AS {kind})")
+            keys.append(key)
+        conditions.append(f"({column} IS NULL OR {column} NOT IN ({', '.join(values)}))")
+    filtered = f"SELECT * FROM ({task.select_sql}) etl_erased WHERE {' AND '.join(conditions)}"
+    return replace(task, select_sql=filtered), tuple(keys)
+
+
+def _output_types(session: Session, select_sql: str) -> dict[str, str]:
+    """Return the SELECT's column types, lowercase, without reading any row."""
+    described = session.describe_select(select_sql)
+    if described is None:
+        stage = session.create_scratch(
+            session.scratch("erased"),
+            f"SELECT * FROM ({select_sql}) etl_src WHERE 1 = 0",
+            step="read the SELECT's column types for the erasure filter",
+        )
+        described = session.columns(stage)
+        session.drop(stage)
+    return {name.lower(): kind for name, kind in described}
 
 
 def _read_state(task: SqlTask, context: TaskContext, store: TaskStore) -> TaskState | None:

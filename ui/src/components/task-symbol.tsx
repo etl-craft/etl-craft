@@ -1,4 +1,4 @@
-import { Database, Code, Download, Terminal, FileCheck2, Eraser, ShieldCheck, Bell, Hourglass, Network, Table2, Plus, Replace, ListPlus, GitMerge, History, Trash2, ListMinus, Eye, type LucideIcon } from "lucide-react";
+import { Database, Code, Download, Terminal, FileCheck2, ShieldCheck, Bell, Hourglass, Network, Table2, Plus, Replace, ListPlus, GitMerge, History, Trash2, ListMinus, Eye, type LucideIcon } from "lucide-react";
 import type { CatalogTask } from "@/lib/catalog";
 import { handlerLabel } from "@/lib/labels";
 
@@ -16,7 +16,7 @@ export function taskSymbol(task: CatalogTask): { icon: LucideIcon; label: string
     return action && actions[action] ? actions[action] : {icon:Database,label:"Managed SQL"};
   }
   if (task.handler === "PYTHON") return task.script_kind === "INGESTION" ? {icon:Download,label:"Python ingestion"} : {icon:Code,label:task.script_kind === "UTILITY" ? "Python utility" : "Python"};
-  return {icon:({SQL_SCRIPT:Terminal,FILE_VALIDATION:FileCheck2,ERASURE:Eraser,BUSINESS_RULES:ShieldCheck,EMAIL_ALERT:Bell,EVENT_WAIT:Hourglass,RUN_PIPELINE:Network} as Record<string,LucideIcon>)[task.handler] ?? Code,label:task.handler === "EMAIL_ALERT" ? "Alert" : handlerLabel(task.handler)};
+  return {icon:({SQL_SCRIPT:Terminal,FILE_VALIDATION:FileCheck2,BUSINESS_RULES:ShieldCheck,EMAIL_ALERT:Bell,EVENT_WAIT:Hourglass,RUN_PIPELINE:Network} as Record<string,LucideIcon>)[task.handler] ?? Code,label:task.handler === "EMAIL_ALERT" ? "Alert" : handlerLabel(task.handler)};
 }
 
 export const kindLabels:Record<string,string> = {source:"Source",join:"Join",filter:"Filter",expression:"Expression",aggregate:"Aggregate",rules:"Rules",write:"Write",target:"Target",set:"Set operation"};
@@ -25,7 +25,7 @@ const ROLE: Record<string, "in" | "mid" | "out" | "join" | "filter"> = {
   source: "in", INGESTION: "in", EVENT_WAIT: "in",
   join: "join", aggregate: "join", set: "join",
   filter: "filter", rules: "filter", BUSINESS_RULES: "filter", FILE_VALIDATION: "filter",
-  write: "out", target: "out", EMAIL_ALERT: "out", ERASURE: "out", RUN_PIPELINE: "out",
+  write: "out", target: "out", EMAIL_ALERT: "out", RUN_PIPELINE: "out",
 };
 export function kindColor(kind: string): string {
   return `var(--kind-${ROLE[kind] ?? "mid"})`;

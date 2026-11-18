@@ -120,26 +120,19 @@ def _run(context: TaskContext, engine_db: Engine | TaskStore) -> HandlerResult:
         ", ".join(sorted(input_params)) or "none",
     )
     started = time.monotonic()
-    with capture_all_loggers():
-        result = _call(entry, task, name)
+    try:
+        with capture_all_loggers():
+            result = _call(entry, task, name)
+    finally:
+        # Erase whatever the script wrote, even when it then failed.
+        erased = _erase_written(context, store)
     checked = check_result(result, name, stored, task=context)
     from etl_craft.fan_out_offsets import check_return
 
     check_return(task, checked)
     result_variables = dict(checked.variables)
     elapsed = time.monotonic() - started
-    variables: dict[str, object] = {}
-    if checked.offset is not None and context.backfill:
-        logger.warning(
-            "%s returned offset %s in a backfill run for %s; a backfill does not store offsets, "
-            "so the next scheduled run starts where the last one left off",
-            name,
-            checked.offset.stored(),
-            context.run_date.isoformat(),
-        )
-    elif checked.offset is not None:
-        variables["OFFSET"] = f"{checked.offset.stored()} ({checked.offset.datatype})"
-    variables.update(result_variables)
+    variables = {**_offset_variables(context, checked, name), **result_variables}
     logger.info(
         "%s wrote %s row(s) (%.2fs); offset %s",
         name,
@@ -155,6 +148,7 @@ def _run(context: TaskContext, engine_db: Engine | TaskStore) -> HandlerResult:
         source_count=checked.row_count,
         target_count=checked.row_count,
         insert_count=checked.row_count,
+        delete_count=erased or None,
         variables=variables,
         offset=(
             StoredOffset(checked.offset.datatype, checked.offset.stored())
@@ -162,6 +156,35 @@ def _run(context: TaskContext, engine_db: Engine | TaskStore) -> HandlerResult:
             else None
         ),
     )
+
+
+def _offset_variables(context: TaskContext, checked: ScriptResult, name: str) -> dict[str, object]:
+    """Record a returned offset, or warn that a backfill does not store one."""
+    if checked.offset is not None and context.backfill:
+        logger.warning(
+            "%s returned offset %s in a backfill run for %s; a backfill does not store offsets, "
+            "so the next scheduled run starts where the last one left off",
+            name,
+            checked.offset.stored(),
+            context.run_date.isoformat(),
+        )
+        return {}
+    if checked.offset is not None:
+        return {"OFFSET": f"{checked.offset.stored()} ({checked.offset.datatype})"}
+    return {}
+
+
+def _erase_written(context: TaskContext, store: TaskStore) -> int:
+    """Delete erased identifiers from the script's target; return how many rows went."""
+    target = context.task_params.get("TARGET_OBJECT")
+    if not target:
+        return 0
+    from etl_craft.handlers.erasure import store_erase_written
+
+    erased = sum(t.rows for t in store_erase_written(store, target).tables)
+    if erased:
+        logger.info("%s: removed %d row(s) carrying erased identifiers", target, erased)
+    return erased
 
 
 _JSON_KINDS = {list: "array", str: "string", int: "number", float: "number", bool: "boolean"}

@@ -55,7 +55,7 @@ def count_or_delete(
             )
             locker = LocalLocker(engine, config)
             event_store = (
-                store.erasure_target(plan.target)
+                store
                 if isinstance(store, LocalTaskStore)
                 else LocalTaskStore.standalone(engine, config, locker)
             )

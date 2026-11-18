@@ -76,18 +76,6 @@ def test_failing_delete_never_exposes_bound_key(erasure_project):
             )
         assert key not in str(raised.value)
         assert "row-level deletion failed" in str(raised.value)
-        from etl_craft.execution.child import run_handler
-
-        task = erasure_task(ctx)
-        with acting_as(ctx.actor):
-            assert run_handler(ctx.engine, task) != 0
-        with ctx.engine.connect() as conn:
-            logs = conn.execute(
-                text("SELECT ERROR_MESSAGE AS message FROM AUD_TASK_RUN_LOG WHERE TASK_RUN_ID=:id"),
-                {"id": task.task_run_id},
-            ).scalar_one()
-        assert key not in str(logs)
-        assert "row-level deletion failed" in str(logs)
         assert key not in stream.getvalue()
         assert key not in str(to_json(act(ctx, ActionName.ERASURE_LIST)))
         with ctx.engine.connect() as conn:
@@ -118,65 +106,12 @@ def test_unknown_table_or_column_refused_without_registering(erasure_project, ta
         assert conn.execute(text("SELECT COUNT(*) FROM AUD_ERASURE_SUBJECTS")).scalar_one() == 0
 
 
-def erasure_task(ctx):
-    from etl_craft.engine import transitions
-    from etl_craft.handlers.registry import TaskContext
-
-    with acting_as(ctx.actor), ctx.engine.begin() as conn:
-        pipeline = add_pipeline(conn, "ERASE_RUN")
-        task = add_task(conn, pipeline, "ERASE", handler="ERASURE")
-        run = transitions.create_active_run(conn, pipeline)
-        task_run = transitions.find_or_create_task_run(conn, task, run).task_run_id
-    return TaskContext(
-        ctx.config,
-        pipeline,
-        "ERASE_RUN",
-        task,
-        "ERASE",
-        run,
-        task_run,
-        1,
-        "ERASURE",
-        "FULL",
-        {},
-        writer=ctx.actor.name,
-    )
-
-
-def test_erasure_run_reapplies_resends_and_ignores_lifted_entries(erasure_project):
-    import duckdb
-
-    from etl_craft.handlers.erasure import run
-
-    ctx = erasure_project
-    args = {
-        "table": "ds.people",
-        "column": "person",
-        "value": "private-person-key",
-        "reason": "request",
-    }
-    act(ctx, ActionName.ERASE, **args)
-    task = erasure_task(ctx)
-    with duckdb.connect(str(ctx.config.project_dir / "warehouse.db")) as conn:
-        conn.execute("INSERT INTO ds.people VALUES ('private-person-key',3)")
-    with acting_as(ctx.actor):
-        assert run(task, ctx.engine).delete_count == 1
-    act(ctx, ActionName.ERASE, **args, lift=True)
-    with duckdb.connect(str(ctx.config.project_dir / "warehouse.db")) as conn:
-        conn.execute("INSERT INTO ds.people VALUES ('private-person-key',4)")
-    with acting_as(ctx.actor):
-        assert run(task, ctx.engine).delete_count == 0
-
-
-@pytest.mark.parametrize("recovery", ["erase", "ERASURE"])
-def test_crash_after_upstream_commit_is_finished_by_erasure_run(erasure_project, recovery):
+def test_crash_after_upstream_commit_is_finished_by_repeating_erase(erasure_project):
     import os
     import subprocess
     import sys
 
     import duckdb
-
-    from etl_craft.handlers.erasure import run
 
     ctx = erasure_project
     with acting_as(ctx.actor), ctx.engine.begin() as conn:
@@ -219,94 +154,17 @@ invoke(ctx, ActionName.ERASE, EraseInput(table='ds.people',column='person',
     with duckdb.connect(str(ctx.config.project_dir / "warehouse.db")) as conn:
         assert conn.execute("SELECT COUNT(*) FROM ds.people WHERE n=1").fetchone()[0] == 0
         assert conn.execute("SELECT COUNT(*) FROM ds.copy WHERE n=1").fetchone()[0] == 1
-    if recovery == "erase":
-        result = act(
-            ctx,
-            ActionName.ERASE,
-            table="ds.people",
-            column="person",
-            value="private-person-key",
-            reason="finish the earlier request",
-        )
-        assert sum(t.rows for t in result.tables) == 1
-    else:
-        with acting_as(ctx.actor):
-            assert run(erasure_task(ctx), ctx.engine).delete_count == 1
-    with ctx.engine.connect() as conn:
-        assert conn.execute(text("SELECT COUNT(*) FROM AUD_ERASURE_SUBJECTS")).scalar_one() == 1
-
-
-def test_run_uses_its_pinned_targets_and_sql_bytes_after_retarget(erasure_project, request):
-    from dataclasses import replace
-
-    import duckdb
-
-    from etl_craft.core.definitions import Definition
-    from etl_craft.engine import transitions
-    from etl_craft.engine.queries import statement
-    from etl_craft.handlers.erasure import run
-    from etl_craft.handlers.registry import TaskContext
-    from fixtures.metadata import set_task_target
-
-    ctx = erasure_project
-    script = ctx.config.project_dir / "sql_scripts/copy.sql"
-    script.parent.mkdir(exist_ok=True)
-    script.write_text("SELECT person AS customer,n FROM ds.people")
-    with acting_as(ctx.actor), ctx.engine.begin() as conn:
-        pipeline = conn.execute(
-            text("SELECT PIPELINE_ID FROM CFG_PIPELINES WHERE PIPELINE_CODE='ERASURE_TEST'")
-        ).scalar_one()
-        copying = add_task(
-            conn,
-            pipeline,
-            "COPY",
-            SQL_ACTION="CREATE_TABLE",
-            TARGET_OBJECT="ds.copy",
-            SCRIPT_FILE="sql_scripts/copy.sql",
-        )
-        task = add_task(conn, pipeline, "ERASE", handler="ERASURE")
-    with duckdb.connect(str(ctx.config.project_dir / "warehouse.db")) as conn:
-        conn.execute("CREATE TABLE ds.copy AS SELECT person AS customer,n FROM ds.people")
-    refreshed = act(ctx, ActionName.PIPELINE_REFRESH)
-    assert all(str(r.status) == "SUCCESS" for r in refreshed.refreshes), refreshed
-    ctx = replace(ctx, engine=ctx.engine.execution_options(refresh_required=True))
-    request.addfinalizer(ctx.engine.dispose)
-    with acting_as(ctx.actor), ctx.engine.begin() as conn:
-        run_id = transitions.create_active_run(conn, pipeline)
-        task_run = transitions.find_or_create_task_run(conn, task, run_id).task_run_id
-        image = conn.execute(statement(conn, "run_definition"), {"run_id": run_id}).one()
-    context = TaskContext(
-        ctx.config,
-        pipeline,
-        "ERASURE_TEST",
-        task,
-        "ERASE",
-        run_id,
-        task_run,
-        1,
-        "ERASURE",
-        "FULL",
-        {},
-        _definition=Definition.read(image.snapshot, run_id, image.bundle_id),
-    )
-    act(
+    result = act(
         ctx,
         ActionName.ERASE,
         table="ds.people",
         column="person",
         value="private-person-key",
-        reason="request",
+        reason="finish the earlier request",
     )
-    with duckdb.connect(str(ctx.config.project_dir / "warehouse.db")) as conn:
-        conn.execute("INSERT INTO ds.people VALUES ('private-person-key',3)")
-        conn.execute("INSERT INTO ds.copy VALUES ('private-person-key',3)")
-    script.write_text("SELECT sha256(person) AS customer,n FROM ds.people")
-    with acting_as(ctx.actor), ctx.engine.begin() as conn:
-        set_task_target(conn, copying, "ds.retargeted")
-    with acting_as(ctx.actor):
-        result = run(context, ctx.engine)
-    assert result.delete_count == 2
-    assert "retargeted" not in str(result.variables)
+    assert sum(t.rows for t in result.tables) == 1
+    with ctx.engine.connect() as conn:
+        assert conn.execute(text("SELECT COUNT(*) FROM AUD_ERASURE_SUBJECTS")).scalar_one() == 1
 
 
 def test_doctor_reports_unfollowed_table_with_reason_and_remedy(erasure_project):
@@ -606,3 +464,106 @@ def test_failed_register_insert_never_exposes_bound_subject_key(erasure_project,
     with ctx.engine.connect() as conn:
         rows = conn.execute(text("SELECT ARGUMENTS AS arguments FROM AUD_ACTIONS")).mappings().all()
     assert key not in str(rows)
+
+
+def test_sql_writers_never_write_erased_keys_and_keep_null_identifiers(erasure_project):
+    import duckdb
+
+    from etl_craft.engine import transitions
+    from etl_craft.engine.runlog import RunSelector
+    from etl_craft.execution import runner
+
+    ctx = erasure_project
+    with acting_as(ctx.actor), ctx.engine.begin() as conn:
+        pipeline = add_pipeline(conn, "COPYING")
+        add_task(
+            conn,
+            pipeline,
+            "COPY",
+            SQL_ACTION="CREATE_TABLE",
+            TARGET_OBJECT="ds.copy",
+            SELECT_QUERY="SELECT person AS customer,n FROM ds.people",
+        )
+    with duckdb.connect(str(ctx.config.project_dir / "warehouse.db")) as conn:
+        conn.execute("CREATE TABLE ds.copy AS SELECT person AS customer,n FROM ds.people")
+    refreshed = act(ctx, ActionName.PIPELINE_REFRESH)
+    assert all(str(r.status) == "SUCCESS" for r in refreshed.refreshes), refreshed
+    args = {"table": "ds.people", "column": "person", "value": "private-person-key"}
+    act(ctx, ActionName.ERASE, **args, reason="request")
+    # A source resends the erased identifier, next to a row with no identifier at all.
+    with duckdb.connect(str(ctx.config.project_dir / "warehouse.db")) as conn:
+        conn.execute("INSERT INTO ds.people VALUES ('private-person-key',3),(NULL,4)")
+    with acting_as(ctx.actor), ctx.engine.begin() as conn:
+        run = transitions.create_active_run(conn, pipeline)
+    with acting_as(ctx.actor):
+        runner.run_task(ctx.engine, ctx.config, "COPYING", "COPY", selector=RunSelector(run_id=run))
+    with duckdb.connect(str(ctx.config.project_dir / "warehouse.db")) as conn:
+        assert conn.execute("SELECT customer,n FROM ds.copy ORDER BY n").fetchall() == [
+            ("retained", 2),
+            (None, 4),
+        ]
+    act(ctx, ActionName.ERASE, **args, reason="entry corrected", lift=True)
+    with acting_as(ctx.actor):
+        runner.run_task(
+            ctx.engine, ctx.config, "COPYING", "COPY", selector=RunSelector(run_id=run), force=True
+        )
+    with duckdb.connect(str(ctx.config.project_dir / "warehouse.db")) as conn:
+        assert conn.execute("SELECT COUNT(*) FROM ds.copy WHERE n=3").fetchone()[0] == 1
+
+
+@pytest.mark.parametrize("fails", [False, True])
+def test_a_script_that_resends_an_erased_key_has_it_removed_in_the_same_attempt(
+    erasure_project, fails
+):
+    import duckdb
+
+    from etl_craft.engine import transitions
+    from etl_craft.engine.runlog import RunSelector
+    from etl_craft.execution import runner
+
+    ctx = erasure_project
+    warehouse = ctx.config.project_dir / "warehouse.db"
+    script = ctx.config.project_dir / "python_scripts" / "resend.py"
+    script.parent.mkdir(exist_ok=True)
+    script.write_text(
+        "import duckdb\n"
+        "from etl_craft.scripting import ScriptResult\n"
+        "ROWS = \"('private-person-key',7),('new',8)\"\n"
+        "def run(task):\n"
+        f"    with duckdb.connect({str(warehouse)!r}) as conn:\n"
+        "        conn.execute('INSERT INTO ds.people VALUES ' + ROWS)\n"
+        + ("    raise RuntimeError('source closed mid-load')\n" if fails else "")
+        + "    return ScriptResult(row_count=2)\n"
+    )
+    with acting_as(ctx.actor), ctx.engine.begin() as conn:
+        pipeline = add_pipeline(conn, "RESENDING")
+        add_task(
+            conn,
+            pipeline,
+            "RESEND",
+            "PYTHON",
+            SCRIPT_FILE="python_scripts/resend.py",
+            TARGET_OBJECT="ds.people",
+        )
+    refreshed = act(ctx, ActionName.PIPELINE_REFRESH)
+    assert all(str(r.status) == "SUCCESS" for r in refreshed.refreshes), refreshed
+    act(
+        ctx,
+        ActionName.ERASE,
+        table="ds.people",
+        column="person",
+        value="private-person-key",
+        reason="request",
+    )
+    with acting_as(ctx.actor), ctx.engine.begin() as conn:
+        run = transitions.create_active_run(conn, pipeline)
+    with acting_as(ctx.actor):
+        outcome = runner.run_task(
+            ctx.engine, ctx.config, "RESENDING", "RESEND", selector=RunSelector(run_id=run)
+        )
+    assert str(outcome.status) == ("FAILED" if fails else "SUCCESS"), outcome
+    with duckdb.connect(str(warehouse)) as conn:
+        assert conn.execute("SELECT person FROM ds.people ORDER BY n").fetchall() == [
+            ("retained",),
+            ("new",),
+        ]

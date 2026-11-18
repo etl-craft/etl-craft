@@ -30,21 +30,25 @@ etl-craft erase --lift --project support --table raw.people --column customer_id
 These commands require admin. The project API uses GET (list) and POST (preview, erase or lift)
 at `/api/v1/projects/{project}/erasure`. Administration → Erasure offers a preview of tables,
 counts and unfollowed boundaries before confirming the table and column. It never displays the
-key. Immediate requests wait for the pass to finish; ordinary ERASURE tasks retain their
-normal task timeout. Keep personal values out of shell history and reasons; the private input is not echoed.
+key. Immediate requests wait for the pass to finish. Keep personal values out of shell history and reasons; the private input is not echoed.
 
 Registration commits before deleting. Tables are deleted upstream first, each under its target
-lock with one statement or transaction; a crash can leave downstream work pending. Repeating `erase` reapplies its existing active entry without duplicating the register. A later
-erasure task repeats all active entries, and deleting an already-cleaned value affects zero
+lock with one statement or transaction; a crash can leave downstream work pending. Repeating `erase` reapplies its existing active entry without duplicating the register and
+finishes work a crash left pending; deleting an already-cleaned value affects zero
 rows. A lift changes the entry from active to inactive once; a second lift fails. Entries are
 never deleted. Registering again after a lift adds a new row. A pass snapshots active entries
 when it starts; a concurrent lift affects later passes and does not undo committed deletions.
 
-Add an ordinary task with `HANDLER=ERASURE` after loads, or in a nightly data pipeline. It has
-no handler-specific parameters. Use task dependencies to place it after every relevant loader.
-Every execution reapplies all active project entries, including rows a source has resent.
-Its attempt result records table counts keyed by HMAC. Immediate erase is an in-process action,
-without an invented pipeline run. Neither path changes the managed write actions.
+After registration, every write keeps erased identifiers out; there is no erasure task to
+schedule. Each managed SQL action whose target the entry covers reads its SELECT through a
+filter on each covered column: `(column IS NULL OR column NOT IN (erased keys))`, with each key
+cast to the column's type and bound as a parameter. Rows without an identifier are kept. A
+resent identifier is therefore never written, so no new table version (Iceberg snapshot, Delta
+history, Snowflake Time Travel) holds it. A Python script task deletes erased identifiers from
+its `TARGET_OBJECT` in the same attempt, after the script returns or fails, under the target
+lock. Lifting an entry stops filtering on the next write. API-only agents receive the keys for
+their attempt's own target only, over the attempt credential; they are masked in logs and never
+stored. Immediate erase is an in-process action, without an invented pipeline run.
 
 Erasure shares the guarded hash-only `AUD_PROTECTION_EVENTS` intent log with protected writes
 and hard deletes. On capable warehouses it deletes exact matching row identities with one
