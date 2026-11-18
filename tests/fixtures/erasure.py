@@ -55,7 +55,7 @@ def erasure_world(sql_world, monkeypatch):
 
     w = sql_world
     monkeypatch.setenv("ERASURE_HMAC", "test-hmac-secret")
-    config = replace(w.config, privacy_hmac_secret="ERASURE_HMAC")
+    config = w.config = replace(w.config, privacy_hmac_secret="ERASURE_HMAC")
     w.run(
         "land",
         SQL_ACTION="CREATE_TABLE",
@@ -80,30 +80,6 @@ def erasure_world(sql_world, monkeypatch):
         project_id=1,
     )
     return ctx, w
-
-
-def ordinary_erasure(ctx, world):
-    from etl_craft.engine import transitions
-    from etl_craft.handlers.registry import TaskContext
-
-    with acting_as(ctx.actor), ctx.engine.begin() as conn:
-        task = add_task(conn, world.pipeline_id, "ERASE", handler="ERASURE")
-        task_run = transitions.find_or_create_task_run(
-            conn, task, world.pipeline_run_id
-        ).task_run_id
-    return TaskContext(
-        ctx.config,
-        world.pipeline_id,
-        "P",
-        task,
-        "ERASE",
-        world.pipeline_run_id,
-        task_run,
-        1,
-        "ERASURE",
-        "FULL",
-        {},
-    )
 
 
 def killed_erasure(config, table, key):

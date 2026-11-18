@@ -1,7 +1,7 @@
 import {MemoryRouter} from "react-router-dom";
 import {RunGraph} from "@/components/run-graph";
 import { useState, type ReactElement, type ComponentType } from "react";
-import { Database, Download, Code, History, GitMerge, Eye, Trash2, ListPlus, ListMinus, Plus, Replace, Table2, Terminal, Bell, Hourglass, Network, ShieldCheck, FileCheck2, Eraser } from "lucide-react";
+import { Database, Download, Code, History, GitMerge, Eye, Trash2, ListPlus, ListMinus, Plus, Replace, Table2, Terminal, Bell, Hourglass, Network, ShieldCheck, FileCheck2 } from "lucide-react";
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { dependencyStyle, dependencyBadge, dependencySentence, definitionLabel, runCondition, runsWhen } from "@/lib/catalog-flow";
 import { cleanup, render as rawRender, screen, fireEvent, within } from "@testing-library/react";
@@ -157,7 +157,6 @@ it.each([
   ["SQL_SCRIPT",null,null,Terminal,"SQL script"], ["EMAIL_ALERT",null,null,Bell,"Alert"],
   ["EVENT_WAIT",null,null,Hourglass,"Event wait"], ["RUN_PIPELINE",null,null,Network,"Run pipeline"],
   ["BUSINESS_RULES",null,null,ShieldCheck,"Business rules"], ["FILE_VALIDATION",null,null,FileCheck2,"File validation"],
-  ["ERASURE",null,null,Eraser,"Erasure"],
 ])("gives %s %s %s its own persistent task symbol", async (handler,action,kind,icon,label) => {
   const modulePath = "@/components/task-symbol";
   const {taskSymbol} = await import(modulePath);

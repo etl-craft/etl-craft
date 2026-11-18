@@ -10,7 +10,7 @@ from etl_craft import __version__
 from etl_craft.agent.client import AgentClient
 from etl_craft.config import ConnectorConfig
 from etl_craft.core.enums import ActionName, AgentReport
-from etl_craft.core.erasure import ErasureReport
+from etl_craft.core.erasure import ErasureFilter, ErasureReport
 from etl_craft.core.errors import ServerError
 from etl_craft.core.items import ItemRecord, ItemState
 from etl_craft.core.protection import (
@@ -95,11 +95,25 @@ class RemoteTaskStore:
             )
         return result
 
-    def erasure(self) -> ErasureReport:
-        """Return only the host's HMAC/count report for this fenced task."""
+    def erasure_filters(self, target: str) -> tuple[ErasureFilter, ...]:
+        """Fetch only this attempt's target filters; the keys are bound, never logged."""
+        reply = self.client.call(
+            ActionName.AGENT_REPORT,
+            replace(self.request(AgentReport.ERASURE_FILTERS), target=target),
+        )
+        if not isinstance(reply.data, list):
+            raise ServerError(
+                "agent erasure filters: expected a list; upgrade the API and agent together"
+            )
+        return tuple(from_json(ErasureFilter, item) for item in reply.data)
+
+    def erase_written(self, target: str) -> ErasureReport:
+        """Return only the host's HMAC/count report for this script's target."""
         # The supervisor owns the task deadline while the host finishes its deletion pass.
         reply = self.client.call(
-            ActionName.AGENT_REPORT, self.request(AgentReport.ERASURE), timeout=None
+            ActionName.AGENT_REPORT,
+            replace(self.request(AgentReport.ERASURE), target=target),
+            timeout=None,
         )
         return from_json(ErasureReport, reply.data)
 

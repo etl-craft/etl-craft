@@ -221,6 +221,19 @@ item's text, or work done early under another item.
 
 ### Handover notes
 
+- **Erasure at write time (owner decisions 2026-11-18).** Not a listed item. Write filters on
+  managed SQL actions; delete after Python scripts (also when they fail); `HANDLER=ERASURE`
+  removed. The owner approved sending the erased keys of an attempt's own target to API-only
+  agents (they already read those rows), replacing the rule that personal keys never cross the
+  agent API. Coverage is recomputed for each filtered write; cache it per run if many entries
+  make that slow. Seed-written tables stay outside erasure coverage, as before. This supersedes
+  the "Suppression list on managed writes: Not added" row in the rejected-features table. A
+  project without `Privacy.Hmac_secret` cannot erase and does no erasure work on writes. With
+  the secret, each managed SQL attempt reads the active register once (an API round trip on
+  agents); target admission and coverage run only when entries exist. Acceptance availability: Snowflake
+  and Databricks were not run (the filter is a portable `NOT IN` wrapper that appears only
+  with active entries; Snowflake budget reserved for its dialect changes).
+
 - **Warehouse cleanup and table adoption (owner decisions 2026-11-18).** Not a listed item.
   `rehash` stays (design rule: existing merge targets need it). `upgrade-targets` is replaced by
   `adopt-target` (rebuild and swap; original dropped by default, `--keep-original` keeps

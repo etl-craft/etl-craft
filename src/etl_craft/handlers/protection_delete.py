@@ -4,7 +4,6 @@ from collections.abc import Mapping
 
 from etl_craft.core.enums_protection import ProtectionKind
 from etl_craft.core.protection import ProtectionEvent
-from etl_craft.handlers.protection_recovery import pending
 from etl_craft.handlers.sql.session import Session
 
 
@@ -16,6 +15,9 @@ def intent(
     params: Mapping[str, object] | None = None,
 ) -> str | None:
     """Fingerprint exactly the keys selected for deletion, never their raw values."""
+    # Imported here: protection_recovery imports the SQL package, which imports this module.
+    from etl_craft.handlers.protection_recovery import pending
+
     store = session.protection_store
     assert store is not None
     rows = session.run(selection, params, step="fingerprint keys before deletion").scalars()

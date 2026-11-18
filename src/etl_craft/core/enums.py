@@ -424,7 +424,6 @@ class Handler(StrEnum):
     PYTHON = "PYTHON"
     SQL = "SQL"
     FILE_VALIDATION = "FILE_VALIDATION"
-    ERASURE = "ERASURE"
     SQL_SCRIPT = "SQL_SCRIPT"
     BUSINESS_RULES = "BUSINESS_RULES"
     EMAIL_ALERT = "EMAIL_ALERT"
@@ -761,6 +760,7 @@ class AgentReport(StrEnum):
     END = "END"
     CANCEL = InterventionAction.CANCEL
     ERASURE = "ERASURE"
+    ERASURE_FILTERS = "ERASURE_FILTERS"
     STATE = "STATE"
     TARGET = "TARGET"
     PUBLISH = "PUBLISH"

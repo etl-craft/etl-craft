@@ -12,7 +12,6 @@ const HANDLERS: Record<string, string> = {
   SQL: "SQL",
   SQL_SCRIPT: "SQL script",
   FILE_VALIDATION: "File validation",
-  ERASURE: "Erasure",
   BUSINESS_RULES: "Business rules",
   EMAIL_ALERT: "Email alert",
   EVENT_WAIT: "Event wait",

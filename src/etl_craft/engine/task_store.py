@@ -16,7 +16,6 @@ from etl_craft.core.actor import current_actor
 from etl_craft.core.business_rules import RULE_TEXT_LIMIT, table_result
 from etl_craft.core.definitions import Definition, using
 from etl_craft.core.enums import BusinessRuleLevel, Handler, RunStatus, SqlAction, YesNo
-from etl_craft.core.erasure import ErasureReport
 from etl_craft.core.errors import HandlerError, StaleTransitionError
 from etl_craft.core.items import ItemRecord, ItemState, ItemStore
 from etl_craft.core.landing import GENERATED_COLUMNS, LandingContract
@@ -152,10 +151,6 @@ class TaskStore(ResourceLocker, ItemStore, Protocol):
         """Append an intent or idempotent outcome through the common event service."""
         ...
 
-    def erasure(self) -> ErasureReport:
-        """Execute the admitted erasure without returning personal keys."""
-        ...
-
     def upload_files(self) -> tuple[UploadFile, ...]:
         """Read and verify the admitted files before exposing them to a script."""
         ...
@@ -221,23 +216,7 @@ class LocalTaskStore:
     locks: ResourceLocker
     definition: Definition | None = None
     _contracts: dict[str, TargetState] = field(default_factory=dict, compare=False)
-    _erasure_target: str | None = None
     parameters: Mapping[str, str] = field(default_factory=dict, repr=False)
-
-    def erasure_target(self, target: str) -> LocalTaskStore:
-        """Bind a host-validated lineage target without exposing an agent target override."""
-        from etl_craft.engine.repository.tasks import fetch_task_execution_detail
-
-        with self.engine.connect() as conn:
-            self._assert(conn)
-            with using(self.definition):
-                handler = fetch_task_execution_detail(conn, self.identity.task_id).handler
-            if handler != Handler.ERASURE:
-                raise HandlerError(
-                    f"attempt {self.identity.attempt_id}, target {target}: handler={handler}; "
-                    "expected ERASURE for a lineage target; use the admitted SQL target"
-                )
-        return replace(self, _erasure_target=target)
 
     @classmethod
     def standalone(
@@ -300,9 +279,7 @@ class LocalTaskStore:
             holder_id, owner = holder.holder_id, holder.owner
         else:
             with using(self.definition):
-                expected = self._erasure_target or fetch_task_parameters(
-                    conn, identity.task_id
-                ).get("TARGET_OBJECT")
+                expected = fetch_task_parameters(conn, identity.task_id).get("TARGET_OBJECT")
             if expected is None or target_identity(self.config, expected)[0] != canonical:
                 raise PermissionDeniedError(
                     f"{where}: admitted-target check failed; "
@@ -351,9 +328,21 @@ class LocalTaskStore:
             )
         return canonical
 
-    def erasure(self) -> ErasureReport:
-        """Require local execution to pass its Engine DB directly to the handler."""
-        raise HandlerError("local ERASURE requires its Engine DB backend; use the task runner")
+    def admit_target(self, target: str) -> None:
+        """Refuse a stale attempt or any target other than the attempt's TARGET_OBJECT."""
+        from etl_craft.core.errors import PermissionDeniedError
+        from etl_craft.engine.protection_events import target_identity
+        from etl_craft.engine.repository.tasks import fetch_task_parameters
+
+        with self.engine.connect() as conn, using(self.definition):
+            self._assert(conn)
+            expected = fetch_task_parameters(conn, self.identity.task_id).get("TARGET_OBJECT")
+        canonical = target_identity(self.config, target)[0]
+        if expected is None or target_identity(self.config, expected)[0] != canonical:
+            raise PermissionDeniedError(
+                f"attempt {self.identity.attempt_id}, target {target}: admitted-target check "
+                "failed; erasure filters are given only for this attempt's TARGET_OBJECT"
+            )
 
     def upload_files(self) -> tuple[UploadFile, ...]:
         """Use the same fenced storage stream as API-only agents."""

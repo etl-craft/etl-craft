@@ -118,7 +118,6 @@ HANDLERS: dict[str, str] = {
     enums.Handler.SQL_SCRIPT: "etl_craft.handlers.sql_script:run",
     enums.Handler.SQL: "etl_craft.handlers.sql:run",
     enums.Handler.BUSINESS_RULES: "etl_craft.handlers.business_rules:run",
-    enums.Handler.ERASURE: "etl_craft.handlers.erasure:run",
     enums.Handler.FILE_VALIDATION: "etl_craft.handlers.file_validation:run",
     enums.Handler.PYTHON: "etl_craft.handlers.python_scripts:run",
     enums.Handler.EMAIL_ALERT: "etl_craft.handlers.email_alert:run",

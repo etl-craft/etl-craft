@@ -33,9 +33,9 @@ def check_locked_deletion(w, ctx, task, target, params):
     assert erased.records == ()
     assert any(r["event_kind"] == "ERASURE" for r in erased.history)
     assert problems(w.engine_db, w.config) == []
-    # The source may legitimately resend a different, unlocked key.
+    # The source resends the erased key; the merge filters it out as it writes.
     w.run(task, **{**params, "SELECT_QUERY": reload})
-    assert w.run("remove_" + target, **delete).delete_count >= 1
+    assert w.rows(f"SELECT COUNT(*) FROM {w.name(target)} WHERE id=2") == [(0,)]
     assert problems(w.engine_db, w.config) == []
     with w.engine_db.connect() as conn:
         rows = (
