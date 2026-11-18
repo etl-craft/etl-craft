@@ -61,14 +61,14 @@ def test_every_example_applies_in_order_and_validates(metadata_project):
         "WHERE p.ACTIVE_FLAG = 'Y' AND t.ACTIVE_FLAG = 'Y' AND p.PIPELINE_CODE <> 'SALES_DAILY_EU' "
         "ORDER BY 1, 2",
     ) == [
-        ("SALES_DAILY", "alert", "EMAIL_ALERT"),
+        ("SALES_DAILY", "alert", "ALERT"),
         ("SALES_DAILY", "check_orders", "BUSINESS_RULES"),
         ("SALES_DAILY", "fetch_orders", "PYTHON"),
         ("SALES_DAILY", "load_orders", "SQL"),
-        ("SALES_DAILY", "on_failure", "EMAIL_ALERT"),
+        ("SALES_DAILY", "on_failure", "ALERT"),
         ("SALES_DAILY", "setup_orders", "SQL"),
         ("SALES_DAILY", "validate_feed", "PYTHON"),
-        ("SALES_MART", "alert", "EMAIL_ALERT"),
+        ("SALES_MART", "alert", "ALERT"),
         ("SALES_MART", "daily_totals", "SQL"),
         ("SALES_MART", "publish", "PYTHON"),
         ("SALES_MART", "totals_by_region", "SQL"),
@@ -78,7 +78,7 @@ def test_every_example_applies_in_order_and_validates(metadata_project):
         "FROM CFG_TASK_PARAMETERS x JOIN CFG_TASKS t ON t.TASK_ID = x.TASK_ID "
         "JOIN CFG_PIPELINES p ON p.PIPELINE_ID = t.PIPELINE_ID "
         "WHERE p.PIPELINE_CODE = 'SALES_DAILY_EU' AND p.ACTIVE_FLAG = 'Y' AND x.ACTIVE_FLAG = 'Y' "
-        "AND x.PARAMETER_NAME IN ('INPUT_PARAMS', 'SCRIPT_FILE', 'EMAIL_TO') "
+        "AND x.PARAMETER_NAME IN ('INPUT_PARAMS', 'SCRIPT_FILE', 'ALERT_CHANNEL') "
         "UNION ALL SELECT t.TASK_CODE AS task_code, 'TARGET_OBJECT' AS name, "
         "o.SCHEMA_NAME || '.' || o.TABLE_NAME AS value FROM CFG_TASKS t "
         "JOIN CFG_PIPELINES p ON p.PIPELINE_ID=t.PIPELINE_ID "
@@ -87,13 +87,13 @@ def test_every_example_applies_in_order_and_validates(metadata_project):
         "AND t.TARGET_ACTIVE_FLAG='Y' ORDER BY 1, 2"
     )
     assert metadata_project.rows(copy) == [
-        ("alert", "EMAIL_TO", "sales-data@example.com|sales-leads@example.com"),
+        ("alert", "ALERT_CHANNEL", "sales_data"),
         ("fetch_orders", "INPUT_PARAMS", '{"region": "eu", "days": 1}'),
         ("fetch_orders", "SCRIPT_FILE", "python_scripts/sales/fetch_orders.py"),
         ("fetch_orders", "TARGET_OBJECT", "lnd.orders_eu"),
         ("load_orders", "SCRIPT_FILE", "sql_scripts/sales/orders_eu.sql"),
         ("load_orders", "TARGET_OBJECT", "sales.orders_eu"),
-        ("on_failure", "EMAIL_TO", "sales-oncall@example.com"),
+        ("on_failure", "ALERT_CHANNEL", "sales_oncall"),
         ("setup_orders", "SCRIPT_FILE", "sql_scripts/sales/orders_eu.sql"),
         ("setup_orders", "TARGET_OBJECT", "sales.orders_eu"),
     ]

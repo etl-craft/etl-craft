@@ -102,10 +102,7 @@ def test_exported_files_load_back_without_a_change(exported):
         "2026-11-01",
         "3",
     )
-    assert json.loads(daily["PIPELINE_PARAMETERS"])["EMAIL_RECIPIENTS"] == [
-        "sales-data@example.com",
-        "sales-leads@example.com",
-    ]
+    assert json.loads(daily["PIPELINE_PARAMETERS"]) == {"TAGS": ["sales", "daily"]}
 
 
 def test_apply_inserts_updates_and_preserves_absent_keys(exported):
@@ -119,7 +116,7 @@ def test_apply_inserts_updates_and_preserves_absent_keys(exported):
         "JOIN CFG_TASKS t ON t.TASK_ID = x.TASK_ID "
         "JOIN CFG_PIPELINES p ON p.PIPELINE_ID = t.PIPELINE_ID "
         "WHERE p.PIPELINE_CODE = 'SALES_DAILY' AND p.ACTIVE_FLAG = 'Y' AND t.TASK_CODE = 'alert' "
-        "AND t.ACTIVE_FLAG = 'Y' AND x.PARAMETER_NAME = 'EMAIL_TO' AND x.ACTIVE_FLAG = 'Y'"
+        "AND t.ACTIVE_FLAG = 'Y' AND x.PARAMETER_NAME = 'ALERT_SUBJECT' AND x.ACTIVE_FLAG = 'Y'"
     )[0]
     for name in (
         "pipelines.csv",
@@ -134,9 +131,9 @@ def test_apply_inserts_updates_and_preserves_absent_keys(exported):
         folder / "task_parameters.csv",
         lambda rows: (
             [
-                {**row, "PARAMETER_VALUE": "ops@example.com"}
+                {**row, "PARAMETER_VALUE": "$$pipeline_code ended"}
                 if (row["PIPELINE_CODE"], row["TASK_CODE"], row["PARAMETER_NAME"])
-                == ("SALES_DAILY", "alert", "EMAIL_TO")
+                == ("SALES_DAILY", "alert", "ALERT_SUBJECT")
                 else row
                 for row in rows
             ]
@@ -222,9 +219,9 @@ def test_apply_inserts_updates_and_preserves_absent_keys(exported):
         if change.operation == "update"
     ] == [
         (
-            "SALES_DAILY.alert EMAIL_TO",
-            "sales-data@example.com|sales-leads@example.com",
-            "ops@example.com",
+            "SALES_DAILY.alert ALERT_SUBJECT",
+            "$$pipeline_code: $$trigger",
+            "$$pipeline_code ended",
         )
     ]
     assert "retire" not in by_operation
@@ -233,7 +230,7 @@ def test_apply_inserts_updates_and_preserves_absent_keys(exported):
         "SELECT TASK_PARAMETER_ID AS id, PARAMETER_VALUE AS value FROM CFG_TASK_PARAMETERS "
         "WHERE TASK_PARAMETER_ID = :id",
         id=parameter_id,
-    ) == [(parameter_id, "ops@example.com")]
+    ) == [(parameter_id, "$$pipeline_code ended")]
     assert (
         exported.rows(
             "SELECT COUNT(*) AS n FROM CFG_TASKS t "
@@ -572,8 +569,7 @@ def test_config_apply_refuses_unknown_pipeline_parameter_without_writes(exported
     done = sync(exported)
     assert done.failed and not done.applied
     assert any(
-        key in f.message and "EMAIL_RECIPIENTS" in f.message and "remove" in f.message
-        for f in done.findings
+        key in f.message and "TAGS" in f.message and "remove" in f.message for f in done.findings
     )
     assert changes_logged(exported) == before
 

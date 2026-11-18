@@ -1,9 +1,10 @@
-"""Primitive presentation values shared by alert-task and SLA emails."""
+"""Primitive presentation values for alert emails."""
 
 from __future__ import annotations
 
 from etl_craft import __version__
-from etl_craft.core.enums import EmailFlavour, Handler, RunStatus
+from etl_craft.core.alerts import AlertTrigger
+from etl_craft.core.enums import Handler, RunStatus
 from etl_craft.core.errors import HandlerError
 from etl_craft.engine.alerts import AlertState
 from etl_craft.engine.repository.runs import TaskStatus
@@ -17,7 +18,7 @@ def appearance(status: str) -> dict[str, str]:
         return {"symbol": "✕", "color": "#b42318"}
     if status == RunStatus.IN_PROGRESS:
         return {"symbol": "●", "color": "#175cd3"}
-    if status == EmailFlavour.COMPLETED_WITH_ERRORS:
+    if status == AlertTrigger.COMPLETED_WITH_ERRORS:
         return {"symbol": "⚠", "color": "#b54708"}
     return {"symbol": "—", "color": "#475467"}
 
@@ -40,7 +41,7 @@ def email_context(state: AlertState, *, pipeline: str, status: str) -> dict[str,
             f"email for {pipeline}: missing project environment evidence; restore the "
             f"project registration and retry"
         )
-    relevant = [row for row in state.statuses if row.handler != Handler.EMAIL_ALERT]
+    relevant = [row for row in state.statuses if row.handler != Handler.ALERT]
     return {
         "environment": {
             "type": state.environment.type,

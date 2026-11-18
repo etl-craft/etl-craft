@@ -30,7 +30,6 @@ from etl_craft.config.model import EmailProfile
 from etl_craft.core.enums import AuthMode, EmailTransport, TlsMode
 from etl_craft.core.errors import EtlCraftError, HandlerError
 from etl_craft.dialects import credentials
-from etl_craft.engine.alerts import AlertState
 
 logger = logging.getLogger(__name__)
 
@@ -226,59 +225,3 @@ def _log_in(server: smtplib.SMTP, config: ConnectorConfig, profile: EmailProfile
     server.ehlo_or_helo_if_needed()
     xoauth2 = f"user={profile.user}\x01auth=Bearer {token}\x01\x01"
     server.auth("XOAUTH2", lambda challenge=None: xoauth2, initial_response_ok=True)
-
-
-def sla_recipients(config: ConnectorConfig, pipeline_recipients: Sequence[str] | None) -> list[str]:
-    """Return who hears about a pipeline's SLA: its ``EMAIL_RECIPIENTS``, else the DAG default.
-
-    ``HandlerError`` when neither is set, naming both places.
-    """
-    recipients = list(pipeline_recipients or config.email_recipients or [])
-    if not recipients:
-        raise HandlerError(
-            "no one to send the SLA email to: set EMAIL_RECIPIENTS in the pipeline's "
-            "PIPELINE_PARAMETERS, or the email recipients in Orchestration's DAG defaults"
-        )
-    return parse_recipients("|".join(recipients), "the SLA email recipients")
-
-
-def send_sla_lapse_email(
-    config: ConnectorConfig,
-    pipeline_recipients: Sequence[str] | None,
-    *,
-    pipeline_code: str,
-    pipeline_run_id: int,
-    state: AlertState,
-    sla_hours: float,
-) -> None:
-    """Email that a run is past its pipeline's SLA; only when ``Enforce_sla`` is on."""
-    if not config.limits.enforce_sla:
-        return
-    recipients = sla_recipients(config, pipeline_recipients)
-    assert state.sla is not None
-    elapsed_hours = state.sla.elapsed_hours
-    from etl_craft.handlers.email_context import email_context
-    from etl_craft.handlers.email_templates import render
-
-    data = email_context(state, pipeline=pipeline_code, status=str(state.run["status"]))
-    assert state.environment is not None
-    subject = (
-        f"[{state.environment.label.split(' · ')[0]}] {pipeline_code}: "
-        f"SLA of {sla_hours:g} h missed"
-    )
-    body = (
-        f"pipeline_run_id={pipeline_run_id} has been running {elapsed_hours:.2f} h, "
-        f"past its SLA of {sla_hours:g} h."
-    )
-    data.update(
-        subject=subject,
-        body=body,
-        recipients=recipients,
-        recipient_reason="pipeline EMAIL_RECIPIENTS"
-        if pipeline_recipients
-        else "Orchestration.Email_recipients",
-        sla={"hours": sla_hours, "elapsed_hours": elapsed_hours, "message": body},
-    )
-    rendered = render(config, config.email_template, data)
-    plain = render(config, None, data, text=True)
-    send_email(config, recipients, subject, rendered, body_text=plain)

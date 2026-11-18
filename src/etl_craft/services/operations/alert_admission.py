@@ -1,11 +1,19 @@
-"""Observe durable source events and admit only the configured alert task."""
+"""Observe durable source events and admit only the configured alert task.
+
+A subscription covers events from the moment it took its current form: the alert task's
+creation, or the latest change to its ``ALERT_CHANNEL``/``ALERT_ON`` or to its channel. Adding
+an alert, or re-enabling a channel, never replays the pipeline's history. ``SLA_BREACH`` is
+admitted only where ``Orchestration.Enforce_sla`` is on, so each environment decides whether a
+missed SLA alerts.
+"""
 
 from datetime import UTC, datetime, timedelta
 
 from etl_craft.core.actor import SYSTEM_ACTOR, acting_as
-from etl_craft.core.alerts import AlertStatus, triggers
+from etl_craft.core.alerts import AlertStatus, AlertTrigger, triggers
 from etl_craft.core.enums import YesNo
 from etl_craft.core.errors import MetadataError
+from etl_craft.core.time import as_utc
 from etl_craft.engine.alert_deliveries import AlertEvent, append
 from etl_craft.engine.queries import statement
 from etl_craft.engine.repository.pipelines import selected_project
@@ -46,7 +54,18 @@ def admit_pending(ctx: OperationContext, now: datetime | None = None) -> tuple[i
                 )
             if channel.active_flag != YesNo.YES:
                 continue
+            since = max(
+                as_utc(value)
+                for value in (
+                    subscription.task_created,
+                    subscription.subscription_changed,
+                    subscription.channel_changed,
+                )
+                if value is not None
+            )
             for selector in triggers(params.get("ALERT_ON", channel.default_alert_on)):
+                if selector == AlertTrigger.SLA_BREACH and not ctx.config.limits.enforce_sla:
+                    continue
                 minutes = (
                     int(selector.rsplit("_", 1)[1]) if selector.startswith("GATE_WAIT_OVER_") else 0
                 )
@@ -59,6 +78,7 @@ def admit_pending(ctx: OperationContext, now: datetime | None = None) -> tuple[i
                         "selector": selector,
                         "gate_before": now - timedelta(minutes=minutes),
                         "event_prefix": prefix,
+                        "since": since,
                     },
                 ).all()
                 for row in events:

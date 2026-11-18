@@ -38,7 +38,6 @@ QUERIES = frozenset(
         "transition_queue_attempt",
         "task_rule_counts",
         "task_statuses_for_run",
-        "failure_watch_messages",
     }
 )
 

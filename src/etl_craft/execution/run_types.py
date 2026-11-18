@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable, Generator
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from typing import TypeVar
 
 from sqlalchemy.engine import Connection, Engine
@@ -13,19 +13,13 @@ from etl_craft.config import ConnectorConfig
 from etl_craft.core import interrupts
 from etl_craft.core.enums import (
     RunStatus,
-    SlaStatus,
 )
 from etl_craft.core.graph import DependencyGraph
 from etl_craft.engine import runlog
-from etl_craft.engine.repository.pipelines import (
-    fetch_pipeline_detail,
-    resolve_pipeline_id,
-)
 from etl_craft.execution.gates import (
     Clock,
 )
 from etl_craft.execution.sla import SlaLapse
-from etl_craft.handlers.mail import send_sla_lapse_email
 
 logger = logging.getLogger(__name__)
 
@@ -76,11 +70,7 @@ class RunHooks:
 
 
 def default_hooks(config: ConnectorConfig, engine: Engine) -> RunHooks:
-    """Return the hooks a run gets unless given others: the SLA email, with ``Enforce_sla`` on.
-
-    The email goes to the pipeline's ``EMAIL_RECIPIENTS``, else the DAG default recipients,
-    through the Email settings.
-    """
+    """Return the hooks a run gets unless given others: settle its files and wake waiters."""
 
     def finalized(outcome: PipelineOutcome) -> None:
         from etl_craft.execution.trigger_waits import wake_child_waits
@@ -91,36 +81,7 @@ def default_hooks(config: ConnectorConfig, engine: Engine) -> RunHooks:
             finish_run_files(engine, config, outcome.pipeline_run_id)
             wake_child_waits(engine, outcome.pipeline_run_id)
 
-    if not config.limits.enforce_sla and not config.artifacts.store:
-        return RunHooks(on_finalized=finalized)
-
-    def email_the_lapse(lapse: SlaLapse) -> None:
-        from etl_craft.execution.bundle_files import run_config
-
-        pinned = (
-            run_config(engine, config, lapse.pipeline_run_id) if config.artifacts.store else config
-        )
-        if not pinned.limits.enforce_sla:
-            return
-        with engine.connect() as conn:
-            pipeline_id = resolve_pipeline_id(conn, lapse.pipeline_code)
-            recipients = fetch_pipeline_detail(conn, pipeline_id).email_recipients
-            from etl_craft.engine.alerts import read_alert
-
-            state = replace(
-                read_alert(conn, pipeline_id, lapse.pipeline_run_id, None, False, None),
-                sla=runlog.SlaResult(SlaStatus.BREACHED, lapse.sla_hours, lapse.elapsed_hours),
-            )
-        send_sla_lapse_email(
-            pinned,
-            recipients,
-            pipeline_code=lapse.pipeline_code,
-            pipeline_run_id=lapse.pipeline_run_id,
-            state=state,
-            sla_hours=lapse.sla_hours,
-        )
-
-    return RunHooks(on_sla_lapse=email_the_lapse, on_finalized=finalized)
+    return RunHooks(on_finalized=finalized)
 
 
 def drive(steps: Generator[float, None, T], clock: Clock) -> T:

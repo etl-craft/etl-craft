@@ -1,4 +1,4 @@
-"""Email alerts and SLA emails, sent through the local Mailpit relay and read back from it."""
+"""Alerts on EMAIL channels: an admitted event delivered through a relay and read back from it."""
 
 import html
 import json
@@ -8,31 +8,28 @@ import urllib.parse
 import urllib.request
 import uuid
 from dataclasses import replace
-from pathlib import Path
 
 import psycopg
 import pytest
-import yaml
 from sqlalchemy import text
 
-from etl_craft.config import EmailProfile, ExecutionLimits, load_config
-from etl_craft.core.errors import HandlerError
+from etl_craft.config import EmailProfile
+from etl_craft.core.actor import SYSTEM_ACTOR, acting_as
+from etl_craft.core.enums import ApiRole, RunStatus
+from etl_craft.core.errors import ConfigurationError, HandlerError
 from etl_craft.engine import transitions
-from etl_craft.execution.attempt_types import ChildOptions
 from etl_craft.execution.connections import probe_email_relay
 from etl_craft.execution.context import build_task_context
-from etl_craft.execution.run_types import default_hooks
-from etl_craft.execution.runner import run_task
-from etl_craft.execution.sla import SlaLapse
-from etl_craft.handlers import email_alert
-from etl_craft.handlers.mail import send_sla_lapse_email
-from fixtures.metadata import add_dependency, add_pipeline, add_task, start_run, task_run
+from etl_craft.services.operations import alert_delivery
+from etl_craft.services.operations.alert_admission import admit_pending
+from etl_craft.services.operations.context import OperationContext
+from fixtures.metadata import add_pipeline, add_task, start_run, task_run
 from fixtures.services import POSTGRES_DB, POSTGRES_PASSWORD, POSTGRES_USER, require
 
 
-def relay_config(config, host, port):
+def relay_config(config, host, port, **settings):
     profile = EmailProfile(
-        "EMAIL", "dev", host, port, "etl@example.com", tls_mode="NONE", from_name="ETL Craft"
+        "EMAIL", "dev", host, port, "etl@example.com", from_name="ETL Craft", **settings
     )
     return replace(config, email=profile)
 
@@ -52,85 +49,98 @@ def mailpit(engine_db):
         ) as reply:
             return json.load(reply)
 
-    return relay_config(engine_db.config, smtp.host, smtp.port), read
+    return relay_config(engine_db.config, smtp.host, smtp.port, tls_mode="NONE"), read
 
 
 @pytest.fixture
-def pipeline(engine_db):
-    """Pipeline P: load succeeded, check failed, and alert watches check through FAILURE."""
+def failed(engine_db, monkeypatch):
+    """Pipeline P whose run failed at check, an EMAIL channel, and its admitted alert run."""
+    monkeypatch.setattr(alert_delivery, "RETRY_DELAYS", (0, 0, 0))
     engine = engine_db.engine
     ids = {}
-    with engine.begin() as conn:
+    with acting_as(SYSTEM_ACTOR), engine.begin() as conn:
         ids["P"] = add_pipeline(conn, "P")
-        ids["load"] = add_task(conn, ids["P"], "load")
-        ids["check"] = add_task(conn, ids["P"], "check")
-        ids["alert"] = add_task(conn, ids["P"], "alert", "EMAIL_ALERT")
-        add_dependency(conn, ids["P"], ids["alert"], ids["check"], "FAILURE")
-        ids["run"] = start_run(conn, ids["P"])
-        task_run(conn, ids["load"], ids["run"], "SUCCESS")
-        failed = task_run(conn, ids["check"], ids["run"], "IN-PROGRESS")
-        transitions.finish_task_run(
-            conn, failed, status="FAILED", error_message="3 rows had no key"
+        load = add_task(conn, ids["P"], "load")
+        check = add_task(conn, ids["P"], "check")
+        ids["alert"] = add_task(conn, ids["P"], "alert", "ALERT", ALERT_CHANNEL="mail")
+        conn.execute(
+            text(
+                "INSERT INTO CFG_ALERT_CHANNELS(PROJECT_ID,CHANNEL_NAME,KIND,RECIPIENTS,"
+                "DEFAULT_ALERT_ON) VALUES(1,'mail','EMAIL','ops@example.com|lead@example.com',"
+                "'FAILURE')"
+            )
         )
-        ids["alert_run"] = task_run(conn, ids["alert"], ids["run"], "IN-PROGRESS")
-    return engine, ids
+        ids["run"] = start_run(conn, ids["P"])
+        task_run(conn, load, ids["run"], "SUCCESS")
+        broken = task_run(conn, check, ids["run"], "IN-PROGRESS")
+        transitions.finish_task_run(
+            conn, broken, status="FAILED", error_message="3 rows had no key"
+        )
+        transitions.finalize_pipeline_run(conn, ids["run"], RunStatus.FAILED)
+    ctx = OperationContext(
+        engine, engine_db.config, SYSTEM_ACTOR, role=ApiRole.ADMIN, project_id=1, project="default"
+    )
+    with acting_as(SYSTEM_ACTOR):
+        (ids["alert_run"],) = admit_pending(ctx)
+        with engine.begin() as conn:
+            ids["task_run"] = transitions.find_or_create_task_run(
+                conn, ids["alert"], ids["alert_run"]
+            ).task_run_id
+    return ctx, ids
 
 
-def alert(engine, config, ids, **params):
-    context = build_task_context(engine, config, ids["alert_run"], force=False)
-    return email_alert.run(replace(context, config=config, task_params=params), engine)
+def deliver(failed, config, **params):
+    ctx, ids = failed
+    context = build_task_context(ctx.engine, config, ids["task_run"])
+    context = replace(context, config=config, task_params={"ALERT_CHANNEL": "mail", **params})
+    with acting_as(SYSTEM_ACTOR):
+        return alert_delivery.deliver(replace(ctx, config=config), context)
 
 
-def test_an_alert_reports_the_run_with_a_digest(mailpit, pipeline):
+def recorded(ctx):
+    with ctx.engine.connect() as conn:
+        return [
+            row.status
+            for row in conn.execute(
+                text("SELECT STATUS AS status FROM AUD_ALERT_DELIVERIES ORDER BY DELIVERY_ID")
+            )
+        ]
+
+
+def test_an_alert_emails_the_channel_recipients_with_a_digest(mailpit, failed):
     config, read = mailpit
-    engine, ids = pipeline
+    ids = failed[1]
     tag = uuid.uuid4().hex[:8]
-    result = alert(
-        engine,
+    result = deliver(
+        failed,
         config,
-        ids,
-        EMAIL_TO="ops@example.com|lead@example.com",
-        EMAIL_SUBJECT=f"{tag} $$pipeline_code pipeline $$pipeline_id "
-        "run $$pipeline_run_id task $$task_run_id: $$status",
-        EMAIL_BODY="Failures: $$error_message",
+        ALERT_SUBJECT=f"{tag} $$pipeline_code pipeline $$pipeline_id run $$pipeline_run_id "
+        "task $$task_run_id: $$trigger $$status",
+        ALERT_BODY="Failures: $$error_message",
         EMAIL_PIPELINES="P|NOPE",
     )
+    assert result.variables == {"ALERT_SENT": True}
     subject = (
-        f"[CUSTOM] {tag} P pipeline {ids['P']} run {ids['run']} task {ids['alert_run']}: FAILED"
+        f"[CUSTOM] {tag} P pipeline {ids['P']} run {ids['run']} task {ids['task_run']}: "
+        "FAILURE FAILED"
     )
-    assert result.variables["EMAIL_SUBJECT"] == subject
     message = read(subject)
     assert [to["Address"] for to in message["To"]] == ["ops@example.com", "lead@example.com"]
     assert (message["From"]["Name"], message["From"]["Address"]) == ("ETL Craft", "etl@example.com")
     body = message["HTML"]
     assert "✕ FAILED</h1>" in body and "Failures: 3 rows had no key" in body
+    assert "channel mail" in body
     # The digest: P's latest run with its tasks, and a row for the unknown code.
-    assert "P — IN-PROGRESS</h2>" in body and "3 rows had no key</pre>" in body
+    assert "P — " in body and "3 rows had no key</pre>" in body
     assert "NOPE — UNKNOWN</h2>" in body
+    assert recorded(failed[0]) == ["ADMITTED", "STARTED", "SENT"]
+    assert deliver(failed, config).variables == {"ALERT_SENT": True}
+    assert recorded(failed[0]) == ["ADMITTED", "STARTED", "SENT"]
 
 
-def test_an_alert_on_other_outcomes_sends_nothing(mailpit, pipeline):
-    config, _ = mailpit
-    engine, ids = pipeline
-    result = alert(
-        engine,
-        config,
-        ids,
-        EMAIL_TO="a@example.com",
-        EMAIL_SUBJECT="x",
-        EMAIL_BODY="y",
-        EMAIL_ON_STATUS="SUCCESS",
-    )
-    assert result.variables == {
-        "RUN_STATUS": "FAILED",
-        "EMAIL_SENT": "false",
-        "REASON": "FAILED is not in EMAIL_ON_STATUS",
-    }
-
-
-def test_a_multiline_database_error_is_safe_in_the_subject_and_kept_in_the_body(mailpit, pipeline):
+def test_a_multiline_database_error_is_safe_in_the_subject_and_kept_in_the_body(mailpit, failed):
     config, read = mailpit
-    engine, ids = pipeline
+    ctx, ids = failed
     pg = require("postgres")
     with (
         psycopg.connect(
@@ -145,24 +155,15 @@ def test_a_multiline_database_error_is_safe_in_the_subject_and_kept_in_the_body(
         conn.execute("SELECT CAST('bad' AS INTEGER)")
     error = str(caught.value)
     assert "\n" in error
-    with engine.begin() as conn:
+    with ctx.engine.begin() as conn:
         conn.execute(
-            text("UPDATE AUD_TASK_RUN_LOG SET ERROR_MESSAGE = :error WHERE TASK_ID = :task"),
-            {"error": error, "task": ids["check"]},
+            text("UPDATE AUD_TASK_RUN_LOG SET ERROR_MESSAGE = :error WHERE PIPELINE_RUN_ID = :run"),
+            {"error": error, "run": ids["run"]},
         )
     tag = uuid.uuid4().hex[:8]
-    result = alert(
-        engine,
-        config,
-        ids,
-        EMAIL_TO="ops@example.com",
-        EMAIL_SUBJECT=f"{tag}: $$error_message",
-        EMAIL_BODY="$$error_message",
-    )
-    subject = f"[CUSTOM] {tag}: " + " ".join(error.split())
-    assert result.variables["EMAIL_SUBJECT"] == subject
+    deliver(failed, config, ALERT_SUBJECT=f"{tag}: $$error_message", ALERT_BODY="$$error_message")
     message = read(tag)
-    assert message["Subject"] == subject
+    assert message["Subject"] == f"[CUSTOM] {tag}: " + " ".join(error.split())
     rendered = message["HTML"].replace("\r\n", "\n")
     assert (
         html.unescape(rendered.split("<pre", 1)[1].split(">", 1)[1].split("</pre>", 1)[0]) == error
@@ -171,144 +172,49 @@ def test_a_multiline_database_error_is_safe_in_the_subject_and_kept_in_the_body(
 
 
 @pytest.mark.parametrize(
-    ("recipients", "status", "delivered"),
-    [("bad@example.com|ops@example.com", "SUCCESS", 1), ("bad@example.com", "FAILED", 0)],
+    ("recipients", "outcome", "delivered"),
+    [("bad@example.com|ops@example.com", "SENT", 1), ("bad@example.com", "FAILED", 0)],
 )
-def test_recipient_refusal_is_recorded_on_the_alert_attempt(
-    engine_db, tls_relay, tmp_path, recipients, status, delivered, monkeypatch
+def test_recipient_refusal_is_logged_and_a_total_refusal_retries_then_fails(
+    failed, tls_relay, caplog, recipients, outcome, delivered
 ):
     relay = tls_relay(refused={"bad@example.com"})
-    profile = engine_db.config.engine
-    block = {
-        "Jdbc_url": profile.jdbc_url,
-        "Schema": "public" if profile.jdbc_url.startswith("jdbc:postgresql") else "main",
-    }
-    if profile.auth_mode != "NONE":
-        block.update(User=profile.user, Auth_mode=profile.auth_mode, Secret=profile.secret_var)
-    raw = {
-        "Secrets": {"Source_type": "ENVIRONMENT"},
-        "Orchestration": {
-            "Project": "default",
-            "Email": {
-                "Host": relay.host,
-                "Port": relay.port,
-                "From_address": "etl@example.com",
-                "Tls_mode": "STARTTLS",
-                "Ca_file": str(relay.ca_file),
-            },
-        },
-        "Engine": {"dev": block},
-    }
-    path = engine_db.config.config_path or tmp_path / "craft-connector.yml"
-    path.write_text(yaml.safe_dump(raw, sort_keys=False), encoding="utf-8")
-    config = load_config(path)
-    engine = engine_db.engine
-    with engine.begin() as conn:
-        pipeline_id = add_pipeline(conn, "PARTIAL")
-        add_task(
-            conn,
-            pipeline_id,
-            "notify",
-            "EMAIL_ALERT",
-            EMAIL_TO=recipients,
-            EMAIL_SUBJECT="subject",
-            EMAIL_BODY="body",
-        )
-        start_run(conn, pipeline_id)
-    monkeypatch.setenv("PYTHONPATH", str(Path(__file__).parents[2]))
-    outcome = run_task(
-        engine, config, "PARTIAL", "notify", child=ChildOptions(module="fixtures.email_child")
+    ctx, _ = failed
+    with ctx.engine.begin() as conn:
+        conn.execute(text("UPDATE CFG_ALERT_CHANNELS SET RECIPIENTS=:r"), {"r": recipients})
+    config = relay_config(
+        ctx.config, relay.host, relay.port, tls_mode="STARTTLS", ca_file=relay.ca_file
     )
-    assert outcome.status == status, outcome.message
-    with engine.connect() as conn:
-        log = conn.execute(
-            text("SELECT TASK_LOG AS task_log FROM AUD_TASK_RUN_LOG WHERE TASK_RUN_ID = :id"),
-            {"id": outcome.task_run_id},
-        ).scalar_one()
-    attempt = next(config.log_dir.glob("project-1/PARTIAL/run-*/notify.attempt-1.log")).read_text(
-        "utf-8"
-    )
-    if status == "SUCCESS":
-        assert "EMAIL_WARNING = " in log and "bad@example.com (550: no such recipient)" in log
-        assert "WARNING etl_craft.handlers.mail" in attempt and "bad@example.com" in attempt
+    if outcome == "SENT":
+        assert deliver(failed, config).variables == {"ALERT_SENT": True}
+        assert "bad@example.com (550: no such recipient)" in caplog.text
     else:
-        assert "SMTPRecipientsRefused" in log and "550" in log
-        assert "SMTPRecipientsRefused" in attempt
+        with pytest.raises(HandlerError, match="channel mail: delivery failed; expected a relay"):
+            deliver(failed, config)
+        assert "SMTPRecipientsRefused" in caplog.text
+    assert recorded(ctx)[-1] == outcome
     assert len(relay.messages) == delivered
 
 
-@pytest.mark.parametrize(
-    ("params", "message"),
-    [
-        ({"EMAIL_SUBJECT": "x", "EMAIL_BODY": "y"}, "EMAIL_TO is required"),
-        ({"EMAIL_TO": "a@example.com", "EMAIL_BODY": "y"}, "EMAIL_SUBJECT .* is required"),
-        ({"EMAIL_TO": "a@example.com", "EMAIL_SUBJECT": "x"}, "EMAIL_BODY .* is required"),
-        (
-            {"EMAIL_TO": "a@example.com", "EMAIL_SUBJECT": "$$when", "EMAIL_BODY": "y"},
-            r"EMAIL_SUBJECT uses unknown token\(s\) \$\$when",
-        ),
-        (
-            {
-                "EMAIL_TO": "a@example.com",
-                "EMAIL_SUBJECT": "x",
-                "EMAIL_BODY": "y",
-                "EMAIL_ON_STATUS": "FAILED|OK",
-            },
-            "EMAIL_ON_STATUS names unknown outcome",
-        ),
-    ],
-)
-def test_alert_mistakes_fail_with_the_remedy(mailpit, pipeline, params, message):
-    config, _ = mailpit
-    engine, ids = pipeline
-    with pytest.raises(HandlerError, match=message):
-        alert(engine, config, ids, **params)
+def test_an_unknown_token_or_a_missing_relay_fails_before_any_attempt(failed):
+    ctx, _ = failed
+    with pytest.raises(HandlerError, match=r"ALERT_SUBJECT uses unknown token\(s\) \$\$when"):
+        deliver(failed, ctx.config, ALERT_SUBJECT="$$when")
+    with pytest.raises(ConfigurationError, match=r"kind=EMAIL, but craft-connector\.yml has no"):
+        deliver(failed, replace(ctx.config, email=None))
+    assert recorded(ctx) == ["ADMITTED"]
 
 
-def test_a_relay_that_cannot_be_reached_is_named(engine_db, pipeline):
-    engine, ids = pipeline
+def test_a_relay_that_cannot_be_reached_is_named(failed, caplog):
+    ctx, _ = failed
     with socket.socket() as sock:
         sock.bind(("127.0.0.1", 0))
         port = sock.getsockname()[1]
-    config = relay_config(engine_db.config, "127.0.0.1", port)
-    with pytest.raises(HandlerError, match=rf"the relay 127\.0\.0\.1:{port} failed at connect"):
-        alert(engine, config, ids, EMAIL_TO="a@example.com", EMAIL_SUBJECT="x", EMAIL_BODY="y")
-
-
-def test_the_sla_email_goes_to_the_pipeline_recipients_only_when_enforced(mailpit, engine_db):
-    config, read = mailpit
-    tag = uuid.uuid4().hex[:8]
-    code = f"SLA_{tag}".upper()
-    with engine_db.engine.begin() as conn:
-        pipeline_id = add_pipeline(conn, code, sla_in_hours=1)
-        conn.exec_driver_sql(
-            "UPDATE CFG_PIPELINES SET PIPELINE_PARAMETERS = "
-            '\'{"EMAIL_RECIPIENTS": ["owner@example.com"]}\' '
-            f"WHERE PIPELINE_ID = {pipeline_id}"
-        )
-    with engine_db.engine.begin() as conn:
-        run_id = start_run(conn, pipeline_id)
-    lapse = SlaLapse(code, run_id, 1.0, 1.5)
-    from etl_craft.engine.alerts import read_alert
-
-    with engine_db.engine.connect() as conn:
-        state = read_alert(conn, pipeline_id, run_id, None, False, None)
-    # Enforce_sla off: no hook, and a direct call sends nothing.
-    assert default_hooks(config, engine_db.engine).on_sla_lapse is None
-    send_sla_lapse_email(
-        config, None, pipeline_code=code, pipeline_run_id=run_id, sla_hours=1, state=state
-    )
-
-    enforced = replace(config, limits=ExecutionLimits(enforce_sla=True))
-    default_hooks(enforced, engine_db.engine).on_sla_lapse(lapse)
-    message = read(f"[CUSTOM] {code}: SLA of 1 h missed")
-    assert [to["Address"] for to in message["To"]] == ["owner@example.com"]
-    assert f"pipeline_run_id={run_id} has been running" in message["HTML"]
-    assert "past its SLA of 1 h." in message["HTML"]
-    with pytest.raises(HandlerError, match="no one to send the SLA email to"):
-        send_sla_lapse_email(
-            enforced, None, pipeline_code=code, pipeline_run_id=run_id, sla_hours=1, state=state
-        )
+    config = relay_config(ctx.config, "127.0.0.1", port, tls_mode="NONE")
+    with pytest.raises(HandlerError, match="channel mail: delivery failed"):
+        deliver(failed, config)
+    assert f"the relay 127.0.0.1:{port} failed at connect" in caplog.text
+    assert recorded(ctx).count("RETRY") == 3 and recorded(ctx)[-1] == "FAILED"
 
 
 FAKE_SENDMAIL = """#!{python}
@@ -336,26 +242,24 @@ def sendmail_config(config, tmp_path, code=0):
     return replace(config, email=profile), out
 
 
-def test_an_alert_through_sendmail(engine_db, pipeline, tmp_path):
-    engine, ids = pipeline
-    config, out = sendmail_config(engine_db.config, tmp_path)
-    alert(engine, config, ids, EMAIL_TO="ops@example.com", EMAIL_SUBJECT="$$status", EMAIL_BODY="y")
+def test_an_alert_through_sendmail(failed, tmp_path):
+    config, out = sendmail_config(failed[0].config, tmp_path)
+    deliver(failed, config, ALERT_SUBJECT="$$trigger")
     sent = out.read_text()
     # Recipients come from the headers (-t); the sender is the profile's from_address (-f).
     assert sent.startswith("-t -oi -f etl@example.com -F ETL Craft\n")
     assert "From: ETL Craft <etl@example.com>" in sent
-    assert "To: ops@example.com" in sent and "Subject: [CUSTOM] FAILED" in sent
+    assert "To: ops@example.com, lead@example.com" in sent
+    assert "Subject: [CUSTOM] FAILURE" in sent
     assert probe_email_relay(config) is None
 
 
-def test_a_failing_or_missing_sendmail_is_named(engine_db, pipeline, tmp_path):
-    engine, ids = pipeline
-    config, _ = sendmail_config(engine_db.config, tmp_path, code=75)
-    params = {"EMAIL_TO": "a@example.com", "EMAIL_SUBJECT": "x", "EMAIL_BODY": "y"}
-    with pytest.raises(HandlerError, match=r"sendmail exited 75"):
-        alert(engine, config, ids, **params)
-    missing = replace(config.email, sendmail_path=str(tmp_path / "no_such_sendmail"))
-    gone = replace(config, email=missing)
-    with pytest.raises(HandlerError, match=r"the sendmail program .* does not exist"):
-        alert(engine, gone, ids, **params)
+def test_a_failing_or_missing_sendmail_is_named(failed, tmp_path, caplog):
+    config, _ = sendmail_config(failed[0].config, tmp_path, code=75)
+    with pytest.raises(HandlerError, match="channel mail: delivery failed"):
+        deliver(failed, config)
+    assert "sendmail exited 75" in caplog.text
+    gone = replace(
+        config, email=replace(config.email, sendmail_path=str(tmp_path / "no_such_sendmail"))
+    )
     assert "does not exist; install one, or set sendmail_path" in probe_email_relay(gone)

@@ -29,7 +29,6 @@ from etl_craft.core.cron import parse, timezone
 from etl_craft.core.enums import (
     BusinessRuleLevel,
     DependencyType,
-    EmailFlavour,
     Handler,
     InputKind,
     SqlAction,
@@ -67,7 +66,6 @@ from etl_craft.execution.event_probe import probe_sql
 from etl_craft.execution.limits import task_timeout_seconds
 from etl_craft.execution.retries import task_retry_policy
 from etl_craft.handlers import (
-    email_alert,
     event_wait,
     file_validation,
     python_scripts,
@@ -232,10 +230,6 @@ def validate_on(
         pipeline_codes=[code for code, _ in pipeline_parameters],
     )
     report = Report()
-    from etl_craft.handlers.email_templates import validate_templates
-
-    for template_problem in validate_templates(config, {}):
-        report.fail("Orchestration.Email_template", template_problem)
     dialect, _ = dialect_and_catalog(config)
     for row in conn.execute(statement(conn, "inactive_table_columns")):
         report.fail(
@@ -376,7 +370,6 @@ def _dependencies(data: _Metadata, report: Report) -> None:
                     "the dependency is never satisfied and the task is always skipped; use "
                     "SUCCESS",
                 )
-    _alert_ordering(data, report)
 
 
 def _no_rows_reason(task: ActiveTask, params: Mapping[str, str]) -> str | None:
@@ -385,56 +378,9 @@ def _no_rows_reason(task: ActiveTask, params: Mapping[str, str]) -> str | None:
         if action and action not in ROWS_REPORTED:
             return f"is a {action} task and reports no target rows"
         return None
-    if task.handler in (Handler.BUSINESS_RULES, Handler.EMAIL_ALERT, Handler.EVENT_WAIT):
+    if task.handler in (Handler.BUSINESS_RULES, Handler.ALERT, Handler.EVENT_WAIT):
         return f"is a {task.handler} task and reports no target rows"
     return None
-
-
-def _alert_ordering(data: _Metadata, report: Report) -> None:
-    """Check each alert waits for every task it reports on, and hears about their failures."""
-    for code in data.pipeline_codes:
-        tasks = [task for task in data.tasks if task.pipeline_code == code]
-        alerts = {t.task_code: t for t in tasks if t.handler == Handler.EMAIL_ALERT}
-        if not alerts:
-            continue
-        edges = [
-            e for e in data.edges if e.pipeline_code == code and e.depends_on_pipeline_code == code
-        ]
-        depended_on = {e.depends_on_task_code for e in edges if e.task_code not in alerts}
-        leaves = {t.task_code for t in tasks if t.task_code not in alerts} - depended_on
-        for alert_code, alert in sorted(alerts.items()):
-            waits = {e.depends_on_task_code: e for e in edges if e.task_code == alert_code}
-            if waits and all(e.dependency_type == DependencyType.FAILURE for e in waits.values()):
-                # A failure watcher: it runs when what it watches fails, not at the run's end.
-                continue
-            missing = sorted(leaves - set(waits))
-            if missing:
-                report.fail(
-                    alert.label,
-                    f"reports on the whole run but does not depend on {', '.join(missing)}, so "
-                    "it can run before they finish and report on a run still in progress; add "
-                    "an ALWAYS dependency on each",
-                )
-            outcomes = _alert_outcomes(data.params[alert.task_id])
-            if outcomes & {EmailFlavour.FAILED, EmailFlavour.COMPLETED_WITH_ERRORS}:
-                strict = sorted(
-                    upstream
-                    for upstream, edge in waits.items()
-                    if edge.dependency_type in (DependencyType.SUCCESS, DependencyType.HAS_DATA)
-                )
-                if strict:
-                    report.warn(
-                        alert.label,
-                        f"depends on {', '.join(strict)} through SUCCESS or HAS_DATA, so when "
-                        "one of them fails the alert is skipped and sends nothing about it; use "
-                        "ALWAYS to hear about failures",
-                    )
-
-
-def _alert_outcomes(params: Mapping[str, str]) -> set[str]:
-    written = params.get("EMAIL_ON_STATUS") or ""
-    wanted = {part.strip().upper() for part in written.split("|") if part.strip()}
-    return wanted or set(email_alert.OUTCOMES)
 
 
 def _task(
@@ -662,32 +608,40 @@ def _python(conn: Connection, context: TaskContext, data: _Metadata) -> list[str
     return [problem] if problem else []
 
 
-def _email_alert(conn: Connection, context: TaskContext, data: _Metadata) -> list[str]:
+def _alert(conn: Connection, context: TaskContext, data: _Metadata) -> list[str]:
+    from etl_craft.core.alerts import AlertKind, triggers
+    from etl_craft.engine.queries import statement
+    from etl_craft.engine.repository.pipelines import current_project_id
+    from etl_craft.handlers.alert_message import parameter_problems
     from etl_craft.handlers.email_templates import validate_templates
 
-    if context.task_params.get("ALERT_CHANNEL"):
-        from etl_craft.core.alerts import triggers
-        from etl_craft.engine.queries import statement
-        from etl_craft.engine.repository.pipelines import current_project_id
-
-        channel = conn.execute(
-            statement(conn, "alert_channel"),
-            {
-                "project_id": current_project_id(),
-                "channel_name": context.task_params["ALERT_CHANNEL"],
-            },
-        ).one_or_none()
-        if channel is None or channel.active_flag != YesNo.YES:
-            return [
-                f"ALERT_CHANNEL={context.task_params['ALERT_CHANNEL']!r}: missing or inactive; "
-                "ask an administrator to configure the project channel"
-            ]
-        triggers(context.task_params.get("ALERT_ON", channel.default_alert_on))
-        return []
-    problems = email_alert.alert_parameter_problems(context.task_params)
-    problems.extend(validate_templates(context.config, context.task_params))
-    if context.config.email is None:
-        problems.insert(0, "an EMAIL_ALERT task needs an Email section in craft-connector.yml")
+    params = context.task_params
+    name = params.get("ALERT_CHANNEL")
+    if not name:
+        return [
+            "ALERT_CHANNEL is required for HANDLER=ALERT; name a project alert channel "
+            "(etl-craft alert-channel list shows them)"
+        ]
+    channel = conn.execute(
+        statement(conn, "alert_channel"),
+        {"project_id": current_project_id(), "channel_name": name},
+    ).one_or_none()
+    if channel is None or channel.active_flag != YesNo.YES:
+        return [
+            f"ALERT_CHANNEL={name!r}: missing or inactive; "
+            "ask an administrator to configure the project channel"
+        ]
+    triggers(params.get("ALERT_ON", channel.default_alert_on))
+    kind = AlertKind(channel.kind)
+    problems = parameter_problems(params, kind)
+    if kind == AlertKind.EMAIL:
+        problems.extend(validate_templates(context.config, params))
+        if context.config.email is None:
+            problems.insert(
+                0,
+                f"ALERT_CHANNEL={name!r} is an EMAIL channel, which needs an Email section in "
+                "craft-connector.yml",
+            )
     return problems
 
 
@@ -721,7 +675,7 @@ CHECKS: dict[str, Callable[[Connection, TaskContext, _Metadata], list[str]]] = {
     Handler.SQL_SCRIPT: _sql_script,
     Handler.BUSINESS_RULES: _business_rules,
     Handler.PYTHON: _python,
-    Handler.EMAIL_ALERT: _email_alert,
+    Handler.ALERT: _alert,
 }
 """Each handler's checks; each raises or returns the problems it finds."""
 

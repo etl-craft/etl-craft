@@ -221,6 +221,14 @@ item's text, or work done early under another item.
 
 ### Handover notes
 
+- **One alert task.** Rebuild step 6. Owner decisions: event-only delivery (the in-run email path
+  is gone), recipients on an `EMAIL` channel, and the lean message settings. SLA emails were a
+  fourth path and became `ALERT_ON=SLA_BREACH`; owner kept `Orchestration.Enforce_sla` as the
+  per-environment switch, which now gates `SLA_BREACH` admission. Admission now ignores events older than the
+  subscription's last change, since `SUCCESS` would otherwise replay every past run. The demo
+  sets two email channels in `prepare.py`; its e2e test reads the emails while the controller
+  runs. The Support Insights demo repo still uses `EMAIL_ALERT` and needs the same change.
+
 - **One access evaluator.** Second authorization PR. Built-in `CAN_*` roles are stored action
   sets; one principal match (`access_principal`) feeds visibility SQL and admission
   (`services/operations/authorization.py`). Owner decisions: grants are additive, and a pipeline

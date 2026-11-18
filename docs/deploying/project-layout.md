@@ -148,6 +148,5 @@ comparison as unavailable with a remedy. That diagnostic does not block an admin
 `email_templates/` holds team-owned HTML and optional plain-text email templates, included
 in project bundles. EMAIL_TEMPLATE and EMAIL_TEMPLATE_TEXT name paths relative to the project,
 for example `email_templates/team.html` and `email_templates/team.txt`.
-Orchestration.Email_template selects the SLA HTML template. See
-[Email alerts](../guides/email-alerts.md#environment-and-designed-templates) for the context,
-copyable example and path/sandbox restrictions.
+See [Alerts](../guides/alerts.md#email) for the context, copyable example and path/sandbox
+restrictions.

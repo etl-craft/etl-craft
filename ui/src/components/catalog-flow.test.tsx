@@ -154,7 +154,7 @@ it.each([
   ["SQL","DROP_TABLE",null,Trash2,"Drop table"], ["SQL","DELETE_ROWS",null,ListMinus,"Delete rows"],
   ["SQL","CREATE_VIEW",null,Eye,"Create view"], ["SQL",null,null,Database,"Managed SQL"],
   ["PYTHON",null,"INGESTION",Download,"Python ingestion"], ["PYTHON",null,"UTILITY",Code,"Python utility"],
-  ["SQL_SCRIPT",null,null,Terminal,"SQL script"], ["EMAIL_ALERT",null,null,Bell,"Alert"],
+  ["SQL_SCRIPT",null,null,Terminal,"SQL script"], ["ALERT",null,null,Bell,"Alert"],
   ["EVENT_WAIT",null,null,Hourglass,"Event wait"], ["RUN_PIPELINE",null,null,Network,"Run pipeline"],
   ["BUSINESS_RULES",null,null,ShieldCheck,"Business rules"], ["FILE_VALIDATION",null,null,FileCheck2,"File validation"],
 ])("gives %s %s %s its own persistent task symbol", async (handler,action,kind,icon,label) => {

@@ -1,7 +1,8 @@
 PIPELINE_CODE,TASK_CODE,PARAMETER_NAME,PARAMETER_VALUE,ACTIVE_FLAG
-SALES_DAILY,alert,EMAIL_BODY,Run $$pipeline_run_id ended $$status.,Y
-SALES_DAILY,alert,EMAIL_SUBJECT,$$pipeline_code: $$status,Y
-SALES_DAILY,alert,EMAIL_TO,sales-data@example.com|sales-leads@example.com,Y
+SALES_DAILY,alert,ALERT_BODY,Run $$pipeline_run_id ended $$status.,Y
+SALES_DAILY,alert,ALERT_CHANNEL,sales_data,Y
+SALES_DAILY,alert,ALERT_ON,SUCCESS|COMPLETED_WITH_ERRORS|FAILURE|SLA_BREACH,Y
+SALES_DAILY,alert,ALERT_SUBJECT,$$pipeline_code: $$trigger,Y
 SALES_DAILY,fetch_orders,INPUT_PARAMS,"{""region"": ""uk"", ""days"": 1}",Y
 SALES_DAILY,fetch_orders,LINEAGE_SOURCE,orders.api,Y
 SALES_DAILY,fetch_orders,RETRIES,2,Y
@@ -12,18 +13,19 @@ SALES_DAILY,load_orders,DOCUMENTATION,Appends the day's orders to the region's t
 SALES_DAILY,load_orders,RETRIES,1,Y
 SALES_DAILY,load_orders,SCRIPT_FILE,sql_scripts/sales/orders_uk.sql,Y
 SALES_DAILY,load_orders,SQL_ACTION,APPEND_TABLE,Y
-SALES_DAILY,on_failure,EMAIL_BODY,Run $$pipeline_run_id failed: $$error_message,Y
-SALES_DAILY,on_failure,EMAIL_ON_STATUS,FAILED,Y
-SALES_DAILY,on_failure,EMAIL_SUBJECT,$$pipeline_code: a step failed,Y
-SALES_DAILY,on_failure,EMAIL_TO,sales-oncall@example.com,Y
+SALES_DAILY,on_failure,ALERT_BODY,Run $$pipeline_run_id failed: $$error_message,Y
+SALES_DAILY,on_failure,ALERT_CHANNEL,sales_oncall,Y
+SALES_DAILY,on_failure,ALERT_ON,FAILURE,Y
+SALES_DAILY,on_failure,ALERT_SUBJECT,$$pipeline_code: a step failed,Y
 SALES_DAILY,setup_orders,SCRIPT_FILE,sql_scripts/sales/orders_uk.sql,Y
 SALES_DAILY,setup_orders,SQL_ACTION,SETUP_TABLE,Y
 SALES_DAILY,validate_feed,INPUT_PARAMS,"{""table"": ""lnd.orders_uk"", ""min_rows"": 1}",Y
 SALES_DAILY,validate_feed,SCRIPT_FILE,python_scripts/sales/validate_feed.py,Y
 SALES_DAILY,validate_feed,SCRIPT_KIND,INGESTION,Y
-SALES_DAILY_EU,alert,EMAIL_BODY,Run $$pipeline_run_id ended $$status.,Y
-SALES_DAILY_EU,alert,EMAIL_SUBJECT,$$pipeline_code: $$status,Y
-SALES_DAILY_EU,alert,EMAIL_TO,sales-data@example.com|sales-leads@example.com,Y
+SALES_DAILY_EU,alert,ALERT_BODY,Run $$pipeline_run_id ended $$status.,Y
+SALES_DAILY_EU,alert,ALERT_CHANNEL,sales_data,Y
+SALES_DAILY_EU,alert,ALERT_ON,SUCCESS|COMPLETED_WITH_ERRORS|FAILURE|SLA_BREACH,Y
+SALES_DAILY_EU,alert,ALERT_SUBJECT,$$pipeline_code: $$trigger,Y
 SALES_DAILY_EU,fetch_orders,INPUT_PARAMS,"{""region"": ""eu"", ""days"": 1}",Y
 SALES_DAILY_EU,fetch_orders,LINEAGE_SOURCE,orders.api,Y
 SALES_DAILY_EU,fetch_orders,RETRIES,2,Y
@@ -34,15 +36,16 @@ SALES_DAILY_EU,fetch_orders,TASK_TIMEOUT_SECONDS,1800,Y
 SALES_DAILY_EU,load_orders,DOCUMENTATION,Appends the day's orders to the region's table.,Y
 SALES_DAILY_EU,load_orders,SCRIPT_FILE,sql_scripts/sales/orders_eu.sql,Y
 SALES_DAILY_EU,load_orders,SQL_ACTION,APPEND_TABLE,Y
-SALES_DAILY_EU,on_failure,EMAIL_BODY,Run $$pipeline_run_id failed: $$error_message,Y
-SALES_DAILY_EU,on_failure,EMAIL_ON_STATUS,FAILED,Y
-SALES_DAILY_EU,on_failure,EMAIL_SUBJECT,$$pipeline_code: a step failed,Y
-SALES_DAILY_EU,on_failure,EMAIL_TO,sales-oncall@example.com,Y
+SALES_DAILY_EU,on_failure,ALERT_BODY,Run $$pipeline_run_id failed: $$error_message,Y
+SALES_DAILY_EU,on_failure,ALERT_CHANNEL,sales_oncall,Y
+SALES_DAILY_EU,on_failure,ALERT_ON,FAILURE,Y
+SALES_DAILY_EU,on_failure,ALERT_SUBJECT,$$pipeline_code: a step failed,Y
 SALES_DAILY_EU,setup_orders,SCRIPT_FILE,sql_scripts/sales/orders_eu.sql,Y
 SALES_DAILY_EU,setup_orders,SQL_ACTION,SETUP_TABLE,Y
-SALES_MART,alert,EMAIL_BODY,Run $$pipeline_run_id ended $$status.,Y
-SALES_MART,alert,EMAIL_SUBJECT,$$pipeline_code: $$status,Y
-SALES_MART,alert,EMAIL_TO,sales-data@example.com,Y
+SALES_MART,alert,ALERT_BODY,Run $$pipeline_run_id ended $$status.,Y
+SALES_MART,alert,ALERT_CHANNEL,sales_data,Y
+SALES_MART,alert,ALERT_ON,SUCCESS|COMPLETED_WITH_ERRORS|FAILURE,Y
+SALES_MART,alert,ALERT_SUBJECT,$$pipeline_code: $$trigger,Y
 SALES_MART,daily_totals,SELECT_QUERY,"SELECT CAST(ordered_at AS DATE) AS order_date, SUM(amount) AS total_amount FROM sales.orders_uk GROUP BY CAST(ordered_at AS DATE)",Y
 SALES_MART,daily_totals,SQL_ACTION,CREATE_TABLE,Y
 SALES_MART,publish,INPUT_PARAMS,"{""partner"": ""acme""}",Y

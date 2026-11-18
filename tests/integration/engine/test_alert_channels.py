@@ -26,22 +26,22 @@ def alerts(engine_db, monkeypatch):
             conn,
             pipeline,
             "notify",
-            "EMAIL_ALERT",
+            "ALERT",
             ALERT_CHANNEL="ops",
         )
         add_dependency(conn, pipeline, task, data, "ALWAYS")
         channel = conn.execute(
             text(
                 "INSERT INTO CFG_ALERT_CHANNELS(PROJECT_ID,CHANNEL_NAME,KIND,URL_SECRET,"
-                "SIGNING_SECRET,BODY_FORMAT,DEFAULT_ALERT_ON) VALUES(1,'ops','WEBHOOK',"
-                "'ALERT_URL','ALERT_KEY','JSON','FAILURE|SLA_BREACH|LOST|GATE_WAIT_OVER_5') "
+                "SIGNING_SECRET,DEFAULT_ALERT_ON) VALUES(1,'ops','WEBHOOK',"
+                "'ALERT_URL','ALERT_KEY','FAILURE|SLA_BREACH|LOST|GATE_WAIT_OVER_5') "
                 "RETURNING CHANNEL_ID"
             )
         ).scalar_one()
         source = start_run(conn, pipeline)
     ctx = OperationContext(
         engine_db.engine,
-        engine_db.config,
+        replace(engine_db.config, limits=replace(engine_db.config.limits, enforce_sla=True)),
         SYSTEM_ACTOR,
         role=ApiRole.ADMIN,
         project_id=1,
@@ -228,9 +228,9 @@ def test_slack_delivery_uses_plain_text_shape(alerts, monkeypatch):
     from etl_craft.services.operations import alert_delivery
     from etl_craft.services.operations.alert_admission import admit_pending
 
+    with alerts[0].engine.begin() as conn:
+        conn.execute(text("UPDATE CFG_ALERT_CHANNELS SET KIND='SLACK'"))
     ctx, _source, task = failed_source(alerts)
-    with ctx.engine.begin() as conn:
-        conn.execute(text("UPDATE CFG_ALERT_CHANNELS SET KIND='SLACK',BODY_FORMAT='SLACK'"))
     with acting_as(SYSTEM_ACTOR):
         (run,) = admit_pending(ctx)
         context = task_for(ctx, run, task)
@@ -242,6 +242,106 @@ def test_slack_delivery_uses_plain_text_shape(alerts, monkeypatch):
     )
     alert_delivery.deliver(ctx, context)
     assert "ALERT_SOURCE" in sent[0]["text"] and sent[0]["link_names"] is False
+
+
+def test_sla_breach_is_admitted_only_where_enforce_sla_is_on(alerts):
+    from etl_craft.services.operations.alert_admission import admit_pending
+
+    ctx, _pipeline, source, _task, _channel, _data = alerts
+    with ctx.engine.begin() as conn:
+        transitions.mark_sla_breached(conn, source)
+    relaxed = replace(
+        ctx, config=replace(ctx.config, limits=replace(ctx.config.limits, enforce_sla=False))
+    )
+    with acting_as(SYSTEM_ACTOR):
+        assert admit_pending(relaxed) == ()
+        (run,) = admit_pending(ctx)
+    with ctx.engine.connect() as conn:
+        assert (
+            conn.execute(
+                text("SELECT TRIGGER FROM AUD_ALERT_DELIVERIES WHERE PIPELINE_RUN_ID=:r"),
+                {"r": run},
+            ).scalar_one()
+            == "SLA_BREACH"
+        )
+
+
+def test_a_new_or_changed_subscription_never_replays_history(alerts):
+    from etl_craft.services.operations.alert_admission import admit_pending
+
+    ctx, pipeline, source, _task, _channel, _data = alerts
+    with ctx.engine.begin() as conn:
+        transitions.finalize_pipeline_run(conn, source, RunStatus.FAILED)
+        conn.execute(text("UPDATE CFG_ALERT_CHANNELS SET ACTIVE_FLAG='N'"))
+    with ctx.engine.begin() as conn:
+        conn.execute(text("UPDATE CFG_ALERT_CHANNELS SET ACTIVE_FLAG='Y'"))
+    with acting_as(SYSTEM_ACTOR):
+        assert admit_pending(ctx) == ()
+    with ctx.engine.begin() as conn:
+        later = start_run(conn, pipeline)
+        transitions.finalize_pipeline_run(conn, later, RunStatus.FAILED)
+    with acting_as(SYSTEM_ACTOR):
+        (run,) = admit_pending(ctx)
+    with ctx.engine.connect() as conn:
+        assert (
+            conn.execute(
+                text("SELECT SOURCE_RUN_ID FROM AUD_ALERT_DELIVERIES WHERE PIPELINE_RUN_ID=:r"),
+                {"r": run},
+            ).scalar_one()
+            == later
+        )
+
+
+@pytest.mark.parametrize(
+    ("statuses", "attempts", "event"),
+    [
+        (("SUCCESS", "SUCCESS"), 1, "SUCCESS"),
+        (("SUCCESS", "SKIPPED"), 1, "COMPLETED_WITH_ERRORS"),
+        (("SUCCESS", "SUCCESS"), 2, "COMPLETED_WITH_ERRORS"),
+    ],
+)
+def test_a_successful_run_is_reported_as_success_or_completed_with_errors(
+    alerts, statuses, attempts, event
+):
+    from etl_craft.services.operations.alert_admission import admit_pending
+
+    ctx, pipeline, source, task, _channel, data = alerts
+    with ctx.engine.begin() as conn:
+        conn.execute(
+            text(
+                "INSERT INTO CFG_TASK_PARAMETERS(TASK_ID,PARAMETER_NAME,PARAMETER_VALUE) "
+                "VALUES(:t,'ALERT_ON','SUCCESS|COMPLETED_WITH_ERRORS')"
+            ),
+            {"t": task},
+        )
+    with ctx.engine.begin() as conn:
+        other = add_task(conn, pipeline, "other", "PYTHON", SCRIPT_FILE="other.py")
+        for task_id, status in zip((data, other), statuses, strict=True):
+            binding = transitions.find_or_create_task_run(conn, task_id, source)
+            conn.execute(
+                text(
+                    "UPDATE AUD_TASK_RUN_LOG SET STATUS=:s,ATTEMPT_COUNT=:a,END_DATE=START_DATE "
+                    "WHERE TASK_RUN_ID=:id"
+                ),
+                {"s": status, "a": attempts, "id": binding.task_run_id},
+            )
+        # The alert task's own no-op run in the source never makes it unclean.
+        binding = transitions.find_or_create_task_run(conn, task, source)
+        conn.execute(
+            text("UPDATE AUD_TASK_RUN_LOG SET STATUS='SKIPPED' WHERE TASK_RUN_ID=:id"),
+            {"id": binding.task_run_id},
+        )
+        transitions.finalize_pipeline_run(conn, source, RunStatus.SUCCESS)
+    with acting_as(SYSTEM_ACTOR):
+        (run,) = admit_pending(ctx)
+    with ctx.engine.connect() as conn:
+        assert (
+            conn.execute(
+                text("SELECT TRIGGER FROM AUD_ALERT_DELIVERIES WHERE PIPELINE_RUN_ID=:r"),
+                {"r": run},
+            ).scalar_one()
+            == event
+        )
 
 
 def test_concurrent_observers_admit_one_alert_run(alerts):

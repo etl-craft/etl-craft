@@ -2,6 +2,7 @@
 
 import json
 import logging
+import re
 from dataclasses import replace
 
 import pytest
@@ -110,20 +111,31 @@ def good_pipeline(conn, code="SALES"):
     )
     rules = add_task(conn, p, "rules", "BUSINESS_RULES")
     add_rule(conn, p, rules, "negative amount")
-    alert = add_task(
+    email_channel(conn)
+    add_task(
         conn,
         p,
         "alert",
-        "EMAIL_ALERT",
-        EMAIL_TO="ops@x.io",
-        EMAIL_SUBJECT="$$pipeline_code: $$status",
-        EMAIL_BODY="Run $$pipeline_run_id finished.",
+        "ALERT",
+        ALERT_CHANNEL="ops",
+        ALERT_SUBJECT="$$pipeline_code: $$trigger",
+        ALERT_BODY="Run $$pipeline_run_id finished.",
     )
     add_dependency(conn, p, setup, ingest)
     add_dependency(conn, p, load, setup)
     add_dependency(conn, p, rules, load, "HAS_DATA")
-    add_dependency(conn, p, alert, rules, "ALWAYS")
     return p
+
+
+def email_channel(conn):
+    """The project's EMAIL channel ``ops``, once."""
+    conn.execute(
+        text(
+            "INSERT INTO CFG_ALERT_CHANNELS(PROJECT_ID,CHANNEL_NAME,KIND,RECIPIENTS) "
+            "SELECT 1,'ops','EMAIL','ops@x.io' WHERE NOT EXISTS "
+            "(SELECT 1 FROM CFG_ALERT_CHANNELS WHERE CHANNEL_NAME='ops')"
+        )
+    )
 
 
 def found(report):
@@ -221,10 +233,8 @@ def test_task_definitions_are_checked_with_the_handlers_own_rules(project):
             conn,
             p,
             "alert",
-            "EMAIL_ALERT",
-            EMAIL_TO="ops",
-            EMAIL_SUBJECT_FAILED="x $$when",
-            EMAIL_ON_STATUS="FAILED|SUCCESS",
+            "ALERT",
+            ALERT_CHANNEL="nowhere",
         )
         for code in (
             "no_action",
@@ -289,11 +299,7 @@ def test_task_definitions_are_checked_with_the_handlers_own_rules(project):
         for m in rules_messages
     )
     assert any("must be one read-only SELECT" in m for m in rules_messages)
-    alert_messages = [m for _, m in by_task["BAD.alert"]]
-    assert "EMAIL_TO has address(es) that are not valid: ops" in alert_messages
-    assert any(m.startswith("no EMAIL_SUBJECT for outcome(s) SUCCESS") for m in alert_messages)
-    assert any(m.startswith("no EMAIL_BODY for outcome(s) FAILED, SUCCESS") for m in alert_messages)
-    assert any("unknown token(s) $$when" in m for m in alert_messages)
+    assert only("alert").startswith("ALERT_CHANNEL='nowhere': missing or inactive")
     assert "BAD.rebuild" not in by_task
 
 
@@ -308,15 +314,7 @@ def test_dependencies_and_pipeline_settings(project):
         rules_data = add_task(
             conn, down, "after_rules", "PYTHON", SCRIPT_FILE="python_scripts/load.py"
         )
-        alert = add_task(
-            conn,
-            down,
-            "alert",
-            "EMAIL_ALERT",
-            EMAIL_TO="ops@x.io",
-            EMAIL_SUBJECT="s",
-            EMAIL_BODY="b",
-        )
+        alert = add_task(conn, down, "alert", "ALERT", ALERT_CHANNEL="ops")
         add_dependency(conn, down, waits, off, upstream_pipeline=up)
         rules = conn.execute(
             text("SELECT TASK_ID FROM CFG_TASKS WHERE TASK_CODE = 'rules'")
@@ -347,7 +345,7 @@ def test_dependencies_and_pipeline_settings(project):
             conn.exec_driver_sql("PRAGMA ignore_check_constraints=OFF")
     report = validate(engine, config)
     got = found(report)
-    fail, warn = Status.FAIL, Status.WARN
+    fail = Status.FAIL
     assert (
         "DOWN.waits",
         fail,
@@ -362,13 +360,8 @@ def test_dependencies_and_pipeline_settings(project):
         "target rows, so the dependency is never satisfied and the task is always skipped; use "
         "SUCCESS",
     ) in got
-    assert (
-        "DOWN.alert",
-        fail,
-        "reports on the whole run but does not depend on after_rules, so it can run before they "
-        "finish and report on a run still in progress; add an ALWAYS dependency on each",
-    ) in got
-    assert ("DOWN.alert", warn) == got[[g[0] for g in got].index("DOWN.alert") + 1][:2]
+    # Alerts start from events, so their dependencies are never judged as reporting order.
+    assert [g for g in got if g[0] == "DOWN.alert"] == []
     assert (
         "DOWN",
         fail,
@@ -377,7 +370,7 @@ def test_dependencies_and_pipeline_settings(project):
     ) in got
     for key in ("RETRIES", "TAG"):
         assert any(
-            where == "DOWN" and status is fail and key in message and "EMAIL_RECIPIENTS" in message
+            where == "DOWN" and status is fail and key in message and "TAGS" in message
             for where, status, message in got
         )
     assert any(w == "DOWN" and "GONE, which is inactive" in m for w, _, m in got)
@@ -422,26 +415,29 @@ def test_the_command(project, capsys):
         validate(engine, load_config("craft-connector.yml"), "NOPE")
 
 
-def test_an_alert_that_only_watches_for_failures_may_run_mid_run(project):
+@pytest.mark.parametrize(
+    ("params", "message"),
+    [
+        ({}, "ALERT_CHANNEL is required for HANDLER=ALERT"),
+        ({"ALERT_CHANNEL": "ops", "ALERT_ON": "FAILED"}, "ALERT_ON='FAILED': expected FAILURE"),
+        ({"ALERT_CHANNEL": "ops", "ALERT_BODY": "$$when"}, r"unknown token\(s\) \$\$when"),
+        ({"ALERT_CHANNEL": "hooks", "EMAIL_PIPELINES": "ALL"}, "EMAIL channels only"),
+    ],
+)
+def test_alert_tasks_are_checked_against_their_channel(project, params, message):
     engine, config, _ = project
     with engine.begin() as conn:
         p = good_pipeline(conn, "WATCHED")
-        load = conn.execute(
-            text("SELECT TASK_ID FROM CFG_TASKS WHERE TASK_CODE = 'load' AND PIPELINE_ID = :p"),
-            {"p": p},
-        ).scalar_one()
-        watcher = add_task(
-            conn,
-            p,
-            "watcher",
-            "EMAIL_ALERT",
-            EMAIL_TO="ops@x.io",
-            EMAIL_SUBJECT="$$pipeline_code: $$status",
-            EMAIL_BODY="$$error_message",
-            EMAIL_ON_STATUS="FAILED",
+        conn.execute(
+            text(
+                "INSERT INTO CFG_ALERT_CHANNELS(PROJECT_ID,CHANNEL_NAME,KIND,URL_SECRET,"
+                "SIGNING_SECRET) VALUES(1,'hooks','WEBHOOK','HOOK_URL','HOOK_KEY')"
+            )
         )
-        add_dependency(conn, p, watcher, load, "FAILURE")
-    assert found(validate(engine, config)) == []
+        add_task(conn, p, "watcher", "ALERT", **params)
+    got = found(validate(engine, config))
+    assert [w for w, _, _ in got] == ["WATCHED.watcher"]
+    assert re.search(message, got[0][2]), got
 
 
 @pytest.mark.parametrize("default", ["NATIVE", "ICEBERG"])
@@ -606,7 +602,7 @@ def test_unknown_pipeline_parameters_fail_with_allowed_keys_and_remedy(project, 
     assert any(
         f.status is Status.FAIL
         and key in f.message
-        and "EMAIL_RECIPIENTS" in f.message
+        and "TAGS" in f.message
         and "remove" in f.message
         for f in findings
     )

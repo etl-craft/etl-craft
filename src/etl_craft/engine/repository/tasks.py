@@ -144,24 +144,6 @@ def conflicting_merge_action(conn: Connection, task_id: int, sql_action: str) ->
     return str(found) if found is not None else None
 
 
-@dataclass(frozen=True)
-class FailureWatchMessage:
-    """A task watched through a FAILURE dependency, with its latest error message."""
-
-    depends_on_task_code: str
-    error_message: str | None
-
-
-def fetch_failure_watch_messages(conn: Connection, task_id: int) -> list[FailureWatchMessage]:
-    """Return each task ``task_id`` watches through an active FAILURE dependency.
-
-    The message is from the watched task's latest run under any pipeline run, since it may be in
-    another pipeline with no run in common.
-    """
-    rows = conn.execute(statement(conn, "failure_watch_messages"), {"task_id": task_id})
-    return [FailureWatchMessage(**row._mapping) for row in rows]
-
-
 def admitted_parameters(definition: Definition, task_id: int) -> dict[str, str]:
     """Read parameter and normalized-target values from the one admitted image."""
     params = {}

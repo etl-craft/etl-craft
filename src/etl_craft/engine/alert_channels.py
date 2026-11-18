@@ -1,4 +1,4 @@
-"""The public non-secret references of one project alert channel."""
+"""One project alert channel: its kind, recipients or secret variable names."""
 
 from dataclasses import dataclass
 
@@ -13,7 +13,8 @@ class AlertChannel:
     channel_id: int
     channel_name: str
     kind: AlertKind
-    url_secret: str
-    signing_secret: str
+    url_secret: str | None
+    signing_secret: str | None
+    recipients: str | None
     default_alert_on: str | None
     active_flag: YesNo = YesNo.YES

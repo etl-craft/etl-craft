@@ -23,7 +23,7 @@ and the profile lacks, stops the command with the field named.
   `KEY_FILE`, `OAUTH`, `SSO` and `STS`.
 - [Warehouses](warehouses.md#connecting-and-authenticating): each warehouse and table format,
   with its modes.
-- The email relay (see [Email alerts](../guides/email-alerts.md)): `NONE`, `PASSWORD`, or
+- The email relay (see [Alerts](../guides/alerts.md#email)): `NONE`, `PASSWORD`, or
   `OAUTH` (SMTP XOAUTH2, for Microsoft 365 and Google), or no login with `sendmail`.
 
 ## Verified here

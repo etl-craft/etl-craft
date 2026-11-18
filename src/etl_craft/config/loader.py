@@ -36,7 +36,6 @@ from etl_craft.config.loader_helpers import (
     reject_unknown,
     relative_to_config,
     shown,
-    string_list,
     whole_number,
 )
 from etl_craft.config.loader_orchestration import (
@@ -276,11 +275,9 @@ def parse_config(raw: object, path: Path, *, agent: bool = False) -> ConnectorCo
         warehouse_table_format=table_format,
         max_warehouse_queries=parse_warehouse_limit(raw, global_profile, path, resolver),
         retries=whole_number(orchestration, "Retries", None, path),
-        email_recipients=string_list(orchestration, "Email_recipients", path),
         allowed_auto_restarts=parse_allowed_auto_restarts(orchestration, path),
         retry_on=parse_retry_on(orchestration, path),
         email=email,
-        email_template=orchestration.text("Email_template"),
         limits=limits,
         config_path=path,
         dependency_gates=dependency_gates,

@@ -38,7 +38,7 @@ flowchart LR
     handler -->|SQL| sql["SQL action"]
     handler -->|PYTHON| script["Python script"]
     handler -->|BUSINESS_RULES| rules["Business rules"]
-    handler -->|EMAIL_ALERT| mail["Email alert"]
+    handler -->|ALERT| mail["Alert"]
     sql --> wh[("Warehouse")]
     script --> wh
     rules --> wh

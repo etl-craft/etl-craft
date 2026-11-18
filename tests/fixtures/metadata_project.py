@@ -16,6 +16,7 @@ from sqlalchemy import text
 from sqlalchemy.engine import Engine
 
 from etl_craft.config import ConnectorConfig, load_config
+from etl_craft.core.actor import SYSTEM_ACTOR, acting_as
 from etl_craft.engine.migrations import apply_pending_migrations
 from etl_craft.engine.schema import init_db
 
@@ -58,10 +59,27 @@ class MetadataProject:
             return [tuple(row) for row in conn.execute(text(sql), params)]
 
 
+EXAMPLE_CHANNELS = (
+    ("sales_data", "sales-data@example.com|sales-leads@example.com"),
+    ("sales_oncall", "sales-oncall@example.com"),
+)
+"""The email channels the documented examples' alert tasks name."""
+
+
 @pytest.fixture
 def metadata_project(empty_engine_db, tmp_path, monkeypatch) -> MetadataProject:
     engine_db = empty_engine_db
     init_db(engine_db.engine)
+    # The examples' alert tasks name these channels; administrators set them, not migrations.
+    with acting_as(SYSTEM_ACTOR), engine_db.engine.begin() as conn:
+        for name, recipients in EXAMPLE_CHANNELS:
+            conn.execute(
+                text(
+                    "INSERT INTO CFG_ALERT_CHANNELS(PROJECT_ID,CHANNEL_NAME,KIND,RECIPIENTS) "
+                    "VALUES(1,:name,'EMAIL',:recipients)"
+                ),
+                {"name": name, "recipients": recipients},
+            )
     profile = engine_db.config.engine
     schema = "public" if profile.jdbc_url.startswith("jdbc:postgresql") else "main"
     block = {"Jdbc_url": profile.jdbc_url, "Schema": schema}

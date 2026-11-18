@@ -80,20 +80,19 @@ replacement and its recorded values.
 ## Before the run starts
 
 The engine first tests the connections the run uses. A warehouse failure stops with exit status
-`11` (`CONNECTION_TEST`), naming the failure; nothing is recorded and no task starts. An email
-failure is logged and data tasks may still run; the alert task records any delivery failure.
+`11` (`CONNECTION_TEST`), naming the failure; nothing is recorded and no task starts. The email
+relay is not tested here: alerts are separate runs that record their own delivery failures, and
+`doctor` tests the relay.
 
 | Tested | When |
 |---|---|
 | the warehouse | a task's `HANDLER` is `SQL` or `BUSINESS_RULES`, or cloning is on |
-| the email relay | a task's `HANDLER` is `EMAIL_ALERT`, or `Enforce_sla` is on and the pipeline has an `SLA_IN_HOURS` |
 
 A DuckDB file warehouse is not tested: there is no server to be down, and a running task may hold
 its one writer's lock.
 
-Email alert failures do not change the outcome of a pipeline containing data tasks; see
-[Email alerts](email-alerts.md#when-sending-fails). A pipeline containing only alerts uses their
-outcomes.
+Alerts run separately, after the event they report, and never change a run's outcome; see
+[Alerts](alerts.md#delivery-and-recovery).
 
 A new run is recorded `QUEUED` while its dependencies on other pipelines are checked.
 `AUD_GATE_WAITS` retains its deadline and look count across restarts; admission changes it
@@ -146,8 +145,9 @@ Every run of a pipeline with `SLA_IN_HOURS` is marked in `AUD_PIPELINES_RUN_LOG.
 `BREACHED` as soon as the SLA passes, with a warning in the log; otherwise it is marked when the
 run ends. A run's `STATUS` does not change either way: a late run still did its work.
 
-With `Orchestration.Enforce_sla: true`, a breach also sends an SLA email through the `Email`
-settings, once per run.
+With `Orchestration.Enforce_sla: true`, an alert task with `ALERT_ON=SLA_BREACH` reports a
+breach, once per run; see [Alerts](alerts.md). With it off, as in a development profile, runs are
+still marked and nothing is sent.
 
 ## Unfinished commands
 

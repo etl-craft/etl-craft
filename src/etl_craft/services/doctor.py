@@ -583,7 +583,7 @@ def _warehouse(config: ConnectorConfig, *, queue_on_engine_db: bool) -> list[Che
 
 def _email(config: ConnectorConfig) -> list[Check]:
     if config.email is None:
-        return [ok("Email", "no Email settings: only EMAIL_ALERT tasks and SLA emails need them")]
+        return [ok("Email", "no Email settings: only alert tasks on EMAIL channels need them")]
     profile = config.email
     if profile.transport == EmailTransport.SENDMAIL:
         problem = probe_email_relay(config)

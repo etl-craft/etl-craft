@@ -269,11 +269,7 @@ def report(ctx: OperationContext, request: AgentTask) -> AgentReply | Awaitable[
     if request.operation in direct:
         return direct[request.operation](ctx, request)
     task = _context(ctx, request)
-    if (
-        request.operation == AgentReport.ALERT
-        and task.handler == Handler.EMAIL_ALERT
-        and task.task_params.get("ALERT_CHANNEL")
-    ):
+    if request.operation == AgentReport.ALERT and task.handler == Handler.ALERT:
         return _alert_delivery(ctx, task)
     if request.operation == AgentReport.ERASURE:
         return _erasure(ctx, task, required(request.target, "target"))
@@ -305,7 +301,6 @@ def report(ctx: OperationContext, request: AgentTask) -> AgentReply | Awaitable[
         AgentReport.ERASURE_FILTERS: lambda: store_filters(
             store, required(request.target, "target")
         ),
-        AgentReport.ALERT: lambda: store.alert(task.task_params.get("EMAIL_PIPELINES")),
         AgentReport.WATERMARK: lambda: _watermark(store, task, request),
         AgentReport.ITEMS: store.items,
         AgentReport.ITEM_PREPARE: lambda: store.prepare_items(request.item_keys),

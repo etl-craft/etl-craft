@@ -2,11 +2,11 @@
 
 With pip, every Engine DB with every local warehouse; with uv, SQLite and DuckDB, since the
 installer changes how the package got there, not what it does. Each case runs through the engine.
-The runs cover
-python with offsets, all nine SQL actions, business rules in two waves, alerts and a failure
-watcher, the SLA email, a task that fails once, a timeout, a stopped run resumed, cross-pipeline
-gates and cloning; then the warehouse's data, the audit rows, the emails, and what ``validate``,
-``doctor``, ``history``, ``graph``, ``lineage`` and ``generate-docs`` report.
+The runs cover python with offsets, all nine SQL actions, business rules in two waves, email
+alerts on a failure, every ending and an SLA breach, sent by the controller, a task that fails
+once, a timeout, a stopped run resumed, cross-pipeline gates and cloning; then the warehouse's
+data, the audit rows, the emails, and what ``validate``, ``doctor``, ``history``, ``graph``,
+``lineage`` and ``generate-docs`` report.
 """
 
 from __future__ import annotations
@@ -25,7 +25,8 @@ import yaml
 from sqlalchemy import text
 
 from etl_craft.core.actor import SYSTEM_ACTOR, acting_as
-from etl_craft.core.enums import EmailFlavour, RunStatus, SqlAction
+from etl_craft.core.alerts import AlertTrigger
+from etl_craft.core.enums import RunStatus, SqlAction
 from etl_craft.engine.connection import engine_db
 from etl_craft.warehouse.connection import warehouse_dialect
 from fixtures.demo import Demo, demos, installed_cli
@@ -147,9 +148,9 @@ def test_the_demo_runs_locally(make_demo, installer, engine, warehouse):
 
     demo.ok("clone")
     check_the_warehouse(demo)
-    check_the_emails(demo, failed=True)
+    emails = expected_emails(demo)
     check_the_reports(demo)
-    check_server(demo)
+    check_server(demo, emails)
     if not warehouse_dialect(demo.config).views:
         set_parameter(demo, "DEMO", "area_summary", "SQL_ACTION", SqlAction.CREATE_VIEW)
         refused = demo.run("pipelines", "refresh")
@@ -218,32 +219,30 @@ def check_the_warehouse(demo: Demo) -> None:
     ]
 
 
-def check_the_emails(demo: Demo, *, failed: bool) -> None:
+def expected_emails(demo: Demo) -> set[str]:
+    """The alert emails the demo's runs so far call for, before any alert run exists."""
     run_id, status = demo.latest_run("DEMO")
     assert status == RunStatus.SUCCESS
     tasks = demo.engine_rows(
         "SELECT t.TASK_CODE AS task_code,r.STATUS AS status,r.ATTEMPT_COUNT AS attempts,"
         "r.ERROR_MESSAGE AS error FROM AUD_TASK_RUN_LOG r JOIN CFG_TASKS t ON t.TASK_ID=r.TASK_ID "
-        "WHERE r.PIPELINE_RUN_ID=:run AND t.HANDLER<>'EMAIL_ALERT'",
+        "WHERE r.PIPELINE_RUN_ID=:run AND t.HANDLER<>'ALERT'",
         run=run_id,
     )
     assert tasks and all(
         status == RunStatus.SUCCESS and not error for _, status, _, error in tasks
     ), tasks
     outcome = (
-        EmailFlavour.COMPLETED_WITH_ERRORS
+        AlertTrigger.COMPLETED_WITH_ERRORS
         if any(attempts > 1 for _, _, attempts, _ in tasks)
-        else EmailFlavour.SUCCESS
+        else AlertTrigger.SUCCESS
     )
-    expected = f"[CUSTOM] DEMO: {outcome}"
-    subjects = demo.wait_for_email(expected)
-    assert expected in subjects, (tasks, subjects)
-    if failed:
-        assert {
-            "[CUSTOM] DEMO: FAILED",
-            "[CUSTOM] DEMO: a feed failed",
-            "[CUSTOM] EXPORT: SLA of 0.0002 h missed",
-        } <= subjects
+    return {
+        f"[CUSTOM] DEMO: {outcome}",
+        "[CUSTOM] DEMO: FAILURE",
+        "[CUSTOM] DEMO: a feed failed",
+        "[CUSTOM] EXPORT: SLA missed",
+    }
 
 
 def check_the_reports(demo: Demo) -> None:
@@ -267,8 +266,8 @@ def check_the_reports(demo: Demo) -> None:
     assert "unknown agent" in fact and f'data-col="{target}|rating"' in fact
 
 
-def check_server(demo: Demo) -> None:
-    """The installed controller serves probes and shuts down cleanly."""
+def check_server(demo: Demo, emails: set[str]) -> None:
+    """The installed controller serves probes, sends the alert emails and shuts down cleanly."""
     with socket.socket() as listener:
         listener.bind(("127.0.0.1", 0))
         address = f"127.0.0.1:{listener.getsockname()[1]}"
@@ -290,6 +289,8 @@ def check_server(demo: Demo) -> None:
                 time.sleep(0.1)
         with urllib.request.urlopen(f"http://{address}/metrics", timeout=2) as reply:
             assert reply.status == 200
+        for subject in sorted(emails):
+            assert subject in demo.wait_for_email(subject, seconds=180), subject
     finally:
         controller.terminate()
         stdout, stderr = controller.communicate(timeout=30)

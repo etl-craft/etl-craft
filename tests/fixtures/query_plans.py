@@ -40,7 +40,7 @@ MOMENT = datetime(2026, 1, 1, tzinfo=UTC)
 VALUES = {
     "url_secret": "PLAN_URL",
     "signing_secret": "PLAN_KEY",
-    "body_format": "JSON",
+    "recipients": None,
     "default_alert_on": "FAILURE",
     "channel_name": "channel_1",
     "selector": "FAILURE",

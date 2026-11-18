@@ -1,1 +1,1 @@
-INSERT INTO CFG_ALERT_CHANNELS (PROJECT_ID,CHANNEL_NAME,KIND,URL_SECRET,SIGNING_SECRET,BODY_FORMAT,DEFAULT_ALERT_ON,ACTIVE_FLAG) VALUES (:project_id,:name,:kind,:url_secret,:signing_secret,:body_format,:default_alert_on,'Y')
+INSERT INTO CFG_ALERT_CHANNELS (PROJECT_ID,CHANNEL_NAME,KIND,URL_SECRET,SIGNING_SECRET,RECIPIENTS,DEFAULT_ALERT_ON,ACTIVE_FLAG) VALUES (:project_id,:name,:kind,:url_secret,:signing_secret,:recipients,:default_alert_on,'Y')

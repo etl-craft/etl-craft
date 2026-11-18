@@ -27,11 +27,9 @@ ORCHESTRATION_KEYS = frozenset(
         "Gate_wait_minutes",
         "Retries",
         "Retry_on",
-        "Email_recipients",
         "Allowed_auto_restarts",
         "Dependency_gates",
         "Email",
-        "Email_template",
     }
 )
 

@@ -333,7 +333,7 @@ def _invoke_handler(
     context: TaskContext,
     alert: Callable[[Engine, TaskContext], HandlerResult] | None,
 ) -> HandlerResult:
-    if context.handler == Handler.EMAIL_ALERT and context.task_params.get("ALERT_CHANNEL"):
+    if context.handler == Handler.ALERT:
         if alert is None:
             raise HandlerError("alert task: missing service adapter; start it with etl-craft run")
         return alert(engine, context)

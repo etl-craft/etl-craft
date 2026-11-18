@@ -426,7 +426,7 @@ class Handler(StrEnum):
     FILE_VALIDATION = "FILE_VALIDATION"
     SQL_SCRIPT = "SQL_SCRIPT"
     BUSINESS_RULES = "BUSINESS_RULES"
-    EMAIL_ALERT = "EMAIL_ALERT"
+    ALERT = "ALERT"
     EVENT_WAIT = "EVENT_WAIT"
     RUN_PIPELINE = "RUN_PIPELINE"
 
@@ -481,14 +481,6 @@ class SqlAction(StrEnum):
     DROP_TABLE = "DROP_TABLE"
     DELETE_ROWS = "DELETE_ROWS"
     CREATE_VIEW = "CREATE_VIEW"
-
-
-class EmailFlavour(StrEnum):
-    """The outcome an email alert reports."""
-
-    FAILED = "FAILED"
-    COMPLETED_WITH_ERRORS = "COMPLETED_WITH_ERRORS"
-    SUCCESS = "SUCCESS"
 
 
 class DeploymentProfile(StrEnum):

@@ -145,8 +145,8 @@ B60 = [
     "tests/unit/test_scripting.py::test_a_timestamp_offset_refuses_precision_the_store_cannot_keep",
 ]
 B61 = [
-    "tests/integration/execution/test_pipeline.py::test_a_relay_outage_does_not_prevent_data_tasks_from_running",
-    "tests/integration/execution/test_email.py::test_recipient_refusal_is_recorded_on_the_alert_attempt",
+    "tests/integration/execution/test_run_connections.py::test_only_the_connections_a_run_uses_are_tested",
+    "tests/integration/execution/test_email.py::test_recipient_refusal_is_logged_and_a_total_refusal_retries_then_fails",
 ]
 B63 = [
     "tests/unit/test_release_gate.py::test_evidence_for_a_different_marker_is_rejected",

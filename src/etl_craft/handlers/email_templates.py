@@ -220,7 +220,7 @@ def context_example() -> dict[str, object]:
         "sla": {"hours": 1, "elapsed_hours": 2, "message": "SLA missed"},
         "version": "example",
         "recipients": ["team@example.com"],
-        "recipient_reason": "EMAIL_TO on the alert task",
+        "recipient_reason": "channel ops",
         "subject": "Example",
         "body": "Example body",
         "body_lines": ["Example body"],
@@ -230,21 +230,17 @@ def context_example() -> dict[str, object]:
 def validate_templates(config: ConnectorConfig, params: Mapping[str, str]) -> list[str]:
     """Parse/render every referenced template against the complete documented shape."""
     problems = []
-    for name, text, is_sla in (
-        (params.get("EMAIL_TEMPLATE"), False, False),
-        (params.get("EMAIL_TEMPLATE_TEXT"), True, False),
-        (config.email_template, False, True),
+    for name, text in (
+        (params.get("EMAIL_TEMPLATE"), False),
+        (params.get("EMAIL_TEMPLATE_TEXT"), True),
     ):
         if not name:
             continue
         data = context_example()
-        if is_sla:
-            data["task"] = None
         try:
             render(config, name, data, text=text)
-            if not is_sla:
-                data["sla"] = None
-                render(config, name, data, text=text)
+            data["sla"] = None
+            render(config, name, data, text=text)
         except EtlCraftError as error:
             problems.append(str(error))
     return problems

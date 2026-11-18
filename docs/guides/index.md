@@ -18,8 +18,8 @@ How to model and run pipelines with etl-craft.
   retries.
 - [Python scripts](python-scripts.md): the script contract, `INPUT_PARAMS`, offsets, and
   where a script's output goes.
-- [Email alerts](email-alerts.md): the alert task, its outcomes and tokens, SLA emails, and
-  sending through SMTP or `sendmail`.
+- [Alerts](alerts.md): alert tasks, channels (email, webhook, Slack), events, tokens,
+  delivery and email templates.
 - [Validating pipelines](validating.md): `validate`, every check it makes, and what fails.
 - [Inspecting pipelines](inspecting.md): `list`, `graph`, `steps` and `history`.
 - [Lineage and documentation versions](lineage.md): column lineage across tasks and pipelines,

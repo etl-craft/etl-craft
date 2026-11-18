@@ -6,10 +6,14 @@ from pathlib import Path
 import yaml
 from sqlalchemy import text
 
-from fixtures.metadata import add_dependency, add_task
+from etl_craft.core.actor import SYSTEM_ACTOR, acting_as
+from etl_craft.core.enums import ApiRole
+from etl_craft.services.operations.alert_admission import admit_pending
+from etl_craft.services.operations.context import OperationContext
+from fixtures.metadata import add_task
 
 
-def test_missing_required_upload_is_recorded_once_and_sends_failure_alert(cli_project, tls_relay):
+def test_missing_required_upload_is_recorded_once_and_alerts_on_failure(cli_project, tls_relay):
     p = cli_project
     relay = tls_relay()
     raw = yaml.safe_load(p.config.config_path.read_text())
@@ -50,16 +54,22 @@ def test_missing_required_upload_is_recorded_once_and_sends_failure_alert(cli_pr
                 ),
                 {"id": p.task_id, "name": name, "value": value},
             )
-        alert = add_task(
+        conn.execute(
+            text(
+                "INSERT INTO CFG_ALERT_CHANNELS(PROJECT_ID,CHANNEL_NAME,KIND,RECIPIENTS) "
+                "VALUES(1,'ops','EMAIL','ops@example.test')"
+            )
+        )
+        add_task(
             conn,
             p.pipeline_id,
             "failure_alert",
-            "EMAIL_ALERT",
-            EMAIL_TO="ops@example.test",
-            EMAIL_SUBJECT="Upload refused",
-            EMAIL_BODY="$$error_message",
+            "ALERT",
+            ALERT_CHANNEL="ops",
+            ALERT_ON="FAILURE",
+            ALERT_SUBJECT="Upload refused",
+            ALERT_BODY="$$error_message",
         )
-        add_dependency(conn, p.pipeline_id, alert, p.task_id, "FAILURE")
     code, output = p.run("pipelines", "refresh")
     assert code == 0, output
     code, output = p.run(
@@ -93,6 +103,17 @@ def test_missing_required_upload_is_recorded_once_and_sends_failure_alert(cli_pr
     ]:
         assert part in attempt["error_message"]
         assert part in Path(attempt["log_path"]).read_text(encoding="utf-8")
+    assert relay.messages == []
+    ctx = OperationContext(
+        p.engine, p.config, SYSTEM_ACTOR, role=ApiRole.ADMIN, project_id=1, project="default"
+    )
+    with acting_as(SYSTEM_ACTOR):
+        (alert_run,) = admit_pending(ctx)
+    code, output = p.run(
+        "run", "--reason", "deliver the alert", "--pipeline-code", "P", "--run-id",
+        str(alert_run), timeout=60,
+    )  # fmt: skip
+    assert code == 0, output
     assert len(relay.messages) == 1
     message = message_from_bytes(relay.messages[0], policy=policy.default)
     body = message.get_body(preferencelist=("html", "plain")).get_content()

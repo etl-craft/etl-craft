@@ -141,6 +141,6 @@ lost agent host.
 ## Watching it run
 
 - The exit status of every command (see [Exit codes](../reference/exit-codes.md)).
-- Alert tasks and SLA emails (see [Email alerts](../guides/email-alerts.md)).
+- Alert tasks and their channels (see [Alerts](../guides/alerts.md)).
 - `etl-craft history --pipeline-code X --all` for runs and interventions, and the
   [catalog site](../guides/catalog.md) for every pipeline's last run, refreshed nightly.

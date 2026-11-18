@@ -666,7 +666,7 @@ def test_refresh_between_preflight_and_admission_uses_the_admitted_gate_policy(
 def test_manual_selection_uses_the_last_passing_refresh_before_creating_a_run(cli_project):
     project = cli_project
     with project.engine.begin() as conn:
-        add_task(conn, project.pipeline_id, "NEW", "EMAIL_ALERT")
+        add_task(conn, project.pipeline_id, "NEW", "ALERT")
     code, output = project.run(
         "run",
         "--reason",

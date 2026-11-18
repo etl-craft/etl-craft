@@ -21,7 +21,6 @@ from etl_craft.core.protection import (
 )
 from etl_craft.core.upload_copy import verified_upload
 from etl_craft.core.uploads import UploadFile, UploadInfo
-from etl_craft.engine.alerts import AlertState
 from etl_craft.engine.event_files import AdmittedFile
 from etl_craft.engine.repository.business_rules import RuleRunBinding
 from etl_craft.engine.resource_locks import confirm_stale, holder_tag
@@ -250,10 +249,6 @@ class RemoteTaskStore:
     def end_rule(self, ending: RuleEnding) -> None:
         """Commit the rule's keys and ending through its fenced task service."""
         self.call(replace(self.request(AgentReport.RULE_END), rule_ending=ending))
-
-    def alert(self, pipelines: str | None) -> AlertState:
-        """Derive the report scope from admitted metadata through the API."""
-        return from_json(AlertState, self.call(self.request(AgentReport.ALERT)))
 
     @contextmanager
     def hold(self, key: int, name: str, wait_seconds: float) -> Iterator[None]:

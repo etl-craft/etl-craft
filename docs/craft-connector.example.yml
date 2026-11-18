@@ -60,12 +60,10 @@ Orchestration:
   # Local_warehouse_slots: 6           # value — optional: the same for SQL, rule and alert tasks
   Gate_wait_minutes: 60                # value — how long a run waits for a running upstream
                                        # pipeline or task it depends on; 0: judge at once
-  Enforce_sla: false                   # value — true: send an SLA email (Email below) when a
-                                       # run misses its pipeline's SLA_IN_HOURS. Runs are
-                                       # marked MET or BREACHED either way.
+  Enforce_sla: false                   # value — true: admit SLA_BREACH alert events here; runs
+                                       # are marked MET or BREACHED either way
 
-  # Task RETRIES overrides the project retry count; pipeline EMAIL_RECIPIENTS
-  # overrides the project alert recipients.
+  # Task RETRIES overrides the project retry count.
   dev:
     Dependency_gates: WARN             # value — ENFORCE (default) | WARN | OFF. WARN
                                        # and OFF let a run go ahead when its dependencies on
@@ -78,7 +76,7 @@ Orchestration:
     Retries: 1                         # value
   sit:
     Retries: 1                         # value
-    Email:                        # how EMAIL_ALERT tasks and SLA emails are sent —
+    Email:                        # how alerts on EMAIL channels are sent —
       # Transport: SMTP                # value — SMTP (the default) | SENDMAIL: hand mail to the
       #                                #   host's sendmail program, with From_address and
       #                                #   nothing else
@@ -107,8 +105,6 @@ Orchestration:
       Secret: EMAIL_SECRET             # variable, required: a secret is never used as written
   prod:
     Retries: 1                         # value
-    Email_recipients: [data-alerts@example.com]  # value
-    # Email_template: email_templates/team.html  # optional SLA HTML template; project-relative
     Email:
       Host: EMAIL_HOST                 # variable
       Port: EMAIL_PORT                 # variable

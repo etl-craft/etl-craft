@@ -174,8 +174,8 @@ def seeded_tables(db):
         channel = conn.execute(
             text(
                 "INSERT INTO CFG_ALERT_CHANNELS(PROJECT_ID,CHANNEL_NAME,KIND,URL_SECRET,"
-                "SIGNING_SECRET,BODY_FORMAT,DEFAULT_ALERT_ON) VALUES "
-                "(1,'actor_guard','WEBHOOK','ACTOR_URL','ACTOR_KEY','JSON','FAILURE') "
+                "SIGNING_SECRET,DEFAULT_ALERT_ON) VALUES "
+                "(1,'actor_guard','WEBHOOK','ACTOR_URL','ACTOR_KEY','FAILURE') "
                 "RETURNING CHANNEL_ID AS channel_id"
             )
         ).scalar_one()
@@ -860,8 +860,8 @@ def test_alert_channel_changes_have_typed_history_and_delivery_facts_are_immutab
         channel = conn.execute(
             text(
                 "INSERT INTO CFG_ALERT_CHANNELS(PROJECT_ID,CHANNEL_NAME,KIND,URL_SECRET,"
-                "SIGNING_SECRET,BODY_FORMAT) VALUES(1,'ops','WEBHOOK','ALERT_URL',"
-                "'ALERT_KEY','JSON') RETURNING CHANNEL_ID"
+                "SIGNING_SECRET) VALUES(1,'ops','WEBHOOK','ALERT_URL',"
+                "'ALERT_KEY') RETURNING CHANNEL_ID"
             )
         ).scalar_one()
         pipeline = add_pipeline(conn, "ALERTED")

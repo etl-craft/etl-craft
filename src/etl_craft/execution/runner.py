@@ -729,8 +729,7 @@ def _child_argv(
     argv = [
         "-m",
         "etl_craft.services.operations.task_process"
-        if spec.handler in {Handler.RUN_PIPELINE, Handler.EMAIL_ALERT}
-        and child.module == CHILD_MODULE
+        if spec.handler in {Handler.RUN_PIPELINE, Handler.ALERT} and child.module == CHILD_MODULE
         else child.module,
         "--config",
         str(config._host_config_path or config.config_path),
@@ -776,6 +775,6 @@ def _standing_outcome(
 
 
 def _task_values(engine: Engine, config: ConnectorConfig, spec: AttemptSpec) -> dict[str, str]:
-    if spec.handler in {Handler.PYTHON, Handler.EMAIL_ALERT}:
+    if spec.handler in {Handler.PYTHON, Handler.ALERT}:
         return task_values(engine, config, spec.task_run_id)
     return {}

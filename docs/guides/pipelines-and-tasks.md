@@ -41,14 +41,13 @@ writes five pipelines this way, and runs as written on SQLite and PostgreSQL.
 | `AUTO_RESTART_CONDITION` | what may start the pipeline on its own: `SCHEDULE` (default: its `RUN_SCHEDULE`), `NONE` (only a person or a trigger starts it), and run endings `SUCCESS`, `SKIPPED`, `FAILURE` or `ALWAYS` (all three), joined with `|`, for example `SCHEDULE|SUCCESS`. A cancelled run never restarts. The environment's `Orchestration.Allowed_auto_restarts` decides what may start there. The controller starts the next run (trigger kind `RESTART`, run key `restart:<previous run id>`) at least 15 seconds after the previous one ended, when no run is active and the pipeline is not paused; see [Restarting a pipeline](event-waits.md#restarting-a-pipeline) |
 | `SLA_IN_HOURS` | how long a run may take; each run is marked `MET` or `BREACHED` (see [Running a pipeline](running-pipelines.md#sla)) |
 | `REFRESH_TYPE` | `FULL` or `INCREMENTAL`; SQL tasks read it through [`$$pipeline_run_id_filter`](sql-tasks.md) |
-| `PIPELINE_PARAMETERS` | a JSON object of pipeline tags and alert settings (below) |
+| `PIPELINE_PARAMETERS` | a JSON object of pipeline tags (below) |
 
-`PIPELINE_PARAMETERS` accepts two keys, each a list of strings:
+`PIPELINE_PARAMETERS` accepts one key, a list of strings:
 
 | Key | Value |
 |---|---|
 | `TAGS` | labels for the pipeline, such as `["sales", "daily"]` |
-| `EMAIL_RECIPIENTS` | who receives the pipeline's alert and SLA emails, overriding `Orchestration.Email_recipients` |
 
 Wrong types and unknown keys fail
 `validate` and are refused by `config apply`; remove an unknown key or use an allowed one.
@@ -80,7 +79,7 @@ See [tag filters](inspecting.md#filter-by-tags) and [group controls](run-control
 | `PYTHON` | Python code from `python_scripts/` | [Python scripts](python-scripts.md) |
 | `BUSINESS_RULES` | the task's rows of `CFG_BUSINESS_RULES`, flagging the rows that break them | [Business rules](business-rules.md) |
 | `EVENT_WAIT` | a durable file or warehouse-row condition without an agent slot | [Event waits](event-waits.md) |
-| `EMAIL_ALERT` | an email about the run so far | [Email alerts](email-alerts.md) |
+| `ALERT` | a message through a project channel when an event it names happens | [Alerts](alerts.md) |
 | `RUN_PIPELINE` | starts a child pipeline; controller-held WAIT or DETACH at QUEUED admission | [Pipeline triggers](pipeline-triggers.md) |
 
 A task's optional `TARGET_TABLE_ID` references `CFG_TABLES`. `TARGET_ACTIVE_FLAG` defaults to `Y`;

@@ -33,12 +33,12 @@ something other than what the metadata says.
 | `PIPELINE_PARAMETERS` | a value has the wrong type, such as `"RETRIES": "3"` |
 | A pipeline's graph | a cycle, a self-dependency, a run condition its dependencies cannot meet, or a dependency on an inactive task |
 | Pipeline dependencies | a cycle between pipelines, or a dependency on an inactive pipeline |
-| Task dependencies | a dependency on an inactive task or pipeline elsewhere; `DEPENDS_ON_PIPELINE_ID` naming a pipeline the upstream task is not in; a `HAS_DATA` dependency on a task that never reports target rows (`BUSINESS_RULES`, `EMAIL_ALERT`, and the SQL actions `SETUP_TABLE`, `DROP_TABLE`, `DELETE_ROWS` and `CREATE_VIEW`) |
+| Task dependencies | a dependency on an inactive task or pipeline elsewhere; `DEPENDS_ON_PIPELINE_ID` naming a pipeline the upstream task is not in; a `HAS_DATA` dependency on a task that never reports target rows (`BUSINESS_RULES`, `ALERT`, and the SQL actions `SETUP_TABLE`, `DROP_TABLE`, `DELETE_ROWS` and `CREATE_VIEW`) |
 | `SQL` tasks | everything the task checks before it starts: the action, the target, exactly one read-only SELECT (inline, or a file that exists), the pipeline-id tokens, the merge parameters, `TABLE_FORMAT`, storage parameters the warehouse would ignore, and which audit columns a `SETUP_TABLE` target gets |
 | `BUSINESS_RULES` tasks | no active rule; a rule's key column, target table or SQL; a rule keyed on `ROW_ID` of a table a `CREATE_TABLE` or `OVERWRITE_TABLE` task rebuilds, since its flags could never be cleared |
 | `SQL_SCRIPT` tasks | `SCRIPT_FILE` missing, outside `sql_scripts/`, unreadable or empty; invalid `INPUT_PARAMS`, engine-key overrides or missing binds; warns when a parsed write overlaps a managed target, naming both tasks |
 | `PYTHON` tasks | `SCRIPT_FILE` missing or outside `python_scripts/`, `INPUT_PARAMS` not a JSON object, or a script with a syntax error, no top-level `run`, an `async` `run`, or a `run` that takes more than the task |
-| `EMAIL_ALERT` tasks | recipients, `EMAIL_ON_STATUS`, or tokens in a subject or body; a subject or body missing for any outcome the task can send on; or an alert that does not depend on every task that nothing else depends on, so it could report on a run still in progress (an alert whose every dependency is `FAILURE` watches those tasks instead, and is not checked for this) |
+| `ALERT` tasks | `ALERT_CHANNEL` missing, or naming a missing or inactive channel; unknown or duplicate `ALERT_ON` events; unknown tokens in `ALERT_SUBJECT` or `ALERT_BODY`; email-only parameters on a webhook or Slack channel; an `EMAIL` channel without the `Email` section, or a template that does not render |
 | Every task | a `TASK_TIMEOUT_SECONDS` that is not a whole number; invalid retry budgets, delays or backoff; a SQL, business-rules or alert task in a project without the `Warehouse` or `Email` section it needs |
 
 A `WARN` works, but deserves a look:

@@ -31,7 +31,6 @@ from etl_craft.core.time import as_utc
 from etl_craft.core.uploads import UploadFile
 from etl_craft.engine import locks, resource_locks, transitions
 from etl_craft.engine.agent_state import fence
-from etl_craft.engine.alerts import AlertState, read_alert
 from etl_craft.engine.event_files import (
     AdmittedFile,
     Decision,
@@ -167,10 +166,6 @@ class TaskStore(ResourceLocker, ItemStore, Protocol):
         self, wait_code: str, path: str, digest: tuple[str, int], reason: str | None
     ) -> None:
         """Record this validator's decision on one file its wait admitted in this run."""
-        ...
-
-    def alert(self, pipelines: str | None) -> AlertState:
-        """Read this task's run report and requested pipeline digests."""
         ...
 
     def state(self, sql_action: str | None = None) -> TaskState:
@@ -423,21 +418,6 @@ class LocalTaskStore:
                 yield
             finally:
                 self._contracts.clear()
-
-    def alert(self, pipelines: str | None) -> AlertState:
-        """Read the exact run's report, using the deployment's SLA policy."""
-        with using(self.definition):
-            identity = self.identity
-            with self.engine.connect() as conn:
-                self._assert(conn)
-                return read_alert(
-                    conn,
-                    identity.pipeline_id,
-                    identity.pipeline_run_id,
-                    identity.task_id,
-                    self.config.limits.enforce_sla,
-                    pipelines,
-                )
 
     def state(self, sql_action: str | None = None) -> TaskState:
         """Read only metadata belonging to the selected task and its run."""

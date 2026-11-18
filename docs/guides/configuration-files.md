@@ -74,13 +74,11 @@ config 6da809c4700d from /srv/sales/etl-craft/config: 5 change(s)
   insert     task_parameters.csv        SALES_MART.archive SCRIPT_FILE
   insert     task_dependencies.csv      SALES_MART.archive on SALES_MART.publish SUCCESS
 [FAIL] SALES_MART: depends on pipeline SALES_DAILY_EU, which is inactive and no longer runs, so once its last run is consumed the dependency is never satisfied again; deactivate the dependency too, or reactivate the pipeline
-[FAIL] SALES_MART.alert: reports on the whole run but does not depend on archive, so it can run before they finish and report on a run still in progress; add an ALWAYS dependency on each
 validate failed the result, so nothing was changed
 ```
 
-Setting the `SALES_MART on SALES_DAILY_EU` row of `pipeline_dependencies.csv` to `N`, and adding
-an `ALWAYS` dependency of `alert` on `archive`, makes the plan pass; `apply` then makes the seven
-changes.
+Setting the `SALES_MART on SALES_DAILY_EU` row of `pipeline_dependencies.csv` to `N` makes the
+plan pass; `apply` then makes the six changes.
 
 ## How the merge works
 

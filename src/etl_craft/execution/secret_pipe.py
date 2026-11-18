@@ -92,14 +92,16 @@ def task_values(engine: Engine, config: ConnectorConfig, task_run_id: int) -> di
     from etl_craft.core.enums import Handler
     from etl_craft.engine.queries import statement
 
-    if task.handler == Handler.EMAIL_ALERT and task.task_params.get("ALERT_CHANNEL"):
+    if task.handler == Handler.ALERT:
         with engine.connect() as conn:
             channel = conn.execute(
                 statement(conn, "alert_local_secrets"), {"task_run_id": task_run_id}
             ).one_or_none()
         if channel is None:
             return {}
-        names = tuple(dict.fromkeys((channel.url_secret, channel.signing_secret)))
+        names = tuple(
+            dict.fromkeys(n for n in (channel.url_secret, channel.signing_secret) if n is not None)
+        )
         return resolve_names(config, names, f"channel {task.task_params['ALERT_CHANNEL']}")
     return resolve(task)
 

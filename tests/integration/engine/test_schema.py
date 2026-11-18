@@ -138,7 +138,7 @@ def test_task_values_outside_their_lists_are_refused(seeded, column, value):
 
 def test_every_handler_is_accepted(seeded):
     db, ids = seeded
-    for handler in ("PYTHON", "SQL", "BUSINESS_RULES", "EMAIL_ALERT"):
+    for handler in ("PYTHON", "SQL", "BUSINESS_RULES", "ALERT"):
         run(
             db,
             "INSERT INTO CFG_TASKS (TASK_CODE, TASK_TYPE, PIPELINE_ID, HANDLER) "

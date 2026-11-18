@@ -243,36 +243,6 @@ def test_finalization_never_loads_or_clones_a_pinned_warehouse(tmp_path, monkeyp
     assert loaded == [] and cloned == []
 
 
-def test_sla_email_uses_pinned_email_settings_and_enforcement(tmp_path, monkeypatch):
-    from contextlib import nullcontext
-    from dataclasses import replace
-
-    from etl_craft.config import ExecutionLimits
-    from etl_craft.config.object_models import Artifacts
-    from etl_craft.execution import run_types
-    from etl_craft.execution.sla import SlaLapse
-
-    host = replace(config(tmp_path), artifacts=Artifacts((tmp_path / "store").as_uri()))
-    pinned = replace(host, limits=ExecutionLimits(enforce_sla=True))
-    monkeypatch.setattr("etl_craft.execution.bundle_files.run_config", lambda *_: pinned)
-    monkeypatch.setattr(run_types, "resolve_pipeline_id", lambda *_: 1)
-    monkeypatch.setattr(
-        run_types, "fetch_pipeline_detail", lambda *_: SimpleNamespace(email_recipients=[])
-    )
-    sent = []
-    monkeypatch.setattr(
-        run_types, "send_sla_lapse_email", lambda selected, *a, **kw: sent.append(selected)
-    )
-    from etl_craft.engine.alerts import AlertState
-
-    monkeypatch.setattr(
-        "etl_craft.engine.alerts.read_alert", lambda *a: AlertState((), None, (), ())
-    )
-    engine = SimpleNamespace(connect=lambda: nullcontext(None))
-    run_types.default_hooks(host, engine).on_sla_lapse(SlaLapse("P", 7, 1, 2))
-    assert sent == [pinned]
-
-
 def test_connection_contract_rejects_unsupported_yaml_values_without_resolving_secrets(tmp_path):
     from etl_craft.config.project import connection_sha256
 

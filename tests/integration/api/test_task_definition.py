@@ -32,7 +32,7 @@ def site(metadata_project):
             MERGE_KEY="customer_id|region",
             MERGE_COMPARE_COLUMNS="name",
         )
-        add_task(conn, pipeline, "NOTIFY", "EMAIL_ALERT")
+        add_task(conn, pipeline, "NOTIFY", "ALERT")
     return ctx, None
 
 

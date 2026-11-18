@@ -15,7 +15,7 @@ export function AlertDeliveries({ code, rows = [] }: { code: string; rows?: Aler
   return <section aria-label="Alert delivery history" className="grid min-w-0 grid-cols-1 gap-2">
     <h3 className="text-sm font-semibold">Alert deliveries</h3>
     <DataTable label="Alert deliveries" data={rows} empty="No alert deliveries yet."
-      nextStep="Ask an administrator to approve a channel, then configure an EMAIL_ALERT task with ALERT_CHANNEL and ALERT_ON."
+      nextStep="Ask an administrator to approve a channel, then configure an ALERT task with ALERT_CHANNEL and ALERT_ON."
       columns={[
         columns.display({ id: "delivery", header: "Delivery", size: 150, cell: c => {
           const row = c.row.original;

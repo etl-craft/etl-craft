@@ -146,7 +146,7 @@ def _judge_run(engine: Engine, run: PipelineRun) -> _Judgement:
         data_tasks = {
             task.task_id
             for task in fetch_task_statuses_for_run(conn, run.pipeline_id, run.pipeline_run_id)
-            if task.handler != Handler.EMAIL_ALERT
+            if task.handler != Handler.ALERT
         } & set(run.graph.task_ids)
     judged_tasks = data_tasks or set(run.graph.task_ids)
     alert_failures = sorted(

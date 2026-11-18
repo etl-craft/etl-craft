@@ -26,9 +26,10 @@ def configure(parser: argparse.ArgumentParser) -> None:
             sub.add_argument("--reason", required=True, help="Administrator's audit explanation.")
         if verb == "set":
             sub.add_argument("--kind", type=AlertKind, choices=tuple(AlertKind), required=True)
-            sub.add_argument("--url-secret", required=True, help="URL secret variable name only.")
+            sub.add_argument("--recipients", help="EMAIL: addresses separated by '|'.")
+            sub.add_argument("--url-secret", help="WEBHOOK/SLACK: URL secret variable name only.")
             sub.add_argument(
-                "--signing-secret", required=True, help="Signing key variable name only."
+                "--signing-secret", help="WEBHOOK/SLACK: signing key variable name only."
             )
             sub.add_argument(
                 "--default-alert-on",

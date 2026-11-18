@@ -78,7 +78,7 @@ def test_channel_agent_claim_never_reads_task_secret_declaration():
     from etl_craft.services.operations.task_secrets import for_claim
 
     task = SimpleNamespace(
-        handler=Handler.EMAIL_ALERT,
+        handler=Handler.ALERT,
         pipeline_code="P",
         task_code="notify",
         task_params={"ALERT_CHANNEL": "ops", "SECRETS": "not a variable declaration"},

@@ -161,7 +161,6 @@ def test_the_shipped_example_prod_profile_overrides_and_resolves(tmp_path, monke
     assert config.email.host == "smtp.internal"
     assert config.email.port == 587
     assert config.email.secret_var == "EMAIL_SECRET"
-    assert config.email_recipients == ["data-alerts@example.com"]
     assert config.cloning.enabled is True and config.cloning.scope == "ALL"
 
 

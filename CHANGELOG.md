@@ -6,6 +6,24 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+- Alerts are one task kind, `HANDLER=ALERT`, naming a project channel of kind `EMAIL`, `WEBHOOK`
+  or `SLACK`. The controller admits a separate alert run for each event the task's `ALERT_ON`
+  names, and every kind is delivered with four attempts and recorded in `AUD_ALERT_DELIVERIES`.
+  New events `SUCCESS` and `COMPLETED_WITH_ERRORS` join `FAILURE`, `SLA_BREACH`, `LOST` and
+  `GATE_WAIT_OVER_<n>`. `alert-channel set --kind EMAIL --recipients 'a@x|b@y'` makes an email
+  channel; `--url-secret` and `--signing-secret` are now only for `WEBHOOK` and `SLACK`.
+  `ALERT_SUBJECT` and `ALERT_BODY` (with `$$trigger`) word the message for every kind;
+  `EMAIL_TEMPLATE`, `EMAIL_TEMPLATE_TEXT` and `EMAIL_PIPELINES` stay for email channels. Webhook
+  bodies gain `subject` and `body`. A subscription covers only events after the task, its
+  `ALERT_CHANNEL`/`ALERT_ON` or its channel last changed, so adding an alert never replays
+  history. Removed: `HANDLER=EMAIL_ALERT` and its in-run email; `EMAIL_TO`, `EMAIL_SUBJECT`,
+  `EMAIL_BODY`, their per-outcome variants and `EMAIL_ON_STATUS`; SLA emails with
+  `Orchestration.Email_recipients`, `Orchestration.Email_template` and the pipeline's
+  `EMAIL_RECIPIENTS` (use an alert with `ALERT_ON=SLA_BREACH`; `Orchestration.Enforce_sla` still
+  decides per environment whether `SLA_BREACH` is admitted); the run-start
+  email relay probe (`doctor` still tests it); and `CFG_ALERT_CHANNELS.BODY_FORMAT`. Alert tasks
+  need no dependencies. The Email alerts and Webhook and Slack alerts guides are one Alerts guide.
+
 - Access is decided by one evaluator over stored action sets. The built-in `CAN_VIEW`,
   `CAN_UPLOAD`, `CAN_RUN` and `CAN_MANAGE` roles store their actions in `CFG_ROLE_ACTIONS` like
   custom roles (`role describe` shows them; they cannot be changed). Grants only add: a pipeline
