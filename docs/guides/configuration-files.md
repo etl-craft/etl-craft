@@ -120,9 +120,6 @@ retires a stored key. A new key with `N` is refused because no row exists to ret
 All configuration keys retain one row across retirement and reactivation. Column ordinals
 are unique among active columns of a table; retiring a column releases its ordinal, while
 its name and ID remain reserved.
-Legacy deployments could create a replacement row under a retired code; migration 0027
-requires those ambiguous identities to be repaired before upgrading. Existing audit versions
-remain immutable.
 
 Flags apply row by row. Setting a pipeline's `ACTIVE_FLAG` to `N` switches the whole pipeline
 off: its tasks keep their own flags, and etl-craft ignores them while the pipeline is inactive.
@@ -198,14 +195,6 @@ leave all three empty for a task without a target. `TARGET_ACTIVE_FLAG=N` preser
 reference without making it available to handlers. `TARGET_OBJECT` is derived for handlers and
 scripts from the active reference; it cannot be written to `task_parameters.csv`.
 
-Migration `0030_task_target_contracts.sql` moves active and inactive `TARGET_OBJECT` parameters
-onto their task rows, reuses `CFG_TABLES`, and preserves task IDs, actors, timestamps and parameter
-history. Current relative names resolve against the configured catalog once; historical exports
-keep the earlier components. Invalid, duplicate or lookalike parameter names and custom parameter
-columns or task/parameter triggers require repair with the previous package before upgrading.
-Export after migrating, then move edits from old target parameter rows to `tasks.csv`. Keep
-already-applied project migrations unchanged; update pending uploads to use the scoped reference.
-
 ## Configuration as of a moment
 
 `etl-craft config export --as-of WHEN` writes the config files as the rows stood at `WHEN`, rebuilt
@@ -264,22 +253,6 @@ freezing the host's folder. `config export` stays on the host.
 Rows they create remain untouched by later file deployments unless those keys are submitted.
 Migrations also create and change the project's own tables; `etl-craft migrate` upgrades the
 Engine DB schema.
-
-### Upgrading rule targets
-
-Migration `0029_rule_target_contracts.sql` converts rule `TARGET_TABLE` strings to
-`TARGET_TABLE_ID`, reusing existing scoped contracts and resolving current catalog aliases
-once. It preserves rule IDs, audit stamps, counters and earlier typed versions. The conversion
-version retains the original target string as historical evidence; future config writes store
-only the FK. Historical exports rebuild the old components without today’s catalog inference.
-Rule-result records keep their recorded target until the later audit endpoint conversion.
-
-Invalid legacy identifiers and custom columns or target-dependent schema objects stop the
-upgrade with a repair instruction. Export after upgrading and reapply edits to the separate
-catalog/schema/table fields in `business_rules.csv` and `tables.csv`. Old CSV headers are
-rejected. Pending project SQL must write `TARGET_TABLE_ID`; already-applied migration files
-must remain unchanged. Original tutorial files are retained under `legacy-migrations/`, and
-new projects use the current `*_contracts.sql` examples.
 
 ## Pipeline permissions
 

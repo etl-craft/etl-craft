@@ -83,34 +83,21 @@ before rebuilding: move their values into a project table and remove the extra c
 
 ## Run backfill constraint
 
-Migration `0006_run_backfill_constraint.sql` names the run's backfill check
-`ck_pipeline_run_backfill`, matching a fresh database. PostgreSQL renames the existing
-constraint. SQLite rebuilds `AUD_PIPELINES_RUN_LOG` in one transaction, preserving history,
-references, identity-counter high watermarks, custom indexes, triggers and views. It checks
-foreign keys before committing and restores connection settings on success and failure.
-Extra project columns on the SQLite run table are refused before rebuilding; move their
-values into a project table and remove those columns before migrating.
-
 PostgreSQL reports advisory-lock contention as a lock timeout. Other connection failures
 report an Engine DB error naming the lock; check connectivity and authentication before retrying.
 
 ## Run identity and attempt history
 
-Migration `0007_identity.sql` adds a unique `RUN_KEY` per pipeline, a checked `TRIGGER_KIND`,
-nullable owner, lease and configuration fingerprint fields, and `OUTPUT_REVISION` starting at 1.
-Existing runs receive `legacy:<pipeline_run_id>` keys and `BACKFILL` or `MANUAL` trigger kinds.
-New command-created runs receive `manual:<uuid>`, `backfill:<date>:<uuid>` or `stand-in:<uuid>`
+Each run has a unique `RUN_KEY` per pipeline, a checked `TRIGGER_KIND`, nullable owner, lease
+and configuration fingerprint fields, and `OUTPUT_REVISION` starting at 1. Command-created runs receive `manual:<uuid>`, `backfill:<date>:<uuid>` or `stand-in:<uuid>`
 keys. Engine inserts default to a generated manual key and `MANUAL`; other trigger kinds
 are supplied explicitly by the engine.
 
 `AUD_TASK_ATTEMPTS` stores attempt identities, lifecycle timestamps, ownership, process details,
-counts and logs. Migration `0041` adds `FAILURE_CLASS`, `FAILURE_SOURCE`, `FAILURE_CODE` and
-`RETRY_ON`: the attempt's original failure evidence and effective retry policy. These are written
-with the outcome and remain immutable afterwards. Historical attempts retain `UNKNOWN` and no
-policy; queued attempts from an earlier version capture the policy when first admitted after
-upgrade. The initial attempt migration copies each non-skipped task summary into one attempt at its
-current `ATTEMPT_COUNT`, mapping `IN-PROGRESS` to `RUNNING`. Earlier retry outcomes cannot be
-reconstructed from a summary. Skipped tasks retain their summaries without an execution attempt.
+counts and logs. `FAILURE_CLASS`, `FAILURE_SOURCE`, `FAILURE_CODE` and `RETRY_ON` hold the
+attempt's original failure evidence and effective retry policy; they are written with the
+outcome and remain immutable afterwards. Skipped tasks have summaries without an execution
+attempt.
 There can be only one queued, claimed or running attempt per task run.
 
 `AUD_GATE_DECISIONS` holds a downstream run or attempt's admission decision, exactly one dependency,
@@ -126,20 +113,12 @@ occupy no task agents. See [gate waits and dispatch](controller.md#gate-waits-an
 Admission records the selected upstream identities and revisions in `AUD_GATE_DECISIONS`,
 and successful downstream work consumes only its recorded satisfied decisions.
 
-Migration `0010_gate_repairs.sql` adds `REPAIR_PENDING` to pipeline runs. Reopening sets the flag;
-successful publication increments `OUTPUT_REVISION` once and clears it. Existing output revisions
-are preserved, and active historical runs with a recorded REOPEN remain pending after migration.
-
-SQLite rebuilds the pipeline run table with the same reference checks, custom object preservation,
-identity-counter protection and extra-column refusal as migration 0006. PostgreSQL alters it in
-place. Both dialects roll back the schema, copied history and migration ledger together on failure.
+`REPAIR_PENDING` on a pipeline run is set when the run is reopened; successful publication
+increments `OUTPUT_REVISION` once and clears it.
 
 ## Actors and write guards
 
-Migration `0008_actors_and_audit_guards.sql` attributes new actions and metadata changes. Historical
-rows keep unknown actor fields empty; the migration does not invent who performed them. SQLite
-rebuilds the run, attempt, intervention and pause tables to add actor defaults, preserving rows,
-references, custom objects and identity counters with the same rollback checks as migration 0007.
+Every action and metadata change is attributed to its actor.
 
 The CLI resolves its actor once from a registered account's session or `ETL_CRAFT_TOKEN`.
 Account names must be non-empty, contain no control characters and fit 128 characters.
@@ -166,11 +145,7 @@ table becomes available.
 
 All `CFG_` tables require one primary-key column and non-null `CREATED_BY`, `CREATE_DATE`,
 `UPDATED_BY`, `UPDATED_DATE` and `ACTIVE_FLAG`. Actor/date types and the `Y`/`N` active values
-are checked for project tables too. Migration `0026_config_base_contract.sql` makes the core
-fields mandatory. Existing creation/update values and IDs are preserved; missing historical
-attribution is labelled `etl-craft-migration-0026`, with the migration time for missing dates.
-Only changed rows get a new history version. Token update fields begin at the upgrade and
-revoked tokens become inactive; earlier token history is not invented.
+are checked for project tables too.
 
 Stop running Engine DB writers during this schema upgrade and resume them after migration
 succeeds. Before upgrading, bring custom `CFG_` tables into this contract using the previous etl-craft
@@ -259,16 +234,8 @@ is the boundary: anyone who can replace the file or its triggers can bypass the 
 recomputation time. `AUD_TARGET_VIEW_STATEMENT` records the statement behind each view. Both are
 keyed by the target's resolved catalog, schema and table (`TARGET_CATALOG_NAME`,
 `TARGET_SCHEMA_NAME`, `TARGET_TABLE_NAME`), and target locks use the same resolved identity. A
-target named with or without its catalog therefore shares one lock and one record. Migration
-`0011_target_hash_version.sql` creates the guarded tracker without guessing the hash version of
-existing tables.
-
-Migration `0033_target_state_components.sql` splits each recorded name into those components.
-It splits business-rule flags in `AUD_BUSINESS_RULES_RESULTS` the same way, keeping each one's
-spelling as recorded, never today's configured catalog. Values and timestamps are unchanged. A
-recorded name that cannot be split stops the upgrade before any change, naming the row; correct
-or delete it with a project migration and migrate again. Upgrade those merge targets with
-[`etl-craft rehash`](../guides/sql-tasks.md#change-hash-version-2).
+target named with or without its catalog therefore shares one lock and one record.
+Business-rule flags in `AUD_BUSINESS_RULES_RESULTS` use the same components.
 
 Run admission stores `METADATA_VERSION` and `METADATA_SNAPSHOT`, plus `BUNDLE_ID` when
 artifact storage is configured. `AUD_PROJECT_BUNDLES` holds immutable manifests and publication

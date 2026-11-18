@@ -214,11 +214,9 @@ Tags remain the only pipeline grouping. Config plan/apply report grants starting
 their match after tag edits, and open/restricted switches, in text and JSON. This is a report
 only; it does not enumerate accounts or change grant rows.
 
-Migration 0064 adds viewer/CAN_VIEW and operator/CAN_RUN project grants to existing projects,
-retaining restricted-pipeline access exactly. It adds no project CAN_MANAGE. Every authenticated
-account has a deployment role; service tokens and SSO sessions use that account role, so the
-viewer role grant covers every existing grantee. Projects created with `project add` have no
-grants: an admin must grant access explicitly.
+Every authenticated account has a deployment role; service tokens and SSO sessions use that
+account role. Projects created with `project add` have no grants: an admin must grant access
+explicitly.
 
 `config plan`, `config apply`, project migrations, `bundle publish` and `generate-docs` require
 project CAN_MANAGE. A full config export requires CAN_VIEW on every pipeline, so it cannot
@@ -427,9 +425,7 @@ and local task children explicitly act as `etl-craft` (`SYSTEM`).
 
 Each run retains its warehouse writer in `AUD_PIPELINES_RUN_LOG.WRITER`. ETL writes use
 `etl-craft` in `CREATED_BY` and `UPDATED_BY`, even when a person starts the run. The warehouse
-login remains a connection credential. Migration `0035` assigns existing runs the ETL writer
-and preserves their historical actor names and kinds. Apply migrations before using the new
-version; do not edit audit history.
+login remains a connection credential.
 
 Python callers must explicitly scope library writes with `core.actor.acting_as`;
 `current_actor()` raises `ConfigurationError` outside a scope. Unauthenticated connection reads

@@ -131,7 +131,7 @@ the calendar's current rows.
 
 ## Gate waits and dispatch
 
-Migration `0016_gate_waits` adds `AUD_GATE_WAITS`. Each run and task has at most one current
+`AUD_GATE_WAITS` records gate waits. Each run and task has at most one current
 wait; NULL `TASK_ID` identifies pipeline admission. `FIRST_CHECK_AT`, `WAIT_UNTIL`, `LOOKS` and
 `NEXT_CHECK_AT` preserve the budget across restarts. Completed checks clear `NEXT_CHECK_AT`,
 retaining the last budget for inspection. Gate timings remain 70%, 80%, and subsequent fractions

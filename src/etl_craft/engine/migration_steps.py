@@ -7,7 +7,6 @@ statements; a migration declares it in its header as ``-- etl-craft: rebuild-met
 
 from __future__ import annotations
 
-from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import TypedDict
 
@@ -18,7 +17,6 @@ class Target:
 
     catalog: str | None = None
     warehouse_dialect: str | None = None
-    project_dialects: Mapping[str, str] | None = None
 
 
 class TargetOptions(TypedDict, total=False):
@@ -26,7 +24,6 @@ class TargetOptions(TypedDict, total=False):
 
     catalog: str | None
     warehouse_dialect: str | None
-    project_dialects: Mapping[str, str] | None
 
 
 NO_TARGET = Target()

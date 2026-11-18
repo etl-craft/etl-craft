@@ -459,7 +459,6 @@ INTRODUCED: dict[InputKind, dict[str, str]] = {
             "--port",
             "--print-grants",
             "--project",
-            "--project-config",
             "--project-dir",
             "--python-slots",
             "--reason",

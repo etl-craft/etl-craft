@@ -60,15 +60,8 @@ use explicit project migrations; interactive account administration and login ar
 in the following authentication slice. Local commands retain their existing Engine DB trust
 boundary until that rollout.
 
-Before upgrading, legacy token names must be unique even among revoked tokens, non-empty,
-at most 128 characters and free of control characters. Migration
-`0034_accounts.sql` reports conflicting names, token IDs and roles before applying any pending
-migration. Use the old installed version to apply an explicit project migration that gives
-those tokens distinct `NAME` values, then upgrade and run `etl-craft migrate` again. The
-migration preserves credential hashes, IDs, creation fields, expiry and revocation; tokens
-continue working with their original roles. It never silently merges or renames accounts.
-The token-local `ROLE` column is removed; join `CFG_API_TOKENS.ACCOUNT_ID` to `CFG_ACCOUNTS`
-to read the current role.
+A token has no role of its own; join `CFG_API_TOKENS.ACCOUNT_ID` to `CFG_ACCOUNTS` to read the
+current role.
 
 Except for sign-in, `/health` and `/metrics`, every resource endpoint requires `Authorization: Bearer <token>`.
 `viewer` can read, `operator` can also trigger, cancel, pause, resume, mark, rerun and backfill,

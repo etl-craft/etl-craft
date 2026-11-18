@@ -96,12 +96,7 @@ imports cannot be discovered statically.
 
 ## Upgrade
 
-Apply migration `0053_project_bundles.sql` before running this package. Active and queued
-pre-bundle runs receive their current metadata definition during upgrade and retain local
-working-tree execution. Completed older runs have no historical snapshot and cannot be
-reopened: start a new run. Publish before admitting new agent runs. Apply `0054_engine_projects.sql` for project ownership. Existing metadata, publications,
-lineage and project migration records move to `default`. Republish existing bundles as an
-admin to establish their connection approvals before admitting new bundled runs.
+Publish before admitting agent runs.
 
 ## Several projects in one Engine DB
 
