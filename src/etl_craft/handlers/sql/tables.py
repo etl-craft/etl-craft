@@ -286,9 +286,9 @@ def check_target_audit(session: Session, action: str) -> list[tuple[str, str]]:
     if missing_audit:
         raise SqlGuardError(
             f"{session.target} exists but lacks {', '.join(missing_audit)}, which "
-            f"SQL_ACTION={action} maintains; use upgrade-targets for an existing legacy "
-            "target, or add the columns with an explicit migration. "
-            "SCHEMA_EVOLUTION adds only the SELECT's own columns"
+            f"SQL_ACTION={action} maintains; adopt the table with `etl-craft adopt-target "
+            f"--target {session.target_object}` (add --keep-original to keep the original "
+            "table). SCHEMA_EVOLUTION adds only the SELECT's own columns"
         )
     check_identity_types(session)
     if "UPDATE_DATE" in audit:

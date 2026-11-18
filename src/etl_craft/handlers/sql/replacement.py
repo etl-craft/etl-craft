@@ -22,9 +22,14 @@ def cleanup(session: Session, name: str) -> None:
         logger.warning("replacement succeeded but cleanup failed; remove %s manually", name)
 
 
-def promote(session: Session, candidate: str, *, existing: bool) -> None:
-    """Keep the original object until promotion succeeds; restore its definition on failure."""
-    keep = f"{session.target}__etl_keep_{session.token}"
+def promote(
+    session: Session, candidate: str, *, existing: bool, keep_as: str | None = None
+) -> None:
+    """Keep the original object until promotion succeeds; restore its definition on failure.
+
+    The original is dropped after promotion, unless ``keep_as`` names where it stays.
+    """
+    keep = keep_as or f"{session.target}__etl_keep_{session.token}"
     retained = False
     try:
         fault_point("sql.replace.before_publish")
@@ -47,7 +52,7 @@ def promote(session: Session, candidate: str, *, existing: bool) -> None:
                 f"the original table is retained at {keep}. Restore it before retrying"
             ) from restore_error
         raise error
-    if retained:
+    if retained and keep_as is None:
         cleanup(session, keep)
 
 

@@ -34,7 +34,6 @@ from etl_craft.handlers.sql.protection import (
     Protection,
     ProtectionRequest,
     exists,
-    refuse_legacy,
 )
 from etl_craft.handlers.sql.session import Session
 from etl_craft.handlers.sql.spec import read_sql_task
@@ -146,7 +145,6 @@ def _selected(
                 params=context.task_params,
             )
             session.protection_store = store
-            refuse_legacy(session)
             recover(session, store)
             guard = Protection(session, spec)
             guard.acquire()

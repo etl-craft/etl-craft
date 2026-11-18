@@ -225,8 +225,8 @@ def append_table(session: Session, action: ActionContext) -> HandlerResult:
     if "task_run_id" not in present:
         raise SqlGuardError(
             f"{session.target} has no TASK_RUN_ID column, so retrying an append could duplicate "
-            "rows; add it with `etl-craft upgrade-targets --action APPEND_TABLE --target "
-            f"{session.target_object}`"
+            "rows; adopt the table with `etl-craft adopt-target --target "
+            f"{session.target_object}` (add --keep-original to keep the original table)"
         )
     check_identity_types(session, tuple(c for c in IDENTITY_COLUMNS if c.lower() in present))
     stage = action.build_stage(session)

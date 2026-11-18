@@ -4,9 +4,9 @@ import pytest
 from sqlalchemy import text
 
 from etl_craft.core.errors import HandlerError
-from etl_craft.services.upgrade_targets import upgrade_targets
 from fixtures.metadata import add_pipeline, add_task
-from fixtures.scd_lifecycle import check_scd1_upgrade, check_scd_lifecycle, create_legacy_scd1
+from fixtures.scd_lifecycle import check_scd_lifecycle
+from fixtures.sql_appends import adopt
 
 
 @pytest.mark.parametrize("kind", ["SCD1_MERGE", "SCD2_MERGE"])
@@ -14,20 +14,7 @@ def test_scd_lifecycle(sql_world, kind):
     check_scd_lifecycle(sql_world, "lifecycle", kind)
 
 
-def test_legacy_scd1_upgrade(sql_world):
-    check_scd1_upgrade(sql_world, "legacy")
-
-
-def test_upgrade_refuses_unknown_delete_state_before_adding_columns(sql_world):
-    w = sql_world
-    create_legacy_scd1(w, "invalid_state")
-    w.execute(f"UPDATE {w.name('invalid_state')} SET DELETE_FLAG = NULL")
-    with pytest.raises(HandlerError, match="NULL or invalid DELETE_FLAG"):
-        upgrade_targets(w.engine_db, w.config)
-    assert "active_flag" not in w.columns("invalid_state")
-
-
-def test_setup_and_upgrade_refuse_mixed_scd_lifecycles(sql_world):
+def test_setup_and_adoption_refuse_mixed_scd_lifecycles(sql_world):
     w = sql_world
     for kind in ("SCD1_MERGE", "SCD2_MERGE"):
         w.task(
@@ -40,8 +27,8 @@ def test_setup_and_upgrade_refuse_mixed_scd_lifecycles(sql_world):
         )
     with pytest.raises(HandlerError, match="different row lifecycles"):
         w.setup("mixed", "SELECT 1 AS id", "SCD1_MERGE")
-    with pytest.raises(HandlerError, match="different row lifecycles"):
-        upgrade_targets(w.engine_db, w.config)
+    with pytest.raises(HandlerError, match="exactly one"):
+        adopt(w, "mixed")
     assert "mixed" not in w.tables()
 
 

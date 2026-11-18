@@ -221,6 +221,15 @@ item's text, or work done early under another item.
 
 ### Handover notes
 
+- **Warehouse cleanup and table adoption (owner decisions 2026-11-18).** Not a listed item.
+  `rehash` stays (design rule: existing merge targets need it). `upgrade-targets` is replaced by
+  `adopt-target` (rebuild and swap; original dropped by default, `--keep-original` keeps
+  `<target>_pre_adopt`), admin only, CLI or UI console only. Python script targets are not
+  adopted. Acceptance availability: Snowflake ran the SCD lifecycle tests (passed); Databricks
+  refused compute before any SQL ("Cannot create the resource") on the one try. Next: erasure
+  at write time (filter managed writers, delete after Python script writes, remove
+  HANDLER=ERASURE).
+
 - **Engine DB baseline (owner decision 2026-11-17).** Not a listed item: the owner approved
   dropping the upgrade path from pre-0.9 Engine DBs. Every Engine DB starts from the 0.9.0
   baseline (`init-db` records `baseline-0.9.0`); `migrate` refuses a ledger without it or with

@@ -336,7 +336,7 @@ class ActionName(StrEnum):
     DOCS_VERSION = "docs-version"
     REHASH_PLAN = "rehash plan"
     REHASH = "rehash"
-    UPGRADE_TARGETS = "upgrade-targets"
+    ADOPT_TARGET = "adopt-target"
     PURGE = "purge"
     CLONE = "clone"
     SETUP_GRANTS = "setup grants"

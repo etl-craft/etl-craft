@@ -605,40 +605,46 @@ each statement, a failure between them can leave the batch absent until its retr
 `ROW_ID` values may change when a batch is replaced; they are internal keys, not stable source
 identities. Writers outside etl-craft do not participate in the target lock.
 
-An append refuses a target without `TASK_RUN_ID`, because a retry could duplicate rows; the
-error names the command that adds the column. Upgrade existing configured SQL and Python script
-targets:
+An append refuses a target without `TASK_RUN_ID`, because a retry could duplicate rows, and every
+action refuses a target that lacks the columns it maintains. `SCHEMA_EVOLUTION` adds only the
+SELECT's own columns.
+
+## Adopting an existing table
+
+`etl-craft adopt-target` takes over a table that etl-craft did not create, such as one from a
+previous ETL tool, as the target of its configured SQL writer (`APPEND_TABLE`,
+`OVERWRITE_TABLE`, `SCD1_MERGE` or `SCD2_MERGE`, directly or through `SETUP_FOR`). It needs the admin
+role and runs from the CLI or the browser UI's console; no page offers it:
 
 ```bash
-etl-craft upgrade-targets --dry-run
-etl-craft upgrade-targets
-# Select append targets only, or one target:
-etl-craft upgrade-targets --action APPEND_TABLE
-etl-craft upgrade-targets --action APPEND_TABLE --target sales.events
+etl-craft adopt-target --target sales.customers --dry-run
+etl-craft adopt-target --target sales.customers
+# Keep the original table as sales.customers_pre_adopt:
+etl-craft adopt-target --target sales.customers --keep-original
+# Map existing columns to the managed ones:
+etl-craft adopt-target --target sales.customers --select "SELECT id, name, loaded_at AS CREATE_DATE, loaded_at AS UPDATE_DATE, CASE WHEN is_deleted THEN 'Y' ELSE 'N' END AS DELETE_FLAG, CASE WHEN is_deleted THEN 'N' ELSE 'Y' END AS ACTIVE_FLAG FROM sales.customers"
 ```
 
-The command adds missing `PIPELINE_ID`, `PIPELINE_RUN_ID` and `TASK_RUN_ID` columns as nullable
-BIGINT under the same target lock. It validates the stored table format and refuses conflicting
-writer formats or incompatible identity types. It scans active SQL tasks and Python script
-tasks with `TARGET_OBJECT` configured. For targets owned only by Python scripts without an explicit `TABLE_FORMAT`, it uses the stored format because the scripts own their table definitions. It preserves existing rows, leaving new identity fields NULL; it cannot identify
-or remove duplicates from past retries. Already upgraded targets are left intact. Existing overwrite
-and merge targets need these columns before their next write; `SCHEMA_EVOLUTION` does not add audit
-columns. Each target is
-upgraded separately, so rerun the command if an error interrupts a multi-target upgrade. A dry run
-validates targets and prints additions without changing the warehouse; its request is still
-recorded in `AUD_ACTIONS`.
+Adoption builds a new table with the writer's full managed shape and `ROW_ID`, fills it in one
+`INSERT` from the SELECT (default `SELECT * FROM` the target), checks the managed values and then
+swaps it in under the target lock.
 
-Legacy SCD1 targets also need `ACTIVE_FLAG`. The same command adds it and derives `Y` for
-`DELETE_FLAG = 'N'` and `N` for `DELETE_FLAG = 'Y'`, preserving all existing audit stamps and
-row identities. NULL or invalid deletion state fails before any additions; correct it from
-known evidence first. An interrupted upgrade can be rerun to fill only NULL active flags.
-Targets configured for both SCD1 and SCD2 are refused before upgrade. For one SCD1 target:
+**By default the original table is dropped** once the adopted table replaces it. Pass
+`--keep-original` to keep it as `<target>_pre_adopt`; adoption refuses when that name is already
+taken. Either way, a failure before the swap leaves the original untouched.
 
-```bash
-etl-craft upgrade-targets --action SCD1_MERGE --target sales.customers --dry-run
-etl-craft upgrade-targets --action SCD1_MERGE --target sales.customers
-```
+The SELECT returns the business columns and, optionally, `CREATE_DATE`, `CREATED_BY`,
+`UPDATE_DATE`, `UPDATED_BY`, `ACTIVE_FLAG` and `DELETE_FLAG`, which keep their values. Columns it
+does not return start as the adoption time, the writer `adopt-target`, `ACTIVE_FLAG = 'Y'` and
+`DELETE_FLAG = 'N'`. A NULL stamp or a flag other than `Y`/`N` refuses the adoption before the
+swap. A table's own audit columns map by alias (`inserted_at AS CREATE_DATE`); columns already
+named like managed ones map without one. The result and the dry run list which managed columns
+come from the SELECT and which start with the defaults. The engine assigns `ROW_ID`, `HASH_KEY`,
+the protection columns and the run identities,
+which stay NULL for adopted rows; a SELECT returning any of them is refused.
 
-The command also deactivates legacy SCD2 versions with both `ACTIVE_FLAG = 'Y'` and
-`DELETE_FLAG = 'Y'`, preserving their deletion stamps. It cannot reconstruct history that an
-older soft delete already marked deleted; repairing those rows needs independent evidence.
+Merge targets are then rehashed, which publishes hash version 2. Python script targets are not
+adopted; give the script its own table. A target that already has every managed column is left
+unchanged. A dry run validates the SELECT and prints the SQL; its request is still recorded in
+`AUD_ACTIONS`.
+

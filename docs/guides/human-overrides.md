@@ -144,10 +144,7 @@ deletion, naming the target and remedy. This membership check does not gate writ
 Restrict warehouse write credentials to authenticated integrations; these checks cannot
 prevent a warehouse administrator bypassing permissions.
 
-Old targets with `etl_protection_<hash>` or `etl_fingerprints_<hash>` side tables are refused
-before any write. Back up the target, recreate it, and re-apply locks through authenticated
-edits. There is no conversion action. Back up the Engine DB audit log together with the target.
-Restore a consistent backup after detected outside writes. Merge keys, comparison columns and
+Back up the Engine DB audit log together with the target. Restore a consistent backup after detected outside writes. Merge keys, comparison columns and
 business shape must match the stored contract. Replacement, append and drop remain refused
 for protected targets. Unlocking releases values, not the protection contract.
 
@@ -155,9 +152,8 @@ Fingerprint validation scans all physical versions of an enabled table; account 
 cost when choosing protected targets.
 
 
-For an existing unprotected merge target from an earlier version, run `etl-craft upgrade-targets`
-to add missing engine-managed columns, then `etl-craft rehash` to initialize fingerprints
-before enabling protection. This path does not convert a target with old protection side tables.
+Adopt an existing table with [`etl-craft adopt-target`](sql-tasks.md#adopting-an-existing-table),
+which also rehashes it and initializes fingerprints, before enabling protection.
 
 Protection requires a canonical scalar hash for every business column, including columns
 outside `MERGE_COMPARE_COLUMNS`. Ordinary unprotected merges can retain nested columns;

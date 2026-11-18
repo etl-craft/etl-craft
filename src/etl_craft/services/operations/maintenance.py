@@ -6,11 +6,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import ClassVar
 
-from etl_craft.core.enums import SqlAction
+from etl_craft.core.adoption import AdoptResult
 from etl_craft.core.errors import ConfigurationError
 from etl_craft.engine.migrations import apply_pending_migrations
 from etl_craft.engine.privileges import grants_sql
 from etl_craft.engine.schema import InitResult, init_db
+from etl_craft.services.adopt_target import AdoptRequest, adopt_target
 from etl_craft.services.cloning import ClonedTable, clone
 from etl_craft.services.lineage import dialect_and_catalog
 from etl_craft.services.operations.context import OperationContext
@@ -19,7 +20,6 @@ from etl_craft.services.rehash import RehashResult as RehashResult
 from etl_craft.services.rehash import rehash
 from etl_craft.services.setup import SetupResult as SetupResult
 from etl_craft.services.setup import setup
-from etl_craft.services.upgrade_targets import UpgradeResult, upgrade_targets
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -44,11 +44,12 @@ class RehashInput(Request):
 
 
 @dataclass(frozen=True, kw_only=True)
-class UpgradeInput(Request):
-    """Which targets to upgrade, and whether only to show the SQL."""
+class AdoptInput(Request):
+    """One existing table to adopt; the original is dropped unless ``keep_original``."""
 
-    action: SqlAction | None = None
-    target: str | None = None
+    target: str
+    select: str | None = None
+    keep_original: bool = False
     dry_run: bool = False
 
 
@@ -58,14 +59,6 @@ class Clones:
 
     SCHEMA: ClassVar[str] = "etl-craft/clones/1"
     tables: tuple[ClonedTable, ...]
-
-
-@dataclass(frozen=True)
-class TargetUpgrades:
-    """Each target's audit-column upgrade, done or shown."""
-
-    SCHEMA: ClassVar[str] = "etl-craft/target-upgrades/1"
-    targets: tuple[UpgradeResult, ...]
 
 
 @dataclass(frozen=True)
@@ -113,18 +106,12 @@ def rehash_target(ctx: OperationContext, request: RehashInput) -> RehashResult:
     return rehash(ctx.engine, ctx.config, request.target, dry_run=False)
 
 
-def upgrade_audit_columns(ctx: OperationContext, request: UpgradeInput) -> TargetUpgrades:
-    """Add the current audit columns to existing targets, or show the SQL that would."""
-    return TargetUpgrades(
-        tuple(
-            upgrade_targets(
-                ctx.engine,
-                ctx.config,
-                action=request.action,
-                target=request.target,
-                dry_run=request.dry_run,
-            )
-        )
+def adopt(ctx: OperationContext, request: AdoptInput) -> AdoptResult:
+    """Adopt an existing table as its configured writer's target, or show the SQL that would."""
+    return adopt_target(
+        ctx.engine,
+        ctx.config,
+        AdoptRequest(request.target, request.select, request.keep_original, request.dry_run),
     )
 
 

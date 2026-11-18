@@ -115,9 +115,9 @@ class Session:
                 if tables is None or name.rsplit(".", 1)[-1] in tables:
                     del cache[name]
 
-    def prime_target(self, related: tuple[str, ...]) -> None:
-        """Cache the target and its protection evidence from one catalog read."""
-        names = (self.target, *related)
+    def prime_target(self) -> None:
+        """Cache the target's columns and relation kind from one catalog read."""
+        names = (self.target,)
         if not self.dialect.catalog_columns:
             found = self.relation_types(names)
             if 0 not in found:

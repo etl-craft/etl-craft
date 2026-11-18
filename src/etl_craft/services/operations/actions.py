@@ -9,6 +9,7 @@ from dataclasses import replace
 from sqlalchemy.engine import Connection
 
 from etl_craft.core.actor import acting_as, sso_groups
+from etl_craft.core.adoption import AdoptResult
 from etl_craft.core.definitions import using
 from etl_craft.core.enums import (
     ActionName,
@@ -403,9 +404,8 @@ _ROWS = (
            ADMIN, POST, f"{API}/rehash", REQUEST, scope=ActionScope.PROJECT),
     Action(ActionName.PURGE, retention.purge, retention.PurgeInput, retention.PurgeView,
            ADMIN, POST, f"{API}/purge", REQUEST, scope=ActionScope.PROJECT),
-    Action(ActionName.UPGRADE_TARGETS, maintenance.upgrade_audit_columns,
-           maintenance.UpgradeInput, maintenance.TargetUpgrades, ADMIN, POST,
-           f"{API}/targets/upgrade", REQUEST, scope=ActionScope.PROJECT),
+    Action(ActionName.ADOPT_TARGET, maintenance.adopt, maintenance.AdoptInput, AdoptResult,
+           ADMIN, POST, f"{API}/targets/adopt", REQUEST, scope=ActionScope.PROJECT),
     Action(ActionName.CLONE, maintenance.clone_tables, NoInput, maintenance.Clones, ADMIN, POST,
            f"{API}/clones", REQUEST, scope=ActionScope.PROJECT),
     # The controller's host only: local files, Engine DB setup and long-running processes.
@@ -655,7 +655,7 @@ def project_settings(ctx: OperationContext, name: ActionName, request: object) -
         ActionName.REHASH,
         ActionName.RECONCILE,
         ActionName.REHASH_PLAN,
-        ActionName.UPGRADE_TARGETS,
+        ActionName.ADOPT_TARGET,
         ActionName.CLONE,
         ActionName.GENERATE_DOCS,
         ActionName.DATA_EDIT,

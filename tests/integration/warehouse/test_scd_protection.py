@@ -522,21 +522,6 @@ def count_versions(w, active):
 
 
 @warehouses("duckdb", "postgres", "trino_iceberg", "duckdb_iceberg")
-def test_legacy_side_tables_are_refused_before_any_write(sql_world):
-    from hashlib import sha256
-
-    w = sql_world
-    _, params = prepare(w, "SCD1_MERGE")
-    identity = f"{w.catalog}.{w.schema}.protected".lower()
-    legacy = "etl_protection_" + sha256(identity.encode()).hexdigest()[:20]
-    w.execute(f"CREATE TABLE {w.name(legacy)} (id INTEGER)")
-    before = current(w)
-    with pytest.raises(HandlerError, match=r"back up.*recreate.*re-apply"):
-        w.run("load", **params)
-    assert current(w) == before
-
-
-@warehouses("duckdb", "postgres", "trino_iceberg", "duckdb_iceberg")
 def test_manual_edit_refuses_conflicting_merge_lifecycles(sql_world):
     from fixtures.metadata import add_pipeline, add_task
 
