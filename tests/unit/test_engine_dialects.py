@@ -108,9 +108,7 @@ def test_a_dialect_query_overrides_the_shared_one(tmp_path, monkeypatch):
 
 
 def schema_columns(path: Path) -> dict[str, list[str]]:
-    from fixtures.scripts import load
-
-    source = load("reference_pages").schema_text(path)
+    source = path.read_text(encoding="utf-8")
     tables: dict[str, list[str]] = {}
     for match in re.finditer(r"CREATE TABLE (\w+) \((.*?)\n\);", source, re.S):
         columns = []
@@ -124,8 +122,6 @@ def schema_columns(path: Path) -> dict[str, list[str]]:
             ):
                 columns.append(first)
         tables[match[1]] = columns
-    for table, column in re.findall(r"ALTER TABLE (\w+) DROP COLUMN (\w+);", source):
-        tables[table].remove(column)
     return tables
 
 

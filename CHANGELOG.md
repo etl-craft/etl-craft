@@ -6,6 +6,12 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+- Both Engine DB `schema.sql` files are regenerated as the schema itself rather than a log of
+  migrations: one `CREATE TABLE` per table with its comment and indexes, then functions, built-in
+  rows and triggers. A fresh `init-db` builds the same catalog as before; the built-in history rows
+  now name `baseline-0.9.0` instead of removed migration files. The Engine DB reference pages no
+  longer describe the removed `CFG_PIPELINE_GRANTS` tables.
+
 - Erasure happens at write time. Every managed SQL action whose target an active erasure entry
   covers filters its SELECT with `(column IS NULL OR column NOT IN (erased keys))` on each
   covered column, keys cast to the column's type and bound as parameters, so a resent

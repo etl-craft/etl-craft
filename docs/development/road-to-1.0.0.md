@@ -221,6 +221,12 @@ item's text, or work done early under another item.
 
 ### Handover notes
 
+- **Readable schema.sql (2026-11-18).** Not a listed item. Both files were regenerated from the
+  0.9.0 baseline log; a full `init-db` from the old and new file gives an identical `pg_dump` and
+  identical SQLite DDL and pragmas. Physical column order is kept so the catalogs match. The
+  default project's first history row still has NULL in the history columns that
+  `refresh_metadata_triggers` adds after the file runs (`GOVERNANCE` and three others), as before.
+
 - **Erasure at write time (owner decisions 2026-11-18).** Not a listed item. Write filters on
   managed SQL actions; delete after Python scripts (also when they fail); `HANDLER=ERASURE`
   removed. The owner approved sending the erased keys of an attempt's own target to API-only

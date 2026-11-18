@@ -59,7 +59,7 @@ def test_the_parameter_page_lists_what_each_handler_reads():
 @pytest.mark.parametrize("dialect", ["postgres", "sqlite"])
 def test_every_engine_db_table_is_described_and_read_whole(dialect):
     tables = pages.schema_tables(SCHEMAS / dialect / "schema.sql")
-    text = pages.schema_text(SCHEMAS / dialect / "schema.sql")
+    text = (SCHEMAS / dialect / "schema.sql").read_text(encoding="utf-8")
     assert [t.name for t in tables] == re.findall(r"^CREATE TABLE (\w+)", text, re.MULTILINE)
     assert [t.name for t in tables if not t.comment] == []
     for table in tables:
@@ -71,10 +71,7 @@ def test_every_engine_db_table_is_described_and_read_whole(dialect):
             and line.split()[0]
             not in {"CONSTRAINT", "CHECK", "CASE", "OR", "AND", "PRIMARY", "FOREIGN", "UNIQUE"}
         ]
-        dropped = re.findall(rf"ALTER TABLE {table.name} DROP COLUMN (\w+);", text)
-        assert [c.name for c in table.columns] == [
-            name for name in declared if name not in dropped
-        ], table.name
+        assert [c.name for c in table.columns] == declared, table.name
         if table.name in {"CFG_ACCESS_BINDINGS", "AUD_CFG_ACCESS_BINDINGS_HISTORY"}:
             columns = {column.name for column in table.columns}
             assert {"ROLE_NAME", "ACCOUNT_ID", "GRANTEE_ROLE"} <= columns
