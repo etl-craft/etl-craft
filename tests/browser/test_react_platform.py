@@ -273,17 +273,17 @@ def test_a_session_that_ended_says_so_and_signing_in_returns_to_the_page(scene):
 def test_search_names_handlers_and_system_shows_the_schema_number(scene):
     ctx, url, _ = scene
     with acting_as(Actor("owner", ActorKind.USER)), ctx.engine.begin() as conn:
-        pipeline = add_pipeline(conn, "ALERTS")
+        pipeline = add_pipeline(conn, "NOTICES")
         add_task(conn, pipeline, "NOTIFY", handler="ALERT")
     with sync_playwright() as pw:
         browser, page, problems = open_page(pw)
         sign_in(page, url, "/ui/projects/default/search?q=NOTIFY")
         results = page.get_by_role("table", name="Search results")
-        expect(results).to_contain_text("Email alert in ALERTS")
+        expect(results).to_contain_text("Alert in NOTICES")
         expect(results).not_to_contain_text("ALERT")
         page.get_by_label("Search pipelines, tasks, tables and runs").fill("NOTIFY")
         suggestion = page.get_by_role("option").filter(has_text="NOTIFY")
-        expect(suggestion).to_contain_text("Email alert in ALERTS")
+        expect(suggestion).to_contain_text("Alert in NOTICES")
         page.goto(url + "/ui/system")
         schema = page.request.get(url + "/api/v1/about").json()["schema_version"]
         version = page.locator("dl > div").filter(
