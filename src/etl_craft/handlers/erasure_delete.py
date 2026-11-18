@@ -19,7 +19,6 @@ from etl_craft.dialects.warehouse.erasure import ErasureDelete, deletion_plan, s
 from etl_craft.engine.task_store import LocalTaskStore, TaskStore
 from etl_craft.handlers.protection_recovery import committed, pending, recover
 from etl_craft.handlers.resources import LocalLocker
-from etl_craft.handlers.sql.protection import refuse_legacy
 from etl_craft.handlers.sql.session import Session
 from etl_craft.warehouse.connection import warehouse_dialect
 
@@ -63,7 +62,6 @@ def count_or_delete(
             session.protection_store = event_store
             params = {"erasure_value": selection.entry.value}
             try:
-                refuse_legacy(session)
                 if not dry_run:
                     recover(session, event_store)
                 count = int(conn.execute(text(plan.count), params).scalar_one())

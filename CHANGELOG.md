@@ -6,6 +6,21 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+- `etl-craft adopt-target --target T [--select SQL] [--keep-original] [--dry-run]` replaces
+  `upgrade-targets`. It takes over a table etl-craft did not create as the target of its
+  configured SQL writer: it builds a new table with the writer's managed columns and `ROW_ID`,
+  copies the rows from the SELECT (default `SELECT * FROM T`), refuses NULL stamps or flags
+  other than Y/N before the swap, and swaps it in under the target lock. The original table is
+  dropped by default; `--keep-original` keeps it as `T_pre_adopt`. Managed columns the SELECT
+  returns (`CREATE_DATE`, `CREATED_BY`, `UPDATE_DATE`, `UPDATED_BY`, `ACTIVE_FLAG`,
+  `DELETE_FLAG`) keep their values; the others start as the adoption time, `adopt-target`, `Y`
+  and `N`. Merge targets are rehashed. Admin only, from the CLI or the UI console
+  (`POST /api/v1/projects/{project}/targets/adopt`); the Maintenance page no longer offers it.
+- Warehouse targets from builds before 0.9.0 are no longer converted: the refusal of old
+  `etl_protection_<hash>`/`etl_fingerprints_<hash>` side tables and the SCD1 `ACTIVE_FLAG`
+  derivation and SCD2 soft-delete repair are removed. Every SQL task's target read no longer
+  probes for the old side tables.
+
 - The Engine DB starts from one 0.9.0 baseline. The 97 development migrations, their
   conversion steps and markers, and the upgrade path from 0.1.0–0.3.0 Engine DBs are removed;
   `init-db` records `baseline-0.9.0`, and `migrate` refuses an Engine DB created by an earlier

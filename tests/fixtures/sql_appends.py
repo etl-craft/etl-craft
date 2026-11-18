@@ -1,9 +1,9 @@
-"""Append retry, legacy and target-upgrade assertions shared by warehouse suites."""
+"""Append retry and table adoption assertions shared by warehouse suites."""
 
 import pytest
 
-from etl_craft.core.errors import InjectedFaultError, SqlGuardError
-from etl_craft.services.upgrade_targets import upgrade_targets
+from etl_craft.core.errors import HandlerError, InjectedFaultError, SqlGuardError
+from etl_craft.services.adopt_target import AdoptRequest, adopt_target
 from etl_craft.warehouse.connection import warehouse_dialect
 
 
@@ -38,10 +38,10 @@ def check_append_retries(w, target):
     assert sorted(w.rows(f"SELECT id FROM {w.name(target)}")) == [(1,), (2,), (3,), (10,)]
 
 
-def create_legacy_append_target(w, target, loads=0):
-    """Build the pre-TASK_RUN_ID append shape, retaining each warehouse's ROW_ID strategy.
+def create_target_without_task_run_id(w, target, loads=0):
+    """Build an append shape without TASK_RUN_ID, retaining each warehouse's ROW_ID strategy.
 
-    ``loads`` rows of ``id`` 1 stand for appends made before the target had TASK_RUN_ID.
+    ``loads`` rows of ``id`` 1 stand for appends whose task run is unknown.
     """
     from datetime import UTC, datetime
 
@@ -75,45 +75,6 @@ def create_legacy_append_target(w, target, loads=0):
             session.sweep()
 
 
-def check_legacy_upgrade(w, target):
-    """Appends refuse a target without TASK_RUN_ID; upgrading keeps earlier loads unassigned."""
-    create_legacy_append_target(w, target, loads=2)
-    params = {
-        "SQL_ACTION": "APPEND_TABLE",
-        "TARGET_OBJECT": target,
-        "SELECT_QUERY": "SELECT CAST(1 AS BIGINT) AS id",
-    }
-    with pytest.raises(
-        SqlGuardError, match=r"no TASK_RUN_ID column.*upgrade-targets --action APPEND_TABLE"
-    ):
-        w.run("legacy_append", **params)
-    assert w.rows(f"SELECT COUNT(*) FROM {w.name(target)}") == [(2,)]
-    before = w.rows(f"SELECT * FROM {w.name(target)}")
-    before_names = w.columns(target)
-    selected = f"{w.schema}.{target}"
-    result = upgrade_targets(
-        w.engine_db, w.config, action="APPEND_TABLE", target=selected, dry_run=True
-    )
-    assert len(result) == 1 and result[0].changed and result[0].dry_run
-    assert "task_run_id" not in w.columns(target)
-    result = upgrade_targets(w.engine_db, w.config, action="APPEND_TABLE", target=selected)
-    assert result[0].changed
-    names = w.columns(target)
-    index = names.index("task_run_id")
-    after = w.rows(f"SELECT * FROM {w.name(target)}")
-    positions = [names.index(name) for name in before_names]
-    assert sorted(tuple(row[i] for i in positions) for row in after) == sorted(before)
-    assert all(row[index] is None for row in after)
-    assert all(row[names.index("pipeline_id")] is None for row in after)
-    assert not upgrade_targets(w.engine_db, w.config, action="APPEND_TABLE", target=selected)[
-        0
-    ].changed
-    w.run("legacy_append", **params)
-    w.run("legacy_append", **params)
-    assert w.rows(f"SELECT COUNT(*) FROM {w.name(target)}") == [(3,)]
-    assert w.rows(f"SELECT COUNT(*) FROM {w.name(target)} WHERE task_run_id IS NULL") == [(2,)]
-
-
 def check_identity_inputs(w, target):
     """Resolve named SQL inputs and persist the same identities in the target's audit columns."""
     from etl_craft.handlers import sql
@@ -141,28 +102,101 @@ def check_identity_inputs(w, target):
     ) == [expected + expected]
 
 
-def check_ingestion_target_upgrade(w, target):
-    """Upgrade a script-owned native target even when SQL defaults to Iceberg."""
-    from sqlalchemy import text
-
-    w.execute(f"CREATE TABLE {w.name(target)} AS SELECT CAST('old' AS VARCHAR(20)) AS name")
-    context = w.task("ingestion_upgrade", TARGET_OBJECT=target)
-    with w.engine_db.begin() as conn:
-        conn.execute(
-            text("UPDATE CFG_TASKS SET HANDLER = 'PYTHON' WHERE TASK_ID = :t"),
-            {"t": context.task_id},
-        )
-    with w.warehouse.connect() as conn:
-        actual = warehouse_dialect(w.config).existing_table_format(conn, w.name(target))
-    result = upgrade_targets(w.engine_db, w.config)
-    assert len(result) == 1 and result[0].columns == (
-        "PIPELINE_ID",
-        "PIPELINE_RUN_ID",
-        "TASK_RUN_ID",
+def adopt(w, target, **options):
+    """Adopt ``target`` in the world's schema with the service the CLI and API call."""
+    return adopt_target(
+        w.engine_db,
+        w.config,
+        AdoptRequest(
+            f"{w.schema}.{target}",
+            options.get("select"),
+            options.get("keep_original", False),
+            options.get("dry_run", False),
+        ),
     )
+
+
+def create_foreign_table(w, target, select):
+    """Create a table the way another tool would, without any etl-craft column."""
+    w.execute(f"CREATE TABLE {w.name(target)} AS {select}")
+
+
+def check_append_adoption(w, target):
+    """Adopt a foreign table for appends, dropping the original by default."""
+    create_foreign_table(w, target, "SELECT CAST(1 AS BIGINT) AS id UNION ALL SELECT 2")
+    params = {
+        "SQL_ACTION": "APPEND_TABLE",
+        "TARGET_OBJECT": target,
+        "SELECT_QUERY": "SELECT CAST(3 AS BIGINT) AS id",
+    }
+    with pytest.raises(SqlGuardError, match=r"no TASK_RUN_ID column.*adopt-target --target"):
+        w.run("adopted_append", **params)
+    planned = adopt(w, target, dry_run=True)
+    assert planned.adopted and planned.dry_run and planned.kept is None
+    assert any(sql.startswith("INSERT INTO") for sql in planned.sql)
+    assert "task_run_id" not in w.columns(target)
+    done = adopt(w, target)
+    assert (done.adopted, done.rows, done.kept, done.action) == (True, 2, None, "APPEND_TABLE")
+    assert {"task_run_id", "pipeline_id", "create_date", "row_id"} <= set(w.columns(target))
+    assert not [t for t in w.tables() if t.endswith("_pre_adopt")]
     assert w.rows(
-        f"SELECT name, pipeline_id, pipeline_run_id, task_run_id FROM {w.name(target)}"
-    ) == [("old", None, None, None)]
-    with w.warehouse.connect() as conn:
-        assert warehouse_dialect(w.config).existing_table_format(conn, w.name(target)) == actual
-    assert not upgrade_targets(w.engine_db, w.config)[0].changed
+        f"SELECT id FROM {w.name(target)} WHERE task_run_id IS NULL AND create_date IS NOT NULL "
+        "ORDER BY id"
+    ) == [(1,), (2,)]
+    assert not adopt(w, target).adopted
+    w.run("adopted_append", **params)
+    assert sorted(w.rows(f"SELECT id FROM {w.name(target)}")) == [(1,), (2,), (3,)]
+
+
+def check_merge_adoption(w, target):
+    """Map existing flags and stamps, keep the original on request, then merge normally."""
+    create_foreign_table(
+        w,
+        target,
+        "SELECT CAST(1 AS BIGINT) AS id, CAST('Ann' AS VARCHAR(20)) AS name, "
+        "CAST('N' AS VARCHAR(1)) AS gone UNION ALL SELECT 2, 'Bo', 'Y'",
+    )
+    params = {
+        "SQL_ACTION": "SCD1_MERGE",
+        "TARGET_OBJECT": target,
+        "MERGE_KEY": "id",
+        "MERGE_COMPARE_COLUMNS": "name",
+        "SELECT_QUERY": "SELECT CAST(1 AS BIGINT) AS id, CAST('Anna' AS VARCHAR(20)) AS name",
+    }
+    w.task("adopted_merge", **params)
+    mapping = (
+        f"SELECT id, name, gone AS DELETE_FLAG, "
+        f"CASE WHEN gone = 'Y' THEN 'N' ELSE 'Y' END AS ACTIVE_FLAG FROM {w.name(target)}"
+    )
+    with pytest.raises(HandlerError, match=r"NULL or invalid managed values.*original table"):
+        adopt(w, target, select=f"SELECT id, name, 'X' AS ACTIVE_FLAG FROM {w.name(target)}")
+    assert w.columns(target) == ["id", "name", "gone"]
+    done = adopt(w, target, select=mapping, keep_original=True)
+    assert done.kept == f"{w.name(target)}_pre_adopt" and done.rehash is not None
+    assert done.mapped == ("DELETE_FLAG", "ACTIVE_FLAG")
+    assert set(done.defaulted) == {"CREATE_DATE", "CREATED_BY", "UPDATE_DATE", "UPDATED_BY"}
+    assert w.rows(f"SELECT id, name, gone FROM {w.name(target + '_pre_adopt')} ORDER BY id") == [
+        (1, "Ann", "N"),
+        (2, "Bo", "Y"),
+    ]
+    assert w.rows(
+        f"SELECT id, active_flag, delete_flag, created_by FROM {w.name(target)} ORDER BY id"
+    ) == [(1, "Y", "N", "adopt-target"), (2, "N", "Y", "adopt-target")]
+    w.run("adopted_merge", **params)
+    assert w.rows(f"SELECT name FROM {w.name(target)} WHERE id = 1") == [("Anna",)]
+
+
+def check_kept_name_collision(w, target):
+    """Refuse --keep-original when the kept name exists, leaving both tables unchanged."""
+    create_foreign_table(w, target, "SELECT CAST(1 AS BIGINT) AS id")
+    create_foreign_table(w, f"{target}_pre_adopt", "SELECT CAST(9 AS BIGINT) AS id")
+    w.task(
+        "collide",
+        SQL_ACTION="APPEND_TABLE",
+        TARGET_OBJECT=target,
+        SELECT_QUERY="SELECT CAST(1 AS BIGINT) AS id",
+    )
+    with pytest.raises(HandlerError, match=r"_pre_adopt already exists.*drop or rename"):
+        adopt(w, target, keep_original=True)
+    assert w.columns(target) == ["id"]
+    assert w.rows(f"SELECT id FROM {w.name(target + '_pre_adopt')}") == [(9,)]

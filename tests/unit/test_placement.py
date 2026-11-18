@@ -80,7 +80,7 @@ def test_retired_parallel_key_names_the_explicit_move(tmp_path, value):
         assert part in str(caught.value)
 
 
-@pytest.mark.parametrize("command", ["validate", "doctor", "migrate", "upgrade-targets"])
+@pytest.mark.parametrize("command", ["validate", "doctor", "migrate"])
 def test_commands_refuse_the_old_key_before_opening_a_database(tmp_path, capsys, command):
     from etl_craft.cli import main
     from etl_craft.core.errors import ExitCode

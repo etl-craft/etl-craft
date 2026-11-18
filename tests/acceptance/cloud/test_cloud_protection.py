@@ -2,7 +2,6 @@
 
 import os
 from dataclasses import replace
-from hashlib import sha256
 from uuid import uuid4
 
 import pytest
@@ -139,11 +138,6 @@ def test_protected_edits_reload_unlock_and_per_cell_writers(
                 reason="correct",
             )
         assert nested_writes == []
-        legacy = "etl_protection_" + sha256(w.name(target).lower().encode()).hexdigest()[:20]
-        targets.append(legacy)
-        w.execute(f"CREATE TABLE {w.name(legacy)} (id INTEGER)")
-        with pytest.raises(HandlerError, match=r"back up.*recreate.*re-apply"):
-            w.run(task, **params)
     finally:
         for target in targets:
             w.execute(f"DROP TABLE IF EXISTS {w.name(target)}")

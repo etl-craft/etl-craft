@@ -16,7 +16,6 @@ from etl_craft.core.protection import MAX_PROTECTION_COLUMNS, ProtectionEvent
 from etl_craft.core.protection_state import ProtectionRequest as ProtectionRequest
 from etl_craft.core.protection_state import RowProtection
 from etl_craft.core.redaction import registering
-from etl_craft.core.text import sha256_hex
 from etl_craft.dialects.warehouse.merges import matched_merge
 from etl_craft.dialects.warehouse.protection import ProtectionSql, bound_relation
 from etl_craft.handlers.sql.protection_columns import (
@@ -33,35 +32,8 @@ MERGES = frozenset({SqlAction.SCD1_MERGE, SqlAction.SCD2_MERGE})
 _STATE = (("key_hash", "VARCHAR"), ("column_name", "VARCHAR"), ("locked", "BOOLEAN"))
 
 
-def legacy_names(session: Session) -> tuple[str, str]:
-    """Resolve obsolete side-table names solely for the upgrade refusal."""
-    from etl_craft.engine.repository.normalization import object_identity
-
-    parts = object_identity(session.target, None, session.dialect.sqlglot_dialect)
-    catalog, schema, _ = parts
-    suffix = sha256_hex(".".join(str(p) for p in parts).lower().encode())[:20]
-    return (
-        f"{catalog}.{schema}.etl_protection_{suffix}",
-        f"{catalog}.{schema}.etl_fingerprints_{suffix}",
-    )
-
-
-def refuse_legacy(session: Session) -> None:
-    """Refuse obsolete protection before changing warehouse or audit state."""
-    names = legacy_names(session)
-    found = session.relation_types(names)
-    if found:
-        tables = ", ".join(names[i] for i in found)
-        raise SqlGuardError(
-            f"{session.target}: old protection side tables found: "
-            f"{tables}; expected in-row protection; back up, "
-            "recreate the target, and re-apply the locks"
-        )
-
-
 def exists(session: Session) -> bool:
     """Detect activated in-row protection without interpreting business values."""
-    refuse_legacy(session)
     if session.protection_active is False:
         return False
     if "etl_protection" not in {c.lower() for c, _ in session.target_columns()}:
@@ -144,8 +116,7 @@ class Protection:
         self.loaded = False
 
     def acquire(self) -> None:
-        """Check the upgrade boundary and acquire the provider's native lock."""
-        refuse_legacy(self.session)
+        """Acquire the provider's native lock."""
         if sql := self.session.dialect.protection_lock_sql(self.session.target):
             self.session.run(sql, step="lock protected business data")
 

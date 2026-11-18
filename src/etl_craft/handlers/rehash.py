@@ -15,7 +15,6 @@ from etl_craft.engine.repository.hash_versions import save_hash_version
 from etl_craft.engine.task_store import LocalTaskStore
 from etl_craft.handlers.protection_recovery import committed, pending, recover
 from etl_craft.handlers.resources import LocalLocker
-from etl_craft.handlers.sql.protection import refuse_legacy
 from etl_craft.handlers.sql.protection_columns import business_columns, fingerprint
 from etl_craft.handlers.sql.session import Session
 from etl_craft.warehouse.connection import open_warehouse, warehouse_dialect
@@ -40,7 +39,6 @@ def rehash_target(
             )
             session.protection_store = store
             try:
-                refuse_legacy(session)
                 if not dry_run:
                     recover(session, store)
                 shape = {c.lower() for c, _ in session.target_columns()}

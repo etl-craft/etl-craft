@@ -44,6 +44,7 @@ CONSOLE_ONLY = {
     ActionName.TRIGGER_PIPELINE: "for external orchestrators; people use Run now",
     ActionName.CONFIG_PLAN: "metadata is code: CI plans a published bundle; not the UI",
     ActionName.CONFIG_APPLY: "metadata is code: CI applies a published bundle, not the UI",
+    ActionName.ADOPT_TARGET: "rebuilds a warehouse table once, as an admin, from CLI or console",
 }
 """Actions deliberately left to the CLI and the console, each with its reason."""
 

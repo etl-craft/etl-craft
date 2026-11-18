@@ -33,9 +33,7 @@ from etl_craft.handlers.sql.protection import (
     Protection,
     ProtectionRequest,
     for_task,
-    legacy_names,
     refuse_evidence_target,
-    refuse_legacy,
 )
 from etl_craft.handlers.sql.session import Session
 from etl_craft.handlers.sql.spec import MERGES as MERGES
@@ -165,8 +163,7 @@ def _recover_protection(session: Session, store: TaskStore) -> None:
     """Share the catalog read with ordinary mutations before inspecting pending work."""
     from etl_craft.handlers.protection_recovery import recover
 
-    session.prime_target(legacy_names(session))
-    refuse_legacy(session)
+    session.prime_target()
     recover(session, store)
 
 

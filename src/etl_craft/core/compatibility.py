@@ -404,6 +404,8 @@ INTRODUCED: dict[InputKind, dict[str, str]] = {
             "--downstream",
             "--drain-seconds",
             "--dry-run",
+            "--keep-original",
+            "--select",
             "--email",
             "--ends-at",
             "--environment",

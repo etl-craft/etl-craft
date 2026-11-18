@@ -4,26 +4,25 @@ import multiprocessing
 
 import pytest
 
-from etl_craft.core.errors import ConfigurationError, HandlerError
-from etl_craft.services.upgrade_targets import upgrade_targets
+from etl_craft.core.errors import HandlerError
 from etl_craft.warehouse.connection import warehouse_dialect
 from fixtures.auth import service_token
 from fixtures.engine_db import profile_block
 from fixtures.lock_fencing import expire_leases
 from fixtures.sql_appends import (
+    adopt,
+    check_append_adoption,
     check_append_retries,
-    check_legacy_upgrade,
-    create_legacy_append_target,
+    check_kept_name_collision,
+    check_merge_adoption,
+    create_foreign_table,
+    create_target_without_task_run_id,
 )
 from fixtures.sql_warehouse import run_killed_sql, warehouses
 
 
 def test_append_retries_replace_only_their_task_run(sql_world):
     check_append_retries(sql_world, "retry_events")
-
-
-def test_legacy_appends_are_refused_until_upgraded_without_assigning_history(sql_world):
-    check_legacy_upgrade(sql_world, "legacy_events")
 
 
 def test_killed_append_converges_when_retried(sql_world):
@@ -55,7 +54,7 @@ def test_killed_append_converges_when_retried(sql_world):
 def test_invalid_task_run_id_is_refused_before_replacing_a_batch(sql_world):
     w = sql_world
     dialect = warehouse_dialect(w.config)
-    create_legacy_append_target(w, "invalid_load")
+    create_target_without_task_run_id(w, "invalid_load")
     w.execute(
         f"{dialect.alter_table_keyword()} {w.name('invalid_load')} ADD COLUMN TASK_RUN_ID VARCHAR"
     )
@@ -65,25 +64,14 @@ def test_invalid_task_run_id_is_refused_before_replacing_a_batch(sql_world):
         TARGET_OBJECT="invalid_load",
         SELECT_QUERY="SELECT 1 AS id",
     )
-    for call in (
-        lambda: w.run(
+    with pytest.raises(HandlerError, match="expected BIGINT"):
+        w.run(
             "bad_load",
             SQL_ACTION="APPEND_TABLE",
             TARGET_OBJECT="invalid_load",
             SELECT_QUERY="SELECT 1 AS id",
-        ),
-        lambda: upgrade_targets(w.engine_db, w.config, action="APPEND_TABLE"),
-    ):
-        with pytest.raises(HandlerError, match="expected BIGINT"):
-            call()
+        )
     assert w.rows(f"SELECT COUNT(*) FROM {w.name('invalid_load')}") == [(0,)]
-
-
-def test_upgrade_requires_an_active_append_writer(sql_world):
-    w = sql_world
-    assert upgrade_targets(w.engine_db, w.config, action="APPEND_TABLE") == []
-    with pytest.raises(HandlerError, match="no active APPEND_TABLE"):
-        upgrade_targets(w.engine_db, w.config, action="APPEND_TABLE", target=f"{w.schema}.missing")
 
 
 def test_empty_retry_removes_its_old_batch(sql_world):
@@ -93,99 +81,6 @@ def test_empty_retry_removes_its_old_batch(sql_world):
     w.run("load", SELECT_QUERY="SELECT CAST(1 AS BIGINT) AS id", **params)
     result = w.run("load", SELECT_QUERY="SELECT CAST(1 AS BIGINT) AS id WHERE 1 = 0", **params)
     assert (result.insert_count, result.target_count, result.rows_written) == (0, 0, 0)
-
-
-def test_upgrade_deduplicates_qualified_targets_and_refuses_format_conflicts(sql_world):
-    w = sql_world
-    create_legacy_append_target(w, "shared_load")
-    for code, target in (("a", "shared_load"), ("b", w.name("shared_load"))):
-        w.task(code, SQL_ACTION="APPEND_TABLE", TARGET_OBJECT=target, SELECT_QUERY="SELECT 1 AS id")
-    result = upgrade_targets(w.engine_db, w.config, action="APPEND_TABLE", dry_run=True)
-    assert len(result) == 1 and result[0].changed
-    # Conflicting contracts are rejected before the warehouse's ALTER statement.
-    from etl_craft.core.enums import TableFormat
-
-    opposite = (
-        TableFormat.NATIVE
-        if w.config.warehouse_table_format == TableFormat.ICEBERG
-        else TableFormat.ICEBERG
-    )
-    w.task(
-        "b",
-        SQL_ACTION="APPEND_TABLE",
-        TARGET_OBJECT=w.name("shared_load"),
-        TABLE_FORMAT=opposite,
-        SELECT_QUERY="SELECT 1 AS id",
-    )
-    with pytest.raises(
-        (HandlerError, ConfigurationError),
-        match=r"different table formats|format is fixed|always native",
-    ):
-        upgrade_targets(w.engine_db, w.config, action="APPEND_TABLE")
-    assert "task_run_id" not in w.columns("shared_load")
-
-
-def test_upgrade_command_validates_then_adds_and_records_requests(sql_world, capsys, monkeypatch):
-    monkeypatch.setenv("ETL_CRAFT_TOKEN", service_token(sql_world.engine_db))
-    import yaml
-
-    from etl_craft.cli import main
-
-    w = sql_world
-    create_legacy_append_target(w, "cli_load")
-    w.task(
-        "load", SQL_ACTION="APPEND_TABLE", TARGET_OBJECT="cli_load", SELECT_QUERY="SELECT 1 AS id"
-    )
-    profile = w.config.warehouse
-    fields = profile_block(profile, profile.schema)
-    raw = {
-        "Secrets": {"Source_type": "ENVIRONMENT"},
-        "Orchestration": {"Project": "default"},
-        "Engine": {
-            "dev": {"Jdbc_url": f"jdbc:sqlite:{w.engine_db.url.database}", "Schema": "main"}
-        },
-        "Warehouse": {
-            "Name": {
-                "duckdb": "DuckDB",
-                "duckdb_iceberg": "DuckDB",
-                "postgres": "Postgres",
-                "trino_iceberg": "Trino",
-            }[w.kind],
-            "Table_format": str(w.config.warehouse_table_format),
-            "dev": fields,
-        },
-    }
-    path = w.config.config_path
-    path.write_text(yaml.safe_dump(raw, sort_keys=False))
-    args = [
-        "upgrade-targets",
-        "--config",
-        str(path),
-        "--action",
-        "APPEND_TABLE",
-        "--target",
-        f"{w.schema}.cli_load",
-    ]
-    assert main([*args, "--dry-run"]) == 0
-    assert (
-        "would upgrade audit columns; additions: PIPELINE_ID, TASK_RUN_ID"
-        in capsys.readouterr().out
-    )
-    assert "task_run_id" not in w.columns("cli_load")
-    assert main(args) == 0
-    assert "upgraded audit columns; additions: PIPELINE_ID, TASK_RUN_ID" in capsys.readouterr().out
-    assert "task_run_id" in w.columns("cli_load")
-    assert main(args) == 0
-    assert "audit columns already upgraded" in capsys.readouterr().out
-    from sqlalchemy import text
-
-    with w.engine_db.connect() as conn:
-        assert (
-            conn.execute(
-                text("SELECT COUNT(*) AS count FROM AUD_ACTIONS WHERE COMMAND='upgrade-targets'")
-            ).scalar_one()
-            == 6
-        )
 
 
 @pytest.mark.parametrize(
@@ -236,12 +131,6 @@ def test_every_sql_writer_records_pipeline_and_task_run_identities(sql_world, ac
         ) == {(deleted.pipeline_id, deleted.pipeline_run_id, deleted.task_run_id)}
 
 
-def test_upgrade_includes_ingestion_targets_without_a_sql_row_id(sql_world):
-    from fixtures.sql_appends import check_ingestion_target_upgrade
-
-    check_ingestion_target_upgrade(sql_world, "ingested")
-
-
 def test_sql_input_identities_match_target_provenance(sql_world):
     from fixtures.sql_appends import check_identity_inputs
 
@@ -269,3 +158,88 @@ def test_a_dropped_warehouse_connection_fails_retryable_and_the_retry_loads_once
     result = w.run("dropped_load", **params)
     assert (result.insert_count, result.target_count) == (1, 1)
     assert w.rows(f"SELECT id FROM {w.name('dropped_events')}") == [(1,)]
+
+
+def test_adoption_rebuilds_a_foreign_append_target_and_drops_the_original(sql_world):
+    check_append_adoption(sql_world, "adopted_events")
+
+
+def test_adoption_maps_merge_flags_keeps_the_original_and_merges(sql_world):
+    check_merge_adoption(sql_world, "adopted_customers")
+
+
+def test_adoption_refuses_a_taken_kept_name(sql_world):
+    check_kept_name_collision(sql_world, "collided")
+
+
+def test_adoption_needs_one_sql_writer_and_refuses_engine_assigned_columns(sql_world):
+    w = sql_world
+    create_foreign_table(w, "unwritten", "SELECT CAST(1 AS BIGINT) AS id")
+    with pytest.raises(HandlerError, match=r"no write action; expected exactly one"):
+        adopt(w, "unwritten")
+    w.task("load", SQL_ACTION="APPEND_TABLE", TARGET_OBJECT="unwritten", SELECT_QUERY="SELECT 1")
+    with pytest.raises(HandlerError, match=r"returns TASK_RUN_ID.*engine assigns"):
+        adopt(w, "unwritten", select=f"SELECT id, 1 AS TASK_RUN_ID FROM {w.name('unwritten')}")
+    assert w.columns("unwritten") == ["id"]
+
+
+def test_adoption_refuses_python_script_targets(sql_world):
+    from sqlalchemy import text
+
+    w = sql_world
+    create_foreign_table(w, "scripted", "SELECT CAST('old' AS VARCHAR(20)) AS name")
+    context = w.task("ingest", TARGET_OBJECT="scripted")
+    with w.engine_db.begin() as conn:
+        conn.execute(
+            text("UPDATE CFG_TASKS SET HANDLER = 'PYTHON' WHERE TASK_ID = :t"),
+            {"t": context.task_id},
+        )
+    with pytest.raises(HandlerError, match=r"SQL actions only.*its own table"):
+        adopt(w, "scripted")
+
+
+def test_adopt_command_plans_adopts_and_records_requests(sql_world, capsys, monkeypatch):
+    monkeypatch.setenv("ETL_CRAFT_TOKEN", service_token(sql_world.engine_db))
+    import yaml
+    from sqlalchemy import text
+
+    from etl_craft.cli import main
+
+    w = sql_world
+    create_foreign_table(w, "cli_load", "SELECT CAST(1 AS BIGINT) AS id")
+    w.task(
+        "load", SQL_ACTION="APPEND_TABLE", TARGET_OBJECT="cli_load", SELECT_QUERY="SELECT 1 AS id"
+    )
+    profile = w.config.warehouse
+    raw = {
+        "Secrets": {"Source_type": "ENVIRONMENT"},
+        "Orchestration": {"Project": "default"},
+        "Engine": {
+            "dev": {"Jdbc_url": f"jdbc:sqlite:{w.engine_db.url.database}", "Schema": "main"}
+        },
+        "Warehouse": {
+            "Name": {
+                "duckdb": "DuckDB",
+                "duckdb_iceberg": "DuckDB",
+                "postgres": "Postgres",
+                "trino_iceberg": "Trino",
+            }[w.kind],
+            "Table_format": str(w.config.warehouse_table_format),
+            "dev": profile_block(profile, profile.schema),
+        },
+    }
+    path = w.config.config_path
+    path.write_text(yaml.safe_dump(raw, sort_keys=False))
+    args = ["adopt-target", "--config", str(path), "--target", f"{w.schema}.cli_load"]
+    assert main([*args, "--dry-run"]) == 0
+    assert "would adopt for APPEND_TABLE; original would be dropped" in capsys.readouterr().out
+    assert "task_run_id" not in w.columns("cli_load")
+    assert main(args) == 0
+    assert "adopted 1 row(s) for APPEND_TABLE; original dropped" in capsys.readouterr().out
+    assert main(args) == 0
+    assert "already has every column APPEND_TABLE maintains" in capsys.readouterr().out
+    with w.engine_db.connect() as conn:
+        recorded = conn.execute(
+            text("SELECT COUNT(*) AS count FROM AUD_ACTIONS WHERE COMMAND='adopt-target'")
+        ).scalar_one()
+    assert recorded >= 3
