@@ -95,14 +95,12 @@ def test_a_project_audit_table_is_refused_and_its_file_rolls_back(engine_db, tmp
 def test_package_config_manifest_matches_the_current_schema():
     import re
 
-    from fixtures.scripts import load
-
     root = Path(__file__).parents[3] / "src/etl_craft/dialects/engine"
     for dialect in ("sqlite", "postgres"):
         declared = set(
             re.findall(
                 r"^CREATE TABLE (CFG_\w+)",
-                load("reference_pages").schema_text(root / dialect / "schema.sql"),
+                (root / dialect / "schema.sql").read_text(encoding="utf-8"),
                 re.MULTILINE,
             )
         )

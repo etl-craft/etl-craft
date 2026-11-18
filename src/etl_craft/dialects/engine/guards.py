@@ -25,7 +25,6 @@ ADMIN_TABLES = frozenset(
         "CFG_GROUPS",
         "CFG_GROUP_MEMBERS",
         "CFG_ACCESS_BINDINGS",
-        "CFG_PIPELINE_GRANTS",
         "CFG_ROLES",
         "CFG_ROLE_ACTIONS",
         "CFG_API_TOKENS",
@@ -144,24 +143,15 @@ def sqlite_authorizer(
 
 @cache
 def declared_triggers(dialect_name: str, schema: str) -> tuple[tuple[str, str, str], ...]:
-    """Track the schema's surviving static guards, including immutable-row guards."""
+    """Return each trigger the packaged schema declares: its name, table and statement."""
     from etl_craft.dialects.engine import for_name
 
-    dialect = for_name(dialect_name)
     definitions: dict[str, tuple[str, str]] = {}
-    for sql in dialect.split_statements(schema):
+    for sql in for_name(dialect_name).split_statements(schema):
         plain = re.sub(r"(?m)^--[^\n]*", "", sql).strip()
         create = re.match(r"CREATE TRIGGER (\w+).*?\bON\s+(\w+)", plain, re.I | re.S)
-        drop = re.match(r"DROP TRIGGER (?:IF EXISTS )?(\w+)", plain, re.I)
-        table = re.match(r"DROP TABLE (?:IF EXISTS )?(\w+)", plain, re.I)
         if create:
             definitions[create.group(1)] = (create.group(2), sql)
-        elif drop:
-            definitions.pop(drop.group(1), None)
-        elif table:
-            definitions = {
-                k: v for k, v in definitions.items() if v[0].lower() != table.group(1).lower()
-            }
     return tuple((name, table, sql) for name, (table, sql) in definitions.items())
 
 

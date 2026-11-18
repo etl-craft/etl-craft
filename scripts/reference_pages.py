@@ -169,54 +169,9 @@ _CHECK_IN = re.compile(r"CHECK \((\w+) IN \(([^)]*)\)\)")
 _UNIQUE_INDEX = re.compile(r"CREATE UNIQUE INDEX \w+\s+ON (\w+) \(([^)]*)\)(?:\s+WHERE ([^;]+))?;")
 
 
-def schema_text(schema: Path) -> str:
-    """Describe the final tables, including additions and SQLite table rebuilds."""
-    text = schema.read_text(encoding="utf-8")
-    for match in list(re.finditer(r"CREATE TABLE (\w+)_new \((.*?)\n\);", text, re.S)):
-        name, body = match.groups()
-        before, rebuild, after = text.partition(match.group())
-        before = re.sub(
-            rf"ALTER TABLE {name} (?:ADD COLUMN|ALTER COLUMN|RENAME COLUMN|DROP COLUMN)\b.*?;",
-            "",
-            before,
-            flags=re.S,
-        )
-        text = before + rebuild + after
-        original = re.search(rf"CREATE TABLE {name} \(.*?\n\);", text, re.S)
-        if original is not None:
-            text = text.replace(original[0], f"CREATE TABLE {name} ({body}\n);", 1)
-        text = text.replace(match.group(), "")
-    for match in list(re.finditer(r"ALTER TABLE (\w+) ADD COLUMN (.*?);", text, re.S)):
-        name, column = match.groups()
-        original = re.search(rf"(CREATE TABLE {name} \(.*?)(\n\);)", text, re.S)
-        if original is not None:
-            text = text.replace(original[0], original[1] + ",\n    " + column + original[2], 1)
-        text = text.replace(match.group(), "")
-    for name, column, change in re.findall(
-        r"ALTER TABLE (\w+) ALTER COLUMN (\w+) SET (NOT NULL|DEFAULT [^;]+);", text
-    ):
-        original = re.search(rf"CREATE TABLE {name} \(.*?\n\);", text, re.S)
-        if original is not None:
-            line = next(
-                line for line in original[0].splitlines() if line.startswith(f"    {column} ")
-            )
-            updated = line.rstrip(",") + " " + change + ("," if line.endswith(",") else "")
-            text = text.replace(original[0], original[0].replace(line, updated), 1)
-    for name, old, new in re.findall(r"ALTER TABLE (\w+) RENAME COLUMN (\w+) TO (\w+);", text):
-        original = re.search(rf"CREATE TABLE {name} \(.*?\n\);", text, re.S)
-        if original is not None:
-            updated = re.sub(rf"\b{old}\b", new, original[0])
-            text = text.replace(original[0], updated, 1)
-    for name in re.findall(r"DROP INDEX (\w+);", text):
-        indexes = list(re.finditer(rf"CREATE (?:UNIQUE )?INDEX {name}\s+.*?;", text, re.S))
-        for index in indexes[:-1]:
-            text = text.replace(index.group(), "", 1)
-    return text
-
-
 def schema_tables(schema: Path = SCHEMA) -> list[Table]:
     """Read the tables of ``schema``: comments, columns, allowed values and unique keys."""
-    text = schema_text(schema)
+    text = schema.read_text(encoding="utf-8")
     tables: list[Table] = []
     for match in _CREATE.finditer(text):
         before = text[: match.start()].rstrip("\n").split("\n")
