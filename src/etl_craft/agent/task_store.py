@@ -101,7 +101,11 @@ class RemoteTaskStore:
             ActionName.AGENT_REPORT,
             replace(self.request(AgentReport.ERASURE_FILTERS), target=target),
         )
-        return from_json(tuple[ErasureFilter, ...], reply.data)
+        if not isinstance(reply.data, list):
+            raise ServerError(
+                "agent erasure filters: expected a list; upgrade the API and agent together"
+            )
+        return tuple(from_json(ErasureFilter, item) for item in reply.data)
 
     def erase_written(self, target: str) -> ErasureReport:
         """Return only the host's HMAC/count report for this script's target."""

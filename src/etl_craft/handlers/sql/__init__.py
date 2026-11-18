@@ -14,6 +14,7 @@ from dataclasses import replace
 
 from sqlalchemy.engine import Engine
 
+from etl_craft.config import ConnectorConfig
 from etl_craft.config.targets import active_catalog
 from etl_craft.core.actor import Actor
 from etl_craft.core.enums import ActorKind, SqlAction
@@ -87,7 +88,7 @@ def run(context: TaskContext, engine_db: Engine | TaskStore) -> HandlerResult:
             session.protection_store = store
             _recover_protection(session, store)
             session.uploads, session.bindings = context.uploads, writer_parameters(context.uploads)
-            task, erased = _erasure_filtered(task, session, store)
+            task, erased = _erasure_filtered(task, session, store, config)
             action = ActionContext(
                 task=task,
                 context=context,
@@ -114,18 +115,19 @@ def run(context: TaskContext, engine_db: Engine | TaskStore) -> HandlerResult:
 
 
 def _erasure_filtered(
-    task: SqlTask, session: Session, store: TaskStore
+    task: SqlTask, session: Session, store: TaskStore, config: ConnectorConfig
 ) -> tuple[SqlTask, tuple[str, ...]]:
     """Keep erased identifiers out of the rows this action writes.
 
     Each covered column must be NULL or none of the erased keys, each cast to the column's
-    type. NULL identifiers are kept: ``NOT IN`` alone would drop them.
+    type. NULL identifiers are kept: ``NOT IN`` alone would drop them. A project without
+    ``Privacy.Hmac_secret`` cannot erase, so it skips the lookup.
     """
     from etl_craft.core.redaction import remember
     from etl_craft.dialects.business_rules import quote_output_key
     from etl_craft.handlers.sql.spec import WRITERS
 
-    if task.select_sql is None or task.action not in WRITERS:
+    if config.privacy_hmac_secret is None or task.select_sql is None or task.action not in WRITERS:
         return task, ()
     from etl_craft.handlers.erasure import store_filters
 

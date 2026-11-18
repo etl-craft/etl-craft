@@ -177,7 +177,7 @@ def _offset_variables(context: TaskContext, checked: ScriptResult, name: str) ->
 def _erase_written(context: TaskContext, store: TaskStore) -> int:
     """Delete erased identifiers from the script's target; return how many rows went."""
     target = context.task_params.get("TARGET_OBJECT")
-    if not target:
+    if not target or context.config.privacy_hmac_secret is None:
         return 0
     from etl_craft.handlers.erasure import store_erase_written
 

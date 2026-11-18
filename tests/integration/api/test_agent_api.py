@@ -2004,13 +2004,15 @@ def test_a_sql_attempt_cannot_request_host_erasure(agent_scene):
 
 
 def test_erasure_filters_are_given_only_for_the_admitted_target(agent_scene, monkeypatch):
-    from etl_craft.core.erasure import ErasureFilter
+    from etl_craft.core.erasure import ErasureEntry, ErasureFilter
     from etl_craft.handlers import erasure
 
+    entry = ErasureEntry("ds.people", "person", "private-key", "h")
+    monkeypatch.setattr(erasure, "active_entries", lambda engine: (entry,))
     monkeypatch.setattr(
         erasure,
         "write_filters",
-        lambda engine, config, target: (ErasureFilter("person", ("private-key",)),),
+        lambda engine, config, target, entries: (ErasureFilter("person", ("private-key",)),),
     )
     attempt = claim(agent_scene, "SQL", TARGET_OBJECT="ds.people")
     other = post(

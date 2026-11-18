@@ -227,9 +227,10 @@ item's text, or work done early under another item.
   agents (they already read those rows), replacing the rule that personal keys never cross the
   agent API. Coverage is recomputed for each filtered write; cache it per run if many entries
   make that slow. Seed-written tables stay outside erasure coverage, as before. This supersedes
-  the "Suppression list on managed writes: Not added" row in the rejected-features table. Each
-  managed SQL attempt makes two more Engine DB statements (target admission and the register
-  read; budgets recorded), an API round trip on agents. Acceptance availability: Snowflake
+  the "Suppression list on managed writes: Not added" row in the rejected-features table. A
+  project without `Privacy.Hmac_secret` cannot erase and does no erasure work on writes. With
+  the secret, each managed SQL attempt reads the active register once (an API round trip on
+  agents); target admission and coverage run only when entries exist. Acceptance availability: Snowflake
   and Databricks were not run (the filter is a portable `NOT IN` wrapper that appears only
   with active entries; Snowflake budget reserved for its dialect changes).
 

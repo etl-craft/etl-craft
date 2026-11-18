@@ -238,16 +238,13 @@ def active_entries(engine: Engine) -> tuple[ErasureEntry, ...]:
 
 
 def write_filters(
-    engine: Engine, config: ConnectorConfig, target: str
+    engine: Engine, config: ConnectorConfig, target: str, entries: tuple[ErasureEntry, ...]
 ) -> tuple[ErasureFilter, ...]:
-    """Name each column of ``target`` that carries an erased identifier, with its keys.
+    """Name each column of ``target`` that carries one of ``entries``, with its keys.
 
     Coverage follows the same direct-copy lineage as erasure itself, so a writer filters
-    exactly the columns an erasure would delete from. No active entry means no filter.
+    exactly the columns an erasure would delete from.
     """
-    entries = active_entries(engine)
-    if not entries:
-        return ()
     wanted = identity(config, target).lower()
     keys: dict[str, list[str]] = {}
     # ponytail: coverage is recomputed per write; cache it per run if many entries make it slow.
@@ -409,9 +406,14 @@ def store_filters(store: TaskStore, target: str) -> tuple[ErasureFilter, ...]:
         if not isinstance(store, HostErasure):
             raise HandlerError(f"{target}: this task store cannot reach erasure; run the task")
         return store.erasure_filters(target)
+    with using(store.definition):
+        entries = active_entries(store.engine)
+    if not entries:
+        return ()
+    # Admitted only when there are keys to give: an empty answer reveals nothing.
     store.admit_target(target)
     with using(store.definition):
-        return write_filters(store.engine, store.config, target)
+        return write_filters(store.engine, store.config, target, entries)
 
 
 def store_erase_written(store: TaskStore, target: str) -> ErasureReport:
@@ -422,11 +424,12 @@ def store_erase_written(store: TaskStore, target: str) -> ErasureReport:
         if not isinstance(store, HostErasure):
             raise HandlerError(f"{target}: this task store cannot reach erasure; run the task")
         return store.erase_written(target)
-    store.admit_target(target)
     with using(store.definition):
         entries = active_entries(store.engine)
-        if not entries:
-            return ErasureReport()
+    if not entries:
+        return ErasureReport()
+    store.admit_target(target)
+    with using(store.definition):
         return apply_entries(
             store.engine, store.config, entries, store=store, only=identity(store.config, target)
         )
