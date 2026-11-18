@@ -183,8 +183,11 @@ def test_changing_the_shared_policy_changes_every_transport(project, monkeypatch
     p, ctx, creds = project
     credential = creds[ApiRole.OPERATOR]
     caller = replace(ctx, actor=credential.metadata.actor, role=ApiRole.OPERATOR)
-    control = ACTIONS[ActionName.CONTROL]
-    monkeypatch.setitem(ACTIONS, ActionName.CONTROL, replace(control, role=ApiRole.ADMIN))
+    # One policy change: operators keep only CAN_VIEW in the project.
+    act(ctx, ActionName.ACCESS_REVOKE, project="default", audience="operator", role="CAN_RUN",
+        reason="policy test")  # fmt: skip
+    act(ctx, ActionName.ACCESS_GRANT, project="default", audience="operator", role="CAN_VIEW",
+        reason="policy test")  # fmt: skip
     with pytest.raises(PermissionDeniedError):
         act(
             caller,
@@ -196,8 +199,7 @@ def test_changing_the_shared_policy_changes_every_transport(project, monkeypatch
     monkeypatch.setenv("ETL_CRAFT_TOKEN", credential.token)
     assert main(["pause", "--pipeline-code", "P", "--reason", "policy test"]) == 26
     message = capsys.readouterr().err
-    assert "pipeline 'P' needs admin role" in message
-    assert "effective role=operator" in message
+    assert "pipeline 'P': action 'control' needs operator role" in message
     response = TestClient(create_app(ctx)).post(
         "/api/v1/projects/default/controls",
         json={"pipeline_code": "P", "action": "PAUSE", "reason": "policy test"},

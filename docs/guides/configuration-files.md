@@ -269,10 +269,7 @@ and `config apply` report each binding that starts or stops matching, naming its
 tag, role or command and pipeline. JSON returns these under `tag_access_changes`, with
 `role`/`action` fields and `audience:` identifying an audience principal.
 
-The report also names open/restricted switches; only built-in `CAN_*` bindings restrict a
-pipeline. Custom bindings change command access without changing that policy. When a pipeline becomes restricted,
-project-level access no longer applies: only matching pipeline/tag grants and project
-CAN_MANAGE reach it. When its last matching built-in binding disappears, the project level applies again.
+Grants only add, so a tag edit never hides a pipeline: project-wide access still reaches it.
 An ungranted tag edit reports no access change. This report neither changes grants nor refuses
 a deploy. It reports grants rather than accounts, because SSO group membership cannot be
 completely enumerated at plan time. Per-project repository folders are deployment layout,

@@ -44,7 +44,8 @@ def isolation(engine_db):
                 for code in ("OPEN", "PRIVATE"):
                     add_pipeline(conn, code, project_id=identity)
     grant(admin, "sales", "reader", Permission.CAN_VIEW)
-    grant(admin, "sales", "operator", Permission.CAN_RUN)
+    # The operator reaches OPEN only, so PRIVATE stays hidden from it.
+    grant(admin, "sales", "operator", Permission.CAN_RUN, pipeline="OPEN")
     grant(admin, "sales", "manager", Permission.CAN_MANAGE)
     grant(admin, "sales", "reader", Permission.CAN_RUN, pipeline="PRIVATE")
     return admin, tokens
@@ -73,7 +74,7 @@ def caller(admin, name, role=ApiRole.VIEWER, project="sales"):
     )
 
 
-def test_project_gate_restricted_fallback_and_manager_override(isolation):
+def test_grants_add_up_and_a_pipeline_grant_opens_its_project(isolation):
     admin, _ = isolation
     with admin.engine.connect() as conn:
         sales = conn.execute(
@@ -90,9 +91,10 @@ def test_project_gate_restricted_fallback_and_manager_override(isolation):
             "OPEN": Permission.CAN_MANAGE,
             "PRIVATE": Permission.CAN_MANAGE,
         }
+    # A pipeline grant alone opens the project, limited to that pipeline.
     grant(admin, "hidden", "reader", Permission.CAN_MANAGE, pipeline="PRIVATE")
-    with pytest.raises(ResourceNotFoundError):
-        act(caller(admin, "reader", project="hidden"), ActionName.PIPELINES)
+    listed = act(caller(admin, "reader", project="hidden"), ActionName.PIPELINES).pipelines
+    assert [row.pipeline_code for row in listed] == ["PRIVATE"]
 
 
 @pytest.mark.parametrize("role", [ApiRole.VIEWER, ApiRole.OPERATOR, ApiRole.DEVELOPER])
@@ -365,7 +367,7 @@ def test_revoked_project_refuses_a_local_claim_before_process_dispatch(isolation
 
 @pytest.mark.parametrize("principal", ["account", "group", "audience"])
 @pytest.mark.parametrize("level", list(Permission))
-def test_project_principals_and_levels_keep_restricted_rules(isolation, principal, level):
+def test_project_levels_reach_every_pipeline_whoever_else_is_granted(isolation, principal, level):
     admin, _ = isolation
     identity = {"account": "reader"} if principal == "account" else {"audience": "viewer"}
     if principal == "group":
@@ -383,15 +385,14 @@ def test_project_principals_and_levels_keep_restricted_rules(isolation, principa
     grant(admin, "finance", "operator", Permission.CAN_VIEW, pipeline="PRIVATE")
     ctx = caller(admin, "reader", project="finance")
     listed = {row.pipeline_code for row in act(ctx, ActionName.PIPELINES).pipelines}
-    assert ("PRIVATE" in listed) == (level == Permission.CAN_MANAGE)
-    assert "OPEN" in listed
+    # Another account's grant on PRIVATE never hides it from project-wide holders.
+    assert listed == {"OPEN", "PRIVATE"}
     with admin.engine.connect() as conn:
         project = conn.execute(
             text("SELECT PROJECT_ID AS project_id FROM CFG_PROJECTS WHERE PROJECT_CODE='finance'")
         ).scalar_one()
         effective = pipeline_access(conn, replace(ctx, project_id=project)).levels
-    assert effective["OPEN"] == level
-    assert effective["PRIVATE"] == (level if level == Permission.CAN_MANAGE else None)
+    assert effective["OPEN"] == effective["PRIVATE"] == level
 
 
 def test_project_revoke_and_delegated_grant_race(isolation):

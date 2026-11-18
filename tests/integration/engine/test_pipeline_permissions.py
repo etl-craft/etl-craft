@@ -44,7 +44,17 @@ def scene(engine_db):
         task = add_task(conn, private_id, "secret")
         run_id = transitions.create_run(conn, private_id, OWNER)
         task_run(conn, task, run_id)
+    close_audiences(ctx)
+    act(ctx, ActionName.ACCESS_GRANT, project="default", account="reader", pipeline="OPEN",
+        role="CAN_VIEW", reason="scene")  # fmt: skip
     return ctx, reader, credential.token, group.group_id, open_id, private_id, run_id, task
+
+
+def close_audiences(ctx):
+    """Revoke the default project's audience grants, so only named grants open pipelines."""
+    for audience, role in (("viewer", "CAN_VIEW"), ("operator", "CAN_RUN")):
+        act(ctx, ActionName.ACCESS_REVOKE, project="default", audience=audience, role=role,
+            reason="private project")  # fmt: skip
 
 
 def grant(ctx, *, tag=False):
@@ -109,7 +119,7 @@ def test_disabled_groups_keep_pipelines_restricted_and_changes_are_audited(scene
             conn.execute(
                 text(
                     "SELECT COUNT(*) AS n FROM AUD_CFG_ACCESS_BINDINGS_HISTORY "
-                    "WHERE PIPELINE_CODE IS NOT NULL OR TAG IS NOT NULL"
+                    "WHERE PIPELINE_CODE='PRIVATE' OR TAG IS NOT NULL"
                 )
             ).scalar_one()
             == 1
@@ -129,11 +139,16 @@ def test_cli_uses_the_same_grant_and_admin_policy(metadata_project, monkeypatch,
     act(ctx, ActionName.GROUP_ADD, name="sales")
     with acting_as(OWNER), project.engine.begin() as conn:
         add_pipeline(conn, "PRIVATE")
+        add_pipeline(conn, "OPEN")
+    close_audiences(ctx)
+    act(ctx, ActionName.ACCESS_GRANT, project="default", account="reader", pipeline="OPEN",
+        role="CAN_VIEW", reason="test")  # fmt: skip
     grant(ctx)
     monkeypatch.chdir(project.root)
     monkeypatch.setenv("ETL_CRAFT_TOKEN", token.token)
     assert main(["pipelines", "--format", "json"]) == ExitCode.SUCCESS
-    assert json.loads(capsys.readouterr().out)["pipelines"] == []
+    listed = json.loads(capsys.readouterr().out)["pipelines"]
+    assert [p["pipeline_code"] for p in listed] == ["OPEN"]
     assert main(["group", "list"]) == ExitCode.PERMISSION_DENIED
     assert "admin" in capsys.readouterr().err
 
@@ -187,7 +202,7 @@ def test_sso_ids_survive_rename_refresh_and_logout_but_current_restrictions_appl
         ).all()
         assert any("unknown" in str(row.arguments) for row in audit)
     act(ctx, ActionName.GROUP_DISABLE, name="renamed")
-    with pytest.raises(ResourceNotFoundError, match=r"PRIVATE.*missing or not permitted"):
+    with pytest.raises(ResourceNotFoundError, match=r"missing or not permitted"):
         act(caller, ActionName.PIPELINE, pipeline_code="PRIVATE")
 
 

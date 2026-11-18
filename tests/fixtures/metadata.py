@@ -193,3 +193,30 @@ def finalize_pipeline(engine, config, pipeline_code, *, hooks=None):
         PipelineRun(pipeline_code, pipeline_id, run_id, graph, codes, detail.sla_in_hours),
         hooks or default_hooks(config, engine),
     )
+
+
+def hide_from_viewers(conn, *codes, project_id=1):
+    """Limit the viewer audience to the project's pipelines other than ``codes``.
+
+    Grants only add access, so a pipeline is hidden by replacing the audience's project-wide
+    grant with grants on the pipelines that stay visible.
+    """
+    conn.execute(
+        text(
+            "UPDATE CFG_ACCESS_BINDINGS SET ACTIVE_FLAG='N' WHERE PROJECT_ID=:p AND "
+            "GRANTEE_ROLE='viewer' AND PIPELINE_CODE IS NULL AND TAG IS NULL"
+        ),
+        {"p": project_id},
+    )
+    visible = conn.execute(
+        text("SELECT PIPELINE_CODE AS code FROM CFG_PIPELINES WHERE PROJECT_ID=:p"),
+        {"p": project_id},
+    ).scalars()
+    for code in set(visible) - set(codes):
+        conn.execute(
+            text(
+                "INSERT INTO CFG_ACCESS_BINDINGS (PROJECT_ID,PIPELINE_CODE,GRANTEE_ROLE,ROLE_NAME) "
+                "VALUES (:p,:code,'viewer','CAN_VIEW')"
+            ),
+            {"p": project_id, "code": code},
+        )

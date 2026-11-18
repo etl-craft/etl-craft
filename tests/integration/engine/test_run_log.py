@@ -13,6 +13,7 @@ from etl_craft.core.time import as_utc
 from etl_craft.engine import transitions
 from etl_craft.services.operations.identity import authenticated_context
 from fixtures.actions import act
+from fixtures.metadata import add_pipeline, hide_from_viewers
 from fixtures.run_scene import OWNER, seed
 
 
@@ -95,12 +96,8 @@ def test_a_viewer_without_the_pipeline_cannot_read_its_run_log(ran, engine_db):
     reader = authenticated_context(ctx, token.metadata)
     assert run_log(reader, run_id=run)
     with acting_as(OWNER), engine_db.engine.begin() as conn:
-        conn.execute(
-            text(
-                "INSERT INTO CFG_ACCESS_BINDINGS (PROJECT_ID,PIPELINE_CODE,GRANTEE_ROLE,ROLE_NAME) "
-                "VALUES (1,'ORDERS','operator','CAN_VIEW')"
-            )
-        )
+        add_pipeline(conn, "VISIBLE")
+        hide_from_viewers(conn, "ORDERS")
     with pytest.raises(ResourceNotFoundError, match=r"ORDERS.*missing or not permitted"):
         run_log(reader, run_id=run)
 

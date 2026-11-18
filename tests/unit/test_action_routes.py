@@ -19,7 +19,6 @@ from etl_craft.core.enums_access import Permission
 from etl_craft.core.errors import PermissionDeniedError, ResourceNotFoundError, UsageError
 from etl_craft.services.operations import OperationContext, actions
 from etl_craft.services.operations.actions import ACTIONS, action_path, invoke
-from etl_craft.services.operations.permissions import PipelineAccess
 from etl_craft.services.operations.serialization import encode
 from fixtures.actions import build
 
@@ -198,10 +197,9 @@ def test_a_malformed_value_is_refused_by_name_before_the_operation_runs(server, 
 def operations(monkeypatch):
     """Every action's operation replaced by one that records it ran."""
     from etl_craft.core.governance import ProjectPolicy
-    from etl_craft.services.operations import bindings, governance
+    from etl_craft.services.operations import authorization, governance
 
     monkeypatch.setattr(governance, "project_policy", lambda ctx, request: ProjectPolicy())
-    monkeypatch.setattr(bindings, "covering", lambda *args: ())
     ran = []
     # Transport tests isolate identity lookup; grant resolution is exercised on both Engine DBs.
     monkeypatch.setattr(actions, "_request_context", lambda ctx, name, request: ctx)
@@ -213,10 +211,21 @@ def operations(monkeypatch):
             raise PermissionDeniedError("project requires CAN_MANAGE")
 
     monkeypatch.setattr(actions, "require_project", project_check)
-    monkeypatch.setattr(bindings, "request_codes", lambda conn, action, request: ["x"])
-    monkeypatch.setattr(
-        actions, "pipeline_access", lambda conn, ctx: PipelineAccess({"x": ctx.role})
-    )
+    monkeypatch.setattr(authorization, "require_project", project_check)
+    monkeypatch.setattr(authorization, "request_codes", lambda conn, action, request: ["x"])
+
+    def held_by_role(conn, ctx, project_id):
+        """Every action the account role reaches; manage actions keep the project check."""
+        names = frozenset(
+            str(name)
+            for name, spec in ACTIONS.items()
+            if name not in actions.PROJECT_MANAGE_ACTIONS
+            and spec.role != ApiRole.AGENT
+            and actions.has_role(ctx.role, spec.role)
+        )
+        return authorization.Held(names, names, {})
+
+    monkeypatch.setattr(authorization, "held", held_by_role)
     for name in CALLED:
         monkeypatch.setitem(
             ACTIONS, name, replace(ACTIONS[name], call=lambda ctx, request, n=name: ran.append(n))

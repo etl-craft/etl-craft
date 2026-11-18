@@ -10,7 +10,7 @@ from etl_craft.core.errors import UsageError
 from etl_craft.services.operations import OperationContext
 from etl_craft.services.operations.identity import authenticated_context
 from fixtures.actions import act
-from fixtures.metadata import add_pipeline, add_table, add_task, start_run
+from fixtures.metadata import add_pipeline, add_table, add_task, hide_from_viewers, start_run
 
 OWNER = Actor("owner", ActorKind.USER)
 
@@ -66,12 +66,7 @@ def test_limit_marks_truncation(scene):
 def test_pipeline_limited_reader_sees_only_granted_pipelines_and_no_tables(scene, engine_db):
     owner, reader, _, secret = scene
     with acting_as(OWNER), engine_db.engine.begin() as conn:
-        conn.execute(
-            text(
-                "INSERT INTO CFG_ACCESS_BINDINGS (PROJECT_ID,PIPELINE_CODE,GRANTEE_ROLE,ROLE_NAME) "
-                "VALUES (1,'HR_SALES','operator','CAN_VIEW')"
-            )
-        )
+        hide_from_viewers(conn, "HR_SALES")
     hits = found(act(reader, ActionName.SEARCH, q="sales"))
     assert {code for _, _, code in hits} == {"SALES_DAILY"}
     assert act(reader, ActionName.SEARCH, q=str(secret)).hits == ()

@@ -221,6 +221,13 @@ item's text, or work done early under another item.
 
 ### Handover notes
 
+- **One access evaluator.** Second authorization PR. Built-in `CAN_*` roles are stored action
+  sets; one principal match (`access_principal`) feeds visibility SQL and admission
+  (`services/operations/authorization.py`). Owner decisions: grants are additive, and a pipeline
+  or tag grant opens its project. The matrix changed only for those, for `CAN_VIEW` upload at
+  admission, and nowhere else; tests that built privacy from the old restriction now revoke the
+  default audiences instead. Making a pipeline private again would be a new, explicit feature.
+
 - **Authorization matrix.** Not a listed item; first of two PRs (the owner chose option 1).
   `tests/integration/engine/test_access_matrix.py` records every action's decision for eleven
   principals on both Engine DB dialects (`tests/fixtures/access_matrix.tsv`); the one-evaluator

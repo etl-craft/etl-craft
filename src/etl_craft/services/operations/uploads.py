@@ -31,7 +31,7 @@ from etl_craft.engine.upload_storage import (
     unlink_file,
 )
 from etl_craft.engine.uploads import admit_queued
-from etl_craft.services.operations.bindings import allows
+from etl_craft.services.operations.authorization import allows
 from etl_craft.services.operations.context import OperationContext
 from etl_craft.services.operations.permissions import pipeline_access
 from etl_craft.services.operations.recording import recorded

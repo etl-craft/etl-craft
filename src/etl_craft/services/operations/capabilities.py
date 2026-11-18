@@ -84,7 +84,7 @@ def control_capabilities(ctx: OperationContext, request: CapabilitiesInput) -> C
 def _role_refusal(ctx: OperationContext, pipeline_code: str) -> str | None:
     """Describe a role restriction without recording a refused change on a read."""
     from etl_craft.services.operations.actions import ACTIONS
-    from etl_craft.services.operations.bindings import allows
+    from etl_craft.services.operations.authorization import allows
     from etl_craft.services.operations.permissions import pipeline_access
     from etl_craft.services.operations.requests import ControlRequest
 

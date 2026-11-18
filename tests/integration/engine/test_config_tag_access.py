@@ -1,4 +1,4 @@
-"""Config tag edits report matching grants and policy changes on both interfaces."""
+"""Config tag edits report the tag grants they make start or stop matching, on both interfaces."""
 
 import csv
 import json
@@ -18,7 +18,7 @@ from fixtures.metadata import add_pipeline
 
 @pytest.mark.parametrize("output_format", ["text", "json"])
 @pytest.mark.parametrize("principal", ["group", "audience", "account"])
-def test_tag_edits_report_grant_matches_and_open_restricted_switches(
+def test_tag_edits_report_grant_matches(
     metadata_project, monkeypatch, capsys, output_format, principal
 ):
     project = metadata_project
@@ -48,7 +48,7 @@ def test_tag_edits_report_grant_matches_and_open_restricted_switches(
     )
     folder = project.root / "patch"
     folder.mkdir()
-    for tags, restricted, expected in (
+    for tags, starts, expected in (
         (["sensitive"], True, "starts matching"),
         ([], False, "stops matching"),
         (["ungranted"], False, None),
@@ -73,23 +73,13 @@ def test_tag_edits_report_grant_matches_and_open_restricted_switches(
                     assert report == [
                         {
                             "pipeline": "P",
-                            "was_restricted": not restricted,
-                            "is_restricted": restricted,
-                            "policy_change": (
-                                "open -> restricted: project-level access no longer applies; "
-                                "only matching "
-                                "pipeline and tag grants (plus project CAN_MANAGE) "
-                                "reach this pipeline"
-                                if restricted
-                                else "restricted -> open: the project level now applies"
-                            ),
                             "grants": [
                                 {
                                     "principal": label,
                                     "tag": "sensitive",
                                     "role": "CAN_RUN",
                                     "action": None,
-                                    "starts_matching": restricted,
+                                    "starts_matching": starts,
                                 }
                             ],
                         }
@@ -99,16 +89,7 @@ def test_tag_edits_report_grant_matches_and_open_restricted_switches(
             else:
                 for part in ("access P:", label, "sensitive", "CAN_RUN", expected):
                     assert part in output
-                if restricted:
-                    for part in (
-                        "open -> restricted",
-                        "project-level access no longer applies",
-                        "matching pipeline and tag grants",
-                        "project CAN_MANAGE",
-                    ):
-                        assert part in output
-                else:
-                    assert "restricted -> open: the project level now applies" in output
+                assert "restricted" not in output
         if reports:
             assert reports[0] == reports[1]
         with project.engine.connect() as conn:
@@ -122,9 +103,7 @@ def test_tag_edits_report_grant_matches_and_open_restricted_switches(
 
 
 @pytest.mark.parametrize("binding", [{"role": "runner"}, {"action": "run"}])
-def test_custom_tag_bindings_report_commands_without_restricting_pipeline(
-    metadata_project, binding
-):
+def test_custom_tag_bindings_report_their_commands(metadata_project, binding):
 
     project = metadata_project
     ctx = OperationContext(project.engine, project.config, SYSTEM_ACTOR, role=ApiRole.ADMIN)
@@ -149,8 +128,6 @@ def test_custom_tag_bindings_report_commands_without_restricting_pipeline(
     (folder / "pipelines.csv").write_text("PIPELINE_CODE,PIPELINE_PARAMETERS\nP,{}\n")
     done = act(ctx, ActionName.CONFIG_PLAN, config_dir=folder)
     change = done.tag_access_changes[0]
-    assert not change.was_restricted and not change.is_restricted
-    assert change.policy_change is None
     match = change.grants[0]
     assert match.role == binding.get("role")
     assert match.action == binding.get("action")

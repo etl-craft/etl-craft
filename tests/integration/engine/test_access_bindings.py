@@ -271,7 +271,8 @@ def test_custom_batch_admission_requires_every_named_pipeline(estate):
         )
     )
     grant(admin, account="ana", action="control bulk", project="sales", pipeline="P1")
-    with pytest.raises(PermissionDeniedError), admitted(scoped, ActionName.CONTROL_BULK, batch):
+    # P2 is reached by no binding of ana's, so it is masked rather than refused.
+    with pytest.raises(ResourceNotFoundError), admitted(scoped, ActionName.CONTROL_BULK, batch):
         pytest.fail("one binding admitted a batch naming an unbound pipeline")
     grant(admin, account="ana", action="control bulk", project="sales", pipeline="P2")
     with admitted(scoped, ActionName.CONTROL_BULK, batch):

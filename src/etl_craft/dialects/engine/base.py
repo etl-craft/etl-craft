@@ -209,7 +209,7 @@ class EngineDialect(ABC):
                 self.query("metadata_capture").replace(":pipeline_id", "p.PIPELINE_ID"),
             )
         for fragment in (
-            "access_scoped",
+            "access_principal",
             "permission_eligible",
             "permission_projects",
             "permission_effective",

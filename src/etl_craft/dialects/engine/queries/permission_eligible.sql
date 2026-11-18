@@ -1,16 +1,16 @@
-SELECT x.binding_id AS grant_id,x.PROJECT_ID AS project_id,
-x.PIPELINE_CODE AS pipeline_code,x.TAG AS tag,x.permission AS permission,x.custom AS custom,
-CASE WHEN x.GROUP_ID IS NOT NULL THEN 'group:' || CAST(x.GROUP_ID AS text)
-     WHEN x.ACCOUNT_ID IS NOT NULL THEN 'account:' || a.ACCOUNT_NAME
-     ELSE 'role:' || x.GRANTEE_ROLE END AS source
-FROM ({{access_scoped}}) x LEFT JOIN CFG_ACCOUNTS a ON a.ACCOUNT_ID=x.ACCOUNT_ID
-LEFT JOIN CFG_GROUPS g ON g.GROUP_ID=x.GROUP_ID
-WHERE (CAST(:project_id AS bigint) IS NULL OR x.PROJECT_ID=:project_id)
-AND ((a.ACCOUNT_NAME=:account AND a.ACTIVE_FLAG='Y')
- OR (x.GRANTEE_ROLE='viewer' AND :role IN ('viewer','operator','developer','admin'))
- OR (x.GRANTEE_ROLE='operator' AND :role IN ('operator','developer','admin'))
- OR (x.GRANTEE_ROLE='developer' AND :role IN ('developer','admin'))
- OR (g.ACTIVE_FLAG='Y' AND (EXISTS (
-   SELECT 1 AS member FROM CFG_GROUP_MEMBERS m JOIN CFG_ACCOUNTS u ON u.ACCOUNT_ID=m.ACCOUNT_ID
-   WHERE m.GROUP_ID=g.GROUP_ID AND m.ACTIVE_FLAG='Y' AND u.ACCOUNT_NAME=:account AND u.ACTIVE_FLAG='Y')
-   OR g.GROUP_ID IN (SELECT CAST(value AS bigint) AS group_id FROM json_each(:sso_group_ids)))))
+-- The principal's bindings expanded onto the projects they apply to: a deployment binding covers
+-- every project, an environment binding every project of that environment type. Built-in CAN_*
+-- rows keep their level; a custom role or single action implies CAN_VIEW on its environment,
+-- project, pipeline or tag, never deployment-wide, so a deployment-only role reveals no project.
+SELECT x.binding_id AS grant_id,pj.PROJECT_ID AS project_id,x.pipeline_code AS pipeline_code,
+x.tag AS tag,
+CASE WHEN x.role_name IN ('CAN_VIEW','CAN_UPLOAD','CAN_RUN','CAN_MANAGE') THEN x.role_name ELSE 'CAN_VIEW' END AS permission,
+CASE WHEN x.role_name IN ('CAN_VIEW','CAN_UPLOAD','CAN_RUN','CAN_MANAGE') THEN 0 ELSE 1 END AS custom,
+x.source AS source
+FROM ({{access_principal}}) x LEFT JOIN CFG_ROLES r ON r.ROLE_NAME=x.role_name
+JOIN CFG_PROJECTS pj ON pj.PROJECT_ID=x.project_id
+ OR (x.project_id IS NULL AND (x.environment IS NULL OR x.environment=pj.ENVIRONMENT_TYPE))
+WHERE (x.action_name IS NOT NULL OR r.ACTIVE_FLAG='Y')
+AND (x.role_name IN ('CAN_VIEW','CAN_UPLOAD','CAN_RUN','CAN_MANAGE')
+ OR x.project_id IS NOT NULL OR x.environment IS NOT NULL)
+AND (CAST(:project_id AS bigint) IS NULL OR pj.PROJECT_ID=:project_id)

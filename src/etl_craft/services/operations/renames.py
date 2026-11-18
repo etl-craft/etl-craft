@@ -18,7 +18,7 @@ from etl_craft.engine.queries import statement
 from etl_craft.handlers.resources import LocalLocker
 from etl_craft.handlers.sql.watermarks import source_pipelines
 from etl_craft.services.config_renames import mentioned_files
-from etl_craft.services.operations.bindings import allows
+from etl_craft.services.operations.authorization import allows
 from etl_craft.services.operations.context import OperationContext
 from etl_craft.services.operations.permissions import require_project
 from etl_craft.services.operations.pipeline_refresh import RefreshInput, refresh_on
