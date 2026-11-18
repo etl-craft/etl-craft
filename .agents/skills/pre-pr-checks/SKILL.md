@@ -170,6 +170,12 @@ the SQL every warehouse runs:
 - cloning;
 - warehouse authentication.
 
+First run `tests/unit/test_golden_sql.py`: offline, it compares the SQL each of the eight dialects
+writes for every action with `tests/fixtures/golden_sql/<dialect>.sql`. When the Snowflake and
+Databricks files do not change, the change leaves their SQL byte-identical and needs no cloud run.
+When they change, review the difference, record it with `ETL_CRAFT_RECORD_GOLDEN_SQL=1`, and run
+the affected cloud tests.
+
 Cloud compute has a usage budget: run them only when the owner has made it available, and
 otherwise treat the cloud as unable to run (below). Run Snowflake and Databricks at the same time, never one after the other. Try each affected cloud once; never retry a
 cloud run that failed on compute or credentials. Skip them for refactors whose paths the four local warehouses already

@@ -8,7 +8,6 @@ from etl_craft.config.auth import (
     AUTH_EXTRA_FIELDS,
     WAREHOUSE_NAMES,
     WAREHOUSES,
-    warehouse_by_key,
     warehouse_spec,
 )
 from etl_craft.config.loader_helpers import (
@@ -151,10 +150,15 @@ def _jdbc_url_profile(
 ) -> ConnectionProfile:
     """Build a warehouse profile from a whole JDBC URL."""
     path, where, block = fields.path, fields.where, fields.block
-    # DuckDB over Iceberg reads its catalog and object-storage settings from the profile.
-    profile_fields: tuple[str, ...] = ()
-    if expected_dialect == "duckdb" and table_format == TableFormat.ICEBERG:
-        profile_fields = warehouse_by_key("duckdb_iceberg").profile_fields
+    # A dialect may read further settings from the profile, such as DuckDB over Iceberg's catalog.
+    profile_fields = next(
+        (
+            spec.profile_fields
+            for spec in WAREHOUSES
+            if spec.sqlalchemy_name == expected_dialect and spec.table_format == table_format
+        ),
+        (),
+    )
     reject_unknown(block, CONNECTION_FIELDS | set(profile_fields), where, path, fields=True)
     jdbc_url = fields.value("jdbc_url", required=True) or ""
     try:
