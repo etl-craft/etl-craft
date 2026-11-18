@@ -221,6 +221,12 @@ item's text, or work done early under another item.
 
 ### Handover notes
 
+- **Authorization matrix.** Not a listed item; first of two PRs (the owner chose option 1).
+  `tests/integration/engine/test_access_matrix.py` records every action's decision for eleven
+  principals on both Engine DB dialects (`tests/fixtures/access_matrix.tsv`); the one-evaluator
+  PR must leave it unchanged. Grant and revoke run whole as dry runs, because they also
+  authorize inside the operation; other in-operation filters are not in the table.
+
 - **Warehouse dialects.** Not a listed item. The owner chose the scoped option over a
   database-plus-format-strategy rebuild: format differences were already isolated in small
   subclasses. The four `spec.key` and format branches outside `dialects/` became declared
