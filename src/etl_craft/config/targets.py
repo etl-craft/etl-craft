@@ -249,7 +249,7 @@ def active_catalog(config: ConnectorConfig) -> str:
     spec = active_warehouse(config)
     assert config.warehouse is not None
     profile = config.warehouse
-    if spec.key == "duckdb_iceberg":
+    if "catalog" in spec.profile_fields:
         return attached_catalog_name(profile.extra)
     catalog = parse_warehouse_url(profile.jdbc_url).catalog
     if not catalog:

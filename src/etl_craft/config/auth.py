@@ -120,7 +120,8 @@ class WarehouseSpec:
     ``preferred_fields`` are the separate connection fields a profile may give instead of a
     whole JDBC URL; ``profile_fields`` are further settings the dialect reads from the profile.
     ``per_task_format`` says whether a task may choose another table format than the
-    warehouse's own.
+    warehouse's own. ``tables_in_database_file`` says the tables live in the connection's own
+    database file, so an in-memory database would differ in every task process.
     """
 
     key: str
@@ -132,6 +133,7 @@ class WarehouseSpec:
     preferred_fields: tuple[str, ...] = ()
     profile_fields: tuple[str, ...] = ()
     per_task_format: bool = True
+    tables_in_database_file: bool = False
 
     @property
     def auth_modes(self) -> frozenset[str]:
@@ -190,6 +192,7 @@ WAREHOUSES: tuple[WarehouseSpec, ...] = (
         auth_fields={AuthMode.NONE: ()},
         verified_auth_modes=frozenset({AuthMode.NONE}),
         per_task_format=False,
+        tables_in_database_file=True,
     ),
     WarehouseSpec(
         key="duckdb_iceberg",

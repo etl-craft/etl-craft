@@ -221,6 +221,12 @@ item's text, or work done early under another item.
 
 ### Handover notes
 
+- **Warehouse dialects.** Not a listed item. The owner chose the scoped option over a
+  database-plus-format-strategy rebuild: format differences were already isolated in small
+  subclasses. The four `spec.key` and format branches outside `dialects/` became declared
+  capabilities, `make quality` now refuses `spec.key` checks there, and
+  `tests/unit/test_golden_sql.py` records every action's SQL for all eight dialects offline.
+
 - **Readable schema.sql.** Not a listed item. Both files were regenerated from the
   0.9.0 baseline log; a full `init-db` from the old and new file gives an identical `pg_dump` and
   identical SQLite DDL and pragmas. Physical column order is kept so the catalogs match. The

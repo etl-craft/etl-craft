@@ -567,7 +567,7 @@ def _warehouse(config: ConnectorConfig, *, queue_on_engine_db: bool) -> list[Che
     checks.append(
         ok("Warehouse connection", f"{dialect.spec.display_name}, schema {profile.schema} exists")
     )
-    if dialect.spec.key == "trino_iceberg":
+    if dialect.catalog_connector_sql is not None:
         warehouse = build_warehouse_engine(config)
         try:
             catalog_problem = verify_iceberg_catalog(config, warehouse)

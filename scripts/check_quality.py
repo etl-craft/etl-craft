@@ -57,7 +57,8 @@ METRICS = {
     "enum-literal": "strings equal to a core.enums value: use the enum member",
     "inline-sql": "SQL text outside the dialects layer: add a catalog query and use "
     "engine.queries.statement",
-    "dialect-branch": "dialect.name checks outside the dialects layer: add a dialect method",
+    "dialect-branch": "dialect.name or spec.key checks outside the dialects layer: declare a "
+    "capability on the dialect or its spec",
     "private-import": "imports of another module's private names: share the helper properly",
     "type-ignore": "type: ignore comments: fix the type",
     "noqa": "noqa comments: fix the finding",
@@ -329,10 +330,13 @@ class _FileScan:
                 self.add("enum-literal", 1, f"{self.where(node)} {node.value!r}")
             elif (
                 isinstance(node, ast.Attribute)
-                and node.attr == "name"
                 and isinstance(node.value, ast.Attribute)
-                and node.value.attr == "dialect"
+                and (
+                    (node.attr == "name" and node.value.attr == "dialect")
+                    or (node.attr == "key" and node.value.attr == "spec")
+                )
                 and self.package != "dialects"
+                and self.path != f"{PACKAGE.as_posix()}/config/auth.py"
             ):
                 self.add("dialect-branch", 1, self.where(node))
             elif isinstance(node, ast.ImportFrom) and (node.module or "").startswith("etl_craft"):
