@@ -2,7 +2,7 @@
 
 A pipeline is rows in the Engine DB's `CFG_` tables. Your team keeps them in
 [configuration files](configuration-files.md), one CSV file per table, and
-`etl-craft config apply` merges them into the Engine DB; [configuration
+`etl-craft deploy` merges them into the Engine DB; [configuration
 migrations](configuration-migrations.md) write the same rows with SQL. Review the change like
 code, then check the rows with [`validate`](validating.md). Plain SQL connections cannot edit
 these rows; each change records its actor and before/after values. See also
@@ -50,7 +50,7 @@ writes five pipelines this way, and runs as written on SQLite and PostgreSQL.
 | `TAGS` | labels for the pipeline, such as `["sales", "daily"]` |
 
 Wrong types and unknown keys fail
-`validate` and are refused by `config apply`; remove an unknown key or use an allowed one.
+`validate` and are refused by `deploy`; remove an unknown key or use an allowed one.
 The pipeline's `CATCHUP` and `MAX_CATCHUP_RUNS` columns control schedule catch-up.
 
 ### Pipeline tag values
@@ -58,7 +58,7 @@ The pipeline's `CATCHUP` and `MAX_CATCHUP_RUNS` columns control schedule catch-u
 `PIPELINE_PARAMETERS.TAGS` is a JSON list of at most 20 unique strings. Each string has 1 to 64
 lowercase ASCII letters, digits, `-`, `_` or `:`. For example,
 `{"TAGS": ["team:sales", "tier:gold"]}`. Tags are never trimmed or case-folded: `Sales` fails.
-`validate` names each invalid value, its rule and its remedy; `config apply` refuses the whole
+`validate` names each invalid value, its rule and its remedy; `deploy` refuses the whole
 change. Tags label pipelines and do not change their execution order or permissions.
 See [tag filters](inspecting.md#filter-by-tags) and [group controls](run-control.md#pause-or-resume-a-tagged-group).
 

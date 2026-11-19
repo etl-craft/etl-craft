@@ -37,7 +37,7 @@ class RefreshInput(Request):
     """One pipeline, or every pipeline in the selected project.
 
     ``bundle`` (``latest`` or a bundle id) pins the definitions to that published bundle instead
-    of freezing the controller host's project folder, as ``config apply --bundle`` does.
+    of freezing the controller host's project folder, as ``deploy`` does.
     """
 
     pipeline_code: str | None = None

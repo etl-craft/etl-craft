@@ -30,7 +30,7 @@ def test_sql_run_uses_admitted_files_and_the_next_publication_uses_edits(cli_pro
             TARGET_OBJECT="main.bundle_output",
             SCRIPT_FILE="sql_scripts/published.sql",
         )
-    code, output = project.run("bundle", "publish")
+    code, output = project.run("deploy")
     assert code == 0, output
     code, output = project.run("pipelines", "refresh")
     assert code == 0, output
@@ -46,7 +46,7 @@ def test_sql_run_uses_admitted_files_and_the_next_publication_uses_edits(cli_pro
             {"id": 17}
         ]
     script.write_text("SELECT 29 AS id")
-    code, output = project.run("bundle", "publish")
+    code, output = project.run("deploy")
     assert code == 0, output
     code, output = project.run("pipelines", "refresh")
     assert code == 0, output
@@ -104,7 +104,7 @@ def test_recovery_keeps_successes_and_admitted_files_after_definition_edits(cli_
             conn, project.pipeline_id, "retry", "PYTHON", SCRIPT_FILE="python_scripts/retry.py"
         )
         add_dependency(conn, project.pipeline_id, second, project.task_id)
-    code, output = project.run("bundle", "publish")
+    code, output = project.run("deploy")
     assert code == 0, output
     code, output = project.run("pipelines", "refresh")
     assert code == 0, output
@@ -121,7 +121,7 @@ def test_recovery_keeps_successes_and_admitted_files_after_definition_edits(cli_
         ).scalar_one()
         conn.execute(text("UPDATE CFG_TASKS SET ACTIVE_FLAG='N'"))
         add_task(conn, project.pipeline_id, "new", "PYTHON", SCRIPT_FILE="python_scripts/retry.py")
-    code, output = project.run("bundle", "publish")
+    code, output = project.run("deploy")
     assert code == 0, output
     code, output = project.run("pipelines", "refresh")
     assert code == 0, output

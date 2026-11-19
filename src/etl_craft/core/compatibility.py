@@ -386,6 +386,7 @@ INTRODUCED: dict[InputKind, dict[str, str]] = {
             "--default-alert-on",
             "--url-secret",
             "--recipients",
+            "--plan",
             "--signing-secret",
             "--default-pool",
             "--default-project",

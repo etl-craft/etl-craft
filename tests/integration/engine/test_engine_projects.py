@@ -183,7 +183,7 @@ def test_developer_cannot_change_a_projects_approved_connections(engine_db, tmp_
 
     from etl_craft.config.object_models import Artifacts
     from etl_craft.core.errors import PermissionDeniedError
-    from etl_craft.services.operations.bundles import PublishBundle
+    from etl_craft.services.operations.deploy import DeployInput
 
     config = replace(engine_db.config, artifacts=Artifacts((tmp_path / "store").as_uri()))
     ctx = OperationContext(engine_db.engine, config, SYSTEM_ACTOR, role=ApiRole.ADMIN)
@@ -193,10 +193,10 @@ def test_developer_cannot_change_a_projects_approved_connections(engine_db, tmp_
             "Secrets:\n  Source_type: ENVIRONMENT\nWarehouse:\n  dev:\n"
             f"    Jdbc_url: jdbc:duckdb:{database}\n    Schema: main\n"
         ).encode()
-        return PublishBundle(files={"craft-connector.yml": base64.b64encode(data).decode()})
+        return DeployInput(files={"craft-connector.yml": base64.b64encode(data).decode()})
 
     original = upload("approved.db")
-    invoke(ctx, ActionName.BUNDLE_PUBLISH, original)
+    invoke(ctx, ActionName.DEPLOY, original)
     with engine_db.engine.begin() as conn:
         conn.execute(
             text(
@@ -205,9 +205,9 @@ def test_developer_cannot_change_a_projects_approved_connections(engine_db, tmp_
             )
         )
     developer = replace(ctx, role=ApiRole.DEVELOPER)
-    invoke(developer, ActionName.BUNDLE_PUBLISH, original)
+    invoke(developer, ActionName.DEPLOY, original)
     with pytest.raises(PermissionDeniedError, match="admin role is required"):
-        invoke(developer, ActionName.BUNDLE_PUBLISH, upload("redirected.db"))
+        invoke(developer, ActionName.DEPLOY, upload("redirected.db"))
     with engine_db.engine.connect() as conn:
         assert (
             conn.execute(text("SELECT COUNT(*) AS count FROM AUD_PROJECT_BUNDLES")).scalar_one()
@@ -413,7 +413,7 @@ def test_delayed_developer_publication_cannot_restore_a_superseded_contract(
     from etl_craft.config.object_models import Artifacts
     from etl_craft.core.errors import PermissionDeniedError
     from etl_craft.engine import locks
-    from etl_craft.services.operations.bundles import PublishBundle
+    from etl_craft.services.operations.deploy import DeployInput
 
     config = replace(engine_db.config, artifacts=Artifacts((tmp_path / "store").as_uri()))
     admin = OperationContext(engine_db.engine, config, SYSTEM_ACTOR, role=ApiRole.ADMIN)
@@ -423,10 +423,10 @@ def test_delayed_developer_publication_cannot_restore_a_superseded_contract(
             "Secrets:\n  Source_type: ENVIRONMENT\nWarehouse:\n  dev:\n"
             f"    Jdbc_url: jdbc:duckdb:{database}\n    Schema: main\n"
         ).encode()
-        return PublishBundle(files={"craft-connector.yml": base64.b64encode(content).decode()})
+        return DeployInput(files={"craft-connector.yml": base64.b64encode(content).decode()})
 
     original, replacement = upload("first.db"), upload("replacement.db")
-    invoke(admin, ActionName.BUNDLE_PUBLISH, original)
+    invoke(admin, ActionName.DEPLOY, original)
     hold = type(locks.BUNDLES).hold
     replaced = []
 
@@ -443,12 +443,12 @@ def test_delayed_developer_publication_cannot_restore_a_superseded_contract(
         def interleave(lock, *args, **kwargs):
             if lock is locks.BUNDLES:
                 patch.setattr(type(locks.BUNDLES), "hold", hold)
-                replaced.append(invoke(admin, ActionName.BUNDLE_PUBLISH, replacement).bundle_id)
+                replaced.append(invoke(admin, ActionName.DEPLOY, replacement).bundle_id)
             return hold(lock, *args, **kwargs)
 
         patch.setattr(type(locks.BUNDLES), "hold", interleave)
         with pytest.raises(PermissionDeniedError, match="changed since admission"):
-            invoke(replace(admin, role=ApiRole.DEVELOPER), ActionName.BUNDLE_PUBLISH, original)
+            invoke(replace(admin, role=ApiRole.DEVELOPER), ActionName.DEPLOY, original)
     with engine_db.engine.connect() as conn:
         from etl_craft.engine.queries import statement
 

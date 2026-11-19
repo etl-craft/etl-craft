@@ -132,7 +132,7 @@ def test_action_table_role_admission_through_cli_and_api(matrix, monkeypatch, ro
     requests = {}
     for name, spec in ACTIONS.items():
         request = build(spec.request)
-        if name == ActionName.BUNDLE_PUBLISH:
+        if name == ActionName.DEPLOY:
             request = replace(
                 request,
                 files={

@@ -304,7 +304,7 @@ def prepare_context(
             ACTIONS[name].method == HttpMethod.POST
             and name not in {ActionName.DATA_PROVENANCE, ActionName.AGENT_DOCTOR}
         )
-        or name in {ActionName.CONFIG_APPLY, ActionName.MIGRATE, ActionName.PUBLISH_DOCS}
+        or name in {ActionName.MIGRATE, ActionName.PUBLISH_DOCS}
     ):
         out.confirm(name, yes=args.yes)
 

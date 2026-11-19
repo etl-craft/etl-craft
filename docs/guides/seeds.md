@@ -33,19 +33,18 @@ missing declaration, a different catalog or an invalid value, naming the file, r
 value and remedy. Types are never inferred. Keys must match the merge keys when a pipeline
 merges into the table. The seed then receives that merge's audit columns and version-2 hashes.
 
-Publish the files before applying them:
+`deploy` loads them, after applying the config and before refreshing the pipelines:
 
 ```bash
 etl-craft validate --project support
-etl-craft config apply --project support
-etl-craft bundle publish --project support
-etl-craft seed apply --project support
+etl-craft deploy --project support --plan   # lists the seed tables it would load
+etl-craft deploy --project support
 ```
 
-`seed apply` requires the developer role and reads the deployment's pinned bundle, including
-when called locally. Editing files without publishing does not change what it applies.
-`POST /api/v1/projects/{project}/seeds` calls the same operation; `--api` uses that route.
-`--format json` returns the `etl-craft/seed-loads/1` document.
+With `Artifacts.Store` set, the seeds come from the publication `deploy` just made; without
+one, from the project folder on the controller's host. A project without `seeds/` loads
+nothing. `--format json` returns the `etl-craft/deploy/1` document, whose `seed_loads` list
+each table's outcome.
 
 The command waits for its in-process loads and reports each table as `LOADED`, `UNCHANGED`,
 `LOCKED` or `FAILED`. A SHA-256 of both files decides whether the table changed. A changed

@@ -48,7 +48,7 @@ class BundleView:
     files: dict[str, str]
 
 
-def _uploaded(
+def check_upload(
     ctx: OperationContext, request: PublishBundle
 ) -> tuple[dict[str, str], dict[str, bytes], str]:
     """Decode and validate one upload, returning its unresolved connection contract hash."""
@@ -71,7 +71,7 @@ def required_role(ctx: OperationContext, request: object) -> ApiRole:
     assert isinstance(request, PublishBundle)
     if ctx.role == ApiRole.ADMIN:
         return ApiRole.DEVELOPER
-    _, _, digest = _uploaded(ctx, request)
+    _, _, digest = check_upload(ctx, request)
     with ctx.engine.connect() as conn:
         approved = conn.execute(
             statement(conn, "bundle_approved_connection"),
@@ -85,7 +85,7 @@ def publish(
 ) -> BundleView:
     """Publish checked bytes; a supplied transaction already holds the BUNDLES lock."""
     location = for_engine(ctx.engine).artifact_location(ctx.config)
-    manifest, content, connections = _uploaded(ctx, request)
+    manifest, content, connections = check_upload(ctx, request)
     bundle_id = sha256_hex(uuid4().bytes)
     store = ArtifactStore(ctx.config, location, ctx.config.artifacts.profile)
     recorded = json.dumps(

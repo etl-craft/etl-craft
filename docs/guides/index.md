@@ -5,7 +5,7 @@ How to model and run pipelines with etl-craft.
 - [Pipelines and tasks](pipelines-and-tasks.md): the `CFG_` rows a pipeline is made of, the task
   handlers, and the settings every task shares.
 - [Configuration files](configuration-files.md): one CSV file per `CFG_` table, versioned with
-  the project and merged into the Engine DB by `etl-craft config apply`.
+  the project and merged into the Engine DB by `etl-craft deploy`.
 - [Configuration migrations](configuration-migrations.md): writing `CFG_` rows with SQL in project
   migrations, with an example of each kind of change.
 - [Dependencies and run conditions](dependencies.md): dependency types, `ALL`, `ANY` and `N`

@@ -2,7 +2,6 @@
 
 import os
 from dataclasses import replace
-from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -15,7 +14,7 @@ from etl_craft.core.enums import ActionName, ApiRole, Audit, ControlAction
 from etl_craft.dialects.engine.base import EngineDialect
 from etl_craft.services.operations import OperationContext, accounts, tokens
 from etl_craft.services.operations.actions import ACTIONS, admitted
-from etl_craft.services.operations.config_files import ConfigDirectory
+from etl_craft.services.operations.deploy import DeployInput
 from etl_craft.services.operations.documents import DocsInput, PublishInput
 from etl_craft.services.operations.maintenance import RehashInput
 from etl_craft.services.operations.requests import (
@@ -62,7 +61,7 @@ def actions(engine):
 REQUESTS = {
     ActionName.PIPELINES: TagFilter(),
     ActionName.RUN: RunRequest(pipeline_code="P", reason="test requested run action"),
-    ActionName.CONFIG_APPLY: ConfigDirectory(),
+    ActionName.DEPLOY: DeployInput(),
     ActionName.ACCOUNT_LIST: NoInput(),
     ActionName.ACCOUNT_RESET_PASSWORD: accounts.AccountPassword(name="x", password="do-not-record"),
     ActionName.CLONE: NoInput(),
@@ -81,7 +80,7 @@ REQUESTS = {
     [
         (ActionName.PIPELINES, ApiRole.VIEWER),
         (ActionName.RUN, ApiRole.OPERATOR),
-        (ActionName.CONFIG_APPLY, ApiRole.ADMIN),
+        (ActionName.DEPLOY, ApiRole.ADMIN),
         (ActionName.ACCOUNT_LIST, ApiRole.ADMIN),
         (ActionName.ACCOUNT_RESET_PASSWORD, ApiRole.ADMIN),
         (ActionName.CLONE, ApiRole.ADMIN),
@@ -118,7 +117,7 @@ def test_role_inheritance_and_refusal_records(project, role, name, required):
         assert caller.actor.name in message and role in message
         assert (
             "CAN_MANAGE"
-            if name in {ActionName.CONFIG_APPLY, ActionName.GENERATE_DOCS} and role != ApiRole.AGENT
+            if name in {ActionName.DEPLOY, ActionName.GENERATE_DOCS} and role != ApiRole.AGENT
             else ACTIONS[name].role
         ) in message
         assert "administrator" in message
@@ -220,7 +219,7 @@ def test_services_reject_unproven_roles_and_metadata_writes_before_io(project):
     for role in (ApiRole.VIEWER, ApiRole.OPERATOR):
         caller = replace(ctx, role=role, actor=creds[role].metadata.actor)
         with pytest.raises(PermissionDeniedError, match="CAN_MANAGE"):
-            act(caller, ActionName.CONFIG_APPLY, config_dir=Path("does-not-exist"))
+            act(caller, ActionName.DEPLOY)
 
 
 def test_developer_can_apply_project_migrations_but_not_engine_migrations(

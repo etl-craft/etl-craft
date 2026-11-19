@@ -46,8 +46,8 @@ def test_tag_edits_report_grant_matches(
         role=Permission.CAN_RUN,
         reason="Review tagged pipelines",
     )
-    folder = project.root / "patch"
-    folder.mkdir()
+    folder = project.root / "config"
+    folder.mkdir(exist_ok=True)
     for tags, starts, expected in (
         (["sensitive"], True, "starts matching"),
         ([], False, "stops matching"),
@@ -58,14 +58,12 @@ def test_tag_edits_report_grant_matches(
             writer.writerow(["PIPELINE_CODE", "PIPELINE_PARAMETERS"])
             writer.writerow(["P", json.dumps({"TAGS": tags})])
         reports = []
-        for command in ("plan", "apply"):
-            assert (
-                main(["config", command, "--config-dir", str(folder), "--format", output_format])
-                == 0
-            )
+        for command in (["config", "plan", "--config-dir", str(folder)], ["deploy"]):
+            assert main([*command, "--format", output_format]) == 0
             output = capsys.readouterr().out
             if output_format == "json":
-                report = json.loads(output)["tag_access_changes"]
+                document = json.loads(output)
+                report = document.get("config", document)["tag_access_changes"]
                 reports.append(report)
                 if expected is None:
                     assert report == []

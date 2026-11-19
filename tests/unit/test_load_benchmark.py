@@ -281,5 +281,4 @@ def test_prepare_provisions_only_missing_admin_projects(tmp_path, monkeypatch):
     runner["prepare"](tmp_path)
     assert [project for project, args in calls if args[:2] == ("project", "add")] == ["bench_001"]
     for project in ("bench_000", "bench_001"):
-        assert (project, ("config", "apply")) in calls
-        assert (project, ("bundle", "publish")) in calls
+        assert (project, ("deploy",)) in calls

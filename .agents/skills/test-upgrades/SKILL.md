@@ -54,7 +54,7 @@ Code: `services/config_files.py`, `config/loader*.py`; tests: `test_config_files
 
 1. A project written for the last release loads, or fails naming the setting or column and the
    new form. Never silently ignored.
-2. Every CSV config file of the last release applies with `config apply` after the upgrade, or
+2. Every CSV config file of the last release applies with `deploy` after the upgrade, or
    fails naming the file, column and remedy.
 3. `docs/examples/` and `examples/demo/` load with today's code (they are what users copy).
 

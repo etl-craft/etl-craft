@@ -644,7 +644,7 @@ def test_bounded_source_findings_are_shared_by_validate_refresh_and_config_apply
     from etl_craft.core.actor import current_actor
     from etl_craft.core.enums import ActionName, ApiRole, RunStatus
     from etl_craft.services.operations import OperationContext
-    from fixtures.actions import act
+    from fixtures.actions import act, deploy_config
 
     engine, config, root = project
     from etl_craft.config.object_models import Artifacts
@@ -691,7 +691,7 @@ def test_bounded_source_findings_are_shared_by_validate_refresh_and_config_apply
             ["PIPELINE_CODE", "TASK_CODE", "PARAMETER_NAME", "PARAMETER_VALUE", "ACTIVE_FLAG"]
         )
         writer.writerow(["SALES", "window", "WATERMARK_SOURCE_PIPELINES", sources, "Y"])
-    applied = act(ctx, ActionName.CONFIG_APPLY, config_dir=directory)
+    applied = deploy_config(ctx, directory).config
     assert not applied.applied
     assert any(
         f.status == Status.FAIL and "WATERMARK_SOURCE_PIPELINES" in f.message

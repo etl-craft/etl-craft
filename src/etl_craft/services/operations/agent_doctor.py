@@ -44,7 +44,7 @@ def inspect(ctx: OperationContext, request: AgentDoctor) -> AgentImports:
         if identity is None:
             raise ConfigurationError(
                 "agent imports: no published bundle; expected a project "
-                "publication; run `etl-craft bundle publish` before checking agents"
+                "publication; run `etl-craft deploy` before checking agents"
             )
         bundle = Bundle.load(conn, identity)
     imports = script_imports(bundle.materialize(ctx.config))

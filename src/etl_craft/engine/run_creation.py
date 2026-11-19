@@ -83,7 +83,7 @@ def create(conn: Connection, pipeline_id: int, actor: Actor, options: RunCreatio
                 raise ConfigurationError(
                     f"pipeline_id={pipeline_id}: Artifacts.Store is set but no "
                     f"bundle is published; "
-                    "expected an admitted project bundle; run `etl-craft bundle publish` first"
+                    "expected an admitted project bundle; run `etl-craft deploy` first"
                 )
             if options.upload_ids:
                 from etl_craft.engine.uploads import take_uploads

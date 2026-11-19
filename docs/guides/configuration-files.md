@@ -2,7 +2,7 @@
 
 Pipelines, tasks, parameters, dependencies and business rules are rows of the Engine DB's
 `CFG_` tables. Keep them as CSV files in the project's `config/` folder, one file per table, and
-version them with the rest of the project. `etl-craft config apply` merges the files into the
+version them with the rest of the project. `etl-craft deploy` merges the files into the
 tables by key: change a file, review the change, and the deployment applies it.
 
 ```text
@@ -22,7 +22,7 @@ etl-craft/
 ```
 
 The files hold the selected project's pipeline metadata. An administrator creates the project
-first with `etl-craft project add --project sales --reason "New team"`; config apply requires
+first with `etl-craft project add --project sales --reason "New team"`; deploy requires
 that project to exist. Dependency rows may set `DEPENDS_ON_PROJECT_CODE` for another project;
 an empty value selects this project. Applying them never retires another project's rows.
 All eight files are optional. Submit any subset; a header-only file changes nothing. A folder
@@ -38,19 +38,19 @@ NEW_PIPELINE,New pipeline,FULL
 ```
 
 Copy the [one-pipeline change](../examples/config-upserts/pipelines.csv) into
-`config/pipelines.csv`, then run `etl-craft config plan` and `etl-craft config apply`.
+`config/pipelines.csv`, then run `etl-craft config plan` and `etl-craft deploy`.
 Existing pipelines and their children stay unchanged. Export writes the full current state,
 including inactive rows, for inspection or bootstrapping an existing deployment's files.
 
 The Engine DB accepts writes only from etl-craft. A plain connection, such as the `sqlite3`
 shell, `psql`, a BI tool or a database's CSV import, is refused, so the files reach the tables
-through `etl-craft config apply`, which records who changed what.
+through `etl-craft deploy`, which records who changed what.
 
 ## Project selection and deployment rights
 
 Use `--project P` or set `Orchestration.Project` in that folder's `craft-connector.yml`.
-A conflict is refused; the folder name never selects a project. `config plan` and `config apply`
-require project CAN_MANAGE. Use `config apply --project-dir sales/` to load `sales/`'s own file;
+A conflict is refused; the folder name never selects a project. `config plan` and `deploy`
+require project CAN_MANAGE. Use `deploy --project-dir sales/` to load `sales/`'s own file;
 `--config-dir` may select a subset of change CSVs without changing the project's identity.
 Missing files and rows remain untouched. See the [multi-project layout and CI example](../deploying/project-layout.md#several-projects-in-one-repository).
 
@@ -60,7 +60,7 @@ Missing files and rows remain untouched. See the [multi-project layout and CI ex
 |---|---|
 | `etl-craft config export` | writes the Engine DB's rows as config files: the starting point for a project whose pipelines are in the Engine DB already. It refuses to overwrite files there unless given `--force`. It also seeds [source definitions](lineage.md#source-definitions-and-stars) from existing warehouse tables. With `--as-of`, it writes the rows as they stood at a moment instead (see [Configuration as of a moment](#configuration-as-of-a-moment)) |
 | `etl-craft config plan` | shows what `apply` would change and runs [`validate`](validating.md) on the result, then rolls it all back. Exits 1 when `validate` fails |
-| `etl-craft config apply` | makes the changes, in one transaction, unless `validate` fails the result: then it changes nothing and exits 1 |
+| `etl-craft deploy` | makes the changes, in one transaction, unless `validate` fails the result: then it changes nothing and exits 1; then loads seeds and refreshes (see [Deploying](#deploying)) |
 
 Each takes `--config-dir PATH` for a folder other than `config/`, and `--format json` for a
 document (`etl-craft/config-sync/1`, or `etl-craft/config-export/1` from `export`).
@@ -211,30 +211,40 @@ since: its values before that change were never recorded.
 
 ## Deploying
 
-Run `plan` on every change before it merges, and `apply` when it deploys, after the Engine DB's
-migrations:
+Run `deploy --plan` on every change before it merges, and `deploy` when it ships, after the
+Engine DB's migrations:
 
 ```bash
 # Supply ETL_CRAFT_TOKEN from your CI secret manager
 etl-craft migrate
-etl-craft config apply
+etl-craft deploy --plan
+etl-craft deploy
 ```
 
-The plan's text is a review of the change in Engine DB terms; with `--format json`, a pull
-request bot can post it.
+`deploy` runs four steps and stops at the first that fails:
 
-A runner with no access to the controller's host publishes the project, then applies that
-publication over the API, with only a developer token that has project CAN_MANAGE:
+1. With `Artifacts.Store` set, it publishes the project's files as a bundle (see
+   [Pinned project bundles](../deploying/project-bundles.md)); every later step reads that
+   publication. Without a store, every step reads the project folder on the controller's host.
+2. It applies `config/`, unless `validate` fails the result. A project kept in
+   [migrations](configuration-migrations.md) has no `config/`, and this step says it skipped.
+3. It loads the [seed tables](seeds.md), when the project has `seeds/`.
+4. It refreshes every pipeline, pinned to the bundle it published.
+
+`--plan` runs the same steps without writing: it checks the files, validates the config
+changes and rolls them back, and lists the seed tables. Its text is a review of the change in
+Engine DB terms; with `--format json` (`etl-craft/deploy/1`), a pull request bot can post it.
+
+A runner with no access to the controller's host deploys over the API, with only a developer
+token that has project CAN_MANAGE; the server needs `Artifacts.Store`, since the files it
+publishes are the only ones it can read:
 
 ```bash
-etl-craft --api https://etl.example.com bundle publish --project-dir project
-etl-craft --api https://etl.example.com config plan --bundle latest
-etl-craft --api https://etl.example.com config apply --bundle latest
+etl-craft --api https://etl.example.com deploy --project-dir project
 ```
 
-`--bundle` (`latest`, or a bundle id) reads that bundle's `config/` instead of a folder and is
-the only source the API accepts; apply then pins the pipelines to the same bundle rather than
-freezing the host's folder. `config export` stays on the host.
+`config plan --bundle latest` previews an existing publication's config; `config export` stays
+on the host.
 
 ## When it fails
 
@@ -263,7 +273,7 @@ export writes only the eight metadata files; it does not export identities or ac
 
 Tags are the only pipeline grouping; there are no pipeline folders. Editing `TAGS` in a
 pipeline's `PIPELINE_PARAMETERS` can change which access bindings match it. Both `config plan`
-and `config apply` report each binding that starts or stops matching, naming its principal,
+and `deploy` report each binding that starts or stops matching, naming its principal,
 tag, role or command and pipeline. JSON returns these under `tag_access_changes`, with
 `role`/`action` fields and `audience:` identifying an audience principal.
 

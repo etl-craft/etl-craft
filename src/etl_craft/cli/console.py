@@ -31,7 +31,7 @@ KEPT_IN_FILES = frozenset(
     {
         ActionName.CONFIG_PLAN,
         ActionName.CONFIG_EXPORT,
-        ActionName.CONFIG_APPLY,
+        ActionName.DEPLOY,
         ActionName.RENAME,
     }
 )

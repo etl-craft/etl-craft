@@ -2018,8 +2018,7 @@ INSERT INTO CFG_ROLE_ACTIONS (ROLE_ID, ACTION_NAME)
 SELECT r.ROLE_ID, v.column1 FROM CFG_ROLES r, (VALUES
     ('access grant'),
     ('access revoke'),
-    ('bundle publish'),
-    ('config apply'),
+    ('deploy'),
     ('config plan'),
     ('generate-docs'),
     ('migrate'),

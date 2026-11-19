@@ -22,6 +22,7 @@ from etl_craft.core.text import sha256_hex
 from etl_craft.engine import transitions
 from etl_craft.services.operations import OperationContext
 from etl_craft.services.operations.actions import invoke
+from etl_craft.services.operations.deploy import DeployInput
 from etl_craft.services.operations.serialization import encode
 from etl_craft.services.operations.tokens import TokenCreate
 from fixtures.agents import resources
@@ -1155,7 +1156,6 @@ def test_bundle_download_is_assigned_fenced_and_hides_store_credentials(agent_sc
     import base64
 
     from etl_craft.config.object_models import Artifacts
-    from etl_craft.services.operations.bundles import PublishBundle
 
     db, client, agent, person, _, config = agent_scene
     ctx = OperationContext(
@@ -1170,14 +1170,15 @@ def test_bundle_download_is_assigned_fenced_and_hides_store_credentials(agent_sc
     )
     bundle = invoke(
         ctx,
-        ActionName.BUNDLE_PUBLISH,
-        PublishBundle(files={"craft-connector.yml": base64.b64encode(content).decode()}),
+        ActionName.DEPLOY,
+        DeployInput(files={"craft-connector.yml": base64.b64encode(content).decode()}),
     )
     attempt = claim(agent_scene)
     payload = {"version": __version__, "attempt_id": attempt, "operation": "BUNDLE"}
     manifest = client.post("/api/v1/agent/report", headers=agent, json=payload)
     assert manifest.status_code == 200, manifest.text
-    assert manifest.json()["data"] == {"bundle_id": bundle.bundle_id, "files": bundle.files}
+    data = manifest.json()["data"]
+    assert data["bundle_id"] == bundle.bundle_id and set(data["files"]) == {"craft-connector.yml"}
     assert str(tmp_path / "store") not in manifest.text
     file = client.post(
         "/api/v1/agent/report", headers=agent, json=payload | {"bundle_path": "craft-connector.yml"}
@@ -1197,9 +1198,7 @@ def test_bundle_download_is_assigned_fenced_and_hides_store_credentials(agent_sc
         )
         arguments = (
             conn.execute(
-                text(
-                    "SELECT ARGUMENTS AS arguments FROM AUD_ACTIONS WHERE COMMAND='bundle publish'"
-                )
+                text("SELECT ARGUMENTS AS arguments FROM AUD_ACTIONS WHERE COMMAND='deploy'")
             )
             .scalars()
             .all()
@@ -1212,7 +1211,6 @@ def test_agent_doctor_checks_static_imports_without_executing_project_code(agent
     import base64
 
     from etl_craft.config.object_models import Artifacts
-    from etl_craft.services.operations.bundles import PublishBundle
 
     db, client, agent, person, _, config = agent_scene
     ctx = OperationContext(
@@ -1232,10 +1230,8 @@ def test_agent_doctor_checks_static_imports_without_executing_project_code(agent
     }
     bundle = invoke(
         ctx,
-        ActionName.BUNDLE_PUBLISH,
-        PublishBundle(
-            files={name: base64.b64encode(data).decode() for name, data in files.items()}
-        ),
+        ActionName.DEPLOY,
+        DeployInput(files={name: base64.b64encode(data).decode() for name, data in files.items()}),
     )
     payload = {"version": __version__}
     discovery = client.post("/api/v1/projects/default/agent/doctor", headers=agent, json=payload)
@@ -1270,11 +1266,10 @@ def test_streamed_upload_limits_apply_before_parsing_or_action_dispatch(
     agent_scene, monkeypatch, upload
 ):
     from etl_craft.services.operations.agent_models import AgentLog
-    from etl_craft.services.operations.bundles import PublishBundle
 
     db, client, agent, person, _, _ = agent_scene
     model, path, headers = (
-        (PublishBundle, "/api/v1/projects/default/bundles", person)
+        (DeployInput, "/api/v1/projects/default/deploy", person)
         if upload == "bundle"
         else (AgentLog, "/api/v1/agent/log", agent)
     )

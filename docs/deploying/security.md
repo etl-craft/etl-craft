@@ -124,7 +124,7 @@ include every lower role; transports name operations, not their own permission r
 | --- | --- |
 | viewer | SCD provenance, reads, inspection, validation, configuration plan/export, YAML export, `docs-version --check`, `rehash --dry-run`, `setup --print-grants` |
 | operator | Run, backfill, mark, cancel, pause/resume and reconcile |
-| developer | `config apply`, project migrations, `generate-docs`, `lineage --refresh` |
+| developer | `deploy`, project migrations, `generate-docs`, `lineage --refresh` |
 | admin | SCD value edits and human unlocks, accounts/tokens, setup/init-db, packaged Engine DB migrations, adopt-target, rehash, clone, controller/UI startup, publish-docs and docs-version writes |
 
 `migrate` can apply project migrations as developer only when no packaged Engine DB migration
@@ -219,7 +219,7 @@ Every authenticated account has a deployment role; service tokens and SSO sessio
 account role. Projects created with `project add` have no grants: an admin must grant access
 explicitly.
 
-`config plan`, `config apply`, project migrations, `bundle publish` and `generate-docs` require
+`config plan`, `deploy`, project migrations and `generate-docs` require
 project CAN_MANAGE. A full config export requires CAN_VIEW on every pipeline, so it cannot
 disclose a pipeline the account cannot see. Engine migrations and changed connection approvals still require
 deployment admin. Declaring a cross-project dependency also requires CAN_VIEW on the upstream project.

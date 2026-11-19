@@ -62,8 +62,8 @@ Column lineage is checked by [`lineage --strict`](lineage.md).
 
 `etl-craft pipelines refresh` checks the selected project's **Engine DB state**, SQL, Python
 scripts, lineage and immutable bundle. Use `--pipeline SALES_DAILY` to check one pipeline.
-Project `CAN_MANAGE` is required. `config apply` performs the same refresh after committing
-its metadata changes. A failed refresh does not roll back those changes: correct its findings
+Project `CAN_MANAGE` is required. `deploy` performs the same refresh after committing its
+metadata changes. A failed refresh does not roll back those changes: correct its findings
 and refresh again.
 
 Each result records its actor, time, metadata hash, bundle and findings. Findings identify the

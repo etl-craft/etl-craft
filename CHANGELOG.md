@@ -6,6 +6,17 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+- `etl-craft deploy` is the one command that ships a project. With `Artifacts.Store` set it
+  publishes the project's files as a bundle; then it applies `config/` (when the project has
+  it), loads the seed tables (when the project has `seeds/`) and refreshes every pipeline, pinned
+  to that bundle, stopping at the first step that fails. `deploy --plan` runs the same steps
+  without writing. Over the API (`POST /api/v1/projects/{project}/deploy`) the server needs
+  `Artifacts.Store`. `etl-craft bundle publish`, `etl-craft config apply` and `etl-craft seed
+  apply` are removed, with their API routes; `config plan`, `config export`, `validate` and
+  `pipelines refresh` stay. The JSON document is `etl-craft/deploy/1`; `config plan`'s
+  `etl-craft/config-sync/1` drops `refreshes`. The built-in `CAN_MANAGE` role holds `deploy`
+  instead of `bundle publish` and `config apply`.
+
 - Alerts are one task kind, `HANDLER=ALERT`, naming a project channel of kind `EMAIL`, `WEBHOOK`
   or `SLACK`. The controller admits a separate alert run for each event the task's `ALERT_ON`
   names, and every kind is delivered with four attempts and recorded in `AUD_ALERT_DELIVERIES`.

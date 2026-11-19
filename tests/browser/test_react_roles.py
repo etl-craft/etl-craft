@@ -26,7 +26,7 @@ def test_administration_roles_create_bind_and_revoke(site, scheme, width):
         page.get_by_role("button", name="Describe role CAN_MANAGE", exact=True).click()
         details = page.get_by_role("dialog")
         expect(details.get_by_text("run", exact=True)).to_be_visible()
-        expect(details.get_by_text("config apply", exact=True)).to_be_visible()
+        expect(details.get_by_text("deploy", exact=True)).to_be_visible()
         details.get_by_role("list").focus()
         expect(details.get_by_role("list")).to_be_focused()
         page.keyboard.press("Escape")

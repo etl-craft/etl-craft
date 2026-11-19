@@ -369,9 +369,7 @@ class Demo:
             self.ok("alert-channel", "set", "--project", "default", "--name", name, "--kind",
                     "EMAIL", "--recipients", recipients.replace("@example.com",
                     f"+{self.tag}@example.com"), "--reason", "demo alerts")  # fmt: skip
-        self.ok("bundle", "publish")
-        self.ok("seed", "apply")
-        self.ok("pipelines", "refresh")
+        self.ok("deploy")
 
     def close(self) -> None:
         for step in reversed(self.cleanup):

@@ -130,7 +130,7 @@ that damages the package is not helpful; saying so, with a better option, is.
   maintain them with their own scripts, without package guards, history or field requirements.
   `AUD_` stays reserved for etl-craft. Metadata edits use the project's config files
   (one CSV file per package-owned config table,
-  merged by key with `etl-craft config apply`) or project migrations. Audit history is
+  merged by key with `etl-craft deploy`) or project migrations. Audit history is
   append-only and audit tables take no outside writes.
 - **Fail rather than guess.** When metadata, files, connections or data are not what the engine
   expects, fail; never warn and continue, fall back silently or work around it. The message names

@@ -33,7 +33,7 @@ Generation refuses an existing output directory. It writes 100 projects × 100 p
 daily schedules distributed across 1440 UTC minutes. Each project has two independent root
 pipelines; later pipelines depend on the one two positions earlier. `INPUT_PARAMS` configures
 fake-task duration and failure rate. There is no benchmark handler or scheduler in the engine.
-The runner applies and publishes through `config apply` and `bundle publish`, then starts the
+The runner deploys each project with `etl-craft deploy`, then starts the
 controller, waits for leadership, starts the agents and waits for their registration. Initial
 load uses `run --init-only` through the API for up to two roots per project, with at most
 eight concurrent CLI submissions so that 200 roots can overlap; subsequent schedules are entirely

@@ -1,4 +1,4 @@
-"""``etl-craft config``: load the project's config files into the Engine DB, or write them."""
+"""``etl-craft config``: plan the project's config files against the Engine DB, or write them."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from pathlib import Path
 
 from etl_craft.cli.commands.common import Command, call, configure_output, request_from
 from etl_craft.cli.output import Output
-from etl_craft.core.enums import ActionName, RunStatus
+from etl_craft.core.enums import ActionName
 from etl_craft.core.errors import ExitCode
 from etl_craft.services.config_files import ConfigExport, ConfigSync
 from etl_craft.services.operations.config_files import ConfigDirectory, ConfigExportInput
@@ -47,10 +47,6 @@ def _configure(parser: argparse.ArgumentParser) -> None:
         ),
         bundle=True,
     )
-    _directory(
-        verbs.add_parser("apply", help="Merge the submitted config changes.", allow_abbrev=False),
-        bundle=True,
-    )
     export = verbs.add_parser(
         "export", help="Write the CFG_ rows as config files.", allow_abbrev=False
     )
@@ -66,7 +62,8 @@ def _configure(parser: argparse.ArgumentParser) -> None:
     )
 
 
-def _render(out: Output, done: ConfigSync, verb: str) -> None:
+def render_sync(out: Output, done: ConfigSync, verb: str) -> None:
+    """Print each change, access effect, pause and finding, then whether it was applied."""
     out.line(f"config {done.revision} from {done.directory}: {len(done.changes)} change(s)")
     for change in done.changes:
         details = [
@@ -91,12 +88,6 @@ def _render(out: Output, done: ConfigSync, verb: str) -> None:
         out.line(pause.describe())
     for finding in done.findings:
         out.line(f"[{finding.status.value:<4}] {finding.where}: {finding.message}")
-    for checked in done.refreshes:
-        out.line(f"{checked.pipeline_code}: refresh {checked.status}")
-        for refresh_finding in checked.findings:
-            out.line(
-                f"  {refresh_finding.file}: {refresh_finding.message}; {refresh_finding.remedy}"
-            )
     if done.failed:
         out.line("validate failed the result, so nothing was changed")
     elif verb == "plan":
@@ -116,21 +107,16 @@ def _run(args: argparse.Namespace, out: Output) -> int:
             when = f" as of {written.as_of}" if written.as_of else ""
             out.line(f"wrote {written.directory}{when}: {counts} row(s)")
         return ExitCode.SUCCESS
-    name = ActionName.CONFIG_PLAN if args.config_verb == "plan" else ActionName.CONFIG_APPLY
-    done = call(args, name, request_from(args, ConfigDirectory))
+    done = call(args, ActionName.CONFIG_PLAN, request_from(args, ConfigDirectory))
     assert isinstance(done, ConfigSync)
-    out.result(done, args.output_format, text=lambda: _render(out, done, args.config_verb))
-    return (
-        ExitCode.FAILURE
-        if done.failed or any(r.status == RunStatus.FAILED for r in done.refreshes)
-        else ExitCode.SUCCESS
-    )
+    out.result(done, args.output_format, text=lambda: render_sync(out, done, "plan"))
+    return ExitCode.FAILURE if done.failed else ExitCode.SUCCESS
 
 
 COMMAND = Command(
     name="config",
-    help="Load the project's config files into the CFG_ tables, plan that, or export them.",
+    help="Plan the project's config files against the CFG_ tables, or export them.",
     configure=_configure,
     run=_run,
-    actions=(ActionName.CONFIG_PLAN, ActionName.CONFIG_APPLY, ActionName.CONFIG_EXPORT),
+    actions=(ActionName.CONFIG_PLAN, ActionName.CONFIG_EXPORT),
 )

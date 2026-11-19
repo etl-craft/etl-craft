@@ -2025,12 +2025,12 @@ BEGIN
             END IF;
             old_project := etl_craft_config_project(TG_TABLE_NAME, to_jsonb(OLD));
             IF old_project IS DISTINCT FROM row_project THEN
-                RAISE EXCEPTION USING MESSAGE=upper(TG_TABLE_NAME) || ': moving PROJECT_ID is refused; use config apply in the correct project';
+                RAISE EXCEPTION USING MESSAGE=upper(TG_TABLE_NAME) || ': moving PROJECT_ID is refused; use deploy in the correct project';
             END IF;
         END IF;
         SELECT GOVERNANCE INTO policy FROM CFG_PROJECTS p WHERE p.PROJECT_ID=row_project;
         IF policy IS DISTINCT FROM 'RELAXED' THEN
-            RAISE EXCEPTION USING MESSAGE=upper(TG_TABLE_NAME) || ': project ' || row_project || ' governance ' || COALESCE(policy, 'missing') || ' refuses direct SQL: written only by etl-craft; use config apply or ask a deployment admin for RELAXED';
+            RAISE EXCEPTION USING MESSAGE=upper(TG_TABLE_NAME) || ': project ' || row_project || ' governance ' || COALESCE(policy, 'missing') || ' refuses direct SQL: written only by etl-craft; use deploy or ask a deployment admin for RELAXED';
         END IF;
         RETURN NEW;
     END IF;
@@ -2426,8 +2426,7 @@ INSERT INTO CFG_ROLE_ACTIONS (ROLE_ID, ACTION_NAME)
 SELECT r.ROLE_ID, v.column1 FROM CFG_ROLES r, (VALUES
     ('access grant'),
     ('access revoke'),
-    ('bundle publish'),
-    ('config apply'),
+    ('deploy'),
     ('config plan'),
     ('generate-docs'),
     ('migrate'),

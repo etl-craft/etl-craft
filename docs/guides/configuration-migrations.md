@@ -229,7 +229,7 @@ does not exist or a dependency cycle. `etl-craft validate` finds those; see
 Project migration filenames and checksums are scoped to `--project` (default
 `Orchestration.Project`, then `default`). Two projects may each have `0001_setup.sql`.
 Packaged ENGINE migrations are applied once for the whole deployment. Create a project with
-`config apply` before applying its migrations.
+`deploy` before applying its migrations.
 
 Project migration SQL must name the selected project when inserting project-owned metadata.
-Use `config apply` for code-based CSV merging; a scoped ledger does not rewrite arbitrary SQL.
+Use `deploy` for code-based CSV merging; a scoped ledger does not rewrite arbitrary SQL.

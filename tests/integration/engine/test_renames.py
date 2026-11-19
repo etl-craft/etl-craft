@@ -18,7 +18,7 @@ from etl_craft.execution.attempt_records import attempt_log_path, local_attempt_
 from etl_craft.services.operations.context import OperationContext
 from etl_craft.services.retention import retaining
 from etl_craft.services.retention_files import LogRemoval, retire_log_rows
-from fixtures.actions import act
+from fixtures.actions import act, deploy_config
 from fixtures.metadata import add_pipeline, add_task, finish_run, start_run, task_run
 from fixtures.races import two_at_once
 
@@ -249,9 +249,12 @@ def test_old_config_refuses_renamed_away_code(rename_project, tmp_path, task_ren
         payload = "PIPELINE_CODE,TASK_CODE\nP,T\n" if task_rename else "PIPELINE_CODE\nP\n"
     (directory / filename).write_text(payload)
     rename(ctx, **({"task_code": "T"} if task_rename else {}))
-    for action in (ActionName.CONFIG_PLAN, ActionName.CONFIG_APPLY):
+    for apply in (False, True):
         with pytest.raises(MetadataFileError) as error:
-            act(ctx, action, config_dir=directory)
+            if apply:
+                deploy_config(ctx, directory)
+            else:
+                act(ctx, ActionName.CONFIG_PLAN, config_dir=directory)
         for part in (
             filename,
             "line 2",
@@ -530,7 +533,7 @@ def test_plan_warns_about_retire_and_insert_without_blocking(rename_project, tmp
     assert any(
         "likely rename" in f.message and "etl-craft rename" in f.message for f in planned.findings
     )
-    applied = act(ctx, ActionName.CONFIG_APPLY, config_dir=directory)
+    applied = deploy_config(ctx, directory).config
     assert applied.applied and not applied.failed
 
 

@@ -136,7 +136,7 @@ def test_built_in_levels_still_replace_and_custom_bindings_add(estate):
     listed = act(admin, ActionName.ACCESS_LIST, project="sales", account="ana").bindings
     assert sorted(b.role for b in listed if b.active_flag == "Y") == ["CAN_RUN", "runner"]
     roles = act(admin, ActionName.ROLE_DESCRIBE, name="CAN_RUN").roles[0]
-    assert roles.built_in and "run" in roles.actions and "config apply" not in roles.actions
+    assert roles.built_in and "run" in roles.actions and "deploy" not in roles.actions
     assert "config plan" not in roles.actions
 
 

@@ -221,6 +221,15 @@ item's text, or work done early under another item.
 
 ### Handover notes
 
+- **One deploy command.** Rebuild step 7. `services/operations/deploy.py` publishes (only with
+  `Artifacts.Store`), applies config, loads seeds and refreshes, stopping at the first failure;
+  `--plan` unpacks the upload without publishing and rolls the config back. Choice that differs
+  from the agreed plan: config is applied only when `config/` exists, because projects kept in
+  migrations (the demo) have none; the output says the step was skipped. A failed step leaves an
+  already-made publication in place as the next run's bundle. The Support Insights demo repo
+  still chains `bundle publish`, `config apply` and `seed apply`. Next: a UI refresh button for
+  RELAXED projects (owner request).
+
 - **One alert task.** Rebuild step 6. Owner decisions: event-only delivery (the in-run email path
   is gone), recipients on an `EMAIL` channel, and the lean message settings. SLA emails were a
   fourth path and became `ALERT_ON=SLA_BREACH`; owner kept `Orchestration.Enforce_sla` as the
