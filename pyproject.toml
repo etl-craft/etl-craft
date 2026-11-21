@@ -55,7 +55,7 @@ publish = [
     "ngrok>=1.4,<2",
 ]
 snowflake = [
-    "snowflake-sqlalchemy>=1.7,<2",
+    "snowflake-sqlalchemy>=1.7,<3",
 ]
 trino = [
     "trino[sqlalchemy]>=0.330,<1",
