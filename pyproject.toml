@@ -21,7 +21,7 @@ classifiers = [
 ]
 dependencies = [
     "jinja2>=3.1.6,<4",
-    "psutil>=6.0,<7",
+    "psutil>=6.0,<8",
     "psycopg[binary]>=3.3.6,<4",
     "pyyaml>=6.0.3,<7",
     "sqlalchemy>=2.0.54,<3",
