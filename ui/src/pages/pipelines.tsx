@@ -75,6 +75,46 @@ export function Pipelines() {
     />
   );
 
+  // Memoized: the table renders each cell as a component, so a new array remounts every cell (and an open menu).
+  const tableColumns = React.useMemo(() => [
+              columns.accessor("pipeline_code", {
+                id: "pipeline",
+                header: "Pipeline",
+                cell: (c) => (
+                  <span className="grid">
+                    <Link className="font-medium text-fg hover:text-accent hover:underline" to={pipelinePath(code, c.getValue())}>
+                      {c.getValue()}
+                    </Link>
+                    {c.row.original.pipeline_name !== c.getValue() ? <span className="text-xs text-muted">{c.row.original.pipeline_name}</span> : null}
+                  </span>
+                ),
+              }),
+              columns.display({ id: "recent", header: "Recent success", minSize: 176, cell: (c) => <RecentRuns project={code} pipeline={c.row.original} /> }),
+              columns.display({ id: "description", header: "Description", cell: (c) => <span className="line-clamp-2 max-w-md text-[13px] text-muted" title={c.row.original.description ?? undefined}>{c.row.original.description ?? "—"}</span> }),
+              columns.display({ id: "tags", header: "Tags", cell: (c) => <TagList tags={c.row.original.tags} /> }),
+              columns.accessor("run_schedule", { header: "Schedule", enableSorting: false, cell: (c) => (c.getValue() ? <code className="whitespace-nowrap font-mono text-xs">{c.getValue()}</code> : <span className="whitespace-nowrap text-muted">Not scheduled</span>) }),
+              columns.display({ id: "dependencies", header: "Waits for", cell: (c) => c.row.original.depends_on.length ? c.row.original.depends_on.map(([pipeline, kind]) => `${pipeline} (${kind})`).join(", ") : "None" }),
+              columns.display({ id: "last", header: "Last run", cell: (c) => {
+                const pipeline = c.row.original;
+                const run = pipeline.recent_runs[0];
+                return run ? <span className="grid gap-1"><RunLabel id={run.pipeline_run_id} label={run.run_label} to={runPath(code, pipeline.pipeline_code, run.pipeline_run_id)} /><When iso={run.start_date} /></span> : <span className="text-muted">No runs yet</span>;
+              } }),
+              columns.display({ id: "next", header: "Next run", cell: (c) => <NextRun pipeline={c.row.original} /> }),
+              ...(all.some((p) => p.sla_in_hours) ? [
+              columns.display({
+                id: "sla",
+                header: "SLA",
+                minSize: 112,
+                cell: (c) => {
+                  const p = c.row.original;
+                  const newest = p.recent_runs[0];
+                  const latest = newest ? slaVerdict(newest) : null;
+                  return latest ? <StatusBadge status={latest} /> : <span className="text-muted">{!p.sla_in_hours ? "—" : newest ? "No verdict" : "No run yet"}</span>;
+                },
+              })
+              ] : []),
+              columns.display({ id: "auto", header: "Automatic runs", minSize:220, cell: (c) => <div className="flex flex-wrap items-center gap-2"><PauseState pipeline={c.row.original} /><PipelinePause code={code} pipeline={c.row.original}/></div> }),
+  ], [code, all]);
   return (
     <div className="grid grid-cols-1 gap-4">
       <PageHeader
@@ -118,45 +158,7 @@ export function Pipelines() {
             onToggleAll: (every) => setChosen(every ? new Set(shown.map((p) => p.pipeline_code)) : new Set()),
           }}
           initialSort={[{ id: "pipeline", desc: false }]}
-          columns={[
-            columns.accessor("pipeline_code", {
-              id: "pipeline",
-              header: "Pipeline",
-              cell: (c) => (
-                <span className="grid">
-                  <Link className="font-medium text-fg hover:text-accent hover:underline" to={pipelinePath(code, c.getValue())}>
-                    {c.getValue()}
-                  </Link>
-                  {c.row.original.pipeline_name !== c.getValue() ? <span className="text-xs text-muted">{c.row.original.pipeline_name}</span> : null}
-                </span>
-              ),
-            }),
-            columns.display({ id: "recent", header: "Recent success", minSize: 176, cell: (c) => <RecentRuns project={code} pipeline={c.row.original} /> }),
-            columns.display({ id: "description", header: "Description", cell: (c) => <span className="line-clamp-2 max-w-md text-[13px] text-muted" title={c.row.original.description ?? undefined}>{c.row.original.description ?? "—"}</span> }),
-            columns.display({ id: "tags", header: "Tags", cell: (c) => <TagList tags={c.row.original.tags} /> }),
-            columns.accessor("run_schedule", { header: "Schedule", enableSorting: false, cell: (c) => (c.getValue() ? <code className="whitespace-nowrap font-mono text-xs">{c.getValue()}</code> : <span className="whitespace-nowrap text-muted">Not scheduled</span>) }),
-            columns.display({ id: "dependencies", header: "Waits for", cell: (c) => c.row.original.depends_on.length ? c.row.original.depends_on.map(([pipeline, kind]) => `${pipeline} (${kind})`).join(", ") : "None" }),
-            columns.display({ id: "last", header: "Last run", cell: (c) => {
-              const pipeline = c.row.original;
-              const run = pipeline.recent_runs[0];
-              return run ? <span className="grid gap-1"><RunLabel id={run.pipeline_run_id} label={run.run_label} to={runPath(code, pipeline.pipeline_code, run.pipeline_run_id)} /><When iso={run.start_date} /></span> : <span className="text-muted">No runs yet</span>;
-            } }),
-            columns.display({ id: "next", header: "Next run", cell: (c) => <NextRun pipeline={c.row.original} /> }),
-            ...(all.some((p) => p.sla_in_hours) ? [
-            columns.display({
-              id: "sla",
-              header: "SLA",
-              minSize: 112,
-              cell: (c) => {
-                const p = c.row.original;
-                const newest = p.recent_runs[0];
-                const latest = newest ? slaVerdict(newest) : null;
-                return latest ? <StatusBadge status={latest} /> : <span className="text-muted">{!p.sla_in_hours ? "—" : newest ? "No verdict" : "No run yet"}</span>;
-              },
-            })
-            ] : []),
-            columns.display({ id: "auto", header: "Automatic runs", minSize:220, cell: (c) => <div className="flex flex-wrap items-center gap-2"><PauseState pipeline={c.row.original} /><PipelinePause code={code} pipeline={c.row.original}/></div> }),
-          ]}
+          columns={tableColumns}
         /></LegendView>
         {list.isPending ? <Loading what="pipelines" className="p-4" /> : null}
       </Card>

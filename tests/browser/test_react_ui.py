@@ -123,16 +123,19 @@ def test_refresh_selected_is_grayed_out_with_the_reason_on_strict(scene):
 def pause_item(scope, name, pipeline="OPS"):
     """Open the pipeline's Pause menu in ``scope`` and return its ``name`` item on the page.
 
-    The menu opens from the keyboard and is retried, because the row re-renders after an action.
+    Tries a click, then keyboard activation, and retries: the trigger can re-render after an action.
     """
     page = getattr(scope, "page", scope)  # a Locator has .page; a Page is the page
     trigger = scope.get_by_role("button", name=f"Pause options for {pipeline}", exact=True)
     item = page.get_by_role("menuitem", name=name, exact=True)
-    for _ in range(3):
-        trigger.focus()
-        page.keyboard.press("Enter")
+    for key in (None, "Enter", "Space", None, "Enter"):
+        if key is None:
+            trigger.click()
+        else:
+            trigger.focus()
+            page.keyboard.press(key)
         try:
-            item.wait_for(state="visible", timeout=2000)
+            item.wait_for(state="visible", timeout=3000)
             return item
         except PlaywrightTimeoutError:
             page.keyboard.press("Escape")
