@@ -113,7 +113,9 @@ def test_refresh_selected_is_grayed_out_with_the_reason_on_strict(scene):
         refresh = page.get_by_role("button", name="Refresh selected", exact=True)
         expect(refresh).to_be_disabled()
         refresh.hover()
-        expect(page.get_by_role("tooltip")).to_contain_text("standalone pipeline refresh requires RELAXED")
+        expect(page.get_by_role("tooltip")).to_contain_text(
+            "standalone pipeline refresh requires RELAXED"
+        )
         browser.close()
 
 
