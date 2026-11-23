@@ -199,7 +199,8 @@ item's text, or work done early under another item.
 | S7.AQ Readable run identifiers | Done | #347, #369, #370 | A label beside every run and task run id, stored by the Engine DB; accepted wherever the integer is, and shown beside it |
 | S7.AR Restarting pipelines | Done | #349, #350, #356, #358 | Automatic starts on a chosen run ending, with `Allowed_auto_restarts` per environment; the demo's Gamma pipeline runs without a schedule. |
 | S7.AS Project dashboard and navigation | Done | #401, #402, #404, #405, #406, #407, #413 | Slices 1–5 owner approved; shared controls polished, with framed working panes, application-drawn diagram scrollbars, unclipped column selection and accessible search/action feedback in follow-up |
-| S7.AT Available actions only | Planned | | Pipeline and all-pipelines refresh on RELAXED projects; every unavailable action grayed out with its reason |
+| S7.AT Refresh and availability on the first pages | Planned | | Pipeline and all-pipelines refresh on RELAXED projects; unavailable actions on these pages grayed out with their reason |
+| S7.AU Available actions on every page | Planned | | Every unavailable action on the remaining project and platform pages grayed out with its reason |
 | S7.M Stewardship uploads | Done (M2) | #296, #305 | Atomic receipts and safe stored names; processed layout, retention archives and verified reruns; crash recovery and guarded upload history |
 | S7.S Seed tables | Done | #308 | Typed pinned-bundle seeds replace reference tables until recorded stewardship handover |
 | S7.T Business calendars | Done | #276 | Shared holiday and weekend calendars for schedules, run dates, backfill and catch-up |
@@ -9777,45 +9778,61 @@ its tabs. (5) The Pipelines list takes the catalog's DAGs columns. Slice 4 is bu
 the Insights page is deleted; the owner approves the screenshots of each slice on the Support
 Insights demo.
 
-### S7.AT Available actions only
+### S7.AT Refresh and availability on the first pages
 
-Owner, 2026-11-23. The pipelines page shows "Refresh all" only to developers, whatever the
-project's governance, and other action controls in the UI are gated by separate flags, so a caller
-can see a control the server then refuses. The owner wants every action a caller cannot take now
-grayed out with its reason, and pipeline refresh offered at two levels: one pipeline and all
-pipelines. Rebuild catalog stays as it is and regenerates the catalog documentation.
+Owner, 2026-11-23. The pipelines page showed "Refresh all" only to developers, whatever the
+project's governance, so a caller could see a control the server then refused. The owner wants
+pipeline refresh offered at two levels, one pipeline and all pipelines, only on RELAXED projects,
+and the unavailable actions on these pages grayed out with their reason. Rebuild catalog stays as
+it is and regenerates the catalog documentation.
 
 **Decisions.**
 
-- **One availability answer per action.** The server states, for each action on an object, whether
-  the caller may take it now and, if not, why: role or grant, governance, environment type, or the
-  state of the run, task or pipeline. The UI renders from that answer and does not compare roles or
-  governance flags itself.
-- **Grayed out, never hidden.** Every action the caller cannot take is shown disabled, with its
-  reason as text beside it. The same rule applies to every action, whatever the cause (role, grant,
-  governance, environment type, or run, task and pipeline state), so a user always sees what exists
-  and why it is unavailable.
-- **Pipeline refresh at two levels.** The pipeline page refreshes its own pipeline (`pipelines
-  refresh --pipeline`). The pipelines list refreshes every pipeline in the project (the current
-  "Refresh all", moved to the list). Both reuse the existing `pipelines refresh` action
-  (`services/operations/actions.py`); no second path. Both are available on RELAXED projects only,
-  to callers who may run `pipelines refresh`; on STRICT projects they are shown disabled with the
-  reason.
-- **Rebuild catalog is unchanged.** It stays where it is and regenerates the catalog documentation.
-- **Slices.** (1) The availability answer, and the pipeline-level and all-pipelines refresh
-  controls. (2) Every action on the project pages: action buttons, form actions, row actions and
-  menus. (3) Platform actions: administration, agents, accounts and projects.
+- **One answer, enforced once.** The shared action policy refuses a standalone refresh on a STRICT
+  project for the UI, CLI and API alike. Deploy's final refresh carries an internal privilege and
+  passes the same policy.
+- **Grayed out, never hidden.** An action the caller cannot take is shown disabled, with its reason
+  as text, for these pages: pipelines, pipeline, catalog, and administration accounts.
+- **Refresh at two levels.** The pipeline page refreshes its pipeline, and the pipelines list
+  refreshes every pipeline in the project. Both use the existing `pipelines refresh` action.
+- **Deployment capabilities.** `GET /api/v1/capabilities` answers before any project or run exists,
+  so Add project can show its availability.
+- **Self-disable.** The shared account operation refuses disabling the signed-in account.
 
 **Done when.**
 
-- [ ] Pipeline and all-pipelines refresh are available only on RELAXED projects, and only to callers
-  who may refresh; otherwise they are shown disabled with the reason.
-- [ ] Every UI action renders from the server's availability answer; no page compares a role or
-  governance flag itself.
-- [ ] Every action the caller cannot take is shown disabled, with its reason as text, not only as
-  colour; no unavailable action is hidden.
-- [ ] Rebuild catalog is unchanged in behaviour and placement.
-- [ ] A test covers each action's availability for each role, governance and environment type.
+- [ ] Pipeline and all-pipelines refresh are available only on RELAXED projects, to callers who may
+  refresh; otherwise they are grayed out with the reason.
+- [ ] A standalone refresh on STRICT is refused with the reason by the UI, CLI and API; deploy's
+  final refresh still succeeds.
+- [ ] `GET /api/v1/capabilities` answers on a fresh installation with no project or run.
+- [ ] Disabling the signed-in account is refused by the UI, CLI and API; the UI shows it grayed out
+  with the reason.
+- [ ] Rebuild catalog keeps its operation and placement, and is grayed out with the reason when the
+  caller cannot rebuild.
+- [ ] The availability matrix covers every valid role, governance and environment combination; the
+  project API refuses PROD with RELAXED.
+
+### S7.AU Available actions on every page
+
+The remaining pages of S7.AT: every action a caller cannot perform, for any reason, is grayed out
+with its reason on each project page and each platform page. S7.AT covers the pages it names.
+
+**Decisions.**
+
+- **One answer per action.** Each page renders from the server's availability answer for that
+  action. No page compares a role or governance flag itself.
+- **Grayed out, never hidden,** as in S7.AT.
+- **Scope.** The project pages: action buttons, form actions, row actions and menus. The platform
+  pages: administration, agents, accounts and projects.
+
+**Done when.**
+
+- [ ] Every action on the project pages renders from the server's availability answer, grayed out
+  with its reason when unavailable.
+- [ ] Every action on the platform pages does the same.
+- [ ] An availability test covers each action in the action table for each role, governance and
+  environment type.
 
 ## Release candidate: the Support Insights example
 
