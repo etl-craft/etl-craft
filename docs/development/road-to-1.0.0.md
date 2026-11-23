@@ -199,6 +199,7 @@ item's text, or work done early under another item.
 | S7.AQ Readable run identifiers | Done | #347, #369, #370 | A label beside every run and task run id, stored by the Engine DB; accepted wherever the integer is, and shown beside it |
 | S7.AR Restarting pipelines | Done | #349, #350, #356, #358 | Automatic starts on a chosen run ending, with `Allowed_auto_restarts` per environment; the demo's Gamma pipeline runs without a schedule. |
 | S7.AS Project dashboard and navigation | Done | #401, #402, #404, #405, #406, #407, #413 | Slices 1–5 owner approved; shared controls polished, with framed working panes, application-drawn diagram scrollbars, unclipped column selection and accessible search/action feedback in follow-up |
+| S7.AT Available actions only | Planned | | Refresh pipelines for RELAXED projects; every action hidden or disabled by the server's availability answer |
 | S7.M Stewardship uploads | Done (M2) | #296, #305 | Atomic receipts and safe stored names; processed layout, retention archives and verified reruns; crash recovery and guarded upload history |
 | S7.S Seed tables | Done | #308 | Typed pinned-bundle seeds replace reference tables until recorded stewardship handover |
 | S7.T Business calendars | Done | #276 | Shared holiday and weekend calendars for schedules, run dates, backfill and catch-up |
@@ -9775,6 +9776,39 @@ its tabs. (5) The Pipelines list takes the catalog's DAGs columns. Slice 4 is bu
 **Done when.** Every page in the new navigation is served by the app in light, dark and 390 px;
 the Insights page is deleted; the owner approves the screenshots of each slice on the Support
 Insights demo.
+
+### S7.AT Available actions only
+
+Owner, 2026-11-23. The pipelines page shows "Refresh all" only to developers, whatever the
+project's governance, and other action controls in the UI are gated by separate flags, so a caller
+can see a control the server then refuses. The owner wants a "Refresh pipelines" control for
+RELAXED projects, and every action a caller cannot take now hidden or disabled.
+
+**Decisions.**
+
+- **One availability answer per action.** The server states, for each action on an object, whether
+  the caller may take it now and, if not, why: role or grant, governance, environment type, or the
+  state of the run, task or pipeline. The UI renders from that answer and does not compare roles or
+  governance flags itself.
+- **Hidden or disabled.** An action is hidden when it can never apply to this caller or object (no
+  role or grant, or the action does not exist for this governance or object kind). It is shown
+  disabled, with its reason in text beside it, when a state refuses it now (run status, a pause, an
+  environment rule, a refresh already in progress).
+- **Refresh pipelines.** Shown only on RELAXED projects, and only to callers who may run
+  `pipelines refresh`. It reuses that action (`services/operations/actions.py`); no second path.
+  It replaces the developer-only "Refresh all" button on the pipelines page.
+- **Slices.** (1) The availability answer and the Refresh pipelines control. (2) Every action on
+  the project pages: action buttons, form actions, row actions and menus. (3) Platform actions:
+  administration, agents, accounts and projects.
+
+**Done when.**
+
+- [ ] Refresh pipelines appears only on RELAXED projects, and only to callers who may refresh.
+- [ ] Every UI action renders from the server's availability answer; no page compares a role or
+  governance flag itself.
+- [ ] A disabled action shows its reason as text, not only as colour; a hidden action is absent
+  from the page.
+- [ ] A test covers each action's availability for each role, governance and environment type.
 
 ## Release candidate: the Support Insights example
 
