@@ -20,7 +20,7 @@ import { Card } from "@/components/ui/card";
 import { unavailableAction, useActionAvailability, useProjectInfo } from "@/hooks";
 import { getJson, project } from "@/lib/api";
 import { pipelinePath, runPath } from "@/lib/routes";
-import { PipelineRefresh } from "@/components/pipeline-refresh";
+import { BulkRefresh, PipelineRefresh } from "@/components/pipeline-refresh";
 import type { BulkOutcome, Pipeline } from "@/lib/types";
 import { useDocumentTitle } from "@/title";
 
@@ -105,6 +105,7 @@ export function Pipelines() {
           <span className="text-sm font-medium">{selected.length} selected</span>
           {bulk("PAUSE", "Pause")}
           {bulk("RESUME", "Resume")}
+          <BulkRefresh code={code} pipelines={selected} />
         </div>
         <LegendView entries={statusEntries(shown.flatMap(pipeline=>pipeline.recent_runs.map(run=>run.status)))}><DataTable
           label="Pipelines"

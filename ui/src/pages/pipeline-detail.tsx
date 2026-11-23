@@ -8,7 +8,7 @@ import { Check, ChevronDown, PlayCircle } from "lucide-react";
 import * as React from "react";
 import { Navigate, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { ActionButton } from "@/components/action-button";
-import { DropdownContent, DropdownItem, DropdownLabel, DropdownMenu, DropdownTrigger } from "@/components/dropdown";
+import { DropdownContent, DropdownItem, DropdownLabel, DropdownMenu, DropdownSeparator, DropdownTrigger } from "@/components/dropdown";
 import { Button } from "@/components/ui/button";
 import { Segmented } from "@/components/segmented";
 import { Switch } from "@/components/switch";
@@ -18,7 +18,7 @@ import { StatusBadge, taskStatus } from "@/components/status";
 import { PauseState } from "@/components/pipeline-parts";
 import { RunGraph } from "@/components/lazy-run-graph";
 import { DEFAULT_RUNS, GRID_COLUMNS, MIN_TASKS, RunGrid } from "@/components/run-grid";
-import { PipelineRefresh } from "@/components/pipeline-refresh";
+import { PipelineRefresh, RefreshMenuItem } from "@/components/pipeline-refresh";
 import { RunOverview } from "@/components/run-overview";
 import { RunsPanel } from "@/components/runs-panel";
 import { useRuns } from "@/components/runs-table";
@@ -126,6 +126,7 @@ export function PipelineDetail() {
   const [requestKey, setRequestKey] = React.useState("");
   const [fullRefresh, setFullRefresh] = React.useState(false);
   const [refreshTask, setRefreshTask] = React.useState("");
+  const [refreshOpen, setRefreshOpen] = React.useState(false);
   const [refreshDownstream, setRefreshDownstream] = React.useState(false);
   /** The append targets the server asked to confirm emptying, and whether the person accepted. */
   const [toEmpty, setToEmpty] = React.useState<string[]>([]);
@@ -148,6 +149,10 @@ export function PipelineDetail() {
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-2">
       <Breadcrumbs trail={[{ label: code, to: projectHomePath(code) }, { label: "Pipelines", to: pipelinesPath(code) }, { label: pipeline }]} />
+      {/* The confirmation lives outside the Options menu, which closes when an item is chosen. */}
+      <div hidden>
+        <PipelineRefresh code={code} pipeline={pipeline} onDone={() => void found.refetch()} menu={{ open: refreshOpen, setOpen: setRefreshOpen }} />
+      </div>
       <PageHeader
         compact
         back={{ to: pipelinesPath(code), label: "Pipelines" }}
@@ -157,7 +162,6 @@ export function PipelineDetail() {
         actions={
           p ? (
             <div className="flex flex-wrap items-start justify-end gap-2">
-              <PipelineRefresh code={code} pipeline={pipeline} onDone={() => void found.refetch()} />
               <ActionButton<{ message?: string }>
                 code={code}
                 label="Run now"
@@ -285,6 +289,8 @@ export function PipelineDetail() {
                     <DropdownItem onSelect={() => choose("columns", byTime ? null : "time")}>
                       <Check className={cn("size-4", !byTime && "invisible")} aria-hidden /> Label columns by start time
                     </DropdownItem>
+                    <DropdownSeparator />
+                    <RefreshMenuItem code={code} pipeline={pipeline} onSelect={() => setRefreshOpen(true)} />
                   </DropdownContent>
                 </DropdownMenu>
               </div>

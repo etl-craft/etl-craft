@@ -71,17 +71,23 @@ def test_both_refresh_controls_show_the_strict_reason(scene, scheme, width):
             ("pipelines/OPS", "Refresh pipeline"),
         ):
             page.goto(f"{url}/ui/projects/default/{path}")
-            refresh = page.get_by_role("button", name=label, exact=True)
-            expect(refresh).to_be_disabled()
+            if path == "pipelines":
+                refresh = page.get_by_role("button", name=label, exact=True)
+            else:  # the pipeline's refresh is an item in the grid's Options menu
+                page.get_by_role("button", name="Options", exact=True).click()
+                refresh = page.get_by_role("menuitem", name=label, exact=True)
+                expect(refresh).to_have_attribute("aria-disabled", "true")
             expect(refresh).to_have_accessible_description(
                 re.compile("standalone pipeline refresh requires RELAXED")
             )
             assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
-            assert refresh.evaluate("""button => {
-                const [summary, actions] = button.closest('header').children;
-                const a = summary.getBoundingClientRect(), b = actions.getBoundingClientRect();
-                return a.right <= b.left || a.bottom <= b.top;
-            }""")
+            if path == "pipelines":
+                expect(refresh).to_be_disabled()
+                assert refresh.evaluate("""button => {
+                    const [summary, actions] = button.closest('header').children;
+                    const a = summary.getBoundingClientRect(), b = actions.getBoundingClientRect();
+                    return a.right <= b.left || a.bottom <= b.top;
+                }""")
             expect(page.get_by_role("tooltip")).to_have_count(0)
             if width == 390:
                 refresh.tap(force=True)
@@ -95,6 +101,19 @@ def test_both_refresh_controls_show_the_strict_reason(scene, scheme, width):
                 file = Path(screenshots) / f"refresh-{path.replace('/', '-')}-{scheme}-{width}.png"
                 file.parent.mkdir(parents=True, exist_ok=True)
                 page.screenshot(path=file, full_page=True)
+        browser.close()
+
+
+def test_refresh_selected_is_grayed_out_with_the_reason_on_strict(scene):
+    _, url, _, _ = scene
+    with sync_playwright() as pw:
+        browser, page, _ = open_page(pw, viewport={"width": 1280, "height": 1000})
+        sign_in(page, url, "/ui/projects/default/pipelines")
+        page.get_by_role("checkbox", name="Select OPS", exact=True).check()
+        refresh = page.get_by_role("button", name="Refresh selected", exact=True)
+        expect(refresh).to_be_disabled()
+        refresh.hover()
+        expect(page.get_by_role("tooltip")).to_contain_text("standalone pipeline refresh requires RELAXED")
         browser.close()
 
 
