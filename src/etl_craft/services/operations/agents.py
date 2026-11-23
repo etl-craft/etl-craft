@@ -287,11 +287,7 @@ def _renew_child(ctx: OperationContext, agent_id: int) -> AgentReply:
 def command(ctx: OperationContext, request: AgentControl) -> AgentReply:
     """Record an operator's command; the agent acknowledges it after applying it."""
     with ctx.engine.begin() as conn:
-        row = conn.execute(
-            statement(conn, "agent_get"), {"agent_id": request.agent_id}
-        ).one_or_none()
-        if row is None or row.status == AgentStatus.GONE:
-            raise RunRefusedError(f"agent {request.agent_id}: GONE or missing; choose a live agent")
+        require_live_agent(conn, request.agent_id)
         command_id = conn.execute(
             statement(conn, "agent_command_insert"),
             {
@@ -304,6 +300,13 @@ def command(ctx: OperationContext, request: AgentControl) -> AgentReply:
         ).scalar_one()
         resource_locks.notify(conn, agent_channel(request.agent_id))
     return AgentReply({"command_id": command_id})
+
+
+def require_live_agent(conn: Connection, agent_id: int) -> None:
+    """Check the same registered state for command admission and inspection."""
+    row = conn.execute(statement(conn, "agent_get"), {"agent_id": agent_id}).one_or_none()
+    if row is None or row.status == AgentStatus.GONE:
+        raise RunRefusedError(f"agent {agent_id}: GONE or missing; choose a live agent")
 
 
 def registered_agents(conn: Connection, *, current: bool = False) -> list[Row[tuple[object, ...]]]:

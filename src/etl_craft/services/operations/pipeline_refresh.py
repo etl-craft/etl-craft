@@ -11,7 +11,8 @@ from sqlalchemy.engine import Connection
 from etl_craft.config import ConnectorConfig
 from etl_craft.config.project import project_config
 from etl_craft.core.enums import RunStatus
-from etl_craft.core.errors import EtlCraftError, ResourceNotFoundError
+from etl_craft.core.enums_access import Governance
+from etl_craft.core.errors import EtlCraftError, PermissionDeniedError, ResourceNotFoundError
 from etl_craft.core.text import sha256_hex
 from etl_craft.core.time import as_utc
 from etl_craft.dialects.engine import for_engine
@@ -42,6 +43,26 @@ class RefreshInput(Request):
 
     pipeline_code: str | None = None
     bundle: str | None = None
+
+
+@dataclass(frozen=True, kw_only=True)
+class InternalRefresh(RefreshInput):
+    """A refresh called by deployment or controller maintenance."""
+
+
+def require_refresh_governance(ctx: OperationContext, request: RefreshInput) -> None:
+    """Require RELAXED for standalone refresh, including for an administrator."""
+    assert ctx.project_id is not None
+    with ctx.engine.connect() as conn:
+        policy = conn.execute(
+            statement(conn, "project_governance"), {"project_id": ctx.project_id}
+        ).one()
+    if policy.governance != Governance.RELAXED:
+        raise PermissionDeniedError(
+            f"project {ctx.project!r}, environment {policy.environment_type}: governance is "
+            f"{policy.governance}; standalone pipeline refresh requires RELAXED; "
+            "use `etl-craft deploy` to refresh during deployment"
+        )
 
 
 def history(ctx: OperationContext, request: RefreshInput) -> RefreshResults:

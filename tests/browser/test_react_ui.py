@@ -6,6 +6,7 @@ from pathlib import Path
 from urllib.parse import quote
 
 import pytest
+from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 from playwright.sync_api import expect, sync_playwright
 from sqlalchemy import text
 
@@ -53,6 +54,93 @@ def sign_in(page, url, destination="/ui", name="owner"):
     page.get_by_label("Password", exact=True).fill(PASSWORD)
     page.get_by_role("button", name="Sign in", exact=True).click()
     page.wait_for_url(url + destination)
+
+
+@pytest.mark.parametrize("scheme,width", (("light", 1440), ("dark", 1440), ("light", 390)))
+def test_both_refresh_controls_show_the_strict_reason(scene, scheme, width):
+    _, url, _, _ = scene
+    with sync_playwright() as pw:
+        browser, page, _ = open_page(
+            pw,
+            color_scheme=scheme,
+            viewport={"width": width, "height": 1000},
+            has_touch=width == 390,
+        )
+        sign_in(page, url, "/ui/projects/default/pipelines")
+        for path, label in (
+            ("pipelines", "Refresh all"),
+            ("pipelines/OPS", "Refresh pipeline"),
+        ):
+            page.goto(f"{url}/ui/projects/default/{path}")
+            if path == "pipelines":
+                refresh = page.get_by_role("button", name=label, exact=True)
+            else:  # the pipeline's refresh is an item in the grid's Options menu
+                page.get_by_role("button", name="Options", exact=True).click()
+                refresh = page.get_by_role("menuitem", name=label, exact=True)
+                expect(refresh).to_have_attribute("aria-disabled", "true")
+            expect(refresh).to_have_accessible_description(
+                re.compile("standalone pipeline refresh requires RELAXED")
+            )
+            assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+            if path == "pipelines":
+                expect(refresh).to_be_disabled()
+                assert refresh.evaluate("""button => {
+                    const [summary, actions] = button.closest('header').children;
+                    const a = summary.getBoundingClientRect(), b = actions.getBoundingClientRect();
+                    return a.right <= b.left || a.bottom <= b.top;
+                }""")
+            expect(page.get_by_role("tooltip")).to_have_count(0)
+            if width == 390:
+                refresh.tap(force=True)
+            else:
+                refresh.hover()
+            expect(page.get_by_role("tooltip")).to_contain_text(
+                "standalone pipeline refresh requires RELAXED"
+            )
+            screenshots = os.environ.get("ETL_CRAFT_UI_SCREENSHOTS")
+            if screenshots:
+                file = Path(screenshots) / f"refresh-{path.replace('/', '-')}-{scheme}-{width}.png"
+                file.parent.mkdir(parents=True, exist_ok=True)
+                page.screenshot(path=file, full_page=True)
+        browser.close()
+
+
+def test_refresh_selected_is_grayed_out_with_the_reason_on_strict(scene):
+    _, url, _, _ = scene
+    with sync_playwright() as pw:
+        browser, page, _ = open_page(pw, viewport={"width": 1280, "height": 1000})
+        sign_in(page, url, "/ui/projects/default/pipelines")
+        page.get_by_role("checkbox", name="Select OPS", exact=True).check()
+        refresh = page.get_by_role("button", name="Refresh selected", exact=True)
+        expect(refresh).to_be_disabled()
+        refresh.hover()
+        expect(page.get_by_role("tooltip")).to_contain_text(
+            "standalone pipeline refresh requires RELAXED"
+        )
+        browser.close()
+
+
+def pause_item(scope, name, pipeline="OPS"):
+    """Open the pipeline's Pause menu in ``scope`` and return its ``name`` item on the page.
+
+    Tries a click, then keyboard activation, and retries: the trigger can re-render after an action.
+    """
+    page = getattr(scope, "page", scope)  # a Locator has .page; a Page is the page
+    trigger = scope.get_by_role("button", name=f"Pause options for {pipeline}", exact=True)
+    item = page.get_by_role("menuitem", name=name, exact=True)
+    for key in (None, "Enter", "Space", None, "Enter"):
+        if key is None:
+            trigger.click()
+        else:
+            trigger.focus()
+            page.keyboard.press(key)
+        try:
+            item.wait_for(state="visible", timeout=3000)
+            return item
+        except PlaywrightTimeoutError:
+            page.keyboard.press("Escape")
+    item.wait_for(state="visible", timeout=5000)
+    return item
 
 
 def open_page(pw, *, show_scrollbars=False, **options):
@@ -158,7 +246,9 @@ def test_a_viewer_sees_the_failed_run_but_no_recover_action(scene):
         sign_in(page, url, f"/ui/projects/default/runs/OPS/{bad}", name="alice")
         expect(page.get_by_label("Run identifier", exact=True)).to_contain_text(f"-{bad}")
         expect(page.get_by_text("Failed", exact=True).first).to_be_visible()
-        expect(page.get_by_role("button", name="Recover run")).to_have_count(0)
+        recover = page.get_by_role("button", name="Recover run")
+        expect(recover).to_be_visible()
+        expect(recover).to_be_disabled()  # grayed out, with the server's reason
         browser.close()
 
 
@@ -265,7 +355,10 @@ def test_a_run_offers_its_logs_and_a_running_run_offers_reconcile(scene):
         )
         expect(page.get_by_role("menuitem", name="Download logs (zip)")).to_be_visible()
         reconcile = page.get_by_role("menuitem").filter(has_text="Reconcile")
-        expect(reconcile).to_have_count(0)  # it has ended
+        # Reconcile is pipeline-scoped: the server accepts it on an ended run (a no-op when no owner
+        # has expired), so the answer is available and the item is not grayed out.
+        expect(reconcile).to_be_visible()
+        expect(reconcile).not_to_have_attribute("aria-disabled", "true")
         page.keyboard.press("Escape")
         page.goto(url + f"/ui/projects/default/runs/OPS/{running}")
         page.get_by_role("button", name="Run actions, logs and key").click()

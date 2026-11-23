@@ -41,6 +41,17 @@ def upstream(project, *, task_edge=False, pipeline_edge=True, repairs="Y"):
                 ),
                 {"repairs": repairs, "edge": edge},
             )
+    code, output = project.run(
+        "project",
+        "set",
+        "--project",
+        "default",
+        "--governance",
+        "RELAXED",
+        "--reason",
+        "Refresh the downstream test pipeline only",
+    )
+    assert code == 0, output
     code, output = project.run("pipelines", "refresh", "--pipeline", "P")
     assert code == 0, output
     return run, rows[task]

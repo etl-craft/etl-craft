@@ -1,9 +1,10 @@
 import * as Menu from "@radix-ui/react-dropdown-menu";
 import * as React from "react";
+import { useActionReason } from "@/components/action-reason";
 import { cn } from "@/lib/utils";
 
 /** Non-modal: modal menus inject a style element, which the page's content policy refuses. */
-export const DropdownMenu = ({ children }: { children: React.ReactNode }) => <Menu.Root modal={false}>{children}</Menu.Root>;
+export const DropdownMenu = (props: Omit<React.ComponentProps<typeof Menu.Root>, "modal">) => <Menu.Root {...props} modal={false} />;
 export const DropdownTrigger = Menu.Trigger;
 
 export function DropdownContent({ className, ...props }: React.ComponentProps<typeof Menu.Content>) {
@@ -19,12 +20,16 @@ export function DropdownContent({ className, ...props }: React.ComponentProps<ty
   );
 }
 
-export function DropdownItem({ className, ...props }: React.ComponentProps<typeof Menu.Item>) {
+export function DropdownItem({ className, children, unavailableReason, ...props }: React.ComponentProps<typeof Menu.Item> & { unavailableReason?: string }) {
+  const { anchor, annotation, show } = useActionReason(unavailableReason);
+  const classes = cn("flex cursor-pointer items-center gap-2 rounded-sm px-2.5 py-1.5 outline-none data-[highlighted]:bg-surface-2 data-[disabled]:cursor-default data-[disabled]:text-muted aria-disabled:cursor-default aria-disabled:text-muted", className);
+  if (!unavailableReason) return <Menu.Item className={classes} {...props}>{children}</Menu.Item>;
   return (
-    <Menu.Item
-      className={cn("flex cursor-pointer items-center gap-2 rounded-sm px-2.5 py-1.5 outline-none data-[highlighted]:bg-surface-2", className)}
-      {...props}
-    />
+    <>
+      <Menu.Item className={classes} {...props} {...anchor} disabled={false} aria-disabled="true"
+        onPointerDown={show} onSelect={(event) => event.preventDefault()}>{children}</Menu.Item>
+      {annotation}
+    </>
   );
 }
 

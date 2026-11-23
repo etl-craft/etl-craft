@@ -24,7 +24,7 @@ export function AlertChannelsTab({ project }: { project: string }) {
         { id: "route", header: "Recipients or URL variable", value: c => c.recipients ?? c.url_secret ?? "" },
         { id: "key", header: "Key variable", value: c => c.signing_secret ?? "None" },
         { id: "state", header: "State", value: c => c.active_flag === "Y" ? "Active" : "Disabled" },
-        { id: "action", header: "Actions", value: c => c.channel_name, cell: c => c.active_flag === "Y" ? <ActionButton key={c.channel_name} label="Disable" title={`Disable ${c.channel_name}`} effect="Stops new alert admission and delivery; history stays." endpoint="/alert-channels/disable" projectCode={project} body={reason => ({ project, name: c.channel_name, reason })} describe={done("Channel disabled.")} variant="danger" size="sm" /> : null },
+        { id: "action", header: "Actions", value: c => c.channel_name, cell: c => <ActionButton key={c.channel_name} label="Disable" title={`Disable ${c.channel_name}`} effect="Stops new alert admission and delivery; history stays." endpoint="/alert-channels/disable" projectCode={project} body={reason => ({ project, name: c.channel_name, reason })} describe={done("Channel disabled.")} variant="danger" size="sm" /> },
       ]), [project]);
   return <div className="grid min-w-0 grid-cols-1 gap-5">
     <ListState query={query} what="alert channels" />

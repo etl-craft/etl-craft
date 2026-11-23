@@ -42,7 +42,7 @@ def erasure_project(seed_project, monkeypatch):
     with duckdb.connect(str(ctx.config.project_dir / "warehouse.db")) as conn:
         conn.execute("CREATE TABLE ds.people(person VARCHAR,n INTEGER)")
         conn.execute("INSERT INTO ds.people VALUES ('private-person-key',1),('retained',2)")
-    result = act(ctx, ActionName.PIPELINE_REFRESH)
+    result = publish(ctx)
     assert all(str(r.status) == "SUCCESS" for r in result.refreshes), result
     return ctx
 

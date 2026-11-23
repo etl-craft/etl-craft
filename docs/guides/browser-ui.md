@@ -149,6 +149,11 @@ the filter is the same `tag` parameter as `etl-craft pipelines --tag` and
 `GET /api/v1/projects/{project}/pipelines?tag=…`, so the page, the CLI and the API return the
 same pipelines, with the same `next_run`, `schedule_problem` and `recent_runs` fields in JSON.
 
+Use **Refresh all** on the Pipelines list or **Refresh pipeline** on a pipeline's detail
+page to validate the current definitions and record the versions that pass. Hover over,
+focus or tap a disabled control to read the server's reason, such as STRICT governance
+or missing project management permission. **Rebuild catalog** is on the Catalog page.
+
 A pipeline's **Runs** tab keeps its run identifiers, outcomes, durations and filters; the
 workspace grid compares the same runs by task. Select a task name in the grid to inspect its
 handler and declared upstream tasks, including before the pipeline has run. The dialog links
@@ -299,12 +304,14 @@ CLI results retain the handler codes.
 
 ## Administration
 
-Administrators see **Administration** in the sidebar. Its tabs list accounts, groups, API
+**Administration** in the sidebar shows the platform controls and their availability.
+Its tabs list accounts, groups, API
 tokens, pipeline access (per project), projects, pools and announcements, and each form or row
 action posts the same request as the matching CLI command (`account`, `group`, `token`,
 `access`, `project`, `pool`, `announce`), so the same checks and audit records apply. The
 Accounts tab shows whether an account is locked, its failed sign-ins and last sign-in, and
-offers **Unlock**; you cannot disable your own account from the page. A created token's value
+offers **Unlock**. Your own account's **Disable** action is grayed out. Ask another
+administrator to disable it, since the same rule applies through the CLI and API. A created token's value
 appears once, with **Copy token**: store it then, because it is never shown again.
 
 Announcements post a banner on every page for everyone signed in, from their start until their
@@ -345,10 +352,9 @@ unlock is recorded.
 
 ## Catalog and refresh actions
 
-The **Catalog** page offers **Validate metadata** to everyone, **Rebuild catalog** and
-**Refresh lineage** to developers, and **Record catalog versions** to administrators; before the
-first build it says the catalog is not generated yet. The **Pipelines** list has **Refresh all**
-for developers, which validates every pipeline's current definition and pins passing versions.
+The **Catalog** page shows **Validate metadata**, **Rebuild catalog**, **Refresh lineage** and
+**Record catalog versions**. Disabled actions explain the server's refusal on hover or focus. Rebuild
+requires project management permission and generates the catalog from current metadata.
 
 ## Paused work
 

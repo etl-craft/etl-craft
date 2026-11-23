@@ -4,28 +4,32 @@ import { When } from "@/components/when";
 import { ActionButton } from "@/components/action-button";
 import { Fact, FactList, Field, inputClass, SelectField } from "@/components/common";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
-import { useCanRun } from "@/hooks";
+import { unavailableAction, useActionAvailability } from "@/hooks";
 import type { TaskOffset } from "@/lib/types";
 
 /** What a task keeps between runs (an offset or a watermark), and how an operator resets it. */
 export function OffsetCard({ code, pipeline, task, offset, runs }: { code: string; pipeline: string; task: string; offset: TaskOffset; runs: { pipeline_run_id: number; run_label?: string }[] }) {
-  const canRun = useCanRun(code);
   const [value, setValue] = React.useState(offset.offset_value ?? "");
   const [chosen, setChosen] = React.useState("");
   const run = chosen || String(runs[0]?.pipeline_run_id ?? "");
+  const availability = useActionAvailability(code, pipeline, !!offset.kind, {
+    task_code: task,
+    run_id: run ? Number(run) : undefined,
+    reset_position: run ? offset.kind ?? undefined : undefined,
+  });
   if (!offset.kind) return null;
   const kind = offset.kind === "OFFSET" ? "offset" : "watermark";
   return (
     <Card>
       <CardHeader>
         <CardTitle>{kind.charAt(0).toUpperCase() + kind.slice(1)}</CardTitle>
-        {canRun && runs.length ? (
           <ActionButton<{ message?: string }>
             code={code}
             label={`Reset the ${kind}`}
             title={`Reset the ${kind} of ${task}`}
             effect={`The next run of ${task} starts from the new value. Runs that already finished keep their data. Same as etl-craft mark --${kind}.`}
             endpoint="/marks"
+            unavailableReason={unavailableAction(availability, "/marks") ?? (run ? undefined : "Run the task first so the reset has a run to record it against.")}
             body={(reason) => ({ pipeline_code: pipeline, task_code: task, run_id: Number(run), [kind]: value, reason })}
             describe={(r) => r.message ?? `The ${kind} was reset.`}
             variant="danger"
@@ -45,8 +49,7 @@ export function OffsetCard({ code, pipeline, task, offset, runs }: { code: strin
               </>
             }
           />
-        ) : null}
-        {canRun && runs.length === 0 ? <span className="text-xs text-muted">A reset is recorded against a run; it is available once the task has run.</span> : null}
+
       </CardHeader>
       <div className="p-4">
         {offset.offset_type ? (

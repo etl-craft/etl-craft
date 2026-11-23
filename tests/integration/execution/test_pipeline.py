@@ -407,7 +407,7 @@ def test_the_command_line(config, pipeline, capsys, monkeypatch, engine_db):
                 "SELECT TASK_ID,'SCRIPT_FILE','python_scripts/fail.py' FROM CFG_TASKS"
             )
         )
-    assert cli_main(["pipelines", "refresh"]) == ExitCode.SUCCESS
+    assert cli_main(["deploy"]) == ExitCode.SUCCESS
     capsys.readouterr()
     assert (
         cli_main(["run", "--pipeline-code", "P", "--init-only", "--reason", "test requested run"])

@@ -615,6 +615,17 @@ deploy	manage_sales	-	allow
 deploy	runner_role	-	deny
 deploy	rehash_action	-	deny
 deploy	agent	-	deny
+deployment capabilities	admin	-	allow
+deployment capabilities	developer	-	allow
+deployment capabilities	operator	-	allow
+deployment capabilities	viewer	-	allow
+deployment capabilities	view_p1	-	allow
+deployment capabilities	upload_t1	-	allow
+deployment capabilities	run_p1	-	allow
+deployment capabilities	manage_sales	-	allow
+deployment capabilities	runner_role	-	allow
+deployment capabilities	rehash_action	-	allow
+deployment capabilities	agent	-	deny
 docs-version	admin	-	allow
 docs-version	developer	-	deny
 docs-version	operator	-	deny
@@ -1110,8 +1121,8 @@ pipelines	manage_sales	-	allow
 pipelines	runner_role	-	allow
 pipelines	rehash_action	-	allow
 pipelines	agent	-	deny
-pipelines refresh	admin	P1	allow
-pipelines refresh	admin	P2	allow
+pipelines refresh	admin	P1	deny
+pipelines refresh	admin	P2	deny
 pipelines refresh	developer	P1	deny
 pipelines refresh	developer	P2	deny
 pipelines refresh	operator	P1	deny
@@ -1124,8 +1135,8 @@ pipelines refresh	upload_t1	P1	deny
 pipelines refresh	upload_t1	P2	deny
 pipelines refresh	run_p1	P1	deny
 pipelines refresh	run_p1	P2	deny
-pipelines refresh	manage_sales	P1	allow
-pipelines refresh	manage_sales	P2	allow
+pipelines refresh	manage_sales	P1	deny
+pipelines refresh	manage_sales	P2	deny
 pipelines refresh	runner_role	P1	deny
 pipelines refresh	runner_role	P2	deny
 pipelines refresh	rehash_action	P1	deny

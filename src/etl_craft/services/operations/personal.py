@@ -5,6 +5,8 @@ from dataclasses import asdict, dataclass
 from typing import ClassVar
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+from sqlalchemy.engine import Row
+
 from etl_craft.core.actor import ActorKind
 from etl_craft.core.enums import AccountKind, ActionName, YesNo
 from etl_craft.core.enums_ui import Theme, TimeDisplay
@@ -175,12 +177,7 @@ def change_password(ctx: OperationContext, request: ChangePassword) -> PasswordC
     """Check outside the account lock; replace and revoke sessions together under it."""
     with ctx.engine.connect() as conn:
         row = find_account(conn, ctx.actor.name)
-    local = (
-        row is not None
-        and row.kind == AccountKind.USER
-        and row.oidc_subject is None
-        and row.active_flag == YesNo.YES
-    )
+    local = local_password_account(row)
     valid = verify_password(
         request.current_password, row.password_hash if local and row is not None else DECOY
     )
@@ -205,6 +202,28 @@ def change_password(ctx: OperationContext, request: ChangePassword) -> PasswordC
     return PasswordChanged()
 
 
+def local_password_account(row: Row[tuple[object, ...]] | None) -> bool:
+    """Identify live local users that can change their passwords."""
+    return (
+        row is not None
+        and row.kind == AccountKind.USER
+        and row.oidc_subject is None
+        and row.active_flag == YesNo.YES
+        and row.password_hash is not None
+    )
+
+
+def require_local_password(ctx: OperationContext) -> None:
+    """Explain when a signed-in account cannot change a password here."""
+    with ctx.engine.connect() as conn:
+        row = find_account(conn, ctx.actor.name)
+    if not local_password_account(row):
+        raise PermissionDeniedError(
+            f"account {ctx.actor.name!r}: no active local user password; "
+            "expected a local password; use your identity provider or ask an administrator for help"
+        )
+
+
 def require_password_change(ctx: OperationContext, action: ActionName) -> None:
     """Temporary credentials authorize only identity, renewal, sign-out and password change."""
     if ctx.upgrade_signin and action == ActionName.MIGRATE:
@@ -217,6 +236,7 @@ def require_password_change(ctx: OperationContext, action: ActionName) -> None:
         ActionName.REFRESH,
         ActionName.LOGOUT,
         ActionName.WHOAMI,
+        ActionName.DEPLOYMENT_CAPABILITIES,
         ActionName.PASSWORD_CHANGE,
     }:
         return

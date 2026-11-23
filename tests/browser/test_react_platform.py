@@ -2,6 +2,7 @@
 
 import contextlib
 import os
+import re
 from pathlib import Path
 
 import pytest
@@ -150,6 +151,7 @@ def test_administrators_manage_accounts_and_tokens_through_confirmations(scene):
         tokens = page.get_by_role("table", name="API tokens")
         expect(tokens.get_by_text("ci", exact=True)).to_be_visible()
         page.get_by_role("tab", name="Projects").click()
+        expect(page.get_by_role("button", name="Add project")).to_be_enabled()
         expect(
             page.get_by_role("table", name="Projects").get_by_text("default", exact=True).first
         ).to_be_visible()
@@ -161,13 +163,69 @@ def test_administrators_manage_accounts_and_tokens_through_confirmations(scene):
     assert "bob" in names
 
 
-def test_a_viewer_is_told_the_administration_page_needs_an_administrator(scene):
+def test_a_viewer_sees_why_administration_actions_are_unavailable(scene):
     _, url, _ = scene
     with sync_playwright() as pw:
         browser, page, _ = open_page(pw)
         sign_in(page, url, "/ui/admin", name="alice")
-        expect(page.get_by_role("alert")).to_contain_text("needs the admin role")
-        expect(page.get_by_role("link", name="Administration")).to_have_count(0)
+        add = page.get_by_role("button", name="Add account")
+        expect(add).to_be_disabled()
+        expect(add).to_have_accessible_description(re.compile("admin role is required"))
+        page.get_by_role("tab", name="Projects").click()
+        add_project = page.get_by_role("button", name="Add project")
+        expect(add_project).to_be_disabled()
+        add_project.hover()
+        expect(page.get_by_role("tooltip")).to_contain_text("admin role is required")
+        expect(page.get_by_role("link", name="Administration")).to_be_visible()
+        browser.close()
+
+
+def test_own_account_disable_is_visible_and_disabled(scene):
+    _, url, _ = scene
+    with sync_playwright() as pw:
+        browser, page, problems = open_page(pw)
+        sign_in(page, url, "/ui/admin?tab=accounts")
+        page.get_by_role("button", name="Actions for owner").click()
+        disable = page.get_by_role("menuitem", name=re.compile("Disable"))
+        expect(disable).to_be_disabled()
+        expect(disable).to_have_accessible_description(
+            re.compile("ask another administrator to disable this account")
+        )
+        disable.hover()
+        expect(page.get_by_role("tooltip")).to_contain_text(
+            "ask another administrator to disable this account"
+        )
+        assert problems == []
+        browser.close()
+
+
+@pytest.mark.parametrize("name,enabled", (("owner", True), ("alice", False)))
+def test_platform_forms_keep_actions_visible_for_both_roles(scene, name, enabled):
+    _, url, _ = scene
+    with sync_playwright() as pw:
+        browser, page, _ = open_page(pw)
+        sign_in(page, url, "/ui/admin?tab=accounts", name=name)
+        for tab, labels in (
+            ("Accounts", ("Add account", "Change role", "Reset password")),
+            ("Groups", ("Add group", "Add member")),
+            ("Roles", ("Create role", "Add command", "Remove command")),
+            ("Tokens", ("Create token",)),
+            ("Projects", ("Add project", "Change project")),
+            ("Pools", ("Add pool", "Change description")),
+            ("Announcements", ("Post announcement",)),
+        ):
+            page.get_by_role("tab", name=tab, exact=True).click()
+            for label in labels:
+                with_action = page.get_by_role("button", name=label, exact=True)
+                if enabled:
+                    expect(with_action).to_be_enabled()
+                else:
+                    expect(with_action).to_be_disabled()
+                    expect(with_action).to_have_accessible_description(
+                        re.compile("admin role is required")
+                    )
+                    with_action.hover()
+                    expect(page.get_by_role("tooltip")).to_contain_text("admin role is required")
         browser.close()
 
 
@@ -181,7 +239,7 @@ def test_maintenance_previews_without_changing_anything(scene):
         shoot(page, "maintenance")
         page.get_by_role("button", name="Purge", exact=True).click()
         dialog = page.get_by_role("dialog")
-        expect(dialog.get_by_role("button", name="Purge")).to_be_disabled()  # needs a reason
+        expect(dialog.get_by_role("button", name="Purge")).to_be_enabled()
         dialog.get_by_role("button", name="Cancel").click()
         assert problems == []
         browser.close()

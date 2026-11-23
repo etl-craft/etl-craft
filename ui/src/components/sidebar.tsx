@@ -26,7 +26,7 @@ interface Item {
   to: string;
 }
 
-function sections(code: string | undefined, admin: boolean): { title: string; items: Item[] }[] {
+function sections(code: string | undefined): { title: string; items: Item[] }[] {
   return [
     {
       title: "Overview",
@@ -50,7 +50,7 @@ function sections(code: string | undefined, admin: boolean): { title: string; it
               { label: "Paused", icon: PauseCircle, to: pausedPath(code) },
               { label: "Uploads", icon: Upload, to: uploadsPath(code) },
               { label: "Console", icon: SquareTerminal, to: consolePath(code) },
-              ...(admin ? [{ label: "Maintenance", icon: Wrench, to: maintenancePath(code) }] : []),
+              { label: "Maintenance", icon: Wrench, to: maintenancePath(code) },
             ],
           },
         ]
@@ -61,7 +61,7 @@ function sections(code: string | undefined, admin: boolean): { title: string; it
         { label: "Projects", icon: LayoutList, to: projectsPath },
         { label: "System health", icon: Activity, to: systemPath },
         { label: "Agents", icon: Cpu, to: agentsPath },
-        ...(admin ? [{ label: "Administration", icon: ShieldCheck, to: adminPath() }] : []),
+        { label: "Administration", icon: ShieldCheck, to: adminPath() },
       ],
     },
   ];
@@ -77,19 +77,17 @@ const row = (collapsed: boolean, active: boolean) =>
 /** The one navigation every page shares: icons always show; labels show when expanded. */
 export function Sidebar({
   code,
-  admin,
   collapsed,
   onToggle,
 }: {
   code?: string;
-  admin: boolean;
   collapsed: boolean;
   onToggle: () => void;
 }) {
   return (
     <div className="flex h-full flex-col">
       <nav aria-label="Main" className="flex-1 overflow-y-auto py-2">
-        {sections(code, admin).map((section) => (
+        {sections(code).map((section) => (
           <div key={section.title} className="mb-3 grid">
             {collapsed ? (
               <div className="mb-1 h-px bg-border" aria-hidden />

@@ -4,7 +4,7 @@ import re
 
 import pytest
 from playwright.sync_api import expect, sync_playwright
-from test_react_ui import open_page, sign_in
+from test_react_ui import open_page, pause_item, sign_in
 from test_react_ui import scene as scene
 
 pytestmark = pytest.mark.browser
@@ -114,7 +114,7 @@ def test_action_feedback_has_a_usable_close_target_and_remains_keyboard_dismissi
             pw, viewport={"width": width, "height": 900}, has_touch=width == 390
         )
         sign_in(page, url, "/ui/projects/default/pipelines/OPS")
-        page.get_by_role("button", name="Pause", exact=True).click()
+        pause_item(page, "Pause").click()
         dialog = page.get_by_role("dialog", name="Pause OPS", exact=True)
         dialog.get_by_label("Reason (kept in the audit trail)").fill("review feedback")
         dialog.get_by_role("button", name="Pause", exact=True).click()

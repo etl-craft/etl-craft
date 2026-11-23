@@ -61,7 +61,7 @@ class Provider:
         if self.queued:
             publish_project(self.project, self.directory)
         else:
-            code, output = self.project.run("pipelines", "refresh")
+            code, output = self.project.run("deploy")
             assert code == 0, output
 
     def admit(self):

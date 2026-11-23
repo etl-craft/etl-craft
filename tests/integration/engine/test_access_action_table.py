@@ -108,6 +108,8 @@ def built_in_allows(spec, role, reach, required):
     if required is None:
         return True
     project_level = role if reach in {"deployment", "project"} else Permission.CAN_VIEW
+    if spec.name == ActionName.PIPELINE_REFRESH:
+        return False  # standalone refresh needs a RELAXED project; the default project is STRICT
     if spec.name in PROJECT_MANAGE_ACTIONS:
         return project_level == Permission.CAN_MANAGE and required != ApiRole.ADMIN
     if spec.scope == ActionScope.PIPELINE:

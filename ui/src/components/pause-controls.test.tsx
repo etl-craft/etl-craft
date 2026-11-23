@@ -17,7 +17,10 @@ afterEach(()=>vi.mocked(postJson).mockReset());
 const pipeline={pipeline_code:"OPS",run_schedule:null,paused:null,task_pauses:[]} as unknown as Pipeline;
 async function show(task=false) {
  const client=new QueryClient({defaultOptions:{queries:{retry:false,staleTime:Infinity}}});
- client.setQueryData(["whoami","default"],{name:"owner",role:"admin"});
+ client.setQueryData(["action-availability","default","OPS",task ? {task_code:"load"} : undefined],{actions:[
+  {endpoint:"/api/v1/controls",method:"POST",control:"PAUSE",available:true,reason:""},
+  {endpoint:"/api/v1/controls",method:"POST",control:"RESUME",available:false,reason:"OPS is not paused."},
+ ]});
  client.setQueryData(["health"],{projects:[{project:"default",environment_type:"CUSTOM",environment_name:null,governance:"STRICT"}]});
  client.setQueryData(["pipeline","default","OPS"],pipeline);
  client.setQueryData(["task","default","OPS","load"],{task_code:"load",handler:"PYTHON",parameters:{},merge_key:[],merge_columns:[]});
@@ -25,9 +28,17 @@ async function show(task=false) {
  client.setQueryData(["task-runs","default","OPS","load"],{entries:[]});
  render(<QueryClientProvider client={client}><MemoryRouter initialEntries={["/ui/projects/default/pipelines/OPS/tasks/load"]}><ToastProvider>{task?<Routes><Route path="/ui/projects/:project/pipelines/:pipeline/tasks/:task" element={<Task/>}/></Routes>:<PipelinePause code="default" pipeline={pipeline}/>}</ToastProvider></MemoryRouter></QueryClientProvider>);
 }
+async function pick(name:string, label="OPS"){
+ fireEvent.keyDown(screen.getByRole("button",{name:`Pause options for ${label}`}),{key:"Enter"});
+ fireEvent.keyDown(await screen.findByRole("menuitem",{name}),{key:"Enter"});
+}
 it("offers DRAIN by default and sends the selected FINISH policy",async()=>{
  vi.mocked(postJson).mockResolvedValue({message:"Paused"});await show();
- fireEvent.click(screen.getByRole("button",{name:"Pause"}));
+ fireEvent.keyDown(screen.getByRole("button",{name:"Pause options for OPS"}),{key:"Enter"});
+ const resume=await screen.findByRole("menuitem",{name:"Resume"});
+ expect(resume).toHaveAttribute("aria-disabled","true");
+ expect(resume).toHaveAccessibleDescription("OPS is not paused.");
+ fireEvent.keyDown(screen.getByRole("menuitem",{name:"Pause"}),{key:"Enter"});
  const dialog=screen.getByRole("dialog");
  const mode=within(dialog).getByRole("combobox",{name:"Active runs"});
  expect(mode).toHaveValue("DRAIN");
@@ -37,7 +48,7 @@ it("offers DRAIN by default and sends the selected FINISH policy",async()=>{
  fireEvent.click(within(dialog).getByRole("button",{name:"Pause"}));
  await waitFor(()=>expect(postJson).toHaveBeenCalledWith("/api/v1/projects/default/controls",expect.objectContaining({action:"PAUSE",active_runs:"FINISH"})));
  await waitFor(()=>expect(screen.queryByRole("dialog")).toBeNull());
- fireEvent.click(screen.getByRole("button",{name:"Pause"}));
+ await pick("Pause");
  expect(within(screen.getByRole("dialog")).getByRole("combobox",{name:"Active runs"})).toHaveValue("DRAIN");
 });
 it("always submits a visible task outcome with SKIPPED preselected",async()=>{
@@ -54,12 +65,14 @@ it("always submits a visible task outcome with SKIPPED preselected",async()=>{
 
 it("keeps an open pause form and its chosen mode during a live list refresh", async()=>{
  const client=new QueryClient({defaultOptions:{queries:{retry:false,staleTime:Infinity}}});
- client.setQueryData(["whoami","default"],{name:"owner",role:"admin"});
+ client.setQueryData(["action-availability","default","OPS",undefined],{actions:[
+  {endpoint:"/api/v1/controls",method:"POST",control:"PAUSE",replacement:true,available:true,reason:""},
+ ]});
  client.setQueryData(["health"],{projects:[{project:"default",environment_type:"CUSTOM",environment_name:null,governance:"STRICT"}]});
  const paused={...pipeline,paused:{active_runs:"DRAIN",drained_runs:[],paused_by:"owner",paused_at:"2026-11-16T12:00:00Z",reason:"maintenance"}};
  client.setQueryData(["pipelines","default"],{pipelines:[paused]});
  render(<QueryClientProvider client={client}><MemoryRouter initialEntries={["/ui/projects/default/paused"]}><ToastProvider><Routes><Route path="/ui/projects/:project/paused" element={<Paused/>}/></Routes></ToastProvider></MemoryRouter></QueryClientProvider>);
- fireEvent.click(screen.getByRole("button",{name:"Replace pause"}));
+ await pick("Replace pause", "OPS");
  const dialog=screen.getByRole("dialog");
  fireEvent.change(within(dialog).getByRole("combobox",{name:"Active runs"}),{target:{value:"FINISH"}});
  fireEvent.change(within(dialog).getByLabelText(/Reason/),{target:{value:"keep this input"}});

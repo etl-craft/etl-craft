@@ -10,6 +10,8 @@ from playwright.sync_api import expect, sync_playwright
 from test_react_ui import open_page, sign_in
 
 from etl_craft.core.actor import Actor, ActorKind, acting_as
+from etl_craft.core.enums import ActionName, ApiRole
+from fixtures.actions import act
 from fixtures.metadata import add_pipeline, add_task
 
 pytestmark = pytest.mark.browser
@@ -80,6 +82,52 @@ def rebuild(page):
     page.get_by_role("button", name="Rebuild catalog").click()
     page.get_by_role("dialog").get_by_role("button", name="Rebuild catalog").click()
     expect(page.get_by_role("tree", name="Catalog objects")).to_be_visible()
+
+
+@pytest.mark.parametrize("theme,width", (("light", 1440), ("dark", 1440), ("light", 390)))
+def test_rebuild_catalog_uses_server_availability(chain, theme, width):
+    ctx, url = chain
+    act(ctx, ActionName.GENERATE_DOCS)
+    act(
+        ctx,
+        ActionName.ACCOUNT_ADD,
+        name="builder",
+        role=ApiRole.DEVELOPER,
+        password="correct horse battery",
+    )
+    act(
+        ctx,
+        ActionName.ACCESS_GRANT,
+        project="default",
+        account="builder",
+        role="CAN_MANAGE",
+        reason="Allow catalog rebuild",
+    )
+    with sync_playwright() as pw:
+        browser, viewer, problems = open_page(pw, viewport={"width": width, "height": 1000})
+        viewer.emulate_media(color_scheme=theme)
+        sign_in(viewer, url, "/ui/projects/default/catalog", name="alice")
+        button = viewer.get_by_role("button", name="Rebuild catalog")
+        expect(button).to_be_disabled()
+        expect(button).to_have_accessible_description(re.compile("expected CAN_MANAGE"))
+        expect(viewer.get_by_role("tooltip")).to_have_count(0)
+        button.hover()
+        expect(viewer.get_by_role("tooltip")).to_contain_text("expected CAN_MANAGE")
+        shoot(viewer, f"s7at-catalog-{theme}-{width}")
+        assert not problems
+        browser.close()
+
+        browser, builder, problems = open_page(pw, viewport={"width": width, "height": 1000})
+        builder.emulate_media(color_scheme=theme)
+        sign_in(builder, url, "/ui/projects/default/catalog", name="builder")
+        expect(builder.get_by_role("button", name="Rebuild catalog")).to_be_enabled()
+        builder.get_by_role("button", name="Rebuild catalog").click()
+        builder.get_by_role("dialog").get_by_role("button", name="Rebuild catalog").click()
+        expect(
+            builder.get_by_role("status").filter(has_text="The catalog was rebuilt.")
+        ).to_be_visible()
+        assert not problems
+        browser.close()
 
 
 def squashed(locator):

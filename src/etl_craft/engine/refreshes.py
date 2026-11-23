@@ -76,6 +76,7 @@ def admitted(conn: Connection, pipeline_id: int) -> tuple[str, str, str]:
         raise RunRefusedError(
             f"pipeline {identity.pipeline_code!r}: {reason}; findings: {messages}; "
             "correct the findings "
-            "and run `etl-craft pipelines refresh` before admitting a new run"
+            "and run `etl-craft deploy` (or `etl-craft pipelines refresh` on RELAXED "
+            "projects) before admitting a new run"
         )
     return str(good.snapshot), str(good.metadata_version), str(good.bundle_id)

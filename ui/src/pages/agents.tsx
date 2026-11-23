@@ -6,7 +6,6 @@ import { RowActions, type RowAction } from "@/components/row-actions";
 import { DataTable } from "@/components/data-table";
 import { StatusBadge } from "@/components/status";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
-import { useRoleAtLeast } from "@/hooks";
 import { getJson } from "@/lib/api";
 import type { AgentRow, AgentsView } from "@/lib/types";
 import { useDocumentTitle } from "@/title";
@@ -27,7 +26,6 @@ const command = (agent: AgentRow, name: string, label: string, effect: string, d
 
 export function Agents() {
   useDocumentTitle("Agents");
-  const may = useRoleAtLeast("operator");
   const list = useQuery({ queryKey: ["agents"], queryFn: () => getJson<AgentsView>("/api/v1/agents"), refetchInterval: 10_000 });
   const rows = list.data?.agents ?? [];
   return (
@@ -53,27 +51,24 @@ export function Agents() {
             columns.display({ id: "attempts", header: "Running attempts", cell: (c) => c.row.original.attempts.length }),
             columns.display({ id: "free", header: "Free CPU / memory", cell: (c) => `${c.row.original.free_cpu.toFixed(1)} / ${c.row.original.free_memory_mb} MB` }),
             columns.display({ id: "pending", header: "Pending commands", cell: (c) => c.row.original.pending_commands.map((p) => p.command).join(", ") || "None" }),
-            ...(may
-              ? [
-                  columns.display({
-                    id: "act",
-                    header: "Actions",
-                    cell: (c) => {
-                      const a = c.row.original;
-                      return (
-                        <RowActions
-                          name={`agent ${a.agent_id}`}
-                          actions={[
-                            ...(a.status === "ACTIVE" ? [command(a, "DRAIN", "Drain", "Stops this agent claiming new tasks; its running tasks finish.")] : []),
-                            ...(a.status === "DRAINING" ? [command(a, "RESUME", "Resume", "Lets this agent claim new tasks again.")] : []),
-                            ...(a.status !== "GONE" ? [command(a, "STOP", "Stop", "Stops the agent process; its running attempts are stopped and retried under their retry rules.", true)] : []),
-                          ]}
-                        />
-                      );
-                    },
-                  }),
-                ]
-              : []),
+            columns.display({
+              id: "act",
+              header: "Actions",
+              cell: (c) => {
+                const a = c.row.original;
+                return (
+                  <RowActions
+                    name={`agent ${a.agent_id}`}
+                    agent={a.agent_id}
+                    actions={[
+                      command(a, "DRAIN", "Drain", "Stops this agent claiming new tasks; its running tasks finish."),
+                      command(a, "RESUME", "Resume", "Lets this agent claim new tasks again."),
+                      command(a, "STOP", "Stop", "Stops the agent process; its running attempts are stopped and retried under their retry rules.", true),
+                    ]}
+                  />
+                );
+              },
+            }),
           ]}
         />
       </Card>

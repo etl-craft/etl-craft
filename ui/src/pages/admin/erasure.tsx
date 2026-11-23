@@ -6,7 +6,7 @@ import { DataTable } from "@/components/data-table";
 import { useToast } from "@/components/toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
-import { failureText, useProjectInfo, useWrite } from "@/hooks";
+import { failureText, unavailableAction, useActionAvailability, useProjectInfo, useWrite } from "@/hooks";
 import { project } from "@/lib/api";
 import { ListState, useAdminList } from "./shared";
 
@@ -39,6 +39,8 @@ export function ErasureTab({ code }: { code: string }) {
     setPreview(null);
   });
   const ready = table.trim() !== "" && column.trim() !== "" && value !== "";
+  const available = useActionAvailability(code, undefined, !!code);
+  const reason = unavailableAction(available, "/erasure") ?? (ready ? undefined : "Enter the table, identifier column and value.");
   if (!code) return <Notice info>Choose a project to manage its erasure register.</Notice>;
   return (
     <div className="grid gap-5">
@@ -74,13 +76,13 @@ export function ErasureTab({ code }: { code: string }) {
           </Field>
           {previewIt.isError ? <Notice>{failureText(previewIt.error)}</Notice> : null}
           <div className="flex flex-wrap gap-2">
-            <Button disabled={!ready || previewIt.isPending} onClick={() => previewIt.mutate(body("Preview before erasing", { dry_run: true }))}>
+            <Button disabled={previewIt.isPending} unavailableReason={reason} onClick={() => previewIt.mutate(body("Preview before erasing", { dry_run: true }))}>
               Preview erasure
             </Button>
-            <Button variant="danger" disabled={!ready || preview === null} onClick={() => { apply.reset(); setMode("register"); }}>
+            <Button variant="danger" unavailableReason={reason ?? (preview === null ? "Preview the erasure before registering it." : undefined)} onClick={() => { apply.reset(); setMode("register"); }}>
               Register and erase
             </Button>
-            <Button disabled={!ready} onClick={() => { apply.reset(); setMode("lift"); }}>
+            <Button unavailableReason={reason} onClick={() => { apply.reset(); setMode("lift"); }}>
               Lift entry
             </Button>
           </div>
@@ -89,7 +91,7 @@ export function ErasureTab({ code }: { code: string }) {
       </Card>
       {info ? (
         <ConfirmDialog
-          open={mode !== null}
+          open={mode !== null && !reason}
           title={mode === "lift" ? `Lift the erasure of ${column} in ${table}` : `Erase ${column} in ${table}`}
           action={mode === "lift" ? "Lift entry" : "Register and erase"}
           effect={mode === "lift" ? "Stops erasing this identifier when the table is loaded again." : "Registers the identifier and erases it from the table and the tables downstream of it. This cannot be undone."}

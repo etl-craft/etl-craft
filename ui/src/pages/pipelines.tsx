@@ -17,9 +17,10 @@ import { DataTable } from "@/components/data-table";
 import { NextRun, PauseState, RecentRuns, TagList } from "@/components/pipeline-parts";
 import { slaVerdict, StatusBadge } from "@/components/status";
 import { Card } from "@/components/ui/card";
-import { useCanRun, useProjectInfo, useRoleAtLeast } from "@/hooks";
+import { unavailableAction, useActionAvailability, useProjectInfo } from "@/hooks";
 import { getJson, project } from "@/lib/api";
 import { pipelinePath, runPath } from "@/lib/routes";
+import { BulkRefresh, PipelineRefresh } from "@/components/pipeline-refresh";
 import type { BulkOutcome, Pipeline } from "@/lib/types";
 import { useDocumentTitle } from "@/title";
 
@@ -36,8 +37,6 @@ export function Pipelines() {
   const [params, setParams] = useSearchParams();
   const tags = params.getAll("tag");
   const text = params.get("q") ?? "";
-  const canRun = useCanRun(code);
-  const developer = useRoleAtLeast("developer");
   const info = useProjectInfo(code);
   useDocumentTitle("Pipelines", code, info.project && { type: info.project.environment_type, name: info.project.environment_name });
   const list = useQuery({ queryKey: ["pipelines", code], queryFn: () => getJson<{ pipelines: Pipeline[] }>(`${project(code)}/pipelines`), refetchInterval: 15_000 });
@@ -46,6 +45,7 @@ export function Pipelines() {
   const shown = React.useMemo(() => all.filter((p) => tags.every((t) => p.tags.includes(t)) && (!text || `${p.pipeline_code} ${p.pipeline_name} ${p.description ?? ""}`.toLowerCase().includes(text.toLowerCase()))), [all, tags, text]);
   const [chosen, setChosen] = React.useState<ReadonlySet<string>>(new Set());
   const selected = shown.filter((p) => chosen.has(p.pipeline_code)).map((p) => p.pipeline_code);
+  const bulkAvailability = useActionAvailability(code, undefined, !!selected.length, { pipeline_codes: selected });
 
   const toggleTag = (tag: string) => {
     const next = new URLSearchParams(window.location.search);
@@ -67,6 +67,7 @@ export function Pipelines() {
       title={`${verb} ${selected.length} pipeline${selected.length === 1 ? "" : "s"}`}
       effect={`${action === "PAUSE" ? "Stops new automatic runs of" : "Allows automatic runs of"}: ${selected.join(", ")}. Each pipeline succeeds or is refused on its own.`}
       endpoint="/controls/bulk"
+      unavailableReason={selected.length ? unavailableAction(bulkAvailability, "/controls/bulk", "POST", { action }) : "Select pipelines first."}
       body={(reason) => ({ requests: selected.map((pipeline_code) => ({ pipeline_code, action, reason })) })}
       describe={describeOutcomes}
       icon={action === "PAUSE" ? <Pause className="size-4" aria-hidden /> : <Play className="size-4" aria-hidden />}
@@ -74,6 +75,46 @@ export function Pipelines() {
     />
   );
 
+  // Memoized: the table renders each cell as a component, so a new array remounts every cell (and an open menu).
+  const tableColumns = React.useMemo(() => [
+              columns.accessor("pipeline_code", {
+                id: "pipeline",
+                header: "Pipeline",
+                cell: (c) => (
+                  <span className="grid">
+                    <Link className="font-medium text-fg hover:text-accent hover:underline" to={pipelinePath(code, c.getValue())}>
+                      {c.getValue()}
+                    </Link>
+                    {c.row.original.pipeline_name !== c.getValue() ? <span className="text-xs text-muted">{c.row.original.pipeline_name}</span> : null}
+                  </span>
+                ),
+              }),
+              columns.display({ id: "recent", header: "Recent success", minSize: 176, cell: (c) => <RecentRuns project={code} pipeline={c.row.original} /> }),
+              columns.display({ id: "description", header: "Description", cell: (c) => <span className="line-clamp-2 max-w-md text-[13px] text-muted" title={c.row.original.description ?? undefined}>{c.row.original.description ?? "—"}</span> }),
+              columns.display({ id: "tags", header: "Tags", cell: (c) => <TagList tags={c.row.original.tags} /> }),
+              columns.accessor("run_schedule", { header: "Schedule", enableSorting: false, cell: (c) => (c.getValue() ? <code className="whitespace-nowrap font-mono text-xs">{c.getValue()}</code> : <span className="whitespace-nowrap text-muted">Not scheduled</span>) }),
+              columns.display({ id: "dependencies", header: "Waits for", cell: (c) => c.row.original.depends_on.length ? c.row.original.depends_on.map(([pipeline, kind]) => `${pipeline} (${kind})`).join(", ") : "None" }),
+              columns.display({ id: "last", header: "Last run", cell: (c) => {
+                const pipeline = c.row.original;
+                const run = pipeline.recent_runs[0];
+                return run ? <span className="grid gap-1"><RunLabel id={run.pipeline_run_id} label={run.run_label} to={runPath(code, pipeline.pipeline_code, run.pipeline_run_id)} /><When iso={run.start_date} /></span> : <span className="text-muted">No runs yet</span>;
+              } }),
+              columns.display({ id: "next", header: "Next run", cell: (c) => <NextRun pipeline={c.row.original} /> }),
+              ...(all.some((p) => p.sla_in_hours) ? [
+              columns.display({
+                id: "sla",
+                header: "SLA",
+                minSize: 112,
+                cell: (c) => {
+                  const p = c.row.original;
+                  const newest = p.recent_runs[0];
+                  const latest = newest ? slaVerdict(newest) : null;
+                  return latest ? <StatusBadge status={latest} /> : <span className="text-muted">{!p.sla_in_hours ? "—" : newest ? "No verdict" : "No run yet"}</span>;
+                },
+              })
+              ] : []),
+              columns.display({ id: "auto", header: "Automatic runs", minSize:220, cell: (c) => <div className="flex flex-wrap items-center gap-2"><PauseState pipeline={c.row.original} /><PipelinePause code={code} pipeline={c.row.original}/></div> }),
+  ], [code, all]);
   return (
     <div className="grid grid-cols-1 gap-4">
       <PageHeader
@@ -81,19 +122,7 @@ export function Pipelines() {
         subtitle={tags.length ? `Tagged ${tags.join(" and ")}` : undefined}
         actions={
           <div className="flex flex-wrap items-start gap-2">
-          {developer ? (
-            <ActionButton<unknown>
-              code={code}
-              label="Refresh all"
-              title={`Refresh every pipeline in ${code}`}
-              effect="Validates each pipeline's current definition and pins the versions that pass."
-              endpoint="/pipelines/refresh"
-              askReason={false}
-              body={() => ({})}
-              describe={() => "Every pipeline was refreshed."}
-              
-            />
-          ) : null}
+          <PipelineRefresh code={code} onDone={() => void list.refetch()} />
           <CsvButton
             name={`${code}-pipelines.csv`}
             header={["pipeline", "name", "description", "tags", "schedule", "dependencies", "last_run", "next_run", "automatic_runs", "paused_tasks"]}
@@ -112,67 +141,24 @@ export function Pipelines() {
       </div>
       {list.isError ? <Notice>{(list.error as Error).message}</Notice> : null}
       <Card>
-        {selected.length && canRun ? (
-          <div className="flex flex-wrap items-center gap-3 border-b border-border px-3 py-2">
-            <span className="text-sm font-medium">{selected.length} selected</span>
-            {bulk("PAUSE", "Pause")}
-            {bulk("RESUME", "Resume")}
-          </div>
-        ) : null}
+        <div className="flex flex-wrap items-center gap-3 border-b border-border px-3 py-2">
+          <span className="text-sm font-medium">{selected.length} selected</span>
+          {bulk("PAUSE", "Pause")}
+          {bulk("RESUME", "Resume")}
+          <BulkRefresh code={code} pipelines={selected} />
+        </div>
         <LegendView entries={statusEntries(shown.flatMap(pipeline=>pipeline.recent_runs.map(run=>run.status)))}><DataTable
           label="Pipelines"
           data={shown}
           empty={list.isSuccess ? (tags.length ? <EmptyState title="No pipeline carries every selected tag." nextStep="Clear a tag to broaden the list." /> : <EmptyState title="This project has no active pipeline." nextStep="Add a pipeline in the project config files, apply them, then refresh the pipeline definitions." />) : undefined}
           rowId={(p) => p.pipeline_code}
-          selection={
-            canRun
-              ? {
-                  ids: chosen,
-                  onToggle: (id) => setChosen((now) => (now.has(id) ? new Set([...now].filter((x) => x !== id)) : new Set([...now, id]))),
-                  onToggleAll: (every) => setChosen(every ? new Set(shown.map((p) => p.pipeline_code)) : new Set()),
-                }
-              : undefined
-          }
+          selection={{
+            ids: chosen,
+            onToggle: (id) => setChosen((now) => (now.has(id) ? new Set([...now].filter((x) => x !== id)) : new Set([...now, id]))),
+            onToggleAll: (every) => setChosen(every ? new Set(shown.map((p) => p.pipeline_code)) : new Set()),
+          }}
           initialSort={[{ id: "pipeline", desc: false }]}
-          columns={[
-            columns.accessor("pipeline_code", {
-              id: "pipeline",
-              header: "Pipeline",
-              cell: (c) => (
-                <span className="grid">
-                  <Link className="font-medium text-fg hover:text-accent hover:underline" to={pipelinePath(code, c.getValue())}>
-                    {c.getValue()}
-                  </Link>
-                  {c.row.original.pipeline_name !== c.getValue() ? <span className="text-xs text-muted">{c.row.original.pipeline_name}</span> : null}
-                </span>
-              ),
-            }),
-            columns.display({ id: "recent", header: "Recent success", minSize: 176, cell: (c) => <RecentRuns project={code} pipeline={c.row.original} /> }),
-            columns.display({ id: "description", header: "Description", cell: (c) => <span className="line-clamp-2 max-w-md text-[13px] text-muted" title={c.row.original.description ?? undefined}>{c.row.original.description ?? "—"}</span> }),
-            columns.display({ id: "tags", header: "Tags", cell: (c) => <TagList tags={c.row.original.tags} /> }),
-            columns.accessor("run_schedule", { header: "Schedule", enableSorting: false, cell: (c) => (c.getValue() ? <code className="whitespace-nowrap font-mono text-xs">{c.getValue()}</code> : <span className="whitespace-nowrap text-muted">Not scheduled</span>) }),
-            columns.display({ id: "dependencies", header: "Waits for", cell: (c) => c.row.original.depends_on.length ? c.row.original.depends_on.map(([pipeline, kind]) => `${pipeline} (${kind})`).join(", ") : "None" }),
-            columns.display({ id: "last", header: "Last run", cell: (c) => {
-              const pipeline = c.row.original;
-              const run = pipeline.recent_runs[0];
-              return run ? <span className="grid gap-1"><RunLabel id={run.pipeline_run_id} label={run.run_label} to={runPath(code, pipeline.pipeline_code, run.pipeline_run_id)} /><When iso={run.start_date} /></span> : <span className="text-muted">No runs yet</span>;
-            } }),
-            columns.display({ id: "next", header: "Next run", cell: (c) => <NextRun pipeline={c.row.original} /> }),
-            ...(all.some((p) => p.sla_in_hours) ? [
-            columns.display({
-              id: "sla",
-              header: "SLA",
-              minSize: 112,
-              cell: (c) => {
-                const p = c.row.original;
-                const newest = p.recent_runs[0];
-                const latest = newest ? slaVerdict(newest) : null;
-                return latest ? <StatusBadge status={latest} /> : <span className="text-muted">{!p.sla_in_hours ? "—" : newest ? "No verdict" : "No run yet"}</span>;
-              },
-            })
-            ] : []),
-            columns.display({ id: "auto", header: "Automatic runs", minSize:220, cell: (c) => <div className="flex flex-wrap items-center gap-2"><PauseState pipeline={c.row.original} /><PipelinePause code={code} pipeline={c.row.original}/></div> }),
-          ]}
+          columns={tableColumns}
         /></LegendView>
         {list.isPending ? <Loading what="pipelines" className="p-4" /> : null}
       </Card>

@@ -3,6 +3,7 @@ import * as React from "react";
 import { ActionButton } from "@/components/action-button";
 import { DropdownContent, DropdownItem, DropdownMenu, DropdownSeparator, DropdownTrigger } from "@/components/dropdown";
 import { cn } from "@/lib/utils";
+import { unavailableAction, useActionAvailability } from "@/hooks";
 
 export interface RowAction {
   label: string;
@@ -18,18 +19,30 @@ export interface RowAction {
 }
 
 /** A row's actions behind one menu; each opens the shared confirmation, so nothing destructive is a single click. */
-export function RowActions({ name, actions }: { name: string; actions: RowAction[] }) {
+export function RowActions({ name, actions, account, agent }: { name: string; actions: RowAction[]; account?: string; agent?: number }) {
   const [chosen, setChosen] = React.useState<number | null>(null);
+  const [open, setOpen] = React.useState(false);
+  const platform = useActionAvailability(undefined, undefined, actions.some((a) => !a.code));
+  const selected = account ? { account_name: account } : agent === undefined ? undefined : { agent_id: agent };
+  const target = useActionAvailability(undefined, undefined, !!selected && open, selected);
   const safe = actions.filter((a) => !a.danger);
   const risky = actions.filter((a) => a.danger);
-  const item = (a: RowAction) => (
-    <DropdownItem key={a.label} className={cn(a.danger && "text-bad")} onSelect={() => setChosen(actions.indexOf(a))}>
-      {a.label}
-    </DropdownItem>
-  );
+  function reason(a: RowAction) {
+    if (account || agent !== undefined) return unavailableAction(target, a.endpoint);
+    const answer = a.code ? undefined : platform.data?.actions.find((entry) => entry.endpoint === "/api/v1" + a.endpoint);
+    return answer?.available === false ? answer.reason : undefined;
+  }
+  const item = (a: RowAction) => {
+    const unavailable = reason(a);
+    return (
+      <DropdownItem key={a.label} aria-label={a.label} unavailableReason={unavailable} className={cn("grid gap-0.5", a.danger && "text-bad")} onSelect={() => setChosen(actions.indexOf(a))}>
+        <span>{a.label}</span>
+      </DropdownItem>
+    );
+  };
   return (
     <>
-      <DropdownMenu>
+      <DropdownMenu onOpenChange={setOpen}>
         <DropdownTrigger aria-label={`Actions for ${name}`} className="grid size-7 cursor-pointer place-items-center rounded-sm text-muted hover:bg-surface-2 hover:text-fg">
           <Ellipsis className="size-4" aria-hidden />
         </DropdownTrigger>
@@ -40,7 +53,7 @@ export function RowActions({ name, actions }: { name: string; actions: RowAction
         </DropdownContent>
       </DropdownMenu>
       {actions.map((a, i) => (
-        <ActionButton<{ message?: string }> key={a.label} {...a} menu={{ open: chosen === i, setOpen: (open) => setChosen(open ? i : null) }} />
+        <ActionButton<{ message?: string }> key={a.label} {...a} unavailableReason={reason(a)} menu={{ open: chosen === i, setOpen: (open) => setChosen(open ? i : null) }} />
       ))}
     </>
   );

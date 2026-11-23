@@ -26,10 +26,7 @@ def resume(ctx: OperationContext, request: ControlRequest) -> str:
         pipeline_id = resolve_pipeline_id(conn, request.pipeline_code)
         standing_pauses.lock(conn, pipeline_id)
         pause = pauses.fetch_open_pause(conn, pipeline_id)
-        if pause is None:
-            raise RunStateError(
-                f"{request.pipeline_code}: not paused; inspect status before resuming"
-            )
+        require_open_pause(request.pipeline_code, pause)
         zone, ticks, skip_ticks = _plan(conn, ctx, request, pipeline_id, now)
         created = []
         if request.then == ResumeChoice.RUN_NOW:
@@ -81,6 +78,12 @@ def resume(ctx: OperationContext, request: ControlRequest) -> str:
             f"pipeline_run_id={active}"
         )
     return message
+
+
+def require_open_pause(pipeline_code: str, pause: pauses.Pause | None) -> None:
+    """Require an open pipeline pause before allowing resume."""
+    if pause is None:
+        raise RunStateError(f"{pipeline_code}: not paused; inspect status before resuming")
 
 
 def _plan(

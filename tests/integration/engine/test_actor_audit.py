@@ -521,6 +521,9 @@ def test_cli_actor_requests_and_read_only_audit(
     config = tmp_path / "craft-connector.yml"
     config.write_text(yaml.safe_dump(metadata, sort_keys=False))
     with engine_db.engine.begin() as conn:
+        conn.execute(
+            text("UPDATE CFG_PROJECTS SET GOVERNANCE='RELAXED' WHERE PROJECT_CODE='default'")
+        )
         pipeline = add_pipeline(conn, "P")
         deleted = add_task(conn, pipeline, "deleted", NOTE="deleted_parameter_history")
         unrelated = add_pipeline(conn, "OTHER")

@@ -2,7 +2,7 @@ import { useMutation } from "@tanstack/react-query";
 import * as React from "react";
 import { Field, inputClass, Notice, PageHeader } from "@/components/common";
 import { Button } from "@/components/ui/button";
-import { failureText, useIdentity } from "@/hooks";
+import { failureText, unavailableAction, useActionAvailability, useIdentity } from "@/hooks";
 import { postJson } from "@/lib/api";
 import { useDocumentTitle } from "@/title";
 
@@ -10,6 +10,7 @@ import { useDocumentTitle } from "@/title";
 export function Password() {
   useDocumentTitle("Change password");
   const identity = useIdentity();
+  const availability = useActionAvailability();
   const [current, setCurrent] = React.useState("");
   const [next, setNext] = React.useState("");
   const [again, setAgain] = React.useState("");
@@ -18,14 +19,8 @@ export function Password() {
     onSuccess: () => window.location.assign("/ui/signin?changed=1"),
   });
   const mismatch = again !== "" && again !== next;
-  if (identity.data && !identity.data.local_password) {
-    return (
-      <div className="grid gap-5">
-        <PageHeader title="Change password" />
-        <Notice info>Your account signs in through single sign-on, so its password is managed by your identity provider.</Notice>
-      </div>
-    );
-  }
+  const reason = unavailableAction(availability, "/account/password")
+    ?? (mismatch ? "The two new passwords differ. Type the same one twice." : undefined);
   return (
     <div className="grid grid-cols-1 gap-5">
       <PageHeader title="Change password" />
@@ -35,7 +30,7 @@ export function Password() {
           className="grid max-w-md gap-4 p-4"
           onSubmit={(event) => {
             event.preventDefault();
-            if (!mismatch) change.mutate();
+            if (!reason && !change.isPending) change.mutate();
           }}
         >
           <Field label="Current password">
@@ -47,10 +42,9 @@ export function Password() {
           <Field label="Confirm new password">
             <input required type="password" autoComplete="new-password" className={inputClass} value={again} onChange={(e) => setAgain(e.target.value)} />
           </Field>
-          {mismatch ? <Notice>The two new passwords differ; type the same one twice.</Notice> : null}
           {change.isError ? <Notice>{failureText(change.error)}</Notice> : null}
           <div>
-            <Button type="submit" variant="primary" disabled={change.isPending || mismatch}>
+            <Button type="submit" variant="primary" disabled={change.isPending} unavailableReason={reason}>
               {change.isPending ? "Changing…" : "Change password and sign in again"}
             </Button>
           </div>

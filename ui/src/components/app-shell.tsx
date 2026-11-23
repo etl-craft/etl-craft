@@ -83,7 +83,6 @@ export function AppShell() {
     if (addressed && !unavailable && health.isSuccess) rememberProject(addressed);
   }, [addressed, unavailable, health.isSuccess]);
   const env = current ? { type: current.environment_type, name: current.environment_name } : null;
-  const admin = identity.data?.role === "admin";
 
   return (
     <div className="flex h-dvh flex-col bg-bg">
@@ -179,7 +178,6 @@ export function AppShell() {
         >
           <Sidebar
             code={code}
-            admin={admin}
             collapsed={collapsed && !open}
             onToggle={() => {
               const next = !collapsed;

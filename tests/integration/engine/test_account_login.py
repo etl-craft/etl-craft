@@ -352,7 +352,11 @@ def test_account_cli_and_local_recovery(project, monkeypatch, capsys):
     assert main(["account", "reset-password", "--name", "alice"]) == 0
     assert main(["account", "disable", "--name", "alice"]) == 0
     capsys.readouterr()
-    act(ctx, ActionName.ACCOUNT_DISABLE, name="owner")
+    # The owner cannot disable its own account; the automation service account does it instead.
+    automation = OperationContext(
+        ctx.engine, ctx.config, Actor("automation", ActorKind.SERVICE), role=ApiRole.ADMIN
+    )
+    act(automation, ActionName.ACCOUNT_DISABLE, name="owner")
     with pytest.raises(UsageError, match="last unlocked active admin"):
         act(ctx, ActionName.ACCOUNT_DISABLE, name="automation")
     assert tokens.authenticate(ctx, service.token) is not None

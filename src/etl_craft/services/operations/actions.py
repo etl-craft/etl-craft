@@ -246,9 +246,13 @@ _ROWS = (
     Action(ActionName.RUN_DETAIL, inspect.get_run, RunId, models.RunView, VIEWER, GET,
            f"{API}/runs/{{run_id}}",
            scope=ActionScope.PIPELINE),
-    Action(ActionName.CAPABILITIES, capabilities.control_capabilities, CapabilitiesInput,
-           capabilities.CapabilitiesView, VIEWER, GET, f"{API}/capabilities",
+    Action(ActionName.CAPABILITIES, capabilities.project_capabilities, CapabilitiesInput,
+           capabilities.CapabilitiesView | capabilities.ActionAvailabilityView,
+           VIEWER, GET, f"{API}/capabilities",
            scope=ActionScope.PIPELINE),
+    Action(ActionName.DEPLOYMENT_CAPABILITIES, capabilities.deployment_capabilities,
+           capabilities.DeploymentCapabilitiesInput,
+           capabilities.ActionAvailabilityView, VIEWER, GET, f"{API}/capabilities"),
     Action(ActionName.CONTROL_REQUEST, controls.get_control, ControlId, ControlView, VIEWER, GET,
            f"{API}/control-requests/{{control_id}}",
            scope=ActionScope.PIPELINE),
@@ -455,8 +459,7 @@ def admitted(ctx: OperationContext, name: ActionName, request: object) -> Iterat
         given = arguments(request)
         required = action.required_role(ctx, request)
         try:
-            authorize_identity(ctx, action, request)
-            authorization.authorize(ctx, action, request, required)
+            authorize_action(ctx, action, request, required)
         except (PermissionDeniedError, ResourceNotFoundError) as error:
             record_refusal(ctx, name, given, error)
             raise
@@ -473,6 +476,23 @@ def authorize_identity(ctx: OperationContext, action: Action, request: object) -
     personal.require_password_change(ctx, action.name)
     _require_trigger_groups(ctx, action, request)
     _require_project_identity(ctx, action, request)
+
+
+def authorize_action(
+    ctx: OperationContext, action: Action, request: object, required: ApiRole | None
+) -> None:
+    """Check action admission without running the action or recording the request."""
+    authorize_identity(ctx, action, request)
+    if action.name == ActionName.PIPELINE_REFRESH and isinstance(
+        request, pipeline_refresh.InternalRefresh
+    ):
+        return
+    authorization.authorize(ctx, action, request, required)
+    if action.name == ActionName.PIPELINE_REFRESH:
+        assert isinstance(request, pipeline_refresh.RefreshInput)
+        pipeline_refresh.require_refresh_governance(ctx, request)
+    if action.name == ActionName.ACCOUNT_DISABLE and isinstance(request, accounts.AccountName):
+        accounts.require_other_account(ctx, request)
 
 
 def _require_project_identity(ctx: OperationContext, action: Action, request: object) -> None:

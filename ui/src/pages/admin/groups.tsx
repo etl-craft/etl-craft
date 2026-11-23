@@ -77,9 +77,7 @@ export function GroupsTab() {
               id: "act",
               header: "Actions",
               cell: (c) =>
-                c.row.original.active_flag === "Y" ? (
-                  <ActionButton<unknown> label="Disable" title={`Disable ${c.row.original.name}`} effect="Stops this group granting access; its grants and history stay." endpoint="/groups/disable" askReason={false} body={() => ({ name: c.row.original.name })} describe={done("Group disabled.")} variant="danger" size="sm" />
-                ) : null,
+                <ActionButton<unknown> label="Disable" title={`Disable ${c.row.original.name}`} effect="Stops this group granting access; its grants and history stay." endpoint="/groups/disable" askReason={false} body={() => ({ name: c.row.original.name })} describe={done("Group disabled.")} variant="danger" size="sm" />,
             }),
           ]}
         />

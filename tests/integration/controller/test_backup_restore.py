@@ -64,7 +64,7 @@ def test_dump_restore_recovers_exact_interrupted_run(cli_project, restored_datab
         "    with Path(ROOT, 'backup-output').open('a') as stream: stream.write('one row\\n')\n"
         "    return ScriptResult(1)\n"
     )
-    assert p.run("pipelines", "refresh")[0] == 0
+    assert p.run("deploy")[0] == 0
     assert (
         p.run(
             "run",

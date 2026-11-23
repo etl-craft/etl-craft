@@ -221,7 +221,7 @@ def test_parent_sigkill_reconciles_and_retries_real_child(cli_project):
         "    while first:\n        time.sleep(0.05)\n"
         "    return ScriptResult(7)\n"
     )
-    code, output = project.run("pipelines", "refresh")
+    code, output = project.run("deploy")
     assert code == 0, output
     parent = project.start("run", "--reason", "test requested run", "--pipeline-code", "P")
     project.wait_for("SELECT STATUS FROM AUD_TASK_ATTEMPTS", expected="RUNNING")
@@ -287,7 +287,7 @@ def test_child_sigkill_is_failed_by_live_parent(cli_project):
     (project.config.python_scripts_dir / "load.py").write_text(
         "import time\ndef run(task):\n    time.sleep(60)\n"
     )
-    code, output = project.run("pipelines", "refresh")
+    code, output = project.run("deploy")
     assert code == 0, output
     parent = project.start("run", "--reason", "test requested run", "--pipeline-code", "P")
     project.wait_for("SELECT STATUS FROM AUD_TASK_ATTEMPTS", expected="RUNNING")

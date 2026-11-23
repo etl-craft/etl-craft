@@ -2,6 +2,8 @@
 
 from datetime import UTC, datetime
 
+from sqlalchemy.engine import Connection
+
 from etl_craft.core.enums import ControlAction, RunStatus
 from etl_craft.core.errors import RunStateError, UsageError
 from etl_craft.core.time import as_utc
@@ -31,39 +33,8 @@ def change(ctx: OperationContext, request: ControlRequest) -> OperationResult:
     with ctx.engine.begin() as conn:
         pipeline_id = resolve_pipeline_id(conn, request.pipeline_code)
         standing_pauses.lock(conn, pipeline_id)
-        assert request.task_code is not None
-        previous = next(
-            (
-                pause
-                for pause in standing_pauses.current(conn, pipeline_id)
-                if pause.task_code == request.task_code
-            ),
-            None,
-        )
-        task_id = (
-            previous.task_id
-            if previous is not None
-            else resolve_task_id(conn, pipeline_id, request.task_code)
-        )
-        active = previous is not None and previous.active(now)
+        previous, task_id = inspect_task_pause(conn, pipeline_id, request, now)
         identity = f"{request.pipeline_code}.{request.task_code}"
-        if request.action == ControlAction.PAUSE:
-            if active and not request.replace:
-                assert previous is not None
-                raise RunStateError(
-                    f"{identity}: already paused by {previous.describe()}; use --replace "
-                    "to close that version and open a replacement atomically"
-                )
-            if request.replace and not active:
-                raise RunStateError(
-                    f"{identity}: --replace found no active task pause (absent or expired); "
-                    "omit --replace to create a pause"
-                )
-        elif not active:
-            raise RunStateError(
-                f"{identity}: no active task pause (absent or expired); expected an active "
-                "pause to resume; inspect status before resuming"
-            )
         parameters = {
             "pipeline_id": pipeline_id,
             "task_id": task_id,
@@ -92,3 +63,43 @@ def change(ctx: OperationContext, request: ControlRequest) -> OperationResult:
         else:
             message = f"{identity}: resumed; task pause and outcome removed"
     return OperationResult(RunStatus.SUCCESS, message, pipeline_id, request.pipeline_code)
+
+
+def inspect_task_pause(
+    conn: Connection, pipeline_id: int, request: ControlRequest, now: datetime
+) -> tuple[standing_pauses.TaskPause | None, int]:
+    """Resolve the current task pause and share its state checks with availability."""
+    assert request.task_code is not None
+    previous = next(
+        (
+            pause
+            for pause in standing_pauses.current(conn, pipeline_id)
+            if pause.task_code == request.task_code
+        ),
+        None,
+    )
+    task_id = (
+        previous.task_id
+        if previous is not None
+        else resolve_task_id(conn, pipeline_id, request.task_code)
+    )
+    active = previous is not None and previous.active(now)
+    identity = f"{request.pipeline_code}.{request.task_code}"
+    if request.action == ControlAction.PAUSE:
+        if active and not request.replace:
+            assert previous is not None
+            raise RunStateError(
+                f"{identity}: already paused by {previous.describe()}; use --replace "
+                "to close that version and open a replacement atomically"
+            )
+        if request.replace and not active:
+            raise RunStateError(
+                f"{identity}: --replace found no active task pause (absent or expired); "
+                "omit --replace to create a pause"
+            )
+    elif not active:
+        raise RunStateError(
+            f"{identity}: no active task pause (absent or expired); expected an active "
+            "pause to resume; inspect status before resuming"
+        )
+    return previous, task_id

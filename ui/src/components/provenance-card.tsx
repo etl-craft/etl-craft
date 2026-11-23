@@ -6,14 +6,13 @@ import { Field, inputClass, Loading, Notice, SelectField } from "@/components/co
 import { RecordTable } from "@/components/record-table";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
-import { useIdentity } from "@/hooks";
-import { failureText } from "@/hooks";
+import { failureText, unavailableAction, useActionAvailability } from "@/hooks";
 import { postJson, project } from "@/lib/api";
 import type { ValueResult } from "@/lib/types";
 
 /** Who last wrote each value of one business key in a merge task's target, and which values are locked. */
 export function ProvenanceCard({ code, pipeline, task, keys, columns }: { code: string; pipeline: string; task: string; keys: string[]; columns: string[] }) {
-  const admin = useIdentity(code).data?.role === "admin";
+  const availability = useActionAvailability(code, pipeline);
   const [key, setKey] = React.useState<Record<string, string>>({});
   const [column, setColumn] = React.useState(columns[0] ?? "");
   const [value, setValue] = React.useState("");
@@ -24,6 +23,8 @@ export function ProvenanceCard({ code, pipeline, task, keys, columns }: { code: 
   const look = useMutation({ mutationFn: () => postJson<ValueResult>(base + "/provenance", scope) });
   const complete = keys.every((k) => (key[k] ?? "") !== "");
   const result = look.data;
+  const keyReason = complete ? undefined : "Enter every part of the business key.";
+  const lookupReason = unavailableAction(availability, "/values/provenance") ?? keyReason;
   return (
     <Card>
       <CardHeader>
@@ -36,7 +37,7 @@ export function ProvenanceCard({ code, pipeline, task, keys, columns }: { code: 
           className="flex flex-wrap items-end gap-3"
           onSubmit={(event) => {
             event.preventDefault();
-            if (complete) look.mutate();
+            if (!lookupReason) look.mutate();
           }}
         >
           {keys.map((k) => (
@@ -44,7 +45,7 @@ export function ProvenanceCard({ code, pipeline, task, keys, columns }: { code: 
               <input value={key[k] ?? ""} onChange={(event) => setKey({ ...key, [k]: event.target.value })} required autoComplete="off" className={inputClass} />
             </Field>
           ))}
-          <Button type="submit" variant="primary" disabled={!complete || look.isPending}>
+          <Button type="submit" variant="primary" disabled={look.isPending} unavailableReason={lookupReason}>
             Look up
           </Button>
         </form>
@@ -63,14 +64,13 @@ export function ProvenanceCard({ code, pipeline, task, keys, columns }: { code: 
             ) : null}
           </div>
         ) : null}
-        {admin && complete ? (
           <div className="flex flex-wrap items-start gap-2">
             <ActionButton<{ message?: string }>
               code={code}
               label="Edit a value"
               title={`Edit a value of ${task}`}
               effect="Writes the explicit value for this key; other values are retained. Recorded with your reason."
-              endpoint="/values"
+              endpoint="/values" unavailableReason={unavailableAction(availability, "/values") ?? keyReason}
               body={(reason) => ({ ...scope, values: { [column]: value }, reason, row_lock: lockRow })}
               describe={() => "The value was saved."}
               size="sm"
@@ -95,7 +95,7 @@ export function ProvenanceCard({ code, pipeline, task, keys, columns }: { code: 
               label="Unlock values"
               title={`Unlock values of ${task}`}
               effect="Releases locks on this key; with no columns named, every active lock on it."
-              endpoint="/values/unlock"
+              endpoint="/values/unlock" unavailableReason={unavailableAction(availability, "/values/unlock") ?? keyReason}
               body={(reason) => ({ ...scope, reason, columns: unlock.split(",").map((c) => c.trim()).filter(Boolean) })}
               describe={() => "The values were unlocked."}
               size="sm"
@@ -106,7 +106,6 @@ export function ProvenanceCard({ code, pipeline, task, keys, columns }: { code: 
               }
             />
           </div>
-        ) : null}
       </div>
     </Card>
   );

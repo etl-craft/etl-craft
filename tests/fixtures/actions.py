@@ -37,6 +37,7 @@ GIVEN = {
     "ItemControl": {"item_key": "x"},
     "MarkRequest": {"status": RunStatus.SUCCESS},
     "ControlRequest": {"run_id": 1, "request_key": "k"},
+    "CapabilitiesInput": {"pipeline_code": "x"},
     "AccountAdd": {"password": "secret", "role": ApiRole.ADMIN},
     "AccountRole": {"role": ApiRole.ADMIN},
     "TokenCreate": {"role": ApiRole.VIEWER},

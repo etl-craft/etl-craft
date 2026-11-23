@@ -126,6 +126,13 @@ def test_crash_after_upstream_commit_is_finished_by_repeating_erase(erasure_proj
         )
     with duckdb.connect(str(ctx.config.project_dir / "warehouse.db")) as conn:
         conn.execute("CREATE TABLE ds.copy AS SELECT person AS customer,n FROM ds.people")
+    act(
+        ctx,
+        ActionName.PROJECT_SET,
+        project=ctx.project or ctx.config.project,
+        governance="RELAXED",
+        reason="Exercise standalone refresh",
+    )
     refreshed = act(ctx, ActionName.PIPELINE_REFRESH)
     assert all(str(r.status) == "SUCCESS" for r in refreshed.refreshes), refreshed
     code = """
@@ -188,6 +195,13 @@ def test_doctor_reports_unfollowed_table_with_reason_and_remedy(erasure_project)
         conn.execute(
             "CREATE TABLE ds.grouped AS SELECT person,COUNT(*) AS n FROM ds.people GROUP BY person"
         )
+    act(
+        ctx,
+        ActionName.PROJECT_SET,
+        project=ctx.project or ctx.config.project,
+        governance="RELAXED",
+        reason="Exercise standalone refresh",
+    )
     refreshed = act(ctx, ActionName.PIPELINE_REFRESH)
     assert all(str(r.status) == "SUCCESS" for r in refreshed.refreshes), refreshed
     act(
@@ -486,6 +500,13 @@ def test_sql_writers_never_write_erased_keys_and_keep_null_identifiers(erasure_p
         )
     with duckdb.connect(str(ctx.config.project_dir / "warehouse.db")) as conn:
         conn.execute("CREATE TABLE ds.copy AS SELECT person AS customer,n FROM ds.people")
+    act(
+        ctx,
+        ActionName.PROJECT_SET,
+        project=ctx.project or ctx.config.project,
+        governance="RELAXED",
+        reason="Exercise standalone refresh",
+    )
     refreshed = act(ctx, ActionName.PIPELINE_REFRESH)
     assert all(str(r.status) == "SUCCESS" for r in refreshed.refreshes), refreshed
     args = {"table": "ds.people", "column": "person", "value": "private-person-key"}
@@ -545,6 +566,13 @@ def test_a_script_that_resends_an_erased_key_has_it_removed_in_the_same_attempt(
             SCRIPT_FILE="python_scripts/resend.py",
             TARGET_OBJECT="ds.people",
         )
+    act(
+        ctx,
+        ActionName.PROJECT_SET,
+        project=ctx.project or ctx.config.project,
+        governance="RELAXED",
+        reason="Exercise standalone refresh",
+    )
     refreshed = act(ctx, ActionName.PIPELINE_REFRESH)
     assert all(str(r.status) == "SUCCESS" for r in refreshed.refreshes), refreshed
     act(

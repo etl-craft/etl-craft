@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 from playwright.sync_api import expect, sync_playwright
-from test_react_ui import open_page, sign_in
+from test_react_ui import open_page, pause_item, sign_in
 from test_react_ui import scene as scene
 
 from etl_craft.core.actor import acting_as
@@ -46,7 +46,7 @@ def test_paused_page_redirect_modes_outcomes_and_resume_use_the_same_controls(sc
             ),
         )
         sign_in(page, url, "/ui/projects/default/pipelines/OPS")
-        page.get_by_role("button", name="Pause", exact=True).click()
+        pause_item(page, "Pause").click()
         dialog = page.get_by_role("dialog", name="Pause OPS", exact=True)
         mode = dialog.get_by_role("combobox", name="Active runs", exact=True)
         expect(mode).to_have_value("DRAIN")
@@ -91,8 +91,7 @@ def test_paused_page_redirect_modes_outcomes_and_resume_use_the_same_controls(sc
         expect(page.get_by_role("button", name="Release", exact=True)).to_have_count(0)
         assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
         capture(page, "paused", scheme, width)
-        replace_button = pipelines.get_by_role("button", name="Replace pause", exact=True)
-        replace_button.click()
+        pause_item(pipelines, "Replace pause").click()
         replacement = page.get_by_role("dialog", name="Replace pause OPS", exact=True)
         select = replacement.get_by_role("combobox", name="Active runs", exact=True)
         select.focus()
@@ -116,7 +115,7 @@ def test_paused_page_redirect_modes_outcomes_and_resume_use_the_same_controls(sc
         resume.get_by_label("Reason (kept in the audit trail)").fill("source restored")
         resume.get_by_role("button", name="Resume", exact=True).click()
         expect(page.get_by_text("No task is paused.", exact=True)).to_be_visible()
-        pipelines.get_by_role("button", name="Resume", exact=True).click()
+        pause_item(pipelines, "Resume").click()
         resume = page.get_by_role("dialog", name="Resume OPS", exact=True)
         resume.get_by_label("Reason (kept in the audit trail)").fill("maintenance complete")
         resume.get_by_role("button", name="Resume", exact=True).click()

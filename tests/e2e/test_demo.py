@@ -153,7 +153,7 @@ def test_the_demo_runs_locally(make_demo, installer, engine, warehouse):
     check_server(demo, emails)
     if not warehouse_dialect(demo.config).views:
         set_parameter(demo, "DEMO", "area_summary", "SQL_ACTION", SqlAction.CREATE_VIEW)
-        refused = demo.run("pipelines", "refresh")
+        refused = demo.run("deploy")
         assert refused.returncode == 1
         assert "DEMO.area_summary" in refused.stdout and "cannot create views" in refused.stdout
 

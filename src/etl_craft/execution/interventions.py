@@ -102,16 +102,7 @@ def mark_task(
         pipeline_id = resolve_pipeline_id(conn, pipeline_code)
         task_id = resolve_task_id(conn, pipeline_id, task_code)
         run_id, run_status = _selected_run(conn, pipeline_id, selector)
-        before = runlog.fetch_task_run_status(conn, task_id, run_id)
-        handed_off = conn.execute(
-            statement(conn, "trigger_task_handoff"), {"task_id": task_id, "run_id": run_id}
-        ).scalar_one_or_none()
-        if before == RunStatus.IN_PROGRESS and handed_off is None:
-            raise RunRefusedError(
-                f"{pipeline_code}.{task_code} is running under pipeline_run_id={run_id}; wait "
-                "for it to end, or end the run with `etl-craft stop` or `abort`. If the process "
-                "running it is gone, give `stale` after its lease expires to record its outcome"
-            )
+        before = require_markable_task(conn, f"{pipeline_code}.{task_code}", task_id, run_id)
         if before == status and rows is None and not lost:
             raise UsageError(
                 f"{pipeline_code}.{task_code} is already {status} under "
@@ -159,6 +150,21 @@ def mark_task(
         message += f". Run `etl-craft run --pipeline-code {pipeline_code}` to resume it"
     logger.warning("%s (by %s: %s)", message, who, reason)
     return Intervened(message, run_id)
+
+
+def require_markable_task(conn: Connection, task: str, task_id: int, run_id: int) -> str | None:
+    """Read the outcome and refuse marking an active attempt before it hands off a child."""
+    before = runlog.fetch_task_run_status(conn, task_id, run_id)
+    handed_off = conn.execute(
+        statement(conn, "trigger_task_handoff"), {"task_id": task_id, "run_id": run_id}
+    ).scalar_one_or_none()
+    if before == RunStatus.IN_PROGRESS and handed_off is None:
+        raise RunRefusedError(
+            f"{task} is running under pipeline_run_id={run_id}; wait "
+            "for it to end, or end the run with `etl-craft stop` or `abort`. If the process "
+            "running it is gone, give `stale` after its lease expires to record its outcome"
+        )
+    return before
 
 
 def mark_run(
@@ -332,16 +338,7 @@ def pause_pipeline(
         pipeline_id = resolve_pipeline_id(conn, pipeline_code)
         standing_pauses.lock(conn, pipeline_id)
         existing = pauses.fetch_open_pause(conn, pipeline_id)
-        if existing is not None and not options.replace:
-            raise RunStateError(
-                f"{pipeline_code}: already {existing.describe()}; "
-                "use --replace to replace the active pause atomically"
-            )
-        if existing is None and options.replace:
-            raise RunStateError(
-                f"{pipeline_code}: --replace found no active pipeline pause; "
-                "expected an open pause; omit --replace to create one"
-            )
+        require_pause_state(pipeline_code, existing, replace_pause=options.replace)
         if existing is not None:
             pauses.close_pause(conn, pipeline_id, who, reason, now=now)
         pauses.record_pause(
@@ -352,6 +349,22 @@ def pause_pipeline(
     )
     logger.info("%s (by %s: %s)", message, who, reason)
     return message
+
+
+def require_pause_state(
+    pipeline_code: str, existing: pauses.Pause | None, *, replace_pause: bool
+) -> None:
+    """Refuse creating a duplicate pause or replacing an absent pause."""
+    if existing is not None and not replace_pause:
+        raise RunStateError(
+            f"{pipeline_code}: already {existing.describe()}; "
+            "use --replace to replace the active pause atomically"
+        )
+    if existing is None and replace_pause:
+        raise RunStateError(
+            f"{pipeline_code}: --replace found no active pipeline pause; "
+            "expected an open pause; omit --replace to create one"
+        )
 
 
 def open_pause(
@@ -561,21 +574,9 @@ def reset_offset(
         pipeline_id = resolve_pipeline_id(conn, change.pipeline_code)
         task_id = resolve_task_id(conn, pipeline_id, change.task_code)
         selected = runlog.select_run(conn, pipeline_id, selector)
-        active = conn.execute(
-            statement(conn, "watermark_active_attempts"), {"task_id": task_id}
-        ).scalar_one()
-        if active:
-            raise RunRefusedError(
-                f"{change.pipeline_code}.{change.task_code} has {active} active attempt(s); "
-                f"wait for them to end or cancel and reconcile before resetting its {label}"
-            )
-        before = fetch_task_offset(conn, task_id)
-        if before is not None and before.pending_task_run_id is not None:
-            raise RunRefusedError(
-                f"{change.pipeline_code}.{change.task_code}: pending timestamp window belongs "
-                f"to task_run_id={before.pending_task_run_id}; resume its owner or cancel and "
-                "reconcile all writers before resetting the cursor"
-            )
+        before = require_resettable_offset(
+            conn, f"{change.pipeline_code}.{change.task_code}", task_id, label
+        )
         wanted, shown = _reset_definition(conn, config, change, task_id, before)
         save_task_offset(conn, task_id, StoredOffset(wanted.datatype, wanted.stored()))
         message = (
@@ -594,6 +595,28 @@ def reset_offset(
         )
     logger.warning("%s (by %s: %s)", message, current_actor().name, change.reason)
     return Intervened(message, selected.pipeline_run_id)
+
+
+def require_resettable_offset(
+    conn: Connection, task: str, task_id: int, label: str
+) -> StoredOffset | None:
+    """Check for active attempts and pending windows before resetting an offset."""
+    active = conn.execute(
+        statement(conn, "watermark_active_attempts"), {"task_id": task_id}
+    ).scalar_one()
+    if active:
+        raise RunRefusedError(
+            f"{task} has {active} active attempt(s); "
+            f"wait for them to end or cancel and reconcile before resetting its {label}"
+        )
+    before = fetch_task_offset(conn, task_id)
+    if before is not None and before.pending_task_run_id is not None:
+        raise RunRefusedError(
+            f"{task}: pending timestamp window belongs "
+            f"to task_run_id={before.pending_task_run_id}; resume its owner or cancel and "
+            "reconcile all writers before resetting the cursor"
+        )
+    return before
 
 
 def _reset_definition(

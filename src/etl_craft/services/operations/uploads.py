@@ -71,6 +71,7 @@ class UploadPipelines:
 
     SCHEMA: ClassVar[str] = "etl-craft/upload-pipelines/1"
     pipelines: tuple[dict[str, object], ...]
+    unavailable_reason: str = ""
 
 
 @dataclass
@@ -241,7 +242,7 @@ class UploadReceipt:
         return self.result
 
 
-def _require_pipeline(ctx: OperationContext, request: UploadRequest) -> int:
+def require_upload_pipeline(ctx: OperationContext, request: UploadRequest) -> int:
     """Recheck current grants before receipt and before its durable queue commit."""
     with ctx.engine.connect() as conn:
         account = find_account(conn, ctx.actor.name)
@@ -295,10 +296,10 @@ def receive(ctx: OperationContext, request: UploadRequest) -> Iterator[UploadRec
             receipt = None
             pipeline_id = None
             try:
-                pipeline_id = _require_pipeline(ctx, request)
+                pipeline_id = require_upload_pipeline(ctx, request)
                 receipt = UploadReceipt(ctx, pipeline_id, audit.action_id, request.pipeline_code)
                 yield receipt
-                _require_pipeline(ctx, request)
+                require_upload_pipeline(ctx, request)
                 receipt.finish()
             except Exception as error:
                 if receipt is not None and receipt.committed_result():
@@ -364,21 +365,26 @@ def eligible(ctx: OperationContext, request: NoInput) -> UploadPipelines:
     with ctx.engine.connect() as conn:
         access = pipeline_access(conn, ctx)
         rows = conn.execute(statement(conn, "upload_eligible"), {"project_id": ctx.project_id})
-        return UploadPipelines(
-            tuple(
-                dict(row._mapping)
-                for row in rows
-                if access.levels.get(row.pipeline_code)
-                in {
-                    Permission.CAN_UPLOAD,
-                    Permission.CAN_RUN,
-                    Permission.CAN_MANAGE,
-                }
-                or allows(
-                    ctx,
-                    ActionName.UPLOAD,
-                    UploadRequest(pipeline_code=row.pipeline_code),
-                    conn=conn,
-                )
+        pipelines = tuple(
+            dict(row._mapping)
+            for row in rows
+            if access.levels.get(row.pipeline_code)
+            in {
+                Permission.CAN_UPLOAD,
+                Permission.CAN_RUN,
+                Permission.CAN_MANAGE,
+            }
+            or allows(
+                ctx,
+                ActionName.UPLOAD,
+                UploadRequest(pipeline_code=row.pipeline_code),
+                conn=conn,
             )
         )
+        unavailable = (
+            ""
+            if pipelines
+            else "No pipeline takes uploads from you here. Ask a developer to enable uploads "
+            "for an active pipeline, then ask its manager or an administrator for CAN_UPLOAD."
+        )
+        return UploadPipelines(pipelines, unavailable)

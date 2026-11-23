@@ -148,8 +148,8 @@ def _steps(
 
 def _refresh(ctx: OperationContext, bundle_id: str | None) -> tuple[PipelineRefresh, ...]:
     from etl_craft.services.operations.actions import invoke
-    from etl_craft.services.operations.pipeline_refresh import RefreshInput
+    from etl_craft.services.operations.pipeline_refresh import InternalRefresh
 
-    checked = invoke(ctx, ActionName.PIPELINE_REFRESH, RefreshInput(bundle=bundle_id))
+    checked = invoke(ctx, ActionName.PIPELINE_REFRESH, InternalRefresh(bundle=bundle_id))
     assert isinstance(checked, RefreshResults)
     return checked.refreshes

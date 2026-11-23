@@ -17,6 +17,7 @@ from etl_craft.core.enums import (
     ControlAction,
     FailureClass,
     LineageDirection,
+    PositionKind,
     ResumeChoice,
     RunStatus,
 )
@@ -172,14 +173,43 @@ class TaskSelection(RunSelection):
 
 
 @dataclass(frozen=True, kw_only=True)
-class CapabilitiesInput(RunSelection):
-    """The selected run, or one task of it, whose controls to inspect."""
+class CapabilitiesInput(RunIdentity):
+    """Inspect run controls, or the actions on a pipeline or project."""
 
+    pipeline_code: str | None = None
     task_code: str | None = None
+    definition: bool = False
+    pipeline_codes: tuple[str, ...] = ()
+    with_warehouse: bool = False
+    preview_table: str | None = None
+    reset_position: PositionKind | None = None
 
     def __post_init__(self) -> None:
-        """Refuse a blank task code as well."""
+        """Require a pipeline for run controls, and keep the two selections distinct."""
         super().__post_init__()
+        if self.definition:
+            optional_text("pipeline_code", self.pipeline_code)
+            optional_text("preview_table", self.preview_table)
+            if self.run_key is not None or (self.run_id is not None and self.task_code is None):
+                raise UsageError("definition capabilities accept a run_id only with task_code")
+            if self.reset_position is not None and self.run_id is None:
+                raise UsageError("reset_position requires a selected run_id")
+            if self.task_code is not None and self.pipeline_code is None:
+                raise UsageError("task_code needs pipeline_code for definition capabilities")
+            if self.pipeline_code is not None and self.pipeline_codes:
+                raise UsageError("choose either pipeline_code or pipeline_codes")
+        else:
+            require_text("pipeline_code", self.pipeline_code)
+            if (
+                self.pipeline_codes
+                or self.with_warehouse
+                or self.preview_table is not None
+                or self.reset_position is not None
+            ):
+                raise UsageError(
+                    "pipeline_codes, with_warehouse, preview_table and reset_position require "
+                    "definition capabilities"
+                )
         optional_text("task_code", self.task_code)
 
 

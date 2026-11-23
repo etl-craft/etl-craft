@@ -5,7 +5,7 @@ import { AppLink as Link } from "@/components/navigation";
 import { inputClass, Loading, Notice, PageHeader, SelectField, SettingRow } from "@/components/common";
 import { useToast } from "@/components/toast";
 import { Button } from "@/components/ui/button";
-import { failureText, useHealth, useIdentity } from "@/hooks";
+import { failureText, unavailableAction, useActionAvailability, useHealth, useIdentity } from "@/hooks";
 import { postJson } from "@/lib/api";
 import { passwordPath } from "@/lib/routes";
 import { applyDensity, applyTheme, storedDensity, type Density } from "@/lib/theme";
@@ -17,6 +17,8 @@ export function Settings() {
   useDocumentTitle("Personal settings");
   const identity = useIdentity();
   const health = useHealth();
+  const availability = useActionAvailability();
+  const passwordReason = unavailableAction(availability, "/account/password");
   const toast = useToast();
   const client = useQueryClient();
   const [edit, setEdit] = React.useState<PersonalSettings | null>(null);
@@ -39,6 +41,8 @@ export function Settings() {
     },
   });
   if (!form) return <Loading what="settings" />;
+  const saveReason = unavailableAction(availability, "/account/settings")
+    ?? (!edit && first === null && last === null ? "Change a setting before saving." : undefined);
   const set = (patch: Partial<PersonalSettings>) => setEdit({ ...form, ...patch });
   const radios = <T extends string>(name: string, value: string, options: [T, string][], pick: (v: T) => void) => (
     <div className="flex flex-wrap gap-4">
@@ -57,7 +61,7 @@ export function Settings() {
       className="flex flex-col"
       onSubmit={(event) => {
         event.preventDefault();
-        save.mutate(form);
+        if (!saveReason && !save.isPending) save.mutate(form);
       }}
     >
       {identity.data?.names_editable ? (
@@ -112,8 +116,8 @@ export function Settings() {
         <input required type="number" min={1} max={100} aria-label="Page size" className={inputClass} value={form.page_size} onChange={(e) => set({ page_size: Number(e.target.value) })} />
       </SettingRow>
       <SettingRow title="Password" hint="Forgot it? Ask an administrator to reset it; they cannot read the old one.">
-        {identity.data?.local_password === false ? (
-          <span className="text-sm text-muted">Managed by your identity provider.</span>
+        {passwordReason ? (
+          <Button unavailableReason={passwordReason}>Change password</Button>
         ) : (
           <Link to={passwordPath} className="inline-flex h-control items-center rounded-md border border-border-strong px-3 text-sm hover:bg-surface-2">
             Change password
@@ -121,7 +125,7 @@ export function Settings() {
         )}
       </SettingRow>
       <div className="flex flex-wrap items-center gap-3 px-4 py-3">
-        <Button type="submit" variant="primary" disabled={(!edit && first === null && last === null) || save.isPending}>
+        <Button type="submit" variant="primary" disabled={save.isPending} unavailableReason={saveReason}>
           {save.isPending ? "Saving…" : "Save settings"}
         </Button>
         {save.isError ? <Notice className="py-1.5">{failureText(save.error)}</Notice> : null}

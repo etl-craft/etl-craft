@@ -5,7 +5,7 @@ import { ChevronDown, ChevronRight, CircleX, Copy, Download, LifeBuoy } from "lu
 import * as React from "react";
 import { AppLink as Link } from "@/components/navigation";
 import { Fact, FactList, Loading, Notice, ParamList } from "@/components/common";
-import { DropdownContent, DropdownItem, DropdownLabel, DropdownMenu, DropdownSeparator, DropdownTrigger } from "@/components/dropdown";
+import { DropdownContent, DropdownItem, DropdownMenu, DropdownSeparator, DropdownTrigger } from "@/components/dropdown";
 import { ActionButton } from "@/components/action-button";
 import { AttemptDetails } from "@/components/attempt-details";
 import { useToast } from "@/components/toast";
@@ -13,7 +13,7 @@ import { DANGER, EFFECT, label as actionLabel, ScopeControls } from "@/component
 import { isFailure, slaVerdict, StatusBadge, taskStatus } from "@/components/status";
 import { Button } from "@/components/ui/button";
 import { Table, Td, Th } from "@/components/ui/table";
-import { useCanRun } from "@/hooks";
+import { unavailableAction, useActionAvailability } from "@/hooks";
 import { getJson, project } from "@/lib/api";
 import { formatDuration } from "@/lib/format";
 import { RunTimeline } from "@/components/run-timeline";
@@ -21,8 +21,6 @@ import { handlerLabel, runConditionLabel, words } from "@/lib/labels";
 import { When } from "@/components/when";
 import { attemptPath, itemsPath, taskPath } from "@/lib/routes";
 import type { Capabilities, ControlView, Explanation, Graph, RunView, Steps, TaskHistory } from "@/lib/types";
-
-const RECOVERABLE = new Set(["FAILED", "LOST", "STOPPED", "ABORTED"]);
 
 function Why({ code, pipeline, runId, task }: { code: string; pipeline: string; runId: number; task: string }) {
   const why = useQuery({
@@ -97,25 +95,24 @@ function TaskDetails({ code, pipeline, runId, task, handler }: { code: string; p
  * Everything else that can be done to the run, in one menu beside its one primary action: each control says what
  * it does, the run's key and logs are at the bottom, and controls that are not possible now say why.
  */
-function RunActions({ code, run, canRun }: { code: string; run: RunView; canRun: boolean }) {
+function RunActions({ code, run }: { code: string; run: RunView }) {
   const toast = useToast();
   const [chosen, setChosen] = React.useState<string | null>(null);
   const caps = useQuery({
     queryKey: ["capabilities", code, run.pipeline_code, run.pipeline_run_id, ""],
     queryFn: () => getJson<Capabilities>(`${project(code)}/capabilities`, { pipeline_code: run.pipeline_code, run_id: run.pipeline_run_id }),
-    enabled: canRun,
   });
   const query = `pipeline_code=${encodeURIComponent(run.pipeline_code)}&run_id=${run.pipeline_run_id}`;
   const scope = `run ${run.pipeline_run_id}`;
   // Recover is the primary button beside this menu, so it is not repeated here.
   const actions = (caps.data?.actions ?? []).filter((a) => a.action !== "RECOVER");
   const open = actions.filter((a) => a.available);
-  const blocked = actions.filter((a) => !a.available);
-  const reconcile = canRun && !run.end_date;
-  const item = (id: string, title: string, line: string, danger = false) => (
-    <DropdownItem key={id} onSelect={() => setChosen(id)} className="grid gap-0.5">
+  const availability = useActionAvailability(code, run.pipeline_code);
+  const reconcileReason = unavailableAction(availability, "/reconciliations");
+  const item = (id: string, title: string, line: string, danger = false, unavailable?: string) => (
+    <DropdownItem key={id} aria-label={title} unavailableReason={unavailable} onSelect={() => setChosen(id)} className="grid gap-0.5">
       <span className={danger ? "font-medium text-bad" : "font-medium"}>{title}</span>
-      <span className="max-w-72 text-xs text-muted">{line}</span>
+      {!unavailable ? <span className="max-w-72 text-xs text-muted">{line}</span> : null}
     </DropdownItem>
   );
   const file = (path: string, name: string, text: string) => (
@@ -135,30 +132,14 @@ function RunActions({ code, run, canRun }: { code: string; run: RunView; canRun:
           </Button>
         </DropdownTrigger>
         <DropdownContent align="end" className="w-80">
-          {canRun ? (
-            <>
-              {open.map((a) => item(a.action, actionLabel(a.action), EFFECT[a.action] ?? "", DANGER.has(a.action)))}
-              {reconcile ? item("RECONCILE", "Reconcile", "Records attempts whose owner stopped renewing its lease as lost, so their tasks can be retried.") : null}
-              {open.length || reconcile ? <DropdownSeparator /> : null}
-            </>
-          ) : null}
+          {actions.map((a) => item(a.action, actionLabel(a.action), EFFECT[a.action] ?? "", DANGER.has(a.action), a.available ? undefined : a.reason ?? undefined))}
+          {item("RECONCILE", "Reconcile", "Records attempts whose owner stopped renewing its lease as lost, so their tasks can be retried.", false, reconcileReason)}
+          <DropdownSeparator />
           <DropdownItem onSelect={() => void navigator.clipboard.writeText(run.run_key).then(() => toast("Run key copied."))}>
             <Copy className="size-4" aria-hidden /> Copy run key
           </DropdownItem>
           {file("/run-log", `run-${run.pipeline_run_id}.log`, "Download run log")}
           {file("/run-zip", `run-${run.pipeline_run_id}-logs.zip`, "Download logs (zip)")}
-          {canRun && blocked.length ? (
-            <>
-              <DropdownSeparator />
-              <DropdownLabel>Not available now</DropdownLabel>
-              {blocked.map((a) => (
-                <DropdownItem key={a.action} disabled className="grid gap-0.5 data-[disabled]:cursor-default">
-                  <span className="font-medium text-muted">{actionLabel(a.action)}</span>
-                  <span className="max-w-72 text-xs text-muted">{a.reason}</span>
-                </DropdownItem>
-              ))}
-            </>
-          ) : null}
         </DropdownContent>
       </DropdownMenu>
       {open.map((a) => (
@@ -174,50 +155,41 @@ function RunActions({ code, run, canRun }: { code: string; run: RunView; canRun:
           menu={{ open: chosen === a.action, setOpen: (on) => setChosen(on ? a.action : null) }}
         />
       ))}
-      {reconcile ? (
-        <ActionButton<{ message: string }>
-          code={code}
-          label="Reconcile"
-          title={`Reconcile ${run.pipeline_code} run #${run.pipeline_run_id}`}
-          effect="Fences attempts whose owner stopped renewing their lease and records them as LOST, so their tasks can be retried; live attempts are untouched."
-          endpoint="/reconciliations"
-          body={(reason) => ({ pipeline_code: run.pipeline_code, reason })}
-          describe={(r) => r.message}
-          menu={{ open: chosen === "RECONCILE", setOpen: (on) => setChosen(on ? "RECONCILE" : null) }}
-        />
-      ) : null}
+      <ActionButton<{ message: string }>
+        code={code}
+        label="Reconcile"
+        title={`Reconcile ${run.pipeline_code} run #${run.pipeline_run_id}`}
+        effect="Fences attempts whose owner stopped renewing their lease and records them as LOST, so their tasks can be retried; live attempts are untouched."
+        endpoint="/reconciliations"
+        unavailableReason={reconcileReason}
+        body={(reason) => ({ pipeline_code: run.pipeline_code, reason })}
+        describe={(r) => r.message}
+        menu={{ open: chosen === "RECONCILE", setOpen: (on) => setChosen(on ? "RECONCILE" : null) }}
+      />
     </>
   );
 }
 
-function RecoverRun({ code, run, canRun }: { code: string; run: RunView; canRun: boolean }) {
+function RecoverRun({ code, run }: { code: string; run: RunView }) {
   const caps = useQuery({
     queryKey: ["capabilities", code, run.pipeline_code, run.pipeline_run_id, run.status],
     queryFn: () => getJson<Capabilities>(`${project(code)}/capabilities`, { pipeline_code: run.pipeline_code, run_id: run.pipeline_run_id }),
-    enabled: canRun,
   });
   const capability = caps.data?.actions.find((a) => a.action === "RECOVER");
-  if (!canRun || !capability || (!capability.available && !RECOVERABLE.has(run.status))) return null;
+  if (!capability) return null;
   return (
-    <div className="grid justify-items-end gap-2">
-      {capability.available ? (
-        <ActionButton<ControlView>
-          code={code}
-          label="Recover run"
-          title={`Recover run #${run.pipeline_run_id}`}
-          effect={`Reopens ${run.pipeline_code} run #${run.pipeline_run_id}: tasks that succeeded are kept; failed and unfinished tasks run again.`}
-          endpoint="/controls"
-          body={(reason) => ({ pipeline_code: run.pipeline_code, run_id: run.pipeline_run_id, action: "RECOVER", reason })}
-          describe={(r) => `Recover accepted: control #${r.control_id}${r.execution_run_id ? `, execution #${r.execution_run_id} ${copyRunLabel(r.execution_run_label ?? "")}` : ""}. ${r.message}`}
-          icon={<LifeBuoy className="size-4" aria-hidden />}
-          variant="primary"
-        />
-      ) : (
-        <Button variant="primary" disabled title="Not available now; the reason is listed under Controls">
-          <LifeBuoy className="size-4" aria-hidden /> Recover run
-        </Button>
-      )}
-    </div>
+    <ActionButton<ControlView>
+      code={code}
+      label="Recover run"
+      unavailableReason={capability.available ? undefined : capability.reason}
+      title={`Recover run #${run.pipeline_run_id}`}
+      effect={`Reopens ${run.pipeline_code} run #${run.pipeline_run_id}: tasks that succeeded are kept; failed and unfinished tasks run again.`}
+      endpoint="/controls"
+      body={(reason) => ({ pipeline_code: run.pipeline_code, run_id: run.pipeline_run_id, action: "RECOVER", reason })}
+      describe={(r) => `Recover accepted: control #${r.control_id}${r.execution_run_id ? `, execution #${r.execution_run_id} ${copyRunLabel(r.execution_run_label ?? "")}` : ""}. ${r.message}`}
+      icon={<LifeBuoy className="size-4" aria-hidden />}
+      variant="primary"
+    />
   );
 }
 
@@ -278,7 +250,6 @@ function FailedTasks({ code, pipeline, runId, steps, open }: { code: string; pip
  */
 export function RunOverview({ code, pipeline, runId, task, onTask }: { code: string; pipeline: string; runId: number; task: string | null; onTask: (task: string | null) => void }) {
   const toast = useToast();
-  const canRun = useCanRun(code);
   const panel = React.useRef<HTMLDivElement>(null);
   React.useEffect(() => {
     if (task) panel.current?.scrollIntoView({ block: "nearest" });
@@ -318,8 +289,8 @@ export function RunOverview({ code, pipeline, runId, task, onTask }: { code: str
           <span aria-label="Run identifier"><RunLabel id={r.pipeline_run_id} label={r.run_label} /></span>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <RecoverRun code={code} run={r} canRun={canRun} />
-          <RunActions code={code} run={r} canRun={canRun} />
+          <RecoverRun code={code} run={r} />
+          <RunActions code={code} run={r} />
         </div>
       </div>
       {r.run_label ? (

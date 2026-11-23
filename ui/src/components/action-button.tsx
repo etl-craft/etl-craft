@@ -2,7 +2,7 @@ import * as React from "react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { useToast } from "@/components/toast";
 import { Button, type ButtonProps } from "@/components/ui/button";
-import { failureText, useProjectInfo, useWrite } from "@/hooks";
+import { failureText, unavailableAction, useActionAvailability, useProjectInfo, useWrite, type AvailabilityTarget } from "@/hooks";
 import { ApiError, project } from "@/lib/api";
 
 /**
@@ -13,6 +13,8 @@ export function ActionButton<TResult>({
   code,
   projectCode,
   canSubmit,
+  unavailableReason: suppliedReason,
+  availabilityTarget,
   label,
   title,
   effect,
@@ -33,6 +35,9 @@ export function ActionButton<TResult>({
   /** Project named in confirmation when a project-scoped body uses a platform endpoint. */
   projectCode?: string;
   canSubmit?: boolean;
+  /** The server's reason this action is unavailable. */
+  unavailableReason?: string | null;
+  availabilityTarget?: AvailabilityTarget;
   label: string;
   title: string;
   effect: string;
@@ -54,6 +59,10 @@ export function ActionButton<TResult>({
   menu?: { open: boolean; setOpen: (open: boolean) => void };
 }) {
   const info = useProjectInfo(code).project;
+  const platform = useActionAvailability(undefined, undefined, !code && !menu && suppliedReason === undefined, availabilityTarget);
+  const unavailableReason = suppliedReason === undefined && !code && !menu
+    ? unavailableAction(platform, endpoint)
+    : suppliedReason ?? undefined;
   const [own, setOwn] = React.useState(false);
   const open = menu ? menu.open : own;
   const setOpen = menu ? menu.setOpen : setOwn;
@@ -69,11 +78,12 @@ export function ActionButton<TResult>({
   );
   if (code && !info) return null;
   return (
-    <div className="grid justify-items-end gap-2">
+    <div className="grid min-w-0 justify-items-start gap-2">
       {menu ? null : (
       <Button
         variant={variant}
         size={size}
+        unavailableReason={unavailableReason}
         onClick={() => {
           write.reset();
           setOpen(true);
@@ -84,7 +94,7 @@ export function ActionButton<TResult>({
       </Button>
       )}
       <ConfirmDialog
-        open={open}
+        open={open && !unavailableReason}
         title={title}
         action={label}
         effect={effect}

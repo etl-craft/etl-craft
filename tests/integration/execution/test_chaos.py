@@ -38,7 +38,7 @@ def install_writer(project, *, hold=False):
         "    return ScriptResult(1)\n"
     )
 
-    code, output = project.run("pipelines", "refresh")
+    code, output = project.run("deploy")
     assert code == 0, output
 
 

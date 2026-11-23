@@ -199,7 +199,7 @@ item's text, or work done early under another item.
 | S7.AQ Readable run identifiers | Done | #347, #369, #370 | A label beside every run and task run id, stored by the Engine DB; accepted wherever the integer is, and shown beside it |
 | S7.AR Restarting pipelines | Done | #349, #350, #356, #358 | Automatic starts on a chosen run ending, with `Allowed_auto_restarts` per environment; the demo's Gamma pipeline runs without a schedule. |
 | S7.AS Project dashboard and navigation | Done | #401, #402, #404, #405, #406, #407, #413 | Slices 1–5 owner approved; shared controls polished, with framed working panes, application-drawn diagram scrollbars, unclipped column selection and accessible search/action feedback in follow-up |
-| S7.AT Refresh and availability on the first pages | Planned | | Pipeline and all-pipelines refresh on RELAXED projects; unavailable actions on these pages grayed out with their reason |
+| S7.AT Refresh and availability on the first pages | Done | #437 | Pipeline and all-pipelines refresh on RELAXED projects; unavailable actions on these pages grayed out with their reason |
 | S7.AU Available actions on every page | Planned | | Every unavailable action on the remaining project and platform pages grayed out with its reason |
 | S7.M Stewardship uploads | Done (M2) | #296, #305 | Atomic receipts and safe stored names; processed layout, retention archives and verified reruns; crash recovery and guarded upload history |
 | S7.S Seed tables | Done | #308 | Typed pinned-bundle seeds replace reference tables until recorded stewardship handover |
@@ -222,6 +222,24 @@ item's text, or work done early under another item.
 | S8.H Support Insights scenario coverage | Planned | | Deterministic mixed-quality generators, every-feature demonstrations, business-rule and stewardship cases, and runnable README coverage |
 
 ### Handover notes
+
+- **S7.AT slices.** S7.AT is the first pages. Every other action on the project and platform pages is S7.AU,
+  which needs its own pull request and a test that every action on its pages renders its answer
+  (the action table has 126 actions; the availability answer covers about 30 of them today).
+
+- **S7.AT Choices that differ from the item text.** Standalone refresh on STRICT is refused
+  by the shared action policy in the browser, CLI and API. Authorized deploy carries an
+  internal privilege for its final refresh, which runs after config and seeds are applied.
+  The controller uses the same internal privilege to finish refreshing prior direct edits
+  if project governance changes to STRICT before the controller sees them.
+  Deployment availability uses `GET /api/v1/capabilities` without selecting a project or run.
+  The matrix covers valid role, environment and governance combinations. The project API
+  refuses PROD with RELAXED, as required by S7.Z.
+  The shared account operation refuses self-disable across the UI, CLI and API. The
+  Accounts menu shows the disabled action and tells the caller to ask another administrator.
+  Rebuild catalog keeps its operation and location. Its visibility follows the same
+  availability rule as other controls, with the server's reason when it is unavailable.
+  Reasons appear as annotations on hover, keyboard focus or tap.
 
 - **One deploy command.** Rebuild step 7. `services/operations/deploy.py` publishes (only with
   `Artifacts.Store`), applies config, loads seeds and refreshes, stopping at the first failure;

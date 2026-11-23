@@ -213,7 +213,7 @@ def cli_project(empty_engine_db, tmp_path, monkeypatch):
         project.task_id = add_task(
             conn, project.pipeline_id, "load", "PYTHON", SCRIPT_FILE="python_scripts/load.py"
         )
-    code, output = project.run("pipelines", "refresh")
+    code, output = project.run("deploy")
     assert code == 0, output
     try:
         yield project

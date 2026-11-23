@@ -4,7 +4,7 @@ import { ActionButton } from "@/components/action-button";
 import { Loading, Notice, PageHeader } from "@/components/common";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
-import { failureText, useProjectInfo, useRoleAtLeast } from "@/hooks";
+import { failureText, unavailableAction, useActionAvailability, useProjectInfo } from "@/hooks";
 import { ApiError, getJson, project } from "@/lib/api";
 import { useCatalog } from "@/lib/catalog";
 import { catalogPath, type CatalogKind } from "@/lib/routes";
@@ -61,8 +61,10 @@ const KINDS: CatalogKind[] = ["pipelines", "tasks", "tables", "gaps"];
 export function Catalog() {
   const { project: code = "", "*": rest = "" } = useParams();
   const [params, setParams] = useSearchParams();
-  const developer = useRoleAtLeast("developer");
-  const admin = useRoleAtLeast("admin");
+  const capabilities = useActionAvailability(code);
+  const rebuildReason = unavailableAction(capabilities, "/docs");
+  const lineageReason = unavailableAction(capabilities, "/lineage/refresh");
+  const versionsReason = unavailableAction(capabilities, "/docs/versions");
   const info = useProjectInfo(code);
   const [refreshed, setRefreshed] = React.useState<LineageRefresh | null>(null);
   const [chosen, setChosen] = React.useState<string | null>(null);
@@ -109,9 +111,7 @@ export function Catalog() {
           // One primary action; the rest are in one menu, each with what it does.
           <div className="flex flex-wrap items-start gap-2" role="group" aria-label="Catalog actions">
             {doc ? <Button aria-controls={sidebar} aria-expanded={!collapsed} onClick={()=>setCollapsed(value=>!value)}>{collapsed?<PanelLeftOpen aria-hidden className="size-4"/>:<PanelLeftClose aria-hidden className="size-4"/>}{collapsed?"Expand catalog sidebar":"Collapse catalog sidebar"}</Button>:null}
-            {developer ? (
-              <ActionButton<Done> code={code} label="Rebuild catalog" title="Rebuild the catalog" effect="Generates the catalog again from the current metadata." endpoint="/docs" body={() => ({})} askReason={false} describe={(r) => r.message ?? "The catalog was rebuilt."} onDone={() => void built.refetch()} variant="primary" />
-            ) : null}
+            <ActionButton<Done> code={code} label="Rebuild catalog" unavailableReason={rebuildReason} title="Rebuild the catalog" effect="Generates the catalog again from the current metadata." endpoint="/docs" body={() => ({})} askReason={false} describe={(r) => r.message ?? "The catalog was rebuilt."} onDone={() => void built.refetch()} variant="primary" />
             <DropdownMenu>
               <DropdownTrigger asChild>
                 <Button aria-label="More catalog actions">
@@ -124,37 +124,29 @@ export function Catalog() {
                   <span className="font-medium">Validate metadata</span>
                   <span className="text-xs text-muted">Checks every pipeline and task definition without running anything.</span>
                 </DropdownItem>
-                {developer ? (
-                  <DropdownItem onSelect={() => setChosen("lineage")} className="grid gap-0.5">
+                <DropdownItem aria-label="Refresh lineage" unavailableReason={lineageReason} onSelect={() => setChosen("lineage")} className="grid gap-0.5">
                     <span className="font-medium">Refresh lineage</span>
                     <span className="text-xs text-muted">Works every task's lineage out again; the pages show it after the next rebuild.</span>
-                  </DropdownItem>
-                ) : null}
-                {admin ? (
-                  <DropdownItem onSelect={() => setChosen("versions")} className="grid gap-0.5">
+                </DropdownItem>
+                <DropdownItem aria-label="Record catalog versions" unavailableReason={versionsReason} onSelect={() => setChosen("versions")} className="grid gap-0.5">
                     <span className="font-medium">Record catalog versions</span>
                     <span className="text-xs text-muted">Records the current definitions as the published catalog versions.</span>
-                  </DropdownItem>
-                ) : null}
+                </DropdownItem>
               </DropdownContent>
             </DropdownMenu>
-            {developer ? (
-              <ActionButton<LineageRefresh>
-                code={code}
-                label="Refresh lineage"
-                title="Refresh lineage"
-                effect="Works every task's lineage out again instead of reusing what was stored, then traces it. The catalog pages show the result after the next rebuild."
-                endpoint="/lineage/refresh"
-                body={() => ({})}
-                askReason={false}
-                describe={describeRefresh}
-                onDone={setRefreshed}
-                menu={{ open: chosen === "lineage", setOpen: (on) => setChosen(on ? "lineage" : null) }}
-              />
-            ) : null}
-            {admin ? (
-              <ActionButton<Done> code={code} label="Record catalog versions" title="Record catalog versions" effect="Records the current definitions as the published catalog versions." endpoint="/docs/versions" body={() => ({})} askReason={false} describe={() => "The catalog versions were recorded."} menu={{ open: chosen === "versions", setOpen: (on) => setChosen(on ? "versions" : null) }} />
-            ) : null}
+            <ActionButton<LineageRefresh>
+              code={code}
+              label="Refresh lineage"
+              title="Refresh lineage"
+              effect="Works every task's lineage out again instead of reusing what was stored, then traces it. The catalog pages show the result after the next rebuild."
+              endpoint="/lineage/refresh" unavailableReason={lineageReason}
+              body={() => ({})}
+              askReason={false}
+              describe={describeRefresh}
+              onDone={setRefreshed}
+              menu={{ open: chosen === "lineage", setOpen: (on) => setChosen(on ? "lineage" : null) }}
+            />
+            <ActionButton<Done> code={code} label="Record catalog versions" title="Record catalog versions" effect="Records the current definitions as the published catalog versions." endpoint="/docs/versions" unavailableReason={versionsReason} body={() => ({})} askReason={false} describe={() => "The catalog versions were recorded."} menu={{ open: chosen === "versions", setOpen: (on) => setChosen(on ? "versions" : null) }} />
           </div>
         }
       />
@@ -185,7 +177,7 @@ export function Catalog() {
       {built.isPending ? <Loading what="the catalog" /> : null}
       {missing ? (
         <Notice info>
-          {missing.replace(/[.\s]+$/, "")}.{developer ? " Use Rebuild catalog above." : ""}
+          {missing.replace(/[.\s]+$/, "")}.{rebuildReason ? "" : " Use Rebuild catalog above."}
         </Notice>
       ) : null}
       {doc ? (

@@ -421,6 +421,13 @@ def test_api_edit_and_cli_upload_keep_each_cells_actual_human_writer(
         ]
         path = tmp_path / "data.csv"
         path.write_bytes(b"id|name\n1|From Bob\n")
+        act(
+            owner,
+            ActionName.PROJECT_SET,
+            project=owner.project or owner.config.project,
+            governance="RELAXED",
+            reason="Exercise standalone refresh",
+        )
         refreshed = act(owner, ActionName.PIPELINE_REFRESH, pipeline_code="P")
         assert not refreshed.failed, refreshed
         monkeypatch.setenv("ETL_CRAFT_TOKEN", tokens["bob"])

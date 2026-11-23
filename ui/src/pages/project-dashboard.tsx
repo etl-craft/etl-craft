@@ -18,7 +18,7 @@ import { Tabs } from "@/components/tabs";
 import { StatusBadge } from "@/components/status";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import { useProjectInfo, useRoleAtLeast } from "@/hooks";
+import { unavailableAction, useActionAvailability, useProjectInfo } from "@/hooks";
 import { getJson, project } from "@/lib/api";
 import { useCatalog } from "@/lib/catalog";
 import { measured, percent, seconds } from "@/lib/format";
@@ -114,7 +114,6 @@ function TablePanel({ title, note, action, children }: { title: string; note?: s
 export function ProjectDashboard() {
   const { project: code = "" } = useParams();
   const [params, setParams] = useSearchParams();
-  const developer = useRoleAtLeast("developer");
   const info = useProjectInfo(code);
   useDocumentTitle("Home", code, info.project && { type: info.project.environment_type, name: info.project.environment_name });
   const chosen = params.getAll("pipeline");
@@ -278,7 +277,7 @@ export function ProjectDashboard() {
                 </TablePanel>
               </div>
             ) : null}
-            {tab === "quality" ? <Quality code={code} d={d} developer={developer} /> : null}
+            {tab === "quality" ? <Quality code={code} d={d} /> : null}
             {tab === "failures" ? (
               <TablePanel title="Failures">
                 <DataTable find
@@ -303,7 +302,8 @@ export function ProjectDashboard() {
 }
 
 /** Rules and schema checks: what ran, what did not pass, and how far the declared tables are checked. */
-function Quality({ code, d, developer }: { code: string; d: InsightsView; developer: boolean }) {
+function Quality({ code, d }: { code: string; d: InsightsView }) {
+  const availability = useActionAvailability(code, undefined, true, { with_warehouse: true });
   const open = d.gaps.filter((g) => !["Matched", "Unchecked", "Not declared", "Expected before first deployment"].includes(g.state));
   const byState = new Map<string, number>();
   for (const g of d.gaps) byState.set(g.state, (byState.get(g.state) ?? 0) + g.checks);
@@ -333,9 +333,7 @@ function Quality({ code, d, developer }: { code: string; d: InsightsView; develo
       <Panel
         title="Schema and lineage checks"
         aside={
-          developer && d.schema_check_on_demand ? (
-            <ActionButton<{ message?: string }> code={code} label="Check now" title="Check the declared tables against the warehouse" effect="Compares the declared tables with the warehouse and rebuilds the catalog." endpoint="/docs" body={() => ({ with_warehouse: true })} askReason={false} describe={(r) => r.message ?? "The check was requested."} size="sm" />
-          ) : null
+            <ActionButton<{ message?: string }> code={code} label="Check now" unavailableReason={unavailableAction(availability, "/docs")} title="Check the declared tables against the warehouse" effect="Compares the declared tables with the warehouse and rebuilds the catalog." endpoint="/docs" body={() => ({ with_warehouse: true })} askReason={false} describe={(r) => r.message ?? "The check was requested."} size="sm" />
         }
       >
         <p className="mb-2 mt-0 text-[13px]">

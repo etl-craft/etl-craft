@@ -46,17 +46,42 @@ export const useProjectInfo = (code: string | undefined) => {
   return { ...health, project: health.data?.projects.find((p) => p.project === code) };
 };
 
+export type ActionAvailability = {
+  action: string;
+  endpoint: string;
+  method: string;
+  available: boolean;
+  reason: string;
+  control?: string | null;
+  replacement?: boolean;
+};
+
+export type AvailabilityTarget = { account_name?: string; agent_id?: number; role_name?: string; pool_name?: string; token_id?: number; announcement_id?: number; pipeline_codes?: string[]; with_warehouse?: boolean; preview_table?: string; task_code?: string; run_id?: number; reset_position?: string };
+
+export function useActionAvailability(code?: string, pipeline?: string, enabled = true, target?: AvailabilityTarget) {
+  return useQuery({
+    queryKey: ["action-availability", code, pipeline, target],
+    queryFn: () => getJson<{ actions: ActionAvailability[] }>(
+      code ? `${project(code)}/capabilities` : "/api/v1/capabilities",
+      code ? { definition: true, pipeline_code: pipeline, pipeline_codes: target?.pipeline_codes, with_warehouse: target?.with_warehouse, preview_table: target?.preview_table, task_code: target?.task_code, run_id: target?.run_id, reset_position: target?.reset_position } : target,
+    ),
+    enabled,
+  });
+}
+
+export function unavailableAction(query: ReturnType<typeof useActionAvailability>, endpoint: string, method = "POST", control?: { action: string; replacement?: boolean }) {
+  const answer = query.data?.actions.find((action) =>
+    action.endpoint === "/api/v1" + endpoint && action.method === method
+    && (!control || (action.control === control.action && !!action.replacement === !!control.replacement)),
+  );
+  if (answer) return answer.available ? undefined : answer.reason;
+  return query.error?.message ?? (query.isPending ? "Checking availability…" : "Availability is unavailable.");
+}
+
 export { project };
 
 export function useTimezone(): string {
   return useIdentity().data?.settings.timezone ?? "UTC";
-}
-
-/** Whether the signed-in account may start and control runs in the project (a viewer may not). */
-export function useCanRun(code: string): boolean {
-  const identity = useIdentity(code).data;
-  const permission = identity?.project_permission;
-  return identity?.role === "admin" || permission === "CAN_RUN" || permission === "CAN_MANAGE";
 }
 
 /** One POST to the API as the session; every cached read is refreshed after it succeeds. */
@@ -70,14 +95,6 @@ export function useWrite<TResult>(path: string, onDone?: (result: TResult) => vo
       void client.invalidateQueries();
     },
   });
-}
-
-const ORDER = ["viewer", "operator", "developer", "admin"];
-
-/** Whether the signed-in account's deployment role is at least `minimum`. */
-export function useRoleAtLeast(minimum: "operator" | "developer" | "admin"): boolean {
-  const role = useIdentity().data?.role ?? "viewer";
-  return ORDER.indexOf(role) >= ORDER.indexOf(minimum);
 }
 
 export const failureText = (error: unknown): string | null =>
