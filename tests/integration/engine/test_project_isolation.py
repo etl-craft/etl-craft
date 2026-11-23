@@ -484,7 +484,14 @@ def test_project_manage_is_required_for_every_deploy_action(isolation, monkeypat
 
     admin, _ = isolation
     # Standalone refresh needs a RELAXED project; the manager's refresh is checked on RELAXED.
-    act(admin, ActionName.PROJECT_SET, project="sales", environment_type="CUSTOM", governance="RELAXED", reason="Manage test")
+    act(
+        admin,
+        ActionName.PROJECT_SET,
+        project="sales",
+        environment_type="CUSTOM",
+        governance="RELAXED",
+        reason="Manage test",
+    )
     for name in PROJECT_MANAGE_ACTIONS:
         action = ACTIONS[name]
         called = []

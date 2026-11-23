@@ -293,7 +293,10 @@ def test_a_viewer_can_read_the_pipelines_but_not_change_them(scene):
         sign_in(page, url, "/ui/projects/default/pipelines", name="alice")
         table = page.get_by_role("table", name="Pipelines")
         expect(table.get_by_role("link", name="OPS")).to_be_visible()
-        for name in ("Pause selected", "Resume selected"):  # selecting rows is allowed; bulk actions are not
+        for name in (
+            "Pause selected",
+            "Resume selected",
+        ):  # selecting rows is allowed; bulk actions are not
             expect(page.get_by_role("button", name=name, exact=True)).to_be_disabled()
         page.goto(url + "/ui/projects/default/pipelines/OPS")
         expect(page.get_by_role("heading", name="OPS")).to_be_visible()
@@ -769,7 +772,9 @@ def test_pipeline_manager_delegates_only_here_and_revokes_with_audit(scene, sche
         expect(page.get_by_role("heading", name=re.compile("Access to SALES"))).to_be_visible()
         # grayed out, with the reason, for a delegated manager of another pipeline
         expect(page.get_by_role("button", name="Grant access", exact=True)).to_be_disabled()
-        expect(page.get_by_role("button", name="Revoke", exact=True)).to_have_count(0)  # no binding row
+        expect(page.get_by_role("button", name="Revoke", exact=True)).to_have_count(
+            0
+        )  # no binding row
         page.context.clear_cookies()
         sign_in(page, url, "/ui/admin?tab=access")
         expect(page.get_by_role("heading", name=re.compile("Access to default"))).to_be_visible()
