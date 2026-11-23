@@ -119,6 +119,26 @@ def test_refresh_selected_is_grayed_out_with_the_reason_on_strict(scene):
         browser.close()
 
 
+def pause_item(scope, name, pipeline="OPS"):
+    """Open the pipeline's Pause menu in ``scope`` and return its ``name`` item on the page.
+
+    The menu opens from the keyboard and is retried, because the row re-renders after an action.
+    """
+    page = getattr(scope, "page", scope)  # a Locator has .page; a Page is the page
+    trigger = scope.get_by_role("button", name=f"Pause options for {pipeline}", exact=True)
+    item = page.get_by_role("menuitem", name=name, exact=True)
+    for _ in range(3):
+        trigger.focus()
+        page.keyboard.press("Enter")
+        try:
+            item.wait_for(state="visible", timeout=2000)
+            return item
+        except PlaywrightTimeoutError:
+            page.keyboard.press("Escape")
+    item.wait_for(state="visible", timeout=5000)
+    return item
+
+
 def open_page(pw, *, show_scrollbars=False, **options):
     browser = pw.chromium.launch(
         ignore_default_args=["--hide-scrollbars"] if show_scrollbars else None

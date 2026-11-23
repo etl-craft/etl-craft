@@ -28,11 +28,17 @@ async function show(task=false) {
  client.setQueryData(["task-runs","default","OPS","load"],{entries:[]});
  render(<QueryClientProvider client={client}><MemoryRouter initialEntries={["/ui/projects/default/pipelines/OPS/tasks/load"]}><ToastProvider>{task?<Routes><Route path="/ui/projects/:project/pipelines/:pipeline/tasks/:task" element={<Task/>}/></Routes>:<PipelinePause code="default" pipeline={pipeline}/>}</ToastProvider></MemoryRouter></QueryClientProvider>);
 }
+async function pick(name:string, label="OPS"){
+ fireEvent.keyDown(screen.getByRole("button",{name:`Pause options for ${label}`}),{key:"Enter"});
+ fireEvent.keyDown(await screen.findByRole("menuitem",{name}),{key:"Enter"});
+}
 it("offers DRAIN by default and sends the selected FINISH policy",async()=>{
  vi.mocked(postJson).mockResolvedValue({message:"Paused"});await show();
- expect(screen.getByRole("button",{name:"Resume"})).toHaveAttribute("aria-disabled","true");
- expect(screen.getByRole("button",{name:"Resume"})).toHaveAccessibleDescription("OPS is not paused.");
- fireEvent.click(screen.getByRole("button",{name:"Pause"}));
+ fireEvent.keyDown(screen.getByRole("button",{name:"Pause options for OPS"}),{key:"Enter"});
+ const resume=await screen.findByRole("menuitem",{name:"Resume"});
+ expect(resume).toHaveAttribute("aria-disabled","true");
+ expect(resume).toHaveAccessibleDescription("OPS is not paused.");
+ fireEvent.keyDown(screen.getByRole("menuitem",{name:"Pause"}),{key:"Enter"});
  const dialog=screen.getByRole("dialog");
  const mode=within(dialog).getByRole("combobox",{name:"Active runs"});
  expect(mode).toHaveValue("DRAIN");
@@ -42,7 +48,7 @@ it("offers DRAIN by default and sends the selected FINISH policy",async()=>{
  fireEvent.click(within(dialog).getByRole("button",{name:"Pause"}));
  await waitFor(()=>expect(postJson).toHaveBeenCalledWith("/api/v1/projects/default/controls",expect.objectContaining({action:"PAUSE",active_runs:"FINISH"})));
  await waitFor(()=>expect(screen.queryByRole("dialog")).toBeNull());
- fireEvent.click(screen.getByRole("button",{name:"Pause"}));
+ await pick("Pause");
  expect(within(screen.getByRole("dialog")).getByRole("combobox",{name:"Active runs"})).toHaveValue("DRAIN");
 });
 it("always submits a visible task outcome with SKIPPED preselected",async()=>{
@@ -66,7 +72,7 @@ it("keeps an open pause form and its chosen mode during a live list refresh", as
  const paused={...pipeline,paused:{active_runs:"DRAIN",drained_runs:[],paused_by:"owner",paused_at:"2026-11-16T12:00:00Z",reason:"maintenance"}};
  client.setQueryData(["pipelines","default"],{pipelines:[paused]});
  render(<QueryClientProvider client={client}><MemoryRouter initialEntries={["/ui/projects/default/paused"]}><ToastProvider><Routes><Route path="/ui/projects/:project/paused" element={<Paused/>}/></Routes></ToastProvider></MemoryRouter></QueryClientProvider>);
- fireEvent.click(screen.getByRole("button",{name:"Replace pause"}));
+ await pick("Replace pause", "OPS");
  const dialog=screen.getByRole("dialog");
  fireEvent.change(within(dialog).getByRole("combobox",{name:"Active runs"}),{target:{value:"FINISH"}});
  fireEvent.change(within(dialog).getByLabelText(/Reason/),{target:{value:"keep this input"}});

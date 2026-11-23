@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 from playwright.sync_api import expect, sync_playwright
 from sqlalchemy import text
-from test_react_ui import open_page, sign_in
+from test_react_ui import open_page, pause_item, sign_in
 
 from etl_craft.core.actor import Actor, ActorKind, acting_as
 from etl_craft.core.enums import ActionName
@@ -135,12 +135,12 @@ def test_a_pipeline_pauses_resumes_and_links_to_its_runs_and_tasks(scene):
         expect(page.get_by_text("Active", exact=True).first).to_be_visible()
         expect(page.get_by_role("table", name="Run grid")).to_be_visible()
         shoot(page, "pipeline-runs")
-        page.get_by_role("button", name="Pause", exact=True).click()
+        pause_item(page, "Pause").click()
         dialog = page.get_by_role("dialog")
         dialog.get_by_label("Reason (kept in the audit trail)").fill("investigate")
         dialog.get_by_role("button", name="Pause", exact=True).click()
         expect(page.get_by_text("by owner: investigate").first).to_be_visible()
-        page.get_by_role("button", name="Resume", exact=True).click()
+        pause_item(page, "Resume").click()
         dialog = page.get_by_role("dialog")
         dialog.get_by_label("Reason (kept in the audit trail)").fill("fixed")
         dialog.get_by_role("button", name="Resume", exact=True).click()
@@ -268,7 +268,7 @@ def test_scheduled_and_paused_pages_list_work_and_resume_a_pause(scene):
         held = page.get_by_role("table", name="Paused pipelines")
         expect(held.get_by_text("check totals")).to_be_visible()
         shoot(page, "held")
-        held.get_by_role("button", name="Resume").click()
+        pause_item(held, "Resume", pipeline="SALES").click()
         dialog = page.get_by_role("dialog")
         dialog.get_by_label("Reason (kept in the audit trail)").fill("totals checked")
         dialog.get_by_role("button", name="Resume").click()
@@ -300,8 +300,16 @@ def test_a_viewer_can_read_the_pipelines_but_not_change_them(scene):
             expect(page.get_by_role("button", name=name, exact=True)).to_be_disabled()
         page.goto(url + "/ui/projects/default/pipelines/OPS")
         expect(page.get_by_role("heading", name="OPS")).to_be_visible()
-        for name in ("Run now", "Pause", "Resume"):  # grayed out, not hidden, for a viewer
-            expect(page.get_by_role("button", name=name, exact=True)).to_be_disabled()
+        expect(
+            page.get_by_role("button", name="Run now", exact=True)
+        ).to_be_disabled()  # grayed out, not hidden
+        pause_menu = page.get_by_role("button", name="Pause options for OPS", exact=True)
+        pause_menu.click()  # the Pause menu is open to a viewer; its actions are grayed out
+        for name in ("Pause", "Resume", "Replace pause"):
+            expect(page.get_by_role("menuitem", name=name, exact=True)).to_have_attribute(
+                "aria-disabled", "true"
+            )
+        page.keyboard.press("Escape")
         browser.close()
 
 
