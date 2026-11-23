@@ -6,6 +6,7 @@ from pathlib import Path
 from urllib.parse import quote
 
 import pytest
+from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 from playwright.sync_api import expect, sync_playwright
 from sqlalchemy import text
 
