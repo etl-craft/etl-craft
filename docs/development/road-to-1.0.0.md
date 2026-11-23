@@ -189,7 +189,7 @@ item's text, or work done early under another item.
 | S7.G Compatibility policy | In progress | #379; rolling checks | Policy, shared same-major admission, additive SQL/ledger checks and installed input registry implemented; actual mixed-version certification waits for the 0.9.0 release gate |
 | S7.H Cloud acceptance | In progress | #104–#110, #208, #231, #236, #247 | Native/Iceberg and managed-engine contracts exist; complete candidate evidence and unavailable provider cases remain |
 | S7.I The endurance run | Planned |  | 72-hour accelerated Support Insights candidate run, faults and bounded growth evidence after S8 is running |
-| S7.J Documentation to finish | In progress | #85, #227, #277 | Generated references and guides exist; supported public contracts, complete reference and recipes remain |
+| S7.J Documentation to finish | In progress | #85, #227, #277 | Generated references and guides exist; three slices remain: S7.J.1 operating a server from your own installation, S7.J.2 concepts and access, S7.J.3 Python contracts and the export recipe |
 | S7.L ETL Craft logo and CLI banner | In progress | #277, #400 | Owner-supplied logo, vector sources, theme-aware favicon and documentation assets, and the taller CLI banner are done; branding guidance remains |
 | S7.AL Pre-demo package gaps | Done | #314, #315, #337, #417, S7.AL.5 PR | Duplicate counts, current references, guarded-table validation guidance, event-file validation, the run timeline with recorded gate and event waits, and erasure physical-retention reporting. |
 | S7.AM Protection on every warehouse | Done | #311, #312, #313 | Atomic SCD merges, in-row protection and recovery, private audit identities and provider acceptance |
@@ -200,7 +200,9 @@ item's text, or work done early under another item.
 | S7.AR Restarting pipelines | Done | #349, #350, #356, #358 | Automatic starts on a chosen run ending, with `Allowed_auto_restarts` per environment; the demo's Gamma pipeline runs without a schedule. |
 | S7.AS Project dashboard and navigation | Done | #401, #402, #404, #405, #406, #407, #413 | Slices 1–5 owner approved; shared controls polished, with framed working panes, application-drawn diagram scrollbars, unclipped column selection and accessible search/action feedback in follow-up |
 | S7.AT Refresh and availability on the first pages | Done | #437 | Pipeline and all-pipelines refresh on RELAXED projects; unavailable actions on these pages grayed out with their reason |
-| S7.AU Available actions on every page | Planned | | Every unavailable action on the remaining project and platform pages grayed out with its reason |
+| S7.AU Available actions on every page | Planned | | Every unavailable action on the remaining project and platform pages grayed out with its reason; two slices, project pages then platform pages |
+| S7.AV No implicit project | Planned | | Engine DB access without a selected project fails naming the caller, instead of using project 1 |
+| S7.AW Public docs for 0.9.0 | Planned | | README, published nav without development pages, and a short 0.9.0 changelog summary |
 | S7.M Stewardship uploads | Done (M2) | #296, #305 | Atomic receipts and safe stored names; processed layout, retention archives and verified reruns; crash recovery and guarded upload history |
 | S7.S Seed tables | Done | #308 | Typed pinned-bundle seeds replace reference tables until recorded stewardship handover |
 | S7.T Business calendars | Done | #276 | Shared holiday and weekend calendars for schedules, run dates, backfill and catch-up |
@@ -220,8 +222,19 @@ item's text, or work done early under another item.
 | S8.F Acceptance checks | Planned | | Rows, provenance, faults, UI and memory checks against the candidate |
 | S8.G The release gate | Planned | | Validate demo wheel/commit/scenario evidence through S7.O without running the external demo in package CI |
 | S8.H Support Insights scenario coverage | Planned | | Deterministic mixed-quality generators, every-feature demonstrations, business-rule and stewardship cases, and runnable README coverage |
+| S8.I Support Insights on current main | Planned | | `ALERT` tasks with `EMAIL` channels and `deploy` replace removed handlers and commands, so the demo can pin current main; precedes S8.C, S8.E and S8.F |
 
 ### Handover notes
+
+- **Repo audit (owner, 2026-11-23).** Checked against `main` at `548b23ce`. The local CLI
+  operating a server (`--api`, S5.S) works for 117 of 126 actions, including `deploy`, but is
+  described only in `docs/deploying/security.md`, which wrongly says config files are refused
+  remotely; S7.J.1 fixes that. Project migrations (`migrate`) stay host-only. Also found: an implicit
+  project 1 (S7.AV), a stale README and a 1,853-line `[Unreleased]` changelog (S7.AW), and
+  Support Insights still on removed commands and `EMAIL_ALERT` (S8.I). S7.R.2 has not
+  started (no `COVERAGE.md`); S7.P still lists `test_last_unlocked_admin_guard` as planned.
+  S8.C's command list now names `deploy`, which replaced `config apply`, `bundle publish` and
+  `seed apply`.
 
 - **S7.AT slices.** S7.AT is the first pages. Every other action on the project and platform pages is S7.AU,
   which needs its own pull request and a test that every action on its pages renders its answer
@@ -8798,6 +8811,46 @@ The documentation gate must inspect rendered content and links on the landing pa
   reads the Engine DB tables. Reads are open, so no exporter or OpenLineage integration is
   needed.
 
+**Slices (owner, 2026-11-23).** Three pull requests, in this order.
+
+**S7.J.1 Operating a server from your own installation.** A user installs etl-craft with pip
+on a laptop or a CI runner, signs in to a server by its URL and runs commands there, holding no
+Engine DB or warehouse credentials. This works today (S5.S), but the only description is a
+section of `docs/deploying/security.md`, which a new user would not open, and it is wrong: it
+says config files reach a server only through its own deployment, while `deploy --api` sends the
+project and applies its config, seeds and refresh. Its hand-written command list also misses
+`deploy`, `upload` and `access`. Project migrations (`migrate`) do stay host-only.
+
+- New guide `docs/guides/remote-cli.md`, in the Guides nav: install without credentials;
+  `login --api` with a password or SSO device flow; `ETL_CRAFT_API` and `--project`;
+  `deploy --plan` then `deploy` from a laptop and from CI; run, watch, logs and stepping in;
+  service tokens in `ETL_CRAFT_TOKEN` for CI; HTTPS only except `localhost`; exit code 27.
+- What runs where is linked to the generated `reference/actions.md`, never listed by hand. Name
+  the host-only commands as a class (setup, migrations of the Engine DB, server processes) and
+  why, without a list that can drift.
+- `docs/deploying/security.md` keeps the token, refresh and HTTPS facts and links to the guide.
+- `quick-start.md` gains a short step operating the demo's local server through `--api`; the
+  README and `index.md` name the capability in one line each.
+- *Tests.* The docs build is strict; every command shown in the guide exists with the flags
+  shown (an existing CLI-page check, or a small doc test if none covers guides).
+
+*Done when:*
+
+- [ ] A new user can go from `pip install` to `deploy` and `run` against a server using only the
+  guide.
+- [ ] No page says config files are refused against a server; pages that mention `migrate`
+  say it runs on the controller's host.
+- [ ] The guide links to the generated actions reference instead of listing commands.
+- [ ] The Quick Start, README and `index.md` mention operating a server from your installation.
+
+**S7.J.2 Concepts and access.** A concepts page (runs, attempts, run keys, revisions, leases,
+pools, projects, environments) and an access guide (roles, bindings, groups, audiences, access
+explain) moved out of `docs/deploying/security.md`, which keeps the threat model and hardening.
+S7.L's remaining branding guidance joins this slice.
+
+**S7.J.3 Python contracts and the export recipe.** The Python API reference and its
+rendered-content documentation gate described above, and the export recipe.
+
 ### S7.K Hosting the metadata-generated catalog documentation
 
 **Problem.** Teams need to share the pipeline documentation generated from Engine DB metadata
@@ -9852,6 +9905,54 @@ with its reason on each project page and each platform page. S7.AT covers the pa
 - [ ] An availability test covers each action in the action table for each role, governance and
   environment type.
 
+**Slices (owner, 2026-11-23).** Two pull requests: the project pages with the availability test
+for every action in the action table, then the platform pages.
+
+### S7.AV No implicit project
+
+Owner, 2026-11-23. `current_project_id()` in `engine/repository/pipelines.py` returns project 1
+when no project is selected (44 calls in 27 files). Project 1 is the default project, which
+admins deactivate after install, so a path that forgets to select its project reads or writes
+the wrong project instead of failing. This breaks "fail rather than guess".
+
+**Decisions.**
+
+- **Select at the entry point.** The CLI, API, controller, agents and task children select the
+  project where they already resolve it (`Orchestration.Project`, `--project`, the run's
+  project). A local installation that means the default project selects it there, explicitly.
+- **No fallback below.** With no project selected, the repository raises a `core.errors` error
+  naming the operation and the remedy. Stop and ask if a user-visible path cannot select one.
+
+**Done when.**
+
+- [ ] `current_project_id()` has no default; a test calls a repository function with no project
+  selected and asserts the error and its message.
+- [ ] The full suite passes with no other test changed to select a project it did not need
+  before; each one that did is named in the pull request.
+- [ ] A local installation without `Orchestration.Project` behaves as before.
+
+### S7.AW Public docs for 0.9.0
+
+Owner, 2026-11-23. 0.9.0 is the first public release, and the public face still shows the
+development history.
+
+**Change.**
+
+1. README: what etl-craft is (ETL/ELT data movement with its own scheduler, not a general
+   orchestrator), `pip install` from the release, the Quick Start, operating a server from your
+   installation (S7.J.1), and the docs link. Drop the 0.1.0 note and the git-clone install.
+2. The published docs nav drops `rewrite-plan.md`, `metadata-and-ui.md` and the UI wireframes;
+   the files are deleted, or kept unpublished where an open item still links them. The roadmap
+   stays in the repository and leaves the published nav.
+3. `CHANGELOG.md` opens 0.9.0 with a summary of at most one screen: what etl-craft does, the
+   supported warehouses and Engine DBs, how to install and the upgrade rule from 0.9.0 on. The
+   detailed entries follow it.
+
+**Done when.**
+
+- [ ] The README and changelog summary describe 0.9.0 as published, with no development history.
+- [ ] `make docs` passes with no development page in the published nav and no broken link.
+
 ## Release candidate: the Support Insights example
 
 **Goal.** Prove 1.0.0 on a real project before it is released. The
@@ -10093,7 +10194,7 @@ admin commands outside config CI. Grant command input is not a project config fi
 `ACTIVE_FLAG = 'N'`. Nobody edits the Engine DB by hand; the UI shows metadata read-only.
 
 - **Pull requests:** `validate.yml` runs on a GitHub-hosted runner, with no secrets. Install
-  the candidate wheel, migrate an empty Engine DB, run `config plan`, `config apply` and
+  the candidate wheel, migrate an empty Engine DB, run `config plan`, `deploy` and
   `validate` against the project in the same demo commit.
   Select an explicit secretless local DuckDB warehouse profile for this job, bootstrap its
   schemas and declared source shapes, and validate the same seed files against that warehouse.
@@ -10101,8 +10202,8 @@ admin commands outside config CI. Grant command input is not a project config fi
   the seed-cast validation environment.
 - **Push to `main`, filtered to `project/**`:** `deploy.yml` runs on a self-hosted runner
   container in the demo cluster, in a GitHub environment with required reviewers. It runs
-  `validate`, `config apply --api`, `bundle publish --api`, `seed apply --api`, then
-  `run --api` for `SI_REFERENCE`.
+  `deploy --plan --api`, `deploy --api`, `validate --api`, then `run --api` for
+  `SI_REFERENCE`.
 - The runner holds only a `developer` token, with no Engine DB or artifact-store credentials.
   No workflow on the self-hosted runner runs on `pull_request`.
 
@@ -10379,6 +10480,27 @@ package bug or missing feature demonstration remains hidden behind a project wor
 reference queries and UI checks pass, every S8.H feature/scenario and README walkthrough is verified,
 and the endurance run on the example passed. A partial coverage matrix cannot pass the release gate.
 
+### S8.I Support Insights on current main
+
+Owner, 2026-11-23. Support Insights pins an older package commit (`ci/PACKAGE_COMMIT`) and uses
+what the package has since removed: nine `EMAIL_ALERT` task rows in `project/config/tasks.csv`,
+and `config apply`, `bundle publish` and `seed apply` in `ci/validate.sh` and its README. It
+cannot move its pin to current `main` until it changes, and S8.C, S8.E and S8.F build on it.
+The change is in the Support Insights repository only; a package defect it finds is fixed in
+the package, never worked around in the demo.
+
+- Alerts become `ALERT` tasks on events, with recipients on `EMAIL` channels, as the package
+  demo's `prepare.py` does.
+- `deploy` replaces the `config apply`, `bundle publish` and `seed apply` chain in CI and the
+  README, with `--api` wherever the README operates the cluster.
+- The pin moves to current package `main`.
+
+*Done when:*
+
+- [ ] No `EMAIL_ALERT`, `config apply`, `bundle publish` or `seed apply` remains in Support
+  Insights.
+- [ ] Its validate job and README walkthrough pass against the new pin.
+
 ## 0.9.0 release checklist
 
 0.9.0 is tagged when each of these has evidence recorded the way `release/README.md` describes:
@@ -10437,6 +10559,8 @@ and the endurance run on the example passed. A partial coverage matrix cannot pa
       Remotion, with its official `remotion-dev/skills`, composes and renders it, so the video
       re-renders when the UI changes. Its sources live in the `etl-craft.github.io` repository,
       never in the package repository, and it is built after S8 runs and published at 0.9.0.
+- [ ] The public README, docs nav and 0.9.0 changelog summary are done (S7.AW), and the docs
+      show operating a server from your own installation (S7.J.1).
 - [ ] The UI shows the running package version on every page (owner, 2026-11-01): one line at
       the foot of the profile menu, linking to About, read from the version About already shows.
 
