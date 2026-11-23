@@ -34,6 +34,7 @@ def test_pipeline_row_pause_resume_keeps_confirmation_policy_and_header_action(s
         expect(dialog).not_to_be_visible()
         expect(row).to_contain_text("row freeze")
         resume = row.get_by_role("button", name="Resume", exact=True)
+        expect(resume).to_be_enabled()  # grayed out until the answer after the pause arrives
         resume.click()
         dialog = page.get_by_role("dialog", name="Resume OPS", exact=True)
         policy = dialog.get_by_role("combobox", name="After resuming", exact=True)
