@@ -200,7 +200,7 @@ item's text, or work done early under another item.
 | S7.AR Restarting pipelines | Done | #349, #350, #356, #358 | Automatic starts on a chosen run ending, with `Allowed_auto_restarts` per environment; the demo's Gamma pipeline runs without a schedule. |
 | S7.AS Project dashboard and navigation | Done | #401, #402, #404, #405, #406, #407, #413 | Slices 1–5 owner approved; shared controls polished, with framed working panes, application-drawn diagram scrollbars, unclipped column selection and accessible search/action feedback in follow-up |
 | S7.AT Refresh and availability on the first pages | Done | #437 | Pipeline and all-pipelines refresh on RELAXED projects; unavailable actions on these pages grayed out with their reason |
-| S7.AU Available actions on every page | Planned | | Every unavailable action on the remaining project and platform pages grayed out with its reason; two slices, project pages then platform pages |
+| S7.AU Available actions on every page | Planned | | Every unavailable action on the remaining project and platform pages grayed out with its reason |
 | S7.AV No implicit project | Planned | | Engine DB access without a selected project fails naming the caller, instead of using project 1 |
 | S7.AW Public docs for 0.9.0 | Planned | | README, published nav without development pages, and a short 0.9.0 changelog summary |
 | S7.M Stewardship uploads | Done (M2) | #296, #305 | Atomic receipts and safe stored names; processed layout, retention archives and verified reruns; crash recovery and guarded upload history |
@@ -9895,7 +9895,18 @@ with its reason on each project page and each platform page. S7.AT covers the pa
   action. No page compares a role or governance flag itself.
 - **Grayed out, never hidden,** as in S7.AT.
 - **Scope.** The project pages: action buttons, form actions, row actions and menus. The platform
-  pages: administration, agents, accounts and projects.
+  pages: administration, agents, accounts and projects. One pull request.
+- **Every reason.** Role, grant, governance, environment type, run, task, pipeline or account
+  state, and self-action all gray the action out with the server's reason.
+- **Reason as text.** A disabled action carries its reason as text (`aria-describedby`), never
+  only as colour, through the shared `unavailableReason` of `Button` and `DropdownItem`.
+- **The answer grows in the shared operation.** An action the availability answer does not yet
+  cover is added in `services/operations/capabilities.py`, never computed in a page. The shared
+  action semantics stay unchanged. A new endpoint, role, setting, capability or Engine DB column
+  is a design question for the owner.
+- **Layout unchanged.** Available actions keep their behaviour and placement. A header or row that
+  would widen or wrap takes the extra action into an existing menu, as the pipeline Pause menu
+  does, at 1440 and 390 px.
 
 **Done when.**
 
@@ -9903,10 +9914,10 @@ with its reason on each project page and each platform page. S7.AT covers the pa
   with its reason when unavailable.
 - [ ] Every action on the platform pages does the same.
 - [ ] An availability test covers each action in the action table for each role, governance and
-  environment type.
-
-**Slices (owner, 2026-11-23).** Two pull requests: the project pages with the availability test
-for every action in the action table, then the platform pages.
+  environment type; PROD is STRICT, and the API refuses PROD with RELAXED.
+- [ ] UI tests show each page's actions disabled with their reason text when unavailable and
+  enabled when available; browser tests show a viewer and an operator the reason and a developer
+  the enabled action on each page.
 
 ### S7.AV No implicit project
 
