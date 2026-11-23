@@ -276,7 +276,7 @@ def test_concurrent_identical_receipts_leave_exactly_one_file(upload_api):
             return None
 
     results = two_at_once(
-        upload, upload, at="etl_craft.services.operations.uploads._require_pipeline"
+        upload, upload, at="etl_craft.services.operations.uploads.require_upload_pipeline"
     )
     assert sum(result is not None for result in results) == 1
     rows = file_rows(ctx)

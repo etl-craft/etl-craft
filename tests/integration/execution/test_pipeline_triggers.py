@@ -15,6 +15,7 @@ from etl_craft.execution.attempt_types import ChildOptions, TaskRun
 from etl_craft.execution.runner import admit_attempt, execute_attempt
 from etl_craft.services.operations import OperationContext
 from etl_craft.services.operations.actions import invoke
+from fixtures.actions import act
 from fixtures.auth import service_token
 from fixtures.metadata import add_pipeline, add_task
 
@@ -139,17 +140,7 @@ def test_real_attempt_frees_its_slot_after_handoff(trigger_scene):
     project, ctx, _, task, run = trigger_scene
     from etl_craft.services.operations.pipeline_refresh import RefreshInput
 
-    code, output = project.run(
-        "project",
-        "set",
-        "--project",
-        "default",
-        "--governance",
-        "RELAXED",
-        "--reason",
-        "Refresh test fixture",
-    )
-    assert code == 0, output
+    act(ctx, ActionName.PROJECT_SET, project="default", environment_type="CUSTOM", governance="RELAXED", reason="Refresh test fixture")
     refresh = invoke(ctx, ActionName.PIPELINE_REFRESH, RefreshInput(pipeline_code="CHILD"))
     assert not refresh.failed, refresh
     spec = admit_attempt(
@@ -826,17 +817,7 @@ def test_explicit_rerun_of_ended_parent_keeps_controller_wait_open(trigger_scene
     project, ctx, _, _, run = scene
     from etl_craft.services.operations.pipeline_refresh import RefreshInput
 
-    code, output = project.run(
-        "project",
-        "set",
-        "--project",
-        "default",
-        "--governance",
-        "RELAXED",
-        "--reason",
-        "Refresh test fixture",
-    )
-    assert code == 0, output
+    act(ctx, ActionName.PROJECT_SET, project="default", environment_type="CUSTOM", governance="RELAXED", reason="Refresh test fixture")
     checked = invoke(ctx, ActionName.PIPELINE_REFRESH, RefreshInput(pipeline_code="CHILD"))
     assert not checked.failed, checked
     first = invoke(ctx, ActionName.TRIGGER_PIPELINE, owned(scene))
