@@ -6,6 +6,7 @@ import * as React from "react";
 import { Fact, FactList, Loading, Notice } from "@/components/common";
 import { StatusBadge } from "@/components/status";
 import { Button } from "@/components/ui/button";
+import { unavailableAction, useActionAvailability } from "@/hooks";
 import { getText, project } from "@/lib/api";
 import { downloadFile } from "@/lib/download";
 import { formatDuration } from "@/lib/format";
@@ -32,11 +33,14 @@ const LIVE = new Set(["QUEUED", "CLAIMED", "RUNNING"]);
 /** An attempt's log, fetched on demand and kept fresh while the attempt is still running. */
 export function AttemptLog({ code, attempt, open = false }: { code: string; attempt: Pick<AttemptView, "attempt_id" | "status">; open?: boolean }) {
   const [shown, setShown] = React.useState(open);
+  const availability = useActionAvailability(code, undefined, true, { attempt_id: attempt.attempt_id });
+  const logReason = unavailableAction(availability, "/attempts/{attempt_id}/log", "GET");
+  const visible = shown && !logReason;
   const [wrap, setWrap] = React.useState(true);
   const log = useQuery({
     queryKey: ["log", code, attempt.attempt_id, attempt.status],
     queryFn: () => getText(`${project(code)}/attempts/${attempt.attempt_id}/log`),
-    enabled: shown,
+    enabled: visible,
     refetchInterval: LIVE.has(attempt.status) ? 3_000 : false,
   });
   const lines = log.data?.split("\n") ?? [];
@@ -52,10 +56,10 @@ export function AttemptLog({ code, attempt, open = false }: { code: string; atte
   return (
     <div className="grid gap-2">
       <div className="flex flex-wrap items-center gap-3">
-        <Button size="sm" className="w-fit" onClick={() => setShown(!shown)} aria-expanded={shown}>
-          {shown ? "Hide log" : "Show log"}
+        <Button size="sm" className="w-fit" unavailableReason={logReason} onClick={() => setShown(!shown)} aria-expanded={visible}>
+          {visible ? "Hide log" : "Show log"}
         </Button>
-        {shown && log.isSuccess ? (
+        {visible && log.isSuccess ? (
           <>
             <input type="search" aria-label="Find in log" placeholder="Find in log" value={find} onChange={(event) => setFind(event.target.value)} className="h-control w-44 rounded-md border border-border-strong bg-surface px-2 text-xs" />
             {needle ? <span className="text-xs text-muted">{matching.length} of {lines.length} lines</span> : null}
@@ -74,9 +78,9 @@ export function AttemptLog({ code, attempt, open = false }: { code: string; atte
           </>
         ) : null}
       </div>
-      {shown && log.isPending ? <Loading what="log" /> : null}
-      {shown && log.isError ? <Notice>{(log.error as Error).message}</Notice> : null}
-      {shown && log.isSuccess ? (
+      {visible && log.isPending ? <Loading what="log" /> : null}
+      {visible && log.isError ? <Notice>{(log.error as Error).message}</Notice> : null}
+      {visible && log.isSuccess ? (
         <>
           {!needle && lines.length > 400 ? <p className="m-0 text-xs text-muted">Showing the last 400 of {lines.length} lines; search or download the log for all of it.</p> : null}
           <pre ref={box} tabIndex={0} aria-label="Attempt log" className={cn("m-0 max-h-96 overflow-auto rounded-sm border border-border bg-surface-2 p-3 font-mono text-xs leading-5", wrap && "whitespace-pre-wrap break-words")}>

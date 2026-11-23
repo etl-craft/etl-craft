@@ -42,8 +42,7 @@ export function Uploads() {
   const addressed = params.get("pipeline");
   const chosen = addressed ?? pipelines[0]?.pipeline_code ?? "";
   const listed = pipelines.some((pipeline) => pipeline.pipeline_code === chosen);
-  const checkAddress = eligible.isSuccess && !!addressed && !listed;
-  const availability = useActionAvailability(code, addressed ?? undefined, checkAddress);
+  const availability = useActionAvailability(code, chosen || undefined, !!chosen);
   const files = useQuery({
     queryKey: ["uploads", code, chosen],
     queryFn: () => getJson<{ uploads: UploadRow[] }>(`${project(code)}/uploads`, { pipeline_code: chosen }),
@@ -51,7 +50,7 @@ export function Uploads() {
     refetchInterval: 10_000,
   });
   const [file, setFile] = React.useState<File | null>(null);
-  const reason = eligible.error?.message || (checkAddress ? unavailableAction(availability, "/uploads") : undefined) || eligible.data?.unavailable_reason
+  const reason = eligible.error?.message || (chosen ? unavailableAction(availability, "/uploads") : undefined) || eligible.data?.unavailable_reason
     || (eligible.isPending ? "Checking upload availability…" : !file ? "Choose a file to upload." : undefined);
   const [over, setOver] = React.useState(false);
   const input = React.useRef<HTMLInputElement>(null);

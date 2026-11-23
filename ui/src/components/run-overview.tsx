@@ -9,7 +9,7 @@ import { DropdownContent, DropdownItem, DropdownMenu, DropdownSeparator, Dropdow
 import { ActionButton } from "@/components/action-button";
 import { AttemptDetails } from "@/components/attempt-details";
 import { useToast } from "@/components/toast";
-import { DANGER, EFFECT, label as actionLabel, ScopeControls } from "@/components/scope-controls";
+import { controlAnswers, DANGER, EFFECT, label as actionLabel, ScopeControls } from "@/components/scope-controls";
 import { isFailure, slaVerdict, StatusBadge, taskStatus } from "@/components/status";
 import { Button } from "@/components/ui/button";
 import { Table, Td, Th } from "@/components/ui/table";
@@ -105,9 +105,9 @@ function RunActions({ code, run }: { code: string; run: RunView }) {
   const query = `pipeline_code=${encodeURIComponent(run.pipeline_code)}&run_id=${run.pipeline_run_id}`;
   const scope = `run ${run.pipeline_run_id}`;
   // Recover is the primary button beside this menu, so it is not repeated here.
-  const actions = (caps.data?.actions ?? []).filter((a) => a.action !== "RECOVER");
+  const actions = controlAnswers(caps.data, caps.error).filter((a) => a.action !== "RECOVER");
   const open = actions.filter((a) => a.available);
-  const availability = useActionAvailability(code, run.pipeline_code);
+  const availability = useActionAvailability(code, run.pipeline_code, true, { run_id: run.pipeline_run_id });
   const reconcileReason = unavailableAction(availability, "/reconciliations");
   const item = (id: string, title: string, line: string, danger = false, unavailable?: string) => (
     <DropdownItem key={id} aria-label={title} unavailableReason={unavailable} onSelect={() => setChosen(id)} className="grid gap-0.5">
@@ -116,7 +116,7 @@ function RunActions({ code, run }: { code: string; run: RunView }) {
     </DropdownItem>
   );
   const file = (path: string, name: string, text: string) => (
-    <DropdownItem asChild>
+    <DropdownItem asChild unavailableReason={unavailableAction(availability, path, "GET")}>
       <a href={`${project(code)}${path}?${query}`} download={name}>
         <Download className="size-4" aria-hidden /> {text}
       </a>
@@ -175,13 +175,12 @@ function RecoverRun({ code, run }: { code: string; run: RunView }) {
     queryKey: ["capabilities", code, run.pipeline_code, run.pipeline_run_id, run.status],
     queryFn: () => getJson<Capabilities>(`${project(code)}/capabilities`, { pipeline_code: run.pipeline_code, run_id: run.pipeline_run_id }),
   });
-  const capability = caps.data?.actions.find((a) => a.action === "RECOVER");
-  if (!capability) return null;
+  const capability = controlAnswers(caps.data, caps.error).find((a) => a.action === "RECOVER");
   return (
     <ActionButton<ControlView>
       code={code}
       label="Recover run"
-      unavailableReason={capability.available ? undefined : capability.reason}
+      unavailableReason={capability?.available ? undefined : capability?.reason ?? "Availability is unavailable."}
       title={`Recover run #${run.pipeline_run_id}`}
       effect={`Reopens ${run.pipeline_code} run #${run.pipeline_run_id}: tasks that succeeded are kept; failed and unfinished tasks run again.`}
       endpoint="/controls"

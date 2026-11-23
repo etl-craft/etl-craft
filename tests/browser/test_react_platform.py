@@ -12,6 +12,11 @@ from sqlalchemy import text
 from test_react_ui import PASSWORD, open_page, sign_in
 
 from etl_craft.core.actor import Actor, ActorKind, acting_as
+from etl_craft.core.enums import ActionName, ApiRole
+from etl_craft.core.errors import ExitCode
+from etl_craft.services.operations.actions import ACTIONS
+from etl_craft.services.operations.permissions import has_role
+from fixtures.actions import act
 from fixtures.metadata import add_pipeline, add_task, finish_run, start_run, task_run
 
 pytestmark = pytest.mark.browser
@@ -199,33 +204,68 @@ def test_own_account_disable_is_visible_and_disabled(scene):
         browser.close()
 
 
-@pytest.mark.parametrize("name,enabled", (("owner", True), ("alice", False)))
-def test_platform_forms_keep_actions_visible_for_both_roles(scene, name, enabled):
-    _, url, _ = scene
+@pytest.mark.parametrize(
+    "role", (ApiRole.VIEWER, ApiRole.OPERATOR, ApiRole.DEVELOPER, ApiRole.ADMIN)
+)
+def test_platform_forms_keep_actions_visible_for_each_role(scene, role):
+    ctx, url, _ = scene
+    name = f"browser-{role}"
+    act(ctx, ActionName.ACCOUNT_ADD, name=name, role=role, password=PASSWORD)
     with sync_playwright() as pw:
         browser, page, _ = open_page(pw)
         sign_in(page, url, "/ui/admin?tab=accounts", name=name)
         for tab, labels in (
-            ("Accounts", ("Add account", "Change role", "Reset password")),
-            ("Groups", ("Add group", "Add member")),
-            ("Roles", ("Create role", "Add command", "Remove command")),
-            ("Tokens", ("Create token",)),
-            ("Projects", ("Add project", "Change project")),
-            ("Pools", ("Add pool", "Change description")),
-            ("Announcements", ("Post announcement",)),
+            (
+                "Accounts",
+                (
+                    ("Add account", ActionName.ACCOUNT_ADD),
+                    ("Change role", ActionName.ACCOUNT_SET_ROLE),
+                    ("Reset password", ActionName.ACCOUNT_RESET_PASSWORD),
+                ),
+            ),
+            (
+                "Groups",
+                (("Add group", ActionName.GROUP_ADD), ("Add member", ActionName.GROUP_ADD_MEMBER)),
+            ),
+            (
+                "Roles",
+                (
+                    ("Create role", ActionName.ROLE_CREATE),
+                    ("Add command", ActionName.ROLE_ADD_ACTION),
+                    ("Remove command", ActionName.ROLE_REMOVE_ACTION),
+                    ("Explain access", ActionName.ACCESS_EXPLAIN),
+                ),
+            ),
+            ("Tokens", (("Create token", ActionName.TOKEN_CREATE),)),
+            (
+                "Projects",
+                (
+                    ("Add project", ActionName.PROJECT_ADD),
+                    ("Change project", ActionName.PROJECT_SET),
+                ),
+            ),
+            (
+                "Pools",
+                (("Add pool", ActionName.POOL_ADD), ("Change description", ActionName.POOL_SET)),
+            ),
+            ("Announcements", (("Post announcement", ActionName.ANNOUNCE_ADD),)),
         ):
             page.get_by_role("tab", name=tab, exact=True).click()
-            for label in labels:
+            for label, action in labels:
+                required = ACTIONS[action].role
+                enabled = has_role(role, required)
                 with_action = page.get_by_role("button", name=label, exact=True)
                 if enabled:
                     expect(with_action).to_be_enabled()
                 else:
                     expect(with_action).to_be_disabled()
                     expect(with_action).to_have_accessible_description(
-                        re.compile("admin role is required")
+                        re.compile(f"{required} role is required")
                     )
                     with_action.hover()
-                    expect(page.get_by_role("tooltip")).to_contain_text("admin role is required")
+                    expect(page.get_by_role("tooltip")).to_contain_text(
+                        f"{required} role is required"
+                    )
         browser.close()
 
 
@@ -246,9 +286,9 @@ def test_maintenance_previews_without_changing_anything(scene):
 
 
 @pytest.mark.parametrize("scheme", ["light", "dark"])
-@pytest.mark.parametrize("width", [1280, 390])
+@pytest.mark.parametrize("width", [1440, 390])
 def test_the_pages_render_cleanly_in_both_themes_and_on_a_phone(scene, scheme, width):
-    _, url, _ = scene
+    _, url, run_id = scene
     pages = {
         "system": "/ui/system",
         "agents": "/ui/agents",
@@ -257,6 +297,21 @@ def test_the_pages_render_cleanly_in_both_themes_and_on_a_phone(scene, scheme, w
         "search": "/ui/projects/default/search?q=ORD",
         "accounts": "/ui/admin?tab=accounts",
         "projects-admin": "/ui/admin?tab=projects",
+        **{
+            f"admin-{tab}": f"/ui/admin?tab={tab}&project=default"
+            for tab in (
+                "groups",
+                "roles",
+                "tokens",
+                "access",
+                "alert-channels",
+                "pools",
+                "announcements",
+                "erasure",
+            )
+        },
+        "items": f"/ui/projects/default/runs/ORDERS/{run_id}/tasks/EXTRACT/items",
+        "task": "/ui/projects/default/pipelines/ORDERS/tasks/EXTRACT",
         "maintenance": "/ui/projects/default/maintenance",
         "pipelines": "/ui/projects/default/pipelines",
         "runs": "/ui/projects/default/runs",
@@ -279,6 +334,8 @@ def test_the_pages_render_cleanly_in_both_themes_and_on_a_phone(scene, scheme, w
             expect(page.locator("main")).to_be_visible()
             # pages reached from the navigation or the account menu have no back arrow
             expect(page.locator("main").get_by_role("button", name="Back")).to_have_count(0)
+            if name == "task":
+                page.get_by_role("button", name="Look up", exact=True).scroll_into_view_if_needed()
             overflow = page.evaluate("document.documentElement.scrollWidth - window.innerWidth")
             assert overflow <= 0, f"{name} scrolls sideways by {overflow}px at {width}px"
             shoot(page, f"{name}-{scheme}-{width}")
@@ -387,3 +444,135 @@ def test_every_control_on_a_page_has_the_same_height(scene, width):
                 found[path] = problems
         browser.close()
     assert found == {}, "\n".join(f"{path}: {row}" for path, rows in found.items() for row in rows)
+
+
+def test_console_refuses_viewer_pause_with_role_and_keeps_pipeline_state(scene):
+    _, url, _ = scene
+    with sync_playwright() as pw:
+        browser, page, problems = open_page(pw)
+        sign_in(page, url, "/ui/projects/default/console", name="alice")
+        before = page.request.get(url + "/api/v1/projects/default/pipelines").json()
+        assert not next(p for p in before["pipelines"] if p["pipeline_code"] == "ORDERS")["paused"]
+        page.get_by_label("$ etl-craft", exact=True).fill(
+            "pause --pipeline-code ORDERS --reason unavailable"
+        )
+        page.get_by_role("button", name="Run", exact=True).click()
+        expect(page.get_by_role("log")).to_contain_text("needs operator role")
+        expect(page.get_by_role("log")).to_contain_text(f"exit {ExitCode.PERMISSION_DENIED}")
+        after = page.request.get(url + "/api/v1/projects/default/pipelines").json()
+        assert not next(p for p in after["pipelines"] if p["pipeline_code"] == "ORDERS")["paused"]
+        assert problems == []
+        browser.close()
+
+
+@pytest.mark.parametrize(
+    "role", (ApiRole.VIEWER, ApiRole.OPERATOR, ApiRole.DEVELOPER, ApiRole.ADMIN)
+)
+def test_task_and_maintenance_actions_use_exact_server_reasons(scene, role):
+    ctx, url, _ = scene
+    name = f"page-{role}"
+    act(ctx, ActionName.ACCOUNT_ADD, name=name, role=role, password=PASSWORD)
+    with sync_playwright() as pw:
+        browser, page, _ = open_page(pw)
+        sign_in(page, url, "/ui/projects/default/pipelines/ORDERS/tasks/EXTRACT", name=name)
+        response = page.request.get(
+            url + "/api/v1/projects/default/capabilities",
+            params={
+                "definition": True,
+                "pipeline_code": "ORDERS",
+                "task_code": "EXTRACT",
+            },
+        )
+        assert response.ok, response.text()
+        found = {a["action"]: a for a in response.json()["actions"]}
+        for label, action in (
+            ("Look up", ActionName.DATA_PROVENANCE),
+            ("Edit a value", ActionName.DATA_EDIT),
+            ("Unlock values", ActionName.DATA_UNLOCK),
+        ):
+            answer = found[action]
+            control = page.get_by_role("button", name=label, exact=True)
+            expect(control).to_be_disabled()
+            expect(control).to_have_accessible_description(answer["reason"])
+            if not has_role(role, ACTIONS[action].role):
+                assert str(ACTIONS[action].role) in answer["reason"]
+            else:
+                assert answer["reason"] and "role is required" not in answer["reason"]
+        page.goto(url + "/ui/projects/default/maintenance")
+        response = page.request.get(
+            url + "/api/v1/projects/default/capabilities", params={"definition": True}
+        )
+        assert response.ok, response.text()
+        answer = next(a for a in response.json()["actions"] if a["action"] == ActionName.PURGE)
+        for label in ("Preview purge", "Purge"):
+            control = page.get_by_role("button", name=label, exact=True)
+            if answer["available"]:
+                expect(control).to_be_enabled()
+            else:
+                expect(control).to_be_disabled()
+                expect(control).to_have_accessible_description(answer["reason"])
+                assert str(ACTIONS[ActionName.PURGE].role) in answer["reason"]
+        browser.close()
+
+
+@pytest.mark.parametrize("site", ["agents"], indirect=True)
+@pytest.mark.parametrize(
+    "role", (ApiRole.VIEWER, ApiRole.OPERATOR, ApiRole.DEVELOPER, ApiRole.ADMIN)
+)
+def test_agent_commands_keep_their_answer_and_menu_across_refresh(scene, role):
+    from fastapi.testclient import TestClient
+
+    from etl_craft import __version__
+    from etl_craft.api.app import create_app
+    from etl_craft.core.enums import AgentCommand
+    from etl_craft.services.operations.serialization import encode
+    from fixtures.agents import resources
+
+    ctx, url, _ = scene
+    name = f"agent-caller-{role}"
+    act(ctx, ActionName.ACCOUNT_ADD, name=name, role=role, password=PASSWORD)
+    token = act(
+        ctx, ActionName.TOKEN_CREATE, name="registered-agent", role=ApiRole.AGENT, pool="default"
+    )
+    with TestClient(create_app(ctx)) as client:
+        registered = client.post(
+            "/api/v1/agent/register",
+            headers={"Authorization": f"Bearer {token.token}"},
+            json={
+                "version": __version__,
+                "pool": "default",
+                "resources": encode(resources()),
+            },
+        )
+        assert registered.status_code == 200, registered.text
+    with sync_playwright() as pw:
+        browser, page, _ = open_page(pw, viewport={"width": 1440, "height": 900})
+        sign_in(page, url, "/ui/agents", name=name)
+        page.get_by_role("button", name=f"Actions for agent {token.metadata.token_id}").click()
+        required = ACTIONS[ActionName.AGENT_CONTROL].role
+        for label in ("Drain", "Resume", "Stop"):
+            item = page.get_by_role("menuitem", name=label, exact=True)
+            if has_role(role, required):
+                expect(item).to_be_enabled()
+            else:
+                expect(item).to_be_disabled()
+                expect(item).to_have_accessible_description(
+                    re.compile(f"{required} role is required")
+                )
+        with page.expect_response(lambda response: response.url.endswith("/api/v1/agents")):
+            act(
+                ctx,
+                ActionName.AGENT_CONTROL,
+                agent_id=token.metadata.token_id,
+                command=AgentCommand.DRAIN,
+            )
+        expect(page.get_by_role("cell", name="DRAIN", exact=True)).to_be_visible()
+        expect(page.get_by_role("menuitem", name="Drain", exact=True)).to_be_visible()
+        for scheme, width in (("light", 1440), ("dark", 1440), ("light", 390)):
+            page.keyboard.press("Escape")
+            page.emulate_media(color_scheme=scheme)
+            page.set_viewport_size({"width": width, "height": 900})
+            page.get_by_role("button", name=f"Actions for agent {token.metadata.token_id}").click()
+            page.get_by_role("menuitem", name="Drain", exact=True).hover()
+            shoot(page, f"agents-availability-{role}-{scheme}-{width}")
+        browser.close()

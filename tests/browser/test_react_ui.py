@@ -189,10 +189,10 @@ def test_home_runs_and_run_detail_lead_to_a_confirmed_recovery(scene):
         expect(graph.locator("[data-focus=focus]")).to_have_count(1)
         expect(graph.locator("[data-focus=lineage]")).to_have_count(1)  # EXTRACT, upstream of LOAD
         expect(graph.locator("[data-focus=dim]")).to_have_count(1)  # AUDIT is unrelated
-        expect(page.get_by_label("Task LOAD")).to_have_count(0)
+        expect(page.get_by_role("region", name="Task LOAD", exact=True)).to_have_count(0)
         graph.get_by_role("button", name="Node actions for LOAD").click()
         page.get_by_role("menuitem", name="Inspect task", exact=True).click()
-        expect(page.get_by_label("Task LOAD")).to_be_visible()
+        expect(page.get_by_role("region", name="Task LOAD", exact=True)).to_be_visible()
         page.get_by_role("button", name="Recover run").click()
         dialog = page.get_by_role("dialog")
         expect(dialog.get_by_text("default")).to_be_visible()
@@ -436,13 +436,15 @@ def test_a_task_opens_in_its_row_and_the_run_shows_its_identifier(scene):
         expect(identifier).to_contain_text("OPS-")
         expect(identifier).to_contain_text(f"-{bad}")
         table = page.get_by_role("table", name="Task list")
-        expect(page.get_by_label("Task LOAD")).to_have_count(0)
+        expect(page.get_by_role("region", name="Task LOAD", exact=True)).to_have_count(0)
         table.get_by_role("button", name="Show details of LOAD").click()
-        details = table.get_by_label("Task LOAD")  # inside the table, directly under its row
+        details = table.get_by_role(
+            "region", name="Task LOAD", exact=True
+        )  # inside the table, directly under its row
         expect(details).to_be_visible()
         shoot(page, "run-page")
         table.get_by_role("button", name="Hide details of LOAD").click()
-        expect(page.get_by_label("Task LOAD")).to_have_count(0)
+        expect(page.get_by_role("region", name="Task LOAD", exact=True)).to_have_count(0)
         assert problems == []
         browser.close()
 

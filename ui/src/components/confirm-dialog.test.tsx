@@ -37,9 +37,9 @@ describe("ConfirmDialog", () => {
     expect(screen.getByText("sales")).toBeInTheDocument();
     expect(screen.getByText("UAT")).toBeInTheDocument();
     const submit = screen.getByRole("button", { name: "Recover run" });
-    expect(submit).toBeDisabled();
+    expect(submit).toHaveAttribute("aria-disabled", "true");
     fireEvent.change(screen.getByLabelText(/Reason/), { target: { value: "  retry after fix " } });
-    expect(submit).toBeEnabled();
+    expect(submit).not.toHaveAttribute("aria-disabled", "true");
     fireEvent.click(submit);
     expect(confirm).toHaveBeenCalledWith("retry after fix");
   });
@@ -48,11 +48,11 @@ describe("ConfirmDialog", () => {
     const confirm = show("PROD");
     fireEvent.change(screen.getByLabelText(/Reason/), { target: { value: "urgent" } });
     const submit = screen.getByRole("button", { name: "Recover run" });
-    expect(submit).toBeDisabled();
+    expect(submit).toHaveAttribute("aria-disabled", "true");
     fireEvent.change(screen.getByLabelText(/Type/), { target: { value: "sale" } });
-    expect(submit).toBeDisabled();
+    expect(submit).toHaveAttribute("aria-disabled", "true");
     fireEvent.change(screen.getByLabelText(/Type/), { target: { value: "sales" } });
-    expect(submit).toBeEnabled();
+    expect(submit).not.toHaveAttribute("aria-disabled", "true");
     fireEvent.click(submit);
     expect(confirm).toHaveBeenCalledWith("urgent");
     expect(screen.getByText("PRODUCTION")).toBeInTheDocument();
@@ -86,14 +86,14 @@ it("matches STRICT and RELAXED governance independently of environment", () => {
     if (type === "PROD") fireEvent.change(screen.getByLabelText(/Type/), { target: { value: "sales" } });
     if (governance === "RELAXED") {
       expect(reason).not.toBeRequired();
-      expect(submit).toBeEnabled();
+      expect(submit).not.toHaveAttribute("aria-disabled", "true");
       fireEvent.click(submit);
       expect(confirm).toHaveBeenCalledWith("");
     } else {
       expect(reason).toBeRequired();
-      expect(submit).toBeDisabled();
+      expect(submit).toHaveAttribute("aria-disabled", "true");
       fireEvent.change(reason, { target: { value: "run the approved data load" } });
-      expect(submit).toBeEnabled();
+      expect(submit).not.toHaveAttribute("aria-disabled", "true");
     }
     cleanup();
   }

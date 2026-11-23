@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { createColumnHelper } from "@tanstack/react-table";
 import { ActionButton } from "@/components/action-button";
 import { DataTable } from "@/components/data-table";
@@ -43,8 +44,17 @@ export function AccessTab({ project, projects, pipeline }: { project: string; pr
   const roles = useRoleNames();
   const bindings = (list.data?.bindings ?? []).filter((b) => b.active_flag === "Y");
   const scoped = useActionAvailability(project, pipeline, !!project);
-  const deployment = useActionAvailability();
   const grantReason = project ? unavailableAction(scoped, "/access/grants") : "Choose a project first.";
+  const tableColumns = useMemo(() => [
+            columns.display({ id: "who", header: "Who", cell: (c) => <span className="font-medium">{who(c.row.original)}</span> }),
+            columns.display({ id: "what", header: "Gets", cell: (c) => what(c.row.original) }),
+            columns.display({ id: "where", header: "Where", cell: (c) => where(c.row.original) }),
+            columns.display({
+              id: "act",
+              header: "Actions",
+              cell: (c) => <BindingRevoke binding={c.row.original} />,
+            }),
+          ], []);
   return (
     <div className="grid min-w-0 grid-cols-1 gap-5">
       <ListState query={list} what="access" />
@@ -77,34 +87,26 @@ export function AccessTab({ project, projects, pipeline }: { project: string; pr
           data={bindings}
           nextStep={pipeline ? "Ask a pipeline manager to grant access here." : "Grant an account, group or audience a role or one command above."}
           empty={list.isSuccess ? "No access yet." : projects.length ? undefined : "No projects."}
-          columns={[
-            columns.display({ id: "who", header: "Who", cell: (c) => <span className="font-medium">{who(c.row.original)}</span> }),
-            columns.display({ id: "what", header: "Gets", cell: (c) => what(c.row.original) }),
-            columns.display({ id: "where", header: "Where", cell: (c) => where(c.row.original) }),
-            columns.display({
-              id: "act",
-              header: "Actions",
-              cell: (c) => {
-                const b = c.row.original;
-                return (
-                  <ActionButton<unknown>
-                    projectCode={pipeline ? project : undefined}
-                    label="Revoke"
-                    title={`Revoke ${what(b)} from ${who(b)}`}
-                    effect={`Removes this binding on ${where(b)}; access from other bindings stays.`}
-                    endpoint="/access/revocations"
-                    unavailableReason={unavailableAction(b.scope === "PROJECT" ? scoped : deployment, "/access/revocations") ?? null}
-                    body={(reason) => revokeBody(b, reason)}
-                    describe={done("Access revoked.")}
-                    variant="danger"
-                    size="sm"
-                  />
-                );
-              },
-            }),
-          ]}
+          columns={tableColumns}
         />
       </Card>
     </div>
   );
+}
+
+
+export function BindingRevoke({ binding }: { binding: Binding }) {
+  const selected = binding.scope === "PROJECT" ? binding.project ?? undefined : undefined;
+  const available = useActionAvailability(selected, binding.pipeline ?? undefined, true, binding.tag ? { binding_tag: binding.tag } : undefined);
+  return <ActionButton<unknown>
+    projectCode={selected}
+    label="Revoke"
+    title={`Revoke ${what(binding)} from ${who(binding)}`}
+    effect={`Removes this binding on ${where(binding)}; access from other bindings stays.`}
+    endpoint="/access/revocations"
+    unavailableReason={unavailableAction(available, "/access/revocations") ?? null}
+    body={reason => revokeBody(binding, reason)}
+    describe={done("Access revoked.")}
+    variant="danger" size="sm"
+  />;
 }

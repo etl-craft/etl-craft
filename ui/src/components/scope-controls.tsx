@@ -16,6 +16,10 @@ export const EFFECT: Record<string, string> = {
 export const DANGER = new Set(["STOP", "ABORT"]);
 export const label = (action: string) => action.charAt(0) + action.slice(1).toLowerCase().replace("_", " ");
 
+export function controlAnswers(data: Capabilities | undefined, error: Error | null): Capabilities["actions"] {
+  return data?.actions ?? Object.keys(EFFECT).map(action => ({ action, available: false, reason: error?.message ?? "Checking availability…", preserves_successful_work: false }));
+}
+
 /**
  * The run or task controls the server says are possible now, each behind the one confirmation;
  * the ones that are not possible say why, instead of disappearing.
@@ -27,9 +31,8 @@ export function ScopeControls({ code, pipeline, runId, task, elsewhere = [] }: {
     queryKey: ["capabilities", code, pipeline, runId, task ?? ""],
     queryFn: () => getJson<Capabilities>(`${project(code)}/capabilities`, { pipeline_code: pipeline, run_id: runId, task_code: task }),
   });
-  if (!caps.data) return null;
   const scope = task ? `task ${task} in run ${runId}` : `run ${runId}`;
-  const actions = caps.data.actions.filter((a) => !elsewhere.includes(a.action));
+  const actions = controlAnswers(caps.data, caps.error).filter((a) => !elsewhere.includes(a.action));
   return (
     <div className="grid gap-2" aria-label={`Controls for ${scope}`}>
       <div className="flex flex-wrap items-start gap-2">

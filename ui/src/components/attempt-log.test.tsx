@@ -8,13 +8,18 @@ const LOG = Array.from({ length: 500 }, (_, i) => `line ${i + 1} ${"x".repeat(20
 vi.mock("@/lib/api", async (original) => ({
   ...(await original<typeof import("@/lib/api")>()),
   getText: () => Promise.resolve(LOG),
+  getJson: () => Promise.resolve({ actions: [{ endpoint: "/api/v1/attempts/{attempt_id}/log", method: "GET", available: true, reason: "" }] }),
 }));
 
 afterEach(() => vi.restoreAllMocks());
 
-function show() {
+const REFUSED = "attempt 7: log not stored yet; retry after the upload finishes";
+
+function show(available = true) {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  client.setQueryData(["action-availability", "p", undefined, { attempt_id: 7 }], { actions: [{ endpoint: "/api/v1/attempts/{attempt_id}/log", method: "GET", available, reason: available ? "" : REFUSED }] });
   render(
-    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+    <QueryClientProvider client={client}>
       <AttemptLog code="p" attempt={{ attempt_id: 7, status: "SUCCESS" }} open />
     </QueryClientProvider>,
   );
@@ -42,6 +47,18 @@ describe("AttemptLog", () => {
     await waitFor(() => expect(blob).toBeDefined());
     expect(await blob!.text()).toBe(LOG);
     expect(screen.getByText(/Showing the last 400 of 500 lines/)).toBeInTheDocument();
+  });
+
+  it("keeps an unavailable log's reason in a hover annotation, not on the page", async () => {
+    show(false);
+    const button = await screen.findByRole("button", { name: "Show log" });
+    expect(button).toHaveAttribute("aria-disabled", "true");
+    const note = document.getElementById(button.getAttribute("aria-describedby")!)!;
+    expect(note).toHaveTextContent(REFUSED);
+    expect(note).not.toBeVisible();
+    expect(screen.queryByLabelText("Attempt log")).toBeNull();
+    fireEvent.focus(button);
+    expect(note).toBeVisible();
   });
 
   it("searches every line of the log", async () => {

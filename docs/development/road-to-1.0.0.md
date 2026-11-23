@@ -226,6 +226,15 @@ item's text, or work done early under another item.
 
 ### Handover notes
 
+- **S7.AU Choices that differ from the item text.** Enabled cases use the action's lowest
+  authorized role; developers see admin-only actions grayed out (owner, 2026-11-23).
+  The console is excluded from grayed-out availability: typed lines are refused on submit
+  with the server's reason; command chips stay role-filtered (owner, 2026-11-23).
+  Reasons appear only as hover, focus or tap annotations, never as text on the page; an
+  unavailable attempt log keeps its Show log button grayed instead of printing a notice (owner,
+  2026-11-23).
+
+
 - **Repo audit (owner, 2026-11-23).** Checked against `main` at `548b23ce`. The local CLI
   operating a server (`--api`, S5.S) works for 117 of 126 actions, including `deploy`, but is
   described only in `docs/deploying/security.md`, which wrongly says config files are refused

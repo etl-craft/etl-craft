@@ -56,14 +56,14 @@ export type ActionAvailability = {
   replacement?: boolean;
 };
 
-export type AvailabilityTarget = { account_name?: string; agent_id?: number; role_name?: string; pool_name?: string; token_id?: number; announcement_id?: number; pipeline_codes?: string[]; with_warehouse?: boolean; preview_table?: string; task_code?: string; run_id?: number; reset_position?: string };
+export type AvailabilityTarget = { account_name?: string; account_role?: string; agent_id?: number; role_name?: string; role_action?: string; channel_name?: string; pool_name?: string; token_id?: number; announcement_id?: number; pipeline_codes?: string[]; with_warehouse?: boolean; preview_table?: string; rehash_target?: string; binding_tag?: string; task_code?: string; run_id?: number; reset_position?: string; attempt_id?: number; group_name?: string; member_name?: string; project_code?: string };
 
 export function useActionAvailability(code?: string, pipeline?: string, enabled = true, target?: AvailabilityTarget) {
   return useQuery({
     queryKey: ["action-availability", code, pipeline, target],
     queryFn: () => getJson<{ actions: ActionAvailability[] }>(
       code ? `${project(code)}/capabilities` : "/api/v1/capabilities",
-      code ? { definition: true, pipeline_code: pipeline, pipeline_codes: target?.pipeline_codes, with_warehouse: target?.with_warehouse, preview_table: target?.preview_table, task_code: target?.task_code, run_id: target?.run_id, reset_position: target?.reset_position } : target,
+      code ? { definition: true, pipeline_code: pipeline, pipeline_codes: target?.pipeline_codes, with_warehouse: target?.with_warehouse, preview_table: target?.preview_table, rehash_target: target?.rehash_target, binding_tag: target?.binding_tag, task_code: target?.task_code, run_id: target?.run_id, reset_position: target?.reset_position, attempt_id: target?.attempt_id } : target,
     ),
     enabled,
   });

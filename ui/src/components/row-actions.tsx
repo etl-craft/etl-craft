@@ -29,8 +29,7 @@ export function RowActions({ name, actions, account, agent }: { name: string; ac
   const risky = actions.filter((a) => a.danger);
   function reason(a: RowAction) {
     if (account || agent !== undefined) return unavailableAction(target, a.endpoint);
-    const answer = a.code ? undefined : platform.data?.actions.find((entry) => entry.endpoint === "/api/v1" + a.endpoint);
-    return answer?.available === false ? answer.reason : undefined;
+    return unavailableAction(platform, a.endpoint);
   }
   const item = (a: RowAction) => {
     const unavailable = reason(a);

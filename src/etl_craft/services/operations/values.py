@@ -36,7 +36,7 @@ from etl_craft.handlers.sql.protection import (
     exists,
 )
 from etl_craft.handlers.sql.session import Session
-from etl_craft.handlers.sql.spec import read_sql_task
+from etl_craft.handlers.sql.spec import SqlTask, read_sql_task
 from etl_craft.services.operations.context import OperationContext
 from etl_craft.services.operations.recording import recorded
 from etl_craft.services.operations.requests import Request
@@ -108,11 +108,8 @@ def _task_context(ctx: OperationContext, pipeline: str, task: str) -> TaskContex
     )
 
 
-@contextmanager
-def _selected(
-    ctx: OperationContext, pipeline: str, task: str
-) -> Iterator[tuple[Protection, TaskContext]]:
-    """Share engine ownership, single-writer access and atomic warehouse transactions with ETL."""
+def value_task(ctx: OperationContext, pipeline: str, task: str) -> tuple[TaskContext, SqlTask]:
+    """Resolve the merge contract shared by value actions and their availability."""
     context = _task_context(ctx, pipeline, task)
     spec = read_sql_task(context)
     if spec.action not in MERGES:
@@ -127,6 +124,15 @@ def _selected(
             f"{spec.target_object}: {spec.action} conflicts with an active {other} writer; "
             "give the target one merge action before editing"
         )
+    return context, spec
+
+
+@contextmanager
+def _selected(
+    ctx: OperationContext, pipeline: str, task: str
+) -> Iterator[tuple[Protection, TaskContext]]:
+    """Share engine ownership, single-writer access and atomic warehouse transactions with ETL."""
+    context, spec = value_task(ctx, pipeline, task)
     catalog = active_catalog(ctx.config)
     locker = LocalLocker(ctx.engine, ctx.config)
     store = LocalTaskStore.standalone(ctx.engine, ctx.config, locker)

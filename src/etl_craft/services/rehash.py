@@ -22,36 +22,44 @@ def rehash(
     """Recompute every target version using its active merge tasks' common compare columns."""
     split_object_ref(target)
     catalog = active_catalog(config)
-    qualified = qualify(target, catalog)
+    qualify(target, catalog)
     with locks.target(target, catalog).hold(LocalLocker(engine, config)):
-        with engine.connect() as conn:
-            task_ids = conn.execute(statement(conn, "rehash_tasks")).scalars().all()
-            tasks = {task_id: fetch_task_parameters(conn, task_id) for task_id in task_ids}
-        contracts = set()
-        for params in tasks.values():
-            if params.get("SQL_ACTION") not in {SqlAction.SCD1_MERGE, SqlAction.SCD2_MERGE}:
-                continue
-            if (
-                not params.get("TARGET_OBJECT")
-                or qualify(params["TARGET_OBJECT"], catalog).lower() != qualified.lower()
-            ):
-                continue
-            columns = tuple(
-                c.strip().lower() for c in params.get("MERGE_COMPARE_COLUMNS", "").split("|")
-            )
-            if not columns or any(not is_safe_identifier(c) for c in columns):
-                raise HandlerError(
-                    f"{qualified}: active merge task has invalid MERGE_COMPARE_COLUMNS; "
-                    "fix its metadata"
-                )
-            contracts.add(columns)
-        if len(contracts) != 1:
-            raise HandlerError(
-                f"{qualified}: expected one common ordered MERGE_COMPARE_COLUMNS contract "
-                f"across active merge tasks; found {sorted(contracts)}. "
-                "Configure matching compare columns before rehashing"
-            )
-        columns = next(iter(contracts))
+        columns = rehash_columns(engine, config, target)
         from etl_craft.handlers.rehash import rehash_target
 
         return rehash_target(engine, config, target, columns, dry_run=dry_run)
+
+
+def rehash_columns(engine: Engine, config: ConnectorConfig, target: str) -> tuple[str, ...]:
+    """Read the target's common merge contract for rehash and availability."""
+    split_object_ref(target)
+    catalog = active_catalog(config)
+    qualified = qualify(target, catalog)
+    with engine.connect() as conn:
+        task_ids = conn.execute(statement(conn, "rehash_tasks")).scalars().all()
+        tasks = {task_id: fetch_task_parameters(conn, task_id) for task_id in task_ids}
+    contracts = set()
+    for params in tasks.values():
+        if params.get("SQL_ACTION") not in {SqlAction.SCD1_MERGE, SqlAction.SCD2_MERGE}:
+            continue
+        if (
+            not params.get("TARGET_OBJECT")
+            or qualify(params["TARGET_OBJECT"], catalog).lower() != qualified.lower()
+        ):
+            continue
+        columns = tuple(
+            c.strip().lower() for c in params.get("MERGE_COMPARE_COLUMNS", "").split("|")
+        )
+        if not columns or any(not is_safe_identifier(c) for c in columns):
+            raise HandlerError(
+                f"{qualified}: active merge task has invalid MERGE_COMPARE_COLUMNS; "
+                "fix its metadata"
+            )
+        contracts.add(columns)
+    if len(contracts) != 1:
+        raise HandlerError(
+            f"{qualified}: expected one common ordered MERGE_COMPARE_COLUMNS contract "
+            f"across active merge tasks; found {sorted(contracts)}. "
+            "Configure matching compare columns before rehashing"
+        )
+    return next(iter(contracts))

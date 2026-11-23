@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 from typing import ClassVar
 
+from sqlalchemy.engine import Connection, Row
 from sqlalchemy.exc import IntegrityError
 
 from etl_craft.core.actor import Actor, ActorKind
@@ -104,9 +105,8 @@ def add_group(ctx: OperationContext, request: GroupAdd) -> Groups:
 def disable_group(ctx: OperationContext, request: GroupName) -> Groups:
     """Retire a group without deleting memberships or grants."""
     with locks.ACCOUNTS.hold(ctx.engine, wait_seconds=30), ctx.engine.begin() as conn:
-        found = conn.execute(statement(conn, "group_disable"), {"name": request.name}).first()
-        if found is None:
-            raise UsageError(f"group {request.name!r}: not found; use `etl-craft group list`")
+        require_group(conn, request.name)
+        conn.execute(statement(conn, "group_disable"), {"name": request.name})
     return list_groups(ctx, NoInput())
 
 
@@ -123,12 +123,33 @@ def remove_member(ctx: OperationContext, request: GroupMember) -> Groups:
 def _membership(ctx: OperationContext, request: GroupMember, active: YesNo) -> Groups:
     with locks.ACCOUNTS.hold(ctx.engine, wait_seconds=30), ctx.engine.begin() as conn:
         values = {"name": request.name, "account": request.account, "active": active}
-        found = conn.execute(statement(conn, "group_member_identity"), values).one_or_none()
-        if found is None:
-            raise UsageError(
-                f"group {request.name!r}, account {request.account!r}: expected active identities; "
-                "check `etl-craft group list` and `etl-craft account list`"
-            )
+        found = require_membership_identities(conn, request, active == YesNo.YES)
         values.update(group_id=found.group_id, account_id=found.account_id)
         conn.execute(statement(conn, "group_member_set"), values)
     return list_groups(ctx, NoInput())
+
+
+def require_membership_identities(
+    conn: Connection, request: GroupMember, adding: bool
+) -> Row[tuple[object, ...]]:
+    """Resolve the same identities for inspection and a membership change."""
+    found = conn.execute(
+        statement(conn, "group_member_identity"),
+        {
+            "name": request.name,
+            "account": request.account,
+            "active": YesNo.YES if adding else YesNo.NO,
+        },
+    ).one_or_none()
+    if found is None:
+        raise UsageError(
+            f"group {request.name!r}, account {request.account!r}: expected active identities; "
+            "check `etl-craft group list` and `etl-craft account list`"
+        )
+    return found
+
+
+def require_group(conn: Connection, name: str) -> None:
+    """Require the retained group that disable updates, including inactive groups."""
+    if not any(row.name == name for row in conn.execute(statement(conn, "group_list"))):
+        raise UsageError(f"group {name!r}: not found; use `etl-craft group list`")

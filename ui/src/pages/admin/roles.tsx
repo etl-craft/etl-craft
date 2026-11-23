@@ -7,8 +7,9 @@ import { FormAction } from "@/components/form-action";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
+import { unavailableAction, useActionAvailability } from "@/hooks";
 import type { Binding, RoleView } from "@/lib/types";
-import { AUDIENCES, ENVIRONMENTS, revokeBody, useRoleNames, what, where, who } from "./access";
+import { AUDIENCES, ENVIRONMENTS, BindingRevoke, useRoleNames, what, where, who } from "./access";
 import { done, ListState, useAdminList } from "./shared";
 
 const roleColumns = createColumnHelper<RoleView>();
@@ -128,6 +129,16 @@ function WideAccess() {
   const roles = useRoleNames();
   const bindings = (list.data?.bindings ?? []).filter((b) => b.active_flag === "Y");
   const label = reach === "deployment" ? "every project" : `every ${reach} project`;
+  const tableColumns = React.useMemo(() => [
+          bindingColumns.display({ id: "who", header: "Who", cell: (c) => <span className="font-medium">{who(c.row.original)}</span> }),
+          bindingColumns.display({ id: "what", header: "Gets", cell: (c) => what(c.row.original) }),
+          bindingColumns.display({ id: "where", header: "Where", cell: (c) => where(c.row.original) }),
+          bindingColumns.display({
+            id: "act",
+            header: "Actions",
+            cell: (c) => <BindingRevoke binding={c.row.original} />,
+          }),
+        ], []);
   return (
     <Card className="min-w-0">
       <CardHeader>
@@ -165,27 +176,7 @@ function WideAccess() {
         data={bindings}
         nextStep="Grant a role or one command above."
         empty={list.isSuccess ? "No access here yet." : undefined}
-        columns={[
-          bindingColumns.display({ id: "who", header: "Who", cell: (c) => <span className="font-medium">{who(c.row.original)}</span> }),
-          bindingColumns.display({ id: "what", header: "Gets", cell: (c) => what(c.row.original) }),
-          bindingColumns.display({ id: "where", header: "Where", cell: (c) => where(c.row.original) }),
-          bindingColumns.display({
-            id: "act",
-            header: "Actions",
-            cell: (c) => (
-              <ActionButton<unknown>
-                label="Revoke"
-                title={`Revoke ${what(c.row.original)} from ${who(c.row.original)}`}
-                effect={`Removes this binding on ${where(c.row.original)}.`}
-                endpoint="/access/revocations"
-                body={(reason) => revokeBody(c.row.original, reason)}
-                describe={done("Access revoked.")}
-                variant="danger"
-                size="sm"
-              />
-            ),
-          }),
-        ]}
+        columns={tableColumns}
       />
     </Card>
   );
@@ -193,6 +184,8 @@ function WideAccess() {
 
 /** Evaluate the same authorization decision without executing the command. */
 function AccessExplanation() {
+  const availability = useActionAvailability();
+  const reason = unavailableAction(availability, "/access/explain", "GET");
   const [probe, setProbe] = React.useState<Record<string, string>>();
   const result = useAdminList<{ allowed: boolean; allowed_by: string[]; refusal: string | null; roles_with_action: string[] }>("/api/v1/access/explain", probe, !!probe);
   return <Card className="min-w-0">
@@ -200,13 +193,14 @@ function AccessExplanation() {
     <form className="grid gap-3 p-4 sm:grid-cols-2" onSubmit={(event) => {
       event.preventDefault();
       const fields = new FormData(event.currentTarget);
+      if (reason) return;
       setProbe(Object.fromEntries(Array.from(fields.entries()).filter(([, value]) => String(value).trim()).map(([name, value]) => [name, String(value).trim()])));
     }}>
       <Field label="Account"><input name="account" required autoComplete="off" className={inputClass} /></Field>
       <Field label="Command"><input name="action" required autoComplete="off" className={inputClass} /></Field>
       <Field label="Project (optional)"><input name="project" autoComplete="off" className={inputClass} /></Field>
       <Field label="Pipeline (optional)"><input name="pipeline" autoComplete="off" className={inputClass} /></Field>
-      <Button type="submit">Explain access</Button>
+      <Button type="submit" unavailableReason={reason}>Explain access</Button>
     </form>
     <ListState query={result} what="access explanation" />
     {result.data ? <div className="grid gap-2 p-4 text-sm" role="status">

@@ -173,15 +173,7 @@ def add_action(ctx: OperationContext, request: RoleAction) -> Roles:
     action = bindable(request.action)
     with locks.ACCOUNTS.hold(ctx.engine, wait_seconds=30), ctx.engine.begin() as conn:
         role_id = custom_role_id(conn, request.name)
-        if (
-            deployment_only(action)
-            and conn.execute(statement(conn, "role_narrow_binding"), {"name": request.name}).first()
-        ):
-            raise UsageError(
-                f"role {request.name!r}, action {action!r}: existing bindings narrow the role; "
-                "expected deployment-only bindings; revoke the narrower bindings first "
-                "or use another role"
-            )
+        require_role_action(conn, request, adding=True)
         if str(action) not in role_actions(conn)[request.name]:
             conn.execute(
                 statement(conn, "role_action_add"),
@@ -194,15 +186,11 @@ def remove_action(ctx: OperationContext, request: RoleAction) -> Roles:
     """Remove one action from a custom role, keeping its history."""
     with locks.ACCOUNTS.hold(ctx.engine, wait_seconds=30), ctx.engine.begin() as conn:
         role_id = custom_role_id(conn, request.name)
-        removed = conn.execute(
+        require_role_action(conn, request, adding=False)
+        conn.execute(
             statement(conn, "role_action_remove"),
             {"role_id": role_id, "action_name": request.action.strip()},
-        ).first()
-        if removed is None:
-            raise UsageError(
-                f"role {request.name!r}: does not allow {request.action!r}; "
-                "use `etl-craft role describe` to see its actions"
-            )
+        )
     return describe_role(ctx, request)
 
 
@@ -226,3 +214,23 @@ def custom_role_id(conn: Connection, name: str) -> int:
                 raise UsageError(f"role {name!r}: disabled; create a new role instead")
             return int(row.role_id)
     raise UsageError(f"role {name!r}: not found; use `etl-craft role list`")
+
+
+def require_role_action(conn: Connection, request: RoleAction, *, adding: bool) -> None:
+    """Inspect the command membership rule without changing a role."""
+    if adding:
+        action = bindable(request.action)
+        if (
+            deployment_only(action)
+            and conn.execute(statement(conn, "role_narrow_binding"), {"name": request.name}).first()
+        ):
+            raise UsageError(
+                f"role {request.name!r}, action {action!r}: existing bindings narrow the role; "
+                "expected deployment-only bindings; revoke the narrower bindings first "
+                "or use another role"
+            )
+    elif request.action.strip() not in role_actions(conn)[request.name]:
+        raise UsageError(
+            f"role {request.name!r}: does not allow {request.action!r}; "
+            "use `etl-craft role describe` to see its actions"
+        )

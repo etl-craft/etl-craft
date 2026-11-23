@@ -12,11 +12,11 @@ const text = (r: unknown) => (typeof r === "object" && r && "message" in r ? Str
 
 export function Maintenance() {
   const { project: code = "" } = useParams();
-  const availability = useActionAvailability(code);
   const info = useProjectInfo(code);
   useDocumentTitle("Maintenance", code, info.project && { type: info.project.environment_type, name: info.project.environment_name });
   const [archive, setArchive] = React.useState("");
   const [target, setTarget] = React.useState("");
+  const availability = useActionAvailability(code, undefined, true, { rehash_target: target.trim() || undefined });
   const purgeReason = unavailableAction(availability, "/purge");
   const rehashTarget = target.trim() ? undefined : "Enter the merge target to rehash.";
   const purge = { archive_to: archive.trim() || undefined };
