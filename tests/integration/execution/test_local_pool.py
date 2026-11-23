@@ -34,7 +34,7 @@ def wait_until(predicate, timeout=30):
 
 
 def admitted(project):
-    code, output = project.run("pipelines", "refresh")
+    code, output = project.run("deploy")
     assert code == 0, output
     assert (
         project.run("run", "--reason", "test requested run", "--pipeline-code", "P", "--init-only")[
@@ -124,7 +124,7 @@ def test_python_slots_keep_python_tasks_from_overlapping(cli_project, pipeline_l
         add_task(
             conn, project.pipeline_id, "second", "PYTHON", SCRIPT_FILE="python_scripts/second.py"
         )
-    code, output = project.run("pipelines", "refresh")
+    code, output = project.run("deploy")
     assert code == 0, output
     code, output = project.run("run", "--reason", "test requested run", "--pipeline-code", "P")
     assert code == 0, output

@@ -1,9 +1,8 @@
-import { Disclosure, DisclosureSummary } from "@/components/dropdown";
 import { useQuery } from "@tanstack/react-query";
 import * as React from "react";
 import { ActionButton } from "@/components/action-button";
 import { SelectField } from "@/components/common";
-import { useCanRun } from "@/hooks";
+import { unavailableAction, useActionAvailability } from "@/hooks";
 import { getJson, project } from "@/lib/api";
 import type { Capabilities, ControlView } from "@/lib/types";
 
@@ -22,28 +21,24 @@ export const label = (action: string) => action.charAt(0) + action.slice(1).toLo
  * the ones that are not possible say why, instead of disappearing.
  */
 export function ScopeControls({ code, pipeline, runId, task, elsewhere = [] }: { code: string; pipeline: string; runId: number; task?: string; elsewhere?: string[] }) {
-  const canRun = useCanRun(code);
+  const availability = useActionAvailability(code, pipeline, !!task, { task_code: task, run_id: runId });
   const [status, setStatus] = React.useState("SUCCESS");
   const caps = useQuery({
     queryKey: ["capabilities", code, pipeline, runId, task ?? ""],
     queryFn: () => getJson<Capabilities>(`${project(code)}/capabilities`, { pipeline_code: pipeline, run_id: runId, task_code: task }),
-    enabled: canRun,
   });
-  if (!canRun || !caps.data) return null;
+  if (!caps.data) return null;
   const scope = task ? `task ${task} in run ${runId}` : `run ${runId}`;
-  // An action shown elsewhere on the page is not repeated here when available, but its refusal is always listed.
-  const actions = caps.data.actions.filter((a) => !a.available || !elsewhere.includes(a.action));
-  const blocked = actions.filter((a) => !a.available);
+  const actions = caps.data.actions.filter((a) => !elsewhere.includes(a.action));
   return (
     <div className="grid gap-2" aria-label={`Controls for ${scope}`}>
       <div className="flex flex-wrap items-start gap-2">
-        {actions
-          .filter((a) => a.available)
-          .map((a) => (
+        {actions.map((a) => (
             <ActionButton<ControlView>
               key={a.action}
               code={code}
               label={label(a.action)}
+              unavailableReason={a.available ? undefined : a.reason}
               title={`${label(a.action)} ${scope}`}
               effect={`${EFFECT[a.action] ?? ""} ${a.preserves_successful_work ? "Work that already succeeded is kept." : "Work that already succeeded may be replaced."}`.trim()}
               endpoint="/controls"
@@ -60,6 +55,7 @@ export function ScopeControls({ code, pipeline, runId, task, elsewhere = [] }: {
             title={`Mark ${scope}`}
             effect="Records the chosen status for this task run, as an operator decision."
             endpoint="/marks"
+            unavailableReason={unavailableAction(availability, "/marks")}
             body={(reason) => ({ pipeline_code: pipeline, run_id: runId, task_code: task, status, reason })}
             describe={(r) => r.message ?? "Mark recorded."}
             fields={
@@ -75,18 +71,6 @@ export function ScopeControls({ code, pipeline, runId, task, elsewhere = [] }: {
           />
         ) : null}
       </div>
-      {blocked.length ? (
-        <Disclosure className="text-xs text-muted">
-          <DisclosureSummary className="cursor-pointer">Not available now ({blocked.length})</DisclosureSummary>
-          <ul className="m-0 mt-1 grid gap-1 pl-4">
-            {blocked.map((a) => (
-              <li key={a.action}>
-                <span className="font-medium text-fg">{label(a.action)}:</span> {a.reason}
-              </li>
-            ))}
-          </ul>
-        </Disclosure>
-      ) : null}
     </div>
   );
 }

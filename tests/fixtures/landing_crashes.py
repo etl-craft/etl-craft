@@ -19,7 +19,7 @@ def check_landing_exit(w, monkeypatch, point):
     project, token = cli_writer(w, target)
     monkeypatch.setenv("ETL_CRAFT_TOKEN", token)
     try:
-        code, output = run_writer(w, project, "pipelines", "refresh", timeout=90)
+        code, output = run_writer(w, project, "deploy", timeout=90)
         assert code == 0, output
         code, output = run_writer(
             w, project, "run", "--reason", "test requested run", "--pipeline-code", "P", timeout=120
@@ -35,7 +35,7 @@ def check_landing_exit(w, monkeypatch, point):
                 ),
                 {"id": project.task_id, "params": json.dumps({"keys": ["0"], "value": "new"})},
             )
-        assert run_writer(w, project, "pipelines", "refresh", timeout=90)[0] == 0
+        assert run_writer(w, project, "deploy", timeout=90)[0] == 0
         code, output = run_writer(
             w,
             project,
@@ -100,7 +100,7 @@ def check_landing_inflight(w, monkeypatch):
     project, token = cli_writer(w, target)
     monkeypatch.setenv("ETL_CRAFT_TOKEN", token)
     try:
-        assert run_writer(w, project, "pipelines", "refresh", timeout=90)[0] == 0
+        assert run_writer(w, project, "deploy", timeout=90)[0] == 0
         code, output = run_writer(
             w, project, "run", "--reason", "test requested run", "--pipeline-code", "P", timeout=120
         )
@@ -118,7 +118,7 @@ def check_landing_inflight(w, monkeypatch):
                     "params": json.dumps({"keys": ["0"], "value": "new", "slow": True}),
                 },
             )
-        assert run_writer(w, project, "pipelines", "refresh", timeout=90)[0] == 0
+        assert run_writer(w, project, "deploy", timeout=90)[0] == 0
         w.warehouse.dispose()
         command = project.start("run", "--reason", "test requested run", "--pipeline-code", "P")
         kill_inflight(w, project, marker)

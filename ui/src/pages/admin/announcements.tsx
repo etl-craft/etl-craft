@@ -49,9 +49,7 @@ export function AnnouncementsTab() {
               id: "act",
               header: "Actions",
               cell: (c) =>
-                c.row.original.ended_at ? null : (
-                  <ActionButton<unknown> label="End" title="End announcement" effect="Takes this announcement down now." endpoint="/announcements/end" body={(reason) => ({ announcement_id: c.row.original.announcement_id, reason })} describe={done("Announcement ended.")} size="sm" />
-                ),
+                  <ActionButton<unknown> label="End" title="End announcement" effect="Takes this announcement down now." endpoint="/announcements/end" availabilityTarget={{ announcement_id: c.row.original.announcement_id }} body={(reason) => ({ announcement_id: c.row.original.announcement_id, reason })} describe={done("Announcement ended.")} size="sm" />,
             }),
           ]}
         />

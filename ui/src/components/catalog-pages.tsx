@@ -17,7 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { columnsOf, DataTable } from "@/components/data-table";
 import { When } from "@/components/when";
-import { useRoleAtLeast } from "@/hooks";
+import { unavailableAction, useActionAvailability } from "@/hooks";
 import { getJson, project } from "@/lib/api";
 import { impact, isOpenGap, pipelineGraph, typeOf, type CatalogColumn, type CatalogDoc, type ImpactRow, type CatalogRun, type CatalogTable, type CatalogTask } from "@/lib/catalog";
 import { describeCron, formatDuration } from "@/lib/format";
@@ -34,9 +34,6 @@ const CATALOG_TABS = {
   tasks: [{id:"overview",label:"Overview"},{id:"mapping",label:"Mapping"},{id:"lineage",label:"Column sources"},{id:"runs",label:"Runs"}],
   tables: [{id:"overview",label:"Overview"},{id:"data",label:"Data"},{id:"lineage",label:"Lineage diagram"},{id:"columns",label:"Column sources"},{id:"history",label:"History"},{id:"quality",label:"Quality"}],
 };
-function catalogTabs(kind:keyof typeof CATALOG_TABS, developer=false) {
-  return CATALOG_TABS[kind].filter(tab=>tab.id!=="data"||developer);
-}
 
 const link = "text-accent hover:underline";
 
@@ -187,7 +184,7 @@ export function PipelineObject({ code, doc, name, tab, onTab }: { code: string; 
   const order = new Map(graph.waves.flat().map((label, i) => [label, i]));
   const at = (t: CatalogTask) => order.get(t.label) ?? order.get(t.code) ?? Number.MAX_SAFE_INTEGER;
   const tasks = doc.tasks.filter((t) => t.pipeline === pipeline.code).sort((a, b) => at(a) - at(b) || a.code.localeCompare(b.code));
-  const tabs = catalogTabs("pipelines");
+  const tabs = CATALOG_TABS.pipelines;
   const on = tabs.some((t) => t.id === tab) ? tab : "overview";
   return (
     <ObjectPage tab={on} fit={on==="lineage"} header={
@@ -271,7 +268,7 @@ export function TaskObject({ code, doc, name, tab, onTab }: { code: string; doc:
   if (!task) return <Notice className="m-4">No task {name} in this catalog build.</Notice>;
   const rules = doc.rules.filter((r) => r.task === task.label);
   const edges = doc.column_edges.filter((e) => e.task === task.label);
-  const tabs = catalogTabs("tasks");
+  const tabs = CATALOG_TABS.tasks;
   const on = tabs.some((t) => t.id === tab) ? tab : "overview";
   return (
     <ObjectPage tab={on} fit={on==="mapping"} header={
@@ -383,13 +380,15 @@ export function TableObject({ code, doc, name, tab, onTab }: { code: string; doc
   const [showAll, setShowAll] = React.useState(false);
   const [now] = React.useState(() => Date.now());
   const [direction, setDirection] = React.useState<"both" | "up" | "down">("both");
-  const developer = useRoleAtLeast("developer");
+  const availability = useActionAvailability(code, undefined, !!name, { preview_table: name });
   const table = doc.tables.find((t) => t.name === name);
   if (!table) return <Notice className="m-4">No table {name} in this catalog build.</Notice>;
   const writers = describe(doc, table);
   const rules = doc.rules.filter((r) => table.rules.includes(r.id));
   const gaps = doc.gaps.filter((g) => g.table === table.name && (showAll || isOpenGap(g)));
-  const tabs = catalogTabs("tables",developer);  const on = tabs.some((t) => t.id === tab) ? tab : "overview";
+  const dataReason = unavailableAction(availability, "/table-preview", "GET");
+  const tabs = CATALOG_TABS.tables.map((entry) => entry.id === "data" ? { ...entry, unavailableReason: dataReason } : entry);
+  const on = tabs.some((entry) => entry.id === tab && !("unavailableReason" in entry && entry.unavailableReason)) ? tab : "overview";
   const shown = table.columns.filter((c) => !filter || `${c.name} ${c.comment ?? ""} ${typeOf(c)}`.toLowerCase().includes(filter.toLowerCase()));
   const hasType = table.columns.some((c) => Boolean(c.warehouse_type ?? c.data_type));
   const hasDeclared = table.columns.some((c) => Boolean(c.declared_type));

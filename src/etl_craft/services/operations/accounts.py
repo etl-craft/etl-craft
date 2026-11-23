@@ -4,12 +4,12 @@ from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from typing import ClassVar
 
-from sqlalchemy.engine import Engine
+from sqlalchemy.engine import Connection, Engine
 from sqlalchemy.exc import IntegrityError
 
 from etl_craft.core.actor import Actor, ActorKind
-from etl_craft.core.enums import AccountKind, ApiRole, YesNo
-from etl_craft.core.errors import UsageError
+from etl_craft.core.enums import AccountKind, ActionName, ApiRole, YesNo
+from etl_craft.core.errors import PermissionDeniedError, UsageError
 from etl_craft.core.time import as_utc
 from etl_craft.dialects.engine import for_engine
 from etl_craft.engine import locks
@@ -226,6 +226,15 @@ def disable(ctx: OperationContext, request: AccountName) -> Accounts:
     return _update(ctx, request.name, "account_disable", {}, revoke=True)
 
 
+def require_other_account(ctx: OperationContext, request: AccountName) -> None:
+    """Protect the signed-in account from disabling itself."""
+    if request.name == ctx.actor.name:
+        raise PermissionDeniedError(
+            f"account {request.name!r}: target is the signed-in account; expected a different "
+            "account; ask another administrator to disable this account"
+        )
+
+
 def unlock(ctx: OperationContext, request: AccountName) -> Accounts:
     """Unlock a local user without changing its password or authority."""
     return _update(ctx, request.name, "account_unlock", {})
@@ -237,30 +246,51 @@ def reset_password(ctx: OperationContext, request: AccountPassword) -> Accounts:
     return _update(ctx, request.name, "account_password", values, revoke=True)
 
 
+def require_recovery_admin(conn: Connection, name: str) -> None:
+    """Protect the last unlocked active administrator."""
+    target = find_account(conn, name)
+    if (
+        target is not None
+        and target.role == ApiRole.ADMIN
+        and target.active_flag == YesNo.YES
+        and target.locked_date is None
+        and unlocked_admins(conn) <= 1
+    ):
+        raise UsageError(
+            f"account {name!r}: last unlocked active admin; expected another recovery "
+            "administrator; add one before disabling or changing this account's role"
+        )
+
+
+def inspect_account_action(ctx: OperationContext, name: ActionName, request: AccountName) -> None:
+    """Check target account eligibility without modifying it."""
+    with ctx.engine.connect() as conn:
+        row = find_account(conn, request.name)
+        if row is None or (
+            name == ActionName.ACCOUNT_UNLOCK
+            and (row.kind != AccountKind.USER or row.oidc_subject is not None)
+        ):
+            raise missing_account(request.name)
+        if name == ActionName.ACCOUNT_DISABLE:
+            require_recovery_admin(conn, request.name)
+
+
+def missing_account(name: str) -> UsageError:
+    """Explain why the action could not select an account."""
+    return UsageError(f"account {name!r}: not found or wrong kind; use `etl-craft account list`")
+
+
 def _update(
     ctx: OperationContext, name: str, query: str, values: dict[str, object], *, revoke: bool = False
 ) -> Accounts:
     with locks.ACCOUNTS.hold(ctx.engine, wait_seconds=30), ctx.engine.begin() as conn:
         if query in ("account_disable", "account_role") and values.get("role") != ApiRole.ADMIN:
-            target = find_account(conn, name)
-            if (
-                target is not None
-                and target.role == ApiRole.ADMIN
-                and target.active_flag == YesNo.YES
-                and target.locked_date is None
-                and unlocked_admins(conn) <= 1
-            ):
-                raise UsageError(
-                    f"account {name!r}: last unlocked active admin; expected another recovery "
-                    "administrator; add one before disabling or changing this account's role"
-                )
+            require_recovery_admin(conn, name)
         account_id = conn.execute(
             statement(conn, query), {"name": name, **values}
         ).scalar_one_or_none()
         if account_id is None:
-            raise UsageError(
-                f"account {name!r}: not found or wrong kind; use `etl-craft account list`"
-            )
+            raise missing_account(name)
         if revoke:
             conn.execute(
                 statement(conn, "account_revoke"),

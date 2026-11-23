@@ -6,6 +6,14 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+- Pipeline details offer **Refresh pipeline** and the pipelines list offers **Refresh all**.
+  Unavailable actions explain why on hover, keyboard focus or tap. Standalone refresh requires RELAXED
+  governance and project management permission across the browser, CLI and API. Authorized
+  deploys still refresh on STRICT projects. **Rebuild catalog** keeps its location and operation,
+  and shows the server's reason when rebuilding is unavailable.
+- Account administrators cannot disable their own account through the browser, CLI or API.
+  The Accounts menu shows the disabled action and directs them to another administrator.
+
 - `etl-craft deploy` is the one command that ships a project. With `Artifacts.Store` set it
   publishes the project's files as a bundle; then it applies `config/` (when the project has
   it), loads the seed tables (when the project has `seeds/`) and refreshes every pipeline, pinned

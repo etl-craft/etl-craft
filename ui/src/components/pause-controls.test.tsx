@@ -17,7 +17,10 @@ afterEach(()=>vi.mocked(postJson).mockReset());
 const pipeline={pipeline_code:"OPS",run_schedule:null,paused:null,task_pauses:[]} as unknown as Pipeline;
 async function show(task=false) {
  const client=new QueryClient({defaultOptions:{queries:{retry:false,staleTime:Infinity}}});
- client.setQueryData(["whoami","default"],{name:"owner",role:"admin"});
+ client.setQueryData(["action-availability","default","OPS",task ? {task_code:"load"} : undefined],{actions:[
+  {endpoint:"/api/v1/controls",method:"POST",control:"PAUSE",available:true,reason:""},
+  {endpoint:"/api/v1/controls",method:"POST",control:"RESUME",available:false,reason:"OPS is not paused."},
+ ]});
  client.setQueryData(["health"],{projects:[{project:"default",environment_type:"CUSTOM",environment_name:null,governance:"STRICT"}]});
  client.setQueryData(["pipeline","default","OPS"],pipeline);
  client.setQueryData(["task","default","OPS","load"],{task_code:"load",handler:"PYTHON",parameters:{},merge_key:[],merge_columns:[]});
@@ -27,6 +30,8 @@ async function show(task=false) {
 }
 it("offers DRAIN by default and sends the selected FINISH policy",async()=>{
  vi.mocked(postJson).mockResolvedValue({message:"Paused"});await show();
+ expect(screen.getByRole("button",{name:"Resume"})).toHaveAttribute("aria-disabled","true");
+ expect(screen.getByRole("button",{name:"Resume"})).toHaveAccessibleDescription("OPS is not paused.");
  fireEvent.click(screen.getByRole("button",{name:"Pause"}));
  const dialog=screen.getByRole("dialog");
  const mode=within(dialog).getByRole("combobox",{name:"Active runs"});
@@ -54,7 +59,9 @@ it("always submits a visible task outcome with SKIPPED preselected",async()=>{
 
 it("keeps an open pause form and its chosen mode during a live list refresh", async()=>{
  const client=new QueryClient({defaultOptions:{queries:{retry:false,staleTime:Infinity}}});
- client.setQueryData(["whoami","default"],{name:"owner",role:"admin"});
+ client.setQueryData(["action-availability","default","OPS",undefined],{actions:[
+  {endpoint:"/api/v1/controls",method:"POST",control:"PAUSE",replacement:true,available:true,reason:""},
+ ]});
  client.setQueryData(["health"],{projects:[{project:"default",environment_type:"CUSTOM",environment_name:null,governance:"STRICT"}]});
  const paused={...pipeline,paused:{active_runs:"DRAIN",drained_runs:[],paused_by:"owner",paused_at:"2026-11-16T12:00:00Z",reason:"maintenance"}};
  client.setQueryData(["pipelines","default"],{pipelines:[paused]});

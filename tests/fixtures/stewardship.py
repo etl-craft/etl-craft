@@ -264,6 +264,13 @@ def check_upload_controls(
             },
         )
         assert edited.status_code == 200, edited.text
+        act(
+            owner,
+            ActionName.PROJECT_SET,
+            project=owner.project or owner.config.project,
+            governance="RELAXED",
+            reason="Exercise standalone refresh",
+        )
         refreshed = act(owner, ActionName.PIPELINE_REFRESH, pipeline_code="P")
         assert not refreshed.failed, refreshed.refreshes[0].findings
         path = tmp_path / "release.csv"

@@ -11,7 +11,7 @@ import { StatusBadge } from "@/components/status";
 import { useToast } from "@/components/toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
-import { failureText, useProjectInfo } from "@/hooks";
+import { failureText, unavailableAction, useActionAvailability, useProjectInfo } from "@/hooks";
 import { getJson, postForm, project } from "@/lib/api";
 import { runPath } from "@/lib/routes";
 import type { UploadReceipt, UploadRow } from "@/lib/types";
@@ -37,16 +37,22 @@ export function Uploads() {
   const client = useQueryClient();
   const info = useProjectInfo(code);
   useDocumentTitle("Uploads", code, info.project && { type: info.project.environment_type, name: info.project.environment_name });
-  const eligible = useQuery({ queryKey: ["upload-pipelines", code], queryFn: () => getJson<{ pipelines: { pipeline_code: string; pipeline_name: string }[] }>(`${project(code)}/uploads/pipelines`) });
+  const eligible = useQuery({ queryKey: ["upload-pipelines", code], queryFn: () => getJson<{ pipelines: { pipeline_code: string; pipeline_name: string }[]; unavailable_reason: string }>(`${project(code)}/uploads/pipelines`) });
   const pipelines = eligible.data?.pipelines ?? [];
-  const chosen = params.get("pipeline") ?? pipelines[0]?.pipeline_code ?? "";
+  const addressed = params.get("pipeline");
+  const chosen = addressed ?? pipelines[0]?.pipeline_code ?? "";
+  const listed = pipelines.some((pipeline) => pipeline.pipeline_code === chosen);
+  const checkAddress = eligible.isSuccess && !!addressed && !listed;
+  const availability = useActionAvailability(code, addressed ?? undefined, checkAddress);
   const files = useQuery({
     queryKey: ["uploads", code, chosen],
     queryFn: () => getJson<{ uploads: UploadRow[] }>(`${project(code)}/uploads`, { pipeline_code: chosen }),
-    enabled: chosen !== "",
+    enabled: listed,
     refetchInterval: 10_000,
   });
   const [file, setFile] = React.useState<File | null>(null);
+  const reason = eligible.error?.message || (checkAddress ? unavailableAction(availability, "/uploads") : undefined) || eligible.data?.unavailable_reason
+    || (eligible.isPending ? "Checking upload availability…" : !file ? "Choose a file to upload." : undefined);
   const [over, setOver] = React.useState(false);
   const input = React.useRef<HTMLInputElement>(null);
   const send = useMutation({
@@ -72,11 +78,6 @@ export function Uploads() {
       <PageHeader title="Uploads" />
       {eligible.isError ? <Notice>{(eligible.error as Error).message}</Notice> : null}
       {eligible.isPending ? <Loading what="your pipelines" /> : null}
-      {eligible.isSuccess && pipelines.length === 0 ? (
-        <Card><EmptyState title="No pipeline takes uploads from you here." nextStep="Ask a developer to enable uploads for a pipeline, then ask its manager or an administrator for upload permission." /></Card>
-      ) : null}
-      {pipelines.length ? (
-        <>
           <Card>
             <CardHeader>
               <CardTitle>Upload a file</CardTitle>
@@ -85,11 +86,12 @@ export function Uploads() {
               className="grid gap-4 p-4 sm:max-w-xl"
               onSubmit={(event) => {
                 event.preventDefault();
-                if (file) send.mutate(file);
+                if (file && !reason && !send.isPending) send.mutate(file);
               }}
             >
               <p className="m-0 text-[13px] text-muted">One pipe-delimited CSV or TXT file, or an XLSX workbook. The pipeline&apos;s validation script checks it before anything is loaded.</p>
-              <SelectField label="Pipeline" value={chosen} onChange={(value) => setParams({ pipeline: value })}>
+              <SelectField label="Pipeline" disabled={!pipelines.length} value={chosen} onChange={(value) => setParams({ pipeline: value })}>
+                {chosen && !listed ? <option value={chosen}>{chosen}</option> : null}
                 {pipelines.map((p) => (
                   <option key={p.pipeline_code} value={p.pipeline_code}>
                     {p.pipeline_code}
@@ -122,12 +124,12 @@ export function Uploads() {
                 </label>
               </Field>
               {send.isError ? <Notice>{failureText(send.error)}</Notice> : null}
-              <Button type="submit" variant="primary" className="w-fit" disabled={!file || send.isPending}>
+              <Button type="submit" variant="primary" className="w-fit" disabled={send.isPending} unavailableReason={reason}>
                 <Upload className="size-4" aria-hidden /> {send.isPending ? "Uploading…" : "Upload"}
               </Button>
             </form>
           </Card>
-          <Card>
+          {listed ? <Card>
             <CardHeader>
               <CardTitle>Recent files for {chosen}</CardTitle>
             </CardHeader>
@@ -161,9 +163,7 @@ export function Uploads() {
                 columns.accessor("reason", { header: "Reason", cell: (c) => <span className="break-words">{c.getValue() ?? ""}</span> }),
               ]}
             />
-          </Card>
-        </>
-      ) : null}
+          </Card> : null}
     </div>
   );
 }

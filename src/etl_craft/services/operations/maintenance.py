@@ -88,12 +88,17 @@ def migrate(ctx: OperationContext, request: MigrateInput) -> list[str]:
 
 def clone_tables(ctx: OperationContext, request: NoInput) -> Clones:
     """Mirror the configured Engine DB tables into the warehouse."""
+    require_cloning(ctx)
+    return Clones(tuple(clone(ctx.engine, ctx.config)))
+
+
+def require_cloning(ctx: OperationContext) -> None:
+    """Require warehouse cloning to be enabled for this project."""
     if not ctx.config.cloning.enabled:
         raise ConfigurationError(
             "Cloning is off in craft-connector.yml: set Cloning.Enabled: true and a Scope of "
             "cfg, aud or all"
         )
-    return Clones(tuple(clone(ctx.engine, ctx.config)))
 
 
 def plan_rehash(ctx: OperationContext, request: RehashInput) -> RehashResult:

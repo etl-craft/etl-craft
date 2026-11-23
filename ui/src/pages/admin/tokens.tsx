@@ -80,9 +80,7 @@ export function TokensTab() {
               id: "act",
               header: "Actions",
               cell: (c) =>
-                c.row.original.revoked_at ? null : (
-                  <ActionButton<unknown> label="Revoke" title={`Revoke ${c.row.original.name}`} effect="Stops this token working at once; clients using it must sign in again." endpoint="/tokens/revoke" askReason={false} body={() => ({ token_id: c.row.original.token_id })} describe={done("Token revoked.")} variant="danger" size="sm" />
-                ),
+                  <ActionButton<unknown> label="Revoke" title={`Revoke ${c.row.original.name}`} effect="Stops this token working at once; clients using it must sign in again." endpoint="/tokens/revoke" availabilityTarget={{ token_id: c.row.original.token_id }} askReason={false} body={() => ({ token_id: c.row.original.token_id })} describe={done("Token revoked.")} variant="danger" size="sm" />,
             }),
           ]}
         />

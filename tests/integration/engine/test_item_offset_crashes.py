@@ -41,7 +41,7 @@ def run(task):
     return task.fan_out(["0", "1"], load, max_parallel=1, max_items=4)
 """)
     try:
-        code, output = run_writer(w, project, "pipelines", "refresh", timeout=90)
+        code, output = run_writer(w, project, "deploy", timeout=90)
         assert code == 0, output
         code, output = run_writer(
             w, project, "run", "--reason", "test requested run", "--pipeline-code", "P", timeout=90

@@ -155,7 +155,7 @@ def create_role(ctx: OperationContext, request: RoleCreate) -> Roles:
                 statement(conn, "role_add"),
                 {"name": request.name, "description": request.description},
             )
-            role_id = _custom_role_id(conn, request.name)
+            role_id = custom_role_id(conn, request.name)
             for action in actions:
                 conn.execute(
                     statement(conn, "role_action_add"),
@@ -172,7 +172,7 @@ def add_action(ctx: OperationContext, request: RoleAction) -> Roles:
     """Add one action to a custom role; an action it already holds is left unchanged."""
     action = bindable(request.action)
     with locks.ACCOUNTS.hold(ctx.engine, wait_seconds=30), ctx.engine.begin() as conn:
-        role_id = _custom_role_id(conn, request.name)
+        role_id = custom_role_id(conn, request.name)
         if (
             deployment_only(action)
             and conn.execute(statement(conn, "role_narrow_binding"), {"name": request.name}).first()
@@ -193,7 +193,7 @@ def add_action(ctx: OperationContext, request: RoleAction) -> Roles:
 def remove_action(ctx: OperationContext, request: RoleAction) -> Roles:
     """Remove one action from a custom role, keeping its history."""
     with locks.ACCOUNTS.hold(ctx.engine, wait_seconds=30), ctx.engine.begin() as conn:
-        role_id = _custom_role_id(conn, request.name)
+        role_id = custom_role_id(conn, request.name)
         removed = conn.execute(
             statement(conn, "role_action_remove"),
             {"role_id": role_id, "action_name": request.action.strip()},
@@ -209,12 +209,13 @@ def remove_action(ctx: OperationContext, request: RoleAction) -> Roles:
 def disable_role(ctx: OperationContext, request: RoleName) -> Roles:
     """Retire a custom role; its bindings stop allowing anything on the next request."""
     with locks.ACCOUNTS.hold(ctx.engine, wait_seconds=30), ctx.engine.begin() as conn:
-        _custom_role_id(conn, request.name)
+        custom_role_id(conn, request.name)
         conn.execute(statement(conn, "role_disable"), {"name": request.name})
     return describe_role(ctx, request)
 
 
-def _custom_role_id(conn: Connection, name: str) -> int:
+def custom_role_id(conn: Connection, name: str) -> int:
+    """Resolve an active role that an administrator can change."""
     for row in conn.execute(statement(conn, "role_list")):
         if row.name == name:
             if row.built_in == YesNo.YES:

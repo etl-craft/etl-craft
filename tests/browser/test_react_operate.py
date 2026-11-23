@@ -101,8 +101,12 @@ def test_a_viewer_with_no_upload_grant_is_told_how_to_get_one(steward):
     with sync_playwright() as pw:
         browser, page, _ = open_page(pw)
         sign_in(page, url, "/ui/projects/default/uploads", name="alice")
-        expect(page.get_by_text("No pipeline takes uploads from you here.")).to_be_visible()
-        expect(upload_button(page)).to_have_count(0)
+        expect(upload_button(page)).to_be_disabled()
+        expect(upload_button(page)).to_have_accessible_description(re.compile("CAN_UPLOAD"))
+        upload_button(page).hover()
+        expect(page.get_by_role("tooltip")).to_contain_text(
+            "No pipeline takes uploads from you here."
+        )
         browser.close()
 
 

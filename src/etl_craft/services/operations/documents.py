@@ -92,6 +92,12 @@ def refuse_off_schedule(ctx: OperationContext) -> None:
         )
 
 
+def require_warehouse_check(ctx: OperationContext, request: DocsInput) -> None:
+    """Check whether the request may ask for an immediate warehouse comparison."""
+    if request.with_warehouse and ctx.actor != SYSTEM_ACTOR:
+        refuse_off_schedule(ctx)
+
+
 def generate_docs(ctx: OperationContext, request: DocsInput) -> DocsBuild:
     """Build the catalog and write its site; ``strict`` writes nothing while a task is untraced.
 
@@ -99,8 +105,7 @@ def generate_docs(ctx: OperationContext, request: DocsInput) -> DocsBuild:
     A warehouse comparison someone asks for is refused while the project turns on-demand
     checks off; the controller's scheduled check runs as the system actor.
     """
-    if request.with_warehouse and ctx.actor != SYSTEM_ACTOR:
-        refuse_off_schedule(ctx)
+    require_warehouse_check(ctx, request)
     requested = current_request()
     assert requested is not None
     completion = ActionRequest(

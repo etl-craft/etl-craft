@@ -55,6 +55,49 @@ def sign_in(page, url, destination="/ui", name="owner"):
     page.wait_for_url(url + destination)
 
 
+@pytest.mark.parametrize("scheme,width", (("light", 1440), ("dark", 1440), ("light", 390)))
+def test_both_refresh_controls_show_the_strict_reason(scene, scheme, width):
+    _, url, _, _ = scene
+    with sync_playwright() as pw:
+        browser, page, _ = open_page(
+            pw,
+            color_scheme=scheme,
+            viewport={"width": width, "height": 1000},
+            has_touch=width == 390,
+        )
+        sign_in(page, url, "/ui/projects/default/pipelines")
+        for path, label in (
+            ("pipelines", "Refresh all"),
+            ("pipelines/OPS", "Refresh pipeline"),
+        ):
+            page.goto(f"{url}/ui/projects/default/{path}")
+            refresh = page.get_by_role("button", name=label, exact=True)
+            expect(refresh).to_be_disabled()
+            expect(refresh).to_have_accessible_description(
+                re.compile("standalone pipeline refresh requires RELAXED")
+            )
+            assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+            assert refresh.evaluate("""button => {
+                const [summary, actions] = button.closest('header').children;
+                const a = summary.getBoundingClientRect(), b = actions.getBoundingClientRect();
+                return a.right <= b.left || a.bottom <= b.top;
+            }""")
+            expect(page.get_by_role("tooltip")).to_have_count(0)
+            if width == 390:
+                refresh.tap(force=True)
+            else:
+                refresh.hover()
+            expect(page.get_by_role("tooltip")).to_contain_text(
+                "standalone pipeline refresh requires RELAXED"
+            )
+            screenshots = os.environ.get("ETL_CRAFT_UI_SCREENSHOTS")
+            if screenshots:
+                file = Path(screenshots) / f"refresh-{path.replace('/', '-')}-{scheme}-{width}.png"
+                file.parent.mkdir(parents=True, exist_ok=True)
+                page.screenshot(path=file, full_page=True)
+        browser.close()
+
+
 def open_page(pw, *, show_scrollbars=False, **options):
     browser = pw.chromium.launch(
         ignore_default_args=["--hide-scrollbars"] if show_scrollbars else None
@@ -158,7 +201,9 @@ def test_a_viewer_sees_the_failed_run_but_no_recover_action(scene):
         sign_in(page, url, f"/ui/projects/default/runs/OPS/{bad}", name="alice")
         expect(page.get_by_label("Run identifier", exact=True)).to_contain_text(f"-{bad}")
         expect(page.get_by_text("Failed", exact=True).first).to_be_visible()
-        expect(page.get_by_role("button", name="Recover run")).to_have_count(0)
+        recover = page.get_by_role("button", name="Recover run")
+        expect(recover).to_be_visible()
+        expect(recover).to_be_disabled()  # grayed out, with the server's reason
         browser.close()
 
 
@@ -265,7 +310,10 @@ def test_a_run_offers_its_logs_and_a_running_run_offers_reconcile(scene):
         )
         expect(page.get_by_role("menuitem", name="Download logs (zip)")).to_be_visible()
         reconcile = page.get_by_role("menuitem").filter(has_text="Reconcile")
-        expect(reconcile).to_have_count(0)  # it has ended
+        # Reconcile is pipeline-scoped: the server accepts it on an ended run (a no-op when no owner
+        # has expired), so the answer is available and the item is not grayed out.
+        expect(reconcile).to_be_visible()
+        expect(reconcile).not_to_have_attribute("aria-disabled", "true")
         page.keyboard.press("Escape")
         page.goto(url + f"/ui/projects/default/runs/OPS/{running}")
         page.get_by_role("button", name="Run actions, logs and key").click()

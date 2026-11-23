@@ -1,6 +1,7 @@
 import { cva, type VariantProps } from "class-variance-authority";
 import { Slot } from "@radix-ui/react-slot";
 import * as React from "react";
+import { useActionReason } from "@/components/action-reason";
 import { cn } from "@/lib/utils";
 
 const button = cva(
@@ -23,9 +24,27 @@ const button = cva(
 export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement>, VariantProps<typeof button> {
   asChild?: boolean;
   ref?: React.Ref<HTMLButtonElement>;
+  unavailableReason?: string;
 }
 
-export function Button({ className, variant, size, asChild, ...props }: ButtonProps) {
+export function Button({ className, variant, size, asChild, unavailableReason, ...props }: ButtonProps) {
+  const { anchor, annotation, show } = useActionReason(unavailableReason);
   const Component = asChild ? Slot : "button";
-  return <Component className={cn(button({ variant, size }), className)} {...props} />;
+  if (!unavailableReason) return <Component className={cn(button({ variant, size }), className)} {...props} />;
+  return (
+    <>
+      <Component
+        className={cn(button({ variant: "outline", size }), className, "cursor-default text-muted")}
+        {...props}
+        {...anchor}
+        aria-disabled="true"
+        onClick={(event: React.MouseEvent<HTMLButtonElement>) => {
+          event.preventDefault();
+          event.stopPropagation();
+          show(event);
+        }}
+      />
+      {annotation}
+    </>
+  );
 }

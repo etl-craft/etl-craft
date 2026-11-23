@@ -4,10 +4,10 @@ import { describe, expect, it } from "vitest";
 import { Sidebar } from "@/components/sidebar";
 import { InsightsRedirect } from "@/pages/project-dashboard";
 
-function nav(code: string | undefined, admin: boolean, at = "/") {
+function nav(code: string | undefined, at = "/") {
   return render(
     <MemoryRouter initialEntries={[at]}>
-      <Sidebar code={code} admin={admin} collapsed={false} onToggle={() => undefined} />
+      <Sidebar code={code} collapsed={false} onToggle={() => undefined} />
     </MemoryRouter>,
   );
 }
@@ -20,7 +20,7 @@ const items = (section: string) => {
 
 describe("the navigation", () => {
   it("groups a project's pages as Overview, Operations and Platform", () => {
-    nav("demo", true);
+    nav("demo");
     expect(items("Overview")).toEqual(["Home", "Pipelines", "Catalog"]);
     expect(items("Operations")).toEqual(["Runs", "Scheduled runs", "Paused", "Uploads", "Console", "Maintenance"]);
     expect(items("Platform")).toEqual(["Projects", "System health", "Agents", "Administration"]);
@@ -28,23 +28,23 @@ describe("the navigation", () => {
     expect(screen.queryByText("Project", { selector: "p" })).toBeNull();
   });
 
-  it("leaves out the project's pages until a project is open, and administration for others", () => {
-    nav(undefined, false);
+  it("leaves out the project's pages until a project is open", () => {
+    nav(undefined);
     expect(items("Overview")).toEqual(["Home"]);
     expect(screen.queryByText("Operations")).toBeNull();
-    expect(items("Platform")).toEqual(["Projects", "System health", "Agents"]);
+    expect(items("Platform")).toEqual(["Projects", "System health", "Agents", "Administration"]);
   });
 });
 
 describe("the current page", () => {
   it("marks Home, not Projects, on a project's own address", () => {
-    nav("demo", true, "/projects/demo");
+    nav("demo", "/projects/demo");
     expect(screen.getByRole("link", { name: "Home" }).getAttribute("aria-current")).toBe("page");
     expect(screen.getByRole("link", { name: "Projects" }).getAttribute("aria-current")).toBeNull();
   });
 
   it("marks Projects on the list of projects", () => {
-    nav("demo", true, "/projects");
+    nav("demo", "/projects");
     expect(screen.getByRole("link", { name: "Projects" }).getAttribute("aria-current")).toBe("page");
     expect(screen.getByRole("link", { name: "Home" }).getAttribute("aria-current")).toBeNull();
   });

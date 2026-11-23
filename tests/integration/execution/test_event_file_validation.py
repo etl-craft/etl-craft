@@ -258,7 +258,7 @@ def test_a_real_run_validates_event_files_and_loads_only_the_accepted_one(cli_pr
         )
         add_dependency(conn, p.pipeline_id, validate, wait)
         add_dependency(conn, p.pipeline_id, p.task_id, validate, "HAS_DATA")
-    code, output = p.run("pipelines", "refresh")
+    code, output = p.run("deploy")
     assert code == 0, output
     code, output = p.run(
         "run", "--reason", "test requested run", "--pipeline-code", "P", timeout=120

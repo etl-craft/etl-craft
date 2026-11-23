@@ -70,7 +70,7 @@ def test_missing_required_upload_is_recorded_once_and_alerts_on_failure(cli_proj
             ALERT_SUBJECT="Upload refused",
             ALERT_BODY="$$error_message",
         )
-    code, output = p.run("pipelines", "refresh")
+    code, output = p.run("deploy")
     assert code == 0, output
     code, output = p.run(
         "run", "--reason", "test requested run", "--pipeline-code", "P", timeout=60

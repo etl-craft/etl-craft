@@ -7,14 +7,12 @@ import { FormAction } from "@/components/form-action";
 import { RowActions } from "@/components/row-actions";
 import { StatusBadge } from "@/components/status";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
-import { useIdentity } from "@/hooks";
 import type { Account } from "@/lib/types";
 import { done, ListState, ROLES, useAdminList } from "./shared";
 
 const columns = createColumnHelper<Account>();
 
 export function AccountsTab() {
-  const me = useIdentity().data?.name;
   const list = useAdminList<{ accounts: Account[] }>("/api/v1/accounts");
   const accounts = list.data?.accounts ?? [];
   const names = accounts.map((a) => a.name);
@@ -95,16 +93,13 @@ export function AccountsTab() {
               header: "Actions",
               cell: (c) => {
                 const a = c.row.original;
-                if (a.name === me) return <span className="text-muted">You</span>;
-                if (a.active_flag !== "Y") return null;
                 // Row actions sit behind one menu, so the table keeps its width at any size; each still confirms.
                 return (
                   <RowActions
                     name={a.name}
+                    account={a.name}
                     actions={[
-                      ...(a.locked_at
-                        ? [{ label: "Unlock", title: `Unlock ${a.name}`, effect: "Clears the lock and the failed sign-in count so the account can sign in again.", endpoint: "/accounts/unlock", askReason: false, body: () => ({ name: a.name }), describe: done(`${a.name} unlocked.`) }]
-                        : []),
+                      { label: "Unlock", title: `Unlock ${a.name}`, effect: "Clears the lock and the failed sign-in count so the account can sign in again.", endpoint: "/accounts/unlock", askReason: false, body: () => ({ name: a.name }), describe: done(`${a.name} unlocked.`) },
                       { label: "Disable", title: `Disable ${a.name}`, effect: "Stops this account signing in and revokes its sessions and tokens; its history stays.", endpoint: "/accounts/disable", askReason: false, body: () => ({ name: a.name }), describe: done(`${a.name} disabled.`), danger: true },
                     ]}
                   />

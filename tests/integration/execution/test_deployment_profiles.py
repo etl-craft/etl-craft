@@ -8,13 +8,13 @@ from sqlalchemy import text
 from etl_craft.cli import main
 from etl_craft.config import load_config
 from etl_craft.config.sizing import start_role
-from etl_craft.core.enums import ActionName, ApiRole, DeploymentProfile
+from etl_craft.core.enums import ApiRole, DeploymentProfile
 from etl_craft.core.errors import ConfigurationError
 from etl_craft.core.resources import GIB, Host
 from etl_craft.engine.connection import engine_db
 from etl_craft.execution.pools.local import LocalPool
 from etl_craft.services.doctor import run_checks
-from fixtures.actions import act
+from fixtures.actions import deploy_config
 from fixtures.auth import service_token
 from fixtures.metadata import add_pipeline, add_task
 from fixtures.scoped_controls import ctx as ctx
@@ -33,9 +33,7 @@ def test_the_cluster_profile_refuses_sqlite_and_init_only_starts_nothing(ctx, ca
     raw = yaml.safe_load(path.read_text())
     raw["Artifacts"] = {"Store": (ctx.config.project_dir / "artifacts").as_uri()}
     path.write_text(yaml.safe_dump(raw, sort_keys=False))
-    result = act(
-        replace(ctx, config=load_config(path), role=ApiRole.ADMIN), ActionName.PIPELINE_REFRESH
-    )
+    result = deploy_config(replace(ctx, config=load_config(path), role=ApiRole.ADMIN))
     assert not result.failed, result
     path.write_text(
         yaml.safe_dump(

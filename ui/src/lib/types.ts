@@ -211,13 +211,14 @@ export interface Items {
   task_run_id: number;
   task_run_label?: string;
   records: ItemRecord[];
+  availability: { action: string; item_key: string | null; available: boolean; reason: string }[];
   progress: { total: number; done: number; failed: number; skipped: number };
 }
 
 export interface Capability {
   action: string;
   available: boolean;
-  reason: string | null;
+  reason: string;
   preserves_successful_work: boolean;
 }
 

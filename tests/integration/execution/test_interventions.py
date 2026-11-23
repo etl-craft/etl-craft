@@ -797,7 +797,7 @@ def test_the_pause_and_skip_commands(config, pipeline, capsys, monkeypatch, engi
                 "SELECT TASK_ID,'SCRIPT_FILE','python_scripts/skip.py' FROM CFG_TASKS"
             )
         )
-    assert cli_main(["pipelines", "refresh"]) == ExitCode.SUCCESS
+    assert cli_main(["deploy"]) == ExitCode.SUCCESS
     capsys.readouterr()
     assert cli_main(["pause", "--pipeline-code", "P", "--reason", "hold"]) == ExitCode.SUCCESS
     assert capsys.readouterr().out.startswith("P: paused;")
@@ -992,7 +992,7 @@ def test_the_run_date_and_backfill_options(config, engine_db, capsys, monkeypatc
         add_pipeline(conn, "P")
     monkeypatch.chdir(config.project_dir)
     both_days = ["--backfill", "2026-09-01:2026-09-02"]
-    assert cli_main(["pipelines", "refresh"]) == ExitCode.SUCCESS
+    assert cli_main(["deploy"]) == ExitCode.SUCCESS
     capsys.readouterr()
     assert cli_main(["run", "--pipeline-code", "P", *both_days, "--reason", "r"]) == 0
     assert "backfill of 2 date(s)" in capsys.readouterr().out

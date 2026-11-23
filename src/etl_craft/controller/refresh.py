@@ -11,7 +11,11 @@ from etl_craft.engine.queries import statement
 from etl_craft.engine.repository.pipelines import selected_project
 from etl_craft.services.operations import OperationContext
 from etl_craft.services.operations.actions import invoke, project_settings
-from etl_craft.services.operations.pipeline_refresh import RefreshInput, initialize_missing
+from etl_craft.services.operations.pipeline_refresh import (
+    InternalRefresh,
+    RefreshInput,
+    initialize_missing,
+)
 
 
 def refresh_due(ctx: OperationContext, stop: threading.Event) -> None:
@@ -33,7 +37,7 @@ def refresh_due(ctx: OperationContext, stop: threading.Event) -> None:
         with acting_as(SYSTEM_ACTOR), selected_project(project.project_id):
             selected = project_settings(scoped, ActionName.CLONE, RefreshInput())
             if _changed(selected):
-                invoke(selected, ActionName.PIPELINE_REFRESH, RefreshInput())
+                invoke(selected, ActionName.PIPELINE_REFRESH, InternalRefresh())
 
 
 def _changed(ctx: OperationContext) -> bool:

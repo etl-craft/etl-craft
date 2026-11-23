@@ -346,7 +346,7 @@ def test_preexisting_run_applies_outcome_to_unstarted_task_without_executing_it(
     )
     with project.engine.begin() as conn:
         add_task(conn, project.pipeline_id, "other", "PYTHON", SCRIPT_FILE="python_scripts/load.py")
-    code, output = project.run("pipelines", "refresh")
+    code, output = project.run("deploy")
     assert code == 0, output
     code, output = project.run(
         "run", "--reason", "test requested run", "--pipeline-code", "P", "--init-only"
@@ -407,7 +407,7 @@ def test_supplied_success_has_no_data_and_no_fresh_cross_pipeline_output(cli_pro
         "        conn.execute(text('CREATE TABLE standing_proof AS SELECT 1 AS id'))\n"
         "    return ScriptResult(1)\n"
     )
-    code, output = project.run("pipelines", "refresh")
+    code, output = project.run("deploy")
     assert code == 0, output
     code, output = project.run(
         "pause",
@@ -569,7 +569,7 @@ def test_standing_outcomes_drive_dependencies_without_retrying_the_paused_task(
             ),
             {"task": project.task_id},
         )
-    code, output = project.run("pipelines", "refresh")
+    code, output = project.run("deploy")
     assert code == 0, output
     assert (
         project.run(
@@ -643,7 +643,7 @@ def test_non_tty_scheduled_resume_requires_then_without_closing_pause(cli_projec
             text("UPDATE CFG_PIPELINES SET RUN_SCHEDULE='@daily',SCHEDULE_START_DATE=:today"),
             {"today": datetime.now(UTC).date().isoformat()},
         )
-    assert project.run("pipelines", "refresh")[0] == 0
+    assert project.run("deploy")[0] == 0
     assert project.run("pause", "--pipeline-code", "P", "--reason", "maintenance")[0] == 0
     code, output = project.run("resume", "--pipeline-code", "P", "--reason", "maintenance over")
     assert code == UsageError.exit_code, output
@@ -825,7 +825,7 @@ def test_standing_watermark_outcomes_leave_the_whole_window_for_real_execution(
                 )
             )
         warehouse.dispose()
-        code, output = p.run("pipelines", "refresh")
+        code, output = p.run("deploy")
         assert code == 0, output
         code, output = p.run(
             "pause",

@@ -18,6 +18,7 @@ import { StatusBadge, taskStatus } from "@/components/status";
 import { PauseState } from "@/components/pipeline-parts";
 import { RunGraph } from "@/components/lazy-run-graph";
 import { DEFAULT_RUNS, GRID_COLUMNS, MIN_TASKS, RunGrid } from "@/components/run-grid";
+import { PipelineRefresh } from "@/components/pipeline-refresh";
 import { RunOverview } from "@/components/run-overview";
 import { RunsPanel } from "@/components/runs-panel";
 import { useRuns } from "@/components/runs-table";
@@ -25,7 +26,7 @@ import { Tabs } from "@/components/tabs";
 import { SplitPane } from "@/components/split-pane";
 import { Card } from "@/components/ui/card";
 import { autoStarts } from "@/lib/auto-starts";
-import { useAutoStarts, useCanRun, useProjectInfo, useRunReference } from "@/hooks";
+import { unavailableAction, useActionAvailability, useAutoStarts, useProjectInfo, useRunReference } from "@/hooks";
 import { describeCron, formatDuration } from "@/lib/format";
 import { ApiError, getJson, project } from "@/lib/api";
 import { pipelinesPath, projectHomePath, scheduledPath, taskPath } from "@/lib/routes";
@@ -53,7 +54,7 @@ export function PipelineDetail() {
     setParams(next, { replace: true });
   };
   const navigate = useNavigate();
-  const canRun = useCanRun(code);
+  const availability = useActionAvailability(code, pipeline);
   const info = useProjectInfo(code);
   const found = useQuery({
     queryKey: ["pipeline", code, pipeline],
@@ -154,11 +155,13 @@ export function PipelineDetail() {
         subtitle={p && p.pipeline_name !== pipeline ? p.pipeline_name : undefined}
         status={p ? <PauseState pipeline={p} /> : null}
         actions={
-          p && canRun ? (
+          p ? (
             <div className="flex flex-wrap items-start justify-end gap-2">
+              <PipelineRefresh code={code} pipeline={pipeline} onDone={() => void found.refetch()} />
               <ActionButton<{ message?: string }>
                 code={code}
                 label="Run now"
+                unavailableReason={unavailableAction(availability, "/runs")}
                 title={`Run ${pipeline} now`}
                 effect="Admits one manual run of the whole pipeline for the controller; scheduled runs are unaffected."
                 endpoint="/runs"

@@ -17,9 +17,10 @@ import { DataTable } from "@/components/data-table";
 import { NextRun, PauseState, RecentRuns, TagList } from "@/components/pipeline-parts";
 import { slaVerdict, StatusBadge } from "@/components/status";
 import { Card } from "@/components/ui/card";
-import { useCanRun, useProjectInfo, useRoleAtLeast } from "@/hooks";
+import { unavailableAction, useActionAvailability, useProjectInfo } from "@/hooks";
 import { getJson, project } from "@/lib/api";
 import { pipelinePath, runPath } from "@/lib/routes";
+import { PipelineRefresh } from "@/components/pipeline-refresh";
 import type { BulkOutcome, Pipeline } from "@/lib/types";
 import { useDocumentTitle } from "@/title";
 
@@ -36,8 +37,6 @@ export function Pipelines() {
   const [params, setParams] = useSearchParams();
   const tags = params.getAll("tag");
   const text = params.get("q") ?? "";
-  const canRun = useCanRun(code);
-  const developer = useRoleAtLeast("developer");
   const info = useProjectInfo(code);
   useDocumentTitle("Pipelines", code, info.project && { type: info.project.environment_type, name: info.project.environment_name });
   const list = useQuery({ queryKey: ["pipelines", code], queryFn: () => getJson<{ pipelines: Pipeline[] }>(`${project(code)}/pipelines`), refetchInterval: 15_000 });
@@ -46,6 +45,7 @@ export function Pipelines() {
   const shown = React.useMemo(() => all.filter((p) => tags.every((t) => p.tags.includes(t)) && (!text || `${p.pipeline_code} ${p.pipeline_name} ${p.description ?? ""}`.toLowerCase().includes(text.toLowerCase()))), [all, tags, text]);
   const [chosen, setChosen] = React.useState<ReadonlySet<string>>(new Set());
   const selected = shown.filter((p) => chosen.has(p.pipeline_code)).map((p) => p.pipeline_code);
+  const bulkAvailability = useActionAvailability(code, undefined, !!selected.length, { pipeline_codes: selected });
 
   const toggleTag = (tag: string) => {
     const next = new URLSearchParams(window.location.search);
@@ -67,6 +67,7 @@ export function Pipelines() {
       title={`${verb} ${selected.length} pipeline${selected.length === 1 ? "" : "s"}`}
       effect={`${action === "PAUSE" ? "Stops new automatic runs of" : "Allows automatic runs of"}: ${selected.join(", ")}. Each pipeline succeeds or is refused on its own.`}
       endpoint="/controls/bulk"
+      unavailableReason={selected.length ? unavailableAction(bulkAvailability, "/controls/bulk", "POST", { action }) : "Select pipelines first."}
       body={(reason) => ({ requests: selected.map((pipeline_code) => ({ pipeline_code, action, reason })) })}
       describe={describeOutcomes}
       icon={action === "PAUSE" ? <Pause className="size-4" aria-hidden /> : <Play className="size-4" aria-hidden />}
@@ -81,19 +82,7 @@ export function Pipelines() {
         subtitle={tags.length ? `Tagged ${tags.join(" and ")}` : undefined}
         actions={
           <div className="flex flex-wrap items-start gap-2">
-          {developer ? (
-            <ActionButton<unknown>
-              code={code}
-              label="Refresh all"
-              title={`Refresh every pipeline in ${code}`}
-              effect="Validates each pipeline's current definition and pins the versions that pass."
-              endpoint="/pipelines/refresh"
-              askReason={false}
-              body={() => ({})}
-              describe={() => "Every pipeline was refreshed."}
-              
-            />
-          ) : null}
+          <PipelineRefresh code={code} onDone={() => void list.refetch()} />
           <CsvButton
             name={`${code}-pipelines.csv`}
             header={["pipeline", "name", "description", "tags", "schedule", "dependencies", "last_run", "next_run", "automatic_runs", "paused_tasks"]}
@@ -112,27 +101,21 @@ export function Pipelines() {
       </div>
       {list.isError ? <Notice>{(list.error as Error).message}</Notice> : null}
       <Card>
-        {selected.length && canRun ? (
-          <div className="flex flex-wrap items-center gap-3 border-b border-border px-3 py-2">
-            <span className="text-sm font-medium">{selected.length} selected</span>
-            {bulk("PAUSE", "Pause")}
-            {bulk("RESUME", "Resume")}
-          </div>
-        ) : null}
+        <div className="flex flex-wrap items-center gap-3 border-b border-border px-3 py-2">
+          <span className="text-sm font-medium">{selected.length} selected</span>
+          {bulk("PAUSE", "Pause")}
+          {bulk("RESUME", "Resume")}
+        </div>
         <LegendView entries={statusEntries(shown.flatMap(pipeline=>pipeline.recent_runs.map(run=>run.status)))}><DataTable
           label="Pipelines"
           data={shown}
           empty={list.isSuccess ? (tags.length ? <EmptyState title="No pipeline carries every selected tag." nextStep="Clear a tag to broaden the list." /> : <EmptyState title="This project has no active pipeline." nextStep="Add a pipeline in the project config files, apply them, then refresh the pipeline definitions." />) : undefined}
           rowId={(p) => p.pipeline_code}
-          selection={
-            canRun
-              ? {
-                  ids: chosen,
-                  onToggle: (id) => setChosen((now) => (now.has(id) ? new Set([...now].filter((x) => x !== id)) : new Set([...now, id]))),
-                  onToggleAll: (every) => setChosen(every ? new Set(shown.map((p) => p.pipeline_code)) : new Set()),
-                }
-              : undefined
-          }
+          selection={{
+            ids: chosen,
+            onToggle: (id) => setChosen((now) => (now.has(id) ? new Set([...now].filter((x) => x !== id)) : new Set([...now, id]))),
+            onToggleAll: (every) => setChosen(every ? new Set(shown.map((p) => p.pipeline_code)) : new Set()),
+          }}
           initialSort={[{ id: "pipeline", desc: false }]}
           columns={[
             columns.accessor("pipeline_code", {

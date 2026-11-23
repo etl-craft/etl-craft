@@ -58,7 +58,7 @@ def test_fast_branch_starts_its_downstream_before_the_slow_branch_finishes(
             conn, p.pipeline_id, "after_fast", "PYTHON", SCRIPT_FILE="python_scripts/after.py"
         )
         add_dependency(conn, p.pipeline_id, following, p.task_id)
-    assert p.run("pipelines", "refresh")[0] == 0
+    assert p.run("deploy")[0] == 0
     if server_mode:
         assert (
             p.run("run", "--reason", "test requested run", "--pipeline-code", "P", "--init-only")[0]
@@ -309,7 +309,7 @@ def test_shutdown_cancels_all_runs_before_joining_the_shared_pool(cli_project):
         add_dependency(conn, p.pipeline_id, later, p.task_id)
         other = add_pipeline(conn, "OTHER")
         add_task(conn, other, "block", "PYTHON", SCRIPT_FILE="python_scripts/block.py")
-    assert p.run("pipelines", "refresh")[0] == 0
+    assert p.run("deploy")[0] == 0
     assert (
         p.run("run", "--reason", "test requested run", "--pipeline-code", "P", "--init-only")[0]
         == 0

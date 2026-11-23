@@ -405,6 +405,15 @@ def _selected_key(guard: Protection, key: Mapping[str, object]) -> str:
     )
 
 
+def require_human_unlock(ctx: OperationContext) -> None:
+    """Only a signed-in person may release value protection."""
+    if ctx.actor.kind != ActorKind.USER:
+        raise PermissionDeniedError(
+            f"actor={ctx.actor.name!r}, kind={ctx.actor.kind}; expected a human admin; "
+            "sign in as a USER admin to release protection"
+        )
+
+
 def unlock_values(ctx: OperationContext, edit: ValueUnlock) -> ValueResult:
     """Release protection explicitly; integrations cannot unlock a person's values."""
     pipeline, task = edit.pipeline_code, edit.task_code
@@ -425,11 +434,7 @@ def unlock_values(ctx: OperationContext, edit: ValueUnlock) -> ValueResult:
         registering(*private),
     ):
         _check_reason(edit.reason)
-        if ctx.actor.kind != ActorKind.USER:
-            raise PermissionDeniedError(
-                f"actor={ctx.actor.name!r}, kind={ctx.actor.kind}; expected a human admin; "
-                "sign in as a USER admin to release protection"
-            )
+        require_human_unlock(ctx)
         with _selected(ctx, pipeline, task) as (guard, _context):
             if not exists(guard.session):
                 raise UsageError(

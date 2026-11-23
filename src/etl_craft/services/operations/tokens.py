@@ -182,8 +182,25 @@ def revoke_token(ctx: OperationContext, request: TokenRevoke) -> TokensView:
             {"token_id": token_id, "now": datetime.now(UTC)},
         ).scalar_one_or_none()
         if found is None:
-            raise UsageError(f"token_id={token_id}: token is missing or already revoked")
+            raise no_revocable_token(token_id)
     return list_tokens(ctx, NoInput())
+
+
+def no_revocable_token(token_id: int) -> UsageError:
+    """Explain why the selected token cannot be revoked."""
+    return UsageError(f"token_id={token_id}: token is missing or already revoked")
+
+
+def require_revocable_token(ctx: OperationContext, token_id: int) -> None:
+    """Check the token identity selected for revocation."""
+    with ctx.engine.connect() as conn:
+        if (
+            conn.execute(
+                statement(conn, "api_token_revocable"), {"token_id": token_id}
+            ).scalar_one_or_none()
+            is None
+        ):
+            raise no_revocable_token(token_id)
 
 
 def authenticate(

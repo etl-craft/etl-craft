@@ -30,19 +30,19 @@ export function RolesTab() {
               header: "Actions",
               cell: (c) => {
                 const r = c.row.original;
-                return !r.built_in && r.active_flag === "Y" ? (
+                return (
                   <ActionButton<unknown>
                     label="Disable"
                     title={`Disable ${r.name}`}
                     effect="Every binding of this role stops allowing anything on the next request."
-                    endpoint="/roles/disable"
+                    endpoint="/roles/disable" availabilityTarget={{ role_name: r.name }}
                     askReason={false}
                     body={() => ({ name: r.name })}
                     describe={done("Role disabled.")}
                     variant="danger"
                     size="sm"
                   />
-                ) : null;
+                );
               },
             }),
   ], []);

@@ -137,7 +137,7 @@ export function PageHeader({
 }) {
   return (
     <header className={cn("flex flex-wrap items-start justify-between gap-y-2", compact ? "gap-x-3" : "gap-x-4")}>
-      <div className={cn("grid min-w-0 flex-1", compact ? "gap-1" : "gap-2")}>
+      <div className={cn("grid min-w-0 flex-[1_1_16rem]", compact ? "gap-1" : "gap-2")}>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
           {back ? (
             <Link to={back.to} aria-label={`Back to ${back.label}`} title={`Back to ${back.label}`} className="-ml-1 grid size-8 place-items-center rounded-md text-muted hover:bg-surface-2 hover:text-fg">
@@ -150,7 +150,7 @@ export function PageHeader({
         {subtitle ? <p className="m-0 text-sm text-muted">{subtitle}</p> : null}
         {children}
       </div>
-      {actions ? <div className="shrink-0 max-sm:w-full">{actions}</div> : null}
+      {actions ? <div className="max-w-full shrink-0 max-sm:w-full">{actions}</div> : null}
     </header>
   );
 }
@@ -195,6 +195,7 @@ export function SelectField({
   onChange,
   compact,
   hideLabel,
+  disabled,
   children,
 }: {
   label: string;
@@ -203,11 +204,12 @@ export function SelectField({
   compact?: boolean;
   /** The label stays for assistive technology; a row around the control already names it. */
   hideLabel?: boolean;
+  disabled?: boolean;
   children: React.ReactNode;
 }) {
   return (
     <Field label={label} compact={compact} hideLabel={hideLabel}>
-      <DropdownSelect value={value} onChange={(event) => onChange(event.target.value)} className={cn(inputClass, "min-w-40")}>
+      <DropdownSelect value={value} disabled={disabled} onChange={(event) => onChange(event.target.value)} className={cn(inputClass, "min-w-40")}>
         {children}
       </DropdownSelect>
     </Field>

@@ -166,8 +166,25 @@ def end_announcement(ctx: OperationContext, request: AnnouncementEnd) -> Announc
             },
         ).rowcount
     if not ended:
-        raise ResourceNotFoundError(
-            f"announcement {request.announcement_id}: not found or already ended; "
-            "list them with `etl-craft announce list --all`"
-        )
+        raise no_open_announcement(request.announcement_id)
     return read(ctx, AnnouncementFilter(all=True))
+
+
+def no_open_announcement(announcement_id: int) -> ResourceNotFoundError:
+    """Explain why the selected announcement cannot be ended."""
+    return ResourceNotFoundError(
+        f"announcement {announcement_id}: not found or already ended; "
+        "list them with `etl-craft announce list --all`"
+    )
+
+
+def require_open_announcement(ctx: OperationContext, announcement_id: int) -> None:
+    """Check the announcement identity selected for ending."""
+    with ctx.engine.connect() as conn:
+        if (
+            conn.execute(
+                statement(conn, "announcement_open"), {"announcement_id": announcement_id}
+            ).scalar_one_or_none()
+            is None
+        ):
+            raise no_open_announcement(announcement_id)

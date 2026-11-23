@@ -144,7 +144,7 @@ def blocking_script(project):
         "        time.sleep(120)\n"
         "    return ScriptResult(1)\n"
     )
-    assert project.run("pipelines", "refresh")[0] == 0
+    assert project.run("deploy")[0] == 0
 
 
 def wait_for_script(project):
@@ -266,6 +266,19 @@ def test_shutdown_interrupts_gate_wait_without_starting_a_task(cli_project):
         upstream_run = start_run(conn, upstream)
         task_run(conn, task, upstream_run, status="IN-PROGRESS")
         add_dependency(conn, p.pipeline_id, p.task_id, task, upstream_pipeline=upstream)
+    assert (
+        p.run(
+            "project",
+            "set",
+            "--project",
+            "default",
+            "--governance",
+            "RELAXED",
+            "--reason",
+            "Refresh the downstream test pipeline only",
+        )[0]
+        == 0
+    )
     assert p.run("pipelines", "refresh", "--pipeline", "P")[0] == 0
     assert p.run("pause", "--pipeline-code", "UPSTREAM", "--reason", "maintenance")[0] == 0
     assert (
@@ -358,7 +371,7 @@ def released_script(project):
         "    while not Path(ROOT, 'release').exists():\n        time.sleep(0.05)\n"
         "    return ScriptResult(1)\n"
     )
-    assert project.run("pipelines", "refresh")[0] == 0
+    assert project.run("deploy")[0] == 0
 
 
 @POSTGRES_ONLY

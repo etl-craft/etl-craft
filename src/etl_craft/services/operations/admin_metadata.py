@@ -380,19 +380,24 @@ def disable_pool(ctx: OperationContext, request: PoolIdentity) -> Pools:
     reason(request.reason)
     pool_name(request.name)
     with locks.MIGRATE.hold(ctx.engine, wait_seconds=30), ctx.engine.begin() as conn:
-        old = conn.execute(statement(conn, "placement_pool"), {"pool": request.name}).one_or_none()
-        if old is None:
-            raise UsageError(f"--name={request.name!r}: expected an existing pool; use pool list")
-        refs = tuple(conn.execute(statement(conn, "admin_pool_references"), {"pool": request.name}))
-        if refs:
-            found = ", ".join(f"{r.kind} {r.identity}" for r in refs)
-            raise UsageError(
-                f"--name={request.name!r}: referenced by {found}; expected no "
-                f"active references; change their DEFAULT_POOL or POOL before pool "
-                f"disable"
-            )
+        require_unused_pool(conn, request.name)
         conn.execute(statement(conn, "admin_pool_disable"), {"name": request.name})
     return list_pools(ctx, request)
+
+
+def require_unused_pool(conn: Connection, name: str | None) -> None:
+    """Check whether a pool can be retired without stranding a project or task."""
+    old = conn.execute(statement(conn, "placement_pool"), {"pool": name}).one_or_none()
+    if old is None:
+        raise UsageError(f"--name={name!r}: expected an existing pool; use pool list")
+    refs = tuple(conn.execute(statement(conn, "admin_pool_references"), {"pool": name}))
+    if refs:
+        found = ", ".join(f"{r.kind} {r.identity}" for r in refs)
+        raise UsageError(
+            f"--name={name!r}: referenced by {found}; expected no "
+            f"active references; change their DEFAULT_POOL or POOL before pool "
+            f"disable"
+        )
 
 
 def environment_values(

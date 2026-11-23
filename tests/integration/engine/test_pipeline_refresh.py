@@ -54,6 +54,7 @@ def refresh_project(engine_db, tmp_path):
     ctx = OperationContext(
         engine_db.engine, config, SYSTEM_ACTOR, role=ApiRole.ADMIN, project="default", project_id=1
     )
+    act(ctx, ActionName.PROJECT_SET, project="default", governance="RELAXED", reason="Test refresh")
     return ctx, pipeline, script
 
 
@@ -223,10 +224,26 @@ def test_unchanged_refresh_preserves_findings_and_reports_changed_files(refresh_
     assert unchanged.findings == broken.findings
 
 
-def test_refresh_cli_reports_unchanged_results_in_text_and_json(cli_project):
+@pytest.fixture
+def relaxed_cli_project(cli_project):
+    code, output = cli_project.run(
+        "project",
+        "set",
+        "--project",
+        "default",
+        "--governance",
+        "RELAXED",
+        "--reason",
+        "Exercise standalone refresh",
+    )
+    assert code == 0, output
+    return cli_project
+
+
+def test_refresh_cli_reports_unchanged_results_in_text_and_json(relaxed_cli_project):
     import json
 
-    project = cli_project
+    project = relaxed_cli_project
     code, output = project.run("pipelines", "refresh")
     assert code == 0, output
     assert "P: no changes since the last refresh at" in output
@@ -413,6 +430,13 @@ def test_controller_refreshes_postgres_direct_edits_without_polling_files(refres
             )
 
     Context().run(edit)
+    act(
+        ctx,
+        ActionName.PROJECT_SET,
+        project="default",
+        governance="STRICT",
+        reason="Close direct editing before the controller sees the change",
+    )
     refresh_due(ctx, threading.Event())
     history = act(ctx, ActionName.PIPELINE_REFRESH_HISTORY, pipeline_code="P")
     assert len(history.refreshes) == 2
@@ -444,10 +468,10 @@ def test_sqlite_default_artifacts_survive_restart_and_execute_the_passing_bundle
         )
 
 
-def test_broken_sql_refresh_records_the_file_and_keeps_the_pipeline_listed(cli_project):
+def test_broken_sql_refresh_records_the_file_and_keeps_the_pipeline_listed(relaxed_cli_project):
     from etl_craft.config import load_config
 
-    project = cli_project
+    project = relaxed_cli_project
     sql = project.config.project_dir / "sql_scripts" / "bad.sql"
     sql.parent.mkdir(exist_ok=True)
     sql.write_text("SELECT * FROM\n")
@@ -485,8 +509,10 @@ def test_broken_sql_refresh_records_the_file_and_keeps_the_pipeline_listed(cli_p
     assert outcome.status == RunStatus.SUCCESS, outcome
 
 
-def test_sql_script_refresh_does_not_require_sqlglot_to_parse_unmanaged_statements(cli_project):
-    project = cli_project
+def test_sql_script_refresh_does_not_require_sqlglot_to_parse_unmanaged_statements(
+    relaxed_cli_project,
+):
+    project = relaxed_cli_project
     script = project.config.project_dir / "sql_scripts" / "vendor.sql"
     script.parent.mkdir(exist_ok=True)
     script.write_text("SELECT * FROM\n")

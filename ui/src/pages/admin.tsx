@@ -1,7 +1,7 @@
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { Notice, PageHeader, SelectField } from "@/components/common";
+import { PageHeader, SelectField } from "@/components/common";
 import { Tabs } from "@/components/tabs";
-import { useHealth, useRoleAtLeast } from "@/hooks";
+import { useHealth } from "@/hooks";
 import { adminPath } from "@/lib/routes";
 import { useDocumentTitle } from "@/title";
 import { AlertChannelsTab } from "./admin/alert-channels";
@@ -17,7 +17,6 @@ import { TokensTab } from "./admin/tokens";
 const TABS = ["accounts", "groups", "roles", "tokens", "access", "alert-channels", "projects", "pools", "announcements", "erasure"];
 
 export function Admin() {
-  const admin = useRoleAtLeast("admin");
   const [params] = useSearchParams();
   const navigate = useNavigate();
   const health = useHealth();
@@ -25,7 +24,6 @@ export function Admin() {
   const codes = (health.data?.projects ?? []).map((p) => p.project);
   const project = params.get("project") ?? codes[0] ?? "";
   useDocumentTitle(`Administration · ${tab}`);
-  if (!admin) return <Notice>The administration page needs the admin role; ask an administrator.</Notice>;
   return (
     <div className="grid grid-cols-1 gap-5">
       <PageHeader title="Administration" subtitle="Accounts, access, projects and platform settings" />

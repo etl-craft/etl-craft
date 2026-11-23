@@ -245,7 +245,7 @@ def test_capability_reasons_match_control_policy_and_preserve_state(ctx, role):
     assert by_action[ControlAction.RESTART].available == (role == ApiRole.OPERATOR)
     assert by_action[ControlAction.RESTART].retains_checkpoints
     assert not by_action[ControlAction.RESTART].preserves_successful_work
-    expected = "new run" if role == ApiRole.OPERATOR else "controls need the operator role"
+    expected = "new run" if role == ApiRole.OPERATOR else "needs operator role or a binding"
     assert expected in by_action[ControlAction.RESTART].reason
     assert not by_action[ControlAction.STOP].available
     with ctx.engine.connect() as conn:

@@ -446,6 +446,13 @@ def test_rename_requires_management_in_the_selected_project(rename_project):
         role=Permission.CAN_MANAGE,
         reason="project manager",
     )
+    act(
+        ctx,
+        ActionName.PROJECT_SET,
+        project=ctx.project or ctx.config.project,
+        governance="RELAXED",
+        reason="Exercise standalone refresh",
+    )
     act(ctx, ActionName.PIPELINE_REFRESH)
     manager = replace(ctx, role=ApiRole.OPERATOR)
     with pytest.raises(ResourceNotFoundError, match=r"not permitted|not found"):
@@ -545,6 +552,13 @@ def test_generated_api_rename_uses_project_permission_and_reason(rename_project,
     from etl_craft.services.operations.actions import ACTIONS, action_path
 
     ctx, _, _, _ = rename_project
+    act(
+        ctx,
+        ActionName.PROJECT_SET,
+        project=ctx.project or ctx.config.project,
+        governance="RELAXED",
+        reason="Exercise standalone refresh",
+    )
     act(ctx, ActionName.PIPELINE_REFRESH)
     token = act(ctx, ActionName.TOKEN_CREATE, name="api-manager", role=ApiRole.VIEWER)
     client = TestClient(create_app(ctx))
@@ -801,6 +815,13 @@ def test_api_rename_uses_the_selected_projects_published_files(rename_project):
         add_task(conn, pipeline, "T", "PYTHON", SCRIPT_FILE="python_scripts/work.py")
     other = replace(
         ctx, config=project_config(ctx.config, path), project="OTHER", project_id=project
+    )
+    act(
+        other,
+        ActionName.PROJECT_SET,
+        project=other.project or other.config.project,
+        governance="RELAXED",
+        reason="Exercise standalone refresh",
     )
     assert not act(other, ActionName.PIPELINE_REFRESH).failed
     token = act(ctx, ActionName.TOKEN_CREATE, name="other-manager", role=ApiRole.VIEWER)

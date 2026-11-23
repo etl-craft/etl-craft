@@ -16,6 +16,13 @@ from integration.engine.test_pipeline_refresh import refresh_project as refresh_
 @pytest.mark.parametrize("value", [None, "OTHER"])
 def test_python_kind_required_by_apply_validate_and_refresh(refresh_project, tmp_path, value):
     ctx, pipeline, _ = refresh_project
+    act(
+        ctx,
+        ActionName.PROJECT_SET,
+        project=ctx.project or ctx.config.project,
+        governance="RELAXED",
+        reason="Exercise standalone refresh",
+    )
     good = act(ctx, ActionName.PIPELINE_REFRESH, pipeline_code="P")
     assert not good.failed
     with ctx.engine.begin() as conn:
@@ -74,6 +81,13 @@ def test_invalid_live_kind_keeps_the_last_passing_script_executable(refresh_proj
     from etl_craft.core.enums import RunStatus
 
     ctx, pipeline, _ = refresh_project
+    act(
+        ctx,
+        ActionName.PROJECT_SET,
+        project=ctx.project or ctx.config.project,
+        governance="RELAXED",
+        reason="Exercise standalone refresh",
+    )
     good = act(ctx, ActionName.PIPELINE_REFRESH, pipeline_code="P")
     assert not good.failed
     ctx.engine.update_execution_options(refresh_required=True)

@@ -130,6 +130,13 @@ def test_rule_level_refused_by_apply_validate_and_refresh(
     )
     found = validate(ctx.engine, ctx.config)
     assert any(expected in f.message and "table check" in f.message for f in found.findings)
+    act(
+        ctx,
+        ActionName.PROJECT_SET,
+        project=ctx.project or ctx.config.project,
+        governance="RELAXED",
+        reason="Exercise standalone refresh",
+    )
     refreshed = act(ctx, ActionName.PIPELINE_REFRESH, pipeline_code="P")
     assert refreshed.failed and any(expected in f.message for f in refreshed.refreshes[0].findings)
 
@@ -232,6 +239,13 @@ def test_table_output_validation_findings_keep_last_good_version(rule_project, s
     from etl_craft.engine.refreshes import admitted
 
     ctx, pipeline, _, rule = rule_project
+    act(
+        ctx,
+        ActionName.PROJECT_SET,
+        project=ctx.project or ctx.config.project,
+        governance="RELAXED",
+        reason="Exercise standalone refresh",
+    )
     good = act(ctx, ActionName.PIPELINE_REFRESH, pipeline_code="P")
     assert not good.failed, good.refreshes[0].findings
     ctx.engine.update_execution_options(refresh_required=True)
@@ -361,6 +375,13 @@ def test_table_refresh_checks_explicit_output_before_the_target_is_created(rule_
             conn.execute(text("DROP TABLE main.data"))
         report = validate(ctx.engine, ctx.config)
         assert not any("has no $$rows_in_scope" in f.message for f in report.findings)
+        act(
+            ctx,
+            ActionName.PROJECT_SET,
+            project=ctx.project or ctx.config.project,
+            governance="RELAXED",
+            reason="Exercise standalone refresh",
+        )
         result = act(ctx, ActionName.PIPELINE_REFRESH, pipeline_code="P")
         assert not result.failed, result.refreshes[0].findings
     finally:

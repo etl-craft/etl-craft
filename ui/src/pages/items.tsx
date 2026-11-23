@@ -8,7 +8,7 @@ import { EmptyState, Breadcrumbs, Loading, Notice, PageHeader, SelectField } fro
 import { DataTable } from "@/components/data-table";
 import { StatusBadge } from "@/components/status";
 import { Card } from "@/components/ui/card";
-import { useCanRun, useProjectInfo, useRunReference } from "@/hooks";
+import { useProjectInfo, useRunReference } from "@/hooks";
 import { getJson, project } from "@/lib/api";
 import { pipelinesPath, pipelinePath, runPath, taskPath } from "@/lib/routes";
 import type { ItemRecord, Items as ItemsView } from "@/lib/types";
@@ -20,7 +20,6 @@ const result = (r: { message?: string }) => r.message ?? "Request recorded.";
 export function Items() {
   const { project: code = "", pipeline = "", runId = "", task = "" } = useParams();
   const addressed = useRunReference(code, runId);
-  const canRun = useCanRun(code);
   const info = useProjectInfo(code);
   const [status, setStatus] = React.useState("SUCCESS");
   useDocumentTitle(`Items · ${task} · run ${runId}`, code, info.project && { type: info.project.environment_type, name: info.project.environment_name });
@@ -28,6 +27,11 @@ export function Items() {
   const items = useQuery({ queryKey: ["items", code, pipeline, runId, task], queryFn: () => getJson<ItemsView>(project(code) + base), refetchInterval: 10_000 });
   const scope = `task ${task} in run ${runId}`;
   const progress = items.data?.progress;
+  const capabilities = new Map((items.data?.availability ?? []).map((a) => [JSON.stringify([a.action, a.item_key]), a]));
+  const reason = (action: string, key: string | null) => {
+    const answer = capabilities.get(JSON.stringify([action, key]));
+    return answer?.available ? undefined : answer?.reason ?? "Item availability is unavailable.";
+  };
   const act = (item: ItemRecord, action: "RERUN" | "CANCEL" | "MARK", effect: string) => (
     <ActionButton<{ message?: string }>
       code={code}
@@ -35,6 +39,7 @@ export function Items() {
       title={`${action.charAt(0) + action.slice(1).toLowerCase()} item ${item.key}`}
       effect={`${effect} (item ${item.key} of ${scope})`}
       endpoint={`${base}/controls`}
+      unavailableReason={reason(action, item.key)}
       body={(reason) => ({ action, item_key: item.key, reason, ...(action === "MARK" ? { status } : {}) })}
       describe={result}
       fields={
@@ -56,10 +61,11 @@ export function Items() {
         title={`Items of ${task}`}
         subtitle={progress ? `items ${progress.done} / ${progress.total}, ${progress.failed} failed, ${progress.skipped} skipped` : undefined}
         actions={
-          canRun && progress?.failed ? (
+          progress ? (
             <ActionButton<{ message?: string }>
               code={code}
               label="Rerun failed items"
+              unavailableReason={reason("RERUN", null)}
               title={`Rerun the ${progress.failed} failed items`}
               effect={`Runs every failed item of ${scope} again; items that succeeded are kept.`}
               endpoint={`${base}/controls`}
@@ -85,9 +91,7 @@ export function Items() {
             columns.accessor("started", { header: "Started", cell: (c) => <span className="num whitespace-nowrap">{c.getValue() ?? ""}</span> }),
             columns.accessor("ended", { header: "Ended", cell: (c) => <span className="num whitespace-nowrap">{c.getValue() ?? ""}</span> }),
             columns.accessor("error", { header: "Error", cell: (c) => <span className="break-words text-bad">{c.getValue() ?? ""}</span> }),
-            ...(canRun
-              ? [
-                  columns.display({
+            columns.display({
                     id: "act",
                     header: "Actions",
                     cell: (c) => (
@@ -98,8 +102,6 @@ export function Items() {
                       </span>
                     ),
                   }),
-                ]
-              : []),
           ]}
         />
       </Card>

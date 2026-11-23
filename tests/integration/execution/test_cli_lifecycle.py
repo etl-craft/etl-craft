@@ -130,7 +130,7 @@ def test_signal_stops_the_real_cli_child_and_grandchild(cli_project, sig):
         "    child = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)'])\n"
         "    print('grandchild ready', flush=True)\n    time.sleep(60)\n"
     )
-    code, output = project.run("pipelines", "refresh")
+    code, output = project.run("deploy")
     assert code == 0, output
     assert (
         project.run("run", "--reason", "test requested run", "--pipeline-code", "P", "--init-only")[
@@ -192,7 +192,7 @@ def test_local_attempt_keeps_full_file_and_configured_tail(cli_project):
         "    print('full-log-start-' + 'x' * 24000 + '-tail-end')\n"
         "    return ScriptResult(7)\n"
     )
-    code, output = p.run("pipelines", "refresh")
+    code, output = p.run("deploy")
     assert code == 0, output
     code, output = p.run("run", "--reason", "test requested run", "--pipeline-code", "P")
     assert code == 0, output

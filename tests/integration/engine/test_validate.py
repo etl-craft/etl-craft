@@ -672,6 +672,13 @@ def test_bounded_source_findings_are_shared_by_validate_refresh_and_config_apply
         for f in report.findings
     )
     ctx = OperationContext(engine, config, current_actor(), role=ApiRole.ADMIN)
+    act(
+        ctx,
+        ActionName.PROJECT_SET,
+        project=ctx.project or ctx.config.project,
+        governance="RELAXED",
+        reason="Exercise standalone refresh",
+    )
     refresh = act(ctx, ActionName.PIPELINE_REFRESH, pipeline_code="SALES").refreshes[0]
     assert refresh.status == RunStatus.FAILED
     assert any(f.failed and "WATERMARK_SOURCE_PIPELINES" in f.message for f in refresh.findings)
@@ -839,6 +846,13 @@ def test_stewardable_nested_merge_columns_fail_early_in_validate_and_refresh(pro
         ctx = OperationContext(
             engine, config, SYSTEM_ACTOR, role=ApiRole.ADMIN, project="default", project_id=1
         )
+        act(
+            ctx,
+            ActionName.PROJECT_SET,
+            project=ctx.project or ctx.config.project,
+            governance="RELAXED",
+            reason="Exercise standalone refresh",
+        )
         result = act(ctx, ActionName.PIPELINE_REFRESH).refreshes[0]
         assert result.status == RunStatus.FAILED
         messages = [finding.message for finding in result.findings]
@@ -892,6 +906,13 @@ def test_locked_upload_control_refused_early_by_validate_and_refresh(project, en
     else:
         ctx = OperationContext(
             engine, config, SYSTEM_ACTOR, role=ApiRole.ADMIN, project="default", project_id=1
+        )
+        act(
+            ctx,
+            ActionName.PROJECT_SET,
+            project=ctx.project or ctx.config.project,
+            governance="RELAXED",
+            reason="Exercise standalone refresh",
         )
         result = act(ctx, ActionName.PIPELINE_REFRESH).refreshes[0]
         assert result.status == RunStatus.FAILED

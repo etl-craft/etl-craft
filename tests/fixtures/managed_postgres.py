@@ -59,7 +59,7 @@ def managed_project(config, directory, monkeypatch, *, timeout=30):
             project.task_id = add_task(
                 conn, project.pipeline_id, "load", "PYTHON", SCRIPT_FILE="python_scripts/load.py"
             )
-        code, output = project.run("pipelines", "refresh", timeout=timeout)
+        code, output = project.run("deploy", timeout=timeout)
         assert code == 0, output
         yield project
     finally:

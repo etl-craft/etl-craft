@@ -64,8 +64,8 @@ def _cell(value: object) -> str | None:
     return shown if len(shown) <= CELL else shown[: CELL - 1] + "…"
 
 
-def preview_table(ctx: OperationContext, request: PreviewInput) -> TablePreview:
-    """Read the first rows of a catalog table; only a table the catalog lists is queried."""
+def preview_parts(ctx: OperationContext, request: PreviewInput) -> list[str]:
+    """Resolve a catalog table the account can preview without querying its rows."""
     with ctx.engine.connect() as conn:
         require_project(conn, ctx)
         access = pipeline_access(conn, ctx)
@@ -100,6 +100,12 @@ def preview_table(ctx: OperationContext, request: PreviewInput) -> TablePreview:
             f"table {request.table!r}: {parts!r} needs quoted identifiers, which a preview does "
             "not support; query it with the warehouse's own tools"
         )
+    return parts
+
+
+def preview_table(ctx: OperationContext, request: PreviewInput) -> TablePreview:
+    """Read the first rows of a catalog table; only a table the catalog lists is queried."""
+    parts = preview_parts(ctx, request)
     try:
         with (
             open_warehouse(ctx.config, LocalLocker(ctx.engine, ctx.config)) as warehouse,

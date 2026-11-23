@@ -62,9 +62,10 @@ Column lineage is checked by [`lineage --strict`](lineage.md).
 
 `etl-craft pipelines refresh` checks the selected project's **Engine DB state**, SQL, Python
 scripts, lineage and immutable bundle. Use `--pipeline SALES_DAILY` to check one pipeline.
-Project `CAN_MANAGE` is required. `deploy` performs the same refresh after committing its
-metadata changes. A failed refresh does not roll back those changes: correct its findings
-and refresh again.
+Standalone refresh requires a RELAXED project and project management permission in the CLI,
+API and browser. An authorized `deploy` refreshes after applying config and loading seeds,
+including on STRICT projects. A failed refresh leaves those changes in place. Correct its
+findings and repeat the deployment or standalone refresh as the project allows.
 
 Each result records its actor, time, metadata hash, bundle and findings. Findings identify the
 file and line where available, or the exact Engine DB row when there is no source file, plus
@@ -73,8 +74,9 @@ A broken pipeline remains listed. Admission uses the most recent **passing** met
 and bundle, so later edits cannot change its tasks or executable files. Existing runs keep
 their own pinned version.
 
-A pipeline with no passing version cannot start. Its refusal lists the findings and the
-`etl-craft pipelines refresh` remedy. `BLOCK_ON_REFRESH_ERROR=Y` in `pipelines.csv` also blocks
+A pipeline with no passing version cannot start. Its refusal lists the findings and how to
+refresh through `etl-craft deploy` or standalone refresh on RELAXED projects.
+`BLOCK_ON_REFRESH_ERROR=Y` in `pipelines.csv` also blocks
 new runs when the latest refresh failed; its default `N` allows the last passing version.
 PostgreSQL direct config edits are detected through their `sql:` history on the controller's
 existing maintenance cycle. SQLite direct SQL edits remain unsupported.

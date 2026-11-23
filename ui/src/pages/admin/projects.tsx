@@ -61,9 +61,7 @@ export function ProjectsTab() {
               id: "act",
               header: "Actions",
               cell: (c) =>
-                c.row.original.active_flag === "Y" ? (
-                  <ActionButton<unknown> label="Disable" title={`Disable ${c.row.original.project}`} effect="Stops this project's pipelines running; its metadata and history stay." endpoint="/projects/disable" body={(reason) => ({ project: c.row.original.project, reason })} describe={done("Project disabled.")} variant="danger" size="sm" />
-                ) : null,
+                <ActionButton<unknown> label="Disable" title={`Disable ${c.row.original.project}`} effect="Stops this project's pipelines running; its metadata and history stay." endpoint="/projects/disable" body={(reason) => ({ project: c.row.original.project, reason })} describe={done("Project disabled.")} variant="danger" size="sm" />,
             }),
           ]}
         />
@@ -107,9 +105,7 @@ export function PoolsTab() {
               id: "act",
               header: "Actions",
               cell: (c) =>
-                c.row.original.active_flag === "Y" ? (
-                  <ActionButton<unknown> label="Disable" title={`Disable ${c.row.original.name}`} effect="Stops placing work in this pool; refused while a project or task still uses it." endpoint="/pools/disable" body={(reason) => ({ name: c.row.original.name, reason })} describe={done("Pool disabled.")} variant="danger" size="sm" />
-                ) : null,
+                <ActionButton<unknown> label="Disable" title={`Disable ${c.row.original.name}`} effect="Stops placing work in this pool; refused while a project or task still uses it." endpoint="/pools/disable" availabilityTarget={{ pool_name: c.row.original.name }} body={(reason) => ({ name: c.row.original.name, reason })} describe={done("Pool disabled.")} variant="danger" size="sm" />,
             }),
           ]}
         />
