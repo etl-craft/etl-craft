@@ -126,12 +126,14 @@ def inspect(ctx: OperationContext, request: ItemInput) -> ItemView:
                 f"task run missing; select a run where this task started"
             )
         records = items.latest(conn, task.task_run_id)
-        return ItemView(
-            task.task_run_id,
-            records,
-            progress(records),
-            availability=availability(ctx, request, task, records),
-        )
+    # Admission opens its own connection; it must run after this read connection closes,
+    # because SQLite serializes writers and a nested connection would wait on this one.
+    return ItemView(
+        task.task_run_id,
+        records,
+        progress(records),
+        availability=availability(ctx, request, task, records),
+    )
 
 
 def control(ctx: OperationContext, request: ItemControl) -> ItemView:
