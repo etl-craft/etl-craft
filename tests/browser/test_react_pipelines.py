@@ -132,19 +132,19 @@ def test_a_pipeline_pauses_resumes_and_links_to_its_runs_and_tasks(scene):
         page.context.set_default_timeout(8000)
         sign_in(page, url, "/ui/projects/default/pipelines/OPS")
         expect(page.get_by_role("heading", name="OPS")).to_be_visible()
-        expect(page.get_by_text("Active")).to_be_visible()
+        expect(page.get_by_text("Active", exact=True).first).to_be_visible()
         expect(page.get_by_role("table", name="Run grid")).to_be_visible()
         shoot(page, "pipeline-runs")
         page.get_by_role("button", name="Pause", exact=True).click()
         dialog = page.get_by_role("dialog")
         dialog.get_by_label("Reason (kept in the audit trail)").fill("investigate")
         dialog.get_by_role("button", name="Pause", exact=True).click()
-        expect(page.get_by_text("by owner: investigate")).to_be_visible()
+        expect(page.get_by_text("by owner: investigate").first).to_be_visible()
         page.get_by_role("button", name="Resume", exact=True).click()
         dialog = page.get_by_role("dialog")
         dialog.get_by_label("Reason (kept in the audit trail)").fill("fixed")
         dialog.get_by_role("button", name="Resume", exact=True).click()
-        expect(page.get_by_text("Active")).to_be_visible()
+        expect(page.get_by_text("Active", exact=True).first).to_be_visible()
 
         page.get_by_role("button", name="Graph", exact=True).click()
         graph = page.get_by_role("group", name="Task graph")
@@ -293,11 +293,12 @@ def test_a_viewer_can_read_the_pipelines_but_not_change_them(scene):
         sign_in(page, url, "/ui/projects/default/pipelines", name="alice")
         table = page.get_by_role("table", name="Pipelines")
         expect(table.get_by_role("link", name="OPS")).to_be_visible()
-        expect(table.get_by_role("checkbox")).to_have_count(0)
+        for name in ("Pause selected", "Resume selected"):  # selecting rows is allowed; bulk actions are not
+            expect(page.get_by_role("button", name=name, exact=True)).to_be_disabled()
         page.goto(url + "/ui/projects/default/pipelines/OPS")
         expect(page.get_by_role("heading", name="OPS")).to_be_visible()
-        for name in ("Run now", "Pause", "Resume"):
-            expect(page.get_by_role("button", name=name, exact=True)).to_have_count(0)
+        for name in ("Run now", "Pause", "Resume"):  # grayed out, not hidden, for a viewer
+            expect(page.get_by_role("button", name=name, exact=True)).to_be_disabled()
         browser.close()
 
 
@@ -766,8 +767,9 @@ def test_pipeline_manager_delegates_only_here_and_revokes_with_audit(scene, sche
         ]
         page.goto(url + "/ui/projects/default/pipelines/SALES?tab=access")
         expect(page.get_by_role("heading", name=re.compile("Access to SALES"))).to_be_visible()
-        expect(page.get_by_role("button", name="Grant access", exact=True)).to_have_count(0)
-        expect(page.get_by_role("button", name="Revoke", exact=True)).to_have_count(0)
+        # grayed out, with the reason, for a delegated manager of another pipeline
+        expect(page.get_by_role("button", name="Grant access", exact=True)).to_be_disabled()
+        expect(page.get_by_role("button", name="Revoke", exact=True)).to_have_count(0)  # no binding row
         page.context.clear_cookies()
         sign_in(page, url, "/ui/admin?tab=access")
         expect(page.get_by_role("heading", name=re.compile("Access to default"))).to_be_visible()
