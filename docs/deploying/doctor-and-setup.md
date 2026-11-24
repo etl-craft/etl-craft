@@ -71,7 +71,7 @@ Engine DB is the exception: etl-craft creates its file, and the folder holding i
 
 To check the pipelines themselves, run [`validate`](../guides/validating.md).
 
-`init-db` and `migrate` remain for doing either step alone; see
+`init-db` and `migrate` run on the controller's host for doing either step alone; see
 [Engine DB setup and upgrades](engine-db.md).
 
 Doctor also checks each configured key, certificate, CA and sendmail file for readability,

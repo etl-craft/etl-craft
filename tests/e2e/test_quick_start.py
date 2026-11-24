@@ -3,13 +3,15 @@
 The commands are read from ``docs/quick-start.md``: every line of its ``bash`` blocks that runs
 ``etl-craft`` or ``python prepare.py``, in order, in a fresh copy of ``examples/demo``. A line
 whose comment says it ``fails`` must exit ``1``, every other ``0``; and every line of the page's
-``text`` blocks must be in what the commands printed. Installing and starting Mailpit are left
+``text`` blocks must be in stdout and ``console`` blocks in stderr. Installing and starting
+Mailpit are left
 to the suite, which installs the wheel and needs the local Mailpit. With
 ``ETL_CRAFT_E2E_WAREHOUSE`` naming another warehouse it is skipped, as its warehouse is DuckDB.
 """
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import shlex
@@ -17,6 +19,10 @@ import shutil
 import sqlite3
 import subprocess
 import textwrap
+import time
+import urllib.error
+import urllib.request
+from contextlib import ExitStack, contextmanager
 
 import pytest
 
@@ -56,6 +62,46 @@ def test_the_page_runs_the_whole_demo():
         "etl-craft login",
     ]
     assert "etl-craft generate-docs" in commands()
+    assert "etl-craft login --api http://localhost:8730 --project default" in commands()
+    assert "etl-craft whoami --api http://localhost:8730 --project default" in commands()
+
+
+@contextmanager
+def local_server(cli, project, environment):
+    """Run the page's all-in-one controller while another terminal uses its API."""
+    created = subprocess.run(
+        [str(cli), "token", "create", "--name", "quick-start-controller", "--role", "admin"],
+        cwd=project,
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=True,
+        timeout=60,
+    )
+    with (project / "controller.log").open("w") as log:
+        controller = subprocess.Popen(
+            [str(cli), "controller"],
+            cwd=project,
+            env={**environment, "ETL_CRAFT_TOKEN": created.stdout.strip()},
+            stdout=log,
+            stderr=log,
+        )
+        try:
+            deadline = time.monotonic() + 30
+            while True:
+                assert controller.poll() is None, (project / "controller.log").read_text()
+                try:
+                    with urllib.request.urlopen("http://localhost:8730/health", timeout=2) as reply:
+                        assert reply.status == 200 and json.load(reply)
+                    break
+                except urllib.error.URLError:
+                    assert time.monotonic() < deadline, "controller never served /health"
+                    time.sleep(0.1)
+            yield
+        finally:
+            controller.terminate()
+            controller.wait(timeout=60)
+        assert controller.returncode == 0, (project / "controller.log").read_text()
 
 
 def test_the_quick_start_runs_as_written(tmp_path):
@@ -63,7 +109,7 @@ def test_the_quick_start_runs_as_written(tmp_path):
     if only not in (None, "duckdb"):
         pytest.skip(f"the Quick Start's warehouse is DuckDB; this run covers {only}")
     require("mailpit_smtp")
-    cli = installed_cli("pip", tmp_path / "venvs", extras="duckdb")
+    cli = installed_cli("pip", tmp_path / "venvs", extras="duckdb,ui")
     python = cli.with_name(cli.name.replace("etl-craft", "python"))
     project = tmp_path / "demo"
     shutil.copytree(
@@ -75,34 +121,40 @@ def test_the_quick_start_runs_as_written(tmp_path):
     )
     environment = {**os.environ, "XDG_CONFIG_HOME": str(tmp_path / "person")}
     printed = []
-    for line in commands():
-        command, _, comment = line.partition("#")
-        argv = shlex.split(command)
-        program = cli if argv[0] == "etl-craft" else python
-        if argv[:2] in (["etl-craft", "setup"], ["etl-craft", "login"]):
-            done = terminal_run(
-                [str(program), *argv[1:]],
-                cwd=project,
-                env=environment,
-                answers=setup_answers() if argv[1] == "setup" else login_answers(),
-            )
-        else:
-            done = subprocess.run(
-                [str(program), *argv[1:]],
-                cwd=project,
-                env=environment,
-                capture_output=True,
-                text=True,
-                timeout=900,
-                check=False,
-            )
-        expected = 1 if "fails" in comment else 0
-        assert done.returncode == expected, (line, done.stdout[-3000:], done.stderr[-3000:])
-        printed.append(done.stdout)
-    output = "\n".join(printed)
-    for block in blocks("text"):
-        for shown in block.splitlines():
-            assert shown in output, shown
+    with ExitStack() as stack:
+        server_started = False
+        for line in commands():
+            if " --api " in line and not server_started:
+                stack.enter_context(local_server(cli, project, environment))
+                server_started = True
+            command, _, comment = line.partition("#")
+            argv = shlex.split(command)
+            program = cli if argv[0] == "etl-craft" else python
+            if argv[:2] in (["etl-craft", "setup"], ["etl-craft", "login"]):
+                done = terminal_run(
+                    [str(program), *argv[1:]],
+                    cwd=project,
+                    env=environment,
+                    answers=setup_answers() if argv[1] == "setup" else login_answers(),
+                )
+            else:
+                done = subprocess.run(
+                    [str(program), *argv[1:]],
+                    cwd=project,
+                    env=environment,
+                    capture_output=True,
+                    text=True,
+                    timeout=900,
+                    check=False,
+                )
+            expected = 1 if "fails" in comment else 0
+            assert done.returncode == expected, (line, done.stdout[-3000:], done.stderr[-3000:])
+            printed.append(done)
+    for kind, stream in (("text", "stdout"), ("console", "stderr")):
+        output = "\n".join(getattr(done, stream) for done in printed)
+        for block in blocks(kind):
+            for shown in block.splitlines():
+                assert shown in output, shown
     assert (project / "catalog" / "index.html").is_file()
 
     with sqlite3.connect(project / "engine.db") as conn:

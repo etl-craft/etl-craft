@@ -62,7 +62,7 @@ etl-craft --api https://etl.example.com config export   # refused: export config
 etl-craft logout --api https://etl.example.com
 ```
 
-See [operating a server](../../deploying/security.md#operating-a-server-from-your-own-installation)
+See [operating a server](../../guides/remote-cli.md)
 for what works against a server and what stays on its host.
 
 ## Human corrections

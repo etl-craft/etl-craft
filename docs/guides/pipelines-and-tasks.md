@@ -116,7 +116,7 @@ in another; a `CFG_PIPELINE_DEPENDENCY` row makes a pipeline wait on another. Ea
 ## An example
 
 Put this SQL in a new project migration to load orders and then check them, on SQLite or
-PostgreSQL. Apply it with `etl-craft migrate`:
+PostgreSQL. Apply it on the controller's host with `etl-craft migrate`:
 
 ```sql
 INSERT INTO CFG_PIPELINES (PIPELINE_CODE, PIPELINE_NAME, DESCRIPTION, REFRESH_TYPE, RUN_SCHEDULE)

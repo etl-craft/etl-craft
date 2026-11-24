@@ -445,7 +445,7 @@ Engine DB tables into the warehouse when cloning is enabled.
 
 ## Upgrade
 
-Run `etl-craft migrate` before starting the new server. Normal login and UI startup refuse
+Run `etl-craft migrate` on the controller's host before starting the new server. Normal login and UI startup refuse
 pending Engine migrations, naming the Engine DB key and applied/required migration. If no
 admin session is available, the local `migrate` command prompts for the admin account and
 password. Its upgrade-only proof reads the original account fields, issues no session and

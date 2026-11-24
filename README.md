@@ -1,5 +1,7 @@
 # etl-craft
 
+[Operate a server from your own installation](https://docs.etl-craft.dev/guides/remote-cli/) without Engine DB or warehouse credentials.
+
 A metadata-driven ETL orchestration engine. Pipelines, tasks and their dependencies are rows in
 an Engine DB; etl-craft reads that metadata and runs it against one warehouse.
 The controller schedules and supervises the work.

@@ -10,7 +10,7 @@ at `Orchestration.Api_address` (default `127.0.0.1:8730`). Use `controller --no-
 is automatic. On PostgreSQL, run separate `etl-craft ui` copies for HTTP; they never acquire
 controller leadership or supervise tasks. SQLite keeps the all-in-one layout. Both roles
 check the package's applied Engine DB migrations before listening; upgrade every process
-and run `etl-craft migrate` before restarting a deployment.
+and run `etl-craft migrate` on the controller's host before restarting a deployment.
 
 ## Starting and submitting work
 

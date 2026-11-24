@@ -1,5 +1,7 @@
 # Setting up and upgrading the Engine DB
 
+Run these setup and migration commands on the controller's host; they do not accept `--api`.
+
 `etl-craft setup` checks every connection and then does both steps below, as needed; see
 [Checking a deployment](doctor-and-setup.md). This page describes each step on its own.
 

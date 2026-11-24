@@ -44,7 +44,7 @@ exist. There is no promise about nonexistent past 1.x releases and no down-migra
 
 Every Engine DB starts from the 0.9.0 baseline, which `init-db` records in
 `SCHEMA_MIGRATIONS`. Engine DBs created by development builds before 0.9.0 are not upgraded:
-`migrate` refuses them and names the remedy, recreating them with `init-db`. From 0.9.0 the
+`migrate`, run on the controller's host, refuses them and names the remedy, recreating them with `init-db`. From 0.9.0 the
 upgrade tests start from each tagged schema snapshot in `tests/fixtures/schemas/` and check
 upgraded structure against fresh initialization and retained data by named columns on SQLite
 and PostgreSQL. Released migration files remain immutable; corrections ship forward.
