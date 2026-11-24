@@ -68,7 +68,7 @@ def test_a_failed_task_explains_itself_and_leads_to_its_attempt_and_history(scen
         page.get_by_role("table", name="Run grid").get_by_role(
             "img", name=f"LOAD in run {bad}: failed"
         ).click()
-        panel = page.get_by_label("Task LOAD")
+        panel = page.get_by_role("region", name="Task LOAD", exact=True)
         expect(panel.get_by_text(ERROR).first).to_be_visible()
         expect(panel.get_by_text("Dependencies")).to_be_visible()
         expect(panel.get_by_text("EXTRACT")).to_be_visible()
@@ -140,7 +140,7 @@ def test_the_items_page_says_when_a_task_recorded_none(scene):
         browser.close()
 
 
-def test_a_viewer_reads_task_pages_without_controls(scene):
+def test_a_viewer_reads_task_pages_with_disabled_controls(scene):
     ctx, url, _, bad, _ = scene
     act(
         ctx,
@@ -157,9 +157,13 @@ def test_a_viewer_reads_task_pages_without_controls(scene):
         page.get_by_role("table", name="Run grid").get_by_role(
             "img", name=f"LOAD in run {bad}: failed"
         ).click()
-        expect(page.get_by_label("Task LOAD").get_by_text(ERROR).first).to_be_visible()
-        expect(page.get_by_role("button", name="Mark as")).to_have_count(0)
-        expect(page.get_by_role("button", name="Hold")).to_have_count(0)
+        expect(
+            page.get_by_role("region", name="Task LOAD", exact=True).get_by_text(ERROR).first
+        ).to_be_visible()
+        for label in ("Mark as", "Pause task"):
+            control = page.get_by_role("button", name=label, exact=True)
+            expect(control).to_be_disabled()
+            expect(control).to_have_accessible_description(re.compile("operator"))
         browser.close()
 
 

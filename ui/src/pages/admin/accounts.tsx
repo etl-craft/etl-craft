@@ -1,3 +1,4 @@
+import * as React from "react";
 import { EmptyState } from "@/components/common";
 import { words } from "@/lib/labels";
 import { createColumnHelper } from "@tanstack/react-table";
@@ -16,6 +17,41 @@ export function AccountsTab() {
   const list = useAdminList<{ accounts: Account[] }>("/api/v1/accounts");
   const accounts = list.data?.accounts ?? [];
   const names = accounts.map((a) => a.name);
+  const tableColumns0 = React.useMemo(() => [
+            columns.accessor("name", { header: "Account", cell: (c) => <span className="font-medium">{c.getValue()}</span> }),
+            columns.display({ id: "person", header: "Name", cell: (c) => [c.row.original.first_name, c.row.original.last_name].filter(Boolean).join(" ") || <span className="text-muted">—</span> }),
+            columns.accessor("email", { header: "Email", cell: (c) => c.getValue() ?? <span className="text-muted">—</span> }),
+            columns.accessor("kind", { header: "Kind", cell: (c) => words(c.getValue()) }),
+            columns.accessor("role", { header: "Role", cell: (c) => words(c.getValue()) }),
+            columns.display({
+              id: "state",
+              header: "State",
+              cell: (c) => {
+                const a = c.row.original;
+                return a.active_flag !== "Y" ? <StatusBadge status="DISABLED" /> : a.locked_at ? <StatusBadge status="LOCKED" /> : <StatusBadge status="ACTIVE" />;
+              },
+            }),
+            columns.accessor("failed_signins", { header: "Failed sign-ins" }),
+            columns.accessor("last_signin_at", { header: "Last sign-in", cell: (c) => <When iso={c.getValue()} empty="Never" /> }),
+            columns.display({
+              id: "act",
+              header: "Actions",
+              cell: (c) => {
+                const a = c.row.original;
+                // Row actions sit behind one menu, so the table keeps its width at any size; each still confirms.
+                return (
+                  <RowActions
+                    name={a.name}
+                    account={a.name}
+                    actions={[
+                      { label: "Unlock", title: `Unlock ${a.name}`, effect: "Clears the lock and the failed sign-in count so the account can sign in again.", endpoint: "/accounts/unlock", askReason: false, body: () => ({ name: a.name }), describe: done(`${a.name} unlocked.`) },
+                      { label: "Disable", title: `Disable ${a.name}`, effect: "Stops this account signing in and revokes its sessions and tokens; its history stays.", endpoint: "/accounts/disable", askReason: false, body: () => ({ name: a.name }), describe: done(`${a.name} disabled.`), danger: true },
+                    ]}
+                  />
+                );
+              },
+            }),
+          ], []);
   return (
     <div className="grid gap-5">
       <ListState query={list} what="accounts" />
@@ -72,41 +108,7 @@ export function AccountsTab() {
           label="Accounts"
           data={accounts}
           empty={list.isSuccess ? <EmptyState title="No accounts." nextStep="Add an account to let a person sign in or a service use tokens." /> : undefined}
-          columns={[
-            columns.accessor("name", { header: "Account", cell: (c) => <span className="font-medium">{c.getValue()}</span> }),
-            columns.display({ id: "person", header: "Name", cell: (c) => [c.row.original.first_name, c.row.original.last_name].filter(Boolean).join(" ") || <span className="text-muted">—</span> }),
-            columns.accessor("email", { header: "Email", cell: (c) => c.getValue() ?? <span className="text-muted">—</span> }),
-            columns.accessor("kind", { header: "Kind", cell: (c) => words(c.getValue()) }),
-            columns.accessor("role", { header: "Role", cell: (c) => words(c.getValue()) }),
-            columns.display({
-              id: "state",
-              header: "State",
-              cell: (c) => {
-                const a = c.row.original;
-                return a.active_flag !== "Y" ? <StatusBadge status="DISABLED" /> : a.locked_at ? <StatusBadge status="LOCKED" /> : <StatusBadge status="ACTIVE" />;
-              },
-            }),
-            columns.accessor("failed_signins", { header: "Failed sign-ins" }),
-            columns.accessor("last_signin_at", { header: "Last sign-in", cell: (c) => <When iso={c.getValue()} empty="Never" /> }),
-            columns.display({
-              id: "act",
-              header: "Actions",
-              cell: (c) => {
-                const a = c.row.original;
-                // Row actions sit behind one menu, so the table keeps its width at any size; each still confirms.
-                return (
-                  <RowActions
-                    name={a.name}
-                    account={a.name}
-                    actions={[
-                      { label: "Unlock", title: `Unlock ${a.name}`, effect: "Clears the lock and the failed sign-in count so the account can sign in again.", endpoint: "/accounts/unlock", askReason: false, body: () => ({ name: a.name }), describe: done(`${a.name} unlocked.`) },
-                      { label: "Disable", title: `Disable ${a.name}`, effect: "Stops this account signing in and revokes its sessions and tokens; its history stays.", endpoint: "/accounts/disable", askReason: false, body: () => ({ name: a.name }), describe: done(`${a.name} disabled.`), danger: true },
-                    ]}
-                  />
-                );
-              },
-            }),
-          ]}
+          columns={tableColumns0}
         />
       </Card>
     </div>

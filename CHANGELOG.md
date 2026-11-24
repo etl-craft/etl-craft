@@ -6,6 +6,19 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+- Project and platform action controls use the server's availability answer; grayed-out
+  controls show the reason only as an annotation on hover, focus or tap. This covers run and task controls, marks and
+  checkpoint resets, item controls, uploads, catalog rebuild/validation/lineage/version and
+  table-preview controls, warehouse checks, provenance/edit/unlock, purge/rehash/clone, and
+  administration of accounts, groups and memberships, roles and commands, bindings, tokens,
+  projects, pools, channels, announcements and erasure; agent commands and personal settings
+  and password changes use the same rule. Exact targets additionally explain missing logs,
+  invalid group/member identities, unsupported password targets, immutable roles, missing
+  role commands, missing projects/channels, and non-merge task definitions. Run log downloads
+  and access explanation now consume availability too. Incomplete confirmations name the missing
+  input and remain keyboard reachable. Refetching table data keeps open
+  action menus in place. The console retains CLI refusals on submit and role-filtered shortcuts.
+
 - Pipeline details offer **Refresh pipeline** and the pipelines list offers **Refresh all**.
   Unavailable actions explain why on hover, keyboard focus or tap. Standalone refresh requires RELAXED
   governance and project management permission across the browser, CLI and API. Authorized

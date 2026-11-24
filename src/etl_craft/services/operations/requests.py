@@ -182,7 +182,10 @@ class CapabilitiesInput(RunIdentity):
     pipeline_codes: tuple[str, ...] = ()
     with_warehouse: bool = False
     preview_table: str | None = None
+    rehash_target: str | None = None
+    binding_tag: str | None = None
     reset_position: PositionKind | None = None
+    attempt_id: int | None = None
 
     def __post_init__(self) -> None:
         """Require a pipeline for run controls, and keep the two selections distinct."""
@@ -190,8 +193,12 @@ class CapabilitiesInput(RunIdentity):
         if self.definition:
             optional_text("pipeline_code", self.pipeline_code)
             optional_text("preview_table", self.preview_table)
-            if self.run_key is not None or (self.run_id is not None and self.task_code is None):
-                raise UsageError("definition capabilities accept a run_id only with task_code")
+            optional_text("rehash_target", self.rehash_target)
+            optional_text("binding_tag", self.binding_tag)
+            if self.run_key is not None or (self.run_id is not None and self.pipeline_code is None):
+                raise UsageError("definition capabilities accept a run_id only with pipeline_code")
+            if self.attempt_id is not None and self.attempt_id < 1:
+                raise UsageError("attempt_id must be positive; select a recorded attempt")
             if self.reset_position is not None and self.run_id is None:
                 raise UsageError("reset_position requires a selected run_id")
             if self.task_code is not None and self.pipeline_code is None:
@@ -204,10 +211,15 @@ class CapabilitiesInput(RunIdentity):
                 self.pipeline_codes
                 or self.with_warehouse
                 or self.preview_table is not None
+                or self.rehash_target is not None
+                or self.binding_tag is not None
                 or self.reset_position is not None
+                or self.attempt_id is not None
             ):
                 raise UsageError(
-                    "pipeline_codes, with_warehouse, preview_table and reset_position require "
+                    "pipeline_codes, with_warehouse, preview_table, rehash_target, binding_tag, "
+                    "attempt_id and "
+                    "reset_position require "
                     "definition capabilities"
                 )
         optional_text("task_code", self.task_code)

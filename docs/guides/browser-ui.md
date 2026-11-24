@@ -7,6 +7,55 @@ Open `/ui`; sign-in is at `/ui/signin`. The minimum width is 320 CSS pixels; 102
 wider gives the desktop layout.
 The layout remains usable at 200% zoom.
 
+## Action availability
+
+Project and platform controls stay visible when unavailable. Their grayed-out buttons, menu
+items and actionable tabs show the server's reason as an annotation on hover, keyboard focus or
+tap, and nowhere else on the page; screen readers read it through `aria-describedby`. Pages do not decide permission from a role or
+project governance flag. The action rechecks its admission when submitted.
+Confirmation buttons also describe incomplete fields, mandatory reasons and production-code
+checks, and remain reachable by keyboard while incomplete.
+
+This applies to pipeline and task controls, marks and checkpoint resets, item and bulk controls,
+uploads, warehouse checks, catalog rebuild/validation/lineage/version and table preview, data
+provenance/edits/unlocks, purge/rehash/clone, agent commands, settings/passwords, and every
+administration tab (accounts, groups/memberships, roles/commands, access bindings, tokens,
+projects, pools, alert channels, announcements and erasure). Log reads and run-log downloads
+also annotate their exact source or identity refusal. A non-merge task's Data controls explain
+which task definition is required. Administration row actions require a readable row; an
+unauthorized list is still refused and does not disclose its contents.
+
+Reasons can name a missing role or grant, governance or environment restrictions, the selected
+run/task/pipeline/account state, or a forbidden self-action. When several restrictions apply,
+the server retains the same order as execution. Being a developer does not enable an admin-only
+action. Form fields remain editable when their selected target is refused.
+
+| Controls | Reasons the server can report |
+| --- | --- |
+| Run, pause/resume/replace, stop/abort/recover/restart and bulk controls | Missing role or grant; standing pause or incompatible run/task state |
+| Mark status and reset offset/watermark | Missing operator permission; no selected run; a running task or a task without the requested checkpoint kind |
+| Item rerun/cancel/mark and rerun failed items | Missing operator permission; task/attempt/item state or no failed items |
+| Upload | Missing CAN_UPLOAD; inactive or non-stewardable pipeline |
+| Refresh pipeline/all | Missing management grant or STRICT governance |
+| Rebuild catalog, refresh lineage, record versions and Check now | Missing role/grant; on-demand warehouse checks disabled where applicable |
+| Validate and table Data preview | Missing view/developer access; restricted pipeline scope, missing warehouse or a table outside the catalog |
+| Look up, edit and unlock values | Missing role; a non-merge task or conflicting merge definition; unlock requires a human administrator |
+| Purge, rehash/preview SQL and clone | Missing administrator role; missing common merge contract or cloning switched off |
+| Account add/change role/reset/unlock/disable | Missing administrator role; wrong account kind, last recovery administrator or self-disable |
+| Group add/disable and membership add/remove | Missing administrator role or invalid target identities; adding requires active identities |
+| Role create/add command/remove command/disable and Explain access | Missing administrator role; immutable built-in/disabled role, incompatible command binding or absent command |
+| Grant and revoke access | Missing CAN_MANAGE at the binding's project, pipeline or tag; wider bindings require a deployment administrator |
+| Project and pool add/change/disable | Missing administrator role or missing target; a pool with active references cannot be disabled |
+| Channel set/disable, token create/revoke and announcement post/end | Missing administrator role, missing channel, revoked token or ended announcement |
+| Erasure preview/register/lift | Missing administrator role or required privacy configuration |
+| Agent drain/resume/stop | Missing operator role or a GONE/missing agent |
+| Read/download attempt or run logs | Inaccessible/missing execution identity, pending upload or unavailable stored source |
+| Personal settings/password and sign out | Server admission for the signed-in identity; SSO accounts use their provider for passwords |
+
+The console is an exception: **Run** accepts non-empty text and a refused command prints the
+CLI's server refusal and exit code. Its role-filtered command chips only insert text; they do
+not execute actions and have no availability preflight.
+
 ## Sign-in and sessions
 
 With `Auth.Browser_state_secret` configured, **Sign in with SSO** redirects to the identity

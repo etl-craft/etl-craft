@@ -331,15 +331,7 @@ def disable_project(ctx: OperationContext, request: ProjectIdentity) -> Projects
     reason(request.reason)
     code("--project", request.project)
     with locks.MIGRATE.hold(ctx.engine, wait_seconds=30), ctx.engine.begin() as conn:
-        if (
-            conn.execute(
-                statement(conn, "project_by_code"), {"code": request.project}
-            ).one_or_none()
-            is None
-        ):
-            raise UsageError(
-                f"--project={request.project!r}: expected an existing project; use project list"
-            )
+        require_existing_project(conn, request.project)
         conn.execute(statement(conn, "admin_project_disable"), {"code": request.project})
     return list_projects(ctx, request)
 
@@ -442,3 +434,9 @@ def _project_alerts(
     return history(
         conn, project_id, tuple(name for name, role in access.roles.items() if role is not None)
     )
+
+
+def require_existing_project(conn: Connection, project: str | None) -> None:
+    """Require the retained project that disable updates."""
+    if conn.execute(statement(conn, "project_by_code"), {"code": project}).one_or_none() is None:
+        raise UsageError(f"--project={project!r}: expected an existing project; use project list")

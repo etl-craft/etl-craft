@@ -1,3 +1,4 @@
+import * as React from "react";
 import { useQuery } from "@tanstack/react-query";
 import { When } from "@/components/when";
 import { createColumnHelper } from "@tanstack/react-table";
@@ -28,20 +29,7 @@ export function Agents() {
   useDocumentTitle("Agents");
   const list = useQuery({ queryKey: ["agents"], queryFn: () => getJson<AgentsView>("/api/v1/agents"), refetchInterval: 10_000 });
   const rows = list.data?.agents ?? [];
-  return (
-    <div className="grid grid-cols-1 gap-5">
-      <PageHeader title="Agents" subtitle="Worker processes that claim tasks, by pool" />
-      {list.isError ? <Notice>{(list.error as Error).message}</Notice> : null}
-      {list.isPending ? <Loading what="agents" /> : null}
-      <Card>
-        <CardHeader>
-          <CardTitle>Registered agents · {rows.length}</CardTitle>
-        </CardHeader>
-        <DataTable find
-          label="Agents"
-          data={rows}
-          empty={list.isSuccess ? <EmptyState title="No agents have registered" nextStep={<>Start one with <code className="font-mono">etl-craft agent</code> and an agent token. Deployments that run tasks on the controller&apos;s host do not use agents.</>} /> : undefined}
-          columns={[
+  const tableColumns0 = React.useMemo(() => [
             columns.accessor("agent_id", { header: "Agent" }),
             columns.accessor("pool", { header: "Pool" }),
             columns.accessor("host", { header: "Host" }),
@@ -69,7 +57,21 @@ export function Agents() {
                 );
               },
             }),
-          ]}
+          ], []);
+  return (
+    <div className="grid grid-cols-1 gap-5">
+      <PageHeader title="Agents" subtitle="Worker processes that claim tasks, by pool" />
+      {list.isError ? <Notice>{(list.error as Error).message}</Notice> : null}
+      {list.isPending ? <Loading what="agents" /> : null}
+      <Card>
+        <CardHeader>
+          <CardTitle>Registered agents · {rows.length}</CardTitle>
+        </CardHeader>
+        <DataTable find
+          label="Agents"
+          data={rows}
+          empty={list.isSuccess ? <EmptyState title="No agents have registered" nextStep={<>Start one with <code className="font-mono">etl-craft agent</code> and an agent token. Deployments that run tasks on the controller&apos;s host do not use agents.</>} /> : undefined}
+          columns={tableColumns0}
         />
       </Card>
     </div>

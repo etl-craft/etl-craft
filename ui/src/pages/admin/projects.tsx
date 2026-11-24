@@ -1,3 +1,4 @@
+import * as React from "react";
 import { AlertDeliveries } from "@/components/alert-deliveries";
 import { words } from "@/lib/labels";
 import { createColumnHelper } from "@tanstack/react-table";
@@ -31,6 +32,23 @@ const projectFields = (code: boolean): FieldSpec[] => [
 export function ProjectsTab() {
   const list = useAdminList<{ projects: ProjectRow[] }>("/api/v1/projects", { reason: LISTING });
   const rows = list.data?.projects ?? [];
+  const tableColumns0 = React.useMemo(() => [
+            columns.accessor("project", { header: "Project", cell: (c) => <span className="font-medium">{c.getValue()}</span> }),
+            columns.accessor("name", { header: "Name" }),
+            columns.display({ id: "env", header: "Environment", cell: (c) => <EnvironmentBadge env={{ type: c.row.original.environment_type, name: c.row.original.environment_name }} /> }),
+            columns.accessor("governance", { header: "Governance", cell: (c) => words(c.getValue()) }),
+            columns.accessor("default_pool", { header: "Default pool" }),
+            columns.accessor("max_running_tasks", { header: "Max tasks" }),
+            columns.accessor("allowed_auto_restarts", { header: "Automatic starts", cell: (c) => words(c.getValue()) }),
+            columns.display({ id: "schema", header: "Schema checks", cell: (c) => (c.row.original.schema_check_schedule ? <code className="font-mono text-xs">{c.row.original.schema_check_schedule}</code> : "Not scheduled") }),
+            columns.display({ id: "state", header: "State", cell: (c) => <StatusBadge quiet status={c.row.original.active_flag === "Y" ? "ACTIVE" : "DISABLED"} /> }),
+            columns.display({
+              id: "act",
+              header: "Actions",
+              cell: (c) =>
+                <ActionButton<unknown> label="Disable" title={`Disable ${c.row.original.project}`} effect="Stops this project's pipelines running; its metadata and history stay." endpoint="/projects/disable" body={(reason) => ({ project: c.row.original.project, reason })} describe={done("Project disabled.")} variant="danger" size="sm" />,
+            }),
+          ], []);
   return (
     <div className="grid min-w-0 grid-cols-1 gap-5">
       <ListState query={list} what="projects" />
@@ -47,23 +65,7 @@ export function ProjectsTab() {
           data={rows}
           empty={list.isSuccess ? "No projects yet." : undefined}
           nextStep="Add a project above to register an Engine DB project."
-          columns={[
-            columns.accessor("project", { header: "Project", cell: (c) => <span className="font-medium">{c.getValue()}</span> }),
-            columns.accessor("name", { header: "Name" }),
-            columns.display({ id: "env", header: "Environment", cell: (c) => <EnvironmentBadge env={{ type: c.row.original.environment_type, name: c.row.original.environment_name }} /> }),
-            columns.accessor("governance", { header: "Governance", cell: (c) => words(c.getValue()) }),
-            columns.accessor("default_pool", { header: "Default pool" }),
-            columns.accessor("max_running_tasks", { header: "Max tasks" }),
-            columns.accessor("allowed_auto_restarts", { header: "Automatic starts", cell: (c) => words(c.getValue()) }),
-            columns.display({ id: "schema", header: "Schema checks", cell: (c) => (c.row.original.schema_check_schedule ? <code className="font-mono text-xs">{c.row.original.schema_check_schedule}</code> : "Not scheduled") }),
-            columns.display({ id: "state", header: "State", cell: (c) => <StatusBadge quiet status={c.row.original.active_flag === "Y" ? "ACTIVE" : "DISABLED"} /> }),
-            columns.display({
-              id: "act",
-              header: "Actions",
-              cell: (c) =>
-                <ActionButton<unknown> label="Disable" title={`Disable ${c.row.original.project}`} effect="Stops this project's pipelines running; its metadata and history stay." endpoint="/projects/disable" body={(reason) => ({ project: c.row.original.project, reason })} describe={done("Project disabled.")} variant="danger" size="sm" />,
-            }),
-          ]}
+          columns={tableColumns0}
         />
       </Card>
       {rows.map(row => <div key={row.project}><h2 className="text-base font-semibold">{row.name || row.project}</h2><AlertDeliveries code={row.project} rows={row.alert_deliveries} /></div>)}
@@ -78,6 +80,17 @@ export function PoolsTab() {
     { name: "name", label: "Pool name", required: true },
     { name: "description", label: "Description" },
   ];
+  const tableColumns1 = React.useMemo(() => [
+            pools.accessor("name", { header: "Pool", cell: (c) => <span className="font-medium">{c.getValue()}</span> }),
+            pools.accessor("description", { header: "Description", cell: (c) => c.getValue() ?? "" }),
+            pools.display({ id: "state", header: "State", cell: (c) => <StatusBadge quiet status={c.row.original.active_flag === "Y" ? "ACTIVE" : "DISABLED"} /> }),
+            pools.display({
+              id: "act",
+              header: "Actions",
+              cell: (c) =>
+                <ActionButton<unknown> label="Disable" title={`Disable ${c.row.original.name}`} effect="Stops placing work in this pool; refused while a project or task still uses it." endpoint="/pools/disable" availabilityTarget={{ pool_name: c.row.original.name }} body={(reason) => ({ name: c.row.original.name, reason })} describe={done("Pool disabled.")} variant="danger" size="sm" />,
+            }),
+          ], []);
   return (
     <div className="grid min-w-0 grid-cols-1 gap-5">
       <ListState query={list} what="pools" />
@@ -97,17 +110,7 @@ export function PoolsTab() {
           data={rows}
           empty={list.isSuccess ? "No pools yet." : undefined}
           nextStep="Add a pool above, then configure tasks to use it and register an agent."
-          columns={[
-            pools.accessor("name", { header: "Pool", cell: (c) => <span className="font-medium">{c.getValue()}</span> }),
-            pools.accessor("description", { header: "Description", cell: (c) => c.getValue() ?? "" }),
-            pools.display({ id: "state", header: "State", cell: (c) => <StatusBadge quiet status={c.row.original.active_flag === "Y" ? "ACTIVE" : "DISABLED"} /> }),
-            pools.display({
-              id: "act",
-              header: "Actions",
-              cell: (c) =>
-                <ActionButton<unknown> label="Disable" title={`Disable ${c.row.original.name}`} effect="Stops placing work in this pool; refused while a project or task still uses it." endpoint="/pools/disable" availabilityTarget={{ pool_name: c.row.original.name }} body={(reason) => ({ name: c.row.original.name, reason })} describe={done("Pool disabled.")} variant="danger" size="sm" />,
-            }),
-          ]}
+          columns={tableColumns1}
         />
       </Card>
     </div>

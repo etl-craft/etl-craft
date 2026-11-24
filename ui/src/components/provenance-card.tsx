@@ -12,7 +12,7 @@ import type { ValueResult } from "@/lib/types";
 
 /** Who last wrote each value of one business key in a merge task's target, and which values are locked. */
 export function ProvenanceCard({ code, pipeline, task, keys, columns }: { code: string; pipeline: string; task: string; keys: string[]; columns: string[] }) {
-  const availability = useActionAvailability(code, pipeline);
+  const availability = useActionAvailability(code, pipeline, true, { task_code: task });
   const [key, setKey] = React.useState<Record<string, string>>({});
   const [column, setColumn] = React.useState(columns[0] ?? "");
   const [value, setValue] = React.useState("");

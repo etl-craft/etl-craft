@@ -125,6 +125,8 @@ def request_for(name: ActionName, pipeline: str, ids: dict[str, dict[str, int]])
         for key, value in {"pipeline_code": pipeline, **ids[pipeline], **SCOPE}.items()
         if key in names
     }
+    if name == ActionName.CAPABILITIES:
+        values.pop("attempt_id", None)  # the run-control answer takes no attempt; logs ask with it
     if name == ActionName.CONTROL_BULK:
         values["requests"] = (
             ControlRequest(

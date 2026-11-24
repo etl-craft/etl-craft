@@ -114,7 +114,7 @@ export function Task() {
         </div>
       </Card>
       {offset.data ? <OffsetCard key={offset.data.offset_value ?? ""} code={code} pipeline={pipeline} task={task} offset={offset.data} runs={runs} /> : null}
-      {def.data?.merge_key.length ? <ProvenanceCard code={code} pipeline={pipeline} task={task} keys={def.data.merge_key} columns={def.data.merge_columns} /> : null}
+      {def.data ? <ProvenanceCard code={code} pipeline={pipeline} task={task} keys={def.data.merge_key} columns={def.data.merge_columns} /> : null}
     </div>
   );
 }

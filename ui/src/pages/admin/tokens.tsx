@@ -18,7 +18,22 @@ export function TokensTab() {
   const list = useAdminList<{ tokens: TokenRow[] }>("/api/v1/tokens");
   const [created, setCreated] = React.useState<string | null>(null);
   const [copied, setCopied] = React.useState(false);
-  const when = (value: string | null, none: string) => <When iso={value} empty={none} />;
+
+  const tableColumns0 = React.useMemo(() => [
+            columns.accessor("name", { header: "Name", cell: (c) => <span className="font-medium">{c.getValue()}</span> }),
+            columns.accessor("token_kind", { header: "Kind", cell: (c) => words(c.getValue()) }),
+            columns.accessor("role", { header: "Role", cell: (c) => words(c.getValue()) }),
+            columns.display({ id: "created", header: "Created", cell: (c) => <>{<When iso={c.row.original.created_at} empty="" />} <span className="text-muted">by {c.row.original.created_by}</span></> }),
+            columns.accessor("expires_at", { header: "Expires", cell: (c) => <When iso={c.getValue()} empty="Never" /> }),
+            columns.accessor("last_used_at", { header: "Last used", cell: (c) => <When iso={c.getValue()} empty="Never" /> }),
+            columns.display({ id: "state", header: "State", cell: (c) => <StatusBadge quiet status={c.row.original.revoked_at ? "REVOKED" : "ACTIVE"} /> }),
+            columns.display({
+              id: "act",
+              header: "Actions",
+              cell: (c) =>
+                  <ActionButton<unknown> label="Revoke" title={`Revoke ${c.row.original.name}`} effect="Stops this token working at once; clients using it must sign in again." endpoint="/tokens/revoke" availabilityTarget={{ token_id: c.row.original.token_id }} askReason={false} body={() => ({ token_id: c.row.original.token_id })} describe={done("Token revoked.")} variant="danger" size="sm" />,
+            }),
+          ], []);
   return (
     <div className="grid gap-5">
       <ListState query={list} what="tokens" />
@@ -68,21 +83,7 @@ export function TokensTab() {
           label="API tokens"
           data={list.data?.tokens ?? []}
           empty={list.isSuccess ? <EmptyState title="No tokens." nextStep="Create a token for a registered account to authenticate a client." /> : undefined}
-          columns={[
-            columns.accessor("name", { header: "Name", cell: (c) => <span className="font-medium">{c.getValue()}</span> }),
-            columns.accessor("token_kind", { header: "Kind", cell: (c) => words(c.getValue()) }),
-            columns.accessor("role", { header: "Role", cell: (c) => words(c.getValue()) }),
-            columns.display({ id: "created", header: "Created", cell: (c) => <>{when(c.row.original.created_at, "")} <span className="text-muted">by {c.row.original.created_by}</span></> }),
-            columns.accessor("expires_at", { header: "Expires", cell: (c) => when(c.getValue(), "Never") }),
-            columns.accessor("last_used_at", { header: "Last used", cell: (c) => when(c.getValue(), "Never") }),
-            columns.display({ id: "state", header: "State", cell: (c) => <StatusBadge quiet status={c.row.original.revoked_at ? "REVOKED" : "ACTIVE"} /> }),
-            columns.display({
-              id: "act",
-              header: "Actions",
-              cell: (c) =>
-                  <ActionButton<unknown> label="Revoke" title={`Revoke ${c.row.original.name}`} effect="Stops this token working at once; clients using it must sign in again." endpoint="/tokens/revoke" availabilityTarget={{ token_id: c.row.original.token_id }} askReason={false} body={() => ({ token_id: c.row.original.token_id })} describe={done("Token revoked.")} variant="danger" size="sm" />,
-            }),
-          ]}
+          columns={tableColumns0}
         />
       </Card>
     </div>

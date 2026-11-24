@@ -39,6 +39,9 @@ def test_pipeline_row_pause_resume_keeps_confirmation_policy_and_header_action(s
         expect(policy).to_have_value("wait")
         for value in ("wait", "run-now", "catch-up"):
             expect(policy.locator(f'option[value="{value}"]')).to_have_count(1)
+        # Escape belongs to the dialog only once the menu that opened it is gone and focus is in it.
+        expect(page.get_by_role("menu")).to_have_count(0)
+        expect(policy).to_be_focused()
         page.keyboard.press("Escape")
         expect(dialog).not_to_be_visible()
         row.get_by_role("link", name="OPS", exact=True).click()

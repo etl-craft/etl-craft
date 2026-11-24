@@ -21,6 +21,7 @@ export function ConfirmDialog({
   askReason = true,
   governance = "STRICT",
   canSubmit = true,
+  unavailableReason,
   children,
 }: {
   open: boolean;
@@ -39,6 +40,7 @@ export function ConfirmDialog({
   governance?: string;
   /** False while the form fields in `children` are incomplete. */
   canSubmit?: boolean;
+  unavailableReason?: string;
   children?: React.ReactNode;
 }) {
   const [reason, setReason] = React.useState("");
@@ -46,6 +48,10 @@ export function ConfirmDialog({
   const production = !!env && !!projectCode && isProduction(env);
   const reasonRequired = governance !== "RELAXED";
   const ready = canSubmit && (!askReason || !reasonRequired || reason.trim().length > 0) && (!production || typed === projectCode);
+  const inputReason = !canSubmit ? "Complete the required fields."
+    : askReason && reasonRequired && !reason.trim() ? "Enter a reason for this action."
+    : production && typed !== projectCode ? `Type ${projectCode} to confirm the production action.`
+    : undefined;
   return (
     <Dialog open={open} onClose={onClose} labelledBy="confirm-title" className={production ? "border-2 border-[var(--env-prod)]" : undefined}>
       {production ? (
@@ -59,7 +65,7 @@ export function ConfirmDialog({
         className="grid gap-4 p-5"
         onSubmit={(event) => {
           event.preventDefault();
-          if (ready) onConfirm(reason.trim());
+          if (ready && !unavailableReason) onConfirm(reason.trim());
         }}
       >
         <div className="grid gap-2">
@@ -105,7 +111,7 @@ export function ConfirmDialog({
           <Button type="button" onClick={onClose}>
             Cancel
           </Button>
-          <Button type="submit" variant={production ? "dangerSolid" : "primary"} disabled={!ready || busy}>
+          <Button type="submit" variant={production ? "dangerSolid" : "primary"} disabled={busy} unavailableReason={unavailableReason ?? inputReason}>
             {busy ? "Working…" : action}
           </Button>
         </div>

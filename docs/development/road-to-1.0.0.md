@@ -200,7 +200,7 @@ item's text, or work done early under another item.
 | S7.AR Restarting pipelines | Done | #349, #350, #356, #358 | Automatic starts on a chosen run ending, with `Allowed_auto_restarts` per environment; the demo's Gamma pipeline runs without a schedule. |
 | S7.AS Project dashboard and navigation | Done | #401, #402, #404, #405, #406, #407, #413 | Slices 1–5 owner approved; shared controls polished, with framed working panes, application-drawn diagram scrollbars, unclipped column selection and accessible search/action feedback in follow-up |
 | S7.AT Refresh and availability on the first pages | Done | #437 | Pipeline and all-pipelines refresh on RELAXED projects; unavailable actions on these pages grayed out with their reason |
-| S7.AU Available actions on every page | Planned | | Every unavailable action on the remaining project and platform pages grayed out with its reason |
+| S7.AU Available actions on every page | Done | S7.AU PR | Every action on the project and platform pages renders from the server's availability answer, grayed out with its reason as a hover annotation; the console keeps submit-time refusals |
 | S7.AV No implicit project | Planned | | Engine DB access without a selected project fails naming the caller, instead of using project 1 |
 | S7.AW Public docs for 0.9.0 | Planned | | README, published nav without development pages, and a short 0.9.0 changelog summary |
 | S7.M Stewardship uploads | Done (M2) | #296, #305 | Atomic receipts and safe stored names; processed layout, retention archives and verified reruns; crash recovery and guarded upload history |
@@ -225,6 +225,15 @@ item's text, or work done early under another item.
 | S8.I Support Insights on current main | Planned | | `ALERT` tasks with `EMAIL` channels and `deploy` replace removed handlers and commands, so the demo can pin current main; precedes S8.C, S8.E and S8.F |
 
 ### Handover notes
+
+- **S7.AU Choices that differ from the item text.** Enabled cases use the action's lowest
+  authorized role; developers see admin-only actions grayed out (owner, 2026-11-23).
+  The console is excluded from grayed-out availability: typed lines are refused on submit
+  with the server's reason; command chips stay role-filtered (owner, 2026-11-23).
+  Reasons appear only as hover, focus or tap annotations, never as text on the page; an
+  unavailable attempt log keeps its Show log button grayed instead of printing a notice (owner,
+  2026-11-23).
+
 
 - **Repo audit (owner, 2026-11-23).** Checked against `main` at `548b23ce`. The local CLI
   operating a server (`--api`, S5.S) works for 117 of 126 actions, including `deploy`, but is

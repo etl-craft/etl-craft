@@ -267,11 +267,15 @@ def inspect_account_action(ctx: OperationContext, name: ActionName, request: Acc
     with ctx.engine.connect() as conn:
         row = find_account(conn, request.name)
         if row is None or (
-            name == ActionName.ACCOUNT_UNLOCK
+            name in (ActionName.ACCOUNT_UNLOCK, ActionName.ACCOUNT_RESET_PASSWORD)
             and (row.kind != AccountKind.USER or row.oidc_subject is not None)
         ):
             raise missing_account(request.name)
-        if name == ActionName.ACCOUNT_DISABLE:
+        if name == ActionName.ACCOUNT_DISABLE or (
+            name == ActionName.ACCOUNT_SET_ROLE
+            and isinstance(request, AccountRole)
+            and request.role != ApiRole.ADMIN
+        ):
             require_recovery_admin(conn, request.name)
 
 

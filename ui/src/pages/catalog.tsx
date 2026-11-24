@@ -120,7 +120,7 @@ export function Catalog() {
                 </Button>
               </DropdownTrigger>
               <DropdownContent align="end" className="w-80">
-                <DropdownItem onSelect={() => validate.mutate()} disabled={validate.isPending} className="grid gap-0.5">
+                <DropdownItem unavailableReason={unavailableAction(capabilities, "/validation", "GET")} onSelect={() => validate.mutate()} disabled={validate.isPending} className="grid gap-0.5">
                   <span className="font-medium">Validate metadata</span>
                   <span className="text-xs text-muted">Checks every pipeline and task definition without running anything.</span>
                 </DropdownItem>

@@ -12,12 +12,13 @@ from etl_craft.core.enums import (
     ActionName,
     ActionScope,
     AgentCommand,
+    ApiRole,
     ControlAction,
     HttpMethod,
     PositionKind,
     RunStatus,
 )
-from etl_craft.core.errors import EtlCraftError, RunStateError
+from etl_craft.core.errors import EtlCraftError, RunStateError, UsageError
 from etl_craft.engine import run_scopes, runlog
 from etl_craft.engine.repository.pipelines import resolve_pipeline_id
 from etl_craft.engine.repository.tasks import resolve_task_id
@@ -28,12 +29,19 @@ from etl_craft.execution.interventions import (
     require_pause_state,
     require_resettable_offset,
 )
-from etl_craft.services.operations import access, announcements, tokens
+from etl_craft.handlers.erasure import secret
+from etl_craft.services.operations import access, announcements, erasure, groups, inspect, tokens
 from etl_craft.services.operations.access_inputs import Resolved
-from etl_craft.services.operations.accounts import AccountName, inspect_account_action
-from etl_craft.services.operations.admin_metadata import PoolIdentity, require_unused_pool
+from etl_craft.services.operations.accounts import AccountName, AccountRole, inspect_account_action
+from etl_craft.services.operations.admin_metadata import (
+    PoolIdentity,
+    ProjectIdentity,
+    require_existing_project,
+    require_unused_pool,
+)
 from etl_craft.services.operations.agent_models import AgentControl
 from etl_craft.services.operations.agents import require_live_agent
+from etl_craft.services.operations.alert_channels import ChannelIdentity, require_channel
 from etl_craft.services.operations.context import OperationContext
 from etl_craft.services.operations.controls import check_control, control_scope
 from etl_craft.services.operations.documents import DocsInput, require_warehouse_check
@@ -48,18 +56,35 @@ from etl_craft.services.operations.requests import (
     CapabilitiesInput,
     ControlRequest,
     LineageRefreshInput,
+    LogInput,
     MarkRequest,
     NoInput,
     PipelineInput,
     ReconcileInput,
     Request,
     RunRequest,
+    RunSelection,
+    TaskSelection,
+    ValidateInput,
 )
 from etl_craft.services.operations.retention import PurgeInput
-from etl_craft.services.operations.roles import RoleName, custom_role_id
+from etl_craft.services.operations.roles import (
+    RoleAction,
+    RoleName,
+    bindable,
+    custom_role_id,
+    require_role_action,
+)
 from etl_craft.services.operations.task_pauses import inspect_task_pause
 from etl_craft.services.operations.uploads import UploadRequest, require_upload_pipeline
-from etl_craft.services.operations.values import require_human_unlock
+from etl_craft.services.operations.values import require_human_unlock, value_task
+from etl_craft.services.rehash import rehash_columns
+
+ROLE_MUTATIONS = (
+    ActionName.ROLE_DISABLE,
+    ActionName.ROLE_ADD_ACTION,
+    ActionName.ROLE_REMOVE_ACTION,
+)
 
 
 @dataclass(frozen=True)
@@ -109,14 +134,31 @@ class ActionAvailabilityView:
 
 @dataclass(frozen=True, kw_only=True)
 class DeploymentCapabilitiesInput(Request):
-    """Optionally inspect actions on one account or agent."""
+    """Optionally inspect an exact deployment object or a form's selected target."""
 
     account_name: str | None = None
+    account_role: ApiRole | None = None
     agent_id: int | None = None
     role_name: str | None = None
+    role_action: str | None = None
     pool_name: str | None = None
     token_id: int | None = None
     announcement_id: int | None = None
+    group_name: str | None = None
+    member_name: str | None = None
+    project_code: str | None = None
+    channel_name: str | None = None
+
+    def __post_init__(self) -> None:
+        """Keep each optional form value tied to its explicit target identity."""
+        for value, parent in (
+            ("account_role", "account_name"),
+            ("role_action", "role_name"),
+            ("member_name", "group_name"),
+            ("channel_name", "project_code"),
+        ):
+            if getattr(self, value) is not None and getattr(self, parent) is None:
+                raise UsageError(f"{value} requires {parent}; supply the selected target identity")
 
 
 def action_availability(
@@ -160,16 +202,12 @@ def action_availability(
 
 def inspect_action_state(ctx: OperationContext, name: ActionName, request: object) -> None:
     """Evaluate action-specific read-only preconditions after authorization."""
-    from etl_craft.services.operations.actions import project_settings
-
     if isinstance(request, DocsInput):
         require_warehouse_check(ctx, request)
     if isinstance(request, PreviewInput):
         preview_parts(ctx, request)
-    if name == ActionName.CLONE:
-        require_cloning(project_settings(ctx, name, request))
-    if name == ActionName.DATA_UNLOCK:
-        require_human_unlock(ctx)
+    inspect_maintenance_state(ctx, name, request)
+    inspect_value_state(ctx, name, request)
     if isinstance(request, access.AccessWrite):
         with ctx.engine.connect() as conn:
             project_id = None if request.reaches_beyond_project else ctx.project_id
@@ -187,7 +225,48 @@ def inspect_action_state(ctx: OperationContext, name: ActionName, request: objec
         inspect_mark(ctx, request)
     if isinstance(request, UploadRequest):
         require_upload_pipeline(ctx, request)
+    inspect_log_state(ctx, name, request)
     inspect_deployment_state(ctx, name, request)
+
+
+def inspect_maintenance_state(ctx: OperationContext, name: ActionName, request: object) -> None:
+    """Inspect configured maintenance targets without taking their writer locks."""
+    from etl_craft.services.operations.actions import project_settings
+
+    if name == ActionName.CLONE:
+        require_cloning(project_settings(ctx, name, request))
+    if name == ActionName.ERASE:
+        secret(erasure.deployment(ctx).config)
+    if isinstance(request, RehashInput) and request.target:
+        selected = project_settings(ctx, name, request)
+        rehash_columns(ctx.engine, selected.config, request.target)
+
+
+def inspect_value_state(ctx: OperationContext, name: ActionName, request: object) -> None:
+    """Preserve identity-before-definition admission for value actions."""
+    from etl_craft.services.operations.actions import project_settings
+
+    if name == ActionName.DATA_UNLOCK:
+        require_human_unlock(ctx)
+    if isinstance(request, TaskSelection) and name in (
+        ActionName.DATA_EDIT,
+        ActionName.DATA_UNLOCK,
+        ActionName.DATA_PROVENANCE,
+    ):
+        value_task(project_settings(ctx, name, request), request.pipeline_code, request.task_code)
+
+
+def inspect_log_state(ctx: OperationContext, name: ActionName, request: object) -> None:
+    """Inspect the exact read source before offering a log action."""
+    if isinstance(request, LogInput):
+        source = inspect.attempt_log(ctx, request)
+        close = getattr(source, "close", None)
+        if close is not None:
+            close()
+    if isinstance(request, RunSelection) and name in (ActionName.RUN_LOG, ActionName.RUN_ZIP):
+        with ctx.engine.connect() as conn:
+            pipeline_id = resolve_pipeline_id(conn, request.pipeline_code)
+            runlog.select_run(conn, pipeline_id, request.selector)
 
 
 def inspect_mark(ctx: OperationContext, request: MarkRequest) -> None:
@@ -212,12 +291,22 @@ def inspect_deployment_state(ctx: OperationContext, name: ActionName, request: o
         require_local_password(ctx)
     if isinstance(request, AccountName):
         inspect_account_action(ctx, name, request)
+    if isinstance(request, groups.GroupMember):
+        with ctx.engine.connect() as conn:
+            groups.require_membership_identities(conn, request, name == ActionName.GROUP_ADD_MEMBER)
+    elif isinstance(request, groups.GroupName):
+        with ctx.engine.connect() as conn:
+            groups.require_group(conn, request.name)
+    if name == ActionName.PROJECT_DISABLE and isinstance(request, ProjectIdentity):
+        with ctx.engine.connect() as conn:
+            require_existing_project(conn, request.project)
+    if name == ActionName.ALERT_CHANNEL_DISABLE and isinstance(request, ChannelIdentity):
+        with ctx.engine.connect() as conn:
+            require_channel(conn, request)
     if isinstance(request, AgentControl):
         with ctx.engine.connect() as conn:
             require_live_agent(conn, request.agent_id)
-    if name == ActionName.ROLE_DISABLE and isinstance(request, RoleName):
-        with ctx.engine.connect() as conn:
-            custom_role_id(conn, request.name)
+    inspect_role_state(ctx, name, request)
     if name == ActionName.POOL_DISABLE and isinstance(request, PoolIdentity):
         with ctx.engine.connect() as conn:
             require_unused_pool(conn, request.name)
@@ -225,6 +314,17 @@ def inspect_deployment_state(ctx: OperationContext, name: ActionName, request: o
         tokens.require_revocable_token(ctx, request.token_id)
     if isinstance(request, announcements.AnnouncementEnd):
         announcements.require_open_announcement(ctx, request.announcement_id)
+
+
+def inspect_role_state(ctx: OperationContext, name: ActionName, request: object) -> None:
+    """Inspect mutable role commands in the same validation order as execution."""
+    if isinstance(request, RoleName) and name in ROLE_MUTATIONS:
+        if name == ActionName.ROLE_ADD_ACTION and isinstance(request, RoleAction):
+            bindable(request.action)
+        with ctx.engine.connect() as conn:
+            custom_role_id(conn, request.name)
+            if isinstance(request, RoleAction):
+                require_role_action(conn, request, adding=name == ActionName.ROLE_ADD_ACTION)
 
 
 def inspect_definition_control(ctx: OperationContext, request: ControlRequest) -> None:
@@ -247,14 +347,11 @@ def deployment_capabilities(
     """Inspect deployment action permissions without selecting a project."""
     from etl_craft.services.operations.actions import ACTIONS
 
-    if request.account_name is not None:
-        account = AccountName(name=request.account_name)
-        return ActionAvailabilityView(
-            tuple(
-                action_availability(ctx, name, account)
-                for name in (ActionName.ACCOUNT_DISABLE, ActionName.ACCOUNT_UNLOCK)
-            )
-        )
+    if any(
+        value is not None
+        for value in (request.account_name, request.group_name, request.project_code)
+    ):
+        return metadata_capabilities(ctx, request)
     if request.agent_id is not None:
         return ActionAvailabilityView(
             (
@@ -267,7 +364,16 @@ def deployment_capabilities(
         )
     if request.role_name is not None:
         return ActionAvailabilityView(
-            (action_availability(ctx, ActionName.ROLE_DISABLE, RoleName(name=request.role_name)),)
+            tuple(
+                action_availability(
+                    ctx,
+                    name,
+                    RoleAction(name=request.role_name, action=request.role_action)
+                    if name != ActionName.ROLE_DISABLE and request.role_action is not None
+                    else RoleName(name=request.role_name),
+                )
+                for name in ROLE_MUTATIONS
+            )
         )
     if request.pool_name is not None:
         return ActionAvailabilityView(
@@ -308,8 +414,67 @@ def deployment_capabilities(
             )
             for action in ACTIONS.values()
             if action.scope == ActionScope.DEPLOYMENT
-            and action.method == HttpMethod.POST
+            and action.method is not None
             and action.escalate is None
+        )
+    )
+
+
+def metadata_capabilities(
+    ctx: OperationContext, request: DeploymentCapabilitiesInput
+) -> ActionAvailabilityView:
+    """Inspect group membership and project identities without writing them."""
+    if request.account_name is not None:
+        account = AccountName(name=request.account_name)
+        return ActionAvailabilityView(
+            tuple(
+                action_availability(
+                    ctx,
+                    name,
+                    AccountRole(name=request.account_name, role=request.account_role)
+                    if name == ActionName.ACCOUNT_SET_ROLE and request.account_role is not None
+                    else account,
+                )
+                for name in (
+                    ActionName.ACCOUNT_DISABLE,
+                    ActionName.ACCOUNT_UNLOCK,
+                    ActionName.ACCOUNT_RESET_PASSWORD,
+                    ActionName.ACCOUNT_SET_ROLE,
+                )
+            )
+        )
+    if request.group_name is not None:
+        target = (
+            groups.GroupMember(name=request.group_name, account=request.member_name)
+            if request.member_name is not None
+            else groups.GroupName(name=request.group_name)
+        )
+        names = (
+            (ActionName.GROUP_ADD_MEMBER, ActionName.GROUP_REMOVE_MEMBER)
+            if request.member_name is not None
+            else (ActionName.GROUP_DISABLE,)
+        )
+        return ActionAvailabilityView(
+            tuple(action_availability(ctx, name, target) for name in names)
+        )
+    assert request.project_code is not None
+    if request.channel_name is not None:
+        return ActionAvailabilityView(
+            (
+                action_availability(
+                    ctx,
+                    ActionName.ALERT_CHANNEL_DISABLE,
+                    ChannelIdentity(project=request.project_code, name=request.channel_name),
+                ),
+            )
+        )
+    return ActionAvailabilityView(
+        (
+            action_availability(
+                ctx,
+                ActionName.PROJECT_DISABLE,
+                ProjectIdentity(project=request.project_code, reason=""),
+            ),
         )
     )
 
@@ -322,42 +487,31 @@ def project_capabilities(
         return control_capabilities(ctx, request)
     pipeline = request.pipeline_code
     selected: dict[ActionName, object] = {
+        ActionName.VALIDATE: ValidateInput(),
         ActionName.PIPELINE_REFRESH: RefreshInput(pipeline_code=pipeline),
         ActionName.LINEAGE_REFRESH: LineageRefreshInput(),
         ActionName.DOCS_VERSION: NoInput(),
         ActionName.GENERATE_DOCS: DocsInput(with_warehouse=request.with_warehouse),
         ActionName.RECONCILE: ReconcileInput(pipeline_code=pipeline),
         ActionName.PURGE: PurgeInput(),
-        ActionName.REHASH: RehashInput(target=""),
-        ActionName.REHASH_PLAN: RehashInput(target=""),
+        ActionName.REHASH: RehashInput(target=request.rehash_target or ""),
+        ActionName.REHASH_PLAN: RehashInput(target=request.rehash_target or ""),
         ActionName.CLONE: NoInput(),
         ActionName.ERASE: NoInput(),
         ActionName.ACCESS_GRANT: access.AccessWrite(
-            project=ctx.project, pipeline=pipeline, reason=""
+            project=ctx.project, pipeline=pipeline, tag=request.binding_tag, reason=""
         ),
         ActionName.ACCESS_REVOKE: access.AccessWrite(
-            project=ctx.project, pipeline=pipeline, reason=""
+            project=ctx.project, pipeline=pipeline, tag=request.binding_tag, reason=""
         ),
     }
     if pipeline is not None:
-        scope = PipelineInput(pipeline_code=pipeline)
-        selected[ActionName.UPLOAD] = UploadRequest(pipeline_code=pipeline)
-        selected[ActionName.DATA_PROVENANCE] = scope
-        selected[ActionName.DATA_EDIT] = scope
-        selected[ActionName.DATA_UNLOCK] = scope
-        selected[ActionName.MARK] = (
-            MarkRequest(
-                pipeline_code=pipeline,
-                task_code=request.task_code,
-                run_id=request.run_id,
-                status=RunStatus.SUCCESS if request.reset_position is None else None,
-                watermark="0" if request.reset_position == PositionKind.WATERMARK else None,
-                offset="0" if request.reset_position == PositionKind.OFFSET else None,
-            )
-            if request.run_id is not None and request.task_code is not None
-            else scope
-        )
-        selected[ActionName.RUN] = RunRequest(pipeline_code=pipeline)
+        selected.update(pipeline_requests(request))
+    if pipeline is not None and request.run_id is not None:
+        selected[ActionName.RUN_LOG] = RunSelection(pipeline_code=pipeline, run_id=request.run_id)
+        selected[ActionName.RUN_ZIP] = selected[ActionName.RUN_LOG]
+    if request.attempt_id is not None:
+        selected[ActionName.LOGS] = LogInput(attempt_id=request.attempt_id)
     if request.preview_table is not None:
         selected[ActionName.TABLE_PREVIEW] = PreviewInput(table=request.preview_table)
     controls = tuple(definition_actions(ctx, request))
@@ -367,6 +521,37 @@ def project_capabilities(
             *controls,
         )
     )
+
+
+def pipeline_requests(request: CapabilitiesInput) -> dict[ActionName, object]:
+    """Build the exact pipeline and task requests whose admission the page renders."""
+    pipeline = request.pipeline_code
+    assert pipeline is not None
+    scope = PipelineInput(pipeline_code=pipeline)
+    selected: dict[ActionName, object] = {}
+    selected[ActionName.UPLOAD] = UploadRequest(pipeline_code=pipeline)
+    value_scope = (
+        TaskSelection(pipeline_code=pipeline, task_code=request.task_code)
+        if request.task_code is not None
+        else scope
+    )
+    selected[ActionName.DATA_PROVENANCE] = value_scope
+    selected[ActionName.DATA_EDIT] = value_scope
+    selected[ActionName.DATA_UNLOCK] = value_scope
+    selected[ActionName.MARK] = (
+        MarkRequest(
+            pipeline_code=pipeline,
+            task_code=request.task_code,
+            run_id=request.run_id,
+            status=RunStatus.SUCCESS if request.reset_position is None else None,
+            watermark="0" if request.reset_position == PositionKind.WATERMARK else None,
+            offset="0" if request.reset_position == PositionKind.OFFSET else None,
+        )
+        if request.task_code is not None
+        else scope
+    )
+    selected[ActionName.RUN] = RunRequest(pipeline_code=pipeline)
+    return selected
 
 
 def definition_actions(

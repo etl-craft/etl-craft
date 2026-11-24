@@ -3,6 +3,8 @@
 from dataclasses import dataclass
 from typing import ClassVar
 
+from sqlalchemy.engine import Connection
+
 from etl_craft.core.alerts import AlertKind, AlertTrigger, triggers
 from etl_craft.core.enums import ActionName, ApiRole
 from etl_craft.core.errors import HandlerError, PermissionDeniedError, UsageError
@@ -158,16 +160,33 @@ def disable_channel(ctx: OperationContext, request: ChannelDisable) -> Channels:
     reason(request.reason)
     with locks.MIGRATE.hold(ctx.engine, wait_seconds=30), ctx.engine.begin() as conn:
         identity = project(conn, request.project)
-        found = conn.execute(
+        require_channel(conn, request, identity)
+        conn.execute(
             statement(conn, "alert_channel_disable"),
             {
                 "project_id": identity,
                 "name": request.name,
             },
-        ).first()
-        if found is None:
-            raise UsageError(
-                f"channel {request.name!r} in project {request.project!r}: missing; "
-                "expected an existing channel; use alert-channel list"
-            )
+        )
     return list_channels(ctx, request)
+
+
+def require_channel(
+    conn: Connection, request: ChannelIdentity, identity: int | None = None
+) -> None:
+    """Require the retained channel selected by disable, without writing it."""
+    identity = project(conn, request.project) if identity is None else identity
+    if (
+        conn.execute(
+            statement(conn, "alert_channel"),
+            {
+                "project_id": identity,
+                "channel_name": request.name,
+            },
+        ).first()
+        is None
+    ):
+        raise UsageError(
+            f"channel {request.name!r} in project {request.project!r}: missing; "
+            "expected an existing channel; use alert-channel list"
+        )
