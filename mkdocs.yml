@@ -29,9 +29,9 @@ theme:
         icon: material/brightness-4
         name: Switch to light mode
 
-# The reference generators run at build time; they are not pages.
+# Development plans and reference generators are kept out of the published site.
 exclude_docs: |
-  development/ui-wireframes/
+  development/
   gen_python_api.py
   gen_cli_page.py
   gen_reference_pages.py
@@ -174,8 +174,4 @@ nav:
       - Engine DB schema: reference/engine-db-schema.md
       - Python API: api/
   - Release notes: release-notes.md
-  - Contributing:
-      - contributing.md
-      - Rewrite plan: development/rewrite-plan.md
-      - Road to 1.0.0: development/road-to-1.0.0.md
-      - Metadata and pipeline UI: development/metadata-and-ui.md
+  - Contributing: contributing.md

@@ -6,6 +6,29 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+### 0.9.0 overview
+
+etl-craft moves data with metadata-driven ETL/ELT pipelines. The Engine DB holds pipeline
+configuration and audit records, and the controller schedules and supervises work against
+one warehouse.
+
+- **Warehouses:** PostgreSQL, DuckDB (native and Iceberg), Trino with Iceberg, Databricks
+  with Delta or Delta UniForm, and Snowflake (native and Iceberg).
+- **Engine DBs:** SQLite and PostgreSQL.
+- **Install:** With Python 3.11 or newer, run `pip install 'etl-craft[duckdb]'` for DuckDB.
+  Use `pip install etl-craft` for PostgreSQL, or choose the `trino`, `databricks` or
+  `snowflake` extra.
+
+From the [compatibility policy](https://docs.etl-craft.dev/reference/compatibility/#forward-upgrades-and-rolling-operation):
+
+> Engine DB migrations are forward-only. Every release after the baseline must upgrade every
+> earlier supported released baseline, including every earlier 1.x release once such releases
+> exist.
+
+Engine DBs created before 0.9.0 must be recreated with `etl-craft init-db`.
+
+### Detailed changes
+
 - Project and platform action controls use the server's availability answer; grayed-out
   controls show the reason only as an annotation on hover, focus or tap. This covers run and task controls, marks and
   checkpoint resets, item controls, uploads, catalog rebuild/validation/lineage/version and
