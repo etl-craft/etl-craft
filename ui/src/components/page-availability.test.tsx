@@ -10,6 +10,7 @@ import { TokensTab } from "@/pages/admin/tokens";
 import { AnnouncementsTab } from "@/pages/admin/announcements";
 import { AlertChannelsTab } from "@/pages/admin/alert-channels";
 import { AccessTab } from "@/pages/admin/access";
+import { Agents } from "@/pages/agents";
 import { Maintenance } from "@/pages/maintenance";
 import { AttemptLog } from "@/components/attempt-details";
 import { ConfirmDialog } from "@/components/confirm-dialog";
@@ -102,6 +103,21 @@ it("keeps an account menu open when the table refreshes", async () => {
   client.clear();
 });
 
+
+it("keeps an agent's command menu open when the agent list refreshes", async () => {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
+  const agent = { agent_id: 7, pool: "default", host: "agent-host", version: "0.3.0", status: "ACTIVE", heartbeat_at: "2026-11-24T00:00:00Z", attempts: [], free_cpu: 4, free_memory_mb: 2048, pending_commands: [] };
+  client.setQueryData(["agents"], { agents: [agent] });
+  client.setQueryData(["action-availability", undefined, undefined, undefined], { actions: [] });
+  client.setQueryData(["action-availability", undefined, undefined, { agent_id: 7 }], { actions: ["DRAIN", "RESUME", "STOP"].map(() => ({ endpoint: "/api/v1/agents/commands", method: "POST", available: false, reason: "operator role is required" })) });
+  render(<QueryClientProvider client={client}><MemoryRouter><ToastProvider><Agents /></ToastProvider></MemoryRouter></QueryClientProvider>);
+  fireEvent.keyDown(screen.getByRole("button", { name: "Actions for agent 7" }), { key: "Enter" });
+  expect(await screen.findByRole("menuitem", { name: "Drain" })).toHaveAccessibleDescription("operator role is required");
+  act(() => client.setQueryData(["agents"], { agents: [{ ...agent, pending_commands: [{ command: "DRAIN" }] }] }));
+  await screen.findByRole("cell", { name: "DRAIN" });
+  expect(screen.getByRole("menuitem", { name: "Drain" })).toBeVisible();
+  client.clear();
+});
 
 it("keeps data actions visible with the server's task-definition refusal", () => {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });

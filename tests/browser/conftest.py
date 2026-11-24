@@ -11,7 +11,7 @@ import uvicorn
 from etl_craft.api.app import create_app
 from etl_craft.cli.console import console
 from etl_craft.core.actor import SYSTEM_ACTOR, Actor, ActorKind, acting_as
-from etl_craft.core.enums import ActionName, ApiRole, DeploymentProfile
+from etl_craft.core.enums import ActionName, ApiRole
 from etl_craft.engine.schema import init_db
 from etl_craft.services.operations import OperationContext
 from fixtures.actions import act
@@ -22,16 +22,10 @@ PASSWORD = "correct horse battery"
 
 @pytest.fixture
 def site(tmp_path, request):
-    db = (
-        request.getfixturevalue("postgres_database")
-        if getattr(request, "param", None) == "agents"
-        else sqlite_engine_db(tmp_path)
-    )
+    db = sqlite_engine_db(tmp_path)
     with acting_as(SYSTEM_ACTOR):
         init_db(db.engine)
     config = db.config
-    if getattr(request, "param", None) == "agents":
-        config = replace(config, deployment=DeploymentProfile.CONTROLLER_AGENTS)
     if getattr(request, "param", None) == "sso":
         config = replace(
             config,
