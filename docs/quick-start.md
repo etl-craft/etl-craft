@@ -145,37 +145,29 @@ are separate sessions. The UI shows the run grid, live task graph, attempts and 
 ### Operate the local server
 
 Keep that demo controller running. In another terminal with etl-craft installed, sign in to
-its API using the USER account from setup, then submit a load:
+its API using the USER account from setup, then check your identity:
 
 ```bash
 etl-craft login --api http://localhost:8730 --project default
-etl-craft run --api http://localhost:8730 --project default --pipeline-code SOURCE_A --reason "remote demo load"
+etl-craft whoami --api http://localhost:8730 --project default
 ```
 
-An installed-package demo run returned this stdout:
+An installed-package demo run, with the setup account named `demo-admin`, returned this stdout:
 
 ```text
-SOURCE_A: pipeline_run_id=1 IN-PROGRESS
+demo-admin admin
 ```
 
-The context and copyable run identity appeared on stderr:
+The project context appeared on stderr:
 
-```text
+```console
 default · CUSTOM · http://localhost:8730
-run_id=1 'SOURCE_A-2026-11-24 04:21:36-1'
 ```
 
-Your run id, label, environment and submission status can differ. This submits work to the
-controller; it does not wait for the load to finish. Watch that exact run, substituting its id:
-
-```bash
-etl-craft status --api http://localhost:8730 --project default --pipeline-code SOURCE_A --run-id 1
-```
-
-This terminal needs no Engine DB or warehouse credentials. Plain HTTP is permitted for
-localhost CLI access; browser sign-in still needs HTTPS. See
-[Operating a server from your own installation](guides/remote-cli.md) for a laptop or CI
-runner operating a remote server, including deployment.
+Your account name and environment can differ. This terminal needs no Engine DB or warehouse
+credentials. Plain HTTP is permitted for localhost CLI access; browser sign-in still needs
+HTTPS. See [Operating a server from your own installation](guides/remote-cli.md) for a laptop
+or CI runner operating a remote server, including deployment and run control.
 
 ## Next
 
