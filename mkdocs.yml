@@ -100,8 +100,10 @@ validation:
 nav:
   - Home: index.md
   - Quick Start: quick-start.md
+  - Concepts: concepts.md
   - Guides:
       - guides/index.md
+      - Access: guides/access.md
       - Operating a server from your own installation: guides/remote-cli.md
       - Personal-data erasure: guides/erasure.md
       - Pipelines and tasks: guides/pipelines-and-tasks.md

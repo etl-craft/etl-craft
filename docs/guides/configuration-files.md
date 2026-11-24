@@ -266,7 +266,7 @@ Engine DB schema.
 
 Access changes use `etl-craft role` and `etl-craft access grant|revoke|list|explain` and their
 API actions, independently of configuration deployment. See
-[Access: roles and bindings](../deploying/security.md#access-roles-and-bindings). Configuration
+[Access: roles and bindings](access.md#access-roles-and-bindings). Configuration
 export writes only the eight metadata files; it does not export identities or access.
 
 ## Tag edits and access

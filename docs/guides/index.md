@@ -2,6 +2,9 @@
 
 How to model and run pipelines with etl-craft.
 
+- [Concepts](../concepts.md): runs, attempts, identities, capacity and project boundaries.
+- [Access](access.md): roles, bindings, groups, audiences and governance.
+
 - [Operating a server from your own installation](remote-cli.md): deploy and run from a laptop
   or CI runner without database credentials.
 
