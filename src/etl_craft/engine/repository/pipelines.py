@@ -55,15 +55,10 @@ def resolve_pipeline_id(conn: Connection, pipeline_code: str) -> int:
     query = statement
     pipeline_id = conn.execute(
         query(conn, "pipeline_id_by_code"),
-        {"pipeline_code": pipeline_code, "project_id": current_project_id()},
+        {"pipeline_code": pipeline_code},
     ).scalar_one_or_none()
     if pipeline_id is None:
-        known = list(
-            conn.execute(
-                query(conn, "active_pipeline_codes"),
-                {"project_id": current_project_id()},
-            ).scalars()
-        )
+        known = list(conn.execute(query(conn, "active_pipeline_codes")).scalars())
         raise MetadataError(
             with_suggestions(
                 f"no active pipeline with PIPELINE_CODE={pipeline_code!r}", pipeline_code, known

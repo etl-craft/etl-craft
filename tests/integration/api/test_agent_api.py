@@ -20,6 +20,7 @@ from etl_craft.core.enums import (
 from etl_craft.core.ownership import attempt_holder
 from etl_craft.core.text import sha256_hex
 from etl_craft.engine import transitions
+from etl_craft.engine.repository.pipelines import selected_project
 from etl_craft.services.operations import OperationContext
 from etl_craft.services.operations.actions import invoke
 from etl_craft.services.operations.deploy import DeployInput
@@ -2289,16 +2290,17 @@ def test_protection_reports_derive_project_from_the_admitted_run(agent_scene):
                 "VALUES ('tenant','Tenant','default') RETURNING PROJECT_ID AS project_id"
             )
         ).scalar_one()
-        default_request = append_event(
-            conn,
-            target_identity(agent_scene[-1], "main.people")[0],
-            ProtectionReport(
-                ProtectionStatus.PENDING,
-                (ProtectionEvent(ProtectionKind.WRITE, "c" * 32, ("name",), ("d" * 32,)),),
-            ),
-            None,
-            privacy_key="test-only-project-privacy",
-        )
+        with selected_project(1):
+            default_request = append_event(
+                conn,
+                target_identity(agent_scene[-1], "main.people")[0],
+                ProtectionReport(
+                    ProtectionStatus.PENDING,
+                    (ProtectionEvent(ProtectionKind.WRITE, "c" * 32, ("name",), ("d" * 32,)),),
+                ),
+                None,
+                privacy_key="test-only-project-privacy",
+            )
     scene, attempt, key = protected_claim(agent_scene, project_id=project)
     assert (
         post(scene, "report", attempt_id=attempt, operation="LOCK", lock_key=key).status_code == 200
@@ -2464,7 +2466,7 @@ def test_pending_deletion_candidates_match_without_disclosing_fingerprints(
     from etl_craft.engine.protection_events import append, target_identity
 
     event = ProtectionEvent(ProtectionKind(kind), "a" * 32, ("name",), (None,))
-    with scene[0].engine.begin() as conn:
+    with scene[0].engine.begin() as conn, selected_project(1):
         target = target_identity(scene[-1], "main.people")[0]
         request = append(
             conn,
@@ -2824,15 +2826,16 @@ def test_every_observed_agent_ending_records_only_verified_evidence(
             task = add_task(conn, pipeline, "read")
             run = start_run(conn, pipeline)
             summary = transitions.find_or_create_task_run(conn, task, run).task_run_id
-            window = admit_window(
-                conn,
-                task,
-                summary,
-                datetime.now(UTC),
-                WindowDefinition(
-                    StoredOffset(OffsetType.TIMESTAMP, "2000-01-01T00:00:00+00:00"), ("P",)
-                ),
-            )
+            with selected_project(1):
+                window = admit_window(
+                    conn,
+                    task,
+                    summary,
+                    datetime.now(UTC),
+                    WindowDefinition(
+                        StoredOffset(OffsetType.TIMESTAMP, "2000-01-01T00:00:00+00:00"), ("P",)
+                    ),
+                )
         source_start = as_utc(started.json()["data"]["started_at"])
         assert (
             (window.high > source_start)
@@ -3032,14 +3035,15 @@ def test_agent_claim_replays_recorded_run_inputs_after_config_changes(agent_scen
         pipeline = add_pipeline(conn, "INPUTS")
         task = add_task(conn, pipeline, "load", "PYTHON", INPUT_PARAMS='{"day":1}')
     ctx = OperationContext(db.engine, config, SYSTEM_ACTOR, role=ApiRole.ADMIN)
-    _, run, _ = admit(
-        ctx,
-        RunRequest(
-            pipeline_code="INPUTS",
-            params=('load.INPUT_PARAMS={"day":2}',),
-            request_key="agent-inputs",
-        ),
-    )
+    with selected_project(1):
+        _, run, _ = admit(
+            ctx,
+            RunRequest(
+                pipeline_code="INPUTS",
+                params=('load.INPUT_PARAMS={"day":2}',),
+                request_key="agent-inputs",
+            ),
+        )
     with db.engine.begin() as conn:
         transitions.admit_run(conn, run, SYSTEM_ACTOR)
         summary = transitions.find_or_create_task_run(conn, task, run).task_run_id

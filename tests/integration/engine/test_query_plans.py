@@ -5,6 +5,7 @@ from sqlalchemy import inspect, text
 
 from etl_craft.engine.queries import statement
 from etl_craft.engine.repository.intervention_rows import fetch_task_rows
+from etl_craft.engine.repository.pipelines import selected_project
 from fixtures.engine_db import apply_schema
 from fixtures.query_plan_data import seed_query_plans
 from fixtures.query_plans import FULL_READS, UTILITIES, catalog_plans, full_scans
@@ -20,7 +21,7 @@ def test_catalog_queries_do_not_scan_growing_tables(postgres_database):
     ) == [scan]
     db = postgres_database
     apply_schema(db.engine)
-    with db.engine.begin() as conn:
+    with db.engine.begin() as conn, selected_project(1):
         seed_query_plans(conn)
         inspector = inspect(conn)
         tables = inspector.get_table_names()
