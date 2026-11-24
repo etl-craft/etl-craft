@@ -3,6 +3,7 @@
 Run by the mkdocs-gen-files plugin during `mkdocs build`; the pages exist only in the build.
 """
 
+import ast
 from pathlib import Path
 
 import mkdocs_gen_files
@@ -15,6 +16,43 @@ SCRIPT_GUIDE = next(
     for name in ("python-scripts.md", "ingestion-scripts.md")
     if (ROOT / "docs" / "guides" / name).is_file()
 )
+
+
+def contract_list() -> str:
+    """Read explicit exports without importing optional warehouse drivers."""
+    if not (ROOT / "docs/reference/compatibility.md").is_file():
+        return ""
+    lines = ["## Supported Python contracts\n\n"]
+    for relative in (
+        "__init__.py",
+        "config/__init__.py",
+        "services/operations/__init__.py",
+        "dialects/engine/__init__.py",
+        "dialects/warehouse/__init__.py",
+    ):
+        source = SRC / "etl_craft" / relative
+        module = ".".join(("etl_craft", *Path(relative).parts[:-1]))
+        exports = next(
+            ast.literal_eval(node.value)
+            for node in ast.parse(source.read_text(encoding="utf-8")).body
+            if isinstance(node, ast.Assign)
+            and any(
+                isinstance(target, ast.Name) and target.id == "__all__" for target in node.targets
+            )
+        )
+        target = relative.removesuffix("__init__.py") + "index.md"
+        for name in exports:
+            lines.append(f"- [`{module}.{name}`]({target})\n")
+    for name in ("ScriptTask", "ScriptResult", "Offset", "ValidationTask"):
+        lines.append(f"- [`etl_craft.scripting.{name}`](scripting.md#etl_craft.scripting.{name})\n")
+    lines.append(
+        "\nOnly these explicit exports and scripting types carry the Python compatibility "
+        "promise in the [compatibility policy](../../reference/compatibility.md). "
+        "Everything else in this browsable reference is implementation detail with no "
+        "compatibility promise.\n\n"
+    )
+    return "".join(lines)
+
 
 nav = mkdocs_gen_files.Nav()
 for source in sorted((SRC / "etl_craft").rglob("*.py")):
@@ -53,6 +91,7 @@ for source in sorted((SRC / "etl_craft").rglob("*.py")):
                     if (SRC / "etl_craft/services/operations/__init__.py").is_file()
                     else ""
                 )
+                + contract_list()
                 + "## Packages\n\n"
             )
         if source.stem == "__init__":

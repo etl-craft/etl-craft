@@ -21,6 +21,10 @@ class OperationContext:
     actor. ``transport`` says how the request arrived, so an operation can refuse an option that
     works only on the controller's host. ``provisioning`` is local Engine DB setup before any
     admin exists: the actions the table marks as provisioning skip only their role check.
+
+    Inputs are the engine, connector configuration, requesting actor and optional
+    request/dispatch fields in the signature. Returns a context record; construction
+    raises no core.errors exception and neither authorizes nor executes an operation.
     """
 
     engine: Engine

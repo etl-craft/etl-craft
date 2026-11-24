@@ -1,5 +1,6 @@
 """Build the published documentation site from a clone of this repository."""
 
+import importlib
 import json
 import subprocess
 import time
@@ -51,6 +52,20 @@ def test_before_the_first_release_the_site_is_the_dev_version(clone, tmp_path, r
     assert 'url=dev/"' in (site / "index.html").read_text(encoding="utf-8")
     page = (site / "dev" / "reference" / "exit-codes" / "index.html").read_text(encoding="utf-8")
     assert f'<link rel="canonical" href="{SITE_URL}/dev/reference/exit-codes/">' in page
+    landing = check_docs_content.Article()
+    landing.feed((site / "dev/api/etl_craft/index.html").read_text(encoding="utf-8"))
+    content = " ".join(landing.text)
+    for module_name in (
+        "etl_craft",
+        "etl_craft.config",
+        "etl_craft.services.operations",
+        "etl_craft.dialects.engine",
+        "etl_craft.dialects.warehouse",
+    ):
+        for name in importlib.import_module(module_name).__all__:
+            assert f"{module_name}.{name}" in content
+    for name in ("ScriptTask", "ScriptResult", "Offset", "ValidationTask"):
+        assert f"etl_craft.scripting.{name}" in content
     # The references generated from the code are in the build.
     reference = site / "dev" / "reference"
     schema = (reference / "engine-db-schema" / "index.html").read_text(encoding="utf-8")

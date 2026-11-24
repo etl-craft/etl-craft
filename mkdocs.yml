@@ -117,6 +117,7 @@ nav:
       - Protecting human SCD edits: guides/human-overrides.md
       - Business rules: guides/business-rules.md
       - Python scripts: guides/python-scripts.md
+      - Export Engine DB data: guides/export-engine-data.md
       - Reading from streams: guides/streams.md
       - Alerts: guides/alerts.md
       - Validating pipelines: guides/validating.md

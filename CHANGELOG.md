@@ -1873,6 +1873,8 @@ Warehouses are optional extras. Core bundles none. `all` is core plus the UI, fo
 
 ### Documentation
 
+- Documented supported Python contracts, tested ingestion and warehouse examples, and an Engine DB export recipe.
+
 - Added Concepts and Access guides and branding usage guidance.
 
 - Added a remote CLI guide for laptop and CI deployment and run control, with a local-server

@@ -37,12 +37,20 @@ def _registry() -> dict[str, EngineDialect]:
 
 
 def all_dialects() -> Iterator[EngineDialect]:
-    """Yield every Engine DB dialect."""
+    """Yield every Engine DB dialect.
+
+    Takes no inputs; returns an iterator of registered dialect instances without opening
+    a connection. Raises no core.errors exception.
+    """
     yield from _registry().values()
 
 
 def for_name(dialect_name: str) -> EngineDialect:
-    """Return the dialect for a SQLAlchemy name such as ``postgresql+psycopg``."""
+    """Return the dialect for a SQLAlchemy name such as ``postgresql+psycopg``.
+
+    Input: a SQLAlchemy dialect name, optionally with a +driver suffix. Returns the
+    registered EngineDialect; raises core.errors.ConfigurationError if unsupported.
+    """
     dialect = _registry().get(dialect_name.split("+", 1)[0])
     if dialect is None:
         raise ConfigurationError(
@@ -57,7 +65,11 @@ def for_jdbc_url(jdbc_url: str) -> EngineDialect:
 
 
 def for_engine(engine: Engine | Connection) -> EngineDialect:
-    """Return the dialect ``engine`` is connected to."""
+    """Return the dialect ``engine`` is connected to.
+
+    Input: a SQLAlchemy Engine or Connection. Returns its registered EngineDialect;
+    raises core.errors.ConfigurationError for an unsupported database.
+    """
     return for_name(engine.dialect.name)
 
 
@@ -71,6 +83,11 @@ def build_engine(
     """Build a SQLAlchemy engine for ``profile``, by default the active Engine profile.
 
     ``supervised`` is for task processes: see ``EngineDialect.build_engine``.
+
+    Inputs: connector configuration, an optional connection profile, supervised mode
+    and SQLAlchemy engine keyword arguments. Returns an Engine; the caller disposes it.
+    Raises core.errors.ConfigurationError for an agent-only configuration, unsupported
+    connection or invalid credentials/settings. Driver and SQLAlchemy errors propagate.
     """
     if config.engine.jdbc_url == "api-only:":
         raise ConfigurationError(

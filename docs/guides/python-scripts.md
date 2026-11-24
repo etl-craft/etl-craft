@@ -235,7 +235,9 @@ The task fails with a message that names the script and the problem when:
 - a timestamp offset has nanoseconds the offset store cannot keep.
 
 The task's time limit covers the script: a script still running when it passes is stopped, and the
-task is recorded `FAILED`.
+task is recorded `FAILED`. Timeout or cancellation sends SIGTERM to the child process group,
+then SIGKILL after the grace period if it has not exited. There is no cooperative
+stop token on `ScriptTask`; do not rely on cleanup code running after a forced stop.
 
 ## Files from event waits
 
@@ -418,3 +420,31 @@ See the [reference loader](../examples/python_scripts/reference_upload.py) and
 [validator](../examples/validation_scripts/reference.py), and the [stewardship guide](stewardship.md).
 
 See [declaring an ingestion mapping](../examples/python-lineage.md) for table-level and column-level catalog declarations.
+
+## Runnable contract examples
+
+These exact files run in `tests/integration/docs/test_python_contract_examples.py` against
+DuckDB. Install the `duckdb` extra. Both use an existing `main.orders` table with `id` (a unique
+integer key), `amount`, `pipeline_id`, `pipeline_run_id` and `task_run_id` integer columns.
+The ingestion input is a JSON array sorted by increasing, unique `id`, such as
+`[{"id": 1, "amount": 7}, {"id": 2, "amount": 9}]`, in `orders.json` beside the host connector.
+The producer must finish writing that file before the task starts.
+
+Set `SCRIPT_KIND=INGESTION` and `SCRIPT_FILE=python_scripts/contract_ingestion.py` for:
+
+```text
+--8<-- "docs/examples/python_scripts/contract_ingestion.py"
+```
+
+This bounded-file example replaces business keys in one warehouse transaction, making a replay
+safe if warehouse commit succeeds before Engine DB success. It returns zero and no new offset
+for an empty batch. The engine, not the script, saves the offset on successful completion.
+
+Set `SCRIPT_KIND=UTILITY` and `SCRIPT_FILE=python_scripts/contract_warehouse.py` for:
+
+```text
+--8<-- "docs/examples/python_scripts/contract_warehouse.py"
+```
+
+This read-only summary reports variables, leaves its row count unmeasured and returns no offset.
+For Engine DB reads, see [Export Engine DB data](export-engine-data.md).

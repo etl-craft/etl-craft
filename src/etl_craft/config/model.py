@@ -53,6 +53,10 @@ class SettingSource:
     """Where one setting's value came from: a variable, or the text as written.
 
     ``where`` is the setting's path in the file, such as ``Engine.dev.user``.
+
+    Inputs are the typed fields in the constructor signature; returns a configuration
+    record with those fields. Construction performs no connection or credential resolution
+    and raises no core.errors exception; use load_config or parse_config for validation.
     """
 
     where: str
@@ -73,6 +77,10 @@ class ConnectionProfile:
     profile fields, and ``secret_var`` when the profile names a secret. ``schema`` is where the
     profile's tables live: the Engine DB's own tables, or the warehouse schema cloning writes to.
     An empty ``schema`` leaves the database's default.
+
+    Inputs are the typed fields in the constructor signature; returns a configuration
+    record with those fields. Construction performs no connection or credential resolution
+    and raises no core.errors exception; use load_config or parse_config for validation.
     """
 
     section: str
@@ -97,7 +105,12 @@ class ConnectionProfile:
 
 @dataclass(frozen=True)
 class SourceConfig:
-    """Where the variables the file names are read from: the environment, or a ``.env`` file."""
+    """Where the variables the file names are read from: the environment, or a ``.env`` file.
+
+    Inputs are the typed fields in the constructor signature; returns a configuration
+    record with those fields. Construction performs no connection or credential resolution
+    and raises no core.errors exception; use load_config or parse_config for validation.
+    """
 
     type: SecretsSource
     path: str | None = None
@@ -116,6 +129,10 @@ class CloningConfig:
 
     ``external_volume`` and ``base_location`` place the copies' Iceberg storage on warehouses
     that name it explicitly (Snowflake).
+
+    Inputs are the typed fields in the constructor signature; returns a configuration
+    record with those fields. Construction performs no connection or credential resolution
+    and raises no core.errors exception; use load_config or parse_config for validation.
     """
 
     enabled: bool = False
@@ -138,6 +155,10 @@ class DocsSiteConfig:
     ``external_url`` selects organization hosting, including its path prefix, without ngrok;
     ``trusted_proxies`` names the source networks allowed to supply catalog visitor and
     API client addresses and the API request protocol.
+
+    Inputs are the typed constructor fields; returns the catalog publishing settings.
+    Raises core.errors.ConfigurationError for an invalid external URL or conflicting URL
+    and ngrok settings. No server is started by construction.
     """
 
     schedule: str | None = None
@@ -175,6 +196,10 @@ class EmailProfile:
     ``mailx`` and ``mail`` use), which delivers it through the host's mail system; ``host``,
     ``port`` and the login settings do not apply. ``from_address`` is the sender either way, and
     ``from_name``, when set, the name shown with it.
+
+    Inputs are the typed fields in the constructor signature; returns a configuration
+    record with those fields. Construction performs no connection or credential resolution
+    and raises no core.errors exception; use load_config or parse_config for validation.
     """
 
     section: str
@@ -212,6 +237,10 @@ class ExecutionLimits:
 
     Every run of a pipeline with ``SLA_IN_HOURS`` is marked ``MET`` or ``BREACHED``. Only with
     ``enforce_sla`` on does this environment admit ``SLA_BREACH`` alert events.
+
+    Inputs are the typed fields in the constructor signature; returns a configuration
+    record with those fields. Construction performs no connection or credential resolution
+    and raises no core.errors exception; use load_config or parse_config for validation.
     """
 
     task_timeout_seconds: int = DEFAULT_TASK_TIMEOUT_SECONDS
@@ -226,7 +255,12 @@ class ExecutionLimits:
 
 @dataclass(frozen=True)
 class AuthConfig:
-    """Deployment login and orchestration credentials."""
+    """Deployment login and orchestration credentials.
+
+    Inputs are the typed fields in the constructor signature; returns a configuration
+    record with those fields. Construction performs no connection or credential resolution
+    and raises no core.errors exception; use load_config or parse_config for validation.
+    """
 
     session_hours: int = 12
     oidc_issuer: str | None = None
@@ -293,6 +327,10 @@ class ConnectorConfig:
 
     The directory holding the file is the project directory (conventionally ``etl-craft/``).
     It holds the project's ``sql_scripts/``, ``python_scripts/`` and ``migrations/``.
+
+    Inputs are the typed fields in the constructor signature; returns a configuration
+    record with those fields. Construction performs no connection or credential resolution
+    and raises no core.errors exception; use load_config or parse_config for validation.
     """
 
     source: SourceConfig

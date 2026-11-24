@@ -202,6 +202,10 @@ def resolve_secret(config: ConnectorConfig, profile: ConnectionProfile | EmailPr
     """Read ``profile``'s secret from the secrets source, as it is now.
 
     Raises ``ConfigurationError`` if the variable is no longer set.
+
+    Inputs: the loaded configuration and a connection or email profile. Returns the
+    current nonempty secret string. Raises core.errors.ConfigurationError for an empty
+    secret or unavailable provider configuration; provider errors propagate.
     """
     return resolve_named_secret(config, profile.secret_var)
 
@@ -218,7 +222,11 @@ def resolve_named_secret(config: ConnectorConfig, name: str) -> str:
 
 
 def profile_needs_secret(profile: ConnectionProfile | EmailProfile) -> bool:
-    """Whether connecting with ``profile`` reads a secret."""
+    """Whether connecting with ``profile`` reads a secret.
+
+    Input: a connection or email profile. Returns bool; performs no credential lookup
+    and raises no core.errors exception.
+    """
     return profile.auth_mode in SECRET_AUTH_MODES or bool(profile.extra.get("secret_var"))
 
 
@@ -227,6 +235,10 @@ def profile_secret(config: ConnectorConfig, profile: ConnectionProfile | EmailPr
 
     ``none``, ``sts`` and ``sso`` without a client secret have nothing to present; a key file's
     passphrase is read when the profile names one.
+
+    Inputs: the loaded configuration and connection or email profile. Returns a secret
+    string or the empty string. Raises core.errors.ConfigurationError when a required
+    secret or provider configuration is unavailable; provider errors propagate.
     """
     if not profile_needs_secret(profile):
         return ""

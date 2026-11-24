@@ -1,4 +1,8 @@
-"""etl-craft: a metadata-driven ETL orchestration engine."""
+"""etl-craft: a metadata-driven ETL orchestration engine.
+
+``__version__`` is the installed distribution version string, or ``0.0.0+unknown``
+without distribution metadata; reading it raises no core.errors exception.
+"""
 
 import logging
 from importlib.metadata import PackageNotFoundError, version

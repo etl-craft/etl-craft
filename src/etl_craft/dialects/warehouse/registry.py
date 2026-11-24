@@ -18,7 +18,11 @@ from etl_craft.dialects.warehouse.trino_iceberg import TrinoIcebergWarehouse
 
 @cache
 def all_dialects() -> tuple[WarehouseDialect, ...]:
-    """Return one instance of every warehouse dialect."""
+    """Return one instance of every warehouse dialect.
+
+    Takes no inputs; returns a cached tuple of dialect instances, without connecting.
+    Raises no core.errors exception.
+    """
     return (
         PostgresWarehouse(),
         DuckDBWarehouse(),
@@ -32,7 +36,11 @@ def all_dialects() -> tuple[WarehouseDialect, ...]:
 
 
 def for_key(key: str) -> WarehouseDialect:
-    """Return the dialect registered under ``key``, such as ``trino_iceberg``."""
+    """Return the dialect registered under ``key``, such as ``trino_iceberg``.
+
+    Input: the exact registry key. Returns a WarehouseDialect; raises LookupError for
+    an unknown key, not a core.errors exception. Use resolve for connection validation.
+    """
     for dialect in all_dialects():
         if dialect.spec.key == key:
             return dialect
@@ -44,5 +52,8 @@ def resolve(sqlalchemy_name: str, table_format: str) -> WarehouseDialect:
 
     Trino is Iceberg whichever format is asked for, because its catalog decides; PostgreSQL has
     no Iceberg tables; an unsupported database is a ``ConfigurationError``.
+
+    Inputs: SQLAlchemy database name and table format. Returns a WarehouseDialect.
+    Raises core.errors.ConfigurationError for unsupported database/format combinations.
     """
     return for_key(warehouse_spec(sqlalchemy_name, table_format).key)

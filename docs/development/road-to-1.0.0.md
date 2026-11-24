@@ -189,7 +189,7 @@ item's text, or work done early under another item.
 | S7.G Compatibility policy | In progress | #379; rolling checks | Policy, shared same-major admission, additive SQL/ledger checks and installed input registry implemented; actual mixed-version certification waits for the 0.9.0 release gate |
 | S7.H Cloud acceptance | In progress | #104–#110, #208, #231, #236, #247 | Native/Iceberg and managed-engine contracts exist; complete candidate evidence and unavailable provider cases remain |
 | S7.I The endurance run | Planned |  | 72-hour accelerated Support Insights candidate run, faults and bounded growth evidence after S8 is running |
-| S7.J Documentation to finish | In progress | #85, #227, #277, #441, #442 | S7.J.1 and S7.J.2 done: remote CLI, concepts and access guides; S7.J.3 Python contracts and the export recipe remain |
+| S7.J Documentation to finish | In progress | #85, #227, #277, #441, #442, #443 | All three slices complete: Python contracts, runnable examples and export recipe; exhaustive API endpoint and JSON request/response document reference remains |
 | S7.L ETL Craft logo and CLI banner | Done | #277, #400, #442 | Owner-supplied logo, vector sources, theme-aware favicon and documentation assets, taller CLI banner and branding guidance are done |
 | S7.AL Pre-demo package gaps | Done | #314, #315, #337, #417, S7.AL.5 PR | Duplicate counts, current references, guarded-table validation guidance, event-file validation, the run timeline with recorded gate and event waits, and erasure physical-retention reporting. |
 | S7.AM Protection on every warehouse | Done | #311, #312, #313 | Atomic SCD merges, in-row protection and recovery, private audit identities and provider acceptance |
@@ -664,6 +664,11 @@ does not move worker work ahead of the metadata, account or operator-control cor
     implementing pull requests update `AGENTS.md`'s design rules to match.
 
 **Acceptance availability.**
+
+S7.J.3 passed static checks, quality, strict docs, unit tests and the exact DuckDB Python
+examples, plus the documentation publishing suite with the complete rendered export inventory.
+An empty generated contract list was rejected by the rendered-content gate.
+No warehouse SQL implementation or cloud behavior changed; cloud acceptance is not applicable.
 
 S7.O slice 3 passed unit tests, fixture manifest refusal/acceptance checks, static checks
 and strict docs without accessing or running the external demo. S8.E produces real manifests;
@@ -1234,6 +1239,21 @@ passed on Snowflake (two cases) and Databricks (one case); the first Databricks 
 empty-history-page handling defect, which was corrected and verified. No cloud was unavailable.
 
 **Choices that differ from the item text.**
+
+- **S7.J.3 Python contracts and export (#443).** The API landing page's Start here links,
+  rendered scripting content/anchors/link checks and compatibility export definition already
+  existed on main; extended them instead of replacing them. The contract inventory is generated
+  from explicit exports, plus the four scripting types, and compatibility links to that list.
+  The guide had illustrative examples but no test executing those exact files; added two
+  included files and a DuckDB docs test. Scripts have no Engine DB helper or named-connection
+  registry: direct reads use an already-authorized PostgreSQL warehouse in the same database;
+  warehouse mirrors are the documented alternative. Database privileges still apply to reads.
+  Older release docs lack the compatibility policy/inventory and recipe; their existing rendered
+  gate remains intact. Derived S7.J.3 acceptance points are explicit supported contracts,
+  checked inputs/returns/errors and lifecycle docs, runnable ingestion/warehouse examples,
+  a supported export recipe, and rendered-list/recipe checks. All three slices are complete,
+  but S7.J stays In progress: the actions reference generates route inventory, not exhaustive
+  endpoint request/response schemas or every JSON document. That reference work remains.
 
 - **S7.AN legacy upgrades.** Before environment metadata exists, migrate explicitly shows
   the Engine DB with environment unknown (Engine DB predates environment metadata); JSON
