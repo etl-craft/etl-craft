@@ -339,7 +339,7 @@ def test_refused_api_request_keeps_its_actor_and_does_not_leak_scope(ctx):
 def test_nested_requests_with_different_actors_are_distinct(ctx):
     seed(ctx)
     outer = Actor("outer", ActorKind.SYSTEM)
-    with acting_as(outer), command_request("run", {"pipeline_code": "P"}):
+    with acting_as(outer), command_request("run", {"pipeline_code": "P"}, project_id=1):
         register_engine(ctx.engine)
         run(ctx, init_only=True)
         assert current_actor() == outer
@@ -510,6 +510,7 @@ def test_inspection_reads_do_not_grow_per_pipeline_or_run(ctx, view):
 def test_retry_evidence_survives_config_edits_in_cli_and_catalog(ctx, capsys, tmp_path):
     from etl_craft.core.enums import FailureClass
     from etl_craft.core.failures import Failure
+    from etl_craft.engine.repository.pipelines import selected_project
     from etl_craft.services.catalog.collect import collect_catalog
     from etl_craft.services.catalog.html import run_url
     from etl_craft.services.catalog.site import write_site
@@ -553,7 +554,8 @@ def test_retry_evidence_survives_config_edits_in_cli_and_catalog(ctx, capsys, tm
     assert main([*arguments, "--format", "json"]) == 0
     document = json.loads(capsys.readouterr().out)
     assert document["task"]["attempts"][0]["retry_reason"] == reason
-    catalog = collect_catalog(ctx.engine, ctx.config, record_lineage=False)
+    with selected_project(1):
+        catalog = collect_catalog(ctx.engine, ctx.config, record_lineage=False)
     folder = tmp_path / "catalog"
     write_site(catalog, ctx.config, folder)
     html = (folder / run_url(run)).read_text()
@@ -592,7 +594,7 @@ def test_completed_requests_are_reported_without_mutating_request_events(ctx):
 
     with (
         acting_as(ctx.actor),
-        command_request("explicit completion", {"pipeline_code": "P"}) as original,
+        command_request("explicit completion", {"pipeline_code": "P"}, project_id=1) as original,
     ):
         register_engine(ctx.engine)
         ActionRequest(
@@ -602,6 +604,7 @@ def test_completed_requests_are_reported_without_mutating_request_events(ctx):
             actor=ctx.actor,
             engine=ctx.engine,
             outcome=ActionOutcome.SUCCESS,
+            project_id=original.project_id,
         ).record()
     assert len(audit(ctx).actions) == len(actions) + 1
     with ctx.engine.connect() as conn:
@@ -634,7 +637,7 @@ def test_failed_requests_report_failure_without_changing_original_events(ctx):
     with (
         pytest.raises(MetadataError),
         acting_as(ctx.actor),
-        command_request("test failure", {"pipeline_code": "P"}),
+        command_request("test failure", {"pipeline_code": "P"}, project_id=1),
     ):
         register_engine(ctx.engine)
         raise MetadataError("pipeline P: missing source; configure its source")
@@ -724,7 +727,7 @@ def test_text_audit_is_newest_first_and_capped_while_json_stays_complete(ctx, ca
     for number in range(101):
         with (
             acting_as(ctx.actor),
-            command_request(f"audit-event-{number:03d}", {"pipeline_code": "P"}),
+            command_request(f"audit-event-{number:03d}", {"pipeline_code": "P"}, project_id=1),
         ):
             register_engine(ctx.engine)
     command = ["--config", str(ctx.config.config_path), "audit", "--pipeline-code", "P"]

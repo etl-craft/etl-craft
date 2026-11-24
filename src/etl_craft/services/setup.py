@@ -15,9 +15,15 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 
+from sqlalchemy.engine import Engine
+
 from etl_craft.config import ConnectorConfig
+from etl_craft.core.enums import YesNo
+from etl_craft.core.errors import ProjectNotSelectedError, UsageError
 from etl_craft.engine.connection import engine_db
-from etl_craft.engine.migrations import apply_pending_migrations
+from etl_craft.engine.migrations import PROJECT, apply_pending_migrations, migration_streams
+from etl_craft.engine.queries import statement
+from etl_craft.engine.repository.pipelines import selected_project
 from etl_craft.engine.schema import existing_engine_tables, init_db
 from etl_craft.services.doctor import Check, Status, run_checks
 from etl_craft.services.lineage import dialect_and_catalog
@@ -39,6 +45,18 @@ class SetupResult:
         return any(check.status is Status.FAIL for check in self.checks)
 
 
+def require_setup_project(engine: Engine, config: ConnectorConfig) -> None:
+    """Refuse unowned project files before setup records or changes anything."""
+    if config.project:
+        return
+    for stream in migration_streams(engine, project_default=config.migrations_dir):
+        if stream.source == PROJECT and stream.files:
+            raise ProjectNotSelectedError(
+                f"setup: {stream.directory} has {len(stream.files)} migration file(s) "
+                f"(first: {stream.files[0].version}) that need an owning project"
+            )
+
+
 def setup(config: ConnectorConfig) -> SetupResult:
     """Check the configuration; when nothing fails, create and migrate the Engine DB."""
     checks = run_checks(config, engine_state=False)
@@ -48,17 +66,32 @@ def setup(config: ConnectorConfig) -> SetupResult:
         return result
     engine = engine_db(config)
     try:
+        require_setup_project(engine, config)
         created = not existing_engine_tables(engine)
         if created:
             init_db(engine)
             logger.info("created the Engine DB tables")
         dialect, catalog = dialect_and_catalog(config)
-        applied = apply_pending_migrations(
-            engine,
-            project_default=config.migrations_dir,
-            catalog=catalog,
-            warehouse_dialect=dialect,
-        )
+        project_id = None
+        if config.project:
+            with engine.connect() as conn:
+                project = conn.execute(
+                    statement(conn, "project_by_code"), {"code": config.project}
+                ).one_or_none()
+            if project is None or project.active_flag != YesNo.YES:
+                raise UsageError(
+                    f"setup: project={config.project!r}; expected an active project; "
+                    "use an active project or register it with etl-craft project add"
+                )
+            project_id = int(project.project_id)
+        with selected_project(project_id):
+            applied = apply_pending_migrations(
+                engine,
+                project_default=config.migrations_dir,
+                package_only=project_id is None,
+                catalog=catalog,
+                warehouse_dialect=dialect,
+            )
         from etl_craft.dialects.engine import for_engine
         from etl_craft.dialects.engine.guards import restore_guards
 

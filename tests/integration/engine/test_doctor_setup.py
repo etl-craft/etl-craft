@@ -221,6 +221,29 @@ def test_the_commands(tmp_path, monkeypatch, capsys):
     )
     assert out[-1].endswith("1 failed")
 
+    migrations = tmp_path / "migrations"
+    migrations.mkdir()
+    migration = migrations / "0001_owner.sql"
+    owner_sql = "CREATE TABLE CFG_OWNERS (OWNER VARCHAR(100));"
+    migration.write_text(owner_sql, encoding="utf-8")
+    assert main(["setup"]) == ExitCode.PROJECT_NOT_SELECTED
+    refusal = capsys.readouterr().err
+    for part in (
+        "setup",
+        str(migrations),
+        "1 migration file",
+        "--project",
+        "Orchestration.Project",
+    ):
+        assert part in refusal
+    fresh_engine = engine_db(load_config(tmp_path / "craft-connector.yml"))
+    try:
+        assert not existing_engine_tables(fresh_engine)
+    finally:
+        fresh_engine.dispose()
+    migration.unlink()
+    migrations.rmdir()
+
     assert main(["setup"]) == ExitCode.SUCCESS
     signed_config = load_config(tmp_path / "craft-connector.yml")
     signed_engine = engine_db(signed_config)
@@ -236,18 +259,149 @@ def test_the_commands(tmp_path, monkeypatch, capsys):
     assert main(["doctor"]) == ExitCode.SUCCESS
     assert capsys.readouterr().out.splitlines()[-1].endswith("0 failed")
 
-    (tmp_path / "migrations").mkdir()
-    (tmp_path / "migrations" / "0001_owner.sql").write_text(
-        "CREATE TABLE CFG_OWNERS (OWNER VARCHAR(100));", encoding="utf-8"
-    )
-    assert main(["setup"]) == ExitCode.SUCCESS
+    migrations.mkdir()
+    migration.write_text(owner_sql, encoding="utf-8")
+    assert main(["--project", "default", "setup"]) == ExitCode.SUCCESS
     assert capsys.readouterr().out.splitlines()[-1] == "setup: applied 0001_owner.sql"
+    with signed_engine.connect() as conn:
+        row = conn.execute(
+            text(
+                "SELECT m.PROJECT_ID AS project_id, p.PROJECT_ID AS owning_project_id "
+                "FROM SCHEMA_MIGRATIONS m CROSS JOIN CFG_PROJECTS p "
+                "WHERE m.SOURCE='PROJECT' AND m.VERSION='0001_owner.sql' "
+                "AND p.PROJECT_CODE='default'"
+            )
+        ).one()
+        assert row.project_id == row.owning_project_id
+    signed_engine.dispose()
+    assert main(["setup"]) == ExitCode.PROJECT_NOT_SELECTED
+    assert "1 migration file" in capsys.readouterr().err
 
     with (tmp_path / "craft-connector.yml").open("a", encoding="utf-8") as config:
         config.write("Warehouse:\n  dev:\n    Jdbc_url: 'jdbc:duckdb:'\n    Schema: main\n")
-    assert main(["setup"]) == ExitCode.FAILURE
+    assert main(["--project", "default", "setup"]) == ExitCode.FAILURE
     out = capsys.readouterr().out.splitlines()
     assert out[-1] == "setup: nothing changed; fix the failed check(s) and run setup again"
+
+
+def test_doctor_checks_erasure_in_each_selected_project(config, empty_engine_db, monkeypatch):
+    from etl_craft.engine.repository.pipelines import current_project_id
+
+    assert not setup(config).failed
+    with empty_engine_db.engine.begin() as conn:
+        second = conn.execute(
+            text(
+                "INSERT INTO CFG_PROJECTS (PROJECT_CODE, PROJECT_NAME, DEFAULT_POOL) "
+                "SELECT 'second', 'Second', DEFAULT_POOL FROM CFG_PROJECTS "
+                "WHERE PROJECT_CODE='default' RETURNING PROJECT_ID AS project_id"
+            )
+        ).scalar_one()
+
+    def coverage(engine, scoped, *, require_approved_connector=False):
+        if current_project_id() == second:
+            assert scoped.project == "second"
+            return ["coverage gap"], []
+        return [], []
+
+    monkeypatch.setattr("etl_craft.services.erasure.findings", coverage)
+    bare = run_checks(replace(config, project=""))
+    assert any(check.detail == "project second: coverage gap" for check in bare)
+    explicit = run_checks(replace(config, project="default"))
+    assert all(check.name != "Erasure coverage" for check in explicit)
+
+
+@pytest.mark.parametrize("approved", [False, True])
+def test_bare_doctor_uses_only_approved_erasure_connector(
+    config, empty_engine_db, monkeypatch, tmp_path, approved
+):
+    from base64 import b64encode
+
+    import duckdb
+
+    from etl_craft.core.enums import ApiRole
+    from etl_craft.core.privacy import PrivacyDomain, digest
+    from etl_craft.engine.repository.pipelines import selected_project
+    from etl_craft.services.operations.bundles import PublishBundle, publish
+    from etl_craft.services.operations.context import OperationContext
+
+    monkeypatch.setenv("DOCTOR_ERASURE_KEY", "test-erasure-secret")
+    assert not setup(config).failed
+    with empty_engine_db.engine.begin() as conn:
+        project_id = conn.execute(
+            text(
+                "INSERT INTO CFG_PROJECTS (PROJECT_CODE, PROJECT_NAME, DEFAULT_POOL) "
+                "SELECT 'second', 'Second', DEFAULT_POOL FROM CFG_PROJECTS "
+                "WHERE PROJECT_CODE='default' RETURNING PROJECT_ID AS project_id"
+            )
+        ).scalar_one()
+        conn.execute(
+            text(
+                "INSERT INTO AUD_ERASURE_SUBJECTS "
+                "(PROJECT_ID,TABLE_NAME,COLUMN_NAME,SUBJECT_KEY,KEY_HMAC,KEY_CHECK,"
+                "REASON,CREATED_BY,CREATED_AT) VALUES "
+                "(:project,'main.second_people','person','fixture-subject',:key,:check,"
+                "'test','test',:created)"
+            ),
+            {
+                "project": project_id,
+                "key": "a" * 64,
+                "check": digest("test-erasure-secret", PrivacyDomain.CHECK),
+                "created": datetime.now(UTC),
+            },
+        )
+    if approved:
+        warehouse = tmp_path / "second.duckdb"
+        with duckdb.connect(str(warehouse)) as conn:
+            conn.execute("CREATE TABLE second_people (person VARCHAR)")
+        connector = (
+            "Secrets:\n  Source_type: ENVIRONMENT\n"
+            "Orchestration:\n  Project: second\n"
+            f"Warehouse:\n  dev:\n    Jdbc_url: jdbc:duckdb:{warehouse}\n    Schema: main\n"
+            "Privacy:\n  Hmac_secret: DOCTOR_ERASURE_KEY\n"
+        )
+        ctx = OperationContext(
+            empty_engine_db.engine,
+            replace(config, project="second"),
+            Actor("test-admin", ActorKind.USER),
+            role=ApiRole.ADMIN,
+            project="second",
+            project_id=project_id,
+        )
+        with acting_as(ctx.actor), selected_project(project_id):
+            publish(
+                ctx,
+                PublishBundle(
+                    files={"craft-connector.yml": b64encode(connector.encode()).decode()}
+                ),
+            )
+    checks = run_checks(replace(config, project=""))
+    assert any(
+        check.name == "Erasure coverage"
+        and check.status == Status.OK
+        and "project default:" in check.detail
+        for check in checks
+    )
+    failures = [
+        check
+        for check in checks
+        if check.name == "Erasure coverage" and check.status == Status.FAIL
+    ]
+    assert len(failures) == 1
+    assert failures[0].status == Status.FAIL
+    if approved:
+        assert (
+            "project second: main.second_people: Team-written or unmanaged table"
+            in failures[0].detail
+        )
+        return
+    for part in (
+        "project second",
+        "warehouse",
+        "no approved connector",
+        "deploy the project",
+        "doctor --project second",
+    ):
+        assert part in failures[0].detail
 
 
 def test_docs_site_publishing_is_only_warned_about(config, monkeypatch):

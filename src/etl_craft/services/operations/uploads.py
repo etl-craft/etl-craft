@@ -285,6 +285,9 @@ def require_upload_pipeline(ctx: OperationContext, request: UploadRequest) -> in
 @contextmanager
 def receive(ctx: OperationContext, request: UploadRequest) -> Iterator[UploadReceipt]:
     """Reserve an audited identity, then publish only complete, durable file receipts."""
+    from etl_craft.services.operations.actions import ACTIONS, project_context
+
+    ctx = project_context(ctx, ACTIONS[ActionName.UPLOAD], request)
     with (
         acting_as(ctx.actor),
         selected_project(ctx.project_id),

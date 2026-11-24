@@ -13,4 +13,4 @@ JOIN CFG_PROJECTS pj ON pj.PROJECT_ID=x.project_id
 WHERE (x.action_name IS NOT NULL OR r.ACTIVE_FLAG='Y')
 AND (x.role_name IN ('CAN_VIEW','CAN_UPLOAD','CAN_RUN','CAN_MANAGE')
  OR x.project_id IS NOT NULL OR x.environment IS NOT NULL)
-AND (CAST(:project_id AS bigint) IS NULL OR pj.PROJECT_ID=:project_id)
+AND (CAST(:project_filter AS bigint) IS NULL OR pj.PROJECT_ID=:project_filter)

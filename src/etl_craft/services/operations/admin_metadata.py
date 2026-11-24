@@ -399,13 +399,12 @@ def environment_values(
     old: Row[tuple[object, ...]] | None,
 ) -> ProjectFields:
     """Merge environment fields without changing omitted values."""
-    environment = (
-        None
-        if old is None
-        else conn.execute(
-            statement(conn, "project_governance"), {"project_id": old.project_id}
-        ).one()
-    )
+    from etl_craft.engine.repository.pipelines import selected_project
+
+    environment = None
+    if old is not None:
+        with selected_project(int(old.project_id)):
+            environment = conn.execute(statement(conn, "project_governance")).one()
     effective = replace(
         effective,
         environment_type=request.environment_type

@@ -9,6 +9,7 @@ from sqlalchemy.engine import Connection
 from etl_craft.core.alerts import AlertStatus
 from etl_craft.core.time import as_utc
 from etl_craft.engine.queries import statement
+from etl_craft.engine.repository.pipelines import selected_project
 
 
 @dataclass(frozen=True)
@@ -34,10 +35,11 @@ def history(conn: Connection, project_id: int, codes: tuple[str, ...]) -> tuple[
     """Filter by authorized pipeline codes before selecting the newest hundred records."""
     if not codes:
         return ()
-    query = statement(conn, "alert_delivery_history").bindparams(
-        bindparam("pipeline_codes", expanding=True)
-    )
-    rows = conn.execute(query, {"project_id": project_id, "pipeline_codes": codes})
+    with selected_project(project_id):
+        query = statement(conn, "alert_delivery_history").bindparams(
+            bindparam("pipeline_codes", expanding=True)
+        )
+        rows = conn.execute(query, {"pipeline_codes": codes})
     return tuple(
         AlertDelivery(
             **{

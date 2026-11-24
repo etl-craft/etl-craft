@@ -310,6 +310,7 @@ def apply_pending_migrations(
     *,
     project_default: Path | None = None,
     wait_seconds: float = 0,
+    package_only: bool = False,
     **target_options: Unpack[TargetOptions],
 ) -> list[str]:
     """Apply every pending ENGINE, then PROJECT, migration; return the filenames applied.
@@ -320,12 +321,13 @@ def apply_pending_migrations(
     Concurrent runs are serialized by the ``migrate`` lock, so a second one waits and then finds
     nothing left to do.
     """
-    streams = migration_streams(engine, project_dir, project_default)
+    streams = migration_streams(engine, project_dir, project_default, package_only=package_only)
     target = Target(**target_options)
     applied: list[str] = []
     with locks.MIGRATE.hold(engine, wait_seconds):
         with engine.connect() as conn:
-            ledger = _load_ledger(conn, "scoped_applied_migrations")
+            query = "engine_applied_migrations" if package_only else "scoped_applied_migrations"
+            ledger = _load_ledger(conn, query)
         require_baseline(ledger)
         verify_ledger(ledger, streams)
         pending = [

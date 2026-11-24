@@ -4,10 +4,21 @@ from sqlalchemy import inspect, text
 
 from etl_craft.core.counts import Counts
 from etl_craft.engine import runlog, transitions
+from etl_craft.engine.queries import statement
+from etl_craft.engine.repository.pipelines import selected_project
 
 
 def insert(conn, sql, id_column, **params):
     return conn.execute(text(f"{sql} RETURNING {id_column}"), params).scalar_one()
+
+
+def pipeline_project_id(conn, pipeline_id):
+    """Resolve the project owned by the fixture's exact pipeline."""
+    return int(
+        conn.execute(
+            statement(conn, "pipeline_project_id"), {"pipeline_id": pipeline_id}
+        ).scalar_one()
+    )
 
 
 def add_pipeline(conn, code, *, refresh_type="FULL", sla_in_hours=None, project_id=None):
@@ -90,7 +101,10 @@ def start_run(conn, pipeline_id, *, run_date=None, backfill=False):
     existing = runlog.fetch_active_pipeline_run_id(conn, pipeline_id)
     if existing is not None:
         return existing
-    created = transitions.create_active_run(conn, pipeline_id, run_date=run_date, backfill=backfill)
+    with selected_project(pipeline_project_id(conn, pipeline_id)):
+        created = transitions.create_active_run(
+            conn, pipeline_id, run_date=run_date, backfill=backfill
+        )
     if created is None:
         # Another session created the run between the read and the insert.
         created = runlog.fetch_active_pipeline_run_id(conn, pipeline_id)

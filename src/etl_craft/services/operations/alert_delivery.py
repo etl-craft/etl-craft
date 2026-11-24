@@ -7,7 +7,7 @@ import logging
 import ssl
 import threading
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from http.client import HTTPException
 from typing import Any
@@ -163,13 +163,15 @@ def deliver(ctx: OperationContext, task: TaskContext) -> HandlerResult:
                 f"alert run {task.pipeline_run_id}: source run {source.source_run_id} "
                 "is missing; expected retained event history; restore it or cancel this alert run"
             )
-        channel = conn.execute(
-            statement(conn, "alert_channel"),
-            {
-                "project_id": ctx.project_id,
-                "channel_name": task.task_params["ALERT_CHANNEL"],
-            },
-        ).one_or_none()
+        project_id = conn.execute(
+            statement(conn, "pipeline_project_id"), {"pipeline_id": task.pipeline_id}
+        ).scalar_one()
+        ctx = replace(ctx, project_id=int(project_id))
+        with selected_project(ctx.project_id):
+            channel = conn.execute(
+                statement(conn, "alert_channel"),
+                {"channel_name": task.task_params["ALERT_CHANNEL"]},
+            ).one_or_none()
         if (
             channel is None
             or channel.channel_id != source.channel_id

@@ -34,7 +34,7 @@ from etl_craft.engine.controls import ControlView
 from etl_craft.engine.migrations import pending_migrations
 from etl_craft.engine.queries import statement
 from etl_craft.engine.repository.group_claims import token_groups
-from etl_craft.engine.repository.pipelines import current_project_id, selected_project
+from etl_craft.engine.repository.pipelines import selected_project
 from etl_craft.engine.schema import InitResult
 from etl_craft.services.catalog.gaps import GapSnapshot
 from etl_craft.services.config_files import ConfigExport, ConfigSync
@@ -451,7 +451,7 @@ def admitted(ctx: OperationContext, name: ActionName, request: object) -> Iterat
     of the actions the table marks as provisioning.
     """
     action = ACTIONS[name]
-    ctx = _project_context(ctx, action, request)
+    ctx = project_context(ctx, action, request)
     if not isinstance(request, action.request):
         raise UsageError(
             f"{name}: request is {type(request).__name__}; expected {action.request.__name__}"
@@ -464,6 +464,10 @@ def admitted(ctx: OperationContext, name: ActionName, request: object) -> Iterat
         except (PermissionDeniedError, ResourceNotFoundError) as error:
             record_refusal(ctx, name, given, error)
             raise
+        if name == ActionName.SETUP:
+            from etl_craft.services.setup import require_setup_project
+
+            require_setup_project(ctx.engine, ctx.config)
         if action.audit == Audit.REQUEST:
             with recorded(ctx, name, given, on_completion=name == ActionName.MIGRATE):
                 yield
@@ -539,27 +543,24 @@ def invoke(ctx: OperationContext, name: ActionName, request: object) -> object:
         raise error
     try:
         ctx = _request_context(ctx, name, request)
-        ctx = _project_context(ctx, ACTIONS[name], request)
+        ctx = project_context(ctx, ACTIONS[name], request)
+        with using(None), selected_project(ctx.project_id):
+            request = resolve_run_reference(ctx, request)
     except (PermissionDeniedError, ResourceNotFoundError, RunStateError) as error:
         assert isinstance(request, ACTIONS[name].request)
         record_refusal(ctx, name, arguments(request), error)
         raise
     claims = sso_groups.set(ctx.sso_group_ids)
     try:
-        with using(None), selected_project(ctx.project_id):
-            if ACTIONS[name].scope != ActionScope.DEPLOYMENT:
-                current_project_id(f"action {name}")
-            request = resolve_run_reference(ctx, request)
-            with admitted(ctx, name, request):
-                if name == ActionName.MIGRATE:
+        with using(None), selected_project(ctx.project_id), admitted(ctx, name, request):
+            if name == ActionName.MIGRATE:
+                result = call(project_settings(ctx, name, request), request)
+            else:
+                with using_policy(governance.project_policy(ctx, request)):
                     result = call(project_settings(ctx, name, request), request)
-                else:
-                    with using_policy(governance.project_policy(ctx, request)):
-                        result = call(project_settings(ctx, name, request), request)
-                if ACTIONS[name].scope == ActionScope.PIPELINE:
-                    result = visible_result(ctx, result)
-                return with_run_labels(ctx, result)
-
+            if ACTIONS[name].scope == ActionScope.PIPELINE:
+                result = visible_result(ctx, result)
+            return with_run_labels(ctx, result)
     finally:
         sso_groups.reset(claims)
 
@@ -637,7 +638,7 @@ def _require_project_access(conn: Connection, ctx: OperationContext, action: Act
             raise
 
 
-def _project_context(ctx: OperationContext, action: Action, request: object) -> OperationContext:
+def project_context(ctx: OperationContext, action: Action, request: object) -> OperationContext:
     """Resolve one active project before a project-owned operation reads any object."""
     ctx = _access_project(ctx, request)
     if action.scope == ActionScope.DEPLOYMENT and not isinstance(request, access.AccessFilter):

@@ -20,7 +20,7 @@ from etl_craft.core.enums import ActionName, ActionScope, ApiRole, YesNo
 from etl_craft.core.enums_access import Permission
 from etl_craft.core.errors import PermissionDeniedError, ResourceNotFoundError
 from etl_craft.engine.queries import statement
-from etl_craft.engine.repository.pipelines import read_tags
+from etl_craft.engine.repository.pipelines import read_tags, selected_project
 from etl_craft.services.operations.action_types import Action
 from etl_craft.services.operations.context import OperationContext
 from etl_craft.services.operations.permissions import has_role, project_not_found, require_project
@@ -64,17 +64,17 @@ def held(conn: Connection, ctx: OperationContext, project_id: int | None) -> Hel
     """Read what the principal holds deployment-wide and, given ``project_id``, in that project."""
     if ctx.role in (None, ApiRole.AGENT):
         return Held()
-    rows = tuple(
-        conn.execute(
-            statement(conn, "deployment_access_held" if project_id is None else "access_held"),
-            {
-                "project_id": project_id,
-                "account": ctx.actor.name,
-                "role": ctx.role,
-                "sso_group_ids": json.dumps(ctx.sso_group_ids),
-            },
-        ).all()
-    )
+    with selected_project(project_id):
+        rows = tuple(
+            conn.execute(
+                statement(conn, "deployment_access_held" if project_id is None else "access_held"),
+                {
+                    "account": ctx.actor.name,
+                    "role": ctx.role,
+                    "sso_group_ids": json.dumps(ctx.sso_group_ids),
+                },
+            ).all()
+        )
     deployment = {r.action_name for r in rows if r.project_id is None and r.environment is None}
     if project_id is None:
         return Held(frozenset(deployment), rows=rows)
@@ -100,11 +100,14 @@ def held(conn: Connection, ctx: OperationContext, project_id: int | None) -> Hel
 
 def pipeline_tags(conn: Connection, project_id: int | None) -> dict[str, tuple[str, ...]]:
     """Each active pipeline's tags in the project."""
-    return {
-        row.pipeline_code: tuple(read_tags(row.pipeline_parameters, row.pipeline_code))
-        for row in conn.execute(statement(conn, "permission_pipelines"), {"project_id": project_id})
-        if row.active_flag == YesNo.YES
-    }
+    if project_id is None:
+        return {}
+    with selected_project(project_id):
+        return {
+            row.pipeline_code: tuple(read_tags(row.pipeline_parameters, row.pipeline_code))
+            for row in conn.execute(statement(conn, "permission_pipelines"))
+            if row.active_flag == YesNo.YES
+        }
 
 
 def authorize(

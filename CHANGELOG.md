@@ -6,9 +6,6 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
-- Project-scoped Engine DB operations without a selected project raise
-  `ProjectNotSelectedError` (exit 32) instead of implicitly using project 1.
-
 - Project and platform action controls use the server's availability answer; grayed-out
   controls show the reason only as an annotation on hover, focus or tap. This covers run and task controls, marks and
   checkpoint resets, item controls, uploads, catalog rebuild/validation/lineage/version and
@@ -794,6 +791,12 @@ Warehouses are optional extras. Core bundles none. `all` is core plus the UI, fo
   lookups by code should filter on `ETL_CRAFT_PROJECT`, as the updated examples do.
 
 ### Changed
+
+- Project-scoped Engine DB operations without a selected project raise
+  `ProjectNotSelectedError` (exit 32) instead of implicitly using project 1.
+- `setup` requires `--project` or `Orchestration.Project` when the project has migration
+  files (exit 32); it no longer applies them to the default project.
+- `doctor` without a project checks erasure coverage for every active project.
 
 - A pipeline's `AUTO_RESTART_CONDITION` is shown in words wherever its schedule is: the pipeline views
   (`restart_note`, with `auto_restart_condition`), the Pipelines list and a pipeline's page, and the catalog

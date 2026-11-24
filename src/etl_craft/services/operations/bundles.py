@@ -24,7 +24,7 @@ from etl_craft.engine.artifacts import ArtifactStore
 from etl_craft.engine.bundles import Bundle
 from etl_craft.engine.project_files import MAX_BYTES, decode_files
 from etl_craft.engine.queries import statement
-from etl_craft.engine.repository.pipelines import current_project_id
+from etl_craft.engine.repository.pipelines import current_project_id, selected_project
 from etl_craft.handlers.registry import TaskContext
 from etl_craft.services.operations.agent_models import AgentTask
 from etl_craft.services.operations.context import OperationContext
@@ -84,6 +84,7 @@ def publish(
     ctx: OperationContext, request: PublishBundle, *, connection: Connection | None = None
 ) -> BundleView:
     """Publish checked bytes; a supplied transaction already holds the BUNDLES lock."""
+    project_id = ctx.project_id if ctx.project_id is not None else current_project_id("publish")
     location = for_engine(ctx.engine).artifact_location(ctx.config)
     manifest, content, connections = check_upload(ctx, request)
     bundle_id = sha256_hex(uuid4().bytes)
@@ -101,10 +102,13 @@ def publish(
     with locks.BUNDLES.hold(ctx.engine) if connection is None else nullcontext():
         for name, digest in manifest.items():
             store.write(digest, content[name])
-        with ctx.engine.begin() if connection is None else nullcontext(connection) as conn:
+        with (
+            selected_project(project_id),
+            ctx.engine.begin() if connection is None else nullcontext(connection) as conn,
+        ):
             approved = conn.execute(
                 statement(conn, "bundle_approved_connection"),
-                {"project_id": ctx.project_id or current_project_id()},
+                {"project_id": project_id},
             ).scalar_one_or_none()
             if ctx.role != ApiRole.ADMIN and approved != connections:
                 raise PermissionDeniedError(
@@ -116,7 +120,7 @@ def publish(
                 statement(conn, "bundle_insert"),
                 {
                     "bundle_id": bundle_id,
-                    "project_id": ctx.project_id or current_project_id(),
+                    "project_id": project_id,
                     "manifest": recorded,
                     "connections": connections,
                     "approved": YesNo.YES,

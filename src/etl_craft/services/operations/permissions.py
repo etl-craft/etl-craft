@@ -9,7 +9,7 @@ from etl_craft.core.enums import ApiRole, YesNo
 from etl_craft.core.enums_access import Permission
 from etl_craft.core.errors import PermissionDeniedError, ResourceNotFoundError
 from etl_craft.engine.queries import statement
-from etl_craft.engine.repository.pipelines import current_project_id, read_tags, selected_project
+from etl_craft.engine.repository.pipelines import current_project_id, read_tags
 from etl_craft.services.operations.context import OperationContext
 
 
@@ -48,10 +48,10 @@ class PipelineAccess:
             )
 
 
-def visibility_parameters(ctx: OperationContext) -> dict[str, object]:
+def visibility_parameters(ctx: OperationContext, project_id: int | None) -> dict[str, object]:
     """Bind the authenticated principal to the shared SQL permission relations."""
     return {
-        "project_id": ctx.project_id if ctx.project_id is not None else current_project_id(),
+        "project_filter": project_id,
         "account": ctx.actor.name,
         "role": ctx.role,
         "sso_group_ids": json.dumps(ctx.sso_group_ids),
@@ -76,7 +76,9 @@ def eligible_grants(
         return []
     return [
         (r.pipeline_code, r.tag, Permission(r.permission), r.source)
-        for r in conn.execute(statement(conn, "permission_eligible"), visibility_parameters(ctx))
+        for r in conn.execute(
+            statement(conn, "permission_eligible"), visibility_parameters(ctx, _project_id(ctx))
+        )
     ]
 
 
@@ -90,7 +92,7 @@ def project_permission(conn: Connection, ctx: OperationContext) -> Permission | 
     if ctx.role is None or ctx.role == ApiRole.AGENT:
         return None
     row = conn.execute(
-        statement(conn, "permission_projects"), visibility_parameters(ctx)
+        statement(conn, "permission_projects"), visibility_parameters(ctx, _project_id(ctx))
     ).one_or_none()
     return tuple(Permission)[row.level - 1] if row is not None else None
 
@@ -129,13 +131,15 @@ def tag_permission(conn: Connection, ctx: OperationContext, tag: str) -> Permiss
     return strongest([level for _, target, level, _ in matched if target == tag])
 
 
+def _project_id(ctx: OperationContext) -> int:
+    return ctx.project_id if ctx.project_id is not None else current_project_id()
+
+
 def pipeline_access(conn: Connection, ctx: OperationContext) -> PipelineAccess:
     """Resolve exactly the same effective SQL visibility used by aggregate reads."""
-    params = visibility_parameters(ctx)
-    project_id = ctx.project_id if ctx.project_id is not None else current_project_id()
-    with selected_project(project_id):
-        validate_visibility(conn, params)
-        rows = conn.execute(statement(conn, "permission_effective"), params).all()
+    params = visibility_parameters(ctx, _project_id(ctx))
+    validate_visibility(conn, params)
+    rows = conn.execute(statement(conn, "permission_effective"), params)
     roles: dict[str, ApiRole | None] = {}
     levels: dict[str, Permission | None] = {}
     sources: dict[str, tuple[str, ...]] = {}

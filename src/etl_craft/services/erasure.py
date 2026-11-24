@@ -11,6 +11,7 @@ from etl_craft.core.redaction import registering
 from etl_craft.engine.queries import statement
 from etl_craft.handlers.erasure import apply_entries, check_column, secret
 from etl_craft.handlers.resources import LocalLocker
+from etl_craft.services.project_warehouses import approved_connector
 from etl_craft.warehouse.connection import open_warehouse
 
 if TYPE_CHECKING:
@@ -25,18 +26,43 @@ def problems(engine: Engine, config: ConnectorConfig, *, check_coverage: bool = 
     return findings(engine, config, check_coverage=check_coverage)[0]
 
 
-def findings(engine: Engine, config: ConnectorConfig, *, check_coverage: bool = True) -> Findings:
+def findings(
+    engine: Engine,
+    config: ConnectorConfig,
+    *,
+    check_coverage: bool = True,
+    require_approved_connector: bool = False,
+) -> Findings:
     """Run one dry erasure pass for both the coverage failures and the retention warnings."""
     with engine.connect() as conn:
         entries = _registered(conn)
+        if entries and require_approved_connector:
+            try:
+                approved = approved_connector(conn, config)
+            except (EtlCraftError, OSError):
+                approved = None
+            if approved is None or approved.warehouse is None:
+                return [
+                    f"erasure coverage needs project {config.project}'s warehouse; "
+                    "no approved connector is available; deploy the project so its bundle "
+                    f"is approved, or run `etl-craft doctor --project {config.project}` "
+                    "with that project's craft-connector.yml"
+                ], []
+            config = approved
     return _checked(engine, config, entries, check_coverage)
 
 
-def doctor_checks(engine: Engine, config: ConnectorConfig) -> list["Check"]:
+def doctor_checks(
+    engine: Engine, config: ConnectorConfig, *, require_approved_connector: bool = False
+) -> list["Check"]:
     """Fail on coverage problems; warn on erased tables whose old versions never expire."""
-    from etl_craft.services.doctor import fail, warn
+    from etl_craft.services.doctor import fail, ok, warn
 
-    coverage, unbounded = findings(engine, config)
+    coverage, unbounded = findings(
+        engine, config, require_approved_connector=require_approved_connector
+    )
+    if require_approved_connector and not coverage and not unbounded:
+        return [ok("Erasure coverage", "no coverage gaps found")]
     return [fail("Erasure coverage", p) for p in coverage] + [
         warn("Erasure physical retention", p) for p in unbounded
     ]

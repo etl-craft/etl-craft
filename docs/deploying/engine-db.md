@@ -5,6 +5,10 @@ Run these setup and migration commands on the controller's host; they do not acc
 `etl-craft setup` checks every connection and then does both steps below, as needed; see
 [Checking a deployment](doctor-and-setup.md). This page describes each step on its own.
 
+When project migration files exist, set `Orchestration.Project` or run
+`etl-craft --project CODE setup`. Setup without a selected project only handles Engine
+DB migrations and refuses project migration files before writing.
+
 ## A new Engine DB
 
 Point the `Engine` section of `craft-connector.yml` at an empty database (see
