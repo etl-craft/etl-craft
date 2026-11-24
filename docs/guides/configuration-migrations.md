@@ -1,5 +1,7 @@
 # Configuration migrations
 
+`etl-craft migrate` runs on the controller's host only; it cannot run through `--api`.
+
 [Configuration files](configuration-files.md) are the usual way to keep pipelines in the Engine
 DB. A project migration writes the same `CFG_` rows with SQL instead: a file in the project's
 `migrations/` folder, which `etl-craft migrate` applies once. Use migrations when a change is

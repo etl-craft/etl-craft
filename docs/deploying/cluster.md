@@ -112,7 +112,7 @@ needs `ETL_CRAFT_API`, its own `ETL_CRAFT_TOKEN` and any separately authorized w
 
 ### Run migrations before rolling the roles
 
-Run `etl-craft migrate` from the project image before rolling the roles. Use a
+Run `etl-craft migrate` on the controller's host from the project image before rolling the roles. Use a
 Kubernetes Job or a Compose one-off container with the project configuration and
 migration credentials. Wait for that command to succeed before rolling out the
 new images.

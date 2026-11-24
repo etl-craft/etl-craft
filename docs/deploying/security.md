@@ -127,8 +127,8 @@ include every lower role; transports name operations, not their own permission r
 | developer | `deploy`, project migrations, `generate-docs`, `lineage --refresh` |
 | admin | SCD value edits and human unlocks, accounts/tokens, setup/init-db, packaged Engine DB migrations, adopt-target, rehash, clone, controller/UI startup, publish-docs and docs-version writes |
 
-`migrate` can apply project migrations as developer only when no packaged Engine DB migration
-is pending. An admin must apply pending engine upgrades first. A refused operation names the
+`migrate` runs on the controller's host only. It can apply project migrations as developer
+only when no packaged Engine DB migration is pending. An admin must apply pending engine upgrades first. A refused operation names the
 account, its current role, the required role and the administrator who can grant it. The CLI
 returns exit **26**, HTTP returns **403**, and the immutable action record has outcome
 `REFUSED` with the same exit code. No operation runs after refusal. The permission check adds no records for allowed reads. Unregistered operations fail closed until the shared policy names them.
@@ -343,42 +343,15 @@ are never accepted. Provider tokens are discarded after the local session is iss
 
 ## Operating a server from your own installation
 
-People develop on their own installation, against a local Engine DB and warehouse. To operate a
-server installation they sign in to it instead, and never hold its Engine DB or warehouse
-credentials:
+See [Operating a server from your own installation](../guides/remote-cli.md) for installation,
+sign-in, deployment and run control without Engine DB or warehouse credentials.
 
-```bash
-etl-craft login --api https://etl.example.com      # password, or SSO when it is configured
-etl-craft status --pipeline-code SALES --api https://etl.example.com
-export ETL_CRAFT_API=https://etl.example.com      # or name the server once per session
-etl-craft history --pipeline-code SALES --all
-etl-craft logs --attempt-id 4812
-etl-craft logout
-```
-
-- **Sign-in.** `login --api` sends the password once to the server, or, for SSO, shows the
-  issuer's code while the server runs the device flow and verifies the ID token. The server
-  issues a one-hour access token and a refresh token that lasts `Auth.Refresh_days` (default
-  30). The credential file keeps both, under the server's address, and the CLI renews the access
-  token when it expires. `logout`, disabling the account or revoking the refresh token ends the
-  session.
-- **Only HTTPS.** `--api` refuses plain HTTP except to `localhost`, and refuses redirects.
-- **What works.** Every action the [actions reference](../reference/actions.md) marks as
-  running anywhere: `run` (a run, a backfill with `--backfill`, or a rerun with `--rerun
-  --task-code`), `mark`, `stop`, `abort`, `hold`, `release`, `pause`, `resume`, `status`,
-  `explain`, `history`, `steps`, `graph`, `pipelines`, `audit`, `lineage`, `validate`,
-  `logs`, `whoami`, `account`, `token` and the maintenance commands, within the account's role,
-  with the same text and JSON output and exit codes as on the controller's own project.
-- **What does not.** `config`, `migrate`, `init-db`, `setup`, `doctor`, `controller`, `ui` and
-  `publish-docs` run on the controller's host only and are refused against a controller,
-  naming where to run them: config files and migrations reach a controller only through its own
-  deployment, by CI or an admin.
-- **Automation.** CI and external schedulers keep a service token in `ETL_CRAFT_TOKEN`, with no refresh.
-- **Errors.** A server that cannot be reached, or that answers with something other than
-  etl-craft JSON, exits **27**. Every other refusal keeps its own exit code.
-
-Every command reaches the same operation whichever interface starts it: a local command calls
-it directly, and a command against a server calls the server's API, which calls it.
+- **Sign-in.** Password or SSO device-flow sign-in issues a one-hour access token and a refresh
+  token lasting `Auth.Refresh_days` (default 30). Credentials are stored privately per server
+  URL; the CLI renews access when it expires. Logout, disabling the account or revoking the
+  refresh token ends the session.
+- **Transport.** `--api` requires HTTPS except on localhost and refuses redirects.
+- **Automation.** CI uses a service token in `ETL_CRAFT_TOKEN`, with no refresh.
 
 ## Least privilege
 

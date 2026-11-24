@@ -1871,6 +1871,11 @@ Warehouses are optional extras. Core bundles none. `all` is core plus the UI, fo
   columns named like statements, such as `copy`. SQL sqlglot cannot parse is checked word by
   word as before, and `validate` warns about it with the line and column where parsing stopped.
 
+### Documentation
+
+- Added a remote CLI guide for laptop and CI deployment and run control, with a local-server
+  Quick Start example.
+
 ## [0.3.0] - 2026-10-10
 
 ### Fixed

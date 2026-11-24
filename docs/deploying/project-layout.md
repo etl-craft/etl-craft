@@ -56,7 +56,7 @@ See [Configuration files](../guides/configuration-files.md).
 
 ## Project migrations
 
-`etl-craft migrate` applies your migrations from `migrations/` when that folder exists. See
+`etl-craft migrate`, run on the controller's host, applies your migrations from `migrations/` when that folder exists. See
 [Engine DB setup and upgrades](engine-db.md).
 
 ## Several projects in one repository

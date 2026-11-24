@@ -2,6 +2,9 @@
 
 How to model and run pipelines with etl-craft.
 
+- [Operating a server from your own installation](remote-cli.md): deploy and run from a laptop
+  or CI runner without database credentials.
+
 - [Pipelines and tasks](pipelines-and-tasks.md): the `CFG_` rows a pipeline is made of, the task
   handlers, and the settings every task shares.
 - [Configuration files](configuration-files.md): one CSV file per `CFG_` table, versioned with

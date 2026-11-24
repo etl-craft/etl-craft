@@ -66,7 +66,7 @@ etl-craft validate
   `login` signs that account in and stores a private, 12-hour session on this server.
 - `prepare.py metadata` loads and refreshes the pipelines, their tasks, parameters, dependencies and business
   rules into `engine.db`, as `CFG_` rows, by copying the seed SQL into numbered project
-  migrations and running `etl-craft migrate`. In your own project, author these migrations
+  migrations and running `etl-craft migrate` on the controller's host. In your own project, author these migrations
   directly and review them like code; plain SQL connections cannot edit Engine DB rows.
 - `validate` checks all of it without running anything:
   `checked 5 pipeline(s) and 25 task(s): 0 failed, 0 warning(s)`.
@@ -141,6 +141,41 @@ Put a local HTTPS reverse proxy in front of that address, preserving the Host he
 [browser setup](guides/browser-ui.md), then open its `/ui` URL and sign in with the USER account
 created during setup. Secure browser cookies require HTTPS. CLI sign-in and browser sign-in
 are separate sessions. The UI shows the run grid, live task graph, attempts and logs.
+
+### Operate the local server
+
+Keep that demo controller running. In another terminal with etl-craft installed, sign in to
+its API using the USER account from setup, then submit a load:
+
+```bash
+etl-craft login --api http://localhost:8730 --project default
+etl-craft run --api http://localhost:8730 --project default --pipeline-code SOURCE_A --reason "remote demo load"
+```
+
+An installed-package demo run returned this stdout:
+
+```text
+SOURCE_A: pipeline_run_id=1 IN-PROGRESS
+```
+
+The context and copyable run identity appeared on stderr:
+
+```text
+default · CUSTOM · http://localhost:8730
+run_id=1 'SOURCE_A-2026-11-24 04:21:36-1'
+```
+
+Your run id, label, environment and submission status can differ. This submits work to the
+controller; it does not wait for the load to finish. Watch that exact run, substituting its id:
+
+```bash
+etl-craft status --api http://localhost:8730 --project default --pipeline-code SOURCE_A --run-id 1
+```
+
+This terminal needs no Engine DB or warehouse credentials. Plain HTTP is permitted for
+localhost CLI access; browser sign-in still needs HTTPS. See
+[Operating a server from your own installation](guides/remote-cli.md) for a laptop or CI
+runner operating a remote server, including deployment.
 
 ## Next
 
