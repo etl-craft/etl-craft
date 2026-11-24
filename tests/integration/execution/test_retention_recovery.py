@@ -30,7 +30,7 @@ def test_purge_process_loss_resumes_committed_work(cli_project, point):
                 "JOIN AUD_PIPELINES_RUN_LOG r ON r.PIPELINE_RUN_ID=t.PIPELINE_RUN_ID"
             )
         ).one()
-    path = attempt_log_path(p.config, "P", row.run_id, "load", 1)
+    path = attempt_log_path(p.config, "P", row.run_id, "load", 1, project_id=1)
     assert path.is_file()
     with retaining(), p.engine.begin() as conn:
         conn.execute(

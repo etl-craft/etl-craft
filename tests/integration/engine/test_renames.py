@@ -14,6 +14,7 @@ from etl_craft.engine import transitions
 from etl_craft.engine.logs import read_log_attempt
 from etl_craft.engine.repository.events import consumed_files, consumed_keys, record_event
 from etl_craft.engine.repository.offsets import StoredOffset, fetch_task_offset, save_task_offset
+from etl_craft.engine.repository.pipelines import selected_project
 from etl_craft.execution.attempt_records import attempt_log_path, local_attempt_log
 from etl_craft.services.operations.context import OperationContext
 from etl_craft.services.retention import retaining
@@ -305,12 +306,13 @@ def test_logs_and_retention_keep_recorded_paths_after_rename(rename_project, tas
     with retaining(), ctx.engine.begin() as conn:
         row = read_log_attempt(conn, attempt)
         assert local_attempt_log(ctx.config, row) == path
-        retire_log_rows(
-            conn,
-            ctx.config,
-            [LogRemoval(attempt, str(path), 1, summary, run, "P", "T")],
-            datetime.now(UTC),
-        )
+        with selected_project(1):
+            retire_log_rows(
+                conn,
+                ctx.config,
+                [LogRemoval(attempt, str(path), 1, summary, run, "P", "T")],
+                datetime.now(UTC),
+            )
         assert read_log_attempt(conn, attempt).log_removed_at is not None
         assert conn.execute(
             text("SELECT LOG_PATH AS path FROM AUD_TASK_ATTEMPTS WHERE ATTEMPT_ID=:id"),

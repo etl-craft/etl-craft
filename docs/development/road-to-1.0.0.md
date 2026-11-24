@@ -201,7 +201,7 @@ item's text, or work done early under another item.
 | S7.AS Project dashboard and navigation | Done | #401, #402, #404, #405, #406, #407, #413 | Slices 1–5 owner approved; shared controls polished, with framed working panes, application-drawn diagram scrollbars, unclipped column selection and accessible search/action feedback in follow-up |
 | S7.AT Refresh and availability on the first pages | Done | #437 | Pipeline and all-pipelines refresh on RELAXED projects; unavailable actions on these pages grayed out with their reason |
 | S7.AU Available actions on every page | Done | S7.AU PR | Every action on the project and platform pages renders from the server's availability answer, grayed out with its reason as a hover annotation; the console keeps submit-time refusals |
-| S7.AV No implicit project | Planned | | Engine DB access without a selected project fails naming the caller, instead of using project 1 |
+| S7.AV No implicit project | Done | #444 | Engine DB access without a selected project raises `ProjectNotSelectedError` (exit 32) naming the query or operation; entry points select their project; `setup` and bare `doctor` are project-aware |
 | S7.AW Public docs for 0.9.0 | Planned | | README, published nav without development pages, and a short 0.9.0 changelog summary |
 | S7.M Stewardship uploads | Done (M2) | #296, #305 | Atomic receipts and safe stored names; processed layout, retention archives and verified reruns; crash recovery and guarded upload history |
 | S7.S Seed tables | Done | #308 | Typed pinned-bundle seeds replace reference tables until recorded stewardship handover |
@@ -225,6 +225,21 @@ item's text, or work done early under another item.
 | S8.I Support Insights on current main | Planned | | `ALERT` tasks with `EMAIL` channels and `deploy` replace removed handlers and commands, so the demo can pin current main; precedes S8.C, S8.E and S8.F |
 
 ### Handover notes
+
+- **S7.AV Choices that differ from the item text.** Main already refused a local command
+  without `Orchestration.Project` or `--project` (exit 2); that refusal is kept unchanged, also
+  inside `invoke`, so "a local installation behaves as before" means that refusal. The new
+  error covers paths below the entry points. `init-db` reads an ENGINE-only migration ledger;
+  `setup` needs a project whenever the project has migration files; bare `doctor` checks each
+  active project with that project's approved connector; `controller`, `ui` and `login` check
+  only package migrations at start. Functions given a run, task run or pipeline take its
+  project from that row (task children, standing pauses, alert delivery); public
+  `(engine, config, ...)` entry functions select the connector's project through one shared
+  `configured_project`. Tests that call internals directly select project 1 explicitly at the
+  call; internals-only modules opt in per module. One attempt costs one more Engine DB
+  statement, transaction and connection: the task child reads its run's project.
+  Acceptance availability: unit and SQLite suites run locally; PostgreSQL suites for the touched
+  modules run locally; CI runs the complete suite.
 
 - **S7.AU Choices that differ from the item text.** Enabled cases use the action's lowest
   authorized role; developers see admin-only actions grayed out (owner, 2026-11-23).

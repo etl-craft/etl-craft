@@ -1,11 +1,14 @@
 """Source definitions and upstream schemas trace without a warehouse connection."""
 
+import pytest
 from sqlalchemy import text
 
 from etl_craft.services.catalog.collect import build_catalog
 from etl_craft.services.config_files import export_config, read_config_files, sync_config
 from etl_craft.services.lineage import collect
 from fixtures.metadata import add_pipeline, add_source_column, add_task
+
+pytestmark = pytest.mark.usefixtures("selected_default_project")
 
 
 def test_upstream_stars_join_resolution_and_schema_cache(engine_db, tmp_path, monkeypatch):

@@ -14,6 +14,7 @@ from etl_craft.controller.schema_checks import schema_checks_due
 from etl_craft.core.actor import SYSTEM_ACTOR, acting_as
 from etl_craft.core.enums import ActionName
 from etl_craft.engine.queries import statement
+from etl_craft.engine.repository.pipelines import selected_project
 from etl_craft.services.operations import OperationContext
 from etl_craft.services.operations.actions import invoke
 from etl_craft.services.operations.log_storage import publish_pending
@@ -96,13 +97,8 @@ def purge_due(ctx: OperationContext, now: datetime, stop: threading.Event) -> No
         local = now.astimezone(ZoneInfo(project.timezone))
         if local.strftime("%H:%M") < daily:
             continue
-        with ctx.engine.connect() as conn:
-            previous = conn.execute(
-                statement(conn, "retention_tick"),
-                {
-                    "project_id": project.project_id,
-                },
-            ).scalar_one_or_none()
+        with selected_project(int(project.project_id)), ctx.engine.connect() as conn:
+            previous = conn.execute(statement(conn, "retention_tick")).scalar_one_or_none()
         if previous is not None and str(previous) >= local.date().isoformat():
             continue
         config = replace(ctx.config, project=project.project_code, timezone=project.timezone)

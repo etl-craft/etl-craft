@@ -282,3 +282,12 @@ def prepare_postgres_engine_db(db: EngineDb, template: str) -> None:
                 psycopg.sql.Identifier(name), psycopg.sql.Identifier(template)
             )
         )
+
+
+@pytest.fixture
+def selected_default_project():
+    """Opt in when a test calls project internals below a production entry point."""
+    from etl_craft.engine.repository.pipelines import selected_project
+
+    with selected_project(1):
+        yield

@@ -61,10 +61,7 @@ def access_context(args: argparse.Namespace) -> Iterator[None]:
         with acting_as(SYSTEM_ACTOR):
             identity: TokenView | UpgradeAdmin | None = None
             if args.command in {"login", "ui", "controller"}:
-                require_current_schema(
-                    OperationContext(engine, config, SYSTEM_ACTOR),
-                    package_only=args.command == "ui",
-                )
+                require_current_schema(OperationContext(engine, config, SYSTEM_ACTOR))
             provisioning = local_provisioning(engine, args.command)
             if (
                 args.command == "setup"

@@ -8,6 +8,7 @@ from sqlalchemy import text
 from etl_craft.core.actor import SYSTEM_ACTOR
 from etl_craft.core.enums import ActionName, ApiRole, RunStatus
 from etl_craft.engine.repository.offsets import StoredOffset, fetch_task_offset, save_task_offset
+from etl_craft.engine.repository.pipelines import selected_project
 from etl_craft.execution.runner import run_task
 from etl_craft.services.operations.context import OperationContext
 from fixtures.actions import act
@@ -51,7 +52,8 @@ def test_utility_counts_are_nullable_and_stored_offsets_are_never_given(project,
         from etl_craft.services.catalog.collect import run_kpis
         from etl_craft.services.catalog.metrics import counts
 
-        summaries = fetch_task_runs(conn)[project[3]]
+        with selected_project(1):
+            summaries = fetch_task_runs(conn)[project[3]]
         assert run_kpis(summaries).average_rows == count
         if count is None:
             assert counts(summaries[0]) == ""

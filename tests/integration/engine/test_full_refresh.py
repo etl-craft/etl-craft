@@ -23,6 +23,8 @@ LOAD = {
     "SELECT_QUERY": "SELECT 1 AS id",
 }
 
+pytestmark = pytest.mark.usefixtures("selected_default_project")
+
 
 @pytest.fixture
 def scene(engine_db):

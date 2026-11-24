@@ -14,6 +14,8 @@ from etl_craft.engine.repository.dependencies import fetch_pipeline_graph
 from fixtures.metadata import add_dependency, add_pipeline, add_task
 from fixtures.races import two_at_once
 
+pytestmark = pytest.mark.usefixtures("selected_default_project")
+
 
 def begin_admission(engine):
     return engine.begin()

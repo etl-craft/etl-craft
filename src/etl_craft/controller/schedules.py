@@ -18,6 +18,7 @@ from etl_craft.core.restart import schedule_allowed
 from etl_craft.engine import standing_pauses
 from etl_craft.engine.queries import statement
 from etl_craft.engine.repository.intervention_rows import record_intervention
+from etl_craft.engine.repository.pipelines import selected_project
 from etl_craft.engine.run_creation import RunCreation, create
 from etl_craft.engine.schedule_ticks import cursor as schedule_cursor
 from etl_craft.engine.schedule_ticks import schedule as pipeline_schedule
@@ -87,7 +88,7 @@ class Schedules:
             tick = plan.next_tick(cursor)
             retained: deque[Tick] = deque()
             count = row.max_catchup_runs if row.catchup == YesNo.YES else 1
-            with acting_as(ctx.actor):
+            with acting_as(ctx.actor), selected_project(int(row.project_id)):
                 while tick.instant <= now:
                     if stop is not None and stop.is_set():
                         return

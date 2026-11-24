@@ -16,6 +16,8 @@ from etl_craft.engine import runlog, transitions
 from etl_craft.engine.repository import business_rules, dependencies, pipelines, runs, tasks
 from fixtures.metadata import add_table, set_task_target, start_run
 
+pytestmark = pytest.mark.usefixtures("selected_default_project")
+
 
 def insert(conn, sql, id_column, **params):
     return conn.execute(text(f"{sql} RETURNING {id_column}"), params).scalar_one()

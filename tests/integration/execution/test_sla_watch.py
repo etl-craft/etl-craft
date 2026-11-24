@@ -2,12 +2,15 @@
 
 import time
 
+import pytest
 from sqlalchemy import text
 from sqlalchemy.exc import OperationalError
 
 from etl_craft.engine import transitions
 from etl_craft.execution import sla
 from fixtures.metadata import add_pipeline, start_run
+
+pytestmark = pytest.mark.usefixtures("selected_default_project")
 
 
 def test_a_refused_breach_write_is_retried_and_the_lapse_reported_once(engine_db, monkeypatch):

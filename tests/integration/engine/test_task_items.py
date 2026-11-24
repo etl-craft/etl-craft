@@ -18,10 +18,12 @@ from etl_craft.core.errors import HandlerError, RunRefusedError, StaleTransition
 from etl_craft.core.items import ItemRecord
 from etl_craft.engine import transitions
 from etl_craft.engine.items import latest
+from etl_craft.engine.repository.pipelines import selected_project
 from etl_craft.engine.task_store import LocalTaskStore, TaskIdentity
 from etl_craft.scripting import ScriptResult, ScriptTask
 from etl_craft.services.operations.context import OperationContext
-from etl_craft.services.operations.items import ItemControl, control
+from etl_craft.services.operations.items import ItemControl
+from etl_craft.services.operations.items import control as control_item
 from fixtures.metadata import add_pipeline, add_task, start_run
 
 
@@ -190,6 +192,20 @@ def test_report_is_idempotent_and_an_expired_owner_cannot_record(scene):
 
 def context(scene):
     return OperationContext(scene.db, scene.config, SYSTEM_ACTOR)
+
+
+def control(ctx, request):
+    """Call the transaction directly so race barriers still observe the item write."""
+    with ctx.engine.connect() as conn:
+        project_id = conn.execute(
+            text(
+                "SELECT p.PROJECT_ID AS project_id FROM AUD_PIPELINES_RUN_LOG r "
+                "JOIN CFG_PIPELINES p ON p.PIPELINE_ID=r.PIPELINE_ID WHERE r.PIPELINE_RUN_ID=:run"
+            ),
+            {"run": request.run_id},
+        ).scalar_one()
+    with selected_project(int(project_id)):
+        return control_item(ctx, request)
 
 
 def test_running_cancel_stays_pending_until_the_thread_returns(scene):
@@ -399,10 +415,15 @@ def test_item_progress_is_identical_in_the_api_task_summary_and_catalog(scene):
     from etl_craft.services.operations.snapshots import task_run_view
 
     scene.task.fan_out(["one", "two"], lambda key: ScriptResult(1), max_items=2)
-    view = inspect(context(scene), ItemInput(pipeline_code="P", task_code="T", run_id=scene.run))
+    with selected_project(1):
+        view = inspect(
+            context(scene), ItemInput(pipeline_code="P", task_code="T", run_id=scene.run)
+        )
     with scene.db.connect() as conn:
-        task = task_run_view(conn, scene.task.pipeline_id, task_run_id=scene.summary)
-        history = fetch_task_runs(conn)[scene.task._items.identity.task_id]
+        with selected_project(1):
+            task = task_run_view(conn, scene.task.pipeline_id, task_run_id=scene.summary)
+        with selected_project(1):
+            history = fetch_task_runs(conn)[scene.task._items.identity.task_id]
     assert task.item_progress == str(view.progress) == "items 2 / 2, 0 failed, 0 skipped"
     assert task.attempts[-1].item_progress == str(view.progress)
     assert history[0].item_progress == str(view.progress)

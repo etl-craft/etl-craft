@@ -450,7 +450,7 @@ def admitted(ctx: OperationContext, name: ActionName, request: object) -> Iterat
     of the actions the table marks as provisioning.
     """
     action = ACTIONS[name]
-    ctx = _project_context(ctx, action, request)
+    ctx = project_context(ctx, action, request)
     if not isinstance(request, action.request):
         raise UsageError(
             f"{name}: request is {type(request).__name__}; expected {action.request.__name__}"
@@ -463,6 +463,10 @@ def admitted(ctx: OperationContext, name: ActionName, request: object) -> Iterat
         except (PermissionDeniedError, ResourceNotFoundError) as error:
             record_refusal(ctx, name, given, error)
             raise
+        if name == ActionName.SETUP:
+            from etl_craft.services.setup import require_setup_project
+
+            require_setup_project(ctx.engine, ctx.config)
         if action.audit == Audit.REQUEST:
             with recorded(ctx, name, given, on_completion=name == ActionName.MIGRATE):
                 yield
@@ -538,8 +542,9 @@ def invoke(ctx: OperationContext, name: ActionName, request: object) -> object:
         raise error
     try:
         ctx = _request_context(ctx, name, request)
-        ctx = _project_context(ctx, ACTIONS[name], request)
-        request = resolve_run_reference(ctx, request)
+        ctx = project_context(ctx, ACTIONS[name], request)
+        with using(None), selected_project(ctx.project_id):
+            request = resolve_run_reference(ctx, request)
     except (PermissionDeniedError, ResourceNotFoundError, RunStateError) as error:
         assert isinstance(request, ACTIONS[name].request)
         record_refusal(ctx, name, arguments(request), error)
@@ -632,7 +637,7 @@ def _require_project_access(conn: Connection, ctx: OperationContext, action: Act
             raise
 
 
-def _project_context(ctx: OperationContext, action: Action, request: object) -> OperationContext:
+def project_context(ctx: OperationContext, action: Action, request: object) -> OperationContext:
     """Resolve one active project before a project-owned operation reads any object."""
     ctx = _access_project(ctx, request)
     if action.scope == ActionScope.DEPLOYMENT and not isinstance(request, access.AccessFilter):
@@ -658,7 +663,8 @@ def _project_context(ctx: OperationContext, action: Action, request: object) -> 
             and not (action.provisioning and ctx.provisioning)
         ):
             scoped = replace(ctx, project_id=int(row.project_id))
-            _require_project_access(conn, scoped, action)
+            with selected_project(scoped.project_id):
+                _require_project_access(conn, scoped, action)
     if row is None or (
         row.active_flag == YesNo.NO
         and action.name

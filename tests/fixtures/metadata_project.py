@@ -18,6 +18,7 @@ from sqlalchemy.engine import Engine
 from etl_craft.config import ConnectorConfig, load_config
 from etl_craft.core.actor import SYSTEM_ACTOR, acting_as
 from etl_craft.engine.migrations import apply_pending_migrations
+from etl_craft.engine.project_scope import configured_project
 from etl_craft.engine.schema import init_db
 
 EXAMPLES = Path(__file__).parents[2] / "docs" / "examples" / "migrations"
@@ -50,9 +51,14 @@ class MetadataProject:
         from etl_craft.services.lineage import dialect_and_catalog
 
         dialect, catalog = dialect_and_catalog(self.config)
-        return apply_pending_migrations(
-            self.engine, self.migrations, catalog=catalog, warehouse_dialect=dialect
-        )
+
+        @configured_project
+        def apply(engine, config):  # migrate selects the connector's project, as the CLI does
+            return apply_pending_migrations(
+                engine, self.migrations, catalog=catalog, warehouse_dialect=dialect
+            )
+
+        return apply(self.engine, self.config)
 
     def rows(self, sql: str, **params: object) -> list[tuple[object, ...]]:
         with self.engine.connect() as conn:

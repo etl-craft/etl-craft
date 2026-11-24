@@ -13,7 +13,10 @@ from etl_craft.execution.scheduler import ENGINE_POLL_SECONDS, Scheduler
 from fixtures.metadata import add_dependency, add_pipeline, add_task, start_run
 from fixtures.round_trips import count_round_trips
 
-pytestmark = pytest.mark.usefixtures("engine_actor")
+pytestmark = [
+    pytest.mark.usefixtures("engine_actor"),
+    pytest.mark.usefixtures("selected_default_project"),
+]
 
 
 class RunningPool:

@@ -11,6 +11,7 @@ from etl_craft.core.enums import ActionName, ApiRole
 from etl_craft.core.text import sha256_hex
 from etl_craft.core.time import as_utc
 from etl_craft.engine import migrations
+from etl_craft.engine.repository.pipelines import selected_project
 from etl_craft.services.operations import OperationContext, tokens
 from fixtures.actions import act
 
@@ -66,7 +67,8 @@ def test_team_config_tables_do_not_need_the_package_base_contract(engine_db, tmp
     (project / "0001_config.sql").write_text(f"CREATE TABLE CFG_PROJECT ({columns});")
     with engine_db.engine.begin() as conn:
         migrations.mark_packaged_migrations_applied(conn)
-    applied = migrations.apply_pending_migrations(engine_db.engine, project)
+    with selected_project(1):  # the migration engine, called below `migrate`
+        applied = migrations.apply_pending_migrations(engine_db.engine, project)
     assert "0001_config.sql" in applied
     with engine_db.engine.connect() as conn:
         assert "CFG_PROJECT" in {name.upper() for name in inspect(conn).get_table_names()}

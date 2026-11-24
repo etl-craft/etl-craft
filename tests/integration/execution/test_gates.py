@@ -26,6 +26,8 @@ from fixtures.metadata import (
 
 NO_WAIT = Clock(sleep=lambda seconds: None)
 
+pytestmark = pytest.mark.usefixtures("selected_default_project")
+
 
 @pytest.fixture
 def world(engine_db):

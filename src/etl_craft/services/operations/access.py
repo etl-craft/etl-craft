@@ -95,7 +95,7 @@ def _list_wide(ctx: OperationContext, request: AccessFilter) -> AccessView:
     with ctx.engine.connect() as conn:
         rows = conn.execute(
             statement(conn, "access_at_scope"),
-            {"project_id": None, "environment": request.environment},
+            {"binding_project_id": None, "environment": request.environment},
         )
         return AccessView(
             bindings=tuple(_binding(row, scope, None) for row in rows if _matches(request, row))
@@ -141,7 +141,7 @@ def revoke_access(ctx: OperationContext, request: AccessWrite) -> AccessView:
 def _write(ctx: OperationContext, request: AccessWrite, intent: AccessIntent) -> AccessView:
     """Record delegated refusals after the locked check has made its final decision."""
     action = ActionName.ACCESS_GRANT if intent == AccessIntent.GRANT else ActionName.ACCESS_REVOKE
-    with command_request(action, arguments(request)) as audit:
+    with command_request(action, arguments(request), project_id=ctx.project_id) as audit:
         audit.engine = ctx.engine
         try:
             return _apply(ctx, request, intent)
@@ -215,7 +215,7 @@ def publish(conn: Connection, resolved: Resolved, intent: AccessIntent) -> Chang
             r
             for r in conn.execute(
                 statement(conn, "access_at_scope"),
-                {"project_id": resolved.project_id, "environment": request.environment},
+                {"binding_project_id": resolved.project_id, "environment": request.environment},
             )
             if (r.group_name, r.account, r.audience) == principal
             and (r.pipeline, r.tag) == (request.pipeline, request.tag)
@@ -254,7 +254,7 @@ def publish(conn: Connection, resolved: Resolved, intent: AccessIntent) -> Chang
         conn.execute(
             statement(conn, "access_add" if old is None else "access_set"),
             {
-                "project_id": resolved.project_id,
+                "binding_project_id": resolved.project_id,
                 "environment": request.environment,
                 "group_id": resolved.group_id,
                 "account_id": resolved.account_id,

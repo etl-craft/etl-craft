@@ -26,6 +26,8 @@ from fixtures.uploads import upload_api as upload_api
 
 CONTENT = b"id|name\n1|accepted\n"
 
+pytestmark = pytest.mark.usefixtures("selected_default_project")
+
 
 def caller(ctx):
     return replace(ctx, actor=Actor("writer", ActorKind.SERVICE), project_id=1, project="default")
@@ -326,9 +328,10 @@ from etl_craft.core.actor import SYSTEM_ACTOR, acting_as
 from etl_craft.core.enums import RunStatus
 from etl_craft.engine import transitions
 from etl_craft.engine.upload_recovery import finish_run_files, archive_uploads
+from etl_craft.engine.repository.pipelines import selected_project
 config = load_config(sys.argv[1])
 engine = build_engine(config)
-with acting_as(SYSTEM_ACTOR):
+with acting_as(SYSTEM_ACTOR), selected_project(1):
     with engine.begin() as conn:
         transitions.finalize_pipeline_run(conn, int(sys.argv[2]), RunStatus.SUCCESS)
     finish_run_files(engine, config, int(sys.argv[2]))

@@ -12,6 +12,7 @@ import importlib
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
+from functools import wraps
 from typing import Any
 
 from sqlalchemy.engine import Engine
@@ -24,7 +25,9 @@ from etl_craft.core.definitions import Definition
 from etl_craft.core.errors import HandlerError
 from etl_craft.core.redaction import mask_log
 from etl_craft.core.uploads import UploadInfo, UploadWriter
+from etl_craft.engine.project_scope import task_run_project_id
 from etl_craft.engine.repository.offsets import StoredOffset
+from etl_craft.engine.repository.pipelines import has_selected_project, selected_project
 from etl_craft.engine.task_store import LocalTaskStore, TaskIdentity, TaskStore
 from etl_craft.handlers.resources import LocalLocker
 
@@ -147,6 +150,19 @@ def resolve_handler(name: str) -> Handler:
     module_name, _, function_name = target.partition(":")
     handler: Handler = getattr(importlib.import_module(module_name), function_name)
     return handler
+
+
+def task_project(handler: Handler) -> Handler:
+    """Keep the child scope for local handlers entered through another caller."""
+
+    @wraps(handler)
+    def scoped(context: TaskContext, engine_db: Engine | TaskStore) -> HandlerResult:
+        if not isinstance(engine_db, Engine) or has_selected_project():
+            return handler(context, engine_db)
+        with selected_project(task_run_project_id(engine_db, context.task_run_id)):
+            return handler(context, engine_db)
+
+    return scoped
 
 
 def task_store(

@@ -29,6 +29,8 @@ OPERATIONS = {
     "renew_lease": {"CLAIMED", "RUNNING"},
 }
 
+pytestmark = pytest.mark.usefixtures("selected_default_project")
+
 
 def scene(conn):
     pipeline = add_pipeline(conn, "P")

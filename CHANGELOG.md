@@ -792,6 +792,15 @@ Warehouses are optional extras. Core bundles none. `all` is core plus the UI, fo
 
 ### Changed
 
+- Project-scoped Engine DB operations without a selected project raise
+  `ProjectNotSelectedError` (exit 32) instead of implicitly using project 1. Commands keep
+  their existing refusal (exit 2) when neither `--project` nor `Orchestration.Project` names one.
+- `setup` requires `--project` or `Orchestration.Project` when the project has migration
+  files (exit 32); it no longer applies them to the default project.
+- `doctor` without a project checks erasure coverage, privacy history, refresh baselines and
+  holiday lists for every active project, naming the project in each finding.
+- `controller`, `ui` and `login` check only the package's Engine DB migrations before starting;
+  project migrations are checked by `doctor --project` and applied by `migrate`.
 - A pipeline's `AUTO_RESTART_CONDITION` is shown in words wherever its schedule is: the pipeline views
   (`restart_note`, with `auto_restart_condition`), the Pipelines list and a pipeline's page, and the catalog
   ("Restarts after a success or a skipped run"; "Not started automatically" for `NONE`).

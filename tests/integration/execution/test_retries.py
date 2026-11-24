@@ -19,6 +19,8 @@ from integration.execution.test_pipeline import (
 )
 from integration.execution.test_pipeline import config as config
 
+pytestmark = pytest.mark.usefixtures("selected_default_project")
+
 
 def attempts(engine, run):
     with engine.connect() as conn:

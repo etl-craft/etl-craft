@@ -1,5 +1,5 @@
 -- Active schedule definitions and their latest durable tick, never entire run history.
-SELECT p.PIPELINE_ID AS pipeline_id, p.PIPELINE_CODE AS pipeline_code,
+SELECT p.PROJECT_ID AS project_id, p.PIPELINE_ID AS pipeline_id, p.PIPELINE_CODE AS pipeline_code,
        (SELECT pause.RESUMED_AT FROM AUD_PIPELINE_PAUSES pause WHERE pause.PIPELINE_ID=p.PIPELINE_ID AND pause.TASK_ID IS NULL AND pause.RESUMED_AT IS NOT NULL ORDER BY pause.RESUMED_AT DESC LIMIT 1) AS resumed_at,
        project.TIMEZONE AS project_timezone, project.ALLOWED_AUTO_RESTARTS AS project_allowed, CASE WHEN :refresh_required THEN old.RUN_SCHEDULE ELSE p.RUN_SCHEDULE END AS run_schedule, CASE WHEN :refresh_required THEN old.SCHEDULE_TIMEZONE ELSE p.SCHEDULE_TIMEZONE END AS schedule_timezone,
        CASE WHEN :refresh_required THEN old.CATCHUP ELSE p.CATCHUP END AS catchup, CASE WHEN :refresh_required THEN old.MAX_CATCHUP_RUNS ELSE p.MAX_CATCHUP_RUNS END AS max_catchup_runs,

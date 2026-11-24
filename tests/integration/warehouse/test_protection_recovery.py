@@ -7,6 +7,7 @@ import pytest
 from sqlalchemy import text
 
 from etl_craft.core.enums import ActionName
+from etl_craft.engine.repository.pipelines import selected_project
 from fixtures.actions import act
 from fixtures.lock_fencing import expire_leases
 from fixtures.protection_crashes import mutate
@@ -196,7 +197,10 @@ def test_standalone_event_fence_rechecks_engine_db_lease(sql_world, request, eng
                 text("UPDATE AUD_RESOURCE_LOCKS SET LEASE_EXPIRES_AT=:past WHERE LOCK_KEY=:key"),
                 {"past": datetime.now(UTC) - timedelta(seconds=60), "key": lock.key},
             )
-        with pytest.raises(StaleTransitionError, match="target-lock check failed"):
+        with (
+            selected_project(1),
+            pytest.raises(StaleTransitionError, match="target-lock check failed"),
+        ):
             store.protection_event(
                 w.name("people"),
                 ProtectionReport(

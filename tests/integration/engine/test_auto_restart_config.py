@@ -9,6 +9,8 @@ from etl_craft.core.errors import ExitCode, MetadataFileError
 from etl_craft.services.config_files import export_config, read_config_files, sync_config
 from fixtures.metadata import add_pipeline
 
+pytestmark = pytest.mark.usefixtures("selected_default_project")
+
 
 def restart_of(engine, code):
     with engine.connect() as conn:

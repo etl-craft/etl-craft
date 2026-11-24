@@ -66,8 +66,7 @@ def read_health(ctx: OperationContext, request: HealthInput) -> ProjectHealth:
     """Count visible work in SQL; end-date windows are start-inclusive and end-exclusive."""
     end = datetime.now(UTC)
     start = end - timedelta(hours=24)
-    params = visibility_parameters(ctx) | {
-        "project_id": None,
+    params = visibility_parameters(ctx, None) | {
         "after_project": request.after,
         "project_limit": request.limit + 1,
         "window_start": start,
@@ -80,7 +79,7 @@ def read_health(ctx: OperationContext, request: HealthInput) -> ProjectHealth:
             ).one_or_none()
             if row is None or row.active_flag != YesNo.YES:
                 raise project_not_found(request.project)
-            params["project_id"] = row.project_id
+            params["project_filter"] = row.project_id
         validate_visibility(conn, params)
         rows = conn.execute(statement(conn, "project_health"), params).all()
         if request.project is not None and not rows:

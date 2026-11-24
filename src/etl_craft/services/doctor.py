@@ -7,8 +7,7 @@ warehouse access, secrets, mail, project files, retention, and connection budget
 from __future__ import annotations
 
 import importlib.util
-import json
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
@@ -47,10 +46,11 @@ from etl_craft.dialects.engine import for_engine, for_jdbc_url
 from etl_craft.dialects.engine.guards import missing_guards
 from etl_craft.engine.connection import check_reachable, engine_db
 from etl_craft.engine.connection_budget import footprint, reservations
-from etl_craft.engine.migrations import PROJECT, MigrationFile, pending_files
+from etl_craft.engine.migrations import PROJECT, pending_files
 from etl_craft.engine.notifications import check_notifications
 from etl_craft.engine.project_migrations import ownership_problems, unowned_team_tables
 from etl_craft.engine.queries import statement
+from etl_craft.engine.repository.pipelines import selected_project
 from etl_craft.engine.schema import existing_engine_tables
 from etl_craft.execution.connections import probe_email_relay, probe_warehouse
 from etl_craft.handlers.mail import email_tls_problem
@@ -59,6 +59,7 @@ from etl_craft.services.cloning import cloning_problem
 from etl_craft.services.erasure import doctor_checks as erasure_checks
 from etl_craft.services.operations.accounts import has_admin
 from etl_craft.services.protection import problems as protection_problems
+from etl_craft.services.refresh_upgrade import refresh_checks
 from etl_craft.warehouse.connection import (
     build_warehouse_engine,
     is_in_memory,
@@ -447,9 +448,8 @@ def _engine_state(config: ConnectorConfig, engine: Engine) -> list[Check]:
                     "the Engine DB has no etl-craft tables yet: run `etl-craft setup`",
                 )
             ]
-        files = pending_files(engine, project_default=config.migrations_dir)
+        files = pending_files(engine, package_only=True)
         pending = [f"{file.source.lower()}/{file.version}" for file in files]
-        scope = _scope_problems(config, engine, [f for f in files if f.source == PROJECT])
     except (EtlCraftError, SQLAlchemyError) as error:
         return [fail("Engine DB migrations", str(error))]
     if pending:
@@ -458,9 +458,8 @@ def _engine_state(config: ConnectorConfig, engine: Engine) -> list[Check]:
                 "Engine DB migrations",
                 f"{len(pending)} pending: {', '.join(pending)}; run `etl-craft migrate`",
             ),
-            *(fail("Project migration scope", problem) for problem in scope),
         ]
-    checks = [ok("Engine DB migrations", "up to date"), *_warehouse_retention(config, engine)]
+    checks = [ok("Engine DB migrations", "up to date")]
     checks.append(
         ok("Active admin", "an active administrator exists")
         if has_admin(engine)
@@ -473,7 +472,7 @@ def _engine_state(config: ConnectorConfig, engine: Engine) -> list[Check]:
     dialect = for_engine(engine)
     with engine.connect() as conn:
         grants = dialect.extra_write_grants(conn)
-        checks.extend(_guard_checks(conn, config))
+        checks.extend(_guard_checks(conn))
     for table, role, privilege in grants:
         quoted_role = quote_identifier(role) if role != "PUBLIC" else role
         schema = config.engine.schema or "public"
@@ -493,12 +492,64 @@ def _engine_state(config: ConnectorConfig, engine: Engine) -> list[Check]:
                 f"{path} is writable by group or others; restrict access with chmod go-w",
             )
         )
+    checks.extend(_project_checks(engine, config))
+    return checks
+
+
+def _project_checks(engine: Engine, config: ConnectorConfig) -> list[Check]:
+    """Check project metadata under each owning project's scope."""
     from etl_craft.engine.privacy import problems as privacy_problems
 
     with engine.connect() as conn:
-        checks.extend(fail("Privacy history", p) for p in privacy_problems(conn, config))
-    checks.extend(erasure_checks(engine, config))
-    checks.extend(fail("Protection membership", p) for p in protection_problems(engine, config))
+        projects = [
+            row
+            for row in conn.execute(statement(conn, "admin_projects"))
+            if row.active_flag == YesNo.YES
+            and (not config.project or row.project_code == config.project)
+        ]
+    if not projects:
+        return [ok("Project checks", "checked no active projects")]
+    checks: list[Check] = []
+    for project in projects:
+        scoped = replace(config, project=project.project_code)
+        with selected_project(int(project.project_id)):
+            with engine.connect() as conn:
+                findings = [fail("Privacy history", p) for p in privacy_problems(conn, scoped)]
+                findings.extend(
+                    _project_guard_checks(conn, int(project.project_id), project.governance)
+                )
+            findings.extend(_warehouse_retention(scoped, engine))
+            findings.extend(
+                erasure_checks(engine, scoped, require_approved_connector=not config.project)
+            )
+            findings.extend(
+                fail("Protection membership", p) for p in protection_problems(engine, scoped)
+            )
+            if config.project:
+                files = pending_files(engine, project_default=scoped.migrations_dir)
+                project_files = [file for file in files if file.source == PROJECT]
+                if project_files:
+                    names = ", ".join(f"project/{file.version}" for file in project_files)
+                    findings.append(
+                        fail(
+                            "Engine DB migrations",
+                            f"{len(project_files)} pending: {names}; run `etl-craft migrate`",
+                        )
+                    )
+                    with engine.connect() as conn:
+                        pending = [(file.version, file.sql) for file in project_files]
+                        findings.extend(
+                            fail("Project migration scope", problem)
+                            for problem in ownership_problems(
+                                conn, int(project.project_id), pending
+                            )
+                        )
+        checks.extend(
+            replace(check, detail=f"project {project.project_code}: {check.detail}")
+            if not config.project or check.name.startswith("Erasure")
+            else check
+            for check in findings
+        )
     return checks
 
 
@@ -709,33 +760,30 @@ def _artifacts(config: ConnectorConfig) -> list[Check]:
     return checks
 
 
-def _guard_checks(conn: Connection, config: ConnectorConfig) -> list[Check]:
-    """Report missing guards and the selected project's direct-edit capability."""
-    checks: list[Check] = []
-    dialect = for_engine(conn)
-    for trigger in missing_guards(conn):
-        checks.append(
-            fail(
-                "Engine DB guard",
-                f"missing trigger {trigger}; expected every package guard; "
-                "re-run `etl-craft setup` or restore",
-            )
+def _guard_checks(conn: Connection) -> list[Check]:
+    """Report deployment-wide guards and unowned team tables."""
+    return [
+        fail(
+            "Engine DB guard",
+            f"missing trigger {trigger}; expected every package guard; "
+            "re-run `etl-craft setup` or restore",
         )
-    project = conn.execute(
-        statement(conn, "project_by_code"), {"code": config.project}
-    ).one_or_none()
-    policy = (
-        None
-        if project is None
-        else conn.execute(
-            statement(conn, "project_governance"), {"project_id": project.project_id}
-        ).one()
-    )
-    if (
-        policy is not None
-        and policy.governance == Governance.RELAXED
-        and not dialect.supports_api_replicas
-    ):
+        for trigger in missing_guards(conn)
+    ] + [
+        Check(
+            "Team table owner",
+            Status.INFO,
+            f"{table} has no owning project; the first project migration that changes it "
+            "claims it for its project",
+        )
+        for table in unowned_team_tables(conn)
+    ]
+
+
+def _project_guard_checks(conn: Connection, project_id: int, governance: str) -> list[Check]:
+    """Report configuration, refresh and calendar findings for the selected project."""
+    checks = refresh_checks(conn, project_id)
+    if governance == Governance.RELAXED and not for_engine(conn).supports_api_replicas:
         checks.append(
             Check(
                 "Direct config edits",
@@ -744,56 +792,6 @@ def _guard_checks(conn: Connection, config: ConnectorConfig) -> list[Check]:
                 "use config files or commands on SQLite",
             )
         )
-
-    checks.extend(
-        Check(
-            "Team table owner",
-            Status.INFO,
-            f"{table} has no owning project; the first project migration that changes it "
-            "claims it for its project",
-        )
-        for table in unowned_team_tables(conn)
-    )
-    if project is not None:
-        checks.extend(_refresh_checks(conn, int(project.project_id)))
-    if project is not None:
-        ending = holiday_lists_ending(conn, datetime.now(UTC), DOCTOR_DAYS)
-        checks.extend(warn(f"Holiday list ({where})", problem) for where, problem in ending)
-
-    return checks
-
-
-def _scope_problems(
-    config: ConnectorConfig, engine: Engine, files: list[MigrationFile]
-) -> list[str]:
-    """Name pending project statements that would change another project's tables."""
-    with engine.connect() as conn:
-        if not files:
-            return []
-        project = conn.execute(
-            statement(conn, "project_by_code"), {"code": config.project}
-        ).one_or_none()
-        if project is None:
-            return []
-        pending = [(file.version, file.sql) for file in files]
-        return ownership_problems(conn, int(project.project_id), pending)
-
-
-def _refresh_checks(conn: Connection, project_id: int) -> list[Check]:
-    """List invalid baselines without hiding pipelines that retain a runnable version."""
-    checks = []
-    for row in conn.execute(statement(conn, "refresh_doctor"), {"project_id": project_id}):
-        findings = [] if row.findings is None else json.loads(row.findings)
-        detail = "; ".join(str(f["message"]) for f in findings) or "no refresh recorded"
-        blocked = not row.has_baseline or row.block_on_refresh_error == YesNo.YES
-        state = (
-            "no version has passed yet" if not row.has_baseline else "last good version retained"
-        )
-        checks.append(
-            Check(
-                f"Pipeline refresh {row.pipeline_code}",
-                Status.FAIL if blocked else Status.WARN,
-                f"{state}; {detail}; correct the findings and run `etl-craft pipelines refresh`",
-            )
-        )
+    ending = holiday_lists_ending(conn, datetime.now(UTC), DOCTOR_DAYS)
+    checks.extend(warn(f"Holiday list ({where})", problem) for where, problem in ending)
     return checks

@@ -44,6 +44,7 @@ from etl_craft.config.resolve import source_values
 from etl_craft.core.errors import ConfigurationError, LockTimeoutError, UsageError
 from etl_craft.core.http import forwarded_visitor
 from etl_craft.core.redaction import remember
+from etl_craft.engine.project_scope import project_selection
 from etl_craft.engine.repository.docs_site import fetch_publication, record_publication
 from etl_craft.services.catalog.storage import MARKER, prepare_site_lock, site_lock
 
@@ -288,10 +289,12 @@ def published(
             url = f"http://{local}/"
         elif organization:
             url = organization
-            _check_url(engine, url, accept_new_url=accept_new_url)
+            with project_selection(engine, config, "publish-docs"):
+                _check_url(engine, url, accept_new_url=accept_new_url)
         else:
             url, close = open_tunnel(local, config)
-            _check_url(engine, url, accept_new_url=accept_new_url)
+            with project_selection(engine, config, "publish-docs"):
+                _check_url(engine, url, accept_new_url=accept_new_url)
         logger.info("serving %s at %s", folder, url)
         yield Published(url, local)
     finally:

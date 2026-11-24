@@ -8,6 +8,7 @@ from sqlalchemy import text
 from etl_craft.core.actor import current_actor
 from etl_craft.core.enums import ActionName, ApiRole, FailureClass, RetryOn, RunStatus
 from etl_craft.engine.repository.catalog import fetch_task_runs
+from etl_craft.engine.repository.pipelines import selected_project
 from etl_craft.execution.attempt_types import TaskRun
 from etl_craft.execution.pipeline import run_pipeline
 from etl_craft.services.operations.context import OperationContext
@@ -67,7 +68,8 @@ def test_script_failure_policy_and_historical_explanation(
             ),
             {"task": task_id},
         ).all()
-        history = fetch_task_runs(conn)[task_id][0]
+        with selected_project(1):
+            history = fetch_task_runs(conn)[task_id][0]
     assert len(attempts) == count
     failed = attempts[0]
     assert failed.failure_class == kind

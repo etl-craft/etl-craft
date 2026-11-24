@@ -1,0 +1,3 @@
+SELECT p.PROJECT_ID AS project_id
+FROM CFG_PIPELINES p
+WHERE p.PIPELINE_ID=:pipeline_id

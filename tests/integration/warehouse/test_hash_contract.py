@@ -8,6 +8,7 @@ from sqlalchemy import text
 from etl_craft.core.enums import SqlAction
 from etl_craft.core.errors import HandlerError
 from etl_craft.engine.repository.hash_versions import clear_hash_version, fetch_hash_version
+from etl_craft.engine.repository.pipelines import selected_project
 from etl_craft.engine.repository.tasks import fetch_task_parameters
 from etl_craft.handlers import sql
 from etl_craft.services.rehash import rehash
@@ -62,7 +63,7 @@ def test_rehash_upgrades_every_row_then_unchanged_merge_does_nothing(sql_world, 
     if kind == "SCD2_MERGE":
         w.run("merge", **{**params, "SELECT_QUERY": source.replace("'old'", "'new'")})
     w.execute(f"UPDATE {w.name('people')} SET HASH_KEY = 'legacy'")
-    with w.engine_db.begin() as conn:
+    with selected_project(1), w.engine_db.begin() as conn:
         clear_hash_version(conn, w.name("people"))
     before = w.rows(f"SELECT * FROM {w.name('people')} ORDER BY ROW_ID")
     with pytest.raises(HandlerError, match="rehash --target"):
@@ -70,11 +71,11 @@ def test_rehash_upgrades_every_row_then_unchanged_merge_does_nothing(sql_world, 
     dry = rehash(w.engine_db, w.config, f"{w.schema}.people", dry_run=True)
     assert dry.rows == len(before) and dry.sql.startswith(("MERGE INTO ", "UPDATE "))
     assert w.rows(f"SELECT * FROM {w.name('people')} ORDER BY ROW_ID") == before
-    with w.engine_db.connect() as conn:
+    with w.engine_db.connect() as conn, selected_project(1):
         assert fetch_hash_version(conn, w.name("people")) is None
     result = rehash(w.engine_db, w.config, f"{w.schema}.people")
     assert result.rows == len(before)
-    with w.engine_db.connect() as conn:
+    with w.engine_db.connect() as conn, selected_project(1):
         assert fetch_hash_version(conn, w.name("people")) == 2
     after = w.rows(f"SELECT * FROM {w.name('people')} ORDER BY ROW_ID")
     names = w.columns("people")

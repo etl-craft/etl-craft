@@ -11,6 +11,7 @@ from sqlalchemy import text
 from etl_craft.core.actor import acting_as
 from etl_craft.core.enums_uploads import SeedStatus
 from etl_craft.engine.repository.hash_versions import fetch_hash_version
+from etl_craft.engine.repository.pipelines import selected_project
 from fixtures.metadata import add_pipeline, add_task
 from fixtures.seeds import seed_project as seed_project
 
@@ -73,7 +74,8 @@ def test_killed_seed_reapply_keeps_exact_rows_and_one_completed_outcome(
         assert conn.execute(text("SELECT COUNT(*) FROM AUD_SEED_LOADS")).scalar_one() == int(
             existing
         )
-        assert fetch_hash_version(conn, "warehouse.ds.agents") == (2 if existing else None)
+        with selected_project(1):
+            assert fetch_hash_version(conn, "warehouse.ds.agents") == (2 if existing else None)
     outcome = deploy().seed_loads[0]
     assert outcome.status == SeedStatus.LOADED, outcome.message
     with duckdb.connect(str(ctx.config.project_dir / "warehouse.db")) as conn:
@@ -85,4 +87,5 @@ def test_killed_seed_reapply_keeps_exact_rows_and_one_completed_outcome(
             == int(existing) + 1
         )
         assert conn.execute(text("SELECT COUNT(*) FROM AUD_PIPELINES_RUN_LOG")).scalar_one() == 0
-        assert fetch_hash_version(conn, "warehouse.ds.agents") == 2
+        with selected_project(1):
+            assert fetch_hash_version(conn, "warehouse.ds.agents") == 2

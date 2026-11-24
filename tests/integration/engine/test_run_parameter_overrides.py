@@ -8,8 +8,11 @@ from sqlalchemy import text
 from etl_craft.core.actor import SYSTEM_ACTOR
 from etl_craft.core.enums import ApiRole
 from etl_craft.core.errors import UsageError
+from etl_craft.engine.queries import statement
+from etl_craft.engine.repository.pipelines import selected_project
 from etl_craft.services.operations.context import OperationContext
 from etl_craft.services.operations.requests import RunRequest
+from etl_craft.services.operations.run_parameters import admit as admit_parameters
 from fixtures.metadata import add_pipeline, add_task
 
 
@@ -32,10 +35,23 @@ def request(**values):
     )
 
 
+def admit(ctx, request):
+    """Give the direct admission transaction the identity normally provided by invoke."""
+    with ctx.engine.connect() as conn:
+        project_id = (
+            conn.execute(
+                statement(conn, "project_by_code"), {"code": ctx.project or ctx.config.project}
+            )
+            .one()
+            .project_id
+        )
+    with selected_project(int(project_id)):
+        return admit_parameters(ctx, request)
+
+
 def test_recorded_values_and_duplicate_submission_ignore_later_metadata(scene):
     from etl_craft.engine.repository.tasks import admitted_parameters
     from etl_craft.engine.run_definitions import read
-    from etl_craft.services.operations.run_parameters import admit
 
     ctx, _pipeline, task = scene
     selected, run_id, duplicate = admit(ctx, request())
@@ -68,7 +84,6 @@ def test_recorded_values_and_duplicate_submission_ignore_later_metadata(scene):
     "params", [("missing.INPUT_PARAMS={}",), ("load.UNKNOWN=x",), ("load.INPUT_PARAMS=not-json",)]
 )
 def test_bad_run_inputs_refused_before_admission(scene, params):
-    from etl_craft.services.operations.run_parameters import admit
 
     ctx, _, _ = scene
     with pytest.raises(UsageError):
@@ -91,7 +106,6 @@ def test_absent_overrides_keep_base_parameters(scene):
 
 
 def test_override_requires_submission_key_and_new_run(scene):
-    from etl_craft.services.operations.run_parameters import admit
 
     ctx, _, _ = scene
     for changes in ({"request_key": None}, {"run_id": 42}, {"skip": True}):
@@ -105,22 +119,23 @@ def test_restart_copies_inputs_and_refuses_incompatible_new_base(scene):
     from etl_craft.engine.runlog import RunSelector, select_run
     from etl_craft.services.operations.recovery import prepare_recovery
     from etl_craft.services.operations.requests import ControlRequest
-    from etl_craft.services.operations.run_parameters import admit, copy_for_restart
+    from etl_craft.services.operations.run_parameters import copy_for_restart
 
     ctx, pipeline, task = scene
     _, source, _ = admit(ctx, request())
     with ctx.engine.begin() as conn:
         transitions.finalize_pipeline_run(conn, source, RunStatus.FAILED)
         selected = select_run(conn, pipeline, RunSelector(run_id=source))
-        prepare_recovery(
-            conn,
-            ctx,
-            selected,
-            ControlRequest(
-                pipeline_code="P", run_id=source, action=ControlAction.RESTART, reason="test"
-            ),
-            100,
-        )
+        with selected_project(1):
+            prepare_recovery(
+                conn,
+                ctx,
+                selected,
+                ControlRequest(
+                    pipeline_code="P", run_id=source, action=ControlAction.RESTART, reason="test"
+                ),
+                100,
+            )
         replacement = select_run(conn, pipeline, RunSelector(run_key="control-restart:100"))
         assert run_overrides.recorded(conn, replacement.pipeline_run_id) == {
             "load": {"INPUT_PARAMS": '{"day":2}'}
@@ -137,7 +152,6 @@ def test_restart_copies_inputs_and_refuses_incompatible_new_base(scene):
 
 
 def test_duplicate_override_admissions_race_to_one_record(scene):
-    from etl_craft.services.operations.run_parameters import admit
     from fixtures.races import two_at_once
 
     ctx, _, _ = scene
@@ -153,7 +167,6 @@ def test_effective_parameters_reach_retry_scope_and_dispatched_task_context(scen
     from etl_craft.engine.repository.tasks import fetch_task_parameters
     from etl_craft.engine.run_definitions import for_run
     from etl_craft.execution.context import build_task_context
-    from etl_craft.services.operations.run_parameters import admit
 
     ctx, _, task = scene
     _, run, _ = admit(ctx, request())
@@ -199,7 +212,6 @@ def test_shared_run_operation_returns_recorded_admission_and_refuses_viewer(scen
     ],
 )
 def test_sql_input_types_use_handler_validation_before_creation(scene, name, value):
-    from etl_craft.services.operations.run_parameters import admit
 
     ctx, pipeline, _ = scene
     with ctx.engine.begin() as conn:
@@ -225,7 +237,6 @@ def test_sql_input_types_use_handler_validation_before_creation(scene, name, val
 
 def test_submission_keys_and_task_names_are_isolated_by_project(scene):
     from etl_craft.engine.repository.pipelines import selected_project
-    from etl_craft.services.operations.run_parameters import admit
 
     ctx, _, _ = scene
     _, first, _ = admit(ctx, request())
@@ -264,7 +275,6 @@ def test_automatic_retry_keeps_override_and_pinned_retry_budget(scene):
     from etl_craft.engine import transitions
     from etl_craft.execution.context import build_task_context
     from etl_craft.execution.retries import refresh_retries
-    from etl_craft.services.operations.run_parameters import admit
 
     ctx, _, task = scene
     with ctx.engine.begin() as conn:
@@ -317,7 +327,6 @@ def test_standalone_sql_run_records_inputs_with_its_existing_selection(scene):
     from etl_craft.engine.repository.tasks import admitted_parameters
     from etl_craft.engine.run_definitions import read
     from etl_craft.engine.run_scopes import fetch_selection
-    from etl_craft.services.operations.run_parameters import admit
 
     ctx, pipeline, _ = scene
     with ctx.engine.begin() as conn:
@@ -344,8 +353,6 @@ def test_standalone_sql_run_records_inputs_with_its_existing_selection(scene):
 def test_run_and_override_record_roll_back_together_after_an_interrupted_write(scene):
     from sqlalchemy import event
 
-    from etl_craft.services.operations.run_parameters import admit
-
     ctx, _, _ = scene
 
     def interrupted(conn, cursor, sql, parameters, context, executemany):
@@ -369,7 +376,6 @@ def test_override_admission_uses_the_project_timezone_for_implicit_run_date(scen
     from datetime import date
 
     from etl_craft.engine import runlog
-    from etl_craft.services.operations.run_parameters import admit
 
     ctx, _, _ = scene
     ctx = replace(ctx, config=replace(ctx.config, timezone="Asia/Kolkata"))
@@ -393,7 +399,6 @@ def test_override_admission_uses_the_project_timezone_for_implicit_run_date(scen
 def test_override_task_names_are_scoped_to_the_run_pipeline_with_upstream_namesakes(scene):
     from etl_craft.engine.repository.tasks import admitted_parameters
     from etl_craft.engine.run_definitions import read
-    from etl_craft.services.operations.run_parameters import admit
     from fixtures.metadata import add_dependency
 
     ctx, pipeline, task = scene

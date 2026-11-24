@@ -72,9 +72,20 @@ def test_failure_admits_only_alert_task_once_without_changing_paused_source(aler
         assert len(admitted) == 1
         assert admit_pending(ctx) == ()
         run = admitted[0]
-        assert open_pause(ctx.engine, "ALERT_SOURCE", selector=RunSelector(run_id=run)) is None
         assert (
-            open_pause(ctx.engine, "ALERT_SOURCE", selector=RunSelector(run_id=source)) is not None
+            open_pause(
+                ctx.engine, "ALERT_SOURCE", selector=RunSelector(run_id=run), pipeline_id=alerts[1]
+            )
+            is None
+        )
+        assert (
+            open_pause(
+                ctx.engine,
+                "ALERT_SOURCE",
+                selector=RunSelector(run_id=source),
+                pipeline_id=alerts[1],
+            )
+            is not None
         )
         with ctx.engine.connect() as conn:
             assert fetch_selection(conn, run).task_ids == (task,)
@@ -515,6 +526,7 @@ def test_retention_keeps_admission_receipt_until_source_history_is_removed(alert
     from etl_craft.core.alerts import AlertStatus
     from etl_craft.engine.alert_deliveries import DeliveryAttempt, append, event
     from etl_craft.engine.queries import statement
+    from etl_craft.engine.repository.pipelines import selected_project
     from etl_craft.services.operations.alert_admission import admit_pending
 
     ctx, source, _ = failed_source(alerts)
@@ -523,8 +535,8 @@ def test_retention_keeps_admission_receipt_until_source_history_is_removed(alert
     try:
         with acting_as(SYSTEM_ACTOR):
             (run,) = admit_pending(ctx)
-            params = {"project_id": 1, "cutoff": cutoff}
-            with ctx.engine.begin() as conn:
+            params = {"cutoff": cutoff}
+            with selected_project(ctx.project_id), ctx.engine.begin() as conn:
                 conn.execute(statement(conn, "retention_aud_pipelines_run_log"), params)
                 assert (
                     conn.execute(
@@ -544,10 +556,10 @@ def test_retention_keeps_admission_receipt_until_source_history_is_removed(alert
                     AlertStatus.FAILED,
                     DeliveryAttempt(status_code=503),
                 )
-            with ctx.engine.begin() as conn:
+            with selected_project(ctx.project_id), ctx.engine.begin() as conn:
                 conn.execute(statement(conn, "retention_aud_alert_deliveries"), params)
             assert admit_pending(ctx) == ()
-            with ctx.engine.begin() as conn:
+            with selected_project(ctx.project_id), ctx.engine.begin() as conn:
                 remaining = (
                     conn.execute(text("SELECT STATUS AS status FROM AUD_ALERT_DELIVERIES"))
                     .scalars()

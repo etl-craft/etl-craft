@@ -39,6 +39,7 @@ error class has its own status; every error etl-craft raises on purpose belongs 
 | `29` | `PERMANENT` | A script explicitly raised `etl_craft.scripting.PermanentError`; correct its input or configuration before retrying, or explicitly select `RETRY_ON=ANY`. |
 | `30` | `ARCHIVE` | The archive destination or stored snapshot cannot be verified; restore the named schema or values, then retry the original archive destination. Source rows are retained. |
 | `31` | `CONFIRMATION_REQUIRED` | A request would empty data and needs those exact targets confirmed first (`ConfirmationRequiredError`). Review the listed targets, then repeat the request confirming them: `--yes` unattended, or answer the prompt. |
+| `32` | `PROJECT_NOT_SELECTED` | A project-owned operation has no selected project (`ProjectNotSelectedError`). Pass `--project`, set `Orchestration.Project`, or have the entry point select the run's project. |
 
 Task pause without `--outcome SUCCESS|SKIPPED|FAILED`, or task pause with `--active-runs`, is
 `UsageError` (exit 2). A DRAIN dispatch refusal is `RunRefusedError` (exit 10).

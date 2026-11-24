@@ -10,6 +10,7 @@ from etl_craft.core.actor import Actor, ActorKind, acting_as
 from etl_craft.core.enums import ActionName, ApiRole
 from etl_craft.core.enums_access import Permission
 from etl_craft.core.errors import PermissionDeniedError, ResourceNotFoundError, UsageError
+from etl_craft.engine.repository.pipelines import selected_project
 from etl_craft.services.operations import OperationContext
 from etl_craft.services.operations.permissions import pipeline_access
 from fixtures.actions import act
@@ -17,6 +18,12 @@ from fixtures.metadata import add_pipeline
 from fixtures.races import two_at_once
 
 OWNER = Actor("owner", ActorKind.USER)
+
+
+def access(conn, ctx):
+    """Read pipeline access below invoke, in the default project the scene builds."""
+    with selected_project(1):
+        return pipeline_access(conn, ctx)
 
 
 @pytest.fixture
@@ -56,7 +63,7 @@ def test_principals_levels_and_securables(access_scene, principal, permission, t
     result = change(ctx, **identity, role=permission)
     assert result.change.binding.role == permission
     with ctx.engine.connect() as conn:
-        assert pipeline_access(conn, alice).levels["P"] == permission
+        assert access(conn, alice).levels["P"] == permission
     assert act(alice, ActionName.ACCESS_LIST, project="default").effective
     selected = act(alice, ActionName.ACCESS_LIST, project="default", tag="team")
     assert {code for code, _, _ in selected.effective} == {"P"}
@@ -99,7 +106,7 @@ def test_highest_level_and_immediate_revocation(access_scene):
     change(ctx, group="team", tag="team", role=Permission.CAN_VIEW)
     change(ctx, account="alice", pipeline="P", role=Permission.CAN_MANAGE)
     with ctx.engine.connect() as conn:
-        assert pipeline_access(conn, alice).levels["P"] == Permission.CAN_MANAGE
+        assert access(conn, alice).levels["P"] == Permission.CAN_MANAGE
     act(
         ctx,
         ActionName.ACCESS_REVOKE,
@@ -111,7 +118,7 @@ def test_highest_level_and_immediate_revocation(access_scene):
     with pytest.raises(PermissionDeniedError):
         change(alice, audience="viewer", pipeline="P", role=Permission.CAN_RUN)
     with ctx.engine.connect() as conn:
-        assert pipeline_access(conn, alice).levels["P"] == Permission.CAN_VIEW
+        assert access(conn, alice).levels["P"] == Permission.CAN_VIEW
         assert (
             conn.execute(
                 text(

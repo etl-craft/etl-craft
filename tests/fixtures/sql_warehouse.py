@@ -23,11 +23,12 @@ from etl_craft.config import ConnectionProfile, ConnectorConfig, SourceConfig
 from etl_craft.core.enums import SecretsSource, TableFormat
 from etl_craft.core.text import qualify
 from etl_craft.engine import transitions
+from etl_craft.engine.repository.pipelines import selected_project
 from etl_craft.handlers import sql
 from etl_craft.handlers.registry import HandlerResult, TaskContext
 from etl_craft.warehouse.connection import build_warehouse_engine
 from fixtures.engine_db import prepared_sqlite_engine_db
-from fixtures.metadata import add_pipeline, add_task, start_run
+from fixtures.metadata import add_pipeline, add_task, pipeline_project_id, start_run
 from fixtures.services import (
     MINIO_PASSWORD,
     MINIO_USER,
@@ -144,7 +145,10 @@ class SqlWorld:
 
     def run(self, code: str, **params: str) -> HandlerResult:
         """Define task ``code`` with ``params`` and run it."""
-        return sql.run(self.task(code, **params), self.engine_db)
+        with self.engine_db.connect() as conn:
+            project_id = pipeline_project_id(conn, self.pipeline_id)
+        with selected_project(project_id):
+            return sql.run(self.task(code, **params), self.engine_db)
 
     def setup(self, table: str, select: str, writer: str) -> HandlerResult:
         """Create ``table`` from ``select`` with the audit columns ``writer`` needs."""

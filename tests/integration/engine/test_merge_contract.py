@@ -1,10 +1,13 @@
 """Merge target contracts hold across active pipelines on both Engine DBs."""
 
+import pytest
 from sqlalchemy import text
 
 from etl_craft.engine.repository.source_contracts import resolve_project_sources
 from etl_craft.engine.repository.tasks import conflicting_merge_action
 from fixtures.metadata import add_pipeline, add_task
+
+pytestmark = pytest.mark.usefixtures("selected_default_project")
 
 
 def test_opposite_merge_writer_matches_aliases_but_not_other_catalogs_or_retired_pipelines(

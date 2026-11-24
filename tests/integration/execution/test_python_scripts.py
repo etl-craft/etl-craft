@@ -20,6 +20,7 @@ from etl_craft.core.enums import RunStatus
 from etl_craft.core.errors import HandlerError, MetadataError
 from etl_craft.engine import runlog, transitions
 from etl_craft.engine.repository.offsets import fetch_task_offset
+from etl_craft.engine.repository.pipelines import selected_project
 from etl_craft.execution.attempt_types import ChildOptions
 from etl_craft.execution.context import build_task_context
 from etl_craft.execution.runner import run_task
@@ -863,16 +864,17 @@ def run(task):
             child=ChildOptions(kill_grace_seconds=1, cancel_poll_seconds=0.1),
         )
         wait_for(lambda: (config.project_dir / "item-ready").exists())
-        request_control(
-            ctx,
-            ControlRequest(
-                action=ControlAction.STOP,
-                pipeline_code="P",
-                task_code="load",
-                run_id=run_id,
-                reason="stop item work",
-            ),
-        )
+        with selected_project(1):
+            request_control(
+                ctx,
+                ControlRequest(
+                    action=ControlAction.STOP,
+                    pipeline_code="P",
+                    task_code="load",
+                    run_id=run_id,
+                    reason="stop item work",
+                ),
+            )
         first = future.result(20)
     assert first.status == RunStatus.CANCELLED
     with engine.connect() as conn:
@@ -880,16 +882,17 @@ def run(task):
         assert records["quick"].status == ItemStatus.SUCCESS
         assert records["hold"].status == ItemStatus.CANCELLED
     (config.project_dir / "release-items").touch()
-    request_control(
-        ctx,
-        ControlRequest(
-            action=ControlAction.RECOVER,
-            pipeline_code="P",
-            task_code="load",
-            run_id=run_id,
-            reason="resume unfinished items",
-        ),
-    )
+    with selected_project(1):
+        request_control(
+            ctx,
+            ControlRequest(
+                action=ControlAction.RECOVER,
+                pipeline_code="P",
+                task_code="load",
+                run_id=run_id,
+                reason="resume unfinished items",
+            ),
+        )
     second = run_task(engine, config, "P", "load")
     assert second.status == RunStatus.SUCCESS
     assert second.task_run_id == first.task_run_id

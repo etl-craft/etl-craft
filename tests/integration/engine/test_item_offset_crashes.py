@@ -12,6 +12,8 @@ from fixtures.lock_fencing import expire_leases
 from fixtures.metadata import add_pipeline, start_run
 from fixtures.sql_warehouse import warehouses
 
+pytestmark = pytest.mark.usefixtures("selected_default_project")
+
 
 @pytest.mark.chaos
 @warehouses("duckdb")

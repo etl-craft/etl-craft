@@ -4,7 +4,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 
-from sqlalchemy.engine import Engine
+from sqlalchemy.engine import Connection, Engine
 
 from etl_craft.config import ConnectorConfig
 from etl_craft.config.project import project_config
@@ -23,6 +23,15 @@ class WarehouseComparison:
     unavailable: tuple[str, ...]
 
 
+def approved_connector(conn: Connection, config: ConnectorConfig) -> ConnectorConfig | None:
+    """Read the selected project's latest approved connection definitions."""
+    identity = conn.execute(statement(conn, "bundle_latest")).scalar_one_or_none()
+    if identity is None:
+        return None
+    bundle = Bundle.load(conn, identity)
+    return project_config(config, bundle.materialize(config) / "craft-connector.yml")
+
+
 def shared_warehouses(engine: Engine, config: ConnectorConfig) -> WarehouseComparison:
     """Name projects with identical configured databases/catalogs and schemas; block nothing."""
     groups: dict[tuple[object, ...], list[str]] = defaultdict(list)
@@ -30,32 +39,20 @@ def shared_warehouses(engine: Engine, config: ConnectorConfig) -> WarehouseCompa
         projects = conn.execute(
             statement(conn, "clone_projects"), {"bootstrap_project": config.project}
         ).all()
-        bundles = []
-        for project in projects:
-            with selected_project(project.project_id):
-                identity = conn.execute(statement(conn, "bundle_latest")).scalar_one_or_none()
-                bundles.append(
-                    (
-                        project.project_code,
-                        project.project_id,
-                        identity,
-                    )
-                )
     unavailable = []
-    for code, project_id, identity in bundles:
+    for project in projects:
+        code = project.project_code
         try:
-            if identity is None:
+            with engine.connect() as conn, selected_project(project.project_id):
+                declared = approved_connector(conn, config)
+            if declared is None:
+                if code != config.project:
+                    continue
                 declared = config
-            else:
-                with engine.connect() as conn, selected_project(project_id):
-                    bundle = Bundle.load(conn, identity)
-                declared = project_config(
-                    config, bundle.materialize(config) / "craft-connector.yml"
-                )
         except (EtlCraftError, OSError) as error:
             # This diagnostic reports unavailable evidence; it cannot block admin changes.
             unavailable.append(
-                f"project {code}, bundle {identity}: "
+                f"project {code}: "
                 f"warehouse comparison unavailable ({type(error).__name__}); expected a readable "
                 "approved bundle and resolvable connection settings; "
                 "restore the bundle and host variables"

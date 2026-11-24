@@ -35,6 +35,7 @@ from etl_craft.dialects.warehouse.copying import MAX_BOUND_VALUES
 from etl_craft.engine import locks, resource_locks
 from etl_craft.engine.audit import ActionRequest
 from etl_craft.engine.cloning import CloneState
+from etl_craft.engine.project_scope import configured_project
 from etl_craft.engine.repository.pipelines import current_project_id
 from etl_craft.execution.run_types import RunHooks, default_hooks
 from etl_craft.handlers.parameters import package_parameters
@@ -104,6 +105,7 @@ def mirror_schema_problem(config: ConnectorConfig) -> str | None:
     return None
 
 
+@configured_project
 def clone(engine: Engine, config: ConnectorConfig) -> list[ClonedTable]:
     """Mirror the Engine DB tables of ``Cloning.Scope`` into the warehouse schema.
 

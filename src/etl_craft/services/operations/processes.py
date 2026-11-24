@@ -50,7 +50,7 @@ def ui(ctx: OperationContext, request: NoInput) -> None:
 
 
 def check_package_schema(
-    ctx: OperationContext, connection: Connection | None = None, *, package_only: bool = False
+    ctx: OperationContext, connection: Connection | None = None, *, package_only: bool = True
 ) -> None:
     """Require the existing migration ledger to match this package before using it."""
     require_current_schema(ctx, connection, package_only=package_only)

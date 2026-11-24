@@ -27,6 +27,7 @@ from etl_craft.core.redaction import mask_text, registering
 from etl_craft.dialects.business_rules import quote_output_key
 from etl_craft.dialects.warehouse.erasure import old_versions, resolved_column, selection_columns
 from etl_craft.engine import locks
+from etl_craft.engine.project_scope import configured_project
 from etl_craft.engine.queries import statement
 from etl_craft.engine.repository.normalization import object_identity
 from etl_craft.engine.repository.tasks import fetch_all_task_parameters
@@ -259,6 +260,7 @@ def write_filters(
     )
 
 
+@configured_project
 def apply_entries(
     engine: Engine,
     config: ConnectorConfig,

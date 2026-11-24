@@ -1,5 +1,7 @@
 """Both Engine DBs batch task metadata without changing exact-run peer selection."""
 
+import pytest
+
 from etl_craft.core.enums import RunStatus, SqlAction
 from etl_craft.dialects.engine import for_engine
 from etl_craft.engine import locks, transitions
@@ -7,6 +9,8 @@ from etl_craft.engine.task_store import LocalTaskStore, TargetState, TaskIdentit
 from etl_craft.handlers.resources import LocalLocker
 from fixtures.metadata import add_pipeline, add_task, start_run
 from fixtures.round_trips import count_round_trips
+
+pytestmark = pytest.mark.usefixtures("selected_default_project")
 
 
 def test_task_state_batches_peer_statuses_and_target_contracts(engine_db):

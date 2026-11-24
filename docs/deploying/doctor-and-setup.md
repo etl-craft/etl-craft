@@ -19,6 +19,12 @@ first. Each line is one check:
 8 ok, 1 warning(s), 1 failed
 ```
 
+Without a project, `doctor` checks erasure coverage for every active project and names
+the project in each finding. Use `--project CODE` or `Orchestration.Project` to check one.
+The deployment-wide check uses each project's approved bundle to reach its warehouse.
+If a project has active erasure entries but no usable approved connector, doctor reports
+that failure and continues checking other projects.
+
 It exits 1 when any check fails, so it can gate a deployment. It checks:
 
 | Check | Fails when | Warns when |
@@ -45,6 +51,10 @@ in, so it never spends a login attempt against a relay that locks accounts out. 
 the mode and trust source.
 
 ## `etl-craft setup`
+
+If the project has migration files, set `Orchestration.Project` or run
+`etl-craft --project CODE setup`. This applies even when all those files have already
+been applied. Without a project, setup exits 32 before making changes.
 
 `setup` is the one command for a new deployment and after every upgrade. It runs the same checks,
 apart from the Engine DB's tables and migrations, and then:

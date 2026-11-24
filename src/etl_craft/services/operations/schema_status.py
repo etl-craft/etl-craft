@@ -12,7 +12,7 @@ from etl_craft.services.operations.context import OperationContext
 
 
 def require_current_schema(
-    ctx: OperationContext, connection: Connection | None = None, *, package_only: bool = False
+    ctx: OperationContext, connection: Connection | None = None, *, package_only: bool = True
 ) -> None:
     """Name applied and required Engine migrations before reading current account columns."""
     try:

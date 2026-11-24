@@ -51,6 +51,7 @@ class ExitCode(IntEnum):
     PERMANENT = 29
     ARCHIVE = 30
     CONFIRMATION_REQUIRED = 31
+    PROJECT_NOT_SELECTED = 32
 
 
 class EtlCraftError(Exception):
@@ -231,3 +232,18 @@ class ConfirmationRequiredError(EtlCraftError):
         """Keep the targets the caller must confirm beside the message."""
         super().__init__(message)
         self.targets = targets
+
+
+class ProjectNotSelectedError(EtlCraftError):
+    """A project-owned operation was called without selecting its project."""
+
+    retryable = False
+    exit_code = ExitCode.PROJECT_NOT_SELECTED
+
+    def __init__(self, operation: str) -> None:
+        """Name the unscoped operation and the supported project-selection remedies."""
+        super().__init__(
+            f"{operation} needs a selected project: no project was selected; "
+            "pass --project, set Orchestration.Project, or the entry point must select "
+            "the run's project"
+        )

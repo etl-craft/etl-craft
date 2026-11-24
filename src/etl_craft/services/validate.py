@@ -42,6 +42,7 @@ from etl_craft.core.text import is_metadata_code, qualify
 from etl_craft.dialects.business_rules import expand_scope, output_key
 from etl_craft.dialects.query_analysis import managed_select_problem, output_columns, read_query
 from etl_craft.engine.connection import read_snapshot
+from etl_craft.engine.project_scope import configured_project
 from etl_craft.engine.queries import statement
 from etl_craft.engine.repository.business_rules import fetch_business_rules_for_task
 from etl_craft.engine.repository.dependencies import fetch_pipeline_graph
@@ -151,6 +152,7 @@ class _Metadata:
     placement: Placement
 
 
+@configured_project
 def validate(engine: Engine, config: ConnectorConfig, pipeline_code: str | None = None) -> Report:
     """Check the warehouse driver and metadata without running tasks."""
     if config.warehouse is not None:

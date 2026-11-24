@@ -21,6 +21,8 @@ from fixtures.metadata import add_pipeline, add_table, add_task, insert, start_r
 NOW = datetime(2026, 1, 1, tzinfo=UTC)
 BEFORE = NOW - timedelta(days=1)
 
+pytestmark = pytest.mark.usefixtures("selected_default_project")
+
 
 def seed_flags(db, count):
     keys = [f"key-{i}" for i in range(count)]

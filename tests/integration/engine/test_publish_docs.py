@@ -482,6 +482,6 @@ def test_served_catalog_is_one_project_per_process(engine_db, site):
     with pytest.raises(ConfigurationError, match="expected project='finance'"):
         publish(engine_db.engine, other, site, local_only=True)
     with published(engine_db.engine, engine_db.config, site, local_only=True) as served:
-        write_site(build_catalog(engine_db.engine, other), other, site)
+        write_site(build_catalog(engine_db.engine, engine_db.config), other, site)
         assert fetch(served.url)[0] == 503
         assert fetch(served.url + "search.json")[0] == 503

@@ -10,6 +10,7 @@ from etl_craft.core.enums import ActionName, ApiRole, TriggerKind, YesNo
 from etl_craft.core.errors import PermissionDeniedError, ResourceNotFoundError
 from etl_craft.engine.queries import statement
 from etl_craft.engine.repository.group_claims import decode_groups
+from etl_craft.engine.repository.pipelines import selected_project
 from etl_craft.execution.attempt_types import ChildOptions
 from etl_craft.services.operations.authorization import allows
 from etl_craft.services.operations.context import OperationContext
@@ -53,10 +54,13 @@ def check_child_start(
     required = ACTIONS[ActionName.RUN].role
     assert required is not None
     try:
-        require_child_groups(conn, ctx, row.pipeline_code)
-        if not allows(ctx, ActionName.RUN, RunRequest(pipeline_code=row.pipeline_code), conn=conn):
-            require_project(conn, ctx)
-            pipeline_access(conn, ctx).require(ctx, row.pipeline_code, required)
+        with selected_project(ctx.project_id):
+            require_child_groups(conn, ctx, row.pipeline_code)
+            if not allows(
+                ctx, ActionName.RUN, RunRequest(pipeline_code=row.pipeline_code), conn=conn
+            ):
+                require_project(conn, ctx)
+                pipeline_access(conn, ctx).require(ctx, row.pipeline_code, required)
     except (PermissionDeniedError, ResourceNotFoundError) as error:
         return str(error)
     return None

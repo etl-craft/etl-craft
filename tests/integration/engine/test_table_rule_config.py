@@ -13,6 +13,7 @@ from etl_craft.core.actor import SYSTEM_ACTOR
 from etl_craft.core.enums import ActionName, ApiRole
 from etl_craft.core.errors import MetadataFileError
 from etl_craft.engine.repository.business_rules import fetch_business_rules_for_task
+from etl_craft.engine.repository.pipelines import selected_project
 from etl_craft.services.config_files import read_config_files, sync_config
 from etl_craft.services.operations.context import OperationContext
 from etl_craft.services.validate import validate
@@ -296,10 +297,13 @@ def test_rule_observation_history_is_bounded_and_exact_runs_remain_readable(rule
             transitions.finish_task_run(conn, binding.task_run_id, status=RunStatus.SUCCESS)
             transitions.finalize_pipeline_run(conn, run, RunStatus.SUCCESS)
     with ctx.engine.connect() as conn:
-        recent = fetch_rule_observations(conn, pipeline)
+        with selected_project(1):
+            recent = fetch_rule_observations(conn, pipeline)
         assert [r.observed for r in recent] == [str(i) for i in range(54, 4, -1)]
-        assert fetch_rule_observations(conn, pipeline, runs[0])[0].observed == "0"
-    selected = act(ctx, ActionName.HISTORY, pipeline_code="P", run_id=runs[0])
+        with selected_project(1):
+            assert fetch_rule_observations(conn, pipeline, runs[0])[0].observed == "0"
+    with selected_project(1):
+        selected = act(ctx, ActionName.HISTORY, pipeline_code="P", run_id=runs[0])
     assert [(r.pipeline_run_id, r.observed) for r in selected.rules] == [(runs[0], "0")]
 
 

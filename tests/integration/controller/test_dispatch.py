@@ -10,6 +10,7 @@ from sqlalchemy import text
 
 from etl_craft.core.graph import build_graph
 from etl_craft.engine.repository.dependencies import fetch_pipeline_graph
+from etl_craft.engine.repository.pipelines import selected_project
 from etl_craft.engine.repository.tasks import fetch_task_codes
 from etl_craft.execution.attempt_types import ChildOptions
 from etl_craft.execution.gates import Clock, check_gate
@@ -114,7 +115,8 @@ def test_one_hundred_waiting_tasks_create_no_worker_jobs_and_resume_the_same_bud
         settle=lambda _: [],
     )
     try:
-        assert not scheduler.step()
+        with selected_project(1):
+            assert not scheduler.step()
         assert scheduler.jobs == {}
         assert scheduler.attempted == set()
         assert [t for t in threading.enumerate() if t.name.startswith("etl-craft-task")] == agents
@@ -131,15 +133,16 @@ def test_one_hundred_waiting_tasks_create_no_worker_jobs_and_resume_the_same_bud
         assert len(rows) == 100
         assert all(r.looks == 0 for r in rows)
         assert conn.execute(text("SELECT COUNT(*) FROM AUD_TASK_ATTEMPTS")).scalar_one() == 0
-    resumed = check_gate(
-        db.engine,
-        run_id,
-        pipeline,
-        task_id=rows[0].task_id,
-        needed=1,
-        clock=Clock(now=lambda: now + timedelta(seconds=1)),
-        wait_seconds=9999,
-    )
+    with selected_project(1):
+        resumed = check_gate(
+            db.engine,
+            run_id,
+            pipeline,
+            task_id=rows[0].task_id,
+            needed=1,
+            clock=Clock(now=lambda: now + timedelta(seconds=1)),
+            wait_seconds=9999,
+        )
     assert resumed.state == "WAIT"
     with db.engine.connect() as conn:
         row = conn.execute(
@@ -210,13 +213,14 @@ def test_persisted_gate_looks_follow_the_average_and_stop_at_the_shared_budget(
     now = start + timedelta(seconds=10)
     looks = []
     for _ in range(32):
-        result = check_gate(
-            db.engine,
-            run_id,
-            down,
-            clock=Clock(now=lambda instant=now: instant),
-            wait_seconds=wait_seconds,
-        )
+        with selected_project(1):
+            result = check_gate(
+                db.engine,
+                run_id,
+                down,
+                clock=Clock(now=lambda instant=now: instant),
+                wait_seconds=wait_seconds,
+            )
         if result.state != "WAIT":
             break
         looks.append(result.next_check_at)
@@ -284,7 +288,8 @@ def test_later_queued_or_skipped_ticks_do_not_hide_the_upstreams_active_run(engi
         down = add_pipeline(conn, "DOWN")
         run_id = start_run(conn, down)
         add_pipeline_dependency(conn, down, up)
-    result = check_gate(db.engine, run_id, down)
+    with selected_project(1):
+        result = check_gate(db.engine, run_id, down)
     assert result.state == "WAIT"
 
 

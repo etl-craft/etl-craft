@@ -7,6 +7,8 @@ from fixtures.single_merge import check_single_merge, target_mutations
 from fixtures.sql_merges import merge_rows
 from fixtures.sql_warehouse import warehouses
 
+pytestmark = pytest.mark.usefixtures("selected_default_project")
+
 
 @pytest.mark.parametrize("kind", ["SCD1_MERGE", "SCD2_MERGE"])
 def test_one_merge_publishes_updates_and_insertions_and_replays_nothing(sql_world, kind):

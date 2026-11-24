@@ -78,13 +78,14 @@ def export_config(
                 "select another project or use project add first"
             )
         project_id = int(project.project_id)
-        for table in TABLES:
-            current[table.file], _ = current_rows(
-                table,
-                read_rows(conn, table, project_code=project_code, project_id=project_id),
-                current_ids,
-            )
-            current_ids[table.file] = {row.row_id for row in current[table.file].values()}
+        with selected_project(project_id):
+            for table in TABLES:
+                current[table.file], _ = current_rows(
+                    table,
+                    read_rows(conn, table, project_code=project_code, project_id=project_id),
+                    current_ids,
+                )
+                current_ids[table.file] = {row.row_id for row in current[table.file].values()}
     if config is not None and as_of is None:
         with selected_project(project_id):
             _warehouse_rows(engine, config, directory, current)

@@ -14,6 +14,8 @@ from etl_craft.services.config_files import export_config
 from fixtures.engine_db import POSTGRES_PASSWORD, POSTGRES_USER
 from fixtures.services import require
 
+pytestmark = pytest.mark.usefixtures("selected_default_project")
+
 
 def external_connection(db):
     if db.engine.dialect.name == "sqlite":

@@ -16,6 +16,7 @@ from etl_craft.core.errors import ConfigurationError, LockTimeoutError
 from etl_craft.core.faults import fault_point
 from etl_craft.core.file_bytes import parent_directory
 from etl_craft.core.upload_names import upload_key
+from etl_craft.engine.project_scope import configured_project
 from etl_craft.engine.queries import statement
 from etl_craft.engine.repository.pipelines import current_project_id
 from etl_craft.engine.upload_archive import archive_location, publish_archive, verify_archive
@@ -89,6 +90,7 @@ def finish_archive(config: ConnectorConfig, upload: StoredUpload) -> None:
         ) from error
 
 
+@configured_project
 def archive_uploads(
     engine: Engine, config: ConnectorConfig, now: datetime, *, dry_run: bool = False
 ) -> int:

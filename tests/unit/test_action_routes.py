@@ -33,7 +33,9 @@ ADMIN = Actor("owner", ActorKind.SERVICE)
 def context(role=ApiRole.ADMIN):
     return OperationContext(
         types.SimpleNamespace(connect=lambda: nullcontext(None)),
-        types.SimpleNamespace(docs_site=None, artifacts=types.SimpleNamespace(store=None)),
+        types.SimpleNamespace(
+            project="default", docs_site=None, artifacts=types.SimpleNamespace(store=None)
+        ),
         ADMIN,
         role=role,
         project_id=1,

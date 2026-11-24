@@ -19,6 +19,7 @@ from etl_craft.core.enums import (
 )
 from etl_craft.core.errors import RunRefusedError, RunStateError, UsageError
 from etl_craft.engine import runlog, standing_pauses, transitions
+from etl_craft.engine.repository.pipelines import selected_project
 from etl_craft.engine.runlog import RunSelector
 from etl_craft.execution.pipeline import run_pipeline
 from etl_craft.services.operations.actions import invoke
@@ -629,9 +630,10 @@ def test_an_admitted_dependency_wait_finishes_during_drain_without_dispatching(c
         add_dependency(conn, pipeline, target, source, upstream_pipeline=upstream)
         run = start_run(conn, pipeline)
     now = datetime.now(UTC)
-    first = check_gate(
-        ctx.engine, run, pipeline, task_id=target, needed=1, clock=Clock(now=lambda: now)
-    )
+    with selected_project(1):
+        first = check_gate(
+            ctx.engine, run, pipeline, task_id=target, needed=1, clock=Clock(now=lambda: now)
+        )
     assert first.next_check_at is not None
     pause(ctx)
     with ctx.engine.begin() as conn:

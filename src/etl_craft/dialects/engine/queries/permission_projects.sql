@@ -9,7 +9,7 @@ WITH eligible AS ({{permission_eligible}}), project_levels AS (
   ELSE CASE e.permission WHEN 'CAN_MANAGE' THEN 4 WHEN 'CAN_RUN' THEN 3 WHEN 'CAN_UPLOAD' THEN 2
    ELSE 1 END END),0) END AS level
  FROM CFG_PROJECTS p LEFT JOIN eligible e ON e.project_id=p.PROJECT_ID
- WHERE p.ACTIVE_FLAG='Y' AND (CAST(:project_id AS bigint) IS NULL OR p.PROJECT_ID=:project_id)
+ WHERE p.ACTIVE_FLAG='Y' AND (CAST(:project_filter AS bigint) IS NULL OR p.PROJECT_ID=:project_filter)
  GROUP BY p.PROJECT_ID,p.PROJECT_CODE
 ), selected_projects AS (
  SELECT project_id,project_code,level FROM project_levels WHERE level>0

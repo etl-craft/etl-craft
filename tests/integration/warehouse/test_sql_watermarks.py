@@ -11,6 +11,8 @@ from etl_craft.execution.child import run_handler
 from fixtures.sql_warehouse import warehouses
 from fixtures.sql_watermarks import check_watermarks
 
+pytestmark = pytest.mark.usefixtures("selected_default_project")
+
 
 def test_watermark_batches_and_retry(sql_world):
     check_watermarks(sql_world, "watermarked_events")
