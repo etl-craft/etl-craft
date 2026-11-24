@@ -190,7 +190,10 @@ def recover_mutation(w, ctx, task, target, params, agent):
             )
         )
     )
-    with context as (store, replies), acting_as(ctx.actor):
+    from etl_craft.engine.repository.pipelines import selected_project
+
+    # The handler is called directly, below the entry point that selects the run's project.
+    with context as (store, replies), acting_as(ctx.actor), selected_project(1):
         lock = locks.target(w.name(target), w.catalog)
         with store.hold(lock.key, lock.name, 30), w.warehouse.begin() as conn:
             session = Session(

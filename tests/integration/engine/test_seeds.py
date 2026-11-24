@@ -12,6 +12,7 @@ from etl_craft.core.enums_uploads import SeedStatus
 from etl_craft.core.errors import PermissionDeniedError
 from etl_craft.engine import transitions
 from etl_craft.engine.project_files import collect
+from etl_craft.engine.repository.pipelines import selected_project
 from etl_craft.services.operations import bundles
 from fixtures.actions import act
 from fixtures.metadata import add_pipeline, add_task
@@ -480,18 +481,19 @@ def test_reopening_and_failing_a_successful_upload_run_never_unlocks_its_seed(se
     try:
         with acting_as(ctx.actor), ctx.engine.begin() as conn:
             parameters = {"project_id": 1, "cutoff": datetime(2030, 1, 1, tzinfo=UTC)}
-            assert (
-                conn.execute(
-                    statement(conn, "retention_aud_run_interventions_count"), parameters
-                ).scalar_one()
-                == 0
-            )
-            assert (
-                conn.execute(
-                    statement(conn, "retention_aud_run_interventions"), parameters
-                ).rowcount
-                == 0
-            )
+            with selected_project(1):
+                assert (
+                    conn.execute(
+                        statement(conn, "retention_aud_run_interventions_count"), parameters
+                    ).scalar_one()
+                    == 0
+                )
+                assert (
+                    conn.execute(
+                        statement(conn, "retention_aud_run_interventions"), parameters
+                    ).rowcount
+                    == 0
+                )
     finally:
         purpose.reset(token)
     assert deploy().seed_loads[0].status == SeedStatus.LOCKED

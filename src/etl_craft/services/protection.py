@@ -13,6 +13,7 @@ from etl_craft.core.errors import ConfigurationError, LockTimeoutError
 from etl_craft.dialects.warehouse import WarehouseDialect
 from etl_craft.dialects.warehouse.protection import recovery_candidates
 from etl_craft.engine import locks
+from etl_craft.engine.project_scope import configured_project
 from etl_craft.engine.protection_events import target_identity
 from etl_craft.engine.queries import statement
 from etl_craft.engine.repository.pipelines import current_project_id
@@ -25,6 +26,7 @@ from etl_craft.warehouse.connection import open_warehouse, warehouse_dialect
 logger = logging.getLogger(__name__)
 
 
+@configured_project
 def startup(engine: Engine, config: ConnectorConfig) -> None:
     """Defer inaccessible projects once; every mutation still recovers under its target lock."""
     with engine.connect() as conn:
@@ -74,6 +76,7 @@ def _recover_target(engine: Engine, config: ConnectorConfig, target: str) -> Non
             session.sweep()
 
 
+@configured_project
 def problems(engine: Engine, config: ConnectorConfig) -> list[str]:
     """Report externally removed locked keys without turning membership into a write gate."""
     with engine.connect() as conn:

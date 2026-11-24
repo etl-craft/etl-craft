@@ -1,11 +1,14 @@
 """Admitted definitions remain exact across edits, retries and independent controllers."""
 
+import pytest
 from sqlalchemy import text
 
 from etl_craft.core.definitions import Definition, using
 from etl_craft.engine.repository.dependencies import fetch_pipeline_graph
 from etl_craft.engine.repository.tasks import fetch_task_parameters
 from fixtures.metadata import add_pipeline, add_task, start_run
+
+pytestmark = pytest.mark.usefixtures("selected_default_project")
 
 
 def test_admission_records_an_immutable_definition(engine_db):

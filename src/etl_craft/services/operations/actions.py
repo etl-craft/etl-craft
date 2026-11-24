@@ -24,7 +24,6 @@ from etl_craft.core.enums import (
 from etl_craft.core.errors import (
     ConfigurationError,
     PermissionDeniedError,
-    ProjectNotSelectedError,
     ResourceNotFoundError,
     RunStateError,
     UsageError,
@@ -648,7 +647,10 @@ def project_context(ctx: OperationContext, action: Action, request: object) -> O
     if not ctx.project:
         ctx = replace(ctx, project=ctx.config.project)
     if not ctx.project:
-        raise ProjectNotSelectedError(f"action {action.name}")
+        raise UsageError(
+            f"{ctx.config.config_path or 'craft-connector.yml'}: missing Orchestration.Project; "
+            "supply --project P or set Orchestration.Project in this file"
+        )
     if ctx.project_id is not None:
         return ctx
     if ctx.transport == Transport.LOCAL:

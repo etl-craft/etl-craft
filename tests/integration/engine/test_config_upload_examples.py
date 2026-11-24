@@ -14,6 +14,8 @@ from etl_craft.engine.migrations import apply_pending_migrations
 from etl_craft.services.validate import validate
 from fixtures.metadata_project import EXAMPLES
 
+pytestmark = pytest.mark.usefixtures("selected_default_project")
+
 
 def test_every_example_applies_in_order_and_validates(metadata_project):
     engine, config, migrations = (

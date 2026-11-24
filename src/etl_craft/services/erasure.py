@@ -8,6 +8,7 @@ from etl_craft.config import ConnectorConfig
 from etl_craft.core.erasure import ErasureEntry
 from etl_craft.core.errors import EtlCraftError
 from etl_craft.core.redaction import registering
+from etl_craft.engine.project_scope import configured_project
 from etl_craft.engine.queries import statement
 from etl_craft.handlers.erasure import apply_entries, check_column, secret
 from etl_craft.handlers.resources import LocalLocker
@@ -26,6 +27,7 @@ def problems(engine: Engine, config: ConnectorConfig, *, check_coverage: bool = 
     return findings(engine, config, check_coverage=check_coverage)[0]
 
 
+@configured_project
 def findings(
     engine: Engine,
     config: ConnectorConfig,
@@ -37,14 +39,16 @@ def findings(
     with engine.connect() as conn:
         entries = _registered(conn)
         if entries and require_approved_connector:
+            reason = "no approved connector is available"
             try:
                 approved = approved_connector(conn, config)
-            except (EtlCraftError, OSError):
-                approved = None
+            except (EtlCraftError, OSError) as error:
+                # Reported as this project's finding; doctor goes on to the other projects.
+                approved, reason = None, f"its approved connector cannot be read ({error})"
             if approved is None or approved.warehouse is None:
                 return [
                     f"erasure coverage needs project {config.project}'s warehouse; "
-                    "no approved connector is available; deploy the project so its bundle "
+                    f"{reason}; deploy the project so its bundle "
                     f"is approved, or run `etl-craft doctor --project {config.project}` "
                     "with that project's craft-connector.yml"
                 ], []

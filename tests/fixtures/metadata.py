@@ -4,6 +4,7 @@ from sqlalchemy import inspect, text
 
 from etl_craft.core.counts import Counts
 from etl_craft.engine import runlog, transitions
+from etl_craft.engine.project_scope import configured_project
 from etl_craft.engine.queries import statement
 from etl_craft.engine.repository.pipelines import selected_project
 
@@ -190,6 +191,7 @@ def set_task_target(conn, task_id, target):
     )
 
 
+@configured_project
 def finalize_pipeline(engine, config, pipeline_code, *, hooks=None):
     """Finalize the explicit active run for outcome and publication fixtures."""
     from etl_craft.engine.repository.pipelines import resolve_pipeline_id

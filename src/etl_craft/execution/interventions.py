@@ -73,6 +73,7 @@ class Intervened:
     pipeline_run_id: int
 
 
+@configured_project
 def mark_task(
     engine: Engine,
     config: ConnectorConfig,
@@ -222,6 +223,7 @@ def mark_run(
     return Intervened(message, run_id)
 
 
+@configured_project
 def record_stand_in_run(
     engine: Engine,
     config: ConnectorConfig,
@@ -711,6 +713,7 @@ def _reset_value(task: str, before: StoredOffset | None, value: str) -> Offset:
     return Offset.from_stored(before.offset_type, value)
 
 
+@configured_project
 def reset_watermark(
     engine: Engine,
     config: ConnectorConfig,

@@ -54,7 +54,7 @@ def test_task_state_batches_peer_statuses_and_target_contracts(engine_db):
         assert state.peer_statuses == {str(task): RunStatus.SUCCESS for task in peers}
         assert store.target("catalog.schema.target") == TargetState(None, None)
     overhead = 1 if for_engine(db).supports_api_replicas else 0
-    assert counter.result()["engine_statements"] == 2 + overhead
+    assert counter.result()["engine_statements"] == 1 + overhead
     assert counter.result()["engine_transactions"] == 1
 
 

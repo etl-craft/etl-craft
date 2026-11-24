@@ -23,6 +23,7 @@ from etl_craft.core.protection import PROTECTION_COLUMNS
 from etl_craft.core.text import qualify, split_object_ref
 from etl_craft.dialects.warehouse import WarehouseDialect
 from etl_craft.engine import locks
+from etl_craft.engine.project_scope import configured_project
 from etl_craft.engine.repository.tasks import fetch_task_parameters
 from etl_craft.engine.repository.validation import fetch_active_tasks
 from etl_craft.handlers.registry import TaskContext
@@ -66,6 +67,7 @@ class AdoptRequest:
     dry_run: bool
 
 
+@configured_project
 def adopt_target(engine: Engine, config: ConnectorConfig, request: AdoptRequest) -> AdoptResult:
     """Adopt the target under its mutation lock, then rehash a merge target."""
     if config.warehouse is None:

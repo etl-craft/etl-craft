@@ -11,11 +11,13 @@ from etl_craft.core.errors import HandlerError
 from etl_craft.core.hashing import RehashResult as RehashResult
 from etl_craft.core.text import is_safe_identifier, qualify, split_object_ref
 from etl_craft.engine import locks
+from etl_craft.engine.project_scope import configured_project
 from etl_craft.engine.queries import statement
 from etl_craft.engine.repository.tasks import fetch_task_parameters
 from etl_craft.handlers.resources import LocalLocker
 
 
+@configured_project
 def rehash(
     engine: Engine, config: ConnectorConfig, target: str, *, dry_run: bool = False
 ) -> RehashResult:

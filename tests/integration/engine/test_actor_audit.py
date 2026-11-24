@@ -30,6 +30,7 @@ from etl_craft.core.enums_access import Permission
 from etl_craft.core.enums_ui import AnnouncementLevel
 from etl_craft.engine import migrations, transitions
 from etl_craft.engine.audit import command_request, register_engine
+from etl_craft.engine.repository.pipelines import selected_project
 from fixtures.metadata import add_pipeline, add_pipeline_dependency, add_task
 from fixtures.services import POSTGRES_PASSWORD, POSTGRES_USER, require
 
@@ -110,7 +111,7 @@ def test_project_changes_record_before_after_actor_and_migration(engine_db, tmp_
 
     with engine_db.engine.begin() as conn:
         mark_packaged_migrations_applied(conn)
-    with acting_as(ALICE):
+    with acting_as(ALICE), selected_project(1):
         migrations.apply_pending_migrations(engine_db.engine, project)
     with engine_db.engine.connect() as conn:
         rows = conn.execute(
@@ -818,7 +819,7 @@ def test_nested_action_secrets_never_reach_audit_logs_cli_or_api(engine_db, log_
 def test_direct_pipeline_requests_record_the_selected_project(engine_db):
     with engine_db.engine.begin() as conn:
         pipeline = add_pipeline(conn, "P")
-    with acting_as(ALICE), command_request("run", {"pipeline_code": "P"}):
+    with acting_as(ALICE), command_request("run", {"pipeline_code": "P"}, project_id=1):
         register_engine(engine_db.engine)
     with engine_db.engine.connect() as conn:
         row = conn.execute(
@@ -834,7 +835,8 @@ def test_run_parameter_overrides_are_attributed_and_immutable(engine_db):
     with acting_as(ALICE), engine_db.engine.begin() as conn:
         pipeline = add_pipeline(conn, "OVERRIDES")
         run = transitions.create_run(conn, pipeline, ALICE)
-        store(conn, run, 1, "submission", "a" * 64, {"load": {"INPUT_PARAMS": "{}"}})
+        with selected_project(1):
+            store(conn, run, 1, "submission", "a" * 64, {"load": {"INPUT_PARAMS": "{}"}})
         row = conn.execute(
             text(
                 "SELECT CREATED_BY AS actor,CREATED_BY_KIND AS kind FROM "

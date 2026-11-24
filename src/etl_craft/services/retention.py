@@ -11,6 +11,7 @@ from etl_craft.core.actor import current_actor, purpose
 from etl_craft.core.enums import ActionName, ActionOutcome
 from etl_craft.core.faults import fault_point
 from etl_craft.engine.audit import ActionRequest
+from etl_craft.engine.project_scope import configured_project
 from etl_craft.engine.queries import statement
 from etl_craft.engine.repository.pipelines import current_project_id
 from etl_craft.engine.retention_tables import TABLES
@@ -54,6 +55,7 @@ def purge_history(
         return counts
 
 
+@configured_project
 def plain_history(
     engine: Engine, config: ConnectorConfig, now: datetime, *, dry_run: bool
 ) -> dict[str, int]:

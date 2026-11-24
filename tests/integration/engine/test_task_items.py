@@ -415,10 +415,15 @@ def test_item_progress_is_identical_in_the_api_task_summary_and_catalog(scene):
     from etl_craft.services.operations.snapshots import task_run_view
 
     scene.task.fan_out(["one", "two"], lambda key: ScriptResult(1), max_items=2)
-    view = inspect(context(scene), ItemInput(pipeline_code="P", task_code="T", run_id=scene.run))
+    with selected_project(1):
+        view = inspect(
+            context(scene), ItemInput(pipeline_code="P", task_code="T", run_id=scene.run)
+        )
     with scene.db.connect() as conn:
-        task = task_run_view(conn, scene.task.pipeline_id, task_run_id=scene.summary)
-        history = fetch_task_runs(conn)[scene.task._items.identity.task_id]
+        with selected_project(1):
+            task = task_run_view(conn, scene.task.pipeline_id, task_run_id=scene.summary)
+        with selected_project(1):
+            history = fetch_task_runs(conn)[scene.task._items.identity.task_id]
     assert task.item_progress == str(view.progress) == "items 2 / 2, 0 failed, 0 skipped"
     assert task.attempts[-1].item_progress == str(view.progress)
     assert history[0].item_progress == str(view.progress)

@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 from sqlalchemy import text
 
+from etl_craft.engine.repository.pipelines import selected_project
 from etl_craft.handlers.sql.session import Session
 from etl_craft.warehouse.connection import open_warehouse, warehouse_dialect
 from fixtures.round_trips import count_round_trips
@@ -23,7 +24,7 @@ def test_action_round_trip_budgets(sql_world):
         context = w.task(code, SQL_ACTION=action, TARGET_OBJECT=target, **params)
         from etl_craft.handlers import sql
 
-        with count_round_trips(w.engine_db) as counts:
+        with count_round_trips(w.engine_db) as counts, selected_project(1):
             result = sql.run(context, w.engine_db)
         observed[action] = counts.result()
         return result

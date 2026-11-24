@@ -91,12 +91,13 @@ def main(
     identity = (int(attempt_id), owner) if attempt_id is not None and owner else None
     token = _identity.set(identity)
     try:
-        project_id = task_run_project_id(engine, args.task_run_id)
+        try:
+            project_id = task_run_project_id(engine, args.task_run_id)
+        except EtlCraftError as error:
+            logger.error("could not start the task: %s", error)
+            return error.exit_code
         with acting_as(SYSTEM_ACTOR), selected_project(project_id):
             return _run_bound(engine, config, args, trigger=trigger, alert=alert)
-    except EtlCraftError as error:
-        logger.error("could not start the task: %s", error)
-        return error.exit_code
     finally:
         _identity.reset(token)
         engine.dispose()

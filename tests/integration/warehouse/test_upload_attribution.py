@@ -9,6 +9,8 @@ from etl_craft.core.uploads import UploadWriter
 from etl_craft.handlers import sql
 from etl_craft.warehouse.connection import warehouse_dialect
 
+pytestmark = pytest.mark.usefixtures("selected_default_project")
+
 
 def apply_upload_action(w, context):
     from etl_craft.dialects.warehouse.uploads import writer_parameters

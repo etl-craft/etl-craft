@@ -1,7 +1,7 @@
 """Project selection for configured entry points outside an operation."""
 
-from collections.abc import Callable
-from contextlib import nullcontext
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager, nullcontext
 from functools import wraps
 from typing import Concatenate, ParamSpec, TypeVar
 
@@ -15,6 +15,7 @@ from etl_craft.engine.repository.pipelines import has_selected_project, selected
 
 P = ParamSpec("P")
 R = TypeVar("R")
+B = TypeVar("B", bound=Engine | Connection)
 
 
 def task_run_project_id(bind: Engine | Connection, task_run_id: int) -> int:
@@ -28,27 +29,37 @@ def task_run_project_id(bind: Engine | Connection, task_run_id: int) -> int:
     return int(project_id)
 
 
+@contextmanager
+def project_selection(
+    bind: Engine | Connection, config: ConnectorConfig, operation: str
+) -> Iterator[None]:
+    """Keep the caller's selection, or select the connector's explicit, active project."""
+    if has_selected_project():
+        yield
+        return
+    if not config.project:
+        raise ProjectNotSelectedError(operation)
+    with bind.connect() if isinstance(bind, Engine) else nullcontext(bind) as conn:
+        project = conn.execute(
+            statement(conn, "project_by_code"), {"code": config.project}
+        ).one_or_none()
+    if project is None or project.active_flag != YesNo.YES:
+        raise MetadataError(
+            f"project {config.project!r}: expected an active project; "
+            "select an active project in Orchestration.Project"
+        )
+    with selected_project(int(project.project_id)):
+        yield
+
+
 def configured_project(
-    call: Callable[Concatenate[Engine, ConnectorConfig, P], R],
-) -> Callable[Concatenate[Engine, ConnectorConfig, P], R]:
+    call: Callable[Concatenate[B, ConnectorConfig, P], R],
+) -> Callable[Concatenate[B, ConnectorConfig, P], R]:
     """Keep the operation's selection, or resolve the explicit connector project."""
 
     @wraps(call)
-    def scoped(engine: Engine, config: ConnectorConfig, /, *args: P.args, **kwargs: P.kwargs) -> R:
-        if has_selected_project():
-            return call(engine, config, *args, **kwargs)
-        if not config.project:
-            raise ProjectNotSelectedError(call.__name__)
-        with engine.connect() as conn:
-            project = conn.execute(
-                statement(conn, "project_by_code"), {"code": config.project}
-            ).one_or_none()
-        if project is None or project.active_flag != YesNo.YES:
-            raise MetadataError(
-                f"project {config.project!r}: expected an active project; "
-                "select an active project in Orchestration.Project"
-            )
-        with selected_project(int(project.project_id)):
+    def scoped(engine: B, config: ConnectorConfig, /, *args: P.args, **kwargs: P.kwargs) -> R:
+        with project_selection(engine, config, call.__name__):
             return call(engine, config, *args, **kwargs)
 
     return scoped

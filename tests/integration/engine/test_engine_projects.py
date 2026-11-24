@@ -44,7 +44,8 @@ def test_selected_project_resolves_and_lists_only_its_same_code_pipeline(engine_
         second = pipeline(conn, second_project, "SHARED")
         with selected_project(second_project):
             assert resolve_pipeline_id(conn, "SHARED") == second
-        assert resolve_pipeline_id(conn, "SHARED") == first
+        with selected_project(1):
+            assert resolve_pipeline_id(conn, "SHARED") == first
     ctx = OperationContext(engine_db.engine, engine_db.config, SYSTEM_ACTOR, role=ApiRole.ADMIN)
     for code, identity in (("default", first), ("second", second)):
         result = invoke(replace(ctx, project=code), ActionName.PIPELINES, TagFilter())
@@ -57,12 +58,14 @@ def test_run_restores_its_project_for_target_contracts(engine_db):
         own = pipeline(conn, second_project, "SHARED")
         add_task(conn, own, "T", "PYTHON")
         run = start_run(conn, own)
-        save_hash_version(conn, "catalog.main.target", 1)
+        with selected_project(1):
+            save_hash_version(conn, "catalog.main.target", 1)
     with for_run(engine_db.engine, run), engine_db.engine.begin() as conn:
         assert fetch_hash_version(conn, "catalog.main.target") is None
         save_hash_version(conn, "catalog.main.target", 2)
     with engine_db.engine.connect() as conn:
-        assert fetch_hash_version(conn, "catalog.main.target") == 1
+        with selected_project(1):
+            assert fetch_hash_version(conn, "catalog.main.target") == 1
         with selected_project(second_project):
             assert fetch_hash_version(conn, "catalog.main.target") == 2
 
@@ -159,7 +162,8 @@ def test_config_apply_keeps_other_projects_and_links_same_code_upstream(engine_d
     result = sync_config(engine_db.engine, config, read_config_files(folder), apply=True)
     assert not result.failed, result.findings
     with engine_db.engine.connect() as conn:
-        assert resolve_pipeline_id(conn, "SHARED") == upstream
+        with selected_project(1):
+            assert resolve_pipeline_id(conn, "SHARED") == upstream
         row = conn.execute(
             text(
                 "SELECT d.PIPELINE_ID AS child,d.DEPENDS_ON_PIPELINE_ID AS parent "
@@ -252,8 +256,9 @@ def test_lineage_versions_and_closing_history_are_project_scoped(engine_db):
         with selected_project(other):
             record_lineage_versions(conn, None, {})
             assert fetch_lineage_versions(conn)[0].current_flag == YesNo.NO
-        assert fetch_lineage_versions(conn)[0].lineage_version_id == identities[0]
-        assert fetch_lineage_versions(conn)[0].current_flag == YesNo.YES
+        with selected_project(1):
+            assert fetch_lineage_versions(conn)[0].lineage_version_id == identities[0]
+            assert fetch_lineage_versions(conn)[0].current_flag == YesNo.YES
 
 
 def test_project_migration_filenames_and_checksums_are_independent(engine_db, tmp_path):
@@ -289,15 +294,17 @@ def test_docs_publications_are_selected_and_updated_within_their_project(engine_
 
     with engine_db.engine.begin() as conn:
         other = project(conn, "other")
-        record_publication(conn, "https://first.example.com")
-        original = fetch_publication(conn)
+        with selected_project(1):
+            record_publication(conn, "https://first.example.com")
+            original = fetch_publication(conn)
         with selected_project(other):
             assert fetch_publication(conn) is None
             record_publication(conn, "https://second.example.com")
             second = fetch_publication(conn)
             record_publication(conn, second.url)
             assert fetch_publication(conn).docs_publication_id == second.docs_publication_id
-        assert fetch_publication(conn) == original
+        with selected_project(1):
+            assert fetch_publication(conn) == original
 
 
 def test_project_default_pool_is_recorded_on_queued_attempts(engine_db):
@@ -452,7 +459,8 @@ def test_delayed_developer_publication_cannot_restore_a_superseded_contract(
     with engine_db.engine.connect() as conn:
         from etl_craft.engine.queries import statement
 
-        assert conn.execute(statement(conn, "bundle_latest")).scalar_one() == replaced[0]
+        with selected_project(1):
+            assert conn.execute(statement(conn, "bundle_latest")).scalar_one() == replaced[0]
         assert (
             conn.execute(text("SELECT COUNT(*) AS count FROM AUD_PROJECT_BUNDLES")).scalar_one()
             == 2
@@ -480,21 +488,23 @@ def test_sql_task_state_reads_only_its_projects_target_contract(engine_db):
         task = add_task(conn, first, "merge", TARGET_OBJECT="warehouse.main.shared")
         run = start_run(conn, first)
         other = project(conn, "other")
-        save_hash_version(conn, "warehouse.main.shared", 1)
-        save_view_statement(conn, "warehouse.main.shared", "a" * 64)
+        with selected_project(1):
+            save_hash_version(conn, "warehouse.main.shared", 1)
+            save_view_statement(conn, "warehouse.main.shared", "a" * 64)
         with selected_project(other):
             save_hash_version(conn, "warehouse.main.shared", 2)
             save_view_statement(conn, "warehouse.main.shared", "b" * 64)
-        rows = conn.execute(
-            statement(conn, "sql_task_state"),
-            {
-                "task_id": task,
-                "pipeline_id": first,
-                "pipeline_run_id": run,
-                "sql_action": "SCD1_MERGE",
-                "catalog": "warehouse",
-            },
-        ).all()
+        with selected_project(1):
+            rows = conn.execute(
+                statement(conn, "sql_task_state"),
+                {
+                    "task_id": task,
+                    "pipeline_id": first,
+                    "pipeline_run_id": run,
+                    "sql_action": "SCD1_MERGE",
+                    "catalog": "warehouse",
+                },
+            ).all()
     assert len(rows) == 1
     assert rows[0].hash_version == 1
     assert rows[0].statement_sha256 == "a" * 64

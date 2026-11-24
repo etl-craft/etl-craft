@@ -23,6 +23,7 @@ from etl_craft.core.actor import SYSTEM_ACTOR, Actor, ActorKind, acting_as
 from etl_craft.core.enums import ActionName, ActionScope, ApiRole, HttpMethod, Placement
 from etl_craft.core.enums_access import Permission
 from etl_craft.core.errors import PermissionDeniedError, ResourceNotFoundError, UsageError
+from etl_craft.engine.repository.pipelines import selected_project
 from etl_craft.services.operations import OperationContext, authorization
 from etl_craft.services.operations.actions import (
     ACTIONS,
@@ -188,7 +189,9 @@ def test_action_table_role_admission_through_cli_and_api(matrix, monkeypatch, ro
         allowed = accepted(caller, name, request)
         if role != "custom":
             try:
-                expected = built_in_allows(spec, role, reach, spec.required_role(caller, request))
+                with selected_project(1):  # required_role read directly, below invoke
+                    needed = spec.required_role(caller, request)
+                expected = built_in_allows(spec, role, reach, needed)
             except PermissionDeniedError:
                 expected = False
             assert allowed == expected, name

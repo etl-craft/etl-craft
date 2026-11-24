@@ -13,6 +13,7 @@ from etl_craft.core.errors import RunRefusedError
 from etl_craft.engine import transitions
 from etl_craft.engine.bundles import Bundle
 from etl_craft.engine.refreshes import admitted
+from etl_craft.engine.repository.pipelines import selected_project
 from etl_craft.services.operations.context import OperationContext
 from fixtures.actions import act
 from fixtures.engine_db import profile_block
@@ -183,7 +184,7 @@ def test_refresh_retention_keeps_latest_and_last_good_snapshots(refresh_project)
     cutoff = datetime.now(UTC) + timedelta(days=30)
     from etl_craft.engine.queries import statement
 
-    with retaining(), ctx.engine.begin() as conn:
+    with selected_project(1), retaining(), ctx.engine.begin() as conn:
         conn.execute(
             statement(conn, "retention_aud_pipeline_refreshes"), {"cutoff": cutoff, "project_id": 1}
         )
@@ -277,7 +278,7 @@ def test_refresh_retention_releases_only_unreferenced_bundle_objects(refresh_pro
     script.write_text("def run(task):\n    return 1\n")
     good = act(ctx, ActionName.PIPELINE_REFRESH).refreshes[0]
     config = replace(ctx.config, retention=replace(ctx.config.retention, config_history_days=1))
-    with retaining():
+    with retaining(), selected_project(1):
         assert (
             cleanup_bundles(
                 ctx.engine, config, datetime.now(UTC) + timedelta(days=2), dry_run=False
@@ -641,7 +642,7 @@ def test_bundle_retention_keeps_objects_referenced_through_a_store_alias(refresh
     publish(alias, PublishBundle(files=collect(ctx.config.project_dir)))
     good = act(ctx, ActionName.PIPELINE_REFRESH).refreshes[0]
     config = replace(ctx.config, retention=replace(ctx.config.retention, config_history_days=1))
-    with retaining():
+    with retaining(), selected_project(1):
         assert (
             cleanup_bundles(
                 ctx.engine, config, datetime.now(UTC) + timedelta(days=2), dry_run=False

@@ -13,6 +13,7 @@ from etl_craft.core.enums_access import Permission
 from etl_craft.core.errors import LockTimeoutError, PermissionDeniedError, RunRefusedError
 from etl_craft.engine import transitions
 from etl_craft.engine.repository.offsets import StoredOffset
+from etl_craft.engine.repository.pipelines import selected_project
 from etl_craft.engine.timestamp_windows import WindowDefinition, admit_window
 from etl_craft.services.operations import OperationContext
 from etl_craft.services.operations.actions import invoke
@@ -115,7 +116,8 @@ def high_mark(ctx):
         definition = WindowDefinition(
             StoredOffset(OffsetType.TIMESTAMP, "2000-01-01T00:00:00+00:00"), ("SOURCE",)
         )
-        return admit_window(conn, t, summary, datetime.now(UTC), definition).high
+        with selected_project(1):
+            return admit_window(conn, t, summary, datetime.now(UTC), definition).high
 
 
 @pytest.mark.parametrize("legacy_instance", [False, True])
@@ -155,15 +157,16 @@ def test_attested_legacy_ending_advances_the_window_and_names_operator(
         t = add_task(conn, p, "dm")
         run = start_run(conn, p)
         summary = transitions.find_or_create_task_run(conn, t, run).task_run_id
-        after = admit_window(
-            conn,
-            t,
-            summary,
-            datetime.now(UTC),
-            WindowDefinition(
-                StoredOffset(OffsetType.TIMESTAMP, "2000-01-01T00:00:00+00:00"), ("SOURCE",)
-            ),
-        ).high
+        with selected_project(1):
+            after = admit_window(
+                conn,
+                t,
+                summary,
+                datetime.now(UTC),
+                WindowDefinition(
+                    StoredOffset(OffsetType.TIMESTAMP, "2000-01-01T00:00:00+00:00"), ("SOURCE",)
+                ),
+            ).high
     assert after > before
 
 

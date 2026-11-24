@@ -18,6 +18,7 @@ from etl_craft.core.enums import ActionName, ActionOutcome, ApiRole, ControlActi
 from etl_craft.core.errors import MetadataError, RunStateError, UsageError
 from etl_craft.engine import transitions
 from etl_craft.engine.audit import ActionRequest, command_request, register_engine
+from etl_craft.engine.repository.pipelines import selected_project
 from etl_craft.execution import reruns, run_types, runner
 from etl_craft.execution.attempt_types import TaskOutcome
 from etl_craft.services.operations import OperationContext, to_json
@@ -825,7 +826,6 @@ def test_pipeline_views_include_the_recorded_dependency_condition(ctx, action):
 
 
 def test_deployment_action_audits_without_project(ctx):
-    from etl_craft.engine.repository.pipelines import selected_project
     from etl_craft.services.operations.accounts import AccountAdd
 
     with selected_project(None):
@@ -845,13 +845,13 @@ def test_deployment_action_audits_without_project(ctx):
     assert all(row.project_id is None and row.pipeline_id is None for row in rows)
 
 
-def test_run_action_without_project_names_action_and_remedy(ctx):
-    from etl_craft.core.errors import ExitCode, ProjectNotSelectedError
+def test_run_action_without_project_keeps_the_usage_refusal(ctx):
+    from etl_craft.core.errors import ExitCode, UsageError
 
-    with pytest.raises(ProjectNotSelectedError) as caught:
+    with pytest.raises(UsageError) as caught:
         run(replace(ctx, config=replace(ctx.config, project="")))
-    assert caught.value.exit_code is ExitCode.PROJECT_NOT_SELECTED
-    for part in ("action run", "no project was selected", "--project", "Orchestration.Project"):
+    assert caught.value.exit_code is ExitCode.USAGE
+    for part in ("missing Orchestration.Project", "--project P"):
         assert part in str(caught.value)
 
 

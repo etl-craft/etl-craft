@@ -15,6 +15,7 @@ from etl_craft.core.errors import (
 )
 from etl_craft.engine import transitions as tr
 from etl_craft.engine.repository.offsets import StoredOffset, fetch_task_offset, save_task_offset
+from etl_craft.engine.repository.pipelines import selected_project
 from etl_craft.engine.runlog import RunSelector
 from etl_craft.execution.interventions import reset_watermark
 from etl_craft.services.operations.context import OperationContext
@@ -290,7 +291,10 @@ def test_real_task_processes_commit_each_sql_watermark(metadata_project):
     with p.engine.connect() as conn:
         assert fetch_task_offset(conn, task).offset_value == "3"
         for run, expected in ((first, ("0", "2")), (second, ("2", "3"))):
-            row = task_run_view(conn, pipeline, pipeline_run_id=run.pipeline_run_id, task_id=task)
+            with selected_project(1):
+                row = task_run_view(
+                    conn, pipeline, pipeline_run_id=run.pipeline_run_id, task_id=task
+                )
             assert (row.watermark_from, row.watermark_to) == expected
             assert (row.attempts[0].watermark_from, row.attempts[0].watermark_to) == expected
     with (

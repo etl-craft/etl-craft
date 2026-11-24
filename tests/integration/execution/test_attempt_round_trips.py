@@ -11,6 +11,7 @@ from sqlalchemy import text
 
 from etl_craft.config import load_config
 from etl_craft.core.enums import RunStatus
+from etl_craft.engine.repository.pipelines import selected_project
 from etl_craft.execution.attempt_types import ChildOptions
 from etl_craft.execution.runner import run_task
 from fixtures.metadata import add_pipeline, add_task, start_run
@@ -61,7 +62,7 @@ def test_sql_attempt_round_trips_include_supervisor_and_child(
     )
     tests = Path(__file__).parents[2]
     monkeypatch.setenv("PYTHONPATH", os.pathsep.join((str(instrumentation), str(tests))))
-    with count_round_trips(db.engine, path=records, include_threads=True):
+    with count_round_trips(db.engine, path=records, include_threads=True), selected_project(1):
         result = run_task(
             db.engine, config, "P", "create", child=ChildOptions(cancel_poll_seconds=60)
         )

@@ -5,6 +5,7 @@ import hashlib
 import pytest
 
 from etl_craft.core.enums import SqlAction
+from etl_craft.engine.repository.pipelines import selected_project
 from etl_craft.handlers.sql.seed import replace_seed
 from etl_craft.handlers.sql.session import Session
 from etl_craft.warehouse.connection import warehouse_dialect
@@ -63,7 +64,7 @@ def test_seed_replacement_retains_declared_values_and_merge_shape(sql_world, mer
     if merge:
         from etl_craft.engine.repository.hash_versions import save_hash_version
 
-        with w.engine_db.begin() as conn:
+        with selected_project(1), w.engine_db.begin() as conn:
             save_hash_version(conn, w.name("reference"), 2)
         from etl_craft.core.actor import Actor, ActorKind
         from etl_craft.core.enums import ActionName, ApiRole

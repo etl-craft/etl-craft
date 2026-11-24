@@ -8,6 +8,7 @@ from etl_craft.cli import main
 from etl_craft.core.actor import SYSTEM_ACTOR
 from etl_craft.core.enums import ActionName, ApiRole
 from etl_craft.core.errors import ExitCode
+from etl_craft.engine.repository.pipelines import selected_project
 from etl_craft.services.operations import OperationContext
 from fixtures.actions import act
 from fixtures.metadata import add_pipeline
@@ -337,16 +338,16 @@ def test_production_cli_refuses_before_mutating_and_confirms_exact_code(
     assert main(["pause", "--pipeline-code", "P", "--reason", "maintenance"]) == ExitCode.USAGE
     captured = capsys.readouterr()
     assert "PRODUCTION" in captured.err and "--yes" in captured.err
-    with project.engine.connect() as conn:
+    with project.engine.connect() as conn, selected_project(1):
         assert "P" not in fetch_open_pauses(conn)
     monkeypatch.setattr("etl_craft.cli.output.can_prompt", lambda: True)
     monkeypatch.setattr("builtins.input", lambda: "wrong")
     assert main(["pause", "--pipeline-code", "P", "--reason", "maintenance"]) == ExitCode.USAGE
-    with project.engine.connect() as conn:
+    with project.engine.connect() as conn, selected_project(1):
         assert "P" not in fetch_open_pauses(conn)
     monkeypatch.setattr("builtins.input", lambda: "default")
     assert main(["pause", "--pipeline-code", "P", "--reason", "maintenance"]) == ExitCode.SUCCESS
-    with project.engine.connect() as conn:
+    with project.engine.connect() as conn, selected_project(1):
         assert "P" in fetch_open_pauses(conn)
 
 

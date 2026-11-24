@@ -12,6 +12,7 @@ from etl_craft.dialects.engine import for_engine
 from etl_craft.dialects.engine.base import EngineDialect
 from etl_craft.engine import migrations
 from etl_craft.engine.migrations import apply_pending_migrations, mark_packaged_migrations_applied
+from etl_craft.engine.repository.pipelines import selected_project
 from etl_craft.engine.schema import SENTINEL_TABLES, existing_engine_tables, init_db
 
 pytestmark = pytest.mark.usefixtures("selected_default_project")
@@ -188,7 +189,8 @@ def test_concurrent_runs_apply_each_file_once(initialized, tmp_path):
     @acting_as(SYSTEM_ACTOR)
     def run():
         try:
-            results.append(apply_pending_migrations(initialized, project))
+            with selected_project(1):
+                results.append(apply_pending_migrations(initialized, project))
         except Exception as error:  # pragma: no cover - surfaced by the assertion below
             errors.append(error)
 

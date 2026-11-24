@@ -661,7 +661,7 @@ def test_generated_catalog_omits_foreign_execution_identities(isolation, tmp_pat
         )
     from etl_craft.engine.repository.triggers import fetch_trigger_links
 
-    with admin.engine.connect() as conn:
+    with admin.engine.connect() as conn, selected_project(1):
         assert fetch_trigger_links(conn, [downstream_run])[0].parent_run_id == upstream_run
     folder = tmp_path / "catalog"
     result = act(caller(admin, "manager"), ActionName.GENERATE_DOCS, output=folder)

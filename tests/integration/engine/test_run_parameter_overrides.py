@@ -126,15 +126,16 @@ def test_restart_copies_inputs_and_refuses_incompatible_new_base(scene):
     with ctx.engine.begin() as conn:
         transitions.finalize_pipeline_run(conn, source, RunStatus.FAILED)
         selected = select_run(conn, pipeline, RunSelector(run_id=source))
-        prepare_recovery(
-            conn,
-            ctx,
-            selected,
-            ControlRequest(
-                pipeline_code="P", run_id=source, action=ControlAction.RESTART, reason="test"
-            ),
-            100,
-        )
+        with selected_project(1):
+            prepare_recovery(
+                conn,
+                ctx,
+                selected,
+                ControlRequest(
+                    pipeline_code="P", run_id=source, action=ControlAction.RESTART, reason="test"
+                ),
+                100,
+            )
         replacement = select_run(conn, pipeline, RunSelector(run_key="control-restart:100"))
         assert run_overrides.recorded(conn, replacement.pipeline_run_id) == {
             "load": {"INPUT_PARAMS": '{"day":2}'}

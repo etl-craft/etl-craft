@@ -421,7 +421,11 @@ class LocalTaskStore:
 
     def state(self, sql_action: str | None = None) -> TaskState:
         """Read only metadata belonging to the selected task and its run."""
-        from etl_craft.engine.repository.pipelines import selected_project
+        from etl_craft.engine.repository.pipelines import (
+            current_project_id,
+            has_selected_project,
+            selected_project,
+        )
 
         identity = self.identity
         with self.engine.connect() as conn:
@@ -429,6 +433,8 @@ class LocalTaskStore:
             if self.definition is not None:
                 pipeline = self.definition.row("CFG_PIPELINES", "pipeline_id", identity.pipeline_id)
                 project_id = int(str(pipeline["project_id"]))
+            elif has_selected_project():
+                project_id = current_project_id("task state")
             else:
                 project_id = conn.execute(
                     statement(conn, "pipeline_project_id"), {"pipeline_id": identity.pipeline_id}

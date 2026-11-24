@@ -863,7 +863,7 @@ def test_a_backfill_runs_once_per_date_as_of_that_date(config, pipeline, downstr
         ("DOWN", "SUCCESS", "2026-09-03", "Y"),
     ]
     first = done.runs[0].pipeline_run_id
-    log = attempt_log_path(config, "DOWN", first, "load", 1).read_text("utf-8")
+    log = attempt_log_path(config, "DOWN", first, "load", 1, project_id=1).read_text("utf-8")
     assert "as of 2026-09-01 (backfill)" in log
     reasons = [row[7] for row in interventions(engine) if row[2] == "GATE_BYPASS"]
     assert reasons[0] == (

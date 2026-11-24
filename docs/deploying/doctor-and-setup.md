@@ -1,11 +1,5 @@
 # Checking a deployment: `doctor` and `setup`
 
-Without a project, `doctor` checks erasure coverage for every active project and names
-the project in each finding. Use `--project CODE` or `Orchestration.Project` to check one.
-The deployment-wide check uses each project's approved bundle to reach its warehouse.
-If a project has active erasure entries but no usable approved connector, doctor reports
-that failure and continues checking other projects.
-
 ## `etl-craft doctor`
 
 `doctor` checks a configuration end to end and reports every problem it finds, not only the
@@ -24,6 +18,12 @@ first. Each line is one check:
 [OK  ] Project folders: sql_scripts, migrations in /srv/etl-craft
 8 ok, 1 warning(s), 1 failed
 ```
+
+Without a project, `doctor` checks erasure coverage for every active project and names
+the project in each finding. Use `--project CODE` or `Orchestration.Project` to check one.
+The deployment-wide check uses each project's approved bundle to reach its warehouse.
+If a project has active erasure entries but no usable approved connector, doctor reports
+that failure and continues checking other projects.
 
 It exits 1 when any check fails, so it can gate a deployment. It checks:
 

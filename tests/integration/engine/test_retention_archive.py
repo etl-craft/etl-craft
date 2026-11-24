@@ -175,7 +175,7 @@ def test_failed_archive_keeps_file_and_log_content(archived, monkeypatch):
     ctx = replace(ctx, config=replace(ctx.config, retention=Retention(attempt_log_days=1)))
     from etl_craft.execution.attempt_records import attempt_log_path
 
-    path = attempt_log_path(ctx.config, "retention", ids[2], "load", 1)
+    path = attempt_log_path(ctx.config, "retention", ids[2], "load", 1, project_id=1)
     path.parent.mkdir(parents=True)
     path.write_text("complete log")
     with retaining(), ctx.engine.begin() as conn:

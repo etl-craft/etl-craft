@@ -9,6 +9,7 @@ from sqlalchemy import text
 from etl_craft.config.model import Retention
 from etl_craft.core.enums import ActionName, ApiRole
 from etl_craft.core.errors import ConfigurationError, PermissionDeniedError
+from etl_craft.engine.repository.pipelines import selected_project
 from etl_craft.execution.attempt_records import attempt_log_path
 from etl_craft.services.operations.actions import invoke
 from etl_craft.services.operations.retention import PurgeInput
@@ -98,7 +99,7 @@ def test_retained_gate_decision_pins_selected_run_and_task(scene):
 
 def test_log_expiry_keeps_removal_evidence_and_deletes_only_canonical_files(scene):
     ctx, _, _, run, _, attempt = scene
-    path = attempt_log_path(ctx.config, "retention", run, "load", 1)
+    path = attempt_log_path(ctx.config, "retention", run, "load", 1, project_id=1)
     path.parent.mkdir(parents=True)
     path.write_text("expired secret-free log")
     with retaining(), ctx.engine.begin() as conn:
@@ -282,7 +283,7 @@ def test_daily_purge_uses_project_time_and_a_durable_completion_cursor(scene):
 
 def test_log_symlink_is_refused_without_removing_the_external_file(scene, tmp_path):
     ctx, _, _, run, _, attempt = scene
-    path = attempt_log_path(ctx.config, "retention", run, "load", 1)
+    path = attempt_log_path(ctx.config, "retention", run, "load", 1, project_id=1)
     path.parent.mkdir(parents=True)
     outside = tmp_path / "outside.log"
     outside.write_text("keep")
@@ -593,7 +594,7 @@ def test_pending_protection_pins_creator_until_recovery_then_retains_only_event_
 
     ctx, _, _, _, _, attempt = scene
     target = '"warehouse"."main"."protected"'
-    with ctx.engine.begin() as conn:
+    with selected_project(1), ctx.engine.begin() as conn:
         request = append(
             conn,
             target,
@@ -609,7 +610,7 @@ def test_pending_protection_pins_creator_until_recovery_then_retains_only_event_
     invoke(ctx, ActionName.PURGE, PurgeInput())
     assert count(ctx, "AUD_TASK_ATTEMPTS") == 1
     assert count(ctx, "AUD_PROTECTION_EVENTS") == 1
-    with ctx.engine.begin() as conn:
+    with selected_project(1), ctx.engine.begin() as conn:
         append(
             conn,
             target,
@@ -635,7 +636,8 @@ def test_pending_protection_pins_creator_until_recovery_then_retains_only_event_
             .mappings()
             .all()
         )
-        assert not read(conn, target).records
+        with selected_project(1):
+            assert not read(conn, target).records
     assert len(rows) == 2
     assert all(row["attempt_id"] == attempt and row["request_id"] == request for row in rows)
     assert rows[-1]["status"] == ProtectionStatus.ABANDONED
