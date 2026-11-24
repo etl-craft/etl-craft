@@ -202,7 +202,7 @@ item's text, or work done early under another item.
 | S7.AT Refresh and availability on the first pages | Done | #437 | Pipeline and all-pipelines refresh on RELAXED projects; unavailable actions on these pages grayed out with their reason |
 | S7.AU Available actions on every page | Done | S7.AU PR | Every action on the project and platform pages renders from the server's availability answer, grayed out with its reason as a hover annotation; the console keeps submit-time refusals |
 | S7.AV No implicit project | Done | #444 | Engine DB access without a selected project raises `ProjectNotSelectedError` (exit 32) naming the query or operation; entry points select their project; `setup` and bare `doctor` are project-aware |
-| S7.AW Public docs for 0.9.0 | Planned | | README, published nav without development pages, and a short 0.9.0 changelog summary |
+| S7.AW Public docs for 0.9.0 | Done | #446 | Release install and first steps in the README, private development docs, and a short 0.9.0 changelog summary |
 | S7.M Stewardship uploads | Done (M2) | #296, #305 | Atomic receipts and safe stored names; processed layout, retention archives and verified reruns; crash recovery and guarded upload history |
 | S7.S Seed tables | Done | #308 | Typed pinned-bundle seeds replace reference tables until recorded stewardship handover |
 | S7.T Business calendars | Done | #276 | Shared holiday and weekend calendars for schedules, run dates, backfill and catch-up |
@@ -10005,8 +10005,8 @@ development history.
 
 **Done when.**
 
-- [ ] The README and changelog summary describe 0.9.0 as published, with no development history.
-- [ ] `make docs` passes with no development page in the published nav and no broken link.
+- [x] The README and changelog summary describe 0.9.0 as published, with no development history.
+- [x] `make docs` passes with no development page in the published nav and no broken link.
 
 ## Release candidate: the Support Insights example
 

@@ -28,7 +28,7 @@ that damages the package is not helpful; saying so, with a better option, is.
 1. **Locate the work.**
    - Roadmap work: `docs/development/road-to-1.0.0.md`. Read the status table, the item's whole
      section to its last bullet, its "Done when", the "Handover notes", and any design document
-     it links (`docs/development/metadata-and-ui.md`).
+     it links.
    - Find the design rules below that the change touches.
    - Search for code that already does the job before writing any (`git grep`). The shared
      helpers most often re-written by mistake are listed under [Architecture](#architecture).
@@ -365,7 +365,6 @@ unless you saw it pass.
 ## Reference
 
 - Roadmap and handover notes: `docs/development/road-to-1.0.0.md`
-- Metadata and UI design: `docs/development/metadata-and-ui.md`
 - Release evidence, gate, chaos and soak: `release/README.md`
 - Procedures (Agent Skills): `.agents/skills/roadmap-item/SKILL.md` (take an item from branch
   to merge) and `.agents/skills/pre-pr-checks/SKILL.md` (validation)

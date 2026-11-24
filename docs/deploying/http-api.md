@@ -242,7 +242,6 @@ An acknowledged file that cannot be opened reports its location, expected access
 it never falls back to chunks or returns an empty log. Legacy terminal attempts without a
 file or chunks report that absence and direct the operator to preserved `TASK_LOG` text.
 The existing attempt document supplies task, task-run, run, attempt, owner and exit identity.
-Run-log synthesis and whole-run zip manifests remain the S7.A.3 work described by the wireframes.
 
 ## Browser UI reads and account changes
 

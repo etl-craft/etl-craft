@@ -26,7 +26,7 @@ matching local step and push. Auto-merge stays on and merges it once the checks 
   items: they track a release and are never "next". If the owner named an item, take that one.
 - Read the item's whole section (`### <id>`) to its last bullet, the Handover notes ("Priority
   correction", "Acceptance availability", "Choices that differ from the item text"), and every
-  document the item links (`docs/development/metadata-and-ui.md` for S5.O to S5.Q).
+  design document the item links.
 - Write the item's "Done when" down as a checklist. If the item has no "Done when", derive one
   from its Problem and Change. Show it in the pull request and treat it as a decision to record.
 

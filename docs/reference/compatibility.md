@@ -2,10 +2,7 @@
 
 The compatibility baseline is **0.9.0**, the first public stable release. Breaking changes
 remain possible before that baseline. Version 1.0.0 follows user feedback; it does not reset
-the guarantees made at 0.9.0. This follows the recorded
-[S7.G owner decision](../development/road-to-1.0.0.md#handover-notes), specifically its
-priority correction beginning “Release gate” and “S7.G”; that decision supersedes the
-unchanged S7.G item bullets that say “from 1.0.0”.
+the guarantees made at 0.9.0.
 
 This page states the release contract, not a claim that unreleased compatibility gates
 already pass. The package currently identifies itself as 0.3.0 in

@@ -4,9 +4,10 @@ import importlib
 import json
 import subprocess
 import time
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 import pytest
+import yaml
 
 from fixtures.scripts import SCRIPTS_DIR, load
 
@@ -16,6 +17,22 @@ build_docs_site = load("build_docs_site")
 check_docs_content = load("check_docs_content")
 REPO_ROOT = SCRIPTS_DIR.parent
 SITE_URL = "https://docs.etl-craft.dev"
+
+
+def test_published_nav_excludes_development_pages():
+    def paths(entries):
+        if isinstance(entries, str):
+            yield entries
+        else:
+            for entry in entries.values() if isinstance(entries, dict) else entries:
+                yield from paths(entry)
+
+    config = (REPO_ROOT / "mkdocs.yml").read_text(encoding="utf-8")
+    # The Markdown formatter is irrelevant to navigation. Treat its tag as plain text.
+    nav = yaml.safe_load(config.replace("!!python/name:", ""))["nav"]
+    assert [
+        path for path in paths(nav) if PurePosixPath(path.lstrip("/")).parts[:1] == ("development",)
+    ] == []
 
 
 def _git(repo, *args):
