@@ -201,7 +201,7 @@ item's text, or work done early under another item.
 | S7.AS Project dashboard and navigation | Done | #401, #402, #404, #405, #406, #407, #413 | Slices 1–5 owner approved; shared controls polished, with framed working panes, application-drawn diagram scrollbars, unclipped column selection and accessible search/action feedback in follow-up |
 | S7.AT Refresh and availability on the first pages | Done | #437 | Pipeline and all-pipelines refresh on RELAXED projects; unavailable actions on these pages grayed out with their reason |
 | S7.AU Available actions on every page | Done | S7.AU PR | Every action on the project and platform pages renders from the server's availability answer, grayed out with its reason as a hover annotation; the console keeps submit-time refusals |
-| S7.AV No implicit project | Done | | Engine DB access without a selected project raises `ProjectNotSelectedError` (exit 32) naming the query or operation; entry points select their project; `setup` and bare `doctor` are project-aware |
+| S7.AV No implicit project | Done | #444 | Engine DB access without a selected project raises `ProjectNotSelectedError` (exit 32) naming the query or operation; entry points select their project; `setup` and bare `doctor` are project-aware |
 | S7.AW Public docs for 0.9.0 | Planned | | README, published nav without development pages, and a short 0.9.0 changelog summary |
 | S7.M Stewardship uploads | Done (M2) | #296, #305 | Atomic receipts and safe stored names; processed layout, retention archives and verified reruns; crash recovery and guarded upload history |
 | S7.S Seed tables | Done | #308 | Typed pinned-bundle seeds replace reference tables until recorded stewardship handover |
