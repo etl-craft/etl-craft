@@ -1873,6 +1873,8 @@ Warehouses are optional extras. Core bundles none. `all` is core plus the UI, fo
 
 ### Documentation
 
+- Added Concepts and Access guides and branding usage guidance.
+
 - Added a remote CLI guide for laptop and CI deployment and run control, with a local-server
   Quick Start example.
 

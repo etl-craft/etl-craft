@@ -6,6 +6,8 @@ etl-craft is a metadata-driven ETL orchestration engine. Pipelines, their tasks 
 dependencies between them are rows in a database, the **Engine DB**. etl-craft reads those rows
 and runs the work against one **warehouse**. The controller schedules and supervises its pipelines.
 
+[Concepts](concepts.md) explains execution and project boundaries; [Access](guides/access.md) explains roles and bindings.
+
 ## Core ideas
 
 **Pipelines are data, not code.** A pipeline is a row in `CFG_PIPELINES`; its tasks are rows in
@@ -17,9 +19,9 @@ change.
 ready tasks after each completion, one child process per task. `etl-craft run --pipeline-code X --task-code Y` runs one task;
 Run requests may also be submitted through the HTTP API.
 
-**Runs resolve themselves.** A run's id is never passed between tasks. Each task finds the
-pipeline's active run in `AUD_PIPELINES_RUN_LOG`, and the database guarantees there is only one.
-A retry resumes the run: tasks that already succeeded are not run again.
+**Runs have explicit identities.** The caller gives each task its run. Commands select
+`--run-id`, `--run-key`, or the single non-terminal whole-pipeline run, never a run by recency.
+A retry resumes the run: `SUCCESS` and `SKIPPED` tasks are not run again.
 
 **The engine owns every write.** A SQL task supplies a read-only `SELECT`. The engine wraps it
 in one of nine actions (`CREATE_TABLE`, `SETUP_TABLE`, `OVERWRITE_TABLE`, `APPEND_TABLE`, `SCD1_MERGE`,

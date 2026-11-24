@@ -189,8 +189,8 @@ item's text, or work done early under another item.
 | S7.G Compatibility policy | In progress | #379; rolling checks | Policy, shared same-major admission, additive SQL/ledger checks and installed input registry implemented; actual mixed-version certification waits for the 0.9.0 release gate |
 | S7.H Cloud acceptance | In progress | #104–#110, #208, #231, #236, #247 | Native/Iceberg and managed-engine contracts exist; complete candidate evidence and unavailable provider cases remain |
 | S7.I The endurance run | Planned |  | 72-hour accelerated Support Insights candidate run, faults and bounded growth evidence after S8 is running |
-| S7.J Documentation to finish | In progress | #85, #227, #277, #441 | S7.J.1 done: remote CLI guide, CI deployment and installed-demo server example; S7.J.2 concepts and access and S7.J.3 Python contracts and the export recipe remain |
-| S7.L ETL Craft logo and CLI banner | In progress | #277, #400 | Owner-supplied logo, vector sources, theme-aware favicon and documentation assets, and the taller CLI banner are done; branding guidance remains |
+| S7.J Documentation to finish | In progress | #85, #227, #277, #441, #442 | S7.J.1 and S7.J.2 done: remote CLI, concepts and access guides; S7.J.3 Python contracts and the export recipe remain |
+| S7.L ETL Craft logo and CLI banner | Done | #277, #400, #442 | Owner-supplied logo, vector sources, theme-aware favicon and documentation assets, taller CLI banner and branding guidance are done |
 | S7.AL Pre-demo package gaps | Done | #314, #315, #337, #417, S7.AL.5 PR | Duplicate counts, current references, guarded-table validation guidance, event-file validation, the run timeline with recorded gate and event waits, and erasure physical-retention reporting. |
 | S7.AM Protection on every warehouse | Done | #311, #312, #313 | Atomic SCD merges, in-row protection and recovery, private audit identities and provider acceptance |
 | S7.AN Always show the environment | Done | #328 | CLI context and production confirmation; designed, sandboxed alert/SLA templates and catalog environment |
