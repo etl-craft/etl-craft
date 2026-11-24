@@ -6,6 +6,8 @@ Generated from the code, so they always match the release:
 - [craft-connector.yml](configuration.md): every section and setting the loader accepts, and
   where each is explained.
 - [Task parameters](task-parameters.md): every `CFG_TASK_PARAMETERS` name, per handler.
+- [Actions](actions.md): commands, routes, request fields and response documents.
+- [JSON documents](json-documents.md): versioned fields, types and returning actions.
 - [Engine DB schema](engine-db-schema.md): every table and column, with allowed values and
   unique keys.
 - [Python API](../api/etl_craft/index.md): scripting contracts, configuration, errors and browsable module references.

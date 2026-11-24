@@ -1,4 +1,4 @@
-"""Generate the configuration, task parameter and Engine DB schema references from the code.
+"""Generate reference pages from the code.
 
 Run by the mkdocs-gen-files plugin during `mkdocs build`; the pages exist only in the build.
 The pages themselves are rendered by scripts/reference_pages.py, which the tests also check.
@@ -25,6 +25,10 @@ PAGES = {
     "reference/actions.md": (
         reference_pages.actions_page,
         "../src/etl_craft/services/operations/actions.py",
+    ),
+    "reference/json-documents.md": (
+        reference_pages.json_documents_page,
+        "../src/etl_craft/services/operations/serialization.py",
     ),
     "reference/engine-db-schema.md": (
         reference_pages.schema_page,

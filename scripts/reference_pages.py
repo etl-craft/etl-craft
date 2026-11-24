@@ -1,19 +1,29 @@
-"""The reference pages generated from the code: configuration, task parameters, Engine DB schema.
+"""Render reference pages from the package's configuration, schemas and action contracts.
 
-``docs/gen_reference_pages.py`` writes them into the documentation build, so each page lists
-exactly what the release reads: the settings the loader accepts, the task parameters each
-handler reads, and the tables and columns of the Engine DB schema. The descriptions stay in the
-annotated ``craft-connector.example.yml``, the guides and the schema's own comments; the tests
-check that each of them covers every name listed here.
+``docs/gen_reference_pages.py`` writes these pages into the documentation build.
 """
 
 from __future__ import annotations
 
+import ast
 import re
-from dataclasses import dataclass, field
+from dataclasses import MISSING, Field, dataclass, field, fields, is_dataclass
+from enum import Enum
+from importlib import import_module
+from importlib.machinery import SourceFileLoader
+from importlib.util import find_spec
+from inspect import getdoc, getsource
 from pathlib import Path
+from pkgutil import walk_packages
+from textwrap import dedent
+from types import UnionType
+from typing import ClassVar, Literal, Union, get_args, get_origin, get_type_hints
 
+import etl_craft
+from etl_craft.cli.commands.migrate import MigrationResult
 from etl_craft.config.loader import settings_by_section
+from etl_craft.core.enums import ActionName
+from etl_craft.core.errors import ConfigurationError
 from etl_craft.dialects.warehouse.base import STORAGE_PARAMETERS
 from etl_craft.handlers import (
     alert_message,
@@ -25,6 +35,10 @@ from etl_craft.handlers import (
 from etl_craft.handlers.registry import COMMON_PARAMETERS
 from etl_craft.handlers.sql.spec import FLAGS, SCREENED
 from etl_craft.handlers.sql.spec import PARAMETERS as SQL_PARAMETERS
+from etl_craft.services.catalog import document as catalog_document
+from etl_craft.services.operations.action_types import Action
+from etl_craft.services.operations.actions import ACTIONS
+from etl_craft.services.operations.requests import NoInput
 
 REPO = Path(__file__).resolve().parents[1]
 ANNOTATED = REPO / "docs" / "craft-connector.example.yml"
@@ -246,7 +260,7 @@ def actions_page() -> str:
     """Render each action's command, route, scope, role, audit and placement from its row."""
     from etl_craft.cli.commands import COMMANDS
     from etl_craft.core.enums import Audit, Placement
-    from etl_craft.services.operations.actions import ACTIONS, action_path
+    from etl_craft.services.operations.actions import action_path
 
     commands: dict[str, list[str]] = {}
     for command in COMMANDS:
@@ -267,7 +281,230 @@ def actions_page() -> str:
         audited = {Audit.NONE: "no", Audit.REQUEST: "yes", Audit.BY_ACTION: "yes, by the action"}
         where = "anywhere" if action.placement == Placement.ANYWHERE else "controller's host"
         lines.append(
-            f"| `{name}` | {', '.join(commands.get(name, [])) or '—'} | {route} | "
+            f'| <a id="action-{action_anchor(name)}"></a>[`{name}`](#{action_anchor(name)}) | '
+            f"{', '.join(commands.get(name, [])) or '—'} | {route} | "
             f"{action.scope} | {action.role or 'none'} | {audited[action.audit]} | {where} |"
         )
-    return "\n".join(lines) + "\n"
+    lines += ["", "## Requests and responses", ""]
+    documents = document_classes()
+    for name, action in sorted(ACTIONS.items()):
+        lines += action_details(name, action, documents)
+    return "\n".join(lines)
+
+
+# The CLI wraps the operation's migration list in cli/commands/migrate.py.
+HOST_JSON = {ActionName.MIGRATE: MigrationResult}
+NON_DOCUMENT_IDENTIFIERS: frozenset[str] = frozenset()
+OTHER_DOCUMENTS = {
+    "etl-craft/alert/1": (
+        "The outbound webhook payload is produced by `services.operations.alert_delivery`. "
+        "See [Webhook JSON and signature](../guides/alerts.md#webhook-json-and-signature)."
+    ),
+    "etl-craft/bundle-manifest/1": (
+        "The stored manifest is produced by `services.operations.bundles.publish`. "
+        "See [Project bundles](../deploying/project-bundles.md)."
+    ),
+    catalog_document.SCHEMA: "See [Catalog document shape 2](catalog-document.md).",
+}
+
+
+def document_classes() -> dict[str, type]:
+    """Discover schema-bearing dataclasses in their defining modules."""
+    documents: dict[str, type] = {}
+    for module in walk_packages(etl_craft.__path__, "etl_craft."):
+        # Docs-only builds omit warehouse extras, so inspect source before importing candidates.
+        spec = find_spec(module.name)
+        if spec is None or not isinstance(spec.loader, SourceFileLoader):
+            continue
+        source = spec.loader.get_source(module.name) or ""
+        if not re.search(r"^\s+SCHEMA\s*:", source, re.MULTILINE):
+            continue
+        for cls in vars(import_module(module.name)).values():
+            if not isinstance(cls, type) or cls.__module__ != module.name or not is_dataclass(cls):
+                continue
+            schema = getattr(cls, "SCHEMA", None)
+            if (
+                isinstance(schema, str)
+                and get_origin(get_type_hints(cls).get("SCHEMA")) is ClassVar
+            ):
+                if schema in documents:
+                    raise ConfigurationError(f"{schema}: multiple JSON document classes")
+                documents[schema] = cls
+    return documents
+
+
+def action_anchor(name: ActionName) -> str:
+    return name.replace(" ", "-")
+
+
+def document_anchor(schema: str) -> str:
+    return schema.removeprefix("etl-craft/").replace("/", "-")
+
+
+def action_documents(action: Action, documents: dict[str, type]) -> list[str]:
+    """Find the published documents for an action, including union alternatives."""
+    result = HOST_JSON.get(action.name, action.result)
+    if result is None or action.streams:
+        return []
+    options = get_args(result) if get_origin(result) in (Union, UnionType) else (result,)
+    schemas = []
+    for cls in options:
+        schema = getattr(cls, "SCHEMA", None)
+        if isinstance(schema, str) and documents.get(schema) is cls:
+            schemas.append(schema)
+        elif action.method is not None or action.name in HOST_JSON:
+            raise ConfigurationError(
+                f"action {action.name}: result {cls} must be a documented JSON document class"
+            )
+    return schemas
+
+
+def display_type(hint: object, links: dict[type, str]) -> str:
+    origin, args = get_origin(hint), get_args(hint)
+    if isinstance(hint, type) and hint in links:
+        return f"[`{hint.__name__}`]({links[hint]})"
+    if origin in (Union, UnionType):
+        members = [display_type(item, links) for item in args if item is not type(None)]
+        union = members[0] if len(members) == 1 else f"Union[{', '.join(members)}]"
+        return f"Optional[{union}]" if type(None) in args else union
+    if origin is Literal:
+        return "`Literal[" + ", ".join(repr(item).replace("|", r"\|") for item in args) + "]`"
+    if origin is not None:
+        return f"{origin.__name__}[" + ", ".join(display_type(item, links) for item in args) + "]"
+    if hint is Ellipsis:
+        return "`...`"
+    return f"`{getattr(hint, '__name__', str(hint))}`"
+
+
+def request_default(item: Field[object]) -> str:
+    if item.default is not MISSING:
+        value = item.default.value if isinstance(item.default, Enum) else item.default
+        return "`" + repr(value).replace("|", r"\|") + "`"
+    if item.default_factory is not MISSING:
+        factory = getattr(item.default_factory, "__name__", "factory")
+        return f"`{factory}()`"
+    return "—"
+
+
+def action_details(name: ActionName, action: Action, documents: dict[str, type]) -> list[str]:
+    schemas = action_documents(action, documents)
+    response = ", ".join(f"[`{s}`](json-documents.md#{document_anchor(s)})" for s in schemas)
+    if name in HOST_JSON:
+        response = f"JSON output of `etl-craft {name} --json` ({response})"
+    elif action.streams:
+        response = "a byte stream"
+    elif action.method is not None and action.result is None:
+        response = "no content (204)"
+    elif not response:
+        response = "No JSON document (host-only)"
+    lines = [f"### `{name}` {{ #{action_anchor(name)} }}", "", f"**Response:** {response}", ""]
+    try:
+        hints = get_type_hints(action.request)
+        request = [item for item in fields(action.request) if item.init]
+        if action.request is NoInput:
+            return [*lines, "**Request:** none", ""]
+        lines += ["| Request field | Type | Default | Required |", "| --- | --- | --- | --- |"]
+        for item in request:
+            required = item.default is MISSING and item.default_factory is MISSING
+            lines.append(
+                f"| `{item.name}` | {display_type(hints[item.name], {})} | "
+                f"{request_default(item)} | {'yes' if required else 'no'} |"
+            )
+    except (NameError, TypeError, KeyError) as error:
+        raise ConfigurationError(
+            f"action {name}: cannot resolve request fields: {error}"
+        ) from error
+    return [*lines, ""]
+
+
+def nested_types(hint: object) -> list[type]:
+    if isinstance(hint, type) and is_dataclass(hint):
+        return [hint]
+    return [cls for arg in get_args(hint) for cls in nested_types(arg)]
+
+
+def attribute_docstrings(cls: type) -> dict[str, str]:
+    """Read the string literals immediately following annotated field definitions."""
+    descriptions = {}
+    for base in reversed(cls.__mro__):
+        if not is_dataclass(base):
+            continue
+        node = ast.parse(dedent(getsource(base))).body[0]
+        assert isinstance(node, ast.ClassDef)
+        for assignment, following in zip(node.body, node.body[1:], strict=False):
+            if (
+                isinstance(assignment, ast.AnnAssign)
+                and isinstance(assignment.target, ast.Name)
+                and isinstance(following, ast.Expr)
+                and isinstance(following.value, ast.Constant)
+                and isinstance(following.value.value, str)
+            ):
+                descriptions[assignment.target.id] = following.value.value.strip()
+    return descriptions
+
+
+def result_table(cls: type, links: dict[type, str]) -> list[str]:
+    doc = getdoc(cls)
+    lines = [doc.splitlines()[0], ""] if doc and not doc.startswith(f"{cls.__name__}(") else []
+    lines += ["| Field | Type | Description |", "| --- | --- | --- |"]
+    schema = getattr(cls, "SCHEMA", None)
+    if isinstance(schema, str):
+        lines.append(f"| `schema` | `str` | `{schema}` |")
+    hints = get_type_hints(cls)
+    assert is_dataclass(cls)
+    descriptions = attribute_docstrings(cls)
+    for item in fields(cls):
+        description = (
+            getattr(item, "doc", None)
+            or item.metadata.get("description")
+            or descriptions.get(item.name, "")
+        )
+        description = description.partition("\n")[0].replace("|", r"\|")
+        lines.append(f"| `{item.name}` | {display_type(hints[item.name], links)} | {description} |")
+    return [*lines, ""]
+
+
+def json_documents_page() -> str:
+    """Render every versioned JSON document with links to the actions that return it."""
+    documents = document_classes()
+    returned_by: dict[str, list[str]] = {}
+    for name, action in sorted(ACTIONS.items()):
+        for schema in action_documents(action, documents):
+            returned_by.setdefault(schema, []).append(
+                f"[`{name}`](actions.md#action-{action_anchor(name)})"
+            )
+    links = {cls: f"#{document_anchor(schema)}" for schema, cls in documents.items()}
+    lines = [
+        "# JSON documents",
+        "",
+        "Versioned JSON documents generated from the code. Dates use ISO 8601 strings,",
+        "enums use their values, and tuples are JSON arrays.",
+        "",
+    ]
+    for schema in sorted(documents.keys() | OTHER_DOCUMENTS.keys()):
+        _, kind, version = schema.split("/")
+        lines += [
+            f"## {kind} (version {version}) {{ #{document_anchor(schema)} }}",
+            "",
+            f"`{schema}`",
+            "",
+        ]
+        if schema in OTHER_DOCUMENTS:
+            lines += [OTHER_DOCUMENTS[schema], ""]
+            continue
+        cls = documents[schema]
+        nested = [cls]
+        for shape in nested:
+            for hint in get_type_hints(shape).values():
+                for item in nested_types(hint):
+                    if item not in links:
+                        qualified_name = f"{item.__module__}.{item.__qualname__}".replace(
+                            ".", "-"
+                        ).lower()
+                        links[item] = f"#fields-{qualified_name}"
+                        nested.append(item)
+        lines += result_table(cls, links)
+        lines += ["**Returned by:** " + (", ".join(returned_by.get(schema, [])) or "—"), ""]
+        for item in nested[1:]:
+            lines += [f"### `{item.__name__}` {{ {links[item]} }}", "", *result_table(item, links)]
+    return "\n".join(lines)

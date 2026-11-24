@@ -166,6 +166,7 @@ nav:
       - reference/index.md
       - Command line: reference/cli.md
       - Actions: reference/actions.md
+      - JSON documents: reference/json-documents.md
       - Catalog document: reference/catalog-document.md
       - Compatibility policy: reference/compatibility.md
       - Exit codes: reference/exit-codes.md
