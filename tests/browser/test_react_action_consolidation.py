@@ -10,6 +10,20 @@ from test_react_ui import open_page, pause_item, sign_in
 from etl_craft.core.enums import ActionName
 from fixtures.actions import act
 
+
+PROBE = """
+window.__probe = [];
+const t = () => performance.now().toFixed(0);
+const orig = HTMLDialogElement.prototype.showModal;
+HTMLDialogElement.prototype.showModal = function () { window.__probe.push(t() + ' showModal ' + this.getAttribute('aria-labelledby')); return orig.call(this); };
+const origClose = HTMLDialogElement.prototype.close;
+HTMLDialogElement.prototype.close = function () { window.__probe.push(t() + ' close() called'); return origClose.call(this); };
+window.addEventListener('keydown', e => { if (e.key === 'Escape') window.__probe.push(t() + ' keydown-capture target=' + e.target.tagName + ' menus=' + document.querySelectorAll('[role=menu]').length + ' openDialogs=' + document.querySelectorAll('dialog[open]').length + ' active=' + (document.activeElement && document.activeElement.tagName)); }, true);
+window.addEventListener('keydown', e => { if (e.key === 'Escape') window.__probe.push(t() + ' keydown-bubble prevented=' + e.defaultPrevented); }, false);
+document.addEventListener('cancel', e => window.__probe.push(t() + ' cancel'), true);
+document.addEventListener('close', e => window.__probe.push(t() + ' close-event'), true);
+"""
+
 pytestmark = pytest.mark.browser
 
 
@@ -18,6 +32,7 @@ def test_pipeline_row_pause_resume_keeps_confirmation_policy_and_header_action(s
     _, url, _ = scene
     with sync_playwright() as pw:
         browser, page, problems = open_page(pw, viewport={"width": width, "height": 1000})
+        page.add_init_script(PROBE)
         sign_in(page, url, "/ui/projects/default/pipelines")
         row = (
             page.get_by_role("table", name="Pipelines", exact=True)
@@ -40,7 +55,11 @@ def test_pipeline_row_pause_resume_keeps_confirmation_policy_and_header_action(s
         for value in ("wait", "run-now", "catch-up"):
             expect(policy.locator(f'option[value="{value}"]')).to_have_count(1)
         page.keyboard.press("Escape")
-        expect(dialog).not_to_be_visible()
+        try:
+            expect(dialog).not_to_be_visible()
+        except AssertionError:
+            print("STUCK", page.evaluate("() => window.__probe"))
+            raise
         row.get_by_role("link", name="OPS", exact=True).click()
         expect(page.get_by_role("button", name="Run now", exact=True)).to_have_count(1)
         pause_item(page, "Resume").click()

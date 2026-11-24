@@ -138,6 +138,7 @@ def pause_item(scope, name, pipeline="OPS"):
             item.wait_for(state="visible", timeout=3000)
             return item
         except PlaywrightTimeoutError:
+            print("PAUSE_ITEM_RETRY", key, name)
             page.keyboard.press("Escape")
     item.wait_for(state="visible", timeout=5000)
     return item
