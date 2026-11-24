@@ -1,6 +1,8 @@
 """The generated reference pages list exactly what the code reads, and every name is explained."""
 
 import re
+from dataclasses import fields, is_dataclass
+from typing import get_args
 
 import pytest
 
@@ -107,3 +109,56 @@ def test_bundle_ownership_and_approval_columns_include_their_final_constraints()
     assert columns["PROJECT_ID"].default == "1"
     assert not columns["CONNECTIONS_SHA256"].nullable
     assert columns["CONNECTIONS_APPROVED_FLAG"].allowed == ["Y", "N"]
+
+
+def test_every_versioned_json_identifier_has_a_reference_section():
+    pattern = r"etl-craft/[a-z0-9_-]+/[0-9]+\b"
+    literals = {
+        identifier
+        for path in (pages.REPO / "src").rglob("*")
+        if path.is_file() and "__pycache__" not in path.parts
+        for identifier in re.findall(pattern, path.read_text(encoding="utf-8", errors="ignore"))
+    }
+    page = pages.json_documents_page()
+    rendered = set(re.findall(rf"^`({pattern})`$", page, re.MULTILINE))
+    assert literals - rendered == pages.NON_DOCUMENT_IDENTIFIERS
+    assert rendered <= literals
+    assert "| `mapped` | tuple[" in page
+    assert "Managed columns whose values come from the SELECT." in page
+    nested_anchors = re.findall(r"\n### .* \{ #(fields-[^ ]+) \}", page)
+    assert nested_anchors
+    assert len(nested_anchors) == len(set(nested_anchors))
+    assert set(re.findall(r"\]\(#(fields-[^)]+)\)", page)) == set(nested_anchors)
+
+
+def test_every_action_documents_its_request_and_response():
+    actions = pages.actions_page()
+    documents = pages.json_documents_page()
+    for name, action in pages.ACTIONS.items():
+        start = f"### `{name}` {{ #{pages.action_anchor(name)} }}"
+        assert start in actions, name
+        section = actions.split(start, 1)[1].split("\n### ", 1)[0]
+        if action.request is pages.NoInput:
+            assert "**Request:** none" in section, name
+        for item in fields(action.request):
+            if item.init:
+                assert f"| `{item.name}` |" in section, name
+        if action.streams:
+            assert "**Response:** a byte stream" in section, name
+        elif action.method is not None and action.result is None:
+            assert "**Response:** no content (204)" in section, name
+        elif action.method is not None:
+            for cls in get_args(action.result) or (action.result,):
+                assert isinstance(cls, type) and is_dataclass(cls), name
+                schema = getattr(cls, "SCHEMA", None)
+                assert isinstance(schema, str) and f"\n`{schema}`\n" in documents, name
+                assert (
+                    f"[`{schema}`](json-documents.md#{pages.document_anchor(schema)})" in section
+                ), name
+    for name in (pages.ActionName.SETUP, pages.ActionName.INIT_DB):
+        section = actions.split(f"### `{name}` ", 1)[1].split("\n### ", 1)[0]
+        assert "**Response:** No JSON document (host-only)" in section, name
+    for name, cls in pages.HOST_JSON.items():
+        assert is_dataclass(cls) and isinstance(cls.SCHEMA, str), name
+        assert f"\n`{cls.SCHEMA}`\n" in documents, name
+        assert f"JSON output of `etl-craft {name} --json`" in actions, name

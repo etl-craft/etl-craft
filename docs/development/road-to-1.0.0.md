@@ -189,7 +189,7 @@ item's text, or work done early under another item.
 | S7.G Compatibility policy | In progress | #379; rolling checks | Policy, shared same-major admission, additive SQL/ledger checks and installed input registry implemented; actual mixed-version certification waits for the 0.9.0 release gate |
 | S7.H Cloud acceptance | In progress | #104–#110, #208, #231, #236, #247 | Native/Iceberg and managed-engine contracts exist; complete candidate evidence and unavailable provider cases remain |
 | S7.I The endurance run | Planned |  | 72-hour accelerated Support Insights candidate run, faults and bounded growth evidence after S8 is running |
-| S7.J Documentation to finish | In progress | #85, #227, #277, #441, #442, #443 | S7.J.1 to S7.J.3 done; S7.J.4 (request and response reference) planned after S7.AW |
+| S7.J Documentation to finish | Done | #85, #227, #277, #441, #442, #443, #448 | Closes S7.J.4 with generated action requests and versioned JSON documents |
 | S7.L ETL Craft logo and CLI banner | Done | #277, #400, #442 | Owner-supplied logo, vector sources, theme-aware favicon and documentation assets, taller CLI banner and branding guidance are done |
 | S7.AL Pre-demo package gaps | Done | #314, #315, #337, #417, S7.AL.5 PR | Duplicate counts, current references, guarded-table validation guidance, event-file validation, the run timeline with recorded gate and event waits, and erasure physical-retention reporting. |
 | S7.AM Protection on every warehouse | Done | #311, #312, #313 | Atomic SCD merges, in-row protection and recovery, private audit identities and provider acceptance |
@@ -225,6 +225,10 @@ item's text, or work done early under another item.
 | S8.I Support Insights on current main | Planned | | `ALERT` tasks with `EMAIL` channels and `deploy` replace removed handlers and commands, so the demo can pin current main; precedes S8.C, S8.E and S8.F |
 
 ### Handover notes
+
+- **S7.J.4 Choices that differ from the item text.** Response links and returning actions use
+  `Action.result` as their source. Host-only results without a JSON document are labelled and
+  exempt from the HTTP response check. The migration CLI's JSON output links to its document.
 
 - **S7.AV Choices that differ from the item text.** Main already refused a local command
   without `Orchestration.Project` or `--project` (exit 2); that refusal is kept unchanged, also

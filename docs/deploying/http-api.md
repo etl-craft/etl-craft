@@ -150,6 +150,9 @@ The interactive contract is at `/api/v1/docs`; `/api/v1/openapi.json` supplies t
 contract. These two documentation endpoints are public and contain no deployment data or
 credentials. The documentation build also publishes the [generated OpenAPI contract](../reference/openapi.json).
 
+The OpenAPI contract lists routes and request schemas, with response bodies described in the
+[JSON documents reference](../reference/json-documents.md).
+
 A task watermark reset posts `{"pipeline_code":"SALES","task_code":"load","run_id":42,
 "watermark":"0","reason":"reload corrected source"}` to `/marks`. It has the same type
 validation and live-attempt refusal as the CLI. Task and attempt documents include nullable

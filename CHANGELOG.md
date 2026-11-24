@@ -1907,6 +1907,8 @@ Warehouses are optional extras. Core bundles none. `all` is core plus the UI, fo
 
 ### Documentation
 
+- Added generated action request fields and a versioned JSON response reference.
+
 - Documented supported Python contracts, tested ingestion and warehouse examples, and an Engine DB export recipe.
 
 - Added Concepts and Access guides and branding usage guidance.
