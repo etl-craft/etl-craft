@@ -116,9 +116,13 @@ for example the [Quick Start's local server](../quick-start.md#operate-the-local
 Redirects are refused, so use the server's final address.
 
 An unreachable server, or a response that is not etl-craft JSON, exits **27**. Check the URL,
-network and server health before retrying. After a connection loss during a write, inspect
-the server's recorded result before submitting it again; the write may already have arrived.
-Other refusals keep their own exit codes and explain the remedy.
+network and server health before retrying. Connections and request sends keep a 60-second socket
+timeout. Long operations such as deploy, full validation, erasure and warehouse maintenance wait
+for the server without a client read deadline. Other actions exit **33** if the response stalls for
+60 seconds after the request was sent. The server may still be completing it. Check its audit
+record or the action's read command before retrying. For deploy, run `deploy --plan` to see which
+config changes remain and check the audit for the deployment outcome. For a run, check `status`
+using the exact run identity. Other refusals keep their own exit codes and explain the remedy.
 
 Engine DB setup and migrations, local diagnostics and exports, and starting server processes
 are host work. The [generated actions reference](../reference/actions.md) is the authority for

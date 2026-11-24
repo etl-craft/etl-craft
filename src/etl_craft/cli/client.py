@@ -7,6 +7,7 @@ import mimetypes
 import os
 import re
 from collections.abc import Iterator, Mapping
+from contextlib import contextmanager
 from datetime import UTC, datetime
 from http.client import HTTPResponse
 from pathlib import Path
@@ -18,12 +19,16 @@ from uuid import uuid4
 from etl_craft.config.remote import server_url as server_url
 from etl_craft.core.api_errors import response_error
 from etl_craft.core.enums import ActionName, HttpMethod
-from etl_craft.core.errors import ServerError, UsageError
+from etl_craft.core.errors import ApiReadTimeoutError, ServerError, UsageError
 from etl_craft.core.http_client import open_request
 from etl_craft.services import credentials
+from etl_craft.services.operations.action_types import Action
 from etl_craft.services.operations.actions import ACTIONS, action_path
 from etl_craft.services.operations.serialization import decode, encode
 from etl_craft.services.operations.sessions import Session, TokenInput
+
+CONNECT_TIMEOUT = 60
+READ_TIMEOUT = 60
 
 
 class ApiClient:
@@ -57,10 +62,9 @@ class ApiClient:
             },
         )
         query, body = (fields, None) if action.method == HttpMethod.GET else (None, fields)
-        signed_in = action.role is not None
         if action.streams:
-            return self._stream(path, query or {})
-        with self._open(action.method, path, query, body, signed_in=signed_in) as response:
+            return self._stream(action, path, query or {})
+        with self._open(action, path, query, body) as response:
             payload = response.read(16 * 1024 * 1024 + 1)
         if action.result is None:
             return None
@@ -74,7 +78,8 @@ class ApiClient:
 
     def upload(self, pipeline_code: str, path: Path) -> object:
         """Send multipart bytes from disk without materializing the file in memory."""
-        route = action_path(ACTIONS[ActionName.UPLOAD]).format(project=quote(self.project, safe=""))
+        action = ACTIONS[ActionName.UPLOAD]
+        route = action_path(action).format(project=quote(self.project, safe=""))
         boundary = "etl-craft-" + uuid4().hex
         mime = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
         head = (
@@ -102,44 +107,69 @@ class ApiClient:
                     ),
                 },
             )
+            with self._receive(action), open_request(message, _timeouts(action)) as response:
+                payload = response.read(65536)
             try:
-                with open_request(message, 60) as response:
-                    return json.loads(response.read(65536))
-            except HTTPError as error:
-                raise response_error(error.code, error.read(65536), self.url) from error
-            except (URLError, OSError) as error:
+                return json.loads(payload)
+            except ValueError as error:
                 raise ServerError(
-                    f"upload {path.name!r}: API unavailable ({type(error).__name__}); "
-                    "expected a complete upload response; restore the API or network "
-                    "and check uploads before retrying"
+                    f"{self.url}{route}: response is not JSON; check the URL"
                 ) from error
 
-    def _stream(self, path: str, query: Mapping[str, object]) -> Iterator[bytes]:
+    def _stream(self, action: Action, path: str, query: Mapping[str, object]) -> Iterator[bytes]:
         """Yield a text response in chunks, such as an attempt's log."""
-        with self._open(HttpMethod.GET, path, query, None, signed_in=True) as response:
+        with self._open(action, path, query, None) as response:
             while chunk := response.read(65536):
                 yield chunk
 
+    @contextmanager
     def _open(
         self,
-        method: str,
+        action: Action,
         path: str,
         query: Mapping[str, object] | None,
         body: Mapping[str, object] | None,
-        *,
-        signed_in: bool,
-    ) -> HTTPResponse:
+    ) -> Iterator[HTTPResponse]:
+        signed_in = action.role is not None
         token = self._token() if signed_in else None
+        with self._receive(action):
+            try:
+                response = self._send(action, path, query, body, token)
+            except HTTPError as error:
+                if error.code != 401 or not signed_in or self._service_token is not None:
+                    raise
+                error.close()
+                response = self._send(action, path, query, body, self._token(renew=True))
+            with response:
+                yield response
+
+    @contextmanager
+    def _receive(self, action: Action) -> Iterator[None]:
+        """Report the deadline for both response headers and response bodies."""
         try:
-            return self._send(method, path, query, body, token)
-        except HTTPError as error:
-            if error.code == 401 and signed_in and self._service_token is None:
-                return self._send(method, path, query, body, self._token(renew=True))
-            raise response_error(error.code, error.read(65536), self.url) from error
+            try:
+                yield
+            except HTTPError as error:
+                with error:
+                    raise response_error(error.code, error.read(65536), self.url) from error
+        except TimeoutError as error:
+            remedy = {
+                ActionName.DEPLOY: "run `deploy --plan` and inspect the server audit",
+                ActionName.RUN: "check the exact run with `status` or inspect the server audit",
+                ActionName.UPLOAD: "check `uploads` or inspect the server audit",
+            }.get(action.name, "inspect the server audit or the action's read command")
+            raise ApiReadTimeoutError(
+                f"{self.url}: {action.name} did not respond within {READ_TIMEOUT:g} seconds; "
+                f"the server may still be completing it; {remedy} before retrying"
+            ) from error
+        except (URLError, OSError) as error:
+            raise ServerError(
+                f"{self.url}: cannot reach the API ({error}); check the URL and the network"
+            ) from error
 
     def _send(
         self,
-        method: str,
+        action: Action,
         path: str,
         query: Mapping[str, object] | None,
         body: Mapping[str, object] | None,
@@ -154,17 +184,8 @@ class ApiClient:
         if body is not None:
             headers["Content-Type"] = "application/json"
             data = json.dumps({k: v for k, v in body.items() if v is not None}).encode()
-        request = Request(url, data=data, headers=headers, method=method)
-        try:
-            timeout = None if method == HttpMethod.POST and path.endswith("/erasure") else 60
-            response: HTTPResponse = open_request(request, timeout=timeout)
-        except HTTPError:
-            raise  # an answer from the server; _open turns it into the server's own error
-        except (URLError, OSError) as error:
-            raise ServerError(
-                f"{self.url}: cannot reach the API ({error}); check the URL and the network"
-            ) from error
-        return response
+        request = Request(url, data=data, headers=headers, method=action.method)
+        return open_request(request, _timeouts(action))
 
     def _token(self, *, renew: bool = False) -> str:
         if self._service_token is not None:
@@ -199,6 +220,10 @@ class ApiClient:
         stored = credentials.read_server(self.url)
         credentials.store_session(self.url, None)
         return None if stored is None else stored["refresh"]
+
+
+def _timeouts(action: Action) -> tuple[float, float | None]:
+    return CONNECT_TIMEOUT, None if action.long_running else READ_TIMEOUT
 
 
 def _path_fields(path: str) -> list[str]:

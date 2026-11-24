@@ -15,7 +15,8 @@ class Action:
     ``call`` performs the operation or validates a process startup. It is ``None`` when an
     interface owns the complete process inside ``admitted``. ``result`` is the document type,
     or ``None`` for no content; ``streams`` marks
-    an action that returns bytes. ``escalate`` raises the role from what the request would
+    an action that returns bytes. ``long_running`` lets remote clients wait for the result
+    without a read deadline. ``escalate`` raises the role from what the request would
     change, as ``migrate`` does for packaged migrations. ``remedy`` says how to run a
     ``CONTROLLER_HOST`` action, for an interface that refuses it elsewhere.
     """
@@ -32,6 +33,7 @@ class Action:
     remedy: str | None = None
     provisioning: bool = False
     streams: bool = False
+    long_running: bool = False
     scope: ActionScope = ActionScope.DEPLOYMENT
     escalate: Callable[[OperationContext, object], ApiRole] | None = None
 

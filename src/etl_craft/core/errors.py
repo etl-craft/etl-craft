@@ -52,6 +52,7 @@ class ExitCode(IntEnum):
     ARCHIVE = 30
     CONFIRMATION_REQUIRED = 31
     PROJECT_NOT_SELECTED = 32
+    API_READ_TIMEOUT = 33
 
 
 class EtlCraftError(Exception):
@@ -161,6 +162,12 @@ class ServerError(EtlCraftError):
     """A server could not be reached, or answered with something that is not etl-craft JSON."""
 
     exit_code = ExitCode.SERVER
+
+
+class ApiReadTimeoutError(EtlCraftError):
+    """The server did not finish responding in time and may still be completing the request."""
+
+    exit_code = ExitCode.API_READ_TIMEOUT
 
 
 class InjectedFaultError(EtlCraftError):
