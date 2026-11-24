@@ -7,6 +7,7 @@ from etl_craft.core.graph import CycleError, SelfDependencyError, UnknownTaskErr
 pytestmark = pytest.mark.unit
 
 EXIT_CODES = {
+    errors.ApiReadTimeoutError: ExitCode.API_READ_TIMEOUT,
     errors.ProjectNotSelectedError: ExitCode.PROJECT_NOT_SELECTED,
     errors.ArchiveError: ExitCode.ARCHIVE,
     errors.ConfirmationRequiredError: ExitCode.CONFIRMATION_REQUIRED,

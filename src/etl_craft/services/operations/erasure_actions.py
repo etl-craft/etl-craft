@@ -16,6 +16,7 @@ ERASURE_ACTIONS = (
         HttpMethod.POST,
         "/api/v1/erasure",
         Audit.REQUEST,
+        long_running=True,
         scope=ActionScope.PROJECT,
     ),
     Action(

@@ -6,6 +6,12 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+- Fixed: `--api` commands that outlive the read deadline now wait for actions designed to run
+  longer, including deployments and warehouse maintenance. Connection and request-send timeouts
+  remain in force. Other actions whose response stalls after the request was sent exit 33
+  (`API_READ_TIMEOUT`) and tell the caller to check the recorded outcome before retrying.
+  Exit 27 still covers unreachable servers and responses that are not etl-craft JSON.
+
 ### 0.9.0 overview
 
 etl-craft moves data with metadata-driven ETL/ELT pipelines. The Engine DB holds pipeline
