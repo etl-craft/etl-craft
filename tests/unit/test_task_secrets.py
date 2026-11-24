@@ -84,3 +84,18 @@ def test_channel_agent_claim_never_reads_task_secret_declaration():
         task_params={"ALERT_CHANNEL": "ops", "SECRETS": "not a variable declaration"},
     )
     assert for_claim(SimpleNamespace(), task) == {}
+
+
+@pytest.mark.parametrize(
+    "written", ["hunter2!", "SOURCE_USER=alice", "postgres://u:p@host/db", "A|A", "token value"]
+)
+def test_declarations_carry_only_variable_names_so_the_catalog_publishes_no_value(written):
+    from etl_craft.core.task_secrets import declared
+
+    assert declared({"SECRETS": "SOURCE_USER|SOURCE_PASSWORD"}, "P.load") == (
+        "SOURCE_USER",
+        "SOURCE_PASSWORD",
+    )
+    with pytest.raises(PermanentError, match="never values") as error:
+        declared({"SECRETS": written}, "P.load")
+    assert written not in str(error.value)
