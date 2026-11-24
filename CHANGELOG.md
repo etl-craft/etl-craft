@@ -770,6 +770,8 @@ Warehouses are optional extras. Core bundles none. `all` is core plus the UI, fo
 
 ### Security
 
+- `opentelemetry-api` 1.45.2 (a FastAPI dependency of the `ui` extra) replaces 1.45.1, whose
+  `traceparent` parsing took quadratic time on crafted headers (denial of service).
 - The browser interface's page shell no longer puts the request's challenge cookie into the page
   unescaped (a code-scanning reflected-XSS finding): the cookie was already accepted only in its
   exact shape, and is now escaped as well. `oauthlib` 4.0.1 (a Databricks connector dependency) and
