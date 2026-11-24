@@ -14,6 +14,7 @@ from etl_craft.core.enums import (
 from etl_craft.core.errors import RunStateError
 from etl_craft.core.log import log_context
 from etl_craft.engine import runlog
+from etl_craft.engine.project_scope import configured_project
 from etl_craft.engine.repository.pipelines import (
     resolve_pipeline_id,
 )
@@ -33,6 +34,7 @@ from etl_craft.execution.runner import run_task
 logger = logging.getLogger(__name__)
 
 
+@configured_project
 def rerun_task(
     engine: Engine,
     config: ConnectorConfig,
@@ -144,6 +146,7 @@ def _rerun_downstream(
     return ran, left
 
 
+@configured_project
 def force_task(
     engine: Engine,
     config: ConnectorConfig,

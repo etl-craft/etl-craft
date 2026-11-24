@@ -42,6 +42,7 @@ from etl_craft.core.graph import build_graph
 from etl_craft.core.text import byte_tail
 from etl_craft.engine import run_scopes, runlog, transitions
 from etl_craft.engine.process_reservations import connection_slot
+from etl_craft.engine.project_scope import configured_project
 from etl_craft.engine.queries import statement
 from etl_craft.engine.repository import trackers
 from etl_craft.engine.repository.dependencies import (
@@ -104,6 +105,7 @@ class _LocalOptions:
     automatic_retries: bool
 
 
+@configured_project
 def run_task(
     engine: Engine,
     config: ConnectorConfig,

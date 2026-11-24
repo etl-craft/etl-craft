@@ -18,6 +18,8 @@ from etl_craft.engine.protection_events import append as append_event
 from etl_craft.engine.protection_events import read
 from fixtures.metadata import add_pipeline, add_task
 
+pytestmark = pytest.mark.usefixtures("selected_default_project")
+
 
 def append(*args, **kwargs):
     return append_event(*args, privacy_key="test-only-project-privacy", **kwargs)

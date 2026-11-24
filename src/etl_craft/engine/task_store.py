@@ -591,16 +591,27 @@ class LocalTaskStore:
 
     def window(self, definition: WindowDefinition) -> TimestampWindow:
         """Serialize admission with source starts and publish range evidence before SQL."""
+        from contextlib import nullcontext
+
+        from etl_craft.engine.project_scope import task_run_project_id
+        from etl_craft.engine.repository.pipelines import has_selected_project, selected_project
+
         identity = self.identity
         with self.engine.begin() as conn:
             self._assert(conn)
-            window = admit_window(
-                conn,
-                identity.task_id,
-                identity.task_run_id,
-                recorded_start(conn, identity.task_run_id, identity.attempt_id),
-                definition,
+            scope = (
+                nullcontext()
+                if has_selected_project()
+                else selected_project(task_run_project_id(conn, identity.task_run_id))
             )
+            with scope:
+                window = admit_window(
+                    conn,
+                    identity.task_id,
+                    identity.task_run_id,
+                    recorded_start(conn, identity.task_run_id, identity.attempt_id),
+                    definition,
+                )
             transitions.record_watermark_range(
                 conn,
                 identity.task_run_id,

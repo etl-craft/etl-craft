@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from datetime import UTC, datetime
 
 from sqlalchemy import BigInteger, DateTime, bindparam
@@ -12,6 +12,7 @@ from etl_craft.core.actor import current_actor
 from etl_craft.core.enums import ActiveRuns, RunStatus
 from etl_craft.core.time import as_utc
 from etl_craft.engine.queries import statement
+from etl_craft.engine.repository.pipelines import selected_project
 
 
 @dataclass(frozen=True)
@@ -48,8 +49,14 @@ def fetch_open_pause(conn: Connection, pipeline_id: int) -> Pause | None:
     ).one_or_none()
     if row is None:
         return None
-    pause = Pause(**row._mapping)
-    return replace(pause, drained_runs=_drained(conn, pipeline_id).get(pipeline_id, ()))
+    with selected_project(int(row.project_id)):
+        return Pause(
+            paused_at=row.paused_at,
+            paused_by=row.paused_by,
+            reason=row.reason,
+            active_runs=row.active_runs,
+            drained_runs=_drained(conn, pipeline_id).get(pipeline_id, ()),
+        )
 
 
 def fetch_open_pauses(conn: Connection) -> dict[str, Pause]:

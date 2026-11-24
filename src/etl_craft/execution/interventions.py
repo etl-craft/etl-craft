@@ -46,6 +46,7 @@ from etl_craft.core.errors import HandlerError, RunRefusedError, RunStateError, 
 from etl_craft.core.governance import check_reason
 from etl_craft.core.script_kinds import script_kind
 from etl_craft.engine import controls, runlog, transitions
+from etl_craft.engine.project_scope import configured_project
 from etl_craft.engine.queries import statement
 from etl_craft.engine.repository import intervention_rows as record
 from etl_craft.engine.repository import pauses
@@ -167,6 +168,7 @@ def require_markable_task(conn: Connection, task: str, task_id: int, run_id: int
     return before
 
 
+@configured_project
 def mark_run(
     engine: Engine,
     config: ConnectorConfig,
@@ -289,6 +291,7 @@ def record_stand_in_run(
     return Intervened(message, run_id)
 
 
+@configured_project
 def skip_run(
     engine: Engine,
     config: ConnectorConfig,
@@ -318,6 +321,7 @@ class PauseOptions:
     replace: bool = False
 
 
+@configured_project
 def pause_pipeline(
     engine: Engine,
     config: ConnectorConfig,
@@ -559,6 +563,7 @@ class OffsetReset:
     watermark: bool = False
 
 
+@configured_project
 def reset_offset(
     engine: Engine,
     config: ConnectorConfig,

@@ -39,6 +39,11 @@ def current_project_id(operation: str = "current_project_id") -> int:
     return project_id
 
 
+def has_selected_project() -> bool:
+    """Whether the caller already supplied a project scope."""
+    return _project_id.get() is not None
+
+
 def with_suggestions(message: str, unknown: str, candidates: list[str]) -> str:
     """Append a "did you mean" list to ``message`` when any candidate is close."""
     hints = suggest(unknown, candidates)

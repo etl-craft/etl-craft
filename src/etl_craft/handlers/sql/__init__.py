@@ -28,7 +28,7 @@ from etl_craft.engine import locks
 from etl_craft.engine.repository.offsets import StoredOffset
 from etl_craft.engine.task_store import TargetPublication, TaskState, TaskStore
 from etl_craft.engine.timestamp_windows import WindowDefinition
-from etl_craft.handlers.registry import HandlerResult, TaskContext, task_store
+from etl_craft.handlers.registry import HandlerResult, TaskContext, task_project, task_store
 from etl_craft.handlers.sql.actions import ACTIONS
 from etl_craft.handlers.sql.context import ActionContext
 from etl_craft.handlers.sql.protection import (
@@ -46,6 +46,7 @@ from etl_craft.warehouse.connection import open_warehouse, task_warehouse_dialec
 logger = logging.getLogger(__name__)
 
 
+@task_project
 def run(context: TaskContext, engine_db: Engine | TaskStore) -> HandlerResult:
     """Run the SQL task described by ``context`` and return its counts."""
     store = task_store(context, engine_db)

@@ -19,6 +19,7 @@ from etl_craft.core.errors import RunStateError, StaleTransitionError
 from etl_craft.core.faults import fault_point
 from etl_craft.core.graph import DependencyGraph, build_graph
 from etl_craft.engine import run_scopes, runlog, standing_pauses, transitions
+from etl_craft.engine.project_scope import configured_project
 from etl_craft.engine.repository import trackers
 from etl_craft.engine.repository.dependencies import PipelineGraphData, fetch_pipeline_graph
 from etl_craft.engine.repository.intervention_rows import record_intervention
@@ -51,6 +52,7 @@ from etl_craft.execution.run_types import PipelineOutcome, RunHooks, call_hook, 
 logger = logging.getLogger(__name__)
 
 
+@configured_project
 def init_pipeline_run(
     engine: Engine,
     config: ConnectorConfig,
@@ -135,6 +137,7 @@ def load_pipeline(
         )
 
 
+@configured_project
 def prepare(
     engine: Engine,
     config: ConnectorConfig,

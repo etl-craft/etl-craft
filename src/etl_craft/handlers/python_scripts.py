@@ -43,6 +43,7 @@ from etl_craft.handlers.registry import (
     HandlerResult,
     TaskContext,
     require_event_files_unchanged,
+    task_project,
     task_store,
 )
 from etl_craft.scripting import Offset, ScriptResult, ScriptTask
@@ -60,6 +61,7 @@ SCRIPT_LOGGER = "etl_craft_script"
 
 
 @warehouse_task()
+@task_project
 def run(context: TaskContext, engine_db: Engine | TaskStore) -> HandlerResult:
     """Run with only admitted credentials and mask results before leaving their scope."""
     from dataclasses import replace

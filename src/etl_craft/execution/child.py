@@ -39,6 +39,8 @@ from etl_craft.core.faults import fault_point
 from etl_craft.core.ownership import attempt_holder
 from etl_craft.engine import attempt_starts, controls, transitions
 from etl_craft.engine.connection import engine_db
+from etl_craft.engine.project_scope import task_run_project_id
+from etl_craft.engine.repository.pipelines import selected_project
 from etl_craft.engine.resource_locks import attempt_scope, holder_tag
 from etl_craft.engine.transitions import finish_task_run
 from etl_craft.execution.bundle_files import prepare_task
@@ -89,8 +91,12 @@ def main(
     identity = (int(attempt_id), owner) if attempt_id is not None and owner else None
     token = _identity.set(identity)
     try:
-        with acting_as(SYSTEM_ACTOR):
+        project_id = task_run_project_id(engine, args.task_run_id)
+        with acting_as(SYSTEM_ACTOR), selected_project(project_id):
             return _run_bound(engine, config, args, trigger=trigger, alert=alert)
+    except EtlCraftError as error:
+        logger.error("could not start the task: %s", error)
+        return error.exit_code
     finally:
         _identity.reset(token)
         engine.dispose()

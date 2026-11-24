@@ -41,6 +41,7 @@ from etl_craft.core.redaction import public_parameters
 from etl_craft.core.text import is_safe_identifier
 from etl_craft.core.time import as_utc
 from etl_craft.engine.environment import project_environment
+from etl_craft.engine.project_scope import configured_project
 from etl_craft.engine.queries import statement
 from etl_craft.engine.repository.business_rules import fetch_rule_observations
 from etl_craft.engine.repository.catalog import (
@@ -306,6 +307,7 @@ def _pipeline_history(conn: Connection) -> tuple[dict[str, list[RunSummary]], li
     return runs, links
 
 
+@configured_project
 def collect_catalog(
     engine: Engine,
     config: ConnectorConfig,
@@ -734,6 +736,7 @@ def _lineage_history(catalog: Catalog, engine: Engine) -> None:
         previous[name] = current
 
 
+@configured_project
 def build_catalog(
     engine: Engine, config: ConnectorConfig, *, with_warehouse: bool = False
 ) -> Catalog:

@@ -510,7 +510,6 @@ def test_inspection_reads_do_not_grow_per_pipeline_or_run(ctx, view):
 def test_retry_evidence_survives_config_edits_in_cli_and_catalog(ctx, capsys, tmp_path):
     from etl_craft.core.enums import FailureClass
     from etl_craft.core.failures import Failure
-    from etl_craft.engine.repository.pipelines import selected_project
     from etl_craft.services.catalog.collect import collect_catalog
     from etl_craft.services.catalog.html import run_url
     from etl_craft.services.catalog.site import write_site
@@ -554,8 +553,7 @@ def test_retry_evidence_survives_config_edits_in_cli_and_catalog(ctx, capsys, tm
     assert main([*arguments, "--format", "json"]) == 0
     document = json.loads(capsys.readouterr().out)
     assert document["task"]["attempts"][0]["retry_reason"] == reason
-    with selected_project(1):
-        catalog = collect_catalog(ctx.engine, ctx.config, record_lineage=False)
+    catalog = collect_catalog(ctx.engine, ctx.config, record_lineage=False)
     folder = tmp_path / "catalog"
     write_site(catalog, ctx.config, folder)
     html = (folder / run_url(run)).read_text()

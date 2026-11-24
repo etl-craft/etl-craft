@@ -42,6 +42,7 @@ from etl_craft.core.enums import (
 from etl_craft.core.errors import RunStateError, UsageError
 from etl_craft.core.log import log_context
 from etl_craft.engine import controls, runlog
+from etl_craft.engine.project_scope import configured_project
 from etl_craft.engine.repository.dependencies import PipelineGraphData
 from etl_craft.engine.repository.pipelines import (
     resolve_pipeline_id,
@@ -96,6 +97,7 @@ class _PipelineOptions(TypedDict, total=False):
     graph_data: PipelineGraphData | None
 
 
+@configured_project
 def run_pipeline(
     engine: Engine,
     config: ConnectorConfig,
@@ -377,6 +379,7 @@ def _backfill_done(
     )
 
 
+@configured_project
 def backfill(
     engine: Engine,
     config: ConnectorConfig,

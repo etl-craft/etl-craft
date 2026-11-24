@@ -105,6 +105,9 @@ seen = []
 
 
 def succeeds(context, engine):
+    from etl_craft.engine.repository.pipelines import current_project_id
+
+    assert current_project_id() == 1
     seen.append(context)
     return HandlerResult(source_count=3, target_count=3, insert_count=3)
 
