@@ -10,6 +10,8 @@ import re
 from dataclasses import MISSING, Field, dataclass, field, fields, is_dataclass
 from enum import Enum
 from importlib import import_module
+from importlib.machinery import SourceFileLoader
+from importlib.util import find_spec
 from inspect import getdoc, getsource
 from pathlib import Path
 from pkgutil import walk_packages
@@ -310,6 +312,13 @@ def document_classes() -> dict[str, type]:
     """Discover schema-bearing dataclasses in their defining modules."""
     documents: dict[str, type] = {}
     for module in walk_packages(etl_craft.__path__, "etl_craft."):
+        # Docs-only builds omit warehouse extras, so inspect source before importing candidates.
+        spec = find_spec(module.name)
+        if spec is None or not isinstance(spec.loader, SourceFileLoader):
+            continue
+        source = spec.loader.get_source(module.name) or ""
+        if not re.search(r"^\s+SCHEMA\s*:", source, re.MULTILINE):
+            continue
         for cls in vars(import_module(module.name)).values():
             if not isinstance(cls, type) or cls.__module__ != module.name or not is_dataclass(cls):
                 continue
