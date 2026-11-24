@@ -26,7 +26,7 @@ def statement(bind: Connection | Engine, name: str) -> TextClause:
     if ":project_id" in sql:
         from etl_craft.engine.repository.pipelines import current_project_id
 
-        query = query.bindparams(project_id=current_project_id())
+        query = query.bindparams(project_id=current_project_id(f"query {name}"))
     return query.execution_options(etl_craft_query=name)
 
 

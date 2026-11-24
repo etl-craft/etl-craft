@@ -226,6 +226,11 @@ item's text, or work done early under another item.
 
 ### Handover notes
 
+- **S7.AV Choices that differ from the item text.** Main already required project selection
+  for local CLI runs. The existing exit-2 refusal without `Orchestration.Project` or
+  `--project` stays unchanged and has a SQLite CLI regression test. Internal test modules
+  opt in to project selection per module rather than per test.
+
 - **S7.AU Choices that differ from the item text.** Enabled cases use the action's lowest
   authorized role; developers see admin-only actions grayed out (owner, 2026-11-23).
   The console is excluded from grayed-out availability: typed lines are refused on submit

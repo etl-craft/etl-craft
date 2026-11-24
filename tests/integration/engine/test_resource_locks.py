@@ -14,6 +14,8 @@ from etl_craft.handlers.resources import LocalLocker
 from fixtures.metadata import add_pipeline, add_task
 from fixtures.races import two_at_once
 
+pytestmark = pytest.mark.usefixtures("selected_default_project")
+
 
 def holder(name, attempt_id=None, owner=None):
     return Holder(name, owner or name, SYSTEM_ACTOR, attempt_id)

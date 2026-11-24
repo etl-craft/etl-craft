@@ -8,6 +8,8 @@ from etl_craft.core.errors import RunStateError
 from etl_craft.engine import transitions
 from fixtures.metadata import add_pipeline, add_pipeline_dependency, add_task, start_run
 
+pytestmark = pytest.mark.usefixtures("selected_default_project")
+
 
 def test_attempt_identity_and_active_uniqueness(engine_db):
     with engine_db.engine.begin() as conn:

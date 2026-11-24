@@ -24,7 +24,9 @@ def pending_engine_upgrade(ctx: OperationContext) -> bool:
     """Whether the local upgrade needs the original-column authentication path."""
     return any(
         name.startswith("engine/")
-        for name in pending_migrations(ctx.engine, project_default=ctx.config.migrations_dir)
+        for name in pending_migrations(
+            ctx.engine, project_default=ctx.config.migrations_dir, package_only=True
+        )
     )
 
 

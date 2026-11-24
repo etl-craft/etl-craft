@@ -26,6 +26,8 @@ from fixtures.uploads import upload_api as upload_api
 
 CONTENT = b"id|name\n1|accepted\n"
 
+pytestmark = pytest.mark.usefixtures("selected_default_project")
+
 
 def caller(ctx):
     return replace(ctx, actor=Actor("writer", ActorKind.SERVICE), project_id=1, project="default")

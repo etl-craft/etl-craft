@@ -148,9 +148,8 @@ def migration_streams(
     return streams
 
 
-def _load_ledger(conn: Connection) -> dict[tuple[str, str], str]:
+def _load_ledger(conn: Connection, query: str) -> dict[tuple[str, str], str]:
     try:
-        query = "scoped_applied_migrations"
         rows = conn.execute(statement(conn, query)).all()
     except SQLAlchemyError as error:
         raise MigrationError(
@@ -293,10 +292,9 @@ def pending_files(
     """Return the files ``migrate`` would apply, in order, after verifying the applied ones."""
     streams = migration_streams(engine, project_dir, project_default, package_only=package_only)
     with nullcontext(connection) if connection is not None else engine.connect() as conn:
-        ledger = _load_ledger(conn)
+        query = "engine_applied_migrations" if package_only else "scoped_applied_migrations"
+        ledger = _load_ledger(conn, query)
     require_baseline(ledger)
-    if package_only:
-        ledger = {key: checksum for key, checksum in ledger.items() if key[0] == ENGINE}
     verify_ledger(ledger, streams)
     return [
         migration
@@ -327,7 +325,7 @@ def apply_pending_migrations(
     applied: list[str] = []
     with locks.MIGRATE.hold(engine, wait_seconds):
         with engine.connect() as conn:
-            ledger = _load_ledger(conn)
+            ledger = _load_ledger(conn, "scoped_applied_migrations")
         require_baseline(ledger)
         verify_ledger(ledger, streams)
         pending = [
@@ -362,7 +360,7 @@ def mark_packaged_migrations_applied(conn: Connection) -> list[str]:
     MIGRATE lock and owns the transaction that creates the schema and records this ledger.
     """
     stream = migration_streams(conn.engine)[0]
-    ledger = _load_ledger(conn)
+    ledger = _load_ledger(conn, "engine_applied_migrations")
     if (ENGINE, BASELINE) not in ledger:
         conn.execute(
             statement(conn, "record_migration"),

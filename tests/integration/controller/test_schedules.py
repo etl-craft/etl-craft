@@ -254,3 +254,49 @@ def test_a_project_setting_the_controller_cannot_read_starts_no_scheduled_runs(e
     with ctx.engine.connect() as conn:
         count = conn.execute(text("SELECT COUNT(*) FROM AUD_PIPELINES_RUN_LOG")).scalar_one()
     assert count == 0
+
+
+def test_schedule_refresh_selects_each_projects_tick(engine_db):
+    from etl_craft.engine.repository.pipelines import current_project_id, selected_project
+
+    _, ctx = configure(engine_db)
+    with engine_db.engine.begin() as conn:
+        other = conn.execute(
+            text(
+                "INSERT INTO CFG_PROJECTS (PROJECT_CODE,PROJECT_NAME,DEFAULT_POOL) "
+                "VALUES ('second','Second','default') RETURNING PROJECT_ID AS project_id"
+            )
+        ).scalar_one()
+        pipeline = add_pipeline(conn, "SECOND", project_id=other)
+        conn.execute(
+            text(
+                "UPDATE CFG_PIPELINES SET RUN_SCHEDULE='@daily', "
+                "SCHEDULE_START_DATE='2026-01-04' WHERE PIPELINE_ID=:pipeline"
+            ),
+            {"pipeline": pipeline},
+        )
+    from sqlalchemy import event
+
+    def check_scope(conn, clause, multiparams, params, options):
+        if options.get("etl_craft_query") == "scheduled_tick_exists":
+            owning = conn.execute(
+                text("SELECT PROJECT_ID AS project_id FROM CFG_PIPELINES WHERE PIPELINE_ID=:id"),
+                {"id": params["pipeline_id"]},
+            ).scalar_one()
+            assert current_project_id() == owning
+
+    event.listen(ctx.engine, "before_execute", check_scope)
+    try:
+        with selected_project(None):
+            Schedules().refresh(ctx, NOW)
+    finally:
+        event.remove(ctx.engine, "before_execute", check_scope)
+    with ctx.engine.connect() as conn:
+        rows = conn.execute(
+            text(
+                "SELECT p.PROJECT_ID AS project_id FROM AUD_PIPELINES_RUN_LOG r "
+                "JOIN CFG_PIPELINES p ON p.PIPELINE_ID=r.PIPELINE_ID "
+                "WHERE r.TRIGGER_KIND='SCHEDULE'"
+            )
+        ).all()
+    assert {row.project_id for row in rows} == {1, other}

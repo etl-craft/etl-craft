@@ -428,12 +428,14 @@ def environment_values(
 def _project_alerts(
     conn: Connection, ctx: OperationContext, project_id: int, code: str
 ) -> tuple[AlertDelivery, ...]:
+    from etl_craft.engine.repository.pipelines import selected_project
     from etl_craft.services.operations.permissions import pipeline_access
 
-    access = pipeline_access(conn, replace(ctx, project_id=project_id, project=code))
-    return history(
-        conn, project_id, tuple(name for name, role in access.roles.items() if role is not None)
-    )
+    with selected_project(project_id):
+        access = pipeline_access(conn, replace(ctx, project_id=project_id, project=code))
+        return history(
+            conn, project_id, tuple(name for name, role in access.roles.items() if role is not None)
+        )
 
 
 def require_existing_project(conn: Connection, project: str | None) -> None:

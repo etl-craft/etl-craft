@@ -518,3 +518,33 @@ def test_item_lookup_refuses_a_run_from_another_project(engine_db):
                 ).one_or_none()
                 is None
             )
+
+
+@pytest.mark.parametrize("ambient", [None, 1])
+def test_run_creation_pins_owning_projects_pauses(engine_db, ambient):
+    from etl_craft.engine.transitions import create_run
+
+    with engine_db.engine.begin() as conn:
+        other = project(conn, "pause_owner")
+        own = pipeline(conn, other, "PAUSED")
+        task = add_task(conn, own, "T", "ALERT")
+        conn.execute(
+            text(
+                "INSERT INTO AUD_PIPELINE_PAUSES "
+                "(PIPELINE_ID,TASK_ID,OUTCOME,PAUSED_AT,PAUSED_BY,PAUSED_BY_KIND,REASON) "
+                "VALUES (:pipeline,:task,'SUCCESS',CURRENT_TIMESTAMP,'system','SYSTEM','test')"
+            ),
+            {"pipeline": own, "task": task},
+        )
+        with selected_project(ambient):
+            run = create_run(conn, own, SYSTEM_ACTOR)
+        row = conn.execute(
+            text(
+                "SELECT p.PROJECT_ID AS project_id, i.TASK_ID AS task_id "
+                "FROM AUD_RUN_INTERVENTIONS i JOIN CFG_PIPELINES p ON p.PIPELINE_ID=i.PIPELINE_ID "
+                "WHERE i.PIPELINE_RUN_ID=:run AND i.ACTION='PAUSE_ADMISSION'"
+            ),
+            {"run": run},
+        ).one()
+        assert row.project_id == other
+        assert row.task_id == task

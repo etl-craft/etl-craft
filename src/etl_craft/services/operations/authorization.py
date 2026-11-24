@@ -66,7 +66,7 @@ def held(conn: Connection, ctx: OperationContext, project_id: int | None) -> Hel
         return Held()
     rows = tuple(
         conn.execute(
-            statement(conn, "access_held"),
+            statement(conn, "deployment_access_held" if project_id is None else "access_held"),
             {
                 "project_id": project_id,
                 "account": ctx.actor.name,

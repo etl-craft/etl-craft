@@ -9,7 +9,7 @@ from etl_craft.core.enums import ApiRole, YesNo
 from etl_craft.core.enums_access import Permission
 from etl_craft.core.errors import PermissionDeniedError, ResourceNotFoundError
 from etl_craft.engine.queries import statement
-from etl_craft.engine.repository.pipelines import current_project_id, read_tags
+from etl_craft.engine.repository.pipelines import current_project_id, read_tags, selected_project
 from etl_craft.services.operations.context import OperationContext
 
 
@@ -51,7 +51,7 @@ class PipelineAccess:
 def visibility_parameters(ctx: OperationContext) -> dict[str, object]:
     """Bind the authenticated principal to the shared SQL permission relations."""
     return {
-        "project_id": ctx.project_id or current_project_id(),
+        "project_id": ctx.project_id if ctx.project_id is not None else current_project_id(),
         "account": ctx.actor.name,
         "role": ctx.role,
         "sso_group_ids": json.dumps(ctx.sso_group_ids),
@@ -131,11 +131,15 @@ def tag_permission(conn: Connection, ctx: OperationContext, tag: str) -> Permiss
 
 def pipeline_access(conn: Connection, ctx: OperationContext) -> PipelineAccess:
     """Resolve exactly the same effective SQL visibility used by aggregate reads."""
-    validate_visibility(conn, visibility_parameters(ctx))
+    params = visibility_parameters(ctx)
+    project_id = ctx.project_id if ctx.project_id is not None else current_project_id()
+    with selected_project(project_id):
+        validate_visibility(conn, params)
+        rows = conn.execute(statement(conn, "permission_effective"), params).all()
     roles: dict[str, ApiRole | None] = {}
     levels: dict[str, Permission | None] = {}
     sources: dict[str, tuple[str, ...]] = {}
-    for row in conn.execute(statement(conn, "permission_effective"), visibility_parameters(ctx)):
+    for row in rows:
         if row.pipeline_id is None:
             continue
         level = tuple(Permission)[row.level - 1] if row.level else None

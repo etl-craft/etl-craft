@@ -24,6 +24,7 @@ from etl_craft.core.enums import (
 from etl_craft.core.errors import (
     ConfigurationError,
     PermissionDeniedError,
+    ProjectNotSelectedError,
     ResourceNotFoundError,
     RunStateError,
     UsageError,
@@ -33,7 +34,7 @@ from etl_craft.engine.controls import ControlView
 from etl_craft.engine.migrations import pending_migrations
 from etl_craft.engine.queries import statement
 from etl_craft.engine.repository.group_claims import token_groups
-from etl_craft.engine.repository.pipelines import selected_project
+from etl_craft.engine.repository.pipelines import current_project_id, selected_project
 from etl_craft.engine.schema import InitResult
 from etl_craft.services.catalog.gaps import GapSnapshot
 from etl_craft.services.config_files import ConfigExport, ConfigSync
@@ -539,22 +540,26 @@ def invoke(ctx: OperationContext, name: ActionName, request: object) -> object:
     try:
         ctx = _request_context(ctx, name, request)
         ctx = _project_context(ctx, ACTIONS[name], request)
-        request = resolve_run_reference(ctx, request)
     except (PermissionDeniedError, ResourceNotFoundError, RunStateError) as error:
         assert isinstance(request, ACTIONS[name].request)
         record_refusal(ctx, name, arguments(request), error)
         raise
     claims = sso_groups.set(ctx.sso_group_ids)
     try:
-        with using(None), selected_project(ctx.project_id), admitted(ctx, name, request):
-            if name == ActionName.MIGRATE:
-                result = call(project_settings(ctx, name, request), request)
-            else:
-                with using_policy(governance.project_policy(ctx, request)):
+        with using(None), selected_project(ctx.project_id):
+            if ACTIONS[name].scope != ActionScope.DEPLOYMENT:
+                current_project_id(f"action {name}")
+            request = resolve_run_reference(ctx, request)
+            with admitted(ctx, name, request):
+                if name == ActionName.MIGRATE:
                     result = call(project_settings(ctx, name, request), request)
-            if ACTIONS[name].scope == ActionScope.PIPELINE:
-                result = visible_result(ctx, result)
-            return with_run_labels(ctx, result)
+                else:
+                    with using_policy(governance.project_policy(ctx, request)):
+                        result = call(project_settings(ctx, name, request), request)
+                if ACTIONS[name].scope == ActionScope.PIPELINE:
+                    result = visible_result(ctx, result)
+                return with_run_labels(ctx, result)
+
     finally:
         sso_groups.reset(claims)
 
@@ -642,10 +647,7 @@ def _project_context(ctx: OperationContext, action: Action, request: object) -> 
     if not ctx.project:
         ctx = replace(ctx, project=ctx.config.project)
     if not ctx.project:
-        raise UsageError(
-            f"{ctx.config.config_path or 'craft-connector.yml'}: missing Orchestration.Project; "
-            "supply --project P or set Orchestration.Project in this file"
-        )
+        raise ProjectNotSelectedError(f"action {action.name}")
     if ctx.project_id is not None:
         return ctx
     if ctx.transport == Transport.LOCAL:
@@ -658,7 +660,8 @@ def _project_context(ctx: OperationContext, action: Action, request: object) -> 
             and not (action.provisioning and ctx.provisioning)
         ):
             scoped = replace(ctx, project_id=int(row.project_id))
-            _require_project_access(conn, scoped, action)
+            with selected_project(scoped.project_id):
+                _require_project_access(conn, scoped, action)
     if row is None or (
         row.active_flag == YesNo.NO
         and action.name

@@ -14,6 +14,8 @@ from etl_craft.engine import migrations
 from etl_craft.engine.migrations import apply_pending_migrations, mark_packaged_migrations_applied
 from etl_craft.engine.schema import SENTINEL_TABLES, existing_engine_tables, init_db
 
+pytestmark = pytest.mark.usefixtures("selected_default_project")
+
 
 def write(directory, name, sql):
     directory.mkdir(parents=True, exist_ok=True)
@@ -301,3 +303,29 @@ def test_a_missing_or_changed_baseline_entry_stops_every_migration_check(initial
         migrations.pending_files(initialized)
     with pytest.raises(MigrationError, match=message):
         apply_pending_migrations(initialized)
+
+
+def test_initialization_and_package_checks_need_no_project(empty_engine_db):
+    from etl_craft.engine.repository.pipelines import selected_project
+
+    with selected_project(None):
+        init_db(empty_engine_db.engine)
+        assert migrations.pending_files(empty_engine_db.engine, package_only=True) == []
+    assert (migrations.ENGINE, migrations.BASELINE) in recorded(empty_engine_db.engine)
+
+
+def test_migrate_without_project_names_query_and_remedy(initialized):
+    from etl_craft.core.errors import ExitCode, ProjectNotSelectedError
+    from etl_craft.engine.repository.pipelines import selected_project
+
+    with selected_project(None), pytest.raises(ProjectNotSelectedError) as caught:
+        apply_pending_migrations(initialized)
+    assert caught.value.exit_code is ExitCode.PROJECT_NOT_SELECTED
+    for part in (
+        "query scoped_applied_migrations",
+        "no project was selected",
+        "pass --project",
+        "Orchestration.Project",
+        "the run's project",
+    ):
+        assert part in str(caught.value)

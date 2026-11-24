@@ -13,7 +13,7 @@ from etl_craft.core.actor import SYSTEM_ACTOR, acting_as
 from fixtures.engine_db import apply_schema, sqlite_engine_db
 from fixtures.metadata import start_run
 
-pytestmark = pytest.mark.engine_sqlite
+pytestmark = [pytest.mark.engine_sqlite, pytest.mark.usefixtures("selected_default_project")]
 
 
 @pytest.fixture

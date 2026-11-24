@@ -16,6 +16,8 @@ from etl_craft.services.operations import metrics as operation
 from fixtures.metadata import add_pipeline, add_task, start_run
 from fixtures.metrics import parse, value
 
+pytestmark = pytest.mark.usefixtures("selected_default_project")
+
 
 def context(db):
     ctx = OperationContext(db.engine, db.config, SYSTEM_ACTOR)

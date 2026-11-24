@@ -821,3 +821,41 @@ def test_pipeline_views_include_the_recorded_dependency_condition(ctx, action):
         else result
     )
     assert view.depends_on == (("UPSTREAM", "HAS_DATA"),)
+
+
+def test_deployment_action_audits_without_project(ctx):
+    from etl_craft.engine.repository.pipelines import selected_project
+    from etl_craft.services.operations.accounts import AccountAdd
+
+    with selected_project(None):
+        invoke(
+            replace(ctx, config=replace(ctx.config, project="")),
+            ActionName.ACCOUNT_ADD,
+            AccountAdd(name="unscoped", password="Example-Password-42!", role=ApiRole.VIEWER),
+        )
+    with ctx.engine.connect() as conn:
+        rows = conn.execute(
+            text(
+                "SELECT PROJECT_ID AS project_id, PIPELINE_ID AS pipeline_id FROM AUD_ACTIONS "
+                "WHERE COMMAND='account add'"
+            )
+        ).all()
+    assert rows
+    assert all(row.project_id is None and row.pipeline_id is None for row in rows)
+
+
+def test_run_action_without_project_names_action_and_remedy(ctx):
+    from etl_craft.core.errors import ExitCode, ProjectNotSelectedError
+
+    with pytest.raises(ProjectNotSelectedError) as caught:
+        run(replace(ctx, config=replace(ctx.config, project="")))
+    assert caught.value.exit_code is ExitCode.PROJECT_NOT_SELECTED
+    for part in ("action run", "no project was selected", "--project", "Orchestration.Project"):
+        assert part in str(caught.value)
+
+
+def test_run_action_resolves_config_project_without_context_id(ctx):
+    seed(ctx)
+    assert ctx.project_id is None
+    result = run(ctx, init_only=True)
+    assert result.run.pipeline_run_id is not None

@@ -10,6 +10,8 @@ from etl_craft.engine import migrations
 from etl_craft.services.config_files import export_config, read_config_files, sync_config
 from fixtures.metadata import add_source_column
 
+pytestmark = pytest.mark.usefixtures("selected_default_project")
+
 
 def test_retirement_reserves_name_but_releases_active_ordinal(engine_db):
     db = engine_db

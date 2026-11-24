@@ -205,6 +205,8 @@ def call(
                 return invoke(ctx, name, request)
         finally:
             before_project_migrations.reset(token)
+    if not args.api and ACTIONS[name].scope != ActionScope.DEPLOYMENT:
+        command_project(args, required=True)
     prepare_context(args, name)
     if args.api:
         return ApiClient(

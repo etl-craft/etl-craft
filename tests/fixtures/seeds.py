@@ -7,6 +7,7 @@ from etl_craft.config import ConnectionProfile, load_config
 from etl_craft.core.actor import Actor, acting_as
 from etl_craft.core.enums import ActionName, ActorKind, ApiRole
 from etl_craft.engine.project_files import collect
+from etl_craft.engine.repository.pipelines import selected_project
 from etl_craft.services.operations import bundles
 from etl_craft.services.operations.context import OperationContext
 from fixtures.actions import act
@@ -54,6 +55,6 @@ def seed_project(engine_db, tmp_path, monkeypatch):
         return act(caller, ActionName.DEPLOY, files=collect(tmp_path))
 
     # Runs a test starts before deploying are pinned to this first publication.
-    with acting_as(ctx.actor):
+    with acting_as(ctx.actor), selected_project(ctx.project_id):
         bundles.publish(ctx, bundles.PublishBundle(files=collect(tmp_path)))
     return ctx, folder, deploy

@@ -12,7 +12,7 @@ from typing import Any
 
 from sqlalchemy.engine import Connection
 
-from etl_craft.core.errors import MetadataError
+from etl_craft.core.errors import MetadataError, ProjectNotSelectedError
 from etl_craft.core.tags import tag_problems
 from etl_craft.core.text import suggest
 from etl_craft.core.time import as_utc
@@ -31,9 +31,12 @@ def selected_project(project_id: int | None) -> Iterator[None]:
         _project_id.reset(token)
 
 
-def current_project_id() -> int:
-    """Return the selected project, defaulting legacy local execution to its migrated project."""
-    return _project_id.get() or 1
+def current_project_id(operation: str = "current_project_id") -> int:
+    """Return the selected project, refusing unscoped project-owned operations."""
+    project_id = _project_id.get()
+    if project_id is None:
+        raise ProjectNotSelectedError(operation)
+    return project_id
 
 
 def with_suggestions(message: str, unknown: str, candidates: list[str]) -> str:

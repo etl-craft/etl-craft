@@ -1,5 +1,6 @@
 """Catalog statement counts and bounded, classified history on both Engine DBs."""
 
+import pytest
 from sqlalchemy import event, inspect, text
 
 from etl_craft.core.actor import SYSTEM_ACTOR, acting_as
@@ -9,6 +10,8 @@ from etl_craft.services.catalog.collect import build_catalog
 from etl_craft.services.catalog.site import write_site
 from fixtures.catalog_scale import seed_catalog
 from fixtures.metadata import add_pipeline_dependency
+
+pytestmark = pytest.mark.usefixtures("selected_default_project")
 
 
 def test_cached_sql_catalog_statement_count_does_not_grow_with_task_count(engine_db):

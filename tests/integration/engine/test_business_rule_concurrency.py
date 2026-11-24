@@ -12,6 +12,8 @@ from fixtures.metadata import add_pipeline, start_run
 from fixtures.races import two_at_once
 from fixtures.sql_warehouse import warehouses
 
+pytestmark = pytest.mark.usefixtures("selected_default_project")
+
 
 @pytest.fixture
 def rule_world(sql_world, engine_db):

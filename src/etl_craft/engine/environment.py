@@ -10,7 +10,7 @@ from etl_craft.engine.repository.pipelines import current_project_id
 
 def project_environment(conn: Connection, *, code: str | None = None) -> tuple[str, Environment]:
     """Read the exact current project, including when execution runs through an agent."""
-    project_id = current_project_id()
+    project_id = None if code is not None else current_project_id()
     for row in conn.execute(statement(conn, "project_environment")):
         if code is not None and row.project_code != code:
             continue

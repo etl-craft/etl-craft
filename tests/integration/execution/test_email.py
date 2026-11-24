@@ -26,6 +26,8 @@ from etl_craft.services.operations.context import OperationContext
 from fixtures.metadata import add_pipeline, add_task, start_run, task_run
 from fixtures.services import POSTGRES_DB, POSTGRES_PASSWORD, POSTGRES_USER, require
 
+pytestmark = pytest.mark.usefixtures("selected_default_project")
+
 
 def relay_config(config, host, port, **settings):
     profile = EmailProfile(

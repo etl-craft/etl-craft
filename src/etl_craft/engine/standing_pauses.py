@@ -75,9 +75,9 @@ def current(conn: Connection, pipeline_id: int | None) -> tuple[TaskPause, ...]:
     return tuple(
         TaskPause(**row._mapping)
         for row in conn.execute(
-            statement(conn, "standing_pause_current").bindparams(
-                bindparam("pipeline_id", type_=BigInteger)
-            ),
+            statement(
+                conn, "standing_pause_current" if pipeline_id is None else "standing_pause_pipeline"
+            ).bindparams(bindparam("pipeline_id", type_=BigInteger)),
             {"pipeline_id": pipeline_id},
         )
     )

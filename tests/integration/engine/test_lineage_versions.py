@@ -7,6 +7,8 @@ from sqlalchemy.exc import DBAPIError
 from etl_craft.services.lineage import collect
 from fixtures.metadata import add_pipeline, add_task
 
+pytestmark = pytest.mark.usefixtures("selected_default_project")
+
 
 def test_table_versions_and_edges_cannot_be_rewritten(engine_db):
     db = engine_db
