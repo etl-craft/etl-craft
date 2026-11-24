@@ -61,7 +61,7 @@ AUDIT_COLUMN_TYPES: dict[str, str] = {
     "DELETE_FLAG": "VARCHAR(1)",
     "ACTIVE_FLAG": "VARCHAR(1)",
 }
-"""The DDL type of each engine-managed audit column, used to create a column with no rows."""
+"""Audit column names mapped to DDL type strings; reading raises no core.errors exception."""
 
 _DECLARED_LENGTH = re.compile(r"(?:n?var)?char(?:acter)?(?: varying)?\s*\((\d+)\)", re.IGNORECASE)
 """A character type with a declared length, such as ``VARCHAR(10)`` or ``character(3)``."""
@@ -75,6 +75,8 @@ class Presented:
     creator, never the engine's own logged URL. ``query`` joins that URL's query string, for
     drivers that read auth settings there (Trino). ``connect_args`` are passed to the driver
     after the dialect's own connect arguments, for settings that must never travel in a URL.
+
+    Inputs are the typed fields; returns a record, with no core.errors exception.
     """
 
     username: str | None = None
@@ -91,7 +93,7 @@ ReplaceStrategy = Literal["transactional", "create_or_replace", "copy_and_restor
 
 
 class WarehouseDialect:
-    """What differs between warehouses; the defaults are the ANSI behaviour PostgreSQL follows."""
+    """Return a base ANSI policy object; no constructor inputs or core.errors exceptions."""
 
     def classify_failure(self, error: BaseException) -> Failure:
         """Classify the driver error using DB-API types and SQLSTATE."""

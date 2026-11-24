@@ -92,6 +92,11 @@ class Offset:
     number of 0 or more, for a stream such as a Kafka topic; it is stored as JSON with sorted
     keys. ``Offset.number``, ``Offset.text``, ``Offset.timestamp`` and ``Offset.partitions`` are
     shorthands.
+
+    Inputs: value and declared datatype; returns an immutable, cast checkpoint value.
+    Raises core.errors.HandlerError for unsupported datatypes or uncastable values.
+    The constructor does not persist anything. The engine stores an ingestion result
+    offset only with successful attempt completion, except backfills, which never store it.
     """
 
     value: OffsetValue
@@ -110,26 +115,47 @@ class Offset:
 
     @classmethod
     def number(cls, value: int | Decimal) -> Offset:
-        """Build a ``NUMBER`` offset, such as the largest id read."""
+        """Build a ``NUMBER`` offset, such as the largest id read.
+
+        Input: an integer or Decimal; returns a NUMBER Offset. Raises
+        core.errors.HandlerError if the supplied value cannot be cast.
+        """
         return cls(value, OffsetType.NUMBER)
 
     @classmethod
     def text(cls, value: str) -> Offset:
-        """Build a ``TEXT`` offset, such as a cursor or a file name."""
+        """Build a ``TEXT`` offset, such as a cursor or a file name.
+
+        Input: a cursor string; returns a TEXT Offset. Raises core.errors.HandlerError
+        if the supplied value cannot be cast.
+        """
         return cls(value, OffsetType.TEXT)
 
     @classmethod
     def timestamp(cls, value: datetime) -> Offset:
-        """Build a ``TIMESTAMP`` offset, such as the latest change read."""
+        """Build a ``TIMESTAMP`` offset, such as the latest change read.
+
+        Input: a datetime; returns a TIMESTAMP Offset retaining its timezone and microseconds.
+        Raises core.errors.HandlerError for uncastable values or nonzero nanoseconds.
+        """
         return cls(value, OffsetType.TIMESTAMP)
 
     @classmethod
     def partitions(cls, value: Mapping[str, int]) -> Offset:
-        """Build a ``PARTITIONS`` offset: each partition's next position to read."""
+        """Build a ``PARTITIONS`` offset: each partition's next position to read.
+
+        Input: nonempty text keys mapped to nonnegative integer positions. Returns a
+        PARTITIONS Offset with a read-only mapping. Raises core.errors.HandlerError for
+        invalid keys or positions; monotonicity is checked later by the handler.
+        """
         return cls(value, OffsetType.PARTITIONS)
 
     def stored(self) -> str:
-        """Return the text the offset is stored as, beside its datatype."""
+        """Return the text the offset is stored as, beside its datatype.
+
+        Takes no arguments; returns the serialized checkpoint text. Raises no core.errors
+        exception for a successfully constructed Offset.
+        """
         if isinstance(self.value, datetime):
             return self.value.isoformat()
         if isinstance(self.value, Mapping):
@@ -138,7 +164,11 @@ class Offset:
 
     @classmethod
     def from_stored(cls, datatype: str, text: str) -> Offset:
-        """Read an offset back from its stored datatype and text, cast to that datatype."""
+        """Read an offset back from its stored datatype and text, cast to that datatype.
+
+        Inputs: datatype text and serialized checkpoint text; returns an Offset. Raises
+        ValueError for an unknown datatype and core.errors.HandlerError for uncastable text.
+        """
         return cls(text, OffsetType(datatype))
 
 
@@ -199,6 +229,12 @@ class ScriptResult:
     ``row_count`` is required for INGESTION and optional for UTILITY; reported values are
     whole numbers of 0 or more. ``offset`` of ``None`` keeps the
     stored offset. ``variables`` are listed in the task log as ``NAME = value`` lines.
+
+    Inputs are row_count, offset and variables; returns a result record without validation.
+    Construction raises no core.errors exception. The Python handler raises
+    core.errors.HandlerError for an invalid result: ingestion requires a nonnegative integer
+    count; utility forbids an offset. Success commits the outcome, summary, offset and
+    recorded consumption together. Warehouse commits are separate and must tolerate replay.
     """
 
     row_count: int | None = None
@@ -220,6 +256,12 @@ class ScriptTask:
     ``run_date``, and leaves the next scheduled run where the last one left off.
     ``event_files`` and ``event_keys`` are tuples from successful waits in this exact run.
     ``event_rows`` holds the keyed waits' other selected columns, paired with their keys.
+
+    Inputs are the run identity, settings, checkpoint and resources shown in the signature;
+    the engine supplies this record to run(task), which returns ScriptResult. Construction
+    raises no core.errors exception. Utility, first-run, full-refresh and backfill contexts
+    have no incoming offset. Methods document their own errors. Timeout or cancellation
+    stops the owning task process; there is no cooperative stop token in this record.
     """
 
     pipeline_code: str
@@ -261,7 +303,13 @@ class ScriptTask:
         retries: int = 0,
         processes: bool = False,
     ) -> ScriptResult:
-        """Run stable text keys with bounded concurrency and durable per-item retries."""
+        """Run stable text keys with bounded concurrency and durable per-item retries.
+
+        Inputs: stable item keys, a callback returning ScriptResult and the bounds/retry
+        options in the signature. Returns the aggregate ScriptResult, reusing committed items.
+        Raises core.errors.HandlerError for invalid bounds, keys or failed items, or
+        core.errors.PermanentError when a permanent item failure prevents success.
+        """
         from etl_craft.fan_out import FanOutOptions, execute
 
         try:
@@ -280,7 +328,12 @@ class ScriptTask:
             raise HandlerError(f"{self.pipeline_code}.{self.task_code}: {error}") from error
 
     def secret(self, name: str) -> str:
-        """Read one admitted credential; values never fall back to process variables."""
+        """Read one admitted credential; values never fall back to process variables.
+
+        Input: an admitted credential name. Returns its secret string. Raises
+        core.errors.PermanentError for an undeclared or unavailable name; no process-variable
+        fallback occurs.
+        """
         from etl_craft.core.task_secrets import declared, read
 
         label = f"{self.pipeline_code}.{self.task_code}"
@@ -295,7 +348,12 @@ class ScriptTask:
     def replace_landing(
         self, rows: Iterable[Mapping[str, object]], *, item_key: str | None = None
     ) -> int:
-        """Stream typed rows and atomically replace this task's or current item's batch."""
+        """Stream typed rows and atomically replace this task's or current item's batch.
+
+        Inputs: typed row mappings and an optional current fan-out item key. Returns the
+        number published. Raises core.errors.HandlerError for missing target/type metadata,
+        foreign item scope or missing admitted lock; warehouse and lock errors propagate.
+        """
         from etl_craft.landing import replace_landing
 
         return replace_landing(self, rows, item_key=item_key)
@@ -305,12 +363,23 @@ class ScriptTask:
 
         ``database.schema.table`` is kept as written, so a script names its tables once and
         writes to the development, test or production database the profile selects.
+
+        Input: schema.table or database.schema.table. Returns the qualified name as text.
+        Raises core.errors.HandlerError for an invalid object reference or
+        core.errors.ConfigurationError when the warehouse/catalog cannot be resolved.
         """
         return qualify(name, active_catalog(self.config))
 
     @contextmanager
     def warehouse(self) -> Iterator[Engine]:
-        """Open the warehouse, queued behind other writers where it allows only one."""
+        """Open the warehouse, queued behind other writers where it allows only one.
+
+        Takes no arguments; yields a SQLAlchemy Engine in a context manager. The owning task
+        reuses its pooled engine and closes it when the task ends. Raises
+        core.errors.ConfigurationError for missing/invalid warehouse settings,
+        core.errors.LockTimeoutError for a bounded single-writer wait, and driver errors
+        when connecting or executing SQL.
+        """
         with self._warehouse_mutex, open_warehouse(self.config, self._locks) as engine:
             yield engine
 
@@ -342,7 +411,14 @@ def _partitions(value: object) -> Partitions:
 
 @dataclass(frozen=True)
 class ValidationTask:
-    """One file, its declared reader and parameters; no warehouse connection is supplied."""
+    """One file, its declared reader and parameters; no warehouse connection is supplied.
+
+    Inputs: checked upload, declared UploadReader, task parameters, decoded input_params
+    and task logger. Returns the context passed to validate(task); construction raises no
+    core.errors exception and supplies no warehouse connection. The validation handler
+    expects validate(task) to return None on acceptance; a non-None result or raised
+    script exception is a core.errors.HandlerError refusal.
+    """
 
     upload: CheckedFile
     reader: UploadReader

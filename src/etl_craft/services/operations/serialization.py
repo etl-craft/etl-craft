@@ -17,7 +17,12 @@ T = TypeVar("T")
 
 
 def to_json(obj: object) -> dict[str, Any]:
-    """Return a fresh JSON document; dates use ISO 8601 and enums use their values."""
+    """Return a fresh JSON document; dates use ISO 8601 and enums use their values.
+
+    Input: a schema-bearing operation-result dataclass instance. Returns a masked
+    dictionary with its schema identifier, suitable for JSON encoding. Raises
+    core.errors.UsageError for an unsupported result, non-string keys or nonfinite numbers.
+    """
     if (
         isinstance(obj, type)
         or not is_dataclass(obj)
@@ -75,6 +80,10 @@ def from_json(cls: type[T], document: object) -> T:
     """Rebuild the operation result ``to_json`` wrote, so every interface renders it the same way.
 
     Unknown fields are ignored, so a newer server can add fields an older client does not read.
+
+    Inputs: the expected result dataclass type and a decoded JSON document. Returns an
+    instance of that type. Raises core.errors.ServerError for an incompatible schema,
+    missing required fields or invalid field values.
     """
     result = _decode(cls, document, cls.__name__)
     if not isinstance(result, cls):

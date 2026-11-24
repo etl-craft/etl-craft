@@ -41,7 +41,13 @@ SHARED_QUERIES = Path(__file__).parent / "queries"
 
 
 class EngineDialect(ABC):
-    """One Engine DB: how to connect, lock, split scripts, and which SQL to run."""
+    """One Engine DB: how to connect, lock, split scripts, and which SQL to run.
+
+    Inputs and returns are defined by each method signature: connections, locks and SQL
+    are selected for this database. This abstract class cannot be instantiated directly.
+    Methods document their own errors, including core.errors.ConfigurationError for invalid
+    configuration and core.errors.LockTimeoutError when a bounded lock wait expires.
+    """
 
     supports_api_replicas = False
     archive_lock_suffix = ""

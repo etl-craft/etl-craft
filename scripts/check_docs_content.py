@@ -43,10 +43,21 @@ class Article(HTMLParser):
 def problems(site: Path) -> list[str]:
     """Return missing content and links, rather than accepting a successful but empty build."""
     failures = []
-    checks = {
+    checks: dict[str, tuple[str, ...]] = {
         "api/etl_craft/index.html": ("Python API", "ScriptTask", "ScriptResult", "Offset"),
         "api/etl_craft/scripting/index.html": ("ScriptTask", "ScriptResult", "Offset", "row_count"),
     }
+    # Released documentation before the compatibility policy predates this inventory and recipe.
+    if (site / "reference/compatibility/index.html").is_file():
+        checks["api/etl_craft/index.html"] += (
+            "etl_craft.__version__",
+            "etl_craft.config.load_config",
+            "etl_craft.services.operations.OperationContext",
+            "etl_craft.dialects.engine.EngineDialect",
+            "etl_craft.dialects.warehouse.WarehouseDialect",
+            "etl_craft.scripting.ValidationTask",
+        )
+        checks["guides/export-engine-data/index.html"] = ("Export Engine DB data",)
     for relative, terms in checks.items():
         page = site / relative
         try:

@@ -36,6 +36,17 @@ impact still belongs in the changelog. Security fixes do not authorize silently 
 inputs. If a safe fix cannot preserve a promised contract, the maintainer must record the
 conflict and obtain an explicit release decision.
 
+## Supported Python surface
+
+The [generated supported-contract list](../api/etl_craft/index.md#supported-python-contracts)
+is the single inventory: the explicit `__all__` exports of `etl_craft`, `etl_craft.config`,
+`etl_craft.services.operations`, `etl_craft.dialects.engine` and
+`etl_craft.dialects.warehouse`, plus `ScriptTask`, `ScriptResult`, `Offset` and `ValidationTask`
+from `etl_craft.scripting`. It is generated from the source exports on each build.
+Everything else is implementation detail with no Python compatibility promise, including
+names visible in the browsable reference but absent from that list. This does not remove
+separate CLI, HTTP, JSON or Engine DB guarantees above.
+
 ## Forward upgrades and rolling operation
 
 Engine DB migrations are forward-only. Every release after the baseline must upgrade every

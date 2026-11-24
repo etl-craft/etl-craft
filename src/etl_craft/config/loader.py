@@ -194,7 +194,13 @@ def read_config(path: str | Path) -> object:
 
 
 def load_config(path: str | Path, *, agent: bool = False) -> ConnectorConfig:
-    """Read, parse and validate the craft-connector.yml at path."""
+    """Read, parse and validate the craft-connector.yml at path.
+
+    Inputs: the connector file path and agent mode (False by default). Returns a
+    ConnectorConfig containing the selected profiles and resolved non-secret settings.
+    Raises core.errors.ConfigurationError for missing files, invalid YAML/settings or
+    unavailable required credentials. Filesystem read errors can propagate as OSError.
+    """
     return parse_config(read_config(path), Path(path), agent=agent)
 
 
@@ -213,6 +219,8 @@ def parse_config(raw: object, path: Path, *, agent: bool = False) -> ConnectorCo
     """Validate an already-loaded ``craft-connector.yml`` mapping; ``path`` is where it came from.
 
     Relative paths in it (``Secrets.Path``) resolve against ``path``'s directory.
+    Returns ConnectorConfig from raw YAML, path and agent mode (no Engine required).
+    Raises core.errors.ConfigurationError for invalid settings or required credentials.
     """
     path = path.absolute()
     raw = _check_layout(raw, path)
