@@ -189,7 +189,7 @@ item's text, or work done early under another item.
 | S7.G Compatibility policy | In progress | #379; rolling checks | Policy, shared same-major admission, additive SQL/ledger checks and installed input registry implemented; actual mixed-version certification waits for the 0.9.0 release gate |
 | S7.H Cloud acceptance | In progress | #104–#110, #208, #231, #236, #247 | Native/Iceberg and managed-engine contracts exist; complete candidate evidence and unavailable provider cases remain |
 | S7.I The endurance run | Planned |  | 72-hour accelerated Support Insights candidate run, faults and bounded growth evidence after S8 is running |
-| S7.J Documentation to finish | In progress | #85, #227, #277, #441, #442, #443 | All three slices complete: Python contracts, runnable examples and export recipe; exhaustive API endpoint and JSON request/response document reference remains |
+| S7.J Documentation to finish | In progress | #85, #227, #277, #441, #442, #443 | S7.J.1 to S7.J.3 done; S7.J.4 (request and response reference) planned after S7.AW |
 | S7.L ETL Craft logo and CLI banner | Done | #277, #400, #442 | Owner-supplied logo, vector sources, theme-aware favicon and documentation assets, taller CLI banner and branding guidance are done |
 | S7.AL Pre-demo package gaps | Done | #314, #315, #337, #417, S7.AL.5 PR | Duplicate counts, current references, guarded-table validation guidance, event-file validation, the run timeline with recorded gate and event waits, and erasure physical-retention reporting. |
 | S7.AM Protection on every warehouse | Done | #311, #312, #313 | Atomic SCD merges, in-row protection and recovery, private audit identities and provider acceptance |
@@ -8855,7 +8855,8 @@ The documentation gate must inspect rendered content and links on the landing pa
   reads the Engine DB tables. Reads are open, so no exporter or OpenLineage integration is
   needed.
 
-**Slices (owner, 2026-11-23).** Three pull requests, in this order.
+**Slices (owner, 2026-11-23; S7.J.4 added 2026-11-24).** Four pull requests, in this order;
+S7.J.4 follows S7.AW.
 
 **S7.J.1 Operating a server from your own installation.** A user installs etl-craft with pip
 on a laptop or a CI runner, signs in to a server by its URL and runs commands there, holding no
@@ -8894,6 +8895,32 @@ S7.L's remaining branding guidance joins this slice.
 
 **S7.J.3 Python contracts and the export recipe.** The Python API reference and its
 rendered-content documentation gate described above, and the export recipe.
+
+**S7.J.4 Request and response reference.** The actions reference lists each route but not what
+it takes or returns, and `/api/v1/openapi.json` declares no response bodies
+(`response_model=None`). About 86 versioned JSON documents (`"etl-craft/<kind>/<n>"`) exist only
+as result dataclasses with a `SCHEMA` class variable, plus a few module constants such as the
+catalog document.
+
+- New generated page `reference/json-documents.md`, rendered by `scripts/reference_pages.py`
+  like the other reference pages: one section per document kind and version, its fields and
+  types from the dataclass (nested result types expanded once and linked), and the actions that
+  return it, from each operation's return annotation. Documents with their own page (the catalog
+  document) link to it instead of repeating it.
+- `reference/actions.md` gains, per action, its request fields (from the action's request
+  dataclass: name, type, default, required) and a link to the document it returns.
+- No route, OpenAPI or JSON change: the HTTP contract stays as it is; the page says the
+  generated reference is the source for response bodies.
+- *Tests.* A docs test collects every `etl-craft/<kind>/<n>` identifier in `src/` and fails when
+  one is missing from the page, and fails when an action's request or response cannot be
+  resolved; proven by removing one document from the generator's input.
+
+*Done when:*
+
+- [ ] Every JSON document kind in the package appears on the generated page with its fields, and
+  the test fails when one is missing.
+- [ ] Every action in the actions reference names its request fields and the document it
+  returns, or says it returns none.
 
 ### S7.K Hosting the metadata-generated catalog documentation
 
