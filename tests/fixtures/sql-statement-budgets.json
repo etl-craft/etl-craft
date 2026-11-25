@@ -16,8 +16,8 @@
     },
     "CREATE_TABLE": {
       "engine_connections": 0,
-      "engine_statements": 5,
-      "engine_transactions": 5,
+      "engine_statements": 6,
+      "engine_transactions": 6,
       "warehouse_connections": 1,
       "warehouse_statements": 5
     },
@@ -65,8 +65,8 @@
     },
     "SETUP_TABLE": {
       "engine_connections": 0,
-      "engine_statements": 5,
-      "engine_transactions": 5,
+      "engine_statements": 6,
+      "engine_transactions": 6,
       "warehouse_connections": 1,
       "warehouse_statements": 4
     }
@@ -139,8 +139,8 @@
     },
     "CREATE_TABLE": {
       "engine_connections": 0,
-      "engine_statements": 5,
-      "engine_transactions": 5,
+      "engine_statements": 6,
+      "engine_transactions": 6,
       "warehouse_connections": 1,
       "warehouse_statements": 4
     },
@@ -188,8 +188,8 @@
     },
     "SETUP_TABLE": {
       "engine_connections": 0,
-      "engine_statements": 5,
-      "engine_transactions": 5,
+      "engine_statements": 6,
+      "engine_transactions": 6,
       "warehouse_connections": 1,
       "warehouse_statements": 3
     }
