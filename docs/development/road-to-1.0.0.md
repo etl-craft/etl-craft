@@ -222,9 +222,13 @@ item's text, or work done early under another item.
 | S8.F Acceptance checks | Planned | | Rows, provenance, faults, UI and memory checks against the candidate |
 | S8.G The release gate | Planned | | Validate demo wheel/commit/scenario evidence through S7.O without running the external demo in package CI |
 | S8.H Support Insights scenario coverage | Planned | | Deterministic mixed-quality generators, every-feature demonstrations, business-rule and stewardship cases, and runnable README coverage |
-| S8.I Support Insights on current main | Planned | | `ALERT` tasks with `EMAIL` channels and `deploy` replace removed handlers and commands, so the demo can pin current main; precedes S8.C, S8.E and S8.F |
+| S8.I Support Insights on current main | Done | #449, support-insights#30 | `ALERT` tasks with `EMAIL` channels and `deploy` replace removed handlers and commands; the demo pins current main. The walkthrough found the 60-second `--api` read deadline (fixed in #449) |
 
 ### Handover notes
+
+- **S8.I deploy timing.** The first cluster `deploy --api` (1,384 config changes, 12 pipeline
+  refreshes) took about 156 seconds on the server: about 67 seconds from bundle publication to
+  the config commit and about 75 seconds of refreshes (support-insights#30). Not tuned in S8.I.
 
 - **S7.J.4 Choices that differ from the item text.** Response links and returning actions use
   `Action.result` as their source. Host-only results without a JSON document are labelled and
@@ -10331,8 +10335,8 @@ In the Support Insights repository's `.github/workflows/`:
 
 | Workflow | When | What it does |
 | --- | --- | --- |
-| `validate.yml` | every pull request, GitHub-hosted | Install the pinned candidate wheel; lint scripts; migrate an empty Engine DB; `config plan`, `config apply`, `validate`. Holds no secrets. |
-| `deploy.yml` | push to `main`, filtered to `project/**` | Self-hosted runner container in the demo cluster; required-reviewer GitHub environment; only a `developer` token. Run `validate`, `config apply --api`, `bundle publish --api`, `seed apply --api`, then `run --api` for `SI_REFERENCE`. Never runs on `pull_request`. |
+| `validate.yml` | every pull request, GitHub-hosted | Install the pinned candidate wheel; lint scripts; migrate an empty Engine DB; `config plan`, `deploy`, `validate` (S8.C). Holds no secrets. |
+| `deploy.yml` | push to `main`, filtered to `project/**` | Self-hosted runner container in the demo cluster; required-reviewer GitHub environment; only a `developer` token. Run `deploy --plan --api`, `deploy --api`, `validate --api`, then `run --api` for `SI_REFERENCE` (S8.C). Never runs on `pull_request`. |
 | `e2e.yml` | manual dispatch and before release, self-hosted | Bring up the S8.A k3d stack; apply the project and seed files; run generators for fixed batches; wait for scheduled runs; run S8.F and S8.H; write the S7.O results manifest. Upload logs, the generated catalog and screenshots of the UI and catalog. Never runs on `pull_request`. |
 
 ### S8.F Acceptance checks
@@ -10583,9 +10587,9 @@ the package, never worked around in the demo.
 
 *Done when:*
 
-- [ ] No `EMAIL_ALERT`, `config apply`, `bundle publish` or `seed apply` remains in Support
+- [x] No `EMAIL_ALERT`, `config apply`, `bundle publish` or `seed apply` remains in Support
   Insights.
-- [ ] Its validate job and README walkthrough pass against the new pin.
+- [x] Its validate job and README walkthrough pass against the new pin.
 
 ## 0.9.0 release checklist
 
