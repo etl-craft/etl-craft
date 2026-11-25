@@ -203,6 +203,7 @@ item's text, or work done early under another item.
 | S7.AU Available actions on every page | Done | S7.AU PR | Every action on the project and platform pages renders from the server's availability answer, grayed out with its reason as a hover annotation; the console keeps submit-time refusals |
 | S7.AV No implicit project | Done | #444 | Engine DB access without a selected project raises `ProjectNotSelectedError` (exit 32) naming the query or operation; entry points select their project; `setup` and bare `doctor` are project-aware |
 | S7.AW Public docs for 0.9.0 | Done | #446 | Release install and first steps in the README, private development docs, and a short 0.9.0 changelog summary |
+| S7.AX Pipeline, run and task views | Planned | | One dense status grid, run and task panels beside it, logs first and live, logs that explain a failure, and pages that load in one request each |
 | S7.M Stewardship uploads | Done (M2) | #296, #305 | Atomic receipts and safe stored names; processed layout, retention archives and verified reruns; crash recovery and guarded upload history |
 | S7.S Seed tables | Done | #308 | Typed pinned-bundle seeds replace reference tables until recorded stewardship handover |
 | S7.T Business calendars | Done | #276 | Shared holiday and weekend calendars for schedules, run dates, backfill and catch-up |
@@ -10055,6 +10056,61 @@ development history.
 
 - [x] The README and changelog summary describe 0.9.0 as published, with no development history.
 - [x] `make docs` passes with no development page in the published nav and no broken link.
+
+### S7.AX Pipeline, run and task views
+
+Owner, 2026-11-25, from the Support Insights walkthrough: the pipeline page, the run tab and the
+attempt page are not readable or usable, pages take 3-12 seconds to load on a small Engine DB,
+task logs appear only after a task ends, and they say too little to debug a failure. These views
+follow Airflow's information model and navigation, which most data engineers already know
+(behaviour reference only). The UI rules stand: status colours with a symbol on every mark,
+reasons for unavailable actions only on hover, one shared component per element.
+
+Measured on the demo cluster: the pipeline page makes 34 API calls (one `history` per task,
+0.3-0.9 s each alone); the pipelines list makes one `capabilities` call per pipeline (1-3 s each
+alone); project-wide `history` reads each visible pipeline separately (about 2 s for 50 runs).
+
+**Slices.** Each is one pull request, in this order.
+
+1. **S7.AX.1 Data in one request per page.**
+   - The pipeline grid reads its runs and every task's cell (status, try, attempt id, start,
+     duration) in one request.
+   - A page reads the capabilities of all the pipelines it shows in one request.
+   - Project-wide `history` reads all visible pipelines in a bounded number of statements.
+   - Engine DB statement budgets for these requests, recorded like the attempt budgets.
+2. **S7.AX.2 The pipeline page.**
+   - The grid: rows are tasks and columns are runs, 20 px rows and 18 px cells with no gap,
+     names in a fixed left column and cells in the same rows of one scroll container. A thin bar
+     above each run column shows its duration (height relative to the longest loaded run) and
+     status. Task groups appear only where the definition groups tasks.
+   - Selecting a run column opens the run beside the grid: header (status, run date, trigger,
+     start, end, duration) and tabs Task instances (each with a small duration bar), Timeline,
+     Graph, Details. Selecting a cell opens the task instance: header (task, run, status,
+     handler, try when above 1, start, end, duration) and tabs Logs (default), SQL / script (what
+     ran, rendered), Details, Attempts; a try picker selects earlier tries.
+   - Selection is in the URL (run, task, try); the standalone attempt page redirects there.
+   - Only fields that apply are shown: no failure fields on a running or successful try, no
+     counts the handler does not produce.
+   - Times come from the server clock; a running try never shows a start in the future.
+3. **S7.AX.3 Live task logs.** Agents send the task log in chunks while the task runs, and the
+   Logs tab follows them. Design note first: the agent report, the storage of partial logs,
+   ordering after a retry and the final upload.
+4. **S7.AX.4 Task logs that explain a failure.** Every task log has a context block (try, agent,
+   connection, run date and parameters, watermark window, task parameters without secrets),
+   each step with its rendered statement (secrets masked) and timing, rule results with their
+   flagged keys (capped), the ROW_ID range reserved, and an outcome block; on failure the error,
+   the failing statement, its classification and the remedy.
+
+**Done when.**
+
+- [ ] Each page in this item reads its data in one request (S7.AX.1), and its statement budget
+      is recorded in a test.
+- [ ] The grid shows a 26-task pipeline with 25 runs without scrolling sideways at 1440 px, names
+      and cells stay aligned when scrolling, and a browser test covers it at 1440 and 390 px,
+      light and dark.
+- [ ] Clicking a cell shows that task's name, status and log in the first screen; a running
+      task's log grows while it runs.
+- [ ] A failing SQL task's log contains the failing statement, the error and the remedy.
 
 ## Release candidate: the Support Insights example
 
