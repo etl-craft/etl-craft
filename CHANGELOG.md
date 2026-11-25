@@ -6,6 +6,9 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+- Fixed: catalog comparisons omit the staged upload control `LOCKED` from inferred merge
+  target columns.
+
 - Fixed: the diagram view no longer jumps back to its fitted position after you move it.
 
 - Fixed: deploy and validate now tell the caller to ask an administrator to run

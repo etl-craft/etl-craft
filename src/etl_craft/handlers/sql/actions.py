@@ -70,7 +70,7 @@ from etl_craft.handlers.sql.tables import (
     refuse_null_keys,
     require_target,
 )
-from etl_craft.handlers.sql.upload_controls import boolean_problem
+from etl_craft.handlers.sql.upload_controls import boolean_problem, is_upload_control
 
 logger = logging.getLogger(__name__)
 
@@ -372,7 +372,7 @@ def scd1_merge(session: Session, action: ActionContext) -> HandlerResult:
     stage_columns = [
         name
         for name, _ in session.columns(stage)
-        if name.upper() not in PROTECTION_COLUMNS and name.lower() != "locked"
+        if name.upper() not in PROTECTION_COLUMNS and not is_upload_control(name)
     ]
     assignments, condition = _scd1_update(session, action, stage_columns)
     target = session.target
@@ -515,7 +515,7 @@ def scd2_merge(session: Session, action: ActionContext) -> HandlerResult:
     stage_columns = [
         name
         for name, _ in session.columns(stage)
-        if name.upper() not in PROTECTION_COLUMNS and name.lower() != "locked"
+        if name.upper() not in PROTECTION_COLUMNS and not is_upload_control(name)
     ]
     target = session.target
 
