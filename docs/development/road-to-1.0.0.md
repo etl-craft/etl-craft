@@ -209,6 +209,7 @@ item's text, or work done early under another item.
 | S7.U Personal-data erasure | Done | #309 | Standing table/column erasure follows pinned lineage, with private keys and recoverable ERASURE tasks |
 | S7.V Empty replacements | Done | #275 | ALLOW_EMPTY can refuse an empty CREATE_TABLE or OVERWRITE_TABLE before changing its target |
 | S7.W Docs toolchain after MkDocs 1.x | Planned | | Evaluate Zensical against the API pages, navigation and published versions; migrate only when every requirement works |
+| S7.AY ROW_IDs derived from the task run | Planned | | Replace the stored ROW_ID high-water and its reservation protocol with IDs built from the writing task run, on every warehouse |
 | S7.O Package and demo repositories | Done | #317, #318 | Small package demo, public demo seed and pinned candidate evidence validation |
 | S7.P Obvious failures do not stop 1.0.0 | In progress | #173, #178 | Audit done (#173); the log-folder and port checks close their catalog rows (#178); item 4 keeps the catalog current |
 | S7.Q A generic ANSI SQL warehouse | Moved after 0.9.0 | | A `generic` dialect over SQLAlchemy for rare databases: ANSI SQL only, NULL-safe column comparison for merges, refusals for anything without an ANSI form |
@@ -10033,6 +10034,40 @@ the wrong project instead of failing. This breaks "fail rather than guess".
 - [ ] The full suite passes with no other test changed to select a project it did not need
   before; each one that did is named in the pull request.
 - [ ] A local installation without `Orchestration.Project` behaves as before.
+
+### S7.AY ROW_IDs derived from the task run
+
+Owner, 2026-11-25. #456 stopped ROW_ID reuse after a replacement by keeping one high-water per
+target in `AUD_TARGET_ROW_IDS`, reserved in the Engine DB before every computed-ID write, with an
+agent reservation report, a floor recorded before removals, a generator start above the
+high-water on recreate and a check after each write. It works, but the Engine DB keeps state that
+must agree with the warehouse forever (a dropped target's row stays), every write pays a round
+trip, and a warehouse table restored from backup without its Engine DB can still reuse IDs.
+
+**Change.** A row's ID is made from the writer's own identity, so uniqueness needs no stored
+state:
+
+- `ROW_ID = writer_id * 2^32 + row number within the write`, where `writer_id` is the
+  `TASK_RUN_ID` of the task run that wrote the row. Task run IDs are unique and only increase, so
+  two writes never produce the same ID, after a replace, a drop, a recreate or a restore.
+- One implementation for every warehouse: computed in the shared SQL path, not by identity
+  columns or sequences. Targets created by etl-craft no longer get a ROW_ID generator.
+- Writers without a task run (seed loads, adopt-target, values) take `writer_id` from their own
+  audited request identity; the implementation lists each writer and the identity it uses.
+- A retried attempt reuses its task run's IDs; that is safe because an append first clears the
+  task run's previous rows and rules run only after the task succeeds. The implementation
+  verifies this for every action that inserts rows.
+- Delete `AUD_TARGET_ROW_IDS` (both `schema.sql` files, pre-0.9.0 rule), the reservation and
+  floor code, the agent reservation report, the generator start on recreate and the post-write
+  reservation check. The attempt round-trip budget returns to its pre-#456 value.
+- Limits, stated in the docs: 2^32 rows per write and task run IDs below 2^31.
+
+**Done when.**
+
+- [ ] The #456 regression cases still fail without the change and pass with it: replace then
+      append, the REJECT run 1 / run 2 sequence, drop and recreate, delete then append.
+- [ ] No Engine DB table, query or agent report remains for ROW_ID allocation.
+- [ ] Every warehouse's merge and append tests pass, and Snowflake and Databricks run once.
 
 ### S7.AW Public docs for 0.9.0
 
