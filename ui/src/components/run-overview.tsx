@@ -7,7 +7,7 @@ import { AppLink as Link } from "@/components/navigation";
 import { Fact, FactList, Loading, Notice, ParamList, SelectField } from "@/components/common";
 import { Disclosure, DisclosureSummary, DropdownContent, DropdownItem, DropdownMenu, DropdownSeparator, DropdownTrigger } from "@/components/dropdown";
 import { ActionButton } from "@/components/action-button";
-import { AttemptDetails, AttemptLog } from "@/components/attempt-details";
+import { AttemptDetails, AttemptLog, LIVE } from "@/components/attempt-details";
 import { useToast } from "@/components/toast";
 import { controlAnswers, DANGER, EFFECT, label as actionLabel, ScopeControls } from "@/components/scope-controls";
 import { isFailure, slaVerdict, StatusBadge, solidClass, taskStatus } from "@/components/status";
@@ -141,7 +141,9 @@ function TaskDetails({ code, pipeline, run, task, handler, cell, tab, tryNumber,
     {history.isError ? <Notice>{history.error.message}</Notice> : null}
     {history.isPending ? <Loading what="task history" /> : null}
     {history.isSuccess && tryNumber !== null && !attempt ? <Notice>Try {tryNumber} is not recorded for {task} in run #{runId}.</Notice> : null}
-    {selectedTab === "logs" && attempt ? <AttemptLog key={attempt.attempt_id} code={code} attempt={attempt} open embedded /> : null}
+    {selectedTab === "logs" && attempt ? (attempt.log_path || LIVE.has(attempt.status)
+      ? <AttemptLog key={attempt.attempt_id} code={code} attempt={attempt} open embedded />
+      : <p className="m-0 text-sm text-muted">No log was recorded for this attempt.</p>) : null}
     {selectedTab === "logs" && history.isSuccess && !attempt && tryNumber === null ? <p className="text-sm text-muted">This task has no stored attempt log yet.</p> : null}
     {selectedTab === "source" ? <TaskSource code={code} pipeline={pipeline} runId={runId} task={task} attemptId={attempt?.attempt_id} /> : null}
     {selectedTab === "details" ? <>

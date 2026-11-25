@@ -14,11 +14,9 @@ export const DEFAULT_RUNS = 10;
 export const MIN_TASKS = 126;
 export const GRID_COLUMNS = { id: { width: 18, minimum: 18 }, time: { width: 18, minimum: 18 } };
 
-export function RunGrid({ code, pipeline, graph, tasks, runs, cells, extra, selected, task, onSelect, bars = true, gantt }: {
+export function RunGrid({ code, pipeline, graph, tasks, runs, cells, extra, selected, task, onSelect, bars = true }: {
   code: string; pipeline: string; graph: Graph; tasks: string[]; runs: RunView[]; cells: GridCell[];
   extra?: RunView; selected?: number; task?: string | null;
-  /** The run whose task timings are drawn on the grid's own rows, after its cells. */
-  gantt?: number;
   onSelect: (runId: number, taskCode?: string) => void; bars?: boolean;
 }) {
   const [definition, setDefinition] = useState<string | null>(null);
@@ -40,17 +38,12 @@ export function RunGrid({ code, pipeline, graph, tasks, runs, cells, extra, sele
   const durations = shown.map((run) => run.start_date
     ? Math.max(0, ((run.end_date ? Date.parse(run.end_date) : now) - Date.parse(run.start_date)) / 1000) : 0);
   const longest = Math.max(0, ...durations);
-  // The Gantt spans the selected run's first task start to its last task end (or now, while running).
-  const spans = gantt === undefined ? [] : cells.filter((cell) => cell.pipeline_run_id === gantt && cell.start_date)
-    .map((cell) => [Date.parse(cell.start_date!), cell.end_date ? Date.parse(cell.end_date) : now] as const);
-  const from = spans.length ? Math.min(...spans.map(([start]) => start)) : 0;
-  const to = spans.length ? Math.max(from + 1000, ...spans.map(([, end]) => end)) : 0;
   return (
     <div tabIndex={0} className="relative flex h-full min-h-0 flex-col" onKeyDown={legend.onKeyDown}>
       {/* The key sits over the duration scale's empty corner instead of taking a row of its own. */}
       <div className="absolute right-2 top-1 z-30">{legend.button}</div>
       {legend.panel}
-      <div ref={scroll} className="min-h-0 flex-1 overflow-auto scroll-pt-[100px]" data-scroll-area>
+      <div ref={scroll} className="min-h-56 flex-1 overflow-auto scroll-pt-[100px]" data-scroll-area>
       <table aria-label="Run grid" className="w-max table-fixed border-separate border-spacing-0 text-xs">
         <thead className="sticky top-0 z-20 bg-surface">
           <tr>
@@ -76,11 +69,6 @@ export function RunGrid({ code, pipeline, graph, tasks, runs, cells, extra, sele
                 </Link>
               </th>;
             })}
-            {gantt !== undefined ? <th scope="col" className="min-w-60 px-2 text-left align-bottom font-normal text-muted">
-              <span className="block text-fg">Run #{gantt}</span>
-              {spans.length ? <span className="flex h-5 justify-between tabular-nums"><span>{formatTime(new Date(from).toISOString(), timezone)}</span><span>{formatSeconds((to - from) / 1000)}</span></span>
-                : <span className="block h-5">No task has started</span>}
-            </th> : null}
           </tr>
         </thead>
         <tbody>
@@ -101,7 +89,6 @@ export function RunGrid({ code, pipeline, graph, tasks, runs, cells, extra, sele
                 </button>
               </td>;
             })}
-            {gantt !== undefined ? <td className="h-5 min-w-60 px-2"><GanttBar cell={byRun.get(JSON.stringify([gantt, name]))} from={from} to={to} now={now} /></td> : null}
           </tr>)}
         </tbody>
       </table>
@@ -112,14 +99,3 @@ export function RunGrid({ code, pipeline, graph, tasks, runs, cells, extra, sele
   );
 }
 
-/** One task's span in the selected run, placed on the run's time range; hover gives its times. */
-function GanttBar({ cell, from, to, now }: { cell?: GridCell; from: number; to: number; now: number }) {
-  if (!cell?.start_date || to <= from) return null;
-  const start = Date.parse(cell.start_date);
-  const end = cell.end_date ? Date.parse(cell.end_date) : now;
-  const label = `${cell.task_code}: ${statusMeta(cell.status).label.toLowerCase()}, ${formatDuration(cell.start_date, cell.end_date, now)}`;
-  return <div className="relative h-[14px] w-full" title={label}>
-    <span role="img" aria-label={label} className={cn("absolute inset-y-0 min-w-[3px] rounded-sm", solidClass(cell.status))}
-      style={{ left: `${(start - from) / (to - from) * 100}%`, width: `${Math.max(0, end - start) / (to - from) * 100}%` }} />
-  </div>;
-}

@@ -28,6 +28,7 @@ import { DEFAULT_RUNS, GRID_COLUMNS, MIN_TASKS, RunGrid } from "@/components/run
 import { PipelineRefresh, RefreshMenuItem } from "@/components/pipeline-refresh";
 import { TaskDefinitionPanel } from "@/components/task-definition-panel";
 import { RunOverview } from "@/components/run-overview";
+import { RunTimeline } from "@/components/run-timeline";
 import { RunsPanel } from "@/components/runs-panel";
 import { useRuns } from "@/components/runs-table";
 import { Tabs } from "@/components/tabs";
@@ -39,7 +40,7 @@ import { describeCron, formatDuration } from "@/lib/format";
 import { ApiError, getJson, project } from "@/lib/api";
 import { pipelinesPath, projectHomePath, scheduledPath, taskPath } from "@/lib/routes";
 import { cn } from "@/lib/utils";
-import type { Graph, Pipeline, Steps } from "@/lib/types";
+import type { Graph, Pipeline, RunView, Steps } from "@/lib/types";
 import { useDocumentTitle } from "@/title";
 
 export function PipelineDetail() {
@@ -120,7 +121,8 @@ export function PipelineDetail() {
   });
   const tabs=pipelineTabs();
   // A run or task chosen in the URL replaces the pipeline's tabs with that run's or task's view.
-  const inSelection = selected !== undefined && (chosen !== undefined || Boolean(task));
+  // A task named without a run opens its definition (lookups, offsets, pauses) under the pipeline's tabs.
+  const inSelection = selected !== undefined && chosen !== undefined;
   const tab=tabs.some(item=>item.id===asked)?asked:"overview";
   const state = params.get("status") ?? "";
   const select = (runId: number, taskCode?: string) => {
@@ -140,6 +142,13 @@ export function PipelineDetail() {
   const stateOf = new Map(cells.filter((cell) => cell.pipeline_run_id === statusRun).map((cell) => [cell.task_code, cell.status as string]));
   const taskOrder = allTasks.filter((name) => (!pickedTasks.length || pickedTasks.includes(name))
     && (!taskStates.length || taskStates.includes(stateOf.get(name) ?? "NOT_STARTED")));
+  // The Gantt view reads the selected run's recorded queue and execution times (shared with its run view).
+  const ganttRun = useQuery({
+    queryKey: ["run", code, chosen],
+    queryFn: () => getJson<RunView>(`${project(code)}/runs/${chosen}`),
+    enabled: view === "gantt" && chosen !== undefined,
+    refetchInterval: (query) => (query.state.data?.status === "IN-PROGRESS" ? 5_000 : false),
+  });
   const clearSelection = () => {
     const next = new URLSearchParams(params);
     for (const key of ["run", "task", "try", "instance", "tab"]) next.delete(key);
@@ -292,7 +301,7 @@ export function PipelineDetail() {
         narrowFirst={inSelection ? "right" : "left"}
         className="lg:min-h-0 lg:flex-1"
         left={
-        <Card className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        <Card className="flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden">
           <div className="grid gap-1.5 border-b border-border px-3 py-2">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <Segmented label="Run view" value={view} options={[{ id: "grid", label: "Grid" }, ...(chosen !== undefined ? [{ id: "gantt", label: "Gantt" }] : []), { id: "graph", label: "Graph" }]} onSelect={(id) => choose("view", id === "grid" ? null : id)} />
@@ -342,12 +351,16 @@ export function PipelineDetail() {
               </div>
             ) : null}
           </div>
-          <div className={cn("relative min-h-0 flex-1 overflow-hidden", view !== "grid" && "max-lg:min-h-96")}>
+          <div className={cn("relative min-h-56 flex-1 overflow-hidden", view !== "grid" && "max-lg:min-h-96")}>
             {!graph.isSuccess ? (
               graph.isError ? <Notice className="m-3">{(graph.error as Error).message}</Notice> : <Loading what="tasks" className="p-3" />
+            ) : view === "gantt" && chosen !== undefined ? (
+              <section aria-label="Timeline" className="min-h-0 flex-1 overflow-auto p-3" data-scroll-area>
+                {ganttRun.data ? <RunTimeline run={ganttRun.data} compact order={taskOrder} /> : ganttRun.isError ? <Notice>{ganttRun.error.message}</Notice> : <Loading what="the run's timeline" />}
+              </section>
             ) : view !== "graph" ? (
               readError ? <Notice>{readError.message}</Notice> : list.runs.isPending ? <Loading what="run history" className="p-3" /> :
-              <RunGrid code={code} pipeline={pipeline} graph={graph.data} tasks={taskOrder} gantt={view === "gantt" ? chosen : undefined} runs={gridRuns} cells={cells} extra={outside ? extraRun ?? undefined : undefined} selected={chosen} task={task} onSelect={select} bars={!hideBars} />
+              <RunGrid code={code} pipeline={pipeline} graph={graph.data} tasks={taskOrder} runs={gridRuns} cells={cells} extra={outside ? extraRun ?? undefined : undefined} selected={chosen} task={task} onSelect={select} bars={!hideBars} />
             ) : (
               <div className="absolute inset-0 flex flex-col">
               {selectedRun ? (
@@ -442,7 +455,7 @@ export function PipelineDetail() {
                   </>
                 }
               />
-            ) : task && selected === undefined && !list.runs.isPending ? (
+            ) : task && chosen === undefined ? (
               <TaskDefinitionPanel code={code} pipeline={pipeline} task={task} />
             ) : !p || !graph.isSuccess ? (
               <Loading what="pipeline" />

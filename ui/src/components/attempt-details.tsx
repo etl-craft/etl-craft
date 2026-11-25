@@ -28,7 +28,7 @@ const evidence = (kind: string | null, actor: string | null, reason: string | nu
   kind ? [words(kind), actor, reason].filter(Boolean).join(" · ") : null;
 const ERROR = /\b(ERROR|FATAL|CRITICAL|Traceback)\b/;
 const WARNING = /\bWARN(ING)?\b/;
-const LIVE = new Set(["QUEUED", "CLAIMED", "RUNNING"]);
+export const LIVE = new Set(["QUEUED", "CLAIMED", "RUNNING"]);
 
 /** An attempt's log, fetched on demand and kept fresh while the attempt is still running. */
 export function AttemptLog({ code, attempt, open = false, embedded = false }: { code: string; attempt: Pick<AttemptView, "attempt_id" | "status">; open?: boolean; embedded?: boolean }) {

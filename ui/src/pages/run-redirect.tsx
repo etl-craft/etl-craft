@@ -16,19 +16,10 @@ export function RunRedirect() {
 }
 
 
+/** An older task address opens the task's own panel: its definition, lookups, offsets, pauses and history. */
 export function TaskRedirect() {
   const { project = "", pipeline = "", task = "" } = useParams();
-  const history = useQuery({
-    queryKey: ["task-redirect", project, pipeline, task],
-    queryFn: () => getJson<TaskHistory>(`${apiProject(project)}/history`, { pipeline_code: pipeline, task_code: task, all: true, limit: 1 }),
-    retry: false,
-  });
-  if (history.isPending) return <Loading what="the task's latest run" />;
-  if (history.error) return <Notice>{history.error.message}</Notice>;
-  const params = new URLSearchParams({ task });
-  const run = history.data?.entries[0]?.pipeline_run_id;
-  if (run) params.set("run", String(run));
-  return <Navigate replace to={`${pipelinePath(project, pipeline)}?${params}`} />;
+  return <Navigate replace to={`${pipelinePath(project, pipeline)}?${new URLSearchParams({ task })}`} />;
 }
 
 export function AttemptRedirect() {

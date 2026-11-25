@@ -74,7 +74,7 @@ def test_timeline_bars_name_their_queue_and_outcome_by_keyboard(waited, scheme, 
             pw, color_scheme=scheme, viewport={"width": width, "height": 1000}
         )
         sign_in(page, url, f"/ui/projects/default/pipelines/TIMED?run={run}")
-        page.get_by_role("tab", name="Timeline").click()
+        page.get_by_role("button", name="Gantt", exact=True).click()
         timeline = page.get_by_role("region", name="Timeline")
         queue = timeline.get_by_role("button", name=re.compile(r"LOAD, attempt 1: Queued"))
         rows = timeline.get_by_role("list", name="Tasks on the run's time axis")
