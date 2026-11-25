@@ -115,8 +115,6 @@ def test_an_operator_resets_a_watermark_with_a_reason(merge_task):
     with sync_playwright() as pw:
         browser, page, problems = open_page(pw, viewport={"width": 1280, "height": 1000})
         sign_in(page, url, "/ui/projects/default/pipelines/SALES/tasks/LOAD")
-        page.get_by_role("tab", name="Details").click()
-        page.get_by_text("Task definition and history", exact=True).click()
         expect(page.get_by_role("heading", name="Watermark")).to_be_visible()
         expect(page.get_by_text("Nothing stored yet; the first run starts it.")).to_be_visible()
         shoot(page, "task-offset")
@@ -142,8 +140,6 @@ def test_the_data_lookup_asks_for_every_key_column_and_answers(merge_task):
     with sync_playwright() as pw:
         browser, page, _ = open_page(pw, viewport={"width": 1280, "height": 1000})
         sign_in(page, url, "/ui/projects/default/pipelines/SALES/tasks/LOAD")
-        page.get_by_role("tab", name="Details").click()
-        page.get_by_text("Task definition and history", exact=True).click()
         expect(page.get_by_role("heading", name="Data")).to_be_visible()
         look = page.get_by_role("button", name="Look up")
         expect(look).to_be_disabled()

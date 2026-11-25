@@ -65,8 +65,6 @@ def test_paused_page_redirect_modes_outcomes_and_resume_use_the_same_controls(sc
         assert sent.value.request.post_data_json["active_runs"] == "DRAIN"
         expect(dialog).not_to_be_visible()
         page.goto(url + "/ui/projects/default/pipelines/OPS/tasks/EXTRACT")
-        page.get_by_role("tab", name="Details").click()
-        page.get_by_text("Task definition and history", exact=True).click()
         page.get_by_role("button", name="Pause task", exact=True).click()
         task_dialog = page.get_by_role("dialog", name="Pause task EXTRACT", exact=True)
         expect(task_dialog.get_by_role("combobox", name="Task outcome")).to_have_value("SKIPPED")

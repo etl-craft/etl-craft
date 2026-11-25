@@ -559,8 +559,6 @@ def test_run_and_task_history_show_stored_labels_with_numeric_links(scene):
     with sync_playwright() as pw:
         browser, page, problems = open_page(pw)
         sign_in(page, url, "/ui/projects/default/pipelines/OPS/tasks/EXTRACT")
-        page.get_by_role("tab", name="Details").click()
-        page.get_by_text("Task definition and history", exact=True).click()
         table = page.get_by_role("table", name="Task runs")
         expect(table.get_by_text(run.label, exact=True)).to_be_visible()
         expect(table.get_by_text(task.label, exact=True)).to_be_visible()
