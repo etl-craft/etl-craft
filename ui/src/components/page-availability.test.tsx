@@ -66,7 +66,7 @@ it("renders every platform and maintenance page action from both server answers"
       client.clear();
     }
   }
-});
+}, 15_000); // renders every platform page twice; about 1 s alone, slower when the whole suite shares the CPU
 
 it("fails closed when an action has no server answer", async () => {
   vi.mocked(getJson).mockImplementation(async path => path.endsWith("/capabilities") ? { actions: [] } : { projects: [] });

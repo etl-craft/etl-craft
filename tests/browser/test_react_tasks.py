@@ -90,7 +90,7 @@ def test_the_task_history_lists_runs_with_counts_and_exports_csv(scene):
     with sync_playwright() as pw:
         browser, page, problems = open_page(pw, viewport={"width": 1280, "height": 900})
         page.context.set_default_timeout(8000)
-        # The task's address opens its own panel: definition, history and lookups, with no run chosen.
+        # The task's address opens its own panel: definition, history and lookups.
         sign_in(page, url, "/ui/projects/default/pipelines/ORDERS/tasks/LOAD")
         table = page.get_by_role("table", name="Task runs")
         expect(table.get_by_role("link", name=f"#{good}", exact=True)).to_be_visible()
