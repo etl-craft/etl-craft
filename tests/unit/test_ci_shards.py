@@ -691,3 +691,17 @@ def test_crashed_worker_without_output_does_not_hide_the_crash():
     shard.pytest_testnodedown(SimpleNamespace(), "crashed")
     assert shard.expected == ["test_one"]
     assert shard.catalog == {"test_one": ["unit"]}
+
+
+def test_rerun_shards_replace_their_earlier_result_artifacts():
+    workflow = yaml.safe_load((Path(__file__).parents[2] / ".github/workflows/ci.yml").read_text())
+    uploads = [
+        step["with"]
+        for job in workflow["jobs"].values()
+        for step in job.get("steps", [])
+        if str(step.get("uses", "")).startswith("actions/upload-artifact")
+        and str(step["with"]["name"]).startswith("ci-")
+    ]
+    assert uploads
+    for upload in uploads:
+        assert upload.get("overwrite") is True, upload["name"]
