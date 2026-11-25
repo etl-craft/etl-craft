@@ -1,6 +1,7 @@
 """Preserve warehouse-provided table properties during atomic CTAS or identity clone publication."""
 
 from collections.abc import Callable
+from dataclasses import dataclass
 from typing import Any, ClassVar
 
 from sqlglot import exp, parse_one
@@ -10,6 +11,16 @@ from sqlglot.generators.databricks import DatabricksGenerator
 from sqlglot.parsers.databricks import DatabricksParser
 
 from etl_craft.core.errors import SqlGuardError
+
+
+@dataclass(frozen=True)
+class IdentityReplacement:
+    """Warehouse names and generator start for publishing a replacement."""
+
+    target: str
+    candidate: str
+    existing: bool
+    start: int = 1
 
 
 class _DatabricksReplacement(Databricks):

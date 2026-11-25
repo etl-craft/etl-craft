@@ -7,6 +7,8 @@ import logging
 from etl_craft.core.enums import SqlAction
 from etl_craft.core.errors import SqlGuardError
 from etl_craft.core.faults import fault_point
+from etl_craft.dialects.warehouse.replacement import IdentityReplacement
+from etl_craft.dialects.warehouse.row_ids import row_number
 from etl_craft.dialects.warehouse.uploads import writer_expression
 from etl_craft.engine.repository.tasks import TargetTask
 from etl_craft.handlers.registry import HandlerResult
@@ -67,18 +69,24 @@ def replace_select(session: Session, select_sql: str, columns: dict[str, str] | 
 
     ``columns`` declares every selected column except ROW_ID, or None for inferred SELECT types.
     """
-    existing = bool(session.target_columns())
-    identity = session.dialect.identity_in_create
+    target_columns = session.target_columns()
+    existing = bool(target_columns)
+    has_ids = any(name.lower() == "row_id" for name, _ in target_columns)
     strategy = session.dialect.replace_strategy
     computed = session.dialect.surrogate_key == "computed"
-    if identity:
+    if not computed and has_ids:
+        session.preserve_row_id_floor()
+    if session.dialect.identity_in_create and not computed:
         assert columns is not None
         return _replace_identity(session, columns, select_sql, existing)
+    count = None
     if computed:
-        select_sql = (
-            "SELECT s.*, CAST(ROW_NUMBER() OVER (ORDER BY NULL) AS BIGINT) AS ROW_ID "
-            f"FROM ({select_sql}) s"
+        stage = session.create_scratch(
+            session.scratch("replace_ids"), select_sql, step="stage replacement rows"
         )
+        count = session.count(f"SELECT COUNT(*) FROM {stage}", step="staged replacement rows")
+        base = session.reserve_row_ids(count, existing=has_ids, replacing=True)
+        select_sql = f"SELECT s.*, {row_number(base)} AS ROW_ID FROM {stage} s"
     if strategy == "create_or_replace":
         ddl = session.dialect.replacement_ddl(
             session.conn, session.target, select_sql, session.params, existing=existing
@@ -101,32 +109,40 @@ def replace_select(session: Session, select_sql: str, columns: dict[str, str] | 
             session.dialect.preserve_replacement_properties(session.conn, session.target, candidate)
         promote(session, candidate, existing=existing)
     else:
-        comment = (
-            session.dialect.replacement_comment(session.conn, session.target) if existing else None
+        _publish_by_drop(session, select_sql, columns if not computed else None, existing)
+    return count
+
+
+def _publish_by_drop(
+    session: Session, select_sql: str, columns: dict[str, str] | None, existing: bool
+) -> None:
+    """Publish transactional warehouse DDL with the old target comment."""
+    computed = session.dialect.surrogate_key == "computed"
+    comment = (
+        session.dialect.replacement_comment(session.conn, session.target) if existing else None
+    )
+    fault_point("sql.replace.before_publish")
+    session.run(f"DROP TABLE IF EXISTS {session.target}", step="drop the old target")
+    fault_point("sql.replace.after_clear")
+    if columns is not None:
+        create_with_identity(session, columns, session.target)
+        session.run(
+            f"INSERT INTO {session.target} ({', '.join(columns)}) {select_sql}",
+            step="insert the declared replacement rows",
         )
-        fault_point("sql.replace.before_publish")
-        session.run(f"DROP TABLE IF EXISTS {session.target}", step="drop the old target")
-        fault_point("sql.replace.after_clear")
-        if columns is not None and not computed:
-            create_with_identity(session, columns, session.target)
-            session.run(
-                f"INSERT INTO {session.target} ({', '.join(columns)}) {select_sql}",
-                step="insert the declared replacement rows",
-            )
-        else:
-            session.create_table_as(
-                session.target, select_sql, step="create the target from the SELECT"
-            )
-            if not computed:
-                add_row_id(session)
-        if comment is not None:
-            escaped = comment.replace("'", "''")
-            session.run(
-                f"COMMENT ON TABLE {session.target} IS '{escaped}'",
-                step="preserve the table comment",
-            )
-        fault_point("sql.replace.after_publish")
-    return None
+    else:
+        session.create_table_as(
+            session.target, select_sql, step="create the target from the SELECT"
+        )
+        if not computed:
+            add_row_id(session)
+    if comment is not None:
+        escaped = comment.replace("'", "''")
+        session.run(
+            f"COMMENT ON TABLE {session.target} IS '{escaped}'",
+            step="preserve the table comment",
+        )
+    fault_point("sql.replace.after_publish")
 
 
 def _replace_identity(
@@ -144,17 +160,18 @@ def _replace_identity(
     renamed = not existing and not any(
         session.params.get(key) for key in ("EXTERNAL_LOCATION", "BASE_LOCATION")
     )
+    start = session.identity_start()
     if renamed:
-        create_ddl = session.dialect.identity_table_ddl(candidate, columns, session.params)
+        create_ddl = session.dialect.identity_table_ddl(
+            candidate, columns, session.params, start=start
+        )
         publish_ddl = ""
     else:
         create_ddl, publish_ddl = session.dialect.identity_replacement_ddl(
             session.conn,
-            session.target,
-            candidate,
+            IdentityReplacement(session.target, candidate, existing, start),
             columns,
             session.params,
-            existing=existing,
         )
     session.run(create_ddl, step="create the identity replacement")
     result = session.run(
@@ -174,7 +191,8 @@ def _replace_identity(
 def _create_new_table(session: Session, action: ActionContext) -> HandlerResult | None:
     """Create a new transactional table without a replacement stage or key alterations."""
     if (
-        session.target_columns()
+        session.dialect.surrogate_key == "computed"
+        or session.target_columns()
         or action.staged is not None
         or action.task.watermark is not None
         or action.uploads

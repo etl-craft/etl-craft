@@ -9,18 +9,6 @@ def numbered_source(source: str, expression: str, column: str = "ROW_ID") -> str
     return f"(SELECT numbered.*, {expression} AS {column} FROM {source} numbered)"
 
 
-def keyed_source(target: str, stage: str, keys: tuple[str, ...], base: str) -> str:
-    """Allocate new-key identities without multiplying duplicate existing target keys."""
-    match = " AND ".join(f"found.{key}=src.{key}" for key in keys)
-    missing = f"found.{keys[0]} IS NULL"
-    return (
-        f"(SELECT src.*, CASE WHEN {missing} THEN {base} + "
-        f"CAST(ROW_NUMBER() OVER (PARTITION BY {missing} ORDER BY NULL) AS BIGINT) "
-        f"END AS ROW_ID FROM {stage} src LEFT JOIN "
-        f"(SELECT DISTINCT {', '.join(keys)} FROM {target}) found ON {match})"
-    )
-
-
 def internal_column(columns: Sequence[str], name: str) -> str:
     """Keep staging controls distinct from every user column, including quoted case."""
     existing = {column.lower() for column in columns}
@@ -83,7 +71,7 @@ class VersionMerge:
         )
         return f"({close} UNION ALL {insert})"
 
-    def counts(self) -> str:
+    def counts(self, source: str | None = None) -> str:
         """Measure business changes rather than provider-specific MERGE rowcounts."""
         closing = f"CASE WHEN {self.inserting} THEN 0 ELSE 1 END"
         if self.metadata_condition is not None:
@@ -91,7 +79,7 @@ class VersionMerge:
         return (
             f"SELECT COALESCE(SUM({closing}),0) "
             f"AS closed, COALESCE(SUM(CASE WHEN {self.inserting} THEN 1 ELSE 0 END),0) "
-            f"AS inserted FROM {self.source()} changes"
+            f"AS inserted FROM {source or self.source()} changes"
         )
 
     def fallback(self, assignments: Mapping[str, str], metadata: Mapping[str, str]) -> str:

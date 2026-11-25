@@ -61,6 +61,7 @@ from etl_craft.engine.repository.tasks import (
     TargetTask,
 )
 from etl_craft.engine.resource_locks import currently_holds, holder_tag
+from etl_craft.engine.row_ids import reserve_row_ids
 from etl_craft.engine.timestamp_windows import (
     TimestampWindow,
     WindowDefinition,
@@ -109,6 +110,7 @@ class TargetState:
 
     hash_version: int | None
     view_statement: str | None
+    row_id_start: int = 1
 
 
 @dataclass(frozen=True)
@@ -166,6 +168,10 @@ class TaskStore(ResourceLocker, ItemStore, Protocol):
         self, wait_code: str, path: str, digest: tuple[str, int], reason: str | None
     ) -> None:
         """Record this validator's decision on one file its wait admitted in this run."""
+        ...
+
+    def reserve_row_ids(self, target: str, count: int, maximum: int) -> int:
+        """Return the base of a durable reservation for the owned target."""
         ...
 
     def state(self, sql_action: str | None = None) -> TaskState:
@@ -419,6 +425,11 @@ class LocalTaskStore:
             finally:
                 self._contracts.clear()
 
+    def reserve_row_ids(self, target: str, count: int, maximum: int) -> int:
+        """Return the base committed for the new range of target IDs."""
+        lock = locks.target(target, active_catalog(self.config))
+        return reserve_row_ids(self.engine, lock, resource_locks.current_holder(""), count, maximum)
+
     def state(self, sql_action: str | None = None) -> TaskState:
         """Read only metadata belonging to the selected task and its run."""
         from etl_craft.engine.repository.pipelines import (
@@ -510,7 +521,9 @@ class LocalTaskStore:
         row = rows[0]
         target = f"{row.catalog_name}.{row.schema_name}.{row.table_name}"
         contract = TargetState(row.hash_version, row.statement_sha256)
-        if currently_holds(locks.target(target, row.catalog_name).key):
+        if sql_action not in {SqlAction.CREATE_TABLE, SqlAction.SETUP_TABLE} and currently_holds(
+            locks.target(target, row.catalog_name).key
+        ):
             self._contracts[target] = contract
         return TaskState(
             StoredOffset(
@@ -543,7 +556,8 @@ class LocalTaskStore:
             return self._contracts[target.lower()]
         with self.engine.connect() as conn:
             self._assert(conn)
-            return TargetState(*fetch_target_contract(conn, target))
+            lock = locks.target(target, "")
+            return TargetState(*fetch_target_contract(conn, target, lock.key))
 
     def publish(self, publication: TargetPublication) -> None:
         """Publish only after the caller's warehouse commit."""

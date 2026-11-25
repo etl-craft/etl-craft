@@ -24,11 +24,13 @@ from sqlalchemy.exc import SQLAlchemyError, StatementError
 
 from etl_craft.core.enums import SqlAction, TableFormat
 from etl_craft.core.errors import HandlerError, SqlGuardError
+from etl_craft.core.faults import fault_point
 from etl_craft.core.redaction import mask_text
 from etl_craft.core.text import qualify, split_object_ref
 from etl_craft.core.uploads import UploadWriter
 from etl_craft.dialects.warehouse import WarehouseDialect
 from etl_craft.dialects.warehouse.metadata import TableMetadata, ddl_tables, projection_names
+from etl_craft.dialects.warehouse.row_ids import violations_sql
 from etl_craft.engine.repository.offsets import StoredOffset
 
 if TYPE_CHECKING:
@@ -66,6 +68,8 @@ class Session:
         self.protection_active: bool | None = None
         self.protection_store: TaskStore | None = None
         self.protection_requests: list[str] = []
+        self.row_id_range: tuple[int, int] | None = None
+        self.generator_start: int | None = None
         self.uploads: tuple[UploadWriter, ...] = ()
         self.bindings: dict[str, object] = {}
         database, self.schema, self.table = split_object_ref(target_object)
@@ -132,8 +136,11 @@ class Session:
             for row in rows
             if row[0] is not None
         ]
+        generated = next((bool(row[5]) for row in rows if row[5] is not None), None)
+        if generated is not None:
+            self._generators[self.target.lower()] = generated
         for index, name in enumerate(names):
-            self._relations[name.lower()] = rows[0][5 + index] if rows else None
+            self._relations[name.lower()] = rows[0][6 + index] if rows else None
 
     def select_columns(self, name: str, sql: str) -> list[str]:
         """Use explicit parsed aliases, or ask the warehouse about a dynamic projection."""
@@ -461,33 +468,51 @@ class Session:
         if qualified_from in self.scratch_tables:
             self.scratch_tables.remove(qualified_from)
 
-    def row_id_insert_parts(self) -> tuple[str, str]:
-        """Return the extra (columns, values) an INSERT needs where ROW_ID does not fill itself.
-
-        An identity column or a sequence default fills ROW_ID. Targets without a generator
-        supply the largest ROW_ID present plus a row number under the target mutation lock.
-        The base is read before the INSERT when the dialect cannot read its own write target.
-        """
-        if self.row_id_generated():
-            return "", ""
-        base = self.row_id_base()
-        # ORDER BY NULL: Databricks rejects a window with no order.
-        return (
-            f", {ROW_ID_COLUMN}",
-            f", {base} + CAST(ROW_NUMBER() OVER (ORDER BY NULL) AS BIGINT)",
+    def reserve_row_ids(self, count: int, *, existing: bool = True, replacing: bool = False) -> int:
+        """Reserve the exact staged insert count before any IDs are published."""
+        if not count and not (existing and replacing):
+            return 0
+        if self.protection_store is None:
+            raise SqlGuardError(f"{self.target}: missing target owner; use a managed writer")
+        maximum = (
+            self.count(f"SELECT COALESCE(MAX(ROW_ID), 0) FROM {self.target}", step="largest ROW_ID")
+            if existing
+            else 0
         )
-
-    def row_id_base(self) -> str:
-        """Read the computed allocation base inside the target mutation lock."""
-        base = self.dialect.row_id_base_sql(self.target)
-        if base is None:
-            base = str(
-                self.count(
-                    f"SELECT COALESCE(MAX({ROW_ID_COLUMN}), 0) FROM {self.target}",
-                    step="largest ROW_ID",
-                )
-            )
+        base = self.protection_store.reserve_row_ids(self.target, count, maximum)
+        if count:
+            self.row_id_range = (base + 1, base + count)
+            fault_point("sql.row_id.after_reserve")
         return base
+
+    def preserve_row_id_floor(self) -> None:
+        """Keep the largest visible computed ID before this operation removes rows."""
+        if (
+            any(name.lower() == "row_id" for name, _ in self.target_columns())
+            and not self.row_id_generated()
+        ):
+            self.reserve_row_ids(0, replacing=True)
+
+    def verify_row_ids(self) -> None:
+        """Fail the committed attempt if its target exceeds or duplicates the reservation."""
+        if self.row_id_range is None:
+            return
+        start, end = self.row_id_range
+        bad = (
+            self.run(
+                violations_sql(self.target),
+                {"start": start, "end": end, "task_run": self.task_run_id},
+                step="verify committed ROW_ID reservation",
+            )
+            .scalars()
+            .all()
+        )
+        if bad:
+            raise SqlGuardError(
+                f"{self.target}: ROW_ID reservation [{start}, {end}] has offending IDs {bad}; "
+                "inspect the committed target before retrying this attempt"
+            )
+        self.row_id_range = None
 
     def check_target_format(self) -> None:
         """Refuse a format mismatch before creating or evolving an existing target."""
@@ -504,6 +529,19 @@ class Session:
                 f"but this task resolves to {self.dialect.spec.table_format}; set TABLE_FORMAT="
                 f"{existing} or use a different TARGET_OBJECT. Migrate formats explicitly"
             )
+
+    def identity_start(self) -> int:
+        """Read the generator start under the lock for this target."""
+        if self.generator_start is not None:
+            return self.generator_start
+        if self.protection_store is None:
+            return 1
+        start = self.protection_store.target(self.target).row_id_start
+        if start >= 2**63:
+            raise SqlGuardError(
+                f"{self.target}: ROW_ID start {start} exceeds BIGINT; provide a fresh target"
+            )
+        return start
 
     def row_id_generated(self) -> bool:
         """Read the existing target's generator rather than assuming new-table defaults."""

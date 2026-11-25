@@ -43,6 +43,7 @@ from etl_craft.core.protection import PROTECTION_COLUMNS
 from etl_craft.core.text import sha256_hex
 from etl_craft.core.uploads import UploadWriter
 from etl_craft.dialects.warehouse.metadata import projection_names
+from etl_craft.dialects.warehouse.row_ids import row_number
 from etl_craft.dialects.warehouse.uploads import actor_parts, writer_expression
 from etl_craft.handlers.registry import HandlerResult
 from etl_craft.handlers.sql.context import ActionContext
@@ -57,6 +58,7 @@ from etl_craft.handlers.sql.protection_columns import (
 )
 from etl_craft.handlers.sql.rejects import screen
 from etl_craft.handlers.sql.replacement import cleanup, recover_overwrite
+from etl_craft.handlers.sql.row_ids import numbered_merge_source, reserve_stage
 from etl_craft.handlers.sql.session import Session
 from etl_craft.handlers.sql.tables import (
     IDENTITY_COLUMNS,
@@ -108,7 +110,8 @@ def overwrite_table(session: Session, action: ActionContext) -> HandlerResult:
     )
     computed = not session.row_id_generated()
     row_id_columns = ", ROW_ID" if computed else ""
-    row_id_values = ", CAST(ROW_NUMBER() OVER (ORDER BY NULL) AS BIGINT)" if computed else ""
+    base = reserve_stage(session, stage, replacing=True) if computed else 0
+    row_id_values = f", {row_number(base)}" if computed else ""
     select_sql = (
         f"SELECT {columns}, :pipeline_run_id, :pipeline_id, :task_run_id, :now"
         f"{actor_values}{row_id_values} "
@@ -119,7 +122,7 @@ def overwrite_table(session: Session, action: ActionContext) -> HandlerResult:
         f"{actor_columns}{row_id_columns}"
     )
     if strategy == "create_or_replace":
-        ddl = _overwrite_ddl(session, action, stage, written_columns, select_sql)
+        ddl = _overwrite_ddl(session, action, stage, written_columns, select_sql, base)
         fault_point("sql.replace.before_publish")
         result = session.run(ddl, action.stamp, step="atomically overwrite the target")
         if source is None:
@@ -150,7 +153,12 @@ def overwrite_table(session: Session, action: ActionContext) -> HandlerResult:
 
 
 def _overwrite_ddl(
-    session: Session, action: ActionContext, stage: str, written_columns: str, select_sql: str
+    session: Session,
+    action: ActionContext,
+    stage: str,
+    written_columns: str,
+    select_sql: str,
+    base: int,
 ) -> str:
     """Render a replacement against the existing target's exact physical types."""
     writer = writer_expression(action.uploads, "UPLOAD_ID")
@@ -162,7 +170,7 @@ def _overwrite_ddl(
             "task_run_id": "CAST(:task_run_id AS BIGINT) AS TASK_RUN_ID",
             "pipeline_id": "CAST(:pipeline_id AS BIGINT) AS PIPELINE_ID",
             "update_date": f"CAST(:now AS {types['update_date']}) AS UPDATE_DATE",
-            "row_id": "CAST(ROW_NUMBER() OVER (ORDER BY NULL) AS BIGINT) AS ROW_ID",
+            "row_id": f"{row_number(base)} AS ROW_ID",
         }
         if action.uploads:
             managed.update(
@@ -240,6 +248,11 @@ def append_table(session: Session, action: ActionContext) -> HandlerResult:
         if source is not None
         else (stage, None)
     )
+    row_ids = (
+        ("", "")
+        if session.row_id_generated()
+        else (", ROW_ID", f", {row_number(reserve_stage(session, stage, replacing=True))}")
+    )
     if _empties_target(session, action):
         session.run(f"DELETE FROM {session.target}", {}, step="empty the target for a full refresh")
     else:
@@ -250,7 +263,7 @@ def append_table(session: Session, action: ActionContext) -> HandlerResult:
         )
     fault_point("sql.append.after_delete")
     columns = ", ".join(name for name, _ in session.columns(stage))
-    row_id_columns, row_id_values = session.row_id_insert_parts()
+    row_id_columns, row_id_values = row_ids
     actor_columns, actor_values = actor_parts(
         action.uploads, "UPLOAD_ID", (name for name, _ in session.target_columns())
     )
@@ -378,8 +391,8 @@ def scd1_merge(session: Session, action: ActionContext) -> HandlerResult:
     target = session.target
     key_match = _key_match(task.merge_key)
     generated = session.row_id_generated()
-    merge_source = stage if generated else _numbered_merge_source(session, stage, task.merge_key)
     if session.dialect.supports_insert_merge(session.conn):
+        merge_source = stage if generated else numbered_merge_source(session, stage, key_match)
         if new is None:
             new = session.count(
                 f"SELECT COUNT(*) FROM {stage} s WHERE NOT EXISTS "
@@ -496,13 +509,6 @@ def _protection_assignments(
     }
 
 
-def _numbered_merge_source(session: Session, stage: str, keys: tuple[str, ...]) -> str:
-    """Use the existing target generator contract in an atomic merge source."""
-    from etl_craft.dialects.warehouse.merges import keyed_source
-
-    return keyed_source(session.target, stage, keys, session.row_id_base())
-
-
 def scd2_merge(session: Session, action: ActionContext) -> HandlerResult:
     """Close the active version of each changed key and insert a new active version.
 
@@ -576,13 +582,22 @@ def _merge_versions(
     session.bindings["protection_request_id"] = (
         session.protection.request_id if session.protection else None
     )
-    counts = session.run(merge.counts(), step="count version changes").one()
     source = merge.source()
     row_ids = None
     if not session.row_id_generated():
-        _, values = session.row_id_insert_parts()
-        source = numbered_source(source, values.removeprefix(", "), merge.allocated)
+        source = session.create_scratch(
+            session.scratch("scd2_ids"),
+            f"SELECT * FROM {source} changes",
+            step="stage closure rows and successors",
+        )
+        counts = session.run(merge.counts(source), step="count staged version changes").one()
+        base = session.reserve_row_ids(int(counts.inserted))
+        values = row_number(base, f"PARTITION BY {merge.inserting} ")
+        allocated = f"CASE WHEN {merge.inserting} THEN {values} ELSE {merge.matched} END"
+        source = numbered_source(source, allocated, merge.allocated)
         row_ids = (", ROW_ID", f", s.{merge.allocated}")
+    else:
+        counts = session.run(merge.counts(), step="count version changes").one()
     insert = _merge_insert_parts(session, columns, row_ids, uploads=action.uploads)
     session.run(
         merge.statement(source, _version_assignments(action), insert, metadata),
@@ -645,7 +660,15 @@ def _separate_versions(
 def _insert_merge_rows(
     session: Session, action: ActionContext, columns: list[str], body: str, *, step: str
 ) -> int:
-    names, values = _merge_insert_parts(session, columns, uploads=action.uploads)
+    row_ids = None
+    if not session.row_id_generated():
+        stage = session.create_scratch(
+            session.scratch("insert_ids"), f"SELECT s.* {body}", step="stage exact merge inserts"
+        )
+        base = reserve_stage(session, stage)
+        row_ids = (", ROW_ID", f", {row_number(base)}")
+        body = f"FROM {stage} s"
+    names, values = _merge_insert_parts(session, columns, row_ids, uploads=action.uploads)
     return session.mutate(
         f"INSERT INTO {session.target} ({names}) SELECT {values} {body}",
         action.stamp,
@@ -662,7 +685,7 @@ def _merge_insert_parts(
     uploads: tuple[UploadWriter, ...] = (),
 ) -> tuple[str, str]:
     """Share inserted business and audit values between INSERT and MERGE."""
-    row_id_columns, row_id_values = session.row_id_insert_parts() if row_ids is None else row_ids
+    row_id_columns, row_id_values = row_ids or ("", "")
     writer = writer_expression(uploads, "s.UPLOAD_ID")
     business = business_columns(columns)
     if session.protection is not None:
@@ -708,6 +731,7 @@ def drop_table(session: Session, action: ActionContext) -> HandlerResult:
     if session.target_relation_type() is None:
         logger.info("%s does not exist; nothing to drop", session.target)
         return HandlerResult()
+    session.preserve_row_id_floor()
     session.clear_hash_version = True
     session.run(f"DROP TABLE {session.target}", step="drop the target")
     return HandlerResult()

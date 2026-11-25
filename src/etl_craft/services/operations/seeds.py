@@ -27,6 +27,7 @@ from etl_craft.engine.queries import statement
 from etl_craft.engine.repository.hash_versions import clear_hash_version, save_hash_version
 from etl_craft.engine.repository.normalization import object_identity
 from etl_craft.engine.repository.tasks import admitted_parameters, fetch_all_task_parameters
+from etl_craft.engine.task_store import LocalTaskStore
 from etl_craft.handlers.resources import LocalLocker
 from etl_craft.handlers.sql.seed import replace_seed
 from etl_craft.handlers.sql.session import Session
@@ -220,10 +221,11 @@ def _merge(ctx: OperationContext, seed: Seed) -> tuple[SqlAction, tuple[str, ...
 def _load(ctx: OperationContext, seed: Seed) -> bool:
     config = ctx.config
     merge = _merge(ctx, seed)
-    with open_warehouse(config, LocalLocker(ctx.engine, config)) as warehouse:
+    locker = LocalLocker(ctx.engine, config)
+    with open_warehouse(config, locker) as warehouse:
         with warehouse.connect() as conn:
             rows = cast_rows(conn, seed)
-        with warehouse.begin() as conn:
+        with warehouse.connect() as conn:
             session = Session(
                 conn,
                 warehouse_dialect(config),
@@ -233,9 +235,12 @@ def _load(ctx: OperationContext, seed: Seed) -> bool:
                 task_run_id=0,
                 params={},
             )
+            session.protection_store = LocalTaskStore.standalone(ctx.engine, config, locker)
             try:
                 replace_seed(session, seed.columns, rows, merge, ctx.actor.name)
             finally:
                 session.sweep()
+            conn.commit()
+            session.verify_row_ids()
         fault_point("seed.after_warehouse_commit")
     return merge is not None

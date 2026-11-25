@@ -25,6 +25,7 @@ def test_identity_candidate_is_populated_before_rename_or_clone(key, publication
     session.target = "c.s.target"
     session.token = "test"
     session.clear_hash_version = False
+    session.identity_start.return_value = 43
     session.params = (
         {"EXTERNAL_LOCATION": "s3://bucket/target"} if publication == "external" else {}
     )
@@ -83,6 +84,7 @@ def test_identity_candidate_is_populated_before_rename_or_clone(key, publication
         assert session.clear_hash_version is True
     assert events[0].startswith("CREATE TABLE c.s.candidate")
     assert "ROW_ID BIGINT" in events[0]
+    assert "43" in events[0]
     assert events[1] == (
         "INSERT INTO c.s.candidate (id, PIPELINE_RUN_ID, PIPELINE_ID, TASK_RUN_ID) "
         "SELECT s.*, CAST(11 AS BIGINT) AS PIPELINE_RUN_ID, CAST(12 AS BIGINT) AS PIPELINE_ID, "

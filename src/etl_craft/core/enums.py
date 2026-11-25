@@ -772,6 +772,7 @@ class AgentReport(StrEnum):
     ALERT = "ALERT"
     LOCK = "LOCK"
     UNLOCK = "UNLOCK"
+    RESERVE_ROW_IDS = "RESERVE_ROW_IDS"
 
 
 class InputKind(StrEnum):

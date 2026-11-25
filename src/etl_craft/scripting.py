@@ -290,6 +290,9 @@ class ScriptTask:
     _landing: Callable[[], LandingContract | None] | None = field(
         default=None, repr=False, compare=False
     )
+    _reserve_landing_ids: Callable[[str, int, int], int] | None = field(
+        default=None, repr=False, compare=False
+    )
     _item_positions: dict[str, int] = field(default_factory=dict, repr=False, compare=False)
     _warehouse_mutex: RLock = field(default_factory=RLock, repr=False, compare=False)
 

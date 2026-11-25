@@ -21,8 +21,8 @@ from etl_craft.dialects.warehouse.base import (
     ReplaceStrategy,
     SurrogateKey,
     WarehouseDialect,
-    unbounded_varchar,
 )
+from etl_craft.dialects.warehouse.metadata import unbounded_varchar
 from etl_craft.dialects.warehouse.replacement import replacement_ddl
 
 if TYPE_CHECKING:
@@ -53,10 +53,6 @@ class TrinoIcebergWarehouse(WarehouseDialect):
         if expected.upper() == "TIMESTAMP WITH TIME ZONE":
             expected = "TIMESTAMP(6) WITH TIME ZONE"
         return self.same_column_type(actual, expected)
-
-    def row_id_base_sql(self, target: str) -> str:
-        """Read the previous committed snapshot under the target lock."""
-        return f"(SELECT COALESCE(MAX(ROW_ID), 0) FROM {target})"
 
     def session_tag_args(self, tag: str) -> Mapping[str, Any]:
         """Label every query of the session through the client's source."""

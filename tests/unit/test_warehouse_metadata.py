@@ -15,6 +15,7 @@ from etl_craft.dialects.warehouse.metadata import (
     declarable_source,
     projection_names,
 )
+from etl_craft.dialects.warehouse.replacement import IdentityReplacement
 
 pytestmark = pytest.mark.unit
 
@@ -241,6 +242,22 @@ def test_source_types_with_inherited_collation_require_catalog_metadata(sql, exp
     assert declarable_source(sql, "postgres") is expected
 
 
+@pytest.mark.parametrize(
+    ("key", "generator"),
+    [
+        ("postgres", "IDENTITY (START WITH 43)"),
+        ("duckdb", "START 43"),
+        ("snowflake", "AUTOINCREMENT START 43 INCREMENT 1"),
+        ("databricks", "IDENTITY (START WITH 43)"),
+    ],
+)
+def test_native_row_id_generator_starts_above_the_reserved_floor(key, generator):
+    dialect = for_key(key)
+    ddl = dialect.identity_table_ddl("c.s.target", "id BIGINT", {}, start=43)
+    setup = dialect.identity_setup_sql("c.s.target", start=43)
+    assert generator in "\n".join((*setup, ddl))
+
+
 @pytest.mark.parametrize("key", ["snowflake", "databricks"])
 @pytest.mark.parametrize("existing", [False, True])
 def test_identity_replacement_keeps_generator_and_publishes_only_from_candidate(key, existing):
@@ -254,7 +271,7 @@ def test_identity_replacement_keeps_generator_and_publishes_only_from_candidate(
         f"CREATE TABLE c.s.target (id BIGINT, ROW_ID BIGINT {identity}) COMMENT 'preserved'"
     )
     create, publish = for_key(key).identity_replacement_ddl(
-        conn, "c.s.target", "c.s.candidate", "id BIGINT", {}, existing=existing
+        conn, IdentityReplacement("c.s.target", "c.s.candidate", existing), "id BIGINT", {}
     )
     assert create.startswith("CREATE TABLE c.s.candidate")
     assert "ROW_ID BIGINT" in create
@@ -276,11 +293,9 @@ def test_existing_delta_identity_replacement_refuses_a_new_external_location_bef
     ):
         for_key("databricks").identity_replacement_ddl(
             conn,
-            "c.s.target",
-            "c.s.candidate",
+            IdentityReplacement("c.s.target", "c.s.candidate", existing=True),
             "id BIGINT",
             {"EXTERNAL_LOCATION": "s3://new"},
-            existing=True,
         )
     conn.execute.assert_not_called()
 

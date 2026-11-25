@@ -6,6 +6,8 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+- Fixed: ROW_IDs are no longer reused after a target is replaced or emptied.
+
 - Fixed: catalog comparisons omit the staged upload control `LOCKED` from inferred merge
   target columns.
 
