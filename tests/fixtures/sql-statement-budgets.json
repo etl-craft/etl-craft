@@ -1,8 +1,8 @@
 {
   "attempt": {
-    "engine_connections": 8,
-    "engine_statements": 89,
-    "engine_transactions": 24,
+    "engine_connections": 9,
+    "engine_statements": 91,
+    "engine_transactions": 25,
     "warehouse_connections": 1,
     "warehouse_statements": 5
   },
