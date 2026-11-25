@@ -187,7 +187,7 @@ def test_pipeline_header_distinguishes_partial_runs_and_unscheduled_triggers(sit
 
 
 def test_checklist_filters_pick_tasks_task_states_and_run_states(workspace):
-    url, order, current, failed, _first, _ = workspace
+    url, order, _current, failed, _first, _ = workspace
     expect.set_options(timeout=12000)
     with sync_playwright() as pw:
         browser, page, problems = open_page(pw, viewport={"width": 1440, "height": 900})

@@ -96,9 +96,12 @@ function TaskDetails({ code, pipeline, run, task, handler, cell, tab, tryNumber,
 }) {
   const panel = React.useRef<HTMLElement>(null);
   React.useLayoutEffect(() => {
-    panel.current?.closest("[data-scroll-area]")?.scrollTo(0, 0);
+    const area = panel.current?.closest("[data-scroll-area]");
+    area?.scrollTo(0, 0);
+    // Stacked on a phone, bring the details card into view only when it is off-screen; scrolling it to the
+    // very top would carry it away again as the content above it settles.
     if (window.matchMedia("(max-width: 1023px)").matches) {
-      panel.current?.scrollIntoView({ block: "start" });
+      (area?.parentElement ?? panel.current)?.scrollIntoView({ block: "nearest" });
     }
   }, []);
   const runId = run.pipeline_run_id;

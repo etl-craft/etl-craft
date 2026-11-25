@@ -1018,8 +1018,9 @@ def test_pipeline_list_shows_dependencies_and_links_the_latest_run(scene):
         assert "?run=" in latest.get_attribute("href")
         page.evaluate("document.fonts.ready")
         latest.click()
-        expect(page.get_by_role("tab", name=re.compile(r"^Run #"))).to_have_attribute(
-            "aria-selected", "true"
-        )
+        # The latest run opens selected: its path row replaces the pipeline's tabs.
+        expect(
+            page.get_by_role("navigation", name="Selection").get_by_text(re.compile(r"^Run #"))
+        ).to_be_visible()
         assert problems == []
         browser.close()
