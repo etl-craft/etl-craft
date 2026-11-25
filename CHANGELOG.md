@@ -6,6 +6,9 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+- Fixed: deploy and validate now tell the caller to ask an administrator to run
+  `etl-craft alert-channel set` when an alert task names a missing or inactive channel.
+
 - Fixed: `--api` commands that outlive the read deadline now wait for actions designed to run
   longer, including deployments and warehouse maintenance. Connection and request-send timeouts
   remain in force. Other actions whose response stalls after the request was sent exit 33

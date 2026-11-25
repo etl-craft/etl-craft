@@ -39,7 +39,9 @@ recipients; `WEBHOOK` and `SLACK` take only the two secret variable names. Mixin
 refused. `--default-alert-on` is the event list a task uses when it sets no `ALERT_ON`; it
 defaults to `FAILURE`. API routes are `GET/POST /api/v1/alert-channels` and
 `POST /api/v1/alert-channels/disable`, all admin-only. Channels are not config files:
-`deploy` and `config export` neither change nor export them.
+`deploy` and `config export` neither change nor export them. Before deploying a task that names
+a channel, have an administrator create or enable the channel with `etl-craft alert-channel set`.
+Deploy and validate report the task and channel when the channel is missing or inactive.
 
 `URL_SECRET` and `SIGNING_SECRET` are **variable names**, resolved through the secrets provider
 when the alert sends, never literal values. The signing key must contain at least 32 UTF-8

@@ -631,7 +631,8 @@ def _alert(conn: Connection, context: TaskContext, data: _Metadata) -> list[str]
     if channel is None or channel.active_flag != YesNo.YES:
         return [
             f"ALERT_CHANNEL={name!r}: missing or inactive; "
-            "ask an administrator to configure the project channel"
+            "ask an administrator to create or enable the project channel with "
+            "`etl-craft alert-channel set`"
         ]
     triggers(params.get("ALERT_ON", channel.default_alert_on))
     kind = AlertKind(channel.kind)
