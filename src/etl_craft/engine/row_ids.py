@@ -2,17 +2,23 @@
 
 from sqlalchemy.engine import Engine
 
+from etl_craft.config import ConnectorConfig
+from etl_craft.config.targets import active_catalog
 from etl_craft.core.errors import StaleTransitionError, UsageError
+from etl_craft.engine import locks
 from etl_craft.engine.agent_state import fence
-from etl_craft.engine.locks import ResourceLock
+from etl_craft.engine.protection_events import target_identity
 from etl_craft.engine.queries import statement
-from etl_craft.engine.resource_locks import Holder
+from etl_craft.engine.resource_locks import current_holder
 
 
 def reserve_row_ids(
-    engine: Engine, lock: ResourceLock, holder: Holder, count: int, maximum: int
+    engine: Engine, config: ConnectorConfig, target: str, count: int, maximum: int
 ) -> int:
     """Commit exactly count identities and return the base preceding the reserved range."""
+    holder = current_holder("")
+    _, physical = target_identity(config, target)
+    lock = locks.target(physical, active_catalog(config))
     subject = f"attempt {holder.attempt_id}, {lock.name}"
     if count < 0 or maximum < 0:
         raise UsageError(

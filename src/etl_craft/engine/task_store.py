@@ -427,11 +427,7 @@ class LocalTaskStore:
 
     def reserve_row_ids(self, target: str, count: int, maximum: int) -> int:
         """Return the base committed for the new range of target IDs."""
-        from etl_craft.engine.protection_events import target_identity
-
-        _, physical = target_identity(self.config, target)
-        lock = locks.target(physical, active_catalog(self.config))
-        return reserve_row_ids(self.engine, lock, resource_locks.current_holder(""), count, maximum)
+        return reserve_row_ids(self.engine, self.config, target, count, maximum)
 
     def state(self, sql_action: str | None = None) -> TaskState:
         """Read only metadata belonging to the selected task and its run."""
