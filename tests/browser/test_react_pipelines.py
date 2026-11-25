@@ -521,6 +521,15 @@ def test_the_newest_grid_run_is_on_the_right_with_readable_status_symbols(scene)
     _, url, active = scene
     with sync_playwright() as pw:
         browser, page, problems = open_page(pw)
+        histories = []
+        page.on(
+            "request",
+            lambda request: (
+                histories.append(request.url)
+                if "/projects/default/history?" in request.url
+                else None
+            ),
+        )
         sign_in(page, url, "/ui/projects/default/pipelines/SALES")
         newest = page.get_by_role("table", name="Run grid").locator("thead th a").last
         expect(newest).to_have_attribute("href", re.compile(rf"/pipelines/SALES\?run={active}$"))
@@ -530,6 +539,7 @@ def test_the_newest_grid_run_is_on_the_right_with_readable_status_symbols(scene)
             .first
         )
         expect(square).to_be_visible()
+        assert len(histories) == 1 and "cells=true" in histories[0]
         size = square.bounding_box()
         assert size["width"] >= 24 and size["height"] >= 24
         assert problems == []
@@ -982,6 +992,15 @@ def test_pipeline_list_shows_dependencies_and_links_the_latest_run(scene):
         add_pipeline_dependency(conn, pipelines["OPS"], pipelines["SALES"], "HAS_DATA")
     with sync_playwright() as pw:
         browser, page, problems = open_page(pw, viewport={"width": 1440, "height": 900})
+        capabilities = []
+        page.on(
+            "request",
+            lambda request: (
+                capabilities.append(request.url)
+                if "/projects/default/capabilities?" in request.url
+                else None
+            ),
+        )
         sign_in(page, url, "/ui/projects/default/pipelines")
         table = page.get_by_role("table", name="Pipelines")
         for column in ("Description", "Schedule", "Waits for", "Last run", "Recent success"):
@@ -992,6 +1011,10 @@ def test_pipeline_list_shows_dependencies_and_links_the_latest_run(scene):
             ).to_be_visible()
         row = table.get_by_role("row").filter(has=page.get_by_role("link", name="OPS", exact=True))
         expect(row.get_by_text("SALES (HAS_DATA)", exact=True)).to_be_visible()
+        expect(page.get_by_role("button", name="Refresh all")).to_have_accessible_description(
+            re.compile("standalone pipeline refresh requires RELAXED")
+        )
+        assert len(capabilities) == 1 and "pipeline_codes=" in capabilities[0]
         latest = row.get_by_role("link", name=re.compile(r"^#\d+$"))
         assert "?run=" in latest.get_attribute("href")
         page.evaluate("document.fonts.ready")

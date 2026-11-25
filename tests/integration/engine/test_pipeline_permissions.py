@@ -70,6 +70,53 @@ def grant(ctx, *, tag=False):
         )
 
 
+def test_grid_and_capability_batch_hide_inaccessible_pipeline(scene):
+    ctx, _, token, _, open_id, _, private_run, _ = scene
+    with acting_as(OWNER), ctx.engine.begin() as conn:
+        task = add_task(conn, open_id, "visible")
+        run_id = transitions.create_run(conn, open_id, OWNER)
+        task_run(conn, task, run_id)
+    api = TestClient(create_app(ctx))
+    headers = {"Authorization": "Bearer " + token}
+    path = "/api/v1/projects/default"
+    grid = {"all": True, "cells": True}
+    definition = {"definition": True}
+    for endpoint, params in (("history", grid), ("capabilities", definition)):
+        denied = api.get(
+            f"{path}/{endpoint}", headers=headers, params={**params, "pipeline_code": "PRIVATE"}
+        )
+        assert denied.status_code == 404
+    visible = api.get(
+        f"{path}/history",
+        headers=headers,
+        params={
+            **grid,
+            "pipeline_code": "OPEN",
+            "extra_run_id": private_run,
+        },
+    ).json()
+    assert visible["extra_run"] is None
+    assert [(cell["task_code"], cell["pipeline_run_id"]) for cell in visible["cells"]] == [
+        ("visible", run_id)
+    ]
+    assert "attempts" not in visible["cells"][0]
+    batch = api.get(
+        f"{path}/capabilities",
+        headers=headers,
+        params={
+            **definition,
+            "pipeline_codes": ["PRIVATE", "OPEN"],
+        },
+    ).json()
+    assert set(batch["pipelines"]) == {"OPEN"}
+    single = api.get(
+        f"{path}/capabilities", headers=headers, params={**definition, "pipeline_code": "OPEN"}
+    ).json()
+    scoped = [a for a in batch["pipelines"]["OPEN"] if a["action"] != ActionName.CONTROL_BULK]
+    assert scoped == single["actions"]
+    assert "PRIVATE" not in json.dumps(batch)
+
+
 @pytest.mark.parametrize("tag", [False, True])
 def test_direct_and_tag_grants_filter_lists_and_elevate_only_members(scene, tag):
     ctx, reader, token, _, _, _, run_id, _ = scene

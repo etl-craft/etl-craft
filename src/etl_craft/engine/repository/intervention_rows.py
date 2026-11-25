@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
-from sqlalchemy import Boolean
+from sqlalchemy import Boolean, bindparam
 from sqlalchemy.engine import Connection
 
 from etl_craft.core.actor import current_actor
@@ -111,14 +111,11 @@ def fetch_task_rows(conn: Connection, pipeline_run_id: int) -> list[TaskRow]:
     ]
 
 
-def fetch_interventions(
-    conn: Connection, pipeline_id: int, first_run_id: int
-) -> list[Intervention]:
-    """Return the changes to the runs of ``pipeline_id`` from ``first_run_id`` on, oldest first."""
+def fetch_interventions(conn: Connection, run_ids: set[int]) -> list[Intervention]:
+    """Return changes to the listed runs, oldest first."""
+    if not run_ids:
+        return []
+    query = statement(conn, "run_interventions").bindparams(bindparam("run_ids", expanding=True))
     return [
-        Intervention(**row._mapping)
-        for row in conn.execute(
-            statement(conn, "run_interventions"),
-            {"pipeline_id": pipeline_id, "first_run_id": first_run_id},
-        )
+        Intervention(**row._mapping) for row in conn.execute(query, {"run_ids": sorted(run_ids)})
     ]

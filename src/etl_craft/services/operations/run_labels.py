@@ -7,6 +7,7 @@ from sqlalchemy import bindparam
 
 from etl_craft.engine.queries import statement
 from etl_craft.services.operations.context import OperationContext
+from etl_craft.services.operations.models import GridCell
 from etl_craft.services.operations.permissions import pipeline_access
 
 PAIRS = {
@@ -31,6 +32,8 @@ OPAQUE = frozenset(
 
 
 def _records(value: object) -> list[Mapping[str, object]]:
+    if isinstance(value, GridCell):
+        return []
     if is_dataclass(value) and not isinstance(value, type):
         record = {f.name: getattr(value, f.name) for f in fields(value)}
         return [
@@ -80,6 +83,8 @@ def with_run_labels(ctx: OperationContext, result: object) -> object:
 
 
 def _labelled(value: object, labels: dict[str, dict[int, str]]) -> object:
+    if isinstance(value, GridCell):
+        return value
     if is_dataclass(value) and not isinstance(value, type):
         original = {f.name: getattr(value, f.name) for f in fields(value)}
         updated = _labelled(original, labels)

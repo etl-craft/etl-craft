@@ -8,7 +8,7 @@ SELECT p.PIPELINE_ID AS pipeline_id, p.PIPELINE_CODE AS pipeline_code,
        r.ENDED_BY AS ended_by, r.ENDED_BY_KIND AS ended_by_kind
 FROM AUD_PIPELINES_RUN_LOG r
 JOIN CFG_PIPELINES p ON p.PIPELINE_ID = r.PIPELINE_ID
-WHERE r.PIPELINE_ID = :pipeline_id
+WHERE r.PIPELINE_ID IN :pipeline_ids
 AND (CAST(:run_id AS bigint) IS NULL OR r.PIPELINE_RUN_ID = :run_id)
 AND (CAST(:before AS bigint) IS NULL OR r.PIPELINE_RUN_ID < :before)
 AND ((CAST(:pool AS varchar) IS NULL AND CAST(:agent AS varchar) IS NULL

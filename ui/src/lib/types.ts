@@ -71,7 +71,21 @@ export interface TimelineSegment {
   deadline: string | null;
 }
 
+export interface GridCell {
+  task_code: string;
+  task_run_id: number;
+  pipeline_run_id: number;
+  status: string;
+  attempt_count: number;
+  attempt_id: number | null;
+  start_date: string | null;
+  end_date: string | null;
+  task_run_label: string;
+}
+
 export interface History {
+  cells?: GridCell[];
+  extra_run?: RunView | null;
   entries: RunView[];
   before: number | null;
 }

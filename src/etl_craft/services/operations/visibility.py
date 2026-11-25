@@ -9,7 +9,7 @@ from etl_craft.engine.queries import statement
 from etl_craft.services.lineage import Edge, TaskLineage
 from etl_craft.services.operations.context import OperationContext
 from etl_craft.services.operations.diagnostics import LineageView
-from etl_craft.services.operations.models import GraphView, RunView, TaskRunView
+from etl_craft.services.operations.models import GraphView, GridCell, RunView, TaskRunView
 from etl_craft.services.operations.permissions import PipelineAccess, pipeline_access
 from etl_craft.services.operations.status import DependencyView
 
@@ -71,7 +71,7 @@ def _visible(
                 for task, dependencies in value.depends_on.items()
             },
         )
-    if is_dataclass(value) and not isinstance(value, type):
+    if is_dataclass(value) and not isinstance(value, (type, GridCell)):
         return replace(
             value,
             **{f.name: _visible(conn, ctx, access, getattr(value, f.name)) for f in fields(value)},

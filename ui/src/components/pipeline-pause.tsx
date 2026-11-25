@@ -14,13 +14,19 @@ type Choice = "PAUSE" | "RESUME" | "REPLACE";
  * with the server's reason when unavailable. The confirmations live outside the menu, which closes
  * when an item is chosen.
  */
-export function PipelinePause({ code, pipeline }: { code: string; pipeline: Pipeline }) {
+export function PipelinePause({ code, pipeline, batchCodes }: { code: string; pipeline: Pipeline; batchCodes?: string[] }) {
   const [then, setThen] = useState("wait");
   const [activeRuns, setActiveRuns] = useState<ActiveRuns>("DRAIN");
   const [open, setOpen] = useState<Choice | null>(null);
-  const availability = useActionAvailability(code, pipeline.pipeline_code);
+  const availability = useActionAvailability(
+    code, batchCodes ? undefined : pipeline.pipeline_code, !batchCodes,
+    batchCodes ? { pipeline_codes: batchCodes } : undefined,
+  );
+  const data = batchCodes
+    ? { actions: availability.data?.pipelines?.[pipeline.pipeline_code] ?? [] }
+    : availability.data;
   const reason = (action: string, replacement = false) =>
-    unavailableAction(availability, "/controls", "POST", { action, replacement });
+    unavailableAction({ ...availability, data }, "/controls", "POST", { action, replacement });
   const policy = (
     <SelectField label="Active runs" value={activeRuns} onChange={(value) => setActiveRuns(value as ActiveRuns)}>
       <option value="DRAIN">Stop active runs at the next task</option>

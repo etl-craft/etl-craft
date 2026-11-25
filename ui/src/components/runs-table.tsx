@@ -24,12 +24,12 @@ export interface RunFilters {
 }
 
 /** A project's runs, or one pipeline's, newest first, a page at a time; every view of the runs shares it. */
-export function useRuns(code: string, pipeline?: string, filters: RunFilters = {}) {
+export function useRuns(code: string, pipeline?: string, filters: RunFilters = {}, grid?: { limit: number; selected?: number }) {
   const runs = useInfiniteQuery({
-    queryKey: ["runs", code, pipeline ?? "", filters.pool ?? "", filters.agent ?? "", filters.failure_class ?? ""],
+    queryKey: ["runs", code, pipeline ?? "", filters.pool ?? "", filters.agent ?? "", filters.failure_class ?? "", ...(grid ? [grid] : [])],
     initialPageParam: undefined as number | undefined,
-    queryFn: ({ pageParam }) => getJson<History>(`${project(code)}/history`, { all: true, limit: PAGE, pipeline_code: pipeline, before: pageParam, pool: filters.pool, agent: filters.agent, failure_class: filters.failure_class }),
-    getNextPageParam: (last) => last.before ?? (last.entries.length >= PAGE ? last.entries[last.entries.length - 1]?.pipeline_run_id : undefined),
+    queryFn: ({ pageParam }) => getJson<History>(`${project(code)}/history`, { all: true, limit: grid?.limit ?? PAGE, cells: grid ? true : undefined, extra_run_id: pageParam === undefined ? grid?.selected : undefined, pipeline_code: pipeline, before: pageParam, pool: filters.pool, agent: filters.agent, failure_class: filters.failure_class }),
+    getNextPageParam: (last) => last.before ?? (!grid && last.entries.length >= PAGE ? last.entries[last.entries.length - 1]?.pipeline_run_id : undefined),
     refetchInterval: 15_000,
   });
   const all = React.useMemo(() => runs.data?.pages.flatMap((page) => page.entries) ?? [], [runs.data]);

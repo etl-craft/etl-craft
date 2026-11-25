@@ -6,7 +6,8 @@ from collections.abc import Generator, Iterator
 from dataclasses import replace
 from datetime import UTC, datetime
 
-from sqlalchemy import Boolean
+from sqlalchemy import Boolean, bindparam
+from sqlalchemy.engine import Connection
 
 from etl_craft.core.enums import ApiRole, RunCondition, RunStatus
 from etl_craft.core.errors import ConfigurationError, ResourceNotFoundError
@@ -49,6 +50,7 @@ from etl_craft.services.operations.models import (
     AttemptView,
     AuditView,
     GraphView,
+    GridCell,
     HistoryView,
     MetadataChangeView,
     PipelineListView,
@@ -76,6 +78,7 @@ from etl_craft.services.operations.snapshots import (
     run_document,
     run_view,
     task_document,
+    timestamp,
 )
 
 
@@ -190,100 +193,122 @@ def run_history(ctx: OperationContext, request: HistoryInput) -> HistoryView:
     if request.pipeline_code is not None and not request.tag:
         return _pipeline_history(ctx, request)
     with read_snapshot(ctx.engine) as conn:
-        pipeline_id = (
-            None
-            if request.pipeline_code is None
-            else resolve_pipeline_id(conn, request.pipeline_code)
-        )
         codes = visible_codes(conn, ctx, tagged_pipelines(conn, request.tag))
-    if request.pipeline_code is not None:
-        if request.tag and request.pipeline_code not in codes:
-            return HistoryView(pipeline_id, request.pipeline_code, request.task_code, (), ())
-        return _pipeline_history(ctx, request)
-    histories = [
-        _pipeline_history(ctx, replace(request, pipeline_code=code, tag=(), all=True))
-        for code in codes
-    ]
-    entries = sorted(
-        (entry for h in histories for entry in h.entries),
-        key=lambda r: r.pipeline_run_id,
-        reverse=True,
-    )
-    more = len(entries) > request.limit or any(h.before is not None for h in histories)
-    entries = entries[: request.limit]
-    listed = {entry.pipeline_run_id for entry in entries}
-    return HistoryView(
-        None,
-        None,
-        None,
-        tuple(entries),
-        tuple(
-            change for h in histories for change in h.changes if change.pipeline_run_id in listed
-        ),
-        entries[-1].pipeline_run_id if more and entries else None,
-    )
+        if request.pipeline_code is not None:
+            pipeline_id = resolve_pipeline_id(conn, request.pipeline_code)
+            if request.pipeline_code not in codes:
+                return HistoryView(pipeline_id, request.pipeline_code, request.task_code, (), ())
+            return _read_history(conn, request, (pipeline_id,))
+        return _read_history(conn, replace(request, all=True), tuple(codes.values()))
 
 
 def _pipeline_history(ctx: OperationContext, request: HistoryInput) -> HistoryView:
-    """Read bounded history; selection never falls back to the most recent ended run.
-
-    Entries come newest run first; the view's ``before`` is the next page's cursor, or ``None``
-    on the last page.
-    """
-    pipeline_code, task_code, limit = request.pipeline_code, request.task_code, request.limit
-    all_runs, before, selector = request.all, request.before, request.selector
-    assert pipeline_code is not None
+    assert request.pipeline_code is not None
     with read_snapshot(ctx.engine) as conn:
-        pipeline_id = resolve_pipeline_id(conn, pipeline_code)
-        selected = None if all_runs else select_run(conn, pipeline_id, selector)
-        parameters = {
-            "pipeline_id": pipeline_id,
-            "limit": limit + 1,
-            "run_id": None if selected is None else selected.pipeline_run_id,
-            "before": before,
-            "pool": request.pool,
-            "agent": None if request.agent is None else str(request.agent),
-            "failure_class": request.failure_class,
-        }
-        entries: tuple[RunView | TaskRunView, ...]
-        if task_code is None:
-            entries = tuple(
-                run_document(row._mapping)
-                for row in conn.execute(statement(conn, "pipeline_run_history"), parameters)
-            )
-        else:
-            parameters["task_id"] = resolve_task_id(conn, pipeline_id, task_code)
-            entries = tuple(
-                task_document(conn, row._mapping)
-                for row in conn.execute(statement(conn, "task_run_history"), parameters)
-            )
-        more, entries = len(entries) > limit, entries[:limit]
-        listed = {entry.pipeline_run_id for entry in entries}
-        changes = (
-            ()
-            if not listed
-            else tuple(
-                replace(change, requested_at=as_utc(change.requested_at))
-                for change in fetch_interventions(conn, pipeline_id, min(listed))
-                if change.pipeline_run_id in listed
-                and (task_code is None or change.task_code in (None, task_code))
+        pipeline_id = resolve_pipeline_id(conn, request.pipeline_code)
+        return _read_history(conn, request, (pipeline_id,))
+
+
+def _read_history(
+    conn: Connection, request: HistoryInput, pipeline_ids: tuple[int, ...]
+) -> HistoryView:
+    pipeline_id = pipeline_ids[0] if request.pipeline_code is not None else None
+    task_code, limit = request.task_code, request.limit
+    selected = (
+        None
+        if request.all or pipeline_id is None
+        else select_run(conn, pipeline_id, request.selector).pipeline_run_id
+    )
+    parameters: dict[str, object] = {
+        "limit": limit + 1,
+        "run_id": selected,
+        "before": request.before,
+        "pool": request.pool,
+        "agent": None if request.agent is None else str(request.agent),
+        "failure_class": request.failure_class,
+    }
+    entries: tuple[RunView | TaskRunView, ...]
+    if task_code is None:
+        entries = _history_runs(conn, pipeline_ids, parameters)
+    else:
+        assert pipeline_id is not None
+        entries = tuple(
+            task_document(conn, row._mapping)
+            for row in conn.execute(
+                statement(conn, "task_run_history"),
+                {
+                    **parameters,
+                    "pipeline_id": pipeline_id,
+                    "task_id": resolve_task_id(conn, pipeline_id, task_code),
+                },
             )
         )
-        return HistoryView(
-            pipeline_id,
-            pipeline_code,
-            task_code,
-            entries,
-            changes,
-            entries[-1].pipeline_run_id if more else None,
-            rules=tuple(
-                r
-                for r in fetch_rule_observations(
-                    conn, pipeline_id, None if selected is None else selected.pipeline_run_id
-                )
-                if task_code is None or r.task_code == task_code
-            ),
+    more, entries = len(entries) > limit, entries[:limit]
+    listed = {entry.pipeline_run_id for entry in entries}
+    changes = tuple(
+        replace(change, requested_at=as_utc(change.requested_at))
+        for change in fetch_interventions(conn, listed)
+        if task_code is None or change.task_code in (None, task_code)
+    )
+    extra: tuple[RunView, ...] = ()
+    if request.extra_run_id is not None and request.extra_run_id not in listed:
+        extra = _history_runs(
+            conn,
+            pipeline_ids,
+            dict.fromkeys(parameters) | {"run_id": request.extra_run_id, "limit": 1},
         )
+        listed.update(run.pipeline_run_id for run in extra)
+    return HistoryView(
+        pipeline_id,
+        request.pipeline_code,
+        task_code,
+        entries,
+        changes,
+        entries[-1].pipeline_run_id if more else None,
+        rules=tuple(
+            r
+            for r in fetch_rule_observations(conn, pipeline_id, selected)
+            if task_code is None or r.task_code == task_code
+        )
+        if pipeline_id is not None and not request.cells
+        else (),
+        cells=_history_cells(conn, listed) if request.cells else (),
+        extra_run=extra[0] if extra else None,
+    )
+
+
+def _history_runs(
+    conn: Connection, pipeline_ids: tuple[int, ...], parameters: dict[str, object]
+) -> tuple[RunView, ...]:
+    if not pipeline_ids:
+        return ()
+    query = statement(conn, "pipeline_run_history").bindparams(
+        bindparam("pipeline_ids", expanding=True)
+    )
+    return tuple(
+        run_document(row._mapping)
+        for row in conn.execute(query, parameters | {"pipeline_ids": pipeline_ids})
+    )
+
+
+def _history_cells(conn: Connection, run_ids: set[int]) -> tuple[GridCell, ...]:
+    if not run_ids:
+        return ()
+    query = statement(conn, "history_cells").bindparams(bindparam("run_ids", expanding=True))
+    return tuple(
+        GridCell(
+            row.task_code,
+            row.task_run_id,
+            row.pipeline_run_id,
+            RunStatus(row.status),
+            row.attempt_count,
+            row.attempt_id,
+            timestamp(row.start_date),
+            timestamp(row.end_date),
+            row.task_run_label,
+        )
+        for row in conn.execute(query, {"run_ids": sorted(run_ids)})
+    )
 
 
 def audit(ctx: OperationContext, request: AuditInput) -> AuditView:

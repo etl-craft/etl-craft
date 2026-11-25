@@ -431,6 +431,37 @@ def test_run_history_cursor_is_bounded_and_exact(api):
     assert last["before"] is None
 
 
+def test_grid_reads_extra_run_and_cells_without_moving_cursor(api):
+    ctx, client, creds, first, attempt = api
+    from fixtures.metadata import finish_run
+
+    with ctx.engine.begin() as conn:
+        pipeline = conn.execute(
+            text("SELECT PIPELINE_ID AS id FROM CFG_PIPELINES WHERE PIPELINE_CODE='P'")
+        ).scalar_one()
+        finish_run(conn, first)
+        second = start_run(conn, pipeline)
+    response = client.get(
+        "/api/v1/projects/default/history",
+        headers=headers(creds["viewer"]),
+        params={
+            "pipeline_code": "P",
+            "all": True,
+            "cells": True,
+            "limit": 1,
+            "extra_run_id": first,
+        },
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["before"] == second
+    assert [r["pipeline_run_id"] for r in body["entries"]] == [second]
+    assert body["extra_run"]["pipeline_run_id"] == first
+    (cell,) = body["cells"]
+    assert (cell["task_code"], cell["pipeline_run_id"], cell["attempt_id"]) == ("T", first, attempt)
+    assert cell["task_run_label"]
+
+
 def test_token_changes_are_not_captured_and_accept_no_project_scope(api):
     ctx, client, creds, _run, _attempt = api
     with ctx.engine.begin() as conn:

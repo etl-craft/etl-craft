@@ -290,6 +290,8 @@ class HistoryInput(RunFilter):
     all: bool = False
     limit: int = 20
     before: int | None = None
+    cells: bool = False
+    extra_run_id: int | None = None
     pool: str | None = None
     agent: int | None = None
     failure_class: FailureClass | None = None
@@ -299,6 +301,12 @@ class HistoryInput(RunFilter):
         super().__post_init__()
         optional_text("task_code", self.task_code)
         optional_text("pool", self.pool)
+        if self.cells and (self.pipeline_code is None or self.task_code is not None):
+            raise UsageError("`cells` needs `pipeline_code` and no `task_code`; select a pipeline")
+        if self.extra_run_id is not None and (
+            not self.cells or not self.all or self.extra_run_id < 1
+        ):
+            raise UsageError("`extra_run_id` needs a positive run id with `all` and `cells`")
         if (self.pool, self.agent, self.failure_class) != (None, None, None) and (
             self.task_code is not None or not self.all
         ):
@@ -621,13 +629,15 @@ class ControlRequest(RunSelection):
 class BulkControlRequest(Request):
     """A bounded explicit selection whose objects succeed or fail independently."""
 
+    MAX_REQUESTS: ClassVar[int] = 100
     requests: tuple[ControlRequest, ...]
 
     def __post_init__(self) -> None:
         """Every object names its run and key, so no object falls back to an active run."""
-        if not 1 <= len(self.requests) <= 100:
+        if not 1 <= len(self.requests) <= self.MAX_REQUESTS:
             raise UsageError(
-                f"`requests` has {len(self.requests)} objects; give 1 to 100 explicit objects"
+                f"`requests` has {len(self.requests)} objects; "
+                f"give 1 to {self.MAX_REQUESTS} explicit objects"
             )
         for request in self.requests:
             if request.action in DEFINITION_CONTROLS:

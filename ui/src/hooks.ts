@@ -61,7 +61,7 @@ export type AvailabilityTarget = { account_name?: string; account_role?: string;
 export function useActionAvailability(code?: string, pipeline?: string, enabled = true, target?: AvailabilityTarget) {
   return useQuery({
     queryKey: ["action-availability", code, pipeline, target],
-    queryFn: () => getJson<{ actions: ActionAvailability[] }>(
+    queryFn: () => getJson<{ actions: ActionAvailability[]; pipelines?: Record<string, ActionAvailability[]> }>(
       code ? `${project(code)}/capabilities` : "/api/v1/capabilities",
       code ? { definition: true, pipeline_code: pipeline, pipeline_codes: target?.pipeline_codes, with_warehouse: target?.with_warehouse, preview_table: target?.preview_table, rehash_target: target?.rehash_target, binding_tag: target?.binding_tag, task_code: target?.task_code, run_id: target?.run_id, reset_position: target?.reset_position, attempt_id: target?.attempt_id } : target,
     ),
@@ -69,7 +69,9 @@ export function useActionAvailability(code?: string, pipeline?: string, enabled 
   });
 }
 
-export function unavailableAction(query: ReturnType<typeof useActionAvailability>, endpoint: string, method = "POST", control?: { action: string; replacement?: boolean }) {
+export type AvailabilityRead = Pick<ReturnType<typeof useActionAvailability>, "data" | "error" | "isPending">;
+
+export function unavailableAction(query: AvailabilityRead, endpoint: string, method = "POST", control?: { action: string; replacement?: boolean }) {
   const answer = query.data?.actions.find((action) =>
     action.endpoint === "/api/v1" + endpoint && action.method === method
     && (!control || (action.control === control.action && !!action.replacement === !!control.replacement)),

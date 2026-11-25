@@ -316,6 +316,21 @@ class StepsView:
 
 
 @dataclass(frozen=True)
+class GridCell:
+    """One task's execution summary for the pipeline grid."""
+
+    task_code: str
+    task_run_id: int
+    pipeline_run_id: int
+    status: RunStatus
+    attempt_count: int
+    attempt_id: int | None
+    start_date: datetime | None
+    end_date: datetime | None
+    task_run_label: str
+
+
+@dataclass(frozen=True)
 class HistoryView:
     """Bounded run or task history and the interventions on the runs shown."""
 
@@ -327,6 +342,8 @@ class HistoryView:
     changes: tuple[Intervention, ...]
     before: int | None = None
     rules: tuple[RuleObservation, ...] = ()
+    cells: tuple[GridCell, ...] = ()
+    extra_run: RunView | None = None
 
 
 @dataclass(frozen=True)

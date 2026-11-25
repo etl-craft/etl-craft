@@ -203,7 +203,7 @@ item's text, or work done early under another item.
 | S7.AU Available actions on every page | Done | S7.AU PR | Every action on the project and platform pages renders from the server's availability answer, grayed out with its reason as a hover annotation; the console keeps submit-time refusals |
 | S7.AV No implicit project | Done | #444 | Engine DB access without a selected project raises `ProjectNotSelectedError` (exit 32) naming the query or operation; entry points select their project; `setup` and bare `doctor` are project-aware |
 | S7.AW Public docs for 0.9.0 | Done | #446 | Release install and first steps in the README, private development docs, and a short 0.9.0 changelog summary |
-| S7.AX Pipeline, run and task views | Planned | | One dense status grid, run and task panels beside it, logs first and live, logs that explain a failure, and pages that load in one request each |
+| S7.AX Pipeline, run and task views | In progress | #460 | S7.AX.1 batches grid cells and pipeline availability and bounds project history. |
 | S7.M Stewardship uploads | Done (M2) | #296, #305 | Atomic receipts and safe stored names; processed layout, retention archives and verified reruns; crash recovery and guarded upload history |
 | S7.S Seed tables | Done | #308 | Typed pinned-bundle seeds replace reference tables until recorded stewardship handover |
 | S7.T Business calendars | Done | #276 | Shared holiday and weekend calendars for schedules, run dates, backfill and catch-up |
@@ -227,6 +227,13 @@ item's text, or work done early under another item.
 | S8.I Support Insights on current main | Done | #449, support-insights#30 | `ALERT` tasks with `EMAIL` channels and `deploy` replace removed handlers and commands; the demo pins current main. The walkthrough found the 60-second `--api` read deadline (fixed in #449) |
 
 ### Handover notes
+
+- **S7.AX.1 for S7.AX.2.** Read `history` with `cells=true` for the grid. The selected run
+  outside the page arrives as `extra_run` when requested by ID. Fetch detailed task history
+  when opening a task. Read pipeline definition availability through the `pipelines` map.
+  Acceptance availability: statement budgets and access checks ran on SQLite and PostgreSQL.
+  Targeted browser checks covered the grid, pipeline list and pause controls. Demo cluster timing
+  was optional and was not rerun.
 
 - **S8.C Choices that differ from the item text.** Local CI uses `deploy --plan` for the
   composite deployment plan and bootstraps its alert channel locally. Production alert

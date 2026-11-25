@@ -4,15 +4,12 @@ import { ChevronDown } from "lucide-react";
 import {useLegend,statusEntries} from "@/components/legend";
 import { RunLabel } from "@/components/run-label";
 import { When } from "@/components/when";
-import { useQueries } from "@tanstack/react-query";
 import * as React from "react";
 import { AppLink as Link } from "@/components/navigation";
-import { Loading, Notice } from "@/components/common";
 import { StatusMark, solidClass, statusMeta } from "@/components/status";
 import { formatDuration } from "@/lib/format";
-import { getJson, project } from "@/lib/api";
 import { runPath } from "@/lib/routes";
-import type { Graph, RunView, TaskHistory } from "@/lib/types";
+import type { Graph, GridCell, RunView } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 /** How many of the newest runs the grid shows unless asked for more. */
@@ -24,13 +21,12 @@ export const GRID_COLUMNS = { id: { width: 28, minimum: 30 }, time: { width: 176
  * Every task against the pipeline's recent runs, newest on the right, like the duration bars above it: one glance shows where and when a task
  * started failing. A column header selects a run; a cell selects the run and opens that task in it.
  */
-export function RunGrid({ code, pipeline, graph, runs, extra, selected, onSelect, bars = true, labels = "id" }: { code: string; pipeline: string; graph: Graph; runs: RunView[]; extra?: RunView; selected?: number; onSelect: (runId: number, task?: string) => void; bars?: boolean; labels?: "id" | "time" }) {
+export function RunGrid({ code, pipeline, graph, runs, cells, extra, selected, onSelect, bars = true, labels = "id" }: { code: string; pipeline: string; graph: Graph; runs: RunView[]; cells: GridCell[]; extra?: RunView; selected?: number; onSelect: (runId: number, task?: string) => void; bars?: boolean; labels?: "id" | "time" }) {
   const [details,setDetails]=React.useState<string|null>(null);
   const cell = GRID_COLUMNS[labels].width;
   const reserve = GRID_COLUMNS[labels].minimum;
   const tasks = graph.waves.flat();
   const latest = runs;
-  const newest = latest[0]?.pipeline_run_id;
   // A run opened by a link that is older than the newest ones shown still has its column, set apart from them.
   const shown = [...latest, ...(extra && !latest.some((r) => r.pipeline_run_id === extra.pipeline_run_id) ? [extra] : [])].sort((a, b) => a.pipeline_run_id - b.pipeline_run_id);
   const showBars = bars && shown.length >= 5;
@@ -70,25 +66,25 @@ export function RunGrid({ code, pipeline, graph, runs, extra, selected, onSelect
   React.useEffect(() => {
     box.current?.querySelector("[aria-current=true]")?.scrollIntoView({ inline: "nearest", block: "nearest" });
   }, [selected]);
-  const aside = useQueries({
-    queries: tasks.map((task) => ({
-      queryKey: ["matrix-run", code, pipeline, task, extra?.pipeline_run_id],
-      enabled: extra !== undefined && shown.some(apart),
-      queryFn: () => getJson<TaskHistory>(`${project(code)}/history`, { pipeline_code: pipeline, task_code: task, run_id: extra?.pipeline_run_id }),
-    })),
-  });
-  const cells = useQueries({
-    queries: tasks.map((task) => ({
-      queryKey: ["matrix", code, pipeline, task, newest, latest.length],
-      enabled: newest !== undefined,
-      queryFn: () => getJson<TaskHistory>(`${project(code)}/history`, { pipeline_code: pipeline, task_code: task, all: true, limit: latest.length, before: (newest ?? 0) + 1 }),
-    })),
-  });
+  const byRun = React.useMemo(() => {
+    const entries = new Map<number, Map<string, GridCell>>();
+    for (const entry of cells) {
+      let tasks = entries.get(entry.pipeline_run_id);
+      if (!tasks) {
+        tasks = new Map();
+        entries.set(entry.pipeline_run_id, tasks);
+      }
+      tasks.set(entry.task_code, entry);
+    }
+    return entries;
+  }, [cells]);
   const [now] = React.useState(() => Date.now());
   const seconds = (run: RunView) => (run.start_date ? Math.max(0, ((run.end_date ? new Date(run.end_date).getTime() : now) - new Date(run.start_date).getTime()) / 1000) : 0);
   const longest = Math.max(1, ...shown.map(seconds));
-  const key=useLegend(statusEntries([...shown.map(run=>run.status),...[...cells,...aside].flatMap(read=>read.data?.entries.map(entry=>entry.status)??[])]));
-  const failed = cells.find((c) => c.isError);
+  const key = useLegend(statusEntries([
+    ...shown.map((run) => run.status),
+    ...shown.flatMap((run) => [...(byRun.get(run.pipeline_run_id)?.values() ?? [])].map((cell) => cell.status)),
+  ]));
   const sync = () => {
     if (head.current && box.current) {
       head.current.scrollTop = box.current.scrollTop;
@@ -102,8 +98,6 @@ export function RunGrid({ code, pipeline, graph, runs, extra, selected, onSelect
   };
   return (
     <div ref={outer} tabIndex={0} onKeyDown={key.onKeyDown} className="relative flex h-full min-h-0 w-full flex-col"><div className="flex justify-end px-2 py-1">{key.button}</div>{key.panel}
-      {failed?.error ? <Notice className="m-3">{(failed.error as Error).message}</Notice> : null}
-      {hasRuns && cells.some((c) => c.isPending) ? <Loading what="the grid" className="p-3" /> : null}
       <div className="flex min-h-0 flex-1">
         <div style={{ width: taskWidth }} className="flex shrink-0 flex-col">
           {/* The task list scrolls with the matrix and has no scroll bar of its own. */}
@@ -168,10 +162,10 @@ export function RunGrid({ code, pipeline, graph, runs, extra, selected, onSelect
                 </tr>
               </thead>
               <tbody>
-                {tasks.map((task, row) => (
+                {tasks.map((task) => (
                   <tr key={task}>
                     {shown.map((run) => {
-                      const entry = (apart(run) ? aside[row] : cells[row])?.data?.entries.find((e) => e.pipeline_run_id === run.pipeline_run_id);
+                      const entry = byRun.get(run.pipeline_run_id)?.get(task);
                       const chosen = run.pipeline_run_id === selected;
                       return (
                         <td key={run.pipeline_run_id} className={cn("h-8 border-l border-t border-border px-0 py-0 text-center align-middle", apart(run) && "border-l-2 border-dashed border-l-border-strong", chosen && "bg-fg/10")}>

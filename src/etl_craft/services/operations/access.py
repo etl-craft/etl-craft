@@ -17,10 +17,12 @@ from etl_craft.services.operations.access_models import AccessFilter as AccessFi
 from etl_craft.services.operations.access_models import AccessView as AccessView
 from etl_craft.services.operations.access_models import AccessWrite as AccessWrite
 from etl_craft.services.operations.access_models import Binding, Change
+from etl_craft.services.operations.authorization import AdmissionSnapshot
 from etl_craft.services.operations.context import OperationContext
 from etl_craft.services.operations.permissions import (
     eligible_grants,
     pipeline_access,
+    project_not_found,
     project_permission,
     require_project,
     tag_permission,
@@ -170,7 +172,13 @@ def _apply(ctx: OperationContext, request: AccessWrite, intent: AccessIntent) ->
     return AccessView(change=change, dry_run=request.dry_run)
 
 
-def authorize(conn: Connection, ctx: OperationContext, resolved: Resolved) -> None:
+def authorize(
+    conn: Connection,
+    ctx: OperationContext,
+    resolved: Resolved,
+    *,
+    snapshot: AdmissionSnapshot | None = None,
+) -> None:
     """Administrators bind anywhere; a CAN_MANAGE holder binds within what it manages."""
     if ctx.role == ApiRole.ADMIN:
         return
@@ -181,19 +189,17 @@ def authorize(conn: Connection, ctx: OperationContext, resolved: Resolved) -> No
             "expected a deployment administrator; ask an administrator to make this binding"
         )
     scoped = replace(ctx, project=str(request.project), project_id=resolved.project_id)
-    require_project(conn, scoped)
-    if project_permission(conn, scoped) == Permission.CAN_MANAGE:
+    level = snapshot.permission if snapshot else project_permission(conn, scoped)
+    if level is None:
+        raise project_not_found(scoped.project)
+    if level == Permission.CAN_MANAGE:
         return
     if request.pipeline:
-        access = pipeline_access(conn, scoped)
+        access = snapshot.pipelines if snapshot else pipeline_access(conn, scoped)
         access.require(scoped, request.pipeline, ApiRole.VIEWER)
         level = access.levels.get(request.pipeline)
     else:
-        level = (
-            tag_permission(conn, scoped, request.tag)
-            if request.tag
-            else project_permission(conn, scoped)
-        )
+        level = tag_permission(conn, scoped, request.tag) if request.tag else level
     if level != Permission.CAN_MANAGE:
         raise PermissionDeniedError(
             f"account {ctx.actor.name!r}: {request.pipeline or request.tag or request.project!r} "

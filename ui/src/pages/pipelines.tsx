@@ -45,7 +45,20 @@ export function Pipelines() {
   const shown = React.useMemo(() => all.filter((p) => tags.every((t) => p.tags.includes(t)) && (!text || `${p.pipeline_code} ${p.pipeline_name} ${p.description ?? ""}`.toLowerCase().includes(text.toLowerCase()))), [all, tags, text]);
   const [chosen, setChosen] = React.useState<ReadonlySet<string>>(new Set());
   const selected = shown.filter((p) => chosen.has(p.pipeline_code)).map((p) => p.pipeline_code);
-  const bulkAvailability = useActionAvailability(code, undefined, !!selected.length, { pipeline_codes: selected });
+  const batchCodes = React.useMemo(() => shown.map((p) => p.pipeline_code), [shown]);
+  const availability = useActionAvailability(code, undefined, list.isSuccess, { pipeline_codes: batchCodes });
+  const { data, error, isPending } = availability;
+  const bulkReason = (action: "PAUSE" | "RESUME") => {
+    if (!selected.length) return "Select pipelines first.";
+    if (selected.length > 100) return "Select at most 100 pipelines.";
+    const reads = selected.map((code) => ({ data: { actions: data?.pipelines?.[code] ?? [] }, error, isPending }));
+    for (const read of reads) {
+      const reason = unavailableAction(read, "/controls/bulk", "POST", { action });
+      if (reason) return reason;
+    }
+    const selectedReasons = reads.map((read) => unavailableAction(read, "/controls", "POST", { action }));
+    return selectedReasons.every(Boolean) ? selectedReasons[0] : undefined;
+  };
 
   const toggleTag = (tag: string) => {
     const next = new URLSearchParams(window.location.search);
@@ -67,7 +80,7 @@ export function Pipelines() {
       title={`${verb} ${selected.length} pipeline${selected.length === 1 ? "" : "s"}`}
       effect={`${action === "PAUSE" ? "Stops new automatic runs of" : "Allows automatic runs of"}: ${selected.join(", ")}. Each pipeline succeeds or is refused on its own.`}
       endpoint="/controls/bulk"
-      unavailableReason={selected.length ? unavailableAction(bulkAvailability, "/controls/bulk", "POST", { action }) : "Select pipelines first."}
+      unavailableReason={bulkReason(action)}
       body={(reason) => ({ requests: selected.map((pipeline_code) => ({ pipeline_code, action, reason })) })}
       describe={describeOutcomes}
       icon={action === "PAUSE" ? <Pause className="size-4" aria-hidden /> : <Play className="size-4" aria-hidden />}
@@ -113,8 +126,8 @@ export function Pipelines() {
                 },
               })
               ] : []),
-              columns.display({ id: "auto", header: "Automatic runs", minSize:220, cell: (c) => <div className="flex flex-wrap items-center gap-2"><PauseState pipeline={c.row.original} /><PipelinePause code={code} pipeline={c.row.original}/></div> }),
-  ], [code, all]);
+              columns.display({ id: "auto", header: "Automatic runs", minSize:220, cell: (c) => <div className="flex flex-wrap items-center gap-2"><PauseState pipeline={c.row.original} /><PipelinePause code={code} pipeline={c.row.original} batchCodes={batchCodes} /></div> }),
+  ], [code, all, batchCodes]);
   return (
     <div className="grid grid-cols-1 gap-4">
       <PageHeader
@@ -122,7 +135,7 @@ export function Pipelines() {
         subtitle={tags.length ? `Tagged ${tags.join(" and ")}` : undefined}
         actions={
           <div className="flex flex-wrap items-start gap-2">
-          <PipelineRefresh code={code} onDone={() => void list.refetch()} />
+          <PipelineRefresh code={code} batched={availability} onDone={() => void list.refetch()} />
           <CsvButton
             name={`${code}-pipelines.csv`}
             header={["pipeline", "name", "description", "tags", "schedule", "dependencies", "last_run", "next_run", "automatic_runs", "paused_tasks"]}
@@ -145,7 +158,7 @@ export function Pipelines() {
           <span className="text-sm font-medium">{selected.length} selected</span>
           {bulk("PAUSE", "Pause")}
           {bulk("RESUME", "Resume")}
-          <BulkRefresh code={code} pipelines={selected} />
+          <BulkRefresh code={code} pipelines={selected} batched={availability} />
         </div>
         <LegendView entries={statusEntries(shown.flatMap(pipeline=>pipeline.recent_runs.map(run=>run.status)))}><DataTable
           label="Pipelines"

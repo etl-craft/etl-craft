@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
-from dataclasses import dataclass
+from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
+from functools import cached_property
 from typing import ClassVar
+
+from sqlalchemy.engine import Row
 
 from etl_craft.core.enums import (
     DEFINITION_CONTROLS,
@@ -20,6 +23,10 @@ from etl_craft.core.enums import (
 )
 from etl_craft.core.errors import EtlCraftError, RunStateError, UsageError
 from etl_craft.engine import run_scopes, runlog
+from etl_craft.engine.connection import read_snapshot
+from etl_craft.engine.queries import statement
+from etl_craft.engine.repository.accounts import find_account
+from etl_craft.engine.repository.pauses import Pause, fetch_open_pauses
 from etl_craft.engine.repository.pipelines import resolve_pipeline_id
 from etl_craft.engine.repository.tasks import resolve_task_id
 from etl_craft.engine.run_definitions import for_run
@@ -42,6 +49,7 @@ from etl_craft.services.operations.admin_metadata import (
 from etl_craft.services.operations.agent_models import AgentControl
 from etl_craft.services.operations.agents import require_live_agent
 from etl_craft.services.operations.alert_channels import ChannelIdentity, require_channel
+from etl_craft.services.operations.authorization import AdmissionSnapshot
 from etl_craft.services.operations.context import OperationContext
 from etl_craft.services.operations.controls import check_control, control_scope
 from etl_craft.services.operations.documents import DocsInput, require_warehouse_check
@@ -76,7 +84,12 @@ from etl_craft.services.operations.roles import (
     require_role_action,
 )
 from etl_craft.services.operations.task_pauses import inspect_task_pause
-from etl_craft.services.operations.uploads import UploadRequest, require_upload_pipeline
+from etl_craft.services.operations.uploads import (
+    UploadRequest,
+    check_upload_pipeline,
+    require_upload_pipeline,
+    upload_principal,
+)
 from etl_craft.services.operations.values import require_human_unlock, value_task
 from etl_craft.services.rehash import rehash_columns
 
@@ -130,6 +143,7 @@ class ActionAvailabilityView:
 
     SCHEMA: ClassVar[str] = "etl-craft/action-availability/1"
     actions: tuple[ActionAvailability, ...]
+    pipelines: dict[str, tuple[ActionAvailability, ...]] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -161,8 +175,50 @@ class DeploymentCapabilitiesInput(Request):
                 raise UsageError(f"{value} requires {parent}; supply the selected target identity")
 
 
+class DefinitionSnapshot(AdmissionSnapshot):
+    """Read shared admission, pause and upload state once for a definition response."""
+
+    @cached_property
+    def pauses(self) -> dict[str, Pause]:
+        """Read current standing pipeline pauses."""
+        return fetch_open_pauses(self.conn)
+
+    @cached_property
+    def upload_flags(self) -> dict[str, tuple[int, str, str]]:
+        """Read the stewardship flags for every active definition."""
+        return {
+            row.pipeline_code: (row.pipeline_id, row.stewardable_flag, row.active_flag)
+            for row in self.conn.execute(statement(self.conn, "active_pipelines"))
+        }
+
+    @cached_property
+    def upload_account(self) -> Row[tuple[object, ...]] | None:
+        """Use one stored account row to check every upload capability."""
+        return find_account(self.conn, self.ctx.actor.name)
+
+    def check_upload(self, code: str) -> None:
+        """Evaluate the same upload preconditions as the receipt action."""
+        ctx = upload_principal(self.ctx, self.upload_account, code)
+        scope = self if ctx == self.ctx else self.upload_scope(ctx)
+        check_upload_pipeline(scope, code, flags=self.upload_flags[code])
+
+    @cached_property
+    def upload_snapshot(self) -> dict[ApiRole | None, AdmissionSnapshot]:
+        """Reuse admission facts even when the stored role has changed."""
+        return {}
+
+    def upload_scope(self, ctx: OperationContext) -> AdmissionSnapshot:
+        """Get the snapshot scoped to the effective upload role."""
+        return self.upload_snapshot.setdefault(ctx.role, AdmissionSnapshot(self.conn, ctx))
+
+
 def action_availability(
-    ctx: OperationContext, name: ActionName, request: object
+    ctx: OperationContext,
+    name: ActionName,
+    request: object,
+    *,
+    snapshot: DefinitionSnapshot | None = None,
+    bulk_admission_only: bool = False,
 ) -> ActionAvailability:
     """Return the admission decision without recording an attempted change."""
     from etl_craft.services.operations.actions import ACTIONS, authorize_action
@@ -178,11 +234,13 @@ def action_availability(
     )
     reason = ""
     try:
-        authorize_action(ctx, action, request, action.required_role(ctx, request))
-        inspect_action_state(ctx, name, request)
-        if isinstance(request, BulkControlRequest):
+        authorize_action(
+            ctx, action, request, action.required_role(ctx, request), snapshot=snapshot
+        )
+        inspect_action_state(ctx, name, request, snapshot=snapshot)
+        if isinstance(request, BulkControlRequest) and not bulk_admission_only:
             choices = tuple(
-                action_availability(ctx, ActionName.CONTROL, control)
+                action_availability(ctx, ActionName.CONTROL, control, snapshot=snapshot)
                 for control in request.requests
             )
             if not any(choice.available for choice in choices):
@@ -200,7 +258,13 @@ def action_availability(
     )
 
 
-def inspect_action_state(ctx: OperationContext, name: ActionName, request: object) -> None:
+def inspect_action_state(
+    ctx: OperationContext,
+    name: ActionName,
+    request: object,
+    *,
+    snapshot: DefinitionSnapshot | None = None,
+) -> None:
     """Evaluate action-specific read-only preconditions after authorization."""
     if isinstance(request, DocsInput):
         require_warehouse_check(ctx, request)
@@ -209,22 +273,33 @@ def inspect_action_state(ctx: OperationContext, name: ActionName, request: objec
     inspect_maintenance_state(ctx, name, request)
     inspect_value_state(ctx, name, request)
     if isinstance(request, access.AccessWrite):
-        with ctx.engine.connect() as conn:
-            project_id = None if request.reaches_beyond_project else ctx.project_id
-            access.authorize(conn, ctx, Resolved(request, project_id, None, None))
+        project_id = None if request.reaches_beyond_project else ctx.project_id
+        resolved = Resolved(request, project_id, None, None)
+        if snapshot is None:
+            with ctx.engine.connect() as conn:
+                access.authorize(conn, ctx, resolved)
+        else:
+            access.authorize(snapshot.conn, ctx, resolved, snapshot=snapshot)
     if isinstance(request, RunRequest):
-        pause = open_pause(ctx.engine, request.pipeline_code, selector=request.selector)
+        pause = (
+            open_pause(ctx.engine, request.pipeline_code, selector=request.selector)
+            if snapshot is None
+            else snapshot.pauses.get(request.pipeline_code)
+        )
         if pause is not None:
             raise RunStateError(
                 f"pipeline {request.pipeline_code!r}: {pause.describe()}; "
                 "resume it before starting a run"
             )
     if isinstance(request, ControlRequest) and request.action in DEFINITION_CONTROLS:
-        inspect_definition_control(ctx, request)
+        inspect_definition_control(ctx, request, None if snapshot is None else snapshot.pauses)
     if isinstance(request, MarkRequest):
         inspect_mark(ctx, request)
     if isinstance(request, UploadRequest):
-        require_upload_pipeline(ctx, request)
+        if snapshot is None:
+            require_upload_pipeline(ctx, request)
+        else:
+            snapshot.check_upload(request.pipeline_code)
     inspect_log_state(ctx, name, request)
     inspect_deployment_state(ctx, name, request)
 
@@ -327,14 +402,22 @@ def inspect_role_state(ctx: OperationContext, name: ActionName, request: object)
                 require_role_action(conn, request, adding=name == ActionName.ROLE_ADD_ACTION)
 
 
-def inspect_definition_control(ctx: OperationContext, request: ControlRequest) -> None:
+def inspect_definition_control(
+    ctx: OperationContext,
+    request: ControlRequest,
+    pauses: dict[str, Pause] | None,
+) -> None:
     """Apply the same standing pause state rules without taking a writer lock."""
     if request.task_code is not None:
         with ctx.engine.connect() as conn:
             pipeline_id = resolve_pipeline_id(conn, request.pipeline_code)
             inspect_task_pause(conn, pipeline_id, request, datetime.now(UTC))
         return
-    active = open_pause(ctx.engine, request.pipeline_code)
+    active = (
+        open_pause(ctx.engine, request.pipeline_code)
+        if pauses is None
+        else pauses.get(request.pipeline_code)
+    )
     if request.action == ControlAction.RESUME:
         require_open_pause(request.pipeline_code, active)
     else:
@@ -485,6 +568,21 @@ def project_capabilities(
     """Inspect a project or pipeline definition, or its selected run controls."""
     if not request.definition:
         return control_capabilities(ctx, request)
+    with read_snapshot(ctx.engine) as conn:
+        snapshot = DefinitionSnapshot(conn, ctx)
+        access = snapshot.pipelines
+        if request.pipeline_code is not None:
+            access.require(ctx, request.pipeline_code, ApiRole.VIEWER)
+        visible = tuple(code for code in request.pipeline_codes if access.permits(code))
+        return _definition_capabilities(ctx, request, snapshot, visible)
+
+
+def _definition_capabilities(
+    ctx: OperationContext,
+    request: CapabilitiesInput,
+    snapshot: DefinitionSnapshot,
+    visible: tuple[str, ...],
+) -> ActionAvailabilityView:
     pipeline = request.pipeline_code
     selected: dict[ActionName, object] = {
         ActionName.VALIDATE: ValidateInput(),
@@ -514,12 +612,45 @@ def project_capabilities(
         selected[ActionName.LOGS] = LogInput(attempt_id=request.attempt_id)
     if request.preview_table is not None:
         selected[ActionName.TABLE_PREVIEW] = PreviewInput(table=request.preview_table)
-    controls = tuple(definition_actions(ctx, request))
-    return ActionAvailabilityView(
-        (
-            *tuple(action_availability(ctx, name, target) for name, target in selected.items()),
-            *controls,
+    common = {
+        name: action_availability(ctx, name, target, snapshot=snapshot)
+        for name, target in selected.items()
+    }
+    controls = tuple(
+        definition_actions(
+            ctx,
+            replace(request, pipeline_codes=visible) if request.pipeline_codes else request,
+            snapshot,
         )
+    )
+    return ActionAvailabilityView(
+        (*common.values(), *controls),
+        {code: _pipeline_availability(ctx, request, snapshot, common, code) for code in visible},
+    )
+
+
+def _pipeline_availability(
+    ctx: OperationContext,
+    request: CapabilitiesInput,
+    snapshot: DefinitionSnapshot,
+    common: dict[ActionName, ActionAvailability],
+    code: str,
+) -> tuple[ActionAvailability, ...]:
+    target = replace(request, pipeline_code=code, pipeline_codes=())
+    scoped = {
+        **pipeline_requests(target),
+        ActionName.RECONCILE: ReconcileInput(pipeline_code=code),
+        ActionName.ACCESS_GRANT: access.AccessWrite(project=ctx.project, pipeline=code, reason=""),
+        ActionName.ACCESS_REVOKE: access.AccessWrite(project=ctx.project, pipeline=code, reason=""),
+    }
+    answers = common | {
+        name: action_availability(ctx, name, value, snapshot=snapshot)
+        for name, value in scoped.items()
+    }
+    return (
+        *answers.values(),
+        *definition_actions(ctx, target, snapshot),
+        *_bulk_definition_actions(ctx, (code,), snapshot, admission_only=True),
     )
 
 
@@ -555,7 +686,9 @@ def pipeline_requests(request: CapabilitiesInput) -> dict[ActionName, object]:
 
 
 def definition_actions(
-    ctx: OperationContext, request: CapabilitiesInput
+    ctx: OperationContext,
+    request: CapabilitiesInput,
+    snapshot: DefinitionSnapshot,
 ) -> Iterator[ActionAvailability]:
     """List the pause, resume and replace variants for the selected definitions."""
     pipeline = request.pipeline_code
@@ -577,19 +710,29 @@ def definition_actions(
                     if request.task_code and action == ControlAction.PAUSE
                     else None,
                 ),
+                snapshot=snapshot,
             )
-    if request.pipeline_codes:
-        for action in (ControlAction.PAUSE, ControlAction.RESUME):
-            yield action_availability(
-                ctx,
-                ActionName.CONTROL_BULK,
-                BulkControlRequest(
-                    requests=tuple(
-                        ControlRequest(pipeline_code=code, action=action)
-                        for code in request.pipeline_codes
-                    )
-                ),
-            )
+    if 1 <= len(request.pipeline_codes) <= BulkControlRequest.MAX_REQUESTS:
+        yield from _bulk_definition_actions(ctx, request.pipeline_codes, snapshot)
+
+
+def _bulk_definition_actions(
+    ctx: OperationContext,
+    codes: tuple[str, ...],
+    snapshot: DefinitionSnapshot,
+    *,
+    admission_only: bool = False,
+) -> Iterator[ActionAvailability]:
+    for action in (ControlAction.PAUSE, ControlAction.RESUME):
+        yield action_availability(
+            ctx,
+            ActionName.CONTROL_BULK,
+            BulkControlRequest(
+                requests=tuple(ControlRequest(pipeline_code=code, action=action) for code in codes)
+            ),
+            snapshot=snapshot,
+            bulk_admission_only=admission_only,
+        )
 
 
 def control_capabilities(ctx: OperationContext, request: CapabilitiesInput) -> CapabilitiesView:
