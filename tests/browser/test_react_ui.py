@@ -178,7 +178,9 @@ def test_home_runs_and_run_detail_lead_to_a_confirmed_recovery(scene):
         expect(
             page.get_by_role("table", name="Run grid").locator("[aria-current=true]")
         ).to_have_count(1)
-        expect(page.get_by_label("Run identifier", exact=True)).to_contain_text(f"-{bad}")
+        expect(page.get_by_label("Run identifier", exact=True)).to_have_attribute(
+            "title", re.compile(rf"-{bad}$")
+        )
         page.get_by_role("button", name="Graph", exact=True).click()
         graph = page.get_by_role("group", name="Task graph")
         expect(graph.get_by_text("EXTRACT")).to_be_visible()
@@ -244,7 +246,9 @@ def test_a_viewer_sees_the_failed_run_but_no_recover_action(scene):
     with sync_playwright() as pw:
         browser, page, _ = open_page(pw)
         sign_in(page, url, f"/ui/projects/default/runs/OPS/{bad}", name="alice")
-        expect(page.get_by_label("Run identifier", exact=True)).to_contain_text(f"-{bad}")
+        expect(page.get_by_label("Run identifier", exact=True)).to_have_attribute(
+            "title", re.compile(rf"-{bad}$")
+        )
         expect(page.get_by_text("Failed", exact=True).first).to_be_visible()
         recover = page.get_by_role("button", name="Recover run")
         expect(recover).to_be_visible()
@@ -427,24 +431,18 @@ def test_the_project_runs_list_and_a_pipeline_share_one_layout(scene):
         browser.close()
 
 
-def test_a_task_opens_in_its_row_and_the_run_shows_its_identifier(scene):
+def test_task_instances_open_the_task_panel_and_restore_the_run(scene):
     _, url, _, bad = scene
     with sync_playwright() as pw:
         browser, page, problems = open_page(pw, viewport={"width": 1280, "height": 900})
         sign_in(page, url, f"/ui/projects/default/runs/OPS/{bad}")
-        identifier = page.get_by_label("Run identifier", exact=True)
-        expect(identifier).to_contain_text("OPS-")
-        expect(identifier).to_contain_text(f"-{bad}")
-        table = page.get_by_role("table", name="Task list")
-        expect(page.get_by_role("region", name="Task LOAD", exact=True)).to_have_count(0)
-        table.get_by_role("button", name="Show details of LOAD").click()
-        details = table.get_by_role(
-            "region", name="Task LOAD", exact=True
-        )  # inside the table, directly under its row
-        expect(details).to_be_visible()
+        table = page.get_by_role("table", name="Task instances")
+        table.get_by_role("button", name="LOAD", exact=True).click()
+        details = page.get_by_role("region", name="Task LOAD", exact=True)
+        expect(details.get_by_role("tab", name="Logs")).to_have_attribute("aria-selected", "true")
         shoot(page, "run-page")
-        table.get_by_role("button", name="Hide details of LOAD").click()
-        expect(page.get_by_role("region", name="Task LOAD", exact=True)).to_have_count(0)
+        details.get_by_role("button", name=f"Run #{bad}", exact=True).click()
+        expect(table).to_be_visible()
         assert problems == []
         browser.close()
 
@@ -520,7 +518,7 @@ def test_run_addresses_validate_the_complete_stored_label(scene):
             url + "/ui/projects/default/pipelines/OPS?run=" + quote(label, safe=""),
             wait_until="domcontentloaded",
         )
-        expect(page.get_by_label("Run identifier", exact=True)).to_contain_text(label)
+        expect(page.get_by_label("Run identifier", exact=True)).to_have_attribute("title", label)
         for value in (label.lower(), "WRONG-" + label):
             page.goto(url + "/ui/projects/default/pipelines/OPS?run=" + quote(value, safe=""))
             expect(page.get_by_role("alert")).to_contain_text("stored label differs")

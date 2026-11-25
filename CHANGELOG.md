@@ -6,6 +6,10 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+- Changed: the pipeline workspace puts run and task details beside the dependency-ordered
+  grid. Selecting a task opens its stored log, and links retain the selected run, task and try.
+  Inspect the deployed SQL or script from the task's SQL / script tab.
+
 - Changed: pipeline grids and pipeline lists load their run cells and action availability in
   batches. Project-wide run history uses a single paged run selection. The History API accepts
   `cells` and `extra_run_id`, and definition capabilities return per-pipeline answers when given

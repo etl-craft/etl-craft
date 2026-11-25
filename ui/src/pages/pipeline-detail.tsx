@@ -19,6 +19,7 @@ import { PauseState } from "@/components/pipeline-parts";
 import { RunGraph } from "@/components/lazy-run-graph";
 import { DEFAULT_RUNS, GRID_COLUMNS, MIN_TASKS, RunGrid } from "@/components/run-grid";
 import { PipelineRefresh, RefreshMenuItem } from "@/components/pipeline-refresh";
+import { TaskDefinitionPanel } from "@/components/task-definition-panel";
 import { RunOverview } from "@/components/run-overview";
 import { RunsPanel } from "@/components/runs-panel";
 import { useRuns } from "@/components/runs-table";
@@ -40,7 +41,6 @@ export function PipelineDetail() {
   const asked = params.get("tab") ?? "";
   const view = params.get("view") === "graph" ? "graph" : "grid";
   const hideBars = params.get("bars") === "off";
-  const byTime = params.get("columns") === "time";
   const flow = params.get("flow") === "lr" ? "LR" : params.get("flow") === "tb" ? "TB" : undefined;
   const asLabel = params.get("run") ?? "";
   const numeric = /^[1-9]\d*$/.test(asLabel) && Number.isSafeInteger(Number(asLabel)) ? Number(asLabel) : undefined;
@@ -86,11 +86,16 @@ export function PipelineDetail() {
     if (all.length < wanted && hasNextPage && !isFetchingNextPage) void fetchNextPage();
   }, [all.length, wanted, hasNextPage, isFetchingNextPage, fetchNextPage]);
   const runs = all;
-  const gridRuns = runs.slice(0, wanted);
+  const [gridPage, setGridPage] = React.useState(0);
+  const gridRuns = runs.slice(gridPage * wanted, (gridPage + 1) * wanted);
+  const older = async () => {
+    if (runs.length <= (gridPage + 1) * wanted && hasNextPage) await fetchNextPage();
+    setGridPage(gridPage + 1);
+  };
   const selected = chosen ?? runs[0]?.pipeline_run_id;
   // A link to a run older than the grid's columns still opens it: the run is read by its number and shown as a column of its own.
   const outside = selected !== undefined && !gridRuns.some((r) => r.pipeline_run_id === selected);
-  const extraRun = pages?.[0]?.extra_run;
+  const extraRun = pages?.[0]?.extra_run ?? (chosen === undefined ? undefined : runs.find(run => run.pipeline_run_id === chosen));
   useDocumentTitle(selected === undefined ? pipeline : `${pipeline} #${selected}`, code, info.project && { type: info.project.environment_type, name: info.project.environment_name });
   const starts = autoStarts(useAutoStarts(), info.project?.allowed_auto_restarts);
   const selectedRun = [...runs, ...(extraRun ? [extraRun] : [])].find((r) => r.pipeline_run_id === selected);
@@ -100,14 +105,16 @@ export function PipelineDetail() {
     enabled: view === "graph" && selected !== undefined,
     refetchInterval: selectedRun?.status === "IN-PROGRESS" ? 5_000 : false,
   });
-  const tabs=pipelineTabs(selected,selectedRun?.run_label);
-  const tab=tabs.some(item=>item.id===asked)?asked:chosen!==undefined?"run":"overview";
+  const tabs=pipelineTabs(selected);
+  const tab=tabs.some(item=>item.id===asked)?asked:chosen!==undefined || (task && selected !== undefined) ? "run" : "overview";
   const state = params.get("status") ?? "";
   const select = (runId: number, taskCode?: string) => {
     setGridSelection({ scope: runsKey, run: runId, extra: gridExtra });
     const next = new URLSearchParams(params);
     next.set("run", String(runId));
     next.delete("tab");
+    next.delete("try");
+    next.delete("instance");
     if (taskCode) next.set("task", taskCode);
     else next.delete("task");
     setParams(next, { replace: true });
@@ -119,6 +126,7 @@ export function PipelineDetail() {
     } catch {
       /* the count lasts for this page only */
     }
+    setGridPage(0);
     choose("runs", null);
   };
   const choose = (key: string, value: string | null) => {
@@ -229,15 +237,15 @@ export function PipelineDetail() {
           <FactList inline>
             <Fact inline label="Schedule">{p.run_schedule ? <span title={p.run_schedule}>{describeCron(p.run_schedule) ?? <code className="font-mono">{p.run_schedule}</code>}</span> : "Not scheduled"}</Fact>
             <Fact inline label="Latest run">
-              {runs[0] ? (
+              {p.latest_whole_run ? (
                 <span className="inline-flex items-center gap-1.5">
-                  <StatusBadge status={runs[0].status} /> <When iso={runs[0].start_date} />
+                  <StatusBadge status={p.latest_whole_run.status} /> <When iso={p.latest_whole_run.start_date} />
                 </span>
               ) : (
                 "None yet"
               )}
             </Fact>
-            <Fact inline label="Next run">{starts && !starts.schedule ? <span className="text-muted" title="Schedules are switched off here by the controller or the project">Not started here</span> : <When iso={p.next_run} empty={p.restart_note ?? "—"} />}</Fact>
+            <Fact inline label="Next run">{p.starts_on_upload && !p.run_schedule ? "On upload" : p.waits_for_events && !p.run_schedule ? "Waits for object events" : starts && !starts.schedule ? <span className="text-muted" title="Schedules are switched off here by the controller or the project">Not started here</span> : <When iso={p.next_run} empty={p.restart_note ?? "—"} />}</Fact>
             <Fact inline label="Refresh">{p.refresh_type.toLowerCase()}</Fact>
             <Fact inline label="SLA">{p.sla_in_hours?`${p.sla_in_hours} h`:"None"}</Fact>
             <Fact inline label="Restarts">{p.restart_note??"On its schedule only"}</Fact>
@@ -250,7 +258,8 @@ export function PipelineDetail() {
       </PageHeader>
       <SplitPane
         id="pipeline"
-        minimumLeft={view === "grid" ? MIN_TASKS + 6 + GRID_COLUMNS[byTime ? "time" : "id"].minimum + 24 : 0}
+        initial={0.55}
+        minimumLeft={view === "grid" ? MIN_TASKS + 6 + GRID_COLUMNS.id.minimum + 24 : 0}
         // On a narrow screen the selected run's details come before the grid of every run.
         narrowFirst={tab === "run" ? "right" : "left"}
         className="lg:min-h-0 lg:flex-1"
@@ -281,6 +290,8 @@ export function PipelineDetail() {
                     onKeyDown={(event) => event.key === "Enter" && apply(event.currentTarget.value)}
                   />
                 </label>
+                <Button size="sm" variant="ghost" disabled={gridPage === 0} onClick={() => setGridPage(gridPage - 1)}>Newer</Button>
+                <Button size="sm" variant="ghost" disabled={isFetchingNextPage || (!hasNextPage && runs.length <= (gridPage + 1) * wanted)} onClick={() => void older()}>Older</Button>
                 <DropdownMenu>
                   <DropdownTrigger asChild>
                     <Button size="sm" variant="outline">
@@ -292,9 +303,6 @@ export function PipelineDetail() {
                     <DropdownLabel>Grid</DropdownLabel>
                     <DropdownItem onSelect={() => choose("bars", hideBars ? null : "off")}>
                       <Check className={cn("size-4", hideBars && "invisible")} aria-hidden /> Duration bars
-                    </DropdownItem>
-                    <DropdownItem onSelect={() => choose("columns", byTime ? null : "time")}>
-                      <Check className={cn("size-4", !byTime && "invisible")} aria-hidden /> Label columns by start time
                     </DropdownItem>
                     <DropdownSeparator />
                     <RefreshMenuItem code={code} pipeline={pipeline} onSelect={() => setRefreshOpen(true)} />
@@ -308,7 +316,7 @@ export function PipelineDetail() {
               graph.isError ? <Notice className="m-3">{(graph.error as Error).message}</Notice> : <Loading what="tasks" className="p-3" />
             ) : view === "grid" ? (
               readError ? <Notice>{readError.message}</Notice> : list.runs.isPending ? <Loading what="run history" className="p-3" /> :
-              <RunGrid code={code} pipeline={pipeline} graph={graph.data} runs={gridRuns} cells={cells} extra={outside ? extraRun ?? undefined : undefined} selected={selected} onSelect={select} bars={!hideBars} labels={byTime ? "time" : "id"} />
+              <RunGrid code={code} pipeline={pipeline} graph={graph.data} tasks={pages?.[0]?.task_order ?? []} runs={gridRuns} cells={cells} extra={outside ? extraRun ?? undefined : undefined} selected={chosen} task={task} onSelect={select} bars={!hideBars} />
             ) : (
               <div className="absolute inset-0 flex flex-col">
               {selectedRun ? (
@@ -383,7 +391,19 @@ export function PipelineDetail() {
                 }
               />
             ) : tab === "run" && selected !== undefined ? (
-              <RunOverview code={code} pipeline={pipeline} runId={selected} task={task} onTask={(next) => choose("task", next)} />
+              <RunOverview code={code} pipeline={pipeline} runId={selected} task={task}
+                taskOrder={pages?.[0]?.task_order ?? []} cells={cells} tab={params.get("instance") ?? ""}
+                tryNumber={params.has("try") ? Number(params.get("try")) : null}
+                onTask={(name) => select(selected, name ?? undefined)}
+                onTab={(next) => choose("instance", next)} onTry={(value) => {
+                  const next = new URLSearchParams(params);
+                  if (value === null) next.delete("try");
+                  else next.set("try", String(value));
+                  next.delete("instance");
+                  setParams(next, { replace: true });
+                }} />
+            ) : task && selected === undefined && !list.runs.isPending ? (
+              <TaskDefinitionPanel code={code} pipeline={pipeline} task={task} />
             ) : !p || !graph.isSuccess ? (
               <Loading what="pipeline" />
 

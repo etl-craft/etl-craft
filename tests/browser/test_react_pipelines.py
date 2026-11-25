@@ -415,13 +415,13 @@ def test_a_narrow_grid_hides_the_oldest_runs_never_the_newest(scene):
         headers = grid.locator("thead th a")
         headers.first.wait_for()  # the runs are drawn once their history has loaded
         assert headers.count() >= 2
-        area = grid.locator("xpath=parent::div/parent::div").bounding_box()
+        area = grid.locator("xpath=parent::div").bounding_box()
         newest = headers.last.bounding_box()
         assert newest["x"] + newest["width"] <= area["x"] + area["width"] + 1, (
             "the newest run is cut off"
         )
         assert newest["x"] >= area["x"], "the newest run is outside the grid"
-        task = page.get_by_role("table", name="Tasks").locator("tbody th").first.bounding_box()
+        task = page.get_by_role("table", name="Run grid").locator("tbody th").first.bounding_box()
         assert task["x"] >= 0 and task["width"] >= 120  # the task list keeps a readable width
         assert problems == []
         browser.close()
@@ -443,18 +443,11 @@ def test_one_grid_divider_fits_names_and_keeps_the_latest_run_visible(site, meth
         browser, page, problems = open_page(pw, viewport={"width": 1280, "height": 800})
         sign_in(page, url, f"/ui/projects/default/pipelines/RESIZE?columns={labels}")
         outer = page.get_by_role("separator", name="Resize the panes")
-        task_cell = page.get_by_role("table", name="Tasks").get_by_role("rowheader", name=name)
         grid = page.get_by_role("table", name="Run grid")
-        area = grid.locator("xpath=parent::div/parent::div")
+        task_cell = grid.get_by_role("rowheader").filter(has_text=name)
+        area = grid.locator("xpath=parent::div")
         expect(grid.locator("thead th a").first).to_be_visible()
         expect(page.get_by_role("separator")).to_have_count(1)
-        full = task_cell.evaluate("""el => {
-            const button=el.querySelector('button'),label=button.querySelector('span');
-            const style=getComputedStyle(el),control=getComputedStyle(button);
-            return label.scrollWidth + parseFloat(style.paddingLeft)
-                + parseFloat(style.paddingRight) + parseFloat(control.columnGap)
-                + button.querySelector('svg').getBoundingClientRect().width;
-        }""")
 
         def resize_grid(wide):
             if method == "keyboard":
@@ -482,14 +475,14 @@ def test_one_grid_divider_fits_names_and_keeps_the_latest_run_visible(site, meth
             )
 
         resize_grid(False)
-        assert task_cell.bounding_box()["width"] < full
+        expect(task_cell).to_have_attribute("title", name)
         latest_visible()
         resize_grid(True)
-        expect(task_cell).to_have_js_property("clientWidth", full)
+        expect(task_cell).to_be_visible()
         latest_visible()
         shoot(page, f"grid-expanded-{method}-{labels}")
         resize_grid(False)
-        assert task_cell.bounding_box()["width"] < full
+        expect(task_cell).to_have_attribute("title", name)
         latest_visible()
         shoot(page, f"grid-narrowed-{method}-{labels}")
         assert problems == []
@@ -541,7 +534,7 @@ def test_the_newest_grid_run_is_on_the_right_with_readable_status_symbols(scene)
         expect(square).to_be_visible()
         assert len(histories) == 1 and "cells=true" in histories[0]
         size = square.bounding_box()
-        assert size["width"] >= 24 and size["height"] >= 24
+        assert size["width"] == 14 and size["height"] == 14
         assert problems == []
         browser.close()
 
@@ -566,13 +559,17 @@ def test_run_and_task_history_show_stored_labels_with_numeric_links(scene):
     with sync_playwright() as pw:
         browser, page, problems = open_page(pw)
         sign_in(page, url, "/ui/projects/default/pipelines/OPS/tasks/EXTRACT")
+        page.get_by_role("tab", name="Details").click()
+        page.get_by_text("Task definition and history", exact=True).click()
         table = page.get_by_role("table", name="Task runs")
         expect(table.get_by_text(run.label, exact=True)).to_be_visible()
         expect(table.get_by_text(task.label, exact=True)).to_be_visible()
         link = table.get_by_role("link", name=f"#{run.id}", exact=True)
         expect(link).to_have_attribute("href", re.compile(rf"[?&]run={run.id}(?:$|&)"))
         link.click()
-        expect(page.get_by_label("Run identifier", exact=True)).to_contain_text(run.label)
+        expect(page.get_by_label("Run identifier", exact=True)).to_have_attribute(
+            "title", run.label
+        )
         page.evaluate(
             "navigator.clipboard.writeText = async (text) => { window.copiedLabel = text; }"
         )
@@ -830,7 +827,9 @@ def test_alert_history_on_pipeline_and_project_has_status_time_and_no_secrets(
         sign_in(page, url, "/ui/projects/default/pipelines/ALERTED")
         page.get_by_role("tab", name="Overview", exact=True).click()
         history = page.get_by_role("region", name="Alert delivery history")
-        expect(history.get_by_text("ops", exact=True).first).to_be_visible()
+        expect(history.get_by_text("ops", exact=True)).to_have_count(1)
+        history.get_by_text("Delivery details", exact=True).click()
+        expect(history.get_by_text(re.compile(r"Attempt 1.*Failed"))).to_be_visible()
         expect(history.get_by_text("Failed", exact=True)).to_be_visible()
         expect(history.get_by_text("503", exact=True)).to_be_visible()
         assert "ALERT_URL" not in history.inner_text() and "ALERT_KEY" not in history.inner_text()

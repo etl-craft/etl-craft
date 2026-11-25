@@ -16,7 +16,7 @@ import { AttemptLog } from "@/components/attempt-details";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { ScopeControls } from "@/components/scope-controls";
 import { Items } from "@/pages/items";
-import { Task } from "@/pages/task";
+import { TaskDefinitionPanel } from "@/components/task-definition-panel";
 import { ActionButton } from "@/components/action-button";
 import { ToastProvider } from "@/components/toast";
 import { getJson } from "@/lib/api";
@@ -129,7 +129,7 @@ it("keeps data actions visible with the server's task-definition refusal", () =>
   client.setQueryData(["offset", "default", "OPS", "load"], { kind: null });
   client.setQueryData(["task-runs", "default", "OPS", "load"], { entries: [] });
   client.setQueryData(["action-availability", "default", "OPS", { task_code: "load" }], { actions: ["/values/provenance", "/values", "/values/unlock"].map(endpoint => ({ endpoint: "/api/v1" + endpoint, method: "POST", available: false, reason })) });
-  render(<QueryClientProvider client={client}><MemoryRouter initialEntries={["/default/OPS/load"]}><Routes><Route path="/:project/:pipeline/:task" element={<ToastProvider><Task /></ToastProvider>} /></Routes></MemoryRouter></QueryClientProvider>);
+  render(<QueryClientProvider client={client}><MemoryRouter initialEntries={["/default/OPS/load"]}><Routes><Route path="/:project/:pipeline/:task" element={<ToastProvider><TaskDefinitionPanel code="default" pipeline="OPS" task="load" /></ToastProvider>} /></Routes></MemoryRouter></QueryClientProvider>);
   for (const name of ["Look up", "Edit a value", "Unlock values"]) {
     expect(screen.getByRole("button", { name })).toHaveAccessibleDescription(reason);
     expect(screen.getByRole("button", { name })).toHaveAttribute("aria-disabled", "true");

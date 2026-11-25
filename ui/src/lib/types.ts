@@ -35,6 +35,7 @@ export interface ProjectHealth {
 }
 
 export interface RunView {
+  selected_task_ids?: number[];
   parameter_overrides?: Record<string, Record<string, string>>;
   pipeline_code: string;
   pipeline_run_id: number;
@@ -84,6 +85,7 @@ export interface GridCell {
 }
 
 export interface History {
+  task_order?: string[];
   cells?: GridCell[];
   extra_run?: RunView | null;
   entries: RunView[];
@@ -91,6 +93,7 @@ export interface History {
 }
 
 export interface StepView {
+  parameters?: Record<string, string>;
   task_code: string;
   task_run_id: number | null;
   task_type: string;
@@ -102,6 +105,7 @@ export interface StepView {
 }
 
 export interface Steps {
+  source?: { version: string; file: string | null; text: string | null; truncated_at_bytes: number | null };
   steps: StepView[];
 }
 
@@ -284,6 +288,9 @@ export interface RecentRun {
 export interface Pipeline {
   depends_on: [string, string][];
   alert_deliveries?: AlertDelivery[];
+  latest_whole_run?: RecentRun | null;
+  starts_on_upload?: boolean;
+  waits_for_events?: boolean;
   pipeline_code: string;
   pipeline_name: string;
   refresh_type: string;
@@ -672,6 +679,7 @@ export interface TablePreview {
 
 export interface AlertDelivery {
   delivery_id: number;
+  event_id?: string;
   channel: string;
   pipeline_code: string;
   source_run_id: number;

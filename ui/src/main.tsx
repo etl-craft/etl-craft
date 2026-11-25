@@ -7,7 +7,6 @@ import { ToastProvider } from "@/components/toast";
 import { About } from "@/pages/about";
 import { Admin } from "@/pages/admin";
 import { Agents } from "@/pages/agents";
-import { Attempt } from "@/pages/attempt";
 import { Loading } from "@/components/common";
 const Catalog = lazy(() => import("@/pages/catalog").then((module) => ({ default: module.Catalog })));
 import { Console } from "@/pages/console";
@@ -22,10 +21,9 @@ import { ProjectDashboard, InsightsRedirect } from "@/pages/project-dashboard";
 import { Items } from "@/pages/items";
 import { HomeEntry, ProjectList } from "@/pages/home";
 import { PipelineDetail } from "@/pages/pipeline-detail";
-import { RunRedirect } from "@/pages/run-redirect";
+import { AttemptRedirect, RunRedirect, TaskRedirect } from "@/pages/run-redirect";
 import { Pipelines } from "@/pages/pipelines";
 import { Scheduled } from "@/pages/scheduled";
-import { Task } from "@/pages/task";
 import { Uploads } from "@/pages/uploads";
 import { Runs } from "@/pages/runs";
 import { applyDensity, applyTheme, initialTheme, storedDensity } from "@/lib/theme";
@@ -61,7 +59,7 @@ createRoot(document.getElementById("root")!).render(
             <Route path="projects/:project/maintenance" element={<Maintenance />} />
             <Route path="projects/:project/pipelines" element={<Pipelines />} />
             <Route path="projects/:project/pipelines/:pipeline" element={<PipelineDetail />} />
-            <Route path="projects/:project/pipelines/:pipeline/tasks/:task" element={<Task />} />
+            <Route path="projects/:project/pipelines/:pipeline/tasks/:task" element={<TaskRedirect />} />
             <Route path="projects/:project/uploads" element={<Uploads />} />
             <Route path="projects/:project/insights" element={<InsightsRedirect />} />
             <Route path="projects/:project/console" element={<Console />} />
@@ -70,7 +68,7 @@ createRoot(document.getElementById("root")!).render(
             <Route path="projects/:project/paused" element={<Paused />} />
             <Route path="projects/:project/held" element={<HeldRedirect />} />
             <Route path="projects/:project/runs" element={<Runs />} />
-            <Route path="projects/:project/runs/:pipeline/:runId/tasks/:task/attempts/:attemptId" element={<Attempt />} />
+            <Route path="projects/:project/runs/:pipeline/:runId/tasks/:task/attempts/:attemptId" element={<AttemptRedirect />} />
             <Route path="projects/:project/runs/:pipeline/:runId/tasks/:task/items" element={<Items />} />
             <Route path="projects/:project/runs/:pipeline/:runId" element={<RunRedirect />} />
             <Route path="*" element={<p className="text-muted">That page does not exist. Use the navigation to go Home.</p>} />

@@ -19,10 +19,11 @@ it("keeps the original failure diagnostics only in process details", () => {
   render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { enabled: false } } })}><AttemptDetails code="demo" attempt={attempt} /></QueryClientProvider>);
   const details = screen.getByText("Process details").closest("details")!;
   expect(details).not.toHaveAttribute("open");
-  for (const raw of ["UNKNOWN", "PYTHON_TASK", "RuntimeError"]) {
+  for (const raw of ["PYTHON_TASK", "RuntimeError"]) {
     expect(within(details).getByText(raw, { exact: true })).toBeInTheDocument();
     expect(screen.getAllByText(raw, { exact: true })).toHaveLength(1);
   }
+  expect(screen.queryByText("UNKNOWN", { exact: true })).toBeNull();
   expect(screen.queryByText("Failure", { exact: true })).toBeNull();
   expect(screen.getByRole("alert")).toHaveTextContent(attempt.error_message!);
 });

@@ -3,7 +3,6 @@ import { RunLabel } from "@/components/run-label";
 import { useQuery } from "@tanstack/react-query";
 import { When } from "@/components/when";
 import { createColumnHelper } from "@tanstack/react-table";
-import { useParams } from "react-router-dom";
 import { EmptyState, Breadcrumbs, Fact, FactList, Loading, Notice, PageHeader, ParamList } from "@/components/common";
 import { CsvButton } from "@/components/csv-button";
 import { DataTable } from "@/components/data-table";
@@ -11,23 +10,18 @@ import { OffsetCard } from "@/components/offset-card";
 import { ProvenanceCard } from "@/components/provenance-card";
 import { StatusBadge } from "@/components/status";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
-import { useProjectInfo } from "@/hooks";
 import { getJson, project } from "@/lib/api";
 import { formatDuration, formatSeconds } from "@/lib/format";
 import { handlerLabel } from "@/lib/labels";
 import { pipelinePath, pipelinesPath, runPath } from "@/lib/routes";
 import type { Pipeline, TaskDefinition, TaskHistory, TaskOffset, TaskRunView } from "@/lib/types";
-import { useDocumentTitle } from "@/title";
 
 const RUNS = 50;
 const columns = createColumnHelper<TaskRunView>();
 const n = (value: number | null) => (value === null ? <span className="text-muted">—</span> : value.toLocaleString("en-GB"));
 const seconds = (run: TaskRunView) => (run.start_date && run.end_date ? (new Date(run.end_date).getTime() - new Date(run.start_date).getTime()) / 1000 : null);
 
-export function Task() {
-  const { project: code = "", pipeline = "", task = "" } = useParams();
-  const info = useProjectInfo(code);
-  useDocumentTitle(`${task} · ${pipeline}`, code, info.project && { type: info.project.environment_type, name: info.project.environment_name });
+export function TaskDefinitionPanel({ code, pipeline, task }: { code: string; pipeline: string; task: string }) {
   const params = { pipeline_code: pipeline, task_code: task };
   const def = useQuery({ queryKey: ["task", code, pipeline, task], queryFn: () => getJson<TaskDefinition>(`${project(code)}/task`, params) });
   const offset = useQuery({ queryKey: ["offset", code, pipeline, task], queryFn: () => getJson<TaskOffset>(`${project(code)}/offset`, params) });

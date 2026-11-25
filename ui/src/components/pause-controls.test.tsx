@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeAll, afterEach, expect, it, vi } from "vitest";
-import { Task } from "@/pages/task";
+import { TaskDefinitionPanel } from "@/components/task-definition-panel";
 import { PipelinePause } from "@/components/pipeline-pause";
 import { Paused } from "@/pages/paused";
 import { ToastProvider } from "@/components/toast";
@@ -26,7 +26,7 @@ async function show(task=false) {
  client.setQueryData(["task","default","OPS","load"],{task_code:"load",handler:"PYTHON",parameters:{},merge_key:[],merge_columns:[]});
  client.setQueryData(["offset","default","OPS","load"],{kind:null});
  client.setQueryData(["task-runs","default","OPS","load"],{entries:[]});
- render(<QueryClientProvider client={client}><MemoryRouter initialEntries={["/ui/projects/default/pipelines/OPS/tasks/load"]}><ToastProvider>{task?<Routes><Route path="/ui/projects/:project/pipelines/:pipeline/tasks/:task" element={<Task/>}/></Routes>:<PipelinePause code="default" pipeline={pipeline}/>}</ToastProvider></MemoryRouter></QueryClientProvider>);
+ render(<QueryClientProvider client={client}><MemoryRouter initialEntries={["/ui/projects/default/pipelines/OPS/tasks/load"]}><ToastProvider>{task?<Routes><Route path="/ui/projects/:project/pipelines/:pipeline/tasks/:task" element={<TaskDefinitionPanel code="default" pipeline="OPS" task="load"/>}/></Routes>:<PipelinePause code="default" pipeline={pipeline}/>}</ToastProvider></MemoryRouter></QueryClientProvider>);
 }
 async function pick(name:string, label="OPS"){
  fireEvent.keyDown(screen.getByRole("button",{name:`Pause options for ${label}`}),{key:"Enter"});

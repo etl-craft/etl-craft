@@ -1102,3 +1102,117 @@ def test_task_pause_api_requires_outcome_and_refuses_pipeline_mode_before_writes
             conn.execute(text("SELECT count(*) AS count FROM AUD_PIPELINE_PAUSES")).scalar_one()
             == 0
         )
+
+
+@pytest.mark.parametrize(
+    "api", [{"SELECT_QUERY": "select 'pinned-secret-value', '$$rule_flags'"}], indirect=True
+)
+def test_steps_source_reads_pinned_inline_sql_with_masking(api):
+    from etl_craft.core.redaction import remember
+
+    ctx, client, creds, run, _ = api
+    with ctx.engine.begin() as conn:
+        conn.execute(
+            text(
+                "UPDATE CFG_TASK_PARAMETERS SET PARAMETER_VALUE='select 42' "
+                "WHERE PARAMETER_NAME='SELECT_QUERY'"
+            )
+        )
+    remember("pinned-secret-value")
+    path = "/api/v1/projects/default/steps"
+    params = {"pipeline_code": "P", "run_id": run}
+    viewer = headers(creds[ApiRole.VIEWER])
+    ordinary = client.get(path, headers=viewer, params=params)
+    assert ordinary.status_code == 200, ordinary.text
+    assert "source" not in ordinary.json()
+    source = client.get(path, headers=viewer, params={**params, "source_task": "T"})
+    assert source.status_code == 200, source.text
+    assert source.json()["source"]["text"] == "select '[REDACTED]', '$$rule_flags'"
+    assert source.json()["source"]["version"]
+    assert (
+        client.get(
+            path, headers=viewer, params={**params, "source_task": "T", "path": "other.sql"}
+        ).status_code
+        == 400
+    )
+
+
+@pytest.mark.parametrize("api", [{"SCRIPT_FILE": "sql_scripts/pinned.sql"}], indirect=True)
+def test_steps_source_refuses_missing_pinned_file(api):
+    _, client, creds, run, _ = api
+    answer = client.get(
+        "/api/v1/projects/default/steps",
+        headers=headers(creds[ApiRole.VIEWER]),
+        params={"pipeline_code": "P", "run_id": run, "source_task": "T"},
+    )
+    assert answer.status_code == 404, answer.text
+    for detail in (f"run {run}", "task 'T'", "version", "sql_scripts/pinned.sql", "restore"):
+        assert detail in answer.text
+
+
+@pytest.mark.parametrize(
+    ("contents", "expected"),
+    [
+        (b"SELECT 17 AS old_value\n", 200),
+        (b"x" * (256 * 1024 - 1) + "é".encode(), 200),
+        (b"SELECT \xff", 409),
+        (b"SELECT \x00", 409),
+    ],
+)
+def test_steps_source_reads_exact_bundle_bytes(api, tmp_path, contents, expected):
+    from base64 import b64encode
+
+    from etl_craft.config.object_models import Artifacts
+    from etl_craft.services.operations.bundles import PublishBundle, publish
+
+    ctx, _, creds, _, _ = api
+    ctx = replace(
+        ctx, config=replace(ctx.config, artifacts=Artifacts((tmp_path / "store").as_uri()))
+    )
+    ctx = replace(ctx, project="default", project_id=1)
+    config = (
+        b"Secrets:\n  Source_type: ENVIRONMENT\nEngine:\n"
+        b"  dev:\n    Jdbc_url: jdbc:sqlite:engine.db\n    Schema: main\n"
+    )
+    path = "sql_scripts/load.sql"
+
+    def encode(value):
+        return b64encode(value).decode("ascii")
+
+    publish(
+        ctx,
+        PublishBundle(
+            files={
+                "craft-connector.yml": encode(config),
+                path: encode(contents),
+            }
+        ),
+    )
+    ctx.engine.update_execution_options(bundles_enabled=True)
+    with ctx.engine.begin() as conn:
+        pipeline = add_pipeline(conn, "PINNED")
+        add_task(conn, pipeline, "LOAD", SCRIPT_FILE=path)
+        run = start_run(conn, pipeline)
+    publish(
+        ctx,
+        PublishBundle(
+            files={
+                "craft-connector.yml": encode(config),
+                path: encode(b"SELECT 42 AS new_value"),
+            }
+        ),
+    )
+    with TestClient(create_app(ctx)) as client:
+        response = client.get(
+            "/api/v1/projects/default/steps",
+            headers=headers(creds[ApiRole.VIEWER]),
+            params={"pipeline_code": "PINNED", "run_id": run, "source_task": "LOAD"},
+        )
+    assert response.status_code == expected, response.text
+    if expected != 200:
+        assert "UTF-8" in response.text and path in response.text
+        return
+    source = response.json()["source"]
+    assert source["file"] == path
+    assert source["text"] == contents[: 256 * 1024].decode(errors="ignore")
+    assert source["truncated_at_bytes"] == (256 * 1024 - 1 if len(contents) > 256 * 1024 else None)

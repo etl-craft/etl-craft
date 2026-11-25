@@ -173,6 +173,20 @@ class TaskSelection(RunSelection):
 
 
 @dataclass(frozen=True, kw_only=True)
+class StepsInput(RunSelection):
+    """Inspect a run's steps, optionally including the deployed source of one task."""
+
+    source_task: str | None = None
+
+    def __post_init__(self) -> None:
+        """Require an exact run when requesting its deployed source."""
+        super().__post_init__()
+        optional_text("source_task", self.source_task)
+        if self.source_task is not None and self.run_id is None and self.run_key is None:
+            raise UsageError("`source_task` needs `run_id` or `run_key`; select the exact run")
+
+
+@dataclass(frozen=True, kw_only=True)
 class CapabilitiesInput(RunIdentity):
     """Inspect run controls, or the actions on a pipeline or project."""
 

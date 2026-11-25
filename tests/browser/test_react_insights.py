@@ -264,7 +264,9 @@ def test_home_times_follow_the_account_display_and_timezone(scene, display):
             if name == "projects":
                 check_time(page.get_by_role("list").filter(has_text="ORDERS").locator("time").first)
             if name == "grid":
-                check_time(page.get_by_role("table", name="Run grid").locator("thead time").last)
+                header = page.get_by_role("table", name="Run grid").locator("thead time").last
+                expect(header).to_have_text(re.compile(r"^\d{2}:\d{2}$"))
+                expect(header).to_have_attribute("title", re.compile(r"GMT\+5:30"))
             if os.environ.get("ETL_CRAFT_UI_SCREENSHOTS"):
                 page.wait_for_load_state("networkidle")
                 for scheme in ["light", "dark"]:

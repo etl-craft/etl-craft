@@ -1,16 +1,17 @@
 import * as React from "react";
 import { useIdentity, useTimezone } from "@/hooks";
+import { serverNow } from "@/lib/api";
 import { formatTime, relative } from "@/lib/format";
 
 /** One clock for every relative time on the page, ticking every 15 seconds, so they agree and stay current. */
 const listeners = new Set<() => void>();
-let tick = Date.now();
+let tick = serverNow();
 let timer: number | undefined;
 function subscribe(listener: () => void) {
   listeners.add(listener);
   if (timer === undefined && typeof window !== "undefined")
     timer = window.setInterval(() => {
-      tick = Date.now();
+      tick = serverNow();
       listeners.forEach((l) => l());
     }, 15_000);
   return () => {
@@ -21,7 +22,10 @@ function subscribe(listener: () => void) {
     }
   };
 }
-export const useNow = () => React.useSyncExternalStore(subscribe, () => tick, () => tick);
+export function useNow(): number {
+  React.useSyncExternalStore(subscribe, () => tick, () => tick);
+  return serverNow();
+}
 
 /**
  * Every moment on a page is shown here, as the account's "Time display" setting says: relative with the exact

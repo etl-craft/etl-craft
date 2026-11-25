@@ -24,7 +24,7 @@ function shown(node: React.ReactNode) {
 it("has one tab definition with only the kept workspace views",()=>{
   expect(pipelineTabs().map(tab=>tab.id)).toEqual(expect.arrayContaining(["overview","runs","audit","access"]));
   for(const removed of ["tasks","details","calendar"])expect(pipelineTabs().some(tab=>tab.id===removed)).toBe(false);
-  expect(pipelineTabs(8,"label").find(tab=>tab.id==="run")?.label).toBe("Run #8 · label");
+  expect(pipelineTabs(8).find(tab=>tab.id==="run")?.label).toBe("Run #8");
 });
 
 describe("the pipeline overview tab", () => {

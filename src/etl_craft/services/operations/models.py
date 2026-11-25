@@ -221,6 +221,9 @@ class PipelineView:
     description: str | None = None
     """The pipeline's ``DESCRIPTION``: what it does, shown beside its tasks' documentation."""
 
+    latest_whole_run: RecentRun | None = None
+    starts_on_upload: bool = False
+    waits_for_events: bool = False
     alert_deliveries: tuple[AlertDelivery, ...] = ()
     depends_on: tuple[tuple[str, str], ...] = ()
 
@@ -316,6 +319,24 @@ class StepsView:
 
 
 @dataclass(frozen=True)
+class StepSource:
+    """Deployed source with its immutable definition identity and display boundary."""
+
+    version: str
+    file: str | None
+    text: str | None
+    truncated_at_bytes: int | None
+
+
+@dataclass(frozen=True)
+class StepsWithSource(StepsView):
+    """The steps document when the caller opts in to one task's deployed source."""
+
+    SCHEMA: ClassVar[str] = "etl-craft/steps-source/1"
+    source: StepSource | None = None
+
+
+@dataclass(frozen=True)
 class GridCell:
     """One task's execution summary for the pipeline grid."""
 
@@ -344,6 +365,7 @@ class HistoryView:
     rules: tuple[RuleObservation, ...] = ()
     cells: tuple[GridCell, ...] = ()
     extra_run: RunView | None = None
+    task_order: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)

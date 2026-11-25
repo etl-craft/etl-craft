@@ -119,7 +119,7 @@ def test_removed_definition_tab_keeps_the_addressed_run_and_task(scene, removed)
         expect(page.get_by_role("tab", name="Overview", exact=True)).to_have_attribute(
             "aria-selected", "true"
         )
-        expect(page.get_by_role("tab", name=re.compile(rf"^Run #{run} ·"))).to_be_visible()
+        expect(page.get_by_role("tab", name=f"Run #{run}")).to_be_visible()
         assert not problems
         browser.close()
 

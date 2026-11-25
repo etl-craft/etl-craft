@@ -4,9 +4,9 @@ from collections.abc import Sequence
 from dataclasses import replace
 from datetime import datetime
 
-from sqlalchemy.engine import Connection
+from sqlalchemy.engine import Connection, RowMapping
 
-from etl_craft.core.enums import RunStatus, SlaStatus
+from etl_craft.core.enums import RunStatus, SlaStatus, YesNo
 from etl_craft.core.errors import EtlCraftError
 from etl_craft.core.time import as_utc
 from etl_craft.engine.queries import statement
@@ -25,15 +25,7 @@ def summarize(
         return ()
     recent: dict[int, list[RecentRun]] = {}
     for row in conn.execute(statement(conn, "pipeline_recent_runs")):
-        recent.setdefault(row.pipeline_id, []).append(
-            RecentRun(
-                row.pipeline_run_id,
-                RunStatus(row.status),
-                None if row.sla_status is None else SlaStatus(row.sla_status),
-                None if row.start_date is None else as_utc(row.start_date),
-                None if row.end_date is None else as_utc(row.end_date),
-            )
-        )
+        recent.setdefault(row.pipeline_id, []).append(_recent_run(row._mapping))
     dependencies: dict[str, list[tuple[str, str]]] = {}
     for row in conn.execute(statement(conn, "active_pipeline_dependency_edges")):
         dependencies.setdefault(row.pipeline_code, []).append(
@@ -51,6 +43,29 @@ def summarize(
             depends_on=tuple(dependencies.get(view.pipeline_code, ())),
         )
         for view in views
+    )
+
+
+def _recent_run(row: RowMapping) -> RecentRun:
+    return RecentRun(
+        row.pipeline_run_id,
+        RunStatus(row.status),
+        None if row.sla_status is None else SlaStatus(row.sla_status),
+        None if row.start_date is None else as_utc(row.start_date),
+        None if row.end_date is None else as_utc(row.end_date),
+    )
+
+
+def workspace_summary(conn: Connection, view: PipelineView) -> PipelineView:
+    """Describe the latest whole run and available automatic admission paths."""
+    row = conn.execute(
+        statement(conn, "pipeline_workspace_summary"), {"pipeline_id": view.pipeline_id}
+    ).one()
+    return replace(
+        view,
+        latest_whole_run=_recent_run(row._mapping) if row.pipeline_run_id is not None else None,
+        starts_on_upload=row.stewardable == YesNo.YES,
+        waits_for_events=bool(row.waits_for_events),
     )
 
 

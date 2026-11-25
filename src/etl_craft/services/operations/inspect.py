@@ -9,7 +9,7 @@ from datetime import UTC, datetime
 from sqlalchemy import Boolean, bindparam
 from sqlalchemy.engine import Connection
 
-from etl_craft.core.enums import ApiRole, RunCondition, RunStatus
+from etl_craft.core.enums import ActionName, ApiRole, RunCondition, RunStatus
 from etl_craft.core.errors import ConfigurationError, ResourceNotFoundError
 from etl_craft.core.file_bytes import open_regular
 from etl_craft.core.graph import build_graph
@@ -57,11 +57,12 @@ from etl_craft.services.operations.models import (
     PipelineView,
     RunView,
     StepsView,
+    StepsWithSource,
     StepView,
     TaskRunView,
 )
 from etl_craft.services.operations.permissions import pipeline_access, visible_codes
-from etl_craft.services.operations.pipeline_summaries import summarize
+from etl_craft.services.operations.pipeline_summaries import summarize, workspace_summary
 from etl_craft.services.operations.requests import (
     AttemptId,
     AuditInput,
@@ -69,7 +70,7 @@ from etl_craft.services.operations.requests import (
     LogInput,
     PipelineInput,
     RunId,
-    RunSelection,
+    StepsInput,
     TagFilter,
 )
 from etl_craft.services.operations.snapshots import (
@@ -155,12 +156,25 @@ def pipeline_graph(ctx: OperationContext, request: PipelineInput) -> GraphView:
         )
 
 
-def pipeline_steps(ctx: OperationContext, request: RunSelection) -> StepsView:
+def pipeline_steps(ctx: OperationContext, request: StepsInput) -> StepsView:
     """Read configured tasks under the exact selected run, including tasks not yet started."""
+    if request.source_task is not None:
+        from etl_craft.services.operations.actions import ACTIONS, authorize_action
+
+        log = ACTIONS[ActionName.RUN_LOG]
+        authorize_action(ctx, log, request, log.required_role(ctx, request))
     with read_snapshot(ctx.engine) as conn:
         pipeline_id = resolve_pipeline_id(conn, request.pipeline_code)
         selected = select_run(conn, pipeline_id, request.selector)
         with for_run(conn, selected.pipeline_run_id):
+            if request.source_task is not None:
+                from etl_craft.services.operations.step_source import read_source
+
+                task_id = resolve_task_id(conn, pipeline_id, request.source_task)
+                source = read_source(
+                    conn, ctx, selected.pipeline_run_id, request.source_task, task_id
+                )
+                return StepsWithSource(pipeline_id, selected.pipeline_run_id, (), source=source)
             steps = tuple(
                 StepView(
                     pipeline_id,
@@ -274,7 +288,21 @@ def _read_history(
         else (),
         cells=_history_cells(conn, listed) if request.cells else (),
         extra_run=extra[0] if extra else None,
+        task_order=_grid_task_order(conn, pipeline_id)
+        if request.cells and pipeline_id is not None
+        else (),
     )
+
+
+def _grid_task_order(conn: Connection, pipeline_id: int) -> tuple[str, ...]:
+    data = fetch_pipeline_graph(conn, pipeline_id)
+    graph = build_graph(data.tasks, data.same_pipeline_edges)
+    codes = {task.task_id: task.task_code or task.label for task in data.tasks}
+    return tuple(
+        code
+        for wave in graph.waves()
+        for code in sorted(codes[task] for task in wave if task not in data.event_alerts)
+    ) + tuple(sorted(codes[task] for task in data.event_alerts))
 
 
 def _history_runs(
@@ -360,7 +388,7 @@ def get_pipeline(ctx: OperationContext, request: PipelineInput) -> PipelineView:
         view = replace(
             view, alert_deliveries=history(conn, current_project_id(), (request.pipeline_code,))
         )
-        return summarize(conn, (view,), datetime.now(UTC), _pinned(ctx))[0]
+        return workspace_summary(conn, summarize(conn, (view,), datetime.now(UTC), _pinned(ctx))[0])
 
 
 def _pinned(ctx: OperationContext) -> bool:

@@ -12,8 +12,8 @@ import type { AuditRecords, Pipeline, RunView } from "@/lib/types";
 
 const PIPELINE_TABS = [{id:"overview",label:"Overview"},{id:"run",label:"Run"},{id:"runs",label:"Runs"},{id:"audit",label:"Audit log"},{id:"access",label:"Access"}];
 
-export function pipelineTabs(runId?:number, label?:string|null) {
-  return PIPELINE_TABS.filter(tab=>tab.id!=="run"||runId!==undefined).map(tab=>tab.id==="run"?{...tab,label:`Run #${runId} · ${label??""}`}:tab);
+export function pipelineTabs(runId?:number) {
+  return PIPELINE_TABS.filter(tab=>tab.id!=="run"||runId!==undefined).map(tab=>tab.id==="run"?{...tab,label:`Run #${runId}`}:tab);
 }
 
 const WINDOWS: Record<string, { label: string; hours: number }> = {

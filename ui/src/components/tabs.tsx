@@ -4,7 +4,7 @@ import { useActionReason } from "@/components/action-reason";
 import { cn } from "@/lib/utils";
 
 /** Page tabs keep their address, keyboard selection and scrolling within the same strip. */
-export function Tabs({ tabs, value, onChange, className }: { tabs: Tab[]; value: string; onChange: (id: string) => void; className?: string }) {
+export function Tabs({ tabs, value, onChange, className, panelId = "tabpanel" }: { tabs: Tab[]; value: string; onChange: (id: string) => void; className?: string; panelId?: string }) {
   const strip = React.useRef<HTMLDivElement>(null);
   const [edges,setEdges] = React.useState({before:false,after:false});
   const measure = React.useCallback(() => {
@@ -29,7 +29,7 @@ export function Tabs({ tabs, value, onChange, className }: { tabs: Tab[]; value:
     <div className="relative min-w-0 max-w-full shrink-0">
     <div ref={strip} role="tablist" onScroll={measure} className={cn("flex min-w-0 max-w-full shrink-0 gap-1 overflow-x-auto overscroll-x-contain touch-pan-x border-b border-border [scroll-padding-inline:1rem]", className)}>
       {tabs.map((tab, index) => (
-        <TabButton key={tab.id} tab={tab} selected={tab.id === value}
+        <TabButton key={tab.id} tab={tab} panelId={panelId} selected={tab.id === value}
           tabIndex={tab.id === value || (!tabs.some((entry) => entry.id === value) && index === 0) ? 0 : -1}
           onMove={(event) => move(event, index)} onSelect={() => onChange(tab.id)} />
       ))}
@@ -42,8 +42,9 @@ export function Tabs({ tabs, value, onChange, className }: { tabs: Tab[]; value:
 
 type Tab = { id: string; label: string; unavailableReason?: string };
 
-function TabButton({ tab, selected, tabIndex, onMove, onSelect }: {
+function TabButton({ tab, selected, tabIndex, onMove, onSelect, panelId }: {
   tab: Tab;
+  panelId: string;
   selected: boolean;
   tabIndex: number;
   onMove: (event: React.KeyboardEvent) => void;
@@ -53,13 +54,15 @@ function TabButton({ tab, selected, tabIndex, onMove, onSelect }: {
   return (
     <>
       <button
-        type="button" role="tab" id={`tab-${tab.id}`} aria-selected={selected} aria-controls="tabpanel"
+        type="button" role="tab" id={`tab-${tab.id}`} aria-selected={selected} aria-controls={panelId}
         aria-disabled={!!tab.unavailableReason || undefined} tabIndex={tabIndex}
         {...anchor}
         onKeyDown={(event) => { anchor.onKeyDown?.(event); onMove(event); }}
         onClick={(event) => { if (tab.unavailableReason) show(event); else onSelect(); }}
         onFocus={(event) => {
-          event.currentTarget.scrollIntoView({ block: "nearest", inline: "nearest" });
+          if (event.currentTarget.matches(":focus-visible")) {
+            event.currentTarget.scrollIntoView({ block: "nearest", inline: "nearest" });
+          }
           anchor.onFocus?.(event);
         }}
         className={cn("-mb-px shrink-0 cursor-pointer border-b-2 px-3 py-2 text-sm font-medium aria-disabled:cursor-default", selected ? "border-accent text-fg" : "border-transparent text-muted hover:text-fg")}
