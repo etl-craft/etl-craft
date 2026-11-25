@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from sqlalchemy import Boolean
 from sqlalchemy.engine import Connection
 
-from etl_craft.core.enums import YesNo
+from etl_craft.core.enums import Handler, YesNo
 from etl_craft.core.errors import MetadataError
 from etl_craft.core.graph import TaskEdge, TaskNode
 from etl_craft.engine.queries import statement
@@ -25,6 +25,7 @@ class PipelineGraphData:
     tasks: list[TaskNode]
     same_pipeline_edges: list[TaskEdge]
     cross_pipeline_task_ids: frozenset[int]
+    event_alerts: frozenset[int] = frozenset()
 
 
 def fetch_pipeline_graph(conn: Connection, pipeline_id: int) -> PipelineGraphData:
@@ -53,6 +54,9 @@ def fetch_pipeline_graph(conn: Connection, pipeline_id: int) -> PipelineGraphDat
         if row.depends_on_pipeline_id == pipeline_id
     ]
     cross = Counter(row.task_id for row in edges if row.depends_on_pipeline_id != pipeline_id)
+    rows = tuple(
+        conn.execute(statement(conn, "pipeline_graph_tasks"), {"pipeline_id": pipeline_id})
+    )
     tasks = [
         TaskNode(
             task_id=row.task_id,
@@ -61,11 +65,13 @@ def fetch_pipeline_graph(conn: Connection, pipeline_id: int) -> PipelineGraphDat
             cross_pipeline_edge_count=cross.get(row.task_id, 0),
             task_code=row.task_code,
         )
-        for row in conn.execute(
-            statement(conn, "pipeline_graph_tasks"), {"pipeline_id": pipeline_id}
-        )
+        for row in rows
     ]
-    return PipelineGraphData(tasks, same, frozenset(cross))
+    dependent = {edge.task_id for edge in same} | cross.keys()
+    alerts = frozenset(
+        row.task_id for row in rows if row.handler == Handler.ALERT and row.task_id not in dependent
+    )
+    return PipelineGraphData(tasks, same, frozenset(cross), alerts)
 
 
 @dataclass(frozen=True)

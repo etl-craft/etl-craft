@@ -144,12 +144,12 @@
   "pipeline_grid": {
     "postgresql": {
       "engine_connections": 0,
-      "engine_statements": 18,
+      "engine_statements": 20,
       "engine_transactions": 5
     },
     "sqlite": {
       "engine_connections": 0,
-      "engine_statements": 13,
+      "engine_statements": 15,
       "engine_transactions": 5
     }
   },

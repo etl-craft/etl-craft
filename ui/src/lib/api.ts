@@ -46,6 +46,12 @@ export const noteInput = (): void => {
   lastInput = Date.now();
 };
 
+let serverClock: { wall: number; received: number } | undefined;
+
+export function serverNow(): number {
+  return serverClock ? serverClock.wall + performance.now() - serverClock.received : Date.now();
+}
+
 async function send(path: string, init: RequestInit): Promise<Response> {
   let response: Response;
   // The server ends a session after idle time; a refresh nobody asked for must not extend it.
@@ -55,6 +61,8 @@ async function send(path: string, init: RequestInit): Promise<Response> {
   } catch {
     throw new ApiError("The server did not answer; check that the etl-craft server is running and reload.", 0);
   }
+  const wall = Date.parse(response.headers.get("date") ?? "");
+  if (Number.isFinite(wall)) serverClock = { wall, received: performance.now() };
   if (response.status === 401 && !onSignInPage()) {
     signInAgain();
     throw new ApiError("Your session has ended; sign in again.", 401);

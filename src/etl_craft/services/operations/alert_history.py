@@ -17,6 +17,7 @@ class AlertDelivery:
     """The bounded public history of one admitted event or delivery attempt."""
 
     delivery_id: int
+    event_id: str
     channel: str
     pipeline_code: str
     source_run_id: int

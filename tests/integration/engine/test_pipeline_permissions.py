@@ -115,6 +115,13 @@ def test_grid_and_capability_batch_hide_inaccessible_pipeline(scene):
     scoped = [a for a in batch["pipelines"]["OPEN"] if a["action"] != ActionName.CONTROL_BULK]
     assert scoped == single["actions"]
     assert "PRIVATE" not in json.dumps(batch)
+    source = api.get(
+        f"{path}/steps",
+        headers=headers,
+        params={"pipeline_code": "PRIVATE", "run_id": private_run, "source_task": "secret"},
+    )
+    assert source.status_code == 404
+    assert "SCRIPT_FILE" not in source.text and "bundle" not in source.text
 
 
 @pytest.mark.parametrize("tag", [False, True])

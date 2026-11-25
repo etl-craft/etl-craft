@@ -26,23 +26,44 @@ function describe(segment: TimelineSegment, tz: string, open: boolean): string {
   return `${who}${attempt}: ${KIND[segment.kind].spoken ?? KIND[segment.kind].label} from ${formatTime(segment.started_at, tz)} to ${end}${lasted}${deadline}. ${statusMeta(segment.outcome).label}.`;
 }
 
+function compactSegments(timeline: TimelineSegment[]): TimelineSegment[] {
+  const tasks = new Map<string, TimelineSegment[]>();
+  for (const segment of timeline) {
+    if (segment.task_code === null) continue;
+    const entries = tasks.get(segment.task_code) ?? [];
+    entries.push(segment);
+    tasks.set(segment.task_code, entries);
+  }
+  return [...tasks.values()].flatMap(entries => {
+    const work = entries.filter(segment => segment.kind === "EXECUTION");
+    const first = work[0];
+    const last = work.at(-1);
+    if (!first || !last) return entries.filter(segment => segment.kind === "QUEUE").slice(0, 1);
+    const queued = entries.find(segment => segment.kind === "QUEUE" && segment.started_at < first.started_at);
+    const merged = { ...last, started_at: first.started_at };
+    return queued ? [{ ...queued, ended_at: first.started_at }, merged] : [merged];
+  });
+}
+
 /**
  * The run's recorded intervals on one time axis, a row per task: queue waits, dependency gates, event and child-run
  * waits apart from execution. Every bar is a button whose description names its times and outcome; an open interval
  * runs to now and says so. Nothing is drawn from configuration or inferred from gaps between timestamps.
  */
-export function RunTimeline({ run }: { run: RunView }) {
+export function RunTimeline({ run, compact = false, order }: { run: RunView; compact?: boolean; order?: string[] }) {
   const tz = useTimezone();
   const now = useNow();
   const [chosen, setChosen] = React.useState<string | null>(null);
-  const segments = run.timeline ?? [];
+  const timeline = run.timeline ?? [];
+  const segments = compact ? compactSegments(timeline) : timeline;
   if (segments.length === 0) return <p className="m-0 text-sm text-muted">No queue, wait or execution has been recorded for this run.</p>;
   const live = run.status === "IN-PROGRESS";
   const runEnd = run.end_date ? Date.parse(run.end_date) : now;
   const endOf = (s: TimelineSegment) => (s.ended_at ? Date.parse(s.ended_at) : live ? now : runEnd);
   const start = Math.min(...segments.map((s) => Date.parse(s.started_at)));
   const span = Math.max(1, Math.max(...segments.map(endOf)) - start);
-  const rows = [...new Set(segments.map((s) => s.task_code ?? PIPELINE_ROW))];
+  const names = new Set(segments.map((s) => s.task_code ?? PIPELINE_ROW));
+  const rows = order ? [...order.filter(name => names.delete(name)), ...names] : [...names];
   const keyOf = (s: TimelineSegment) => `${s.task_code ?? ""}:${s.kind}:${s.attempt_number ?? ""}:${s.started_at}`;
   const picked = segments.find((s) => keyOf(s) === chosen);
   const kinds = [...new Set(segments.map((s) => s.kind))];
@@ -56,8 +77,8 @@ export function RunTimeline({ run }: { run: RunView }) {
           </li>
         ))}
       </ul>
-      <div className="overflow-x-auto" data-scroll-area>
-        <div className="grid min-w-[36rem] gap-1" role="list" aria-label="Tasks on the run's time axis">
+      <div className={compact ? "min-w-0" : "overflow-x-auto"} data-scroll-area={compact ? undefined : true}>
+        <div className={cn("grid gap-1", !compact && "min-w-[36rem]")} role="list" aria-label="Tasks on the run's time axis">
           {rows.map((row) => (
             <div key={row} role="listitem" className="grid grid-cols-[9rem_1fr] items-center gap-2">
               <span className="sticky left-0 z-10 truncate bg-surface py-1 pr-1 text-xs font-medium" title={row}>{row}</span>
@@ -82,11 +103,11 @@ export function RunTimeline({ run }: { run: RunView }) {
                         data-open={open || undefined}
                         className={cn(
                           "timeline-bar absolute flex items-center overflow-hidden rounded-sm px-0.5 outline-offset-1",
-                          execution ? cn("top-1 bottom-1", statusSolid(s.outcome)) : cn("top-0.5 bottom-0.5 text-fg", KIND[s.kind].className),
+                          execution ? cn("top-1 bottom-1", statusSolid(s.outcome)) : cn("top-0.5 bottom-0.5 text-fg", KIND[s.kind].className, compact && "opacity-40"),
                         )}
                         style={{ left: `${left}%`, width: `${Math.min(width, 100 - left)}%` }}
                       >
-                        <Icon aria-hidden className={cn("size-3 shrink-0", spin && open && "animate-spin")} />
+                        {!compact ? <Icon aria-hidden className={cn("size-3 shrink-0", spin && open && "animate-spin")} /> : null}
                       </button>
                     );
                   })}

@@ -60,7 +60,7 @@ def shoot(page, name):
 
 
 def test_a_failed_task_explains_itself_and_leads_to_its_attempt_and_history(scene):
-    _, url, _, bad, failed = scene
+    _, url, _, bad, _ = scene
     with sync_playwright() as pw:
         browser, page, problems = open_page(pw, viewport={"width": 1280, "height": 1000})
         page.context.set_default_timeout(8000)
@@ -69,22 +69,18 @@ def test_a_failed_task_explains_itself_and_leads_to_its_attempt_and_history(scen
             "img", name=f"LOAD in run {bad}: failed"
         ).click()
         panel = page.get_by_role("region", name="Task LOAD", exact=True)
+        expect(panel.get_by_role("heading", name="LOAD", exact=True)).to_be_visible()
+        expect(panel.get_by_role("tab", name="Logs")).to_have_attribute("aria-selected", "true")
+        panel.get_by_role("tab", name="Details").click()
         expect(panel.get_by_text(ERROR).first).to_be_visible()
         expect(panel.get_by_text("Dependencies")).to_be_visible()
         expect(panel.get_by_text("EXTRACT")).to_be_visible()
         expect(panel.get_by_role("button", name="Mark as")).to_be_visible()
+        panel.get_by_text("Process details").click()
+        expect(panel.get_by_text("Attempt id", exact=True)).to_be_visible()
+        panel.get_by_text("Task definition and history", exact=True).click()
+        expect(panel.get_by_text("27 of 28")).to_be_visible()
         shoot(page, "run-task-panel")
-        panel.get_by_role("link", name="Open attempt 1").click()
-        expect(page.get_by_role("heading", name="Attempt 1 of LOAD")).to_be_visible()
-        expect(page.get_by_text(f"attempt id {failed}")).to_have_count(0)
-        page.get_by_text("Process details").click()  # internals sit behind one disclosure
-        expect(page.get_by_text("Attempt id", exact=True)).to_be_visible()
-        expect(page.get_by_text("How the process ended")).to_be_visible()
-        expect(page.get_by_text(ERROR).first).to_be_visible()
-        shoot(page, "attempt")
-        page.get_by_role("link", name="Task history").click()
-        expect(page.get_by_role("heading", name="LOAD")).to_be_visible()
-        expect(page.get_by_text("27 of 28")).to_be_visible()
         assert problems == []
         browser.close()
 
@@ -94,6 +90,7 @@ def test_the_task_history_lists_runs_with_counts_and_exports_csv(scene):
     with sync_playwright() as pw:
         browser, page, problems = open_page(pw, viewport={"width": 1280, "height": 900})
         page.context.set_default_timeout(8000)
+        # The task's address opens its own panel: definition, history and lookups.
         sign_in(page, url, "/ui/projects/default/pipelines/ORDERS/tasks/LOAD")
         table = page.get_by_role("table", name="Task runs")
         expect(table.get_by_role("link", name=f"#{good}", exact=True)).to_be_visible()
@@ -157,9 +154,10 @@ def test_a_viewer_reads_task_pages_with_disabled_controls(scene):
         page.get_by_role("table", name="Run grid").get_by_role(
             "img", name=f"LOAD in run {bad}: failed"
         ).click()
-        expect(
-            page.get_by_role("region", name="Task LOAD", exact=True).get_by_text(ERROR).first
-        ).to_be_visible()
+        panel = page.get_by_role("region", name="Task LOAD", exact=True)
+        panel.get_by_role("tab", name="Details").click()
+        expect(panel.get_by_text(ERROR).first).to_be_visible()
+        panel.get_by_text("Task definition and history", exact=True).click()
         for label in ("Mark as", "Pause task"):
             control = page.get_by_role("button", name=label, exact=True)
             expect(control).to_be_disabled()
@@ -211,7 +209,7 @@ def test_a_skipped_task_names_its_failed_upstream(site):
         browser, page, problems = open_page(pw)
         sign_in(page, url, f"/ui/projects/default/runs/SKIP_REASON/{run}")
         expect(
-            page.get_by_role("table", name="Task list").get_by_text("Skipped: SOURCE failed")
+            page.get_by_role("table", name="Task instances").get_by_text("Skipped: SOURCE failed")
         ).to_be_visible()
         assert problems == []
         browser.close()
@@ -228,11 +226,11 @@ def test_attempt_addresses_validate_the_parent_run_label(scene):
         suffix = f"/tasks/LOAD/attempts/{failed}"
         base = url + "/ui/projects/default/runs/ORDERS/"
         page.goto(base + quote(label, safe="") + suffix, wait_until="domcontentloaded")
-        expect(page.get_by_role("region", name="Attempt 1", exact=True)).to_be_visible()
+        expect(page.get_by_role("region", name="Task LOAD", exact=True)).to_be_visible()
         page.goto(base + quote(label.lower(), safe="") + suffix, wait_until="domcontentloaded")
         expect(page.get_by_role("alert")).to_contain_text("stored label differs")
         expect(page.get_by_role("alert")).to_contain_text(label)
-        expect(page.get_by_role("region", name="Attempt 1", exact=True)).to_have_count(0)
+        expect(page.get_by_role("region", name="Task LOAD", exact=True)).to_have_count(0)
         browser.close()
 
 
@@ -241,16 +239,16 @@ def test_failure_diagnostics_stay_in_process_details(scene):
     with sync_playwright() as pw:
         browser, page, problems = open_page(pw)
         sign_in(page, url, f"/ui/projects/default/runs/ORDERS/{bad}/tasks/LOAD/attempts/{failed}")
+        page.get_by_role("tab", name="Details").click()
         details = page.locator("details").filter(
             has=page.get_by_text("Process details", exact=True)
         )
         expect(details.get_by_text("Failure classification", exact=True)).to_be_hidden()
         expect(page.get_by_text("Failure", exact=True)).to_have_count(0)
         details.locator("summary").click()
-        expect(details.get_by_text("Failure classification", exact=True)).to_be_visible()
-        expect(details.get_by_text("UNKNOWN", exact=True)).to_be_visible()
-        expect(details.get_by_text("Failure source", exact=True)).to_be_visible()
-        expect(details.get_by_text("Failure code", exact=True)).to_be_visible()
+        expect(details.get_by_text("Attempt id", exact=True)).to_be_visible()
+        expect(details.get_by_text("UNKNOWN", exact=True)).to_have_count(0)
+        expect(details.get_by_text("Not recorded", exact=True)).to_have_count(0)
         assert problems == []
         browser.close()
 

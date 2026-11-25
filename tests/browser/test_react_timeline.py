@@ -1,5 +1,6 @@
 """The run page's timeline shows recorded waits apart from execution, by mouse and keyboard."""
 
+import re
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -66,36 +67,27 @@ def waited(site):
 
 @pytest.mark.parametrize("width", [1440, 390])
 @pytest.mark.parametrize("scheme", ["light", "dark"])
-def test_timeline_bars_name_their_wait_and_outcome_by_keyboard(waited, scheme, width):
+def test_timeline_bars_name_their_queue_and_outcome_by_keyboard(waited, scheme, width):
     url, run = waited
     with sync_playwright() as pw:
         browser, page, problems = open_page(
             pw, color_scheme=scheme, viewport={"width": width, "height": 1000}
         )
         sign_in(page, url, f"/ui/projects/default/pipelines/TIMED?run={run}")
+        page.get_by_role("button", name="Gantt", exact=True).click()
         timeline = page.get_by_role("region", name="Timeline")
-        gate = timeline.get_by_role("button", name="LOAD: Dependency gate", exact=False)
-        expect(gate).to_have_attribute("aria-label", "LOAD: Dependency gate" + gate_tail(page))
+        queue = timeline.get_by_role("button", name=re.compile(r"LOAD, attempt 1: Queued"))
         rows = timeline.get_by_role("list", name="Tasks on the run's time axis")
         expect(rows.get_by_role("listitem")).to_have_count(2)
-        gate.scroll_into_view_if_needed()
-        gate.focus()
-        expect(gate).to_be_focused()
-        expect(gate).to_have_attribute("aria-pressed", "true")
-        expect(timeline.locator("p[aria-live]")).to_contain_text("Dependency gate")
-        expect(timeline.locator("p[aria-live]")).to_contain_text("Satisfied.")
+        queue.focus()
+        expect(queue).to_be_focused()
+        expect(queue).to_have_attribute("aria-pressed", "true")
+        expect(timeline.locator("p[aria-live]")).to_contain_text("Queued for a slot")
         page.keyboard.press("Tab")
-        expect(timeline.locator("p[aria-live]")).not_to_contain_text("Dependency gate")
-        execution = timeline.get_by_role("button", name="LOAD, attempt 1: Running", exact=False)
-        assert execution.evaluate("e => e.getBoundingClientRect().width > 0")
+        expect(timeline.locator("p[aria-live]")).to_contain_text("Running")
+        execution = timeline.get_by_role("button", name=re.compile(r"LOAD, attempt 1: Running"))
+        expect(execution).to_be_visible()
+        expect(execution.locator("svg")).to_have_count(0)
         shoot(page, f"run-timeline-{scheme}-{width}")
         assert problems == []
         browser.close()
-
-
-def gate_tail(page):
-    """The recorded gate runs from the first check to the decision, in the viewer's zone (UTC)."""
-    return (
-        " from 01 Mar, 09:00:01 UTC to 01 Mar, 09:01:30 UTC, 1m 29s, "
-        "deadline 01 Mar, 09:10:00 UTC. Satisfied."
-    )

@@ -1,26 +1,26 @@
-import { TaskPauseControl } from "@/components/task-pause";
-import { RunLabel, copyRunLabel } from "@/components/run-label";
-import { useQuery } from "@tanstack/react-query";
-import { ChevronDown, ChevronRight, CircleX, Copy, Download, LifeBuoy } from "lucide-react";
+import { TaskDefinitionPanel } from "@/components/task-definition-panel";
+import { copyRunLabel } from "@/components/run-label";
 import * as React from "react";
+import { useQuery } from "@tanstack/react-query";
+import { ChevronDown, Copy, Download, LifeBuoy } from "lucide-react";
 import { AppLink as Link } from "@/components/navigation";
-import { Fact, FactList, Loading, Notice, ParamList } from "@/components/common";
-import { DropdownContent, DropdownItem, DropdownMenu, DropdownSeparator, DropdownTrigger } from "@/components/dropdown";
+import { Fact, FactList, Loading, Notice, ParamList, SelectField } from "@/components/common";
+import { Disclosure, DisclosureSummary, DropdownContent, DropdownItem, DropdownMenu, DropdownSeparator, DropdownTrigger } from "@/components/dropdown";
 import { ActionButton } from "@/components/action-button";
-import { AttemptDetails } from "@/components/attempt-details";
+import { AttemptDetails, AttemptLog, LIVE } from "@/components/attempt-details";
 import { useToast } from "@/components/toast";
 import { controlAnswers, DANGER, EFFECT, label as actionLabel, ScopeControls } from "@/components/scope-controls";
-import { isFailure, slaVerdict, StatusBadge, taskStatus } from "@/components/status";
+import { isFailure, slaVerdict, StatusBadge, solidClass, taskStatus } from "@/components/status";
 import { Button } from "@/components/ui/button";
 import { Table, Td, Th } from "@/components/ui/table";
 import { unavailableAction, useActionAvailability } from "@/hooks";
-import { getJson, project } from "@/lib/api";
+import { getJson, getText, project } from "@/lib/api";
 import { formatDuration } from "@/lib/format";
-import { RunTimeline } from "@/components/run-timeline";
+import { Tabs } from "@/components/tabs";
 import { handlerLabel, runConditionLabel, words } from "@/lib/labels";
-import { When } from "@/components/when";
-import { attemptPath, itemsPath, taskPath } from "@/lib/routes";
-import type { Capabilities, ControlView, Explanation, Graph, RunView, Steps, TaskHistory } from "@/lib/types";
+import { When, useNow } from "@/components/when";
+import { itemsPath } from "@/lib/routes";
+import type { Capabilities, ControlView, Explanation, GridCell, RunView, Steps, TaskHistory } from "@/lib/types";
 
 function Why({ code, pipeline, runId, task }: { code: string; pipeline: string; runId: number; task: string }) {
   const why = useQuery({
@@ -49,46 +49,121 @@ function Why({ code, pipeline, runId, task }: { code: string; pipeline: string; 
   );
 }
 
-/** What a task row opens in place: its state, controls, why it waits, and each attempt with its evidence and log. */
-function TaskDetails({ code, pipeline, runId, task, handler }: { code: string; pipeline: string; runId: number; task: string; handler?: string }) {
+const taskTabs = [
+  { id: "logs", label: "Logs" }, { id: "source", label: "SQL / script" },
+  { id: "details", label: "Details" }, { id: "attempts", label: "Attempts" },
+];
+
+function TaskSource({ code, pipeline, runId, task, attemptId }: {
+  code: string; pipeline: string; runId: number; task: string; attemptId?: number;
+}) {
+  const source = useQuery({
+    queryKey: ["task-source", code, pipeline, runId, task],
+    queryFn: () => getJson<Steps>(`${project(code)}/steps`, { pipeline_code: pipeline, run_id: runId, source_task: task }),
+  });
+  const log = useQuery({
+    queryKey: ["task-source-log", code, attemptId],
+    queryFn: () => getText(`${project(code)}/attempts/${attemptId}/log`),
+    enabled: attemptId !== undefined,
+    retry: false,
+  });
+  const excerpt = (log.data ?? "").split("\n").flatMap((line) => {
+    const match = /SQL_SCRIPT .* statement \d+ starting: (.*)$/.exec(line);
+    return match ? [match[1]] : [];
+  });
+  const deployed = source.data?.source;
+  return <div className="grid gap-3">
+    {source.isPending ? <Loading what="deployed source" /> : null}
+    {source.error ? <Notice>{source.error.message}</Notice> : null}
+    {deployed ? <section className="grid gap-2">
+      <h3 className="text-sm font-semibold">Source (version {deployed.version}, as deployed for this run)</h3>
+      {deployed.file ? <p className="break-all text-xs text-muted">{deployed.file}</p> : null}
+      {deployed.text === null ? <p className="text-sm text-muted">This handler has no SQL or script source.</p>
+        : <pre className="whitespace-pre-wrap break-all rounded-md bg-surface-2 p-3 text-xs">{deployed.text}</pre>}
+      {deployed.truncated_at_bytes !== null ? <p className="text-xs text-muted">Source display truncated at UTF-8 byte {deployed.truncated_at_bytes.toLocaleString()} (256 KiB limit).</p> : null}
+    </section> : null}
+    {excerpt.length ? <section className="grid gap-2">
+      <h3 className="text-sm font-semibold">Execution text recorded for this try (first 240 characters per statement)</h3>
+      <pre className="whitespace-pre-wrap break-all rounded-md bg-surface-2 p-3 text-xs">{excerpt.join("\n")}</pre>
+    </section> : <p className="text-sm text-muted">Exact, masked per-try execution capture is planned for S7.AX.4.</p>}
+  </div>;
+}
+
+function TaskDetails({ code, pipeline, run, task, handler, cell, tab, tryNumber, onTab, onTry }: {
+  code: string; pipeline: string; run: RunView; task: string; handler?: string; cell?: GridCell;
+  tab: string; tryNumber: number | null; onTab: (tab: string) => void;
+  onTry: (value: number | null) => void;
+}) {
+  const panel = React.useRef<HTMLElement>(null);
+  React.useLayoutEffect(() => {
+    const area = panel.current?.closest("[data-scroll-area]");
+    area?.scrollTo(0, 0);
+    // Stacked on a phone, bring the details card into view only when it is off-screen; scrolling it to the
+    // very top would carry it away again as the content above it settles.
+    if (window.matchMedia("(max-width: 1023px)").matches) {
+      (area?.parentElement ?? panel.current)?.scrollIntoView({ block: "nearest" });
+    }
+  }, []);
+  const runId = run.pipeline_run_id;
+  const now = useNow();
   const history = useQuery({
     queryKey: ["task-history", code, pipeline, runId, task],
     queryFn: () => getJson<TaskHistory>(`${project(code)}/history`, { pipeline_code: pipeline, run_id: runId, task_code: task }),
+    refetchInterval: run.status === "IN-PROGRESS" ? 3_000 : false,
   });
-  const run = history.data?.entries[0];
-  return (
-    <section aria-label={`Task ${task}`} className="grid gap-3 border-l-2 border-accent bg-surface-2 p-4">
-      <div className="flex flex-wrap items-center gap-3 text-xs">
-        <Link to={taskPath(code, pipeline, task)} className="text-accent hover:underline">
-          Task history
-        </Link>
-        {handler === "PYTHON" ? (
-          <Link to={itemsPath(code, pipeline, runId, task)} className="text-accent hover:underline">
-            Items
-          </Link>
-        ) : null}
-      </div>
-      {history.isPending ? <Loading what="task" /> : null}
-      {history.isError ? <Notice>{(history.error as Error).message}</Notice> : null}
-      {history.isSuccess && !run ? <p className="m-0 text-muted">This task has not started under this run.</p> : null}
-      {/* The message is shown once: on the attempt that recorded it, or here when no attempt did. */}
-      {run?.error_message && !run.attempts.some((a) => a.error_message === run.error_message) ? <Notice mono>{run.error_message}</Notice> : null}
+  const summary = history.data?.entries[0];
+  const attempts = summary?.attempts ?? [];
+  const latest = attempts.at(-1);
+  const attempt = tryNumber === null ? latest : attempts.find(item => item.attempt_number === tryNumber);
+  const start = attempt?.started_at ?? cell?.start_date;
+  const end = attempt ? attempt.ended_at : cell?.end_date;
+  const selectedTab = taskTabs.some(item => item.id === tab) ? tab : "logs";
+  const status = attempt?.status ?? taskStatus(summary?.status ?? cell?.status ?? null, run);
+  return <section ref={panel} aria-label={`Task ${task}`} className="grid scroll-mt-14 gap-3">
+    <div className="flex flex-wrap items-center gap-2">
+      <h2 className="break-all text-lg font-semibold">{task}</h2>
+      <StatusBadge status={status} />
+      <span className="text-xs text-muted">Run #{runId}</span>
+      {handler ? <span className="text-xs text-muted">{handlerLabel(handler)}</span> : null}
+      {attempt && attempt.attempt_number > 1 ? <span className="text-xs">Try {attempt.attempt_number}</span> : null}
+    </div>
+    <FactList inline>
+      {start ? <Fact inline label="Started"><When iso={start} now={!end ? Math.max(now, Date.parse(start)) : now} /></Fact> : null}
+      {end ? <Fact inline label="Ended"><When iso={end} /></Fact> : null}
+      {start ? <Fact inline label="Duration">{formatDuration(start, end ?? null, now)}</Fact> : null}
+    </FactList>
+    {attempts.length > 1 ? <SelectField compact label="Try" value={String(tryNumber ?? "")} onChange={(value) => onTry(value ? Number(value) : null)}>
+      <option value="">Latest ({latest?.attempt_number})</option>
+      {attempts.filter(item => item !== latest).map(item => <option key={item.attempt_id} value={item.attempt_number}>{item.attempt_number}</option>)}
+    </SelectField> : null}
+    <Tabs tabs={taskTabs} value={selectedTab} onChange={onTab} panelId="task-instance-tab" />
+    <div role="tabpanel" id="task-instance-tab" aria-labelledby={`tab-${selectedTab}`} className="grid gap-3">
+    {history.isError ? <Notice>{history.error.message}</Notice> : null}
+    {history.isPending ? <Loading what="task history" /> : null}
+    {history.isSuccess && tryNumber !== null && !attempt ? <Notice>Try {tryNumber} is not recorded for {task} in run #{runId}.</Notice> : null}
+    {selectedTab === "logs" && attempt ? (attempt.log_path || LIVE.has(attempt.status)
+      ? <AttemptLog key={attempt.attempt_id} code={code} attempt={attempt} open embedded />
+      : <p className="m-0 text-sm text-muted">No log was recorded for this attempt.</p>) : null}
+    {selectedTab === "logs" && history.isSuccess && !attempt && tryNumber === null ? <p className="text-sm text-muted">This task has no stored attempt log yet.</p> : null}
+    {selectedTab === "source" ? <TaskSource code={code} pipeline={pipeline} runId={runId} task={task} attemptId={attempt?.attempt_id} /> : null}
+    {selectedTab === "details" ? <>
+      {attempt ? <AttemptDetails code={code} attempt={attempt} hideLog /> : null}
       <ScopeControls code={code} pipeline={pipeline} runId={runId} task={task} />
-      <TaskPauseControl code={code} pipeline={pipeline} task={task} />
-      {run && run.status !== "SUCCESS" ? <Why code={code} pipeline={pipeline} runId={runId} task={task} /> : null}
-      {run && run.attempts.length === 0 ? (
-        <p className="m-0 text-muted">No attempt was started for this task{run.status === "SKIPPED" ? ": an upstream outcome skipped it" : ""}.</p>
-      ) : null}
-      {run?.attempts.map((attempt) => (
-        <div key={attempt.attempt_id} className="grid gap-2 rounded-md border border-border bg-surface p-3">
-          <AttemptDetails code={code} attempt={attempt} />
-          <Link to={attemptPath(code, pipeline, runId, task, attempt.attempt_id)} className="w-fit text-xs text-accent hover:underline">
-            Open attempt {attempt.attempt_number}
-          </Link>
-        </div>
-      ))}
-    </section>
-  );
+      {handler === "PYTHON" ? <Link to={itemsPath(code, pipeline, runId, task)} className="text-accent hover:underline">Items</Link> : null}
+      {summary && summary.status !== "SUCCESS" ? <Why code={code} pipeline={pipeline} runId={runId} task={task} /> : null}
+      <Disclosure>
+        <DisclosureSummary>Task definition and history</DisclosureSummary>
+        <TaskDefinitionPanel code={code} pipeline={pipeline} task={task} />
+      </Disclosure>
+    </> : null}
+    {selectedTab === "attempts" ? <ul className="grid gap-1">
+      {attempts.map(item => <li key={item.attempt_id} className="flex items-center gap-2">
+        <Button variant="ghost" size="sm" onClick={() => onTry(item === latest ? null : item.attempt_number)}>Try {item.attempt_number}</Button>
+        <StatusBadge status={item.status} />
+      </li>)}
+    </ul> : null}
+    </div>
+  </section>;
 }
 
 /**
@@ -202,57 +277,16 @@ function SkipReason({ code, pipeline, runId, task }: { code: string; pipeline: s
   return failed?.length ? <span className="text-xs text-muted">Skipped: {failed.map((dependency) => dependency.upstream).join(", ")} failed</span> : null;
 }
 
-function FirstError({ code, pipeline, runId, task }: { code: string; pipeline: string; runId: number; task: string }) {
-  const history = useQuery({
-    queryKey: ["task-history", code, pipeline, runId, task],
-    queryFn: () => getJson<TaskHistory>(`${project(code)}/history`, { pipeline_code: pipeline, run_id: runId, task_code: task }),
-  });
-  const entry = history.data?.entries[0];
-  const message = entry?.error_message ?? [...(entry?.attempts ?? [])].reverse().find((a) => a.error_message)?.error_message;
-  if (!message) return null;
-  return <p className="m-0 line-clamp-2 break-words font-mono text-xs text-fg">{message.split("\n")[0]}</p>;
-}
+// Gantt and Graph are views of the panel beside the grid, so the run keeps only its own tabs.
+const runTabs = [{ id: "instances", label: "Task instances" }, { id: "details", label: "Details" }];
 
-/**
- * A failed run leads with its failure: which tasks failed, the first one's message, and a button that opens each
- * in the list below, so the cause is read before the run's details.
- */
-function FailedTasks({ code, pipeline, runId, steps, open }: { code: string; pipeline: string; runId: number; steps: Steps["steps"]; open: (task: string) => void }) {
-  const failed = steps.filter((step) => isFailure(step.status));
-  if (failed.length === 0) return null;
-  const skipped = steps.filter((step) => step.status === "SKIPPED").length;
-  return (
-    <section aria-label="Failed tasks" className="grid gap-1.5 rounded-md border border-bad/40 bg-bad-bg px-3 py-2.5 text-[13px] text-bad">
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-        <CircleX aria-hidden className="size-4 shrink-0" />
-        <span className="font-semibold">
-          {failed.length} task{failed.length === 1 ? "" : "s"} failed:
-        </span>
-        {failed.map((step, i) => (
-          <React.Fragment key={step.task_code}>
-            {i > 0 ? <span aria-hidden>,</span> : null}
-            <button type="button" onClick={() => open(step.task_code)} className="cursor-pointer font-mono font-medium underline underline-offset-2 hover:no-underline">
-              {step.task_code}
-            </button>
-          </React.Fragment>
-        ))}
-        {skipped ? <span className="text-fg">· {skipped} skipped</span> : null}
-      </div>
-      <FirstError code={code} pipeline={pipeline} runId={runId} task={failed[0]!.task_code} />
-    </section>
-  );
-}
-
-/**
- * The selected run: its state, identifier, times and controls, and one task table whose rows open in place
- * to the task's attempts, evidence and log. The task open is the address's, so a grid cell can open it.
- */
-export function RunOverview({ code, pipeline, runId, task, onTask }: { code: string; pipeline: string; runId: number; task: string | null; onTask: (task: string | null) => void }) {
+export function RunOverview({ code, pipeline, runId, task, taskOrder, cells, tab, tryNumber, onTask, onTab, onTry }: {
+  code: string; pipeline: string; runId: number; task: string | null; taskOrder: string[]; cells: GridCell[];
+  tab: string; tryNumber: number | null; onTask: (task: string | null) => void;
+  onTab: (tab: string) => void; onTry: (value: number | null) => void;
+}) {
   const toast = useToast();
-  const panel = React.useRef<HTMLDivElement>(null);
-  React.useEffect(() => {
-    if (task) panel.current?.scrollIntoView({ block: "nearest" });
-  }, [task]);
+  const now = useNow();
   const live = (status?: string) => (status === "IN-PROGRESS" ? 5_000 : false);
   const run = useQuery({
     queryKey: ["run", code, runId],
@@ -264,112 +298,71 @@ export function RunOverview({ code, pipeline, runId, task, onTask }: { code: str
     queryFn: () => getJson<Steps>(`${project(code)}/steps`, { pipeline_code: pipeline, run_id: runId }),
     refetchInterval: () => live(run.data?.status),
   });
-  const graph = useQuery({ queryKey: ["graph", code, pipeline], queryFn: () => getJson<Graph>(`${project(code)}/graph`, { pipeline_code: pipeline }) });
-  const order = new Map((graph.data?.waves ?? []).flat().map((name, index) => [name, index]));
-  const ordered = [...(steps.data?.steps ?? [])].sort((a, b) => (order.get(a.task_code) ?? 0) - (order.get(b.task_code) ?? 0));
-  if (run.isError) return <Notice>{(run.error as Error).message}</Notice>;
+  if (run.isError) return <Notice>{run.error.message}</Notice>;
   const r = run.data;
   if (!r) return <Loading what="run" />;
-  if (r.pipeline_code !== pipeline)
-    return (
-      <Notice>
-        Run #{r.pipeline_run_id} belongs to {r.pipeline_code}, not {pipeline}.{" "}
-        <Link className="underline" to={`/projects/${encodeURIComponent(code)}/pipelines/${encodeURIComponent(r.pipeline_code)}?run=${r.pipeline_run_id}`}>
-          Open it in {r.pipeline_code}
-        </Link>
-        .
-      </Notice>
-    );
-  return (
-    <div className="grid gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex flex-wrap items-center gap-2">
-          <StatusBadge status={r.status} className="px-2 py-0.5 text-sm" />
-          <span aria-label="Run identifier"><RunLabel id={r.pipeline_run_id} label={r.run_label} /></span>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <RecoverRun code={code} run={r} />
-          <RunActions code={code} run={r} />
-        </div>
-      </div>
-      {r.run_label ? (
-        <p className="m-0 flex items-center gap-2 font-mono text-xs text-muted">
-          <Button size="icon" variant="ghost" className="size-6" aria-label="Copy the run identifier" onClick={() => void navigator.clipboard.writeText(copyRunLabel(r.run_label ?? "")).then(() => toast("Run identifier copied."))}>
-            <Copy className="size-3.5" aria-hidden />
-          </Button>
-        </p>
-      ) : null}
-      {r.parameter_overrides && Object.keys(r.parameter_overrides).length > 0 && <section aria-label="Recorded task inputs" className="space-y-2">
-        <h3 className="text-sm font-medium">Recorded task inputs</h3>
-        <ParamList entries={Object.entries(r.parameter_overrides).flatMap(([task, values]) => Object.entries(values).map(([name, value]): [string, string] => [`${task}.${name}`, value]))} />
-      </section>}
-      <FailedTasks code={code} pipeline={pipeline} runId={runId} steps={ordered} open={(name) => onTask(name)} />
-      <FactList inline>
-        <Fact inline label="Started"><When iso={r.start_date} /></Fact>
-        <Fact inline label="Ended"><When iso={r.end_date} empty="Not yet" /></Fact>
-        <Fact inline label="Duration">{formatDuration(r.start_date, r.end_date)}</Fact>
-        <Fact inline label="Logical date">{r.run_date ?? "—"}</Fact>
-        <Fact inline label="Trigger">{words(r.trigger_kind).toLowerCase()}</Fact>
-        <Fact inline label="Started by">{r.started_by ?? "—"}</Fact>
-        {slaVerdict(r) ? <Fact inline label="SLA"><StatusBadge status={slaVerdict(r)!} /></Fact> : null}
-      </FactList>
-      <section aria-labelledby="run-timeline" className="grid gap-2">
-        <h3 id="run-timeline" className="m-0 text-sm font-medium">Timeline</h3>
-        <RunTimeline run={r} />
-      </section>
-      <div data-card className="overflow-hidden rounded-sm border border-border">
-        <Table aria-label="Task list">
-          <thead>
-            <tr>
-              <Th className="w-8">
-                <span className="sr-only">Details</span>
-              </Th>
-              <Th>Task</Th>
-              <Th>Status</Th>
-              <Th>Handler</Th>
-              <Th>Runs when</Th>
-            </tr>
-          </thead>
-          <tbody>
-            {ordered.map((step) => {
-              const isOpen = step.task_code === task;
-              const toggle = () => onTask(isOpen ? null : step.task_code);
-              return (
-                <React.Fragment key={step.task_code}>
-                  <tr className={isOpen ? "bg-surface-2" : "hover:bg-surface-2"}>
-                    <Td className="w-8">
-                      <button type="button" className="flex cursor-pointer items-center text-muted hover:text-fg" aria-expanded={isOpen} aria-label={`${isOpen ? "Hide" : "Show"} details of ${step.task_code}`} onClick={toggle}>
-                        {isOpen ? <ChevronDown className="size-4" aria-hidden /> : <ChevronRight className="size-4" aria-hidden />}
-                      </button>
-                    </Td>
-                    <Td>
-                      <button type="button" className="cursor-pointer font-medium text-fg hover:text-accent hover:underline" aria-pressed={isOpen} onClick={toggle}>
-                        {step.task_code}
-                      </button>
-                      {step.task_run_id ? <div><RunLabel id={step.task_run_id} label={step.task_run_label} /></div> : null}
-                    </Td>
-                    <Td>
-                      <StatusBadge quiet status={taskStatus(step.status, r)} />
-                      {step.status === "SKIPPED" ? <SkipReason code={code} pipeline={pipeline} runId={runId} task={step.task_code} /> : null}
-                    </Td>
-                    <Td>{handlerLabel(step.handler)}</Td>
-                    <Td className="text-muted">{runConditionLabel(step.run_condition, step.run_condition_count)}</Td>
-                  </tr>
-                  {isOpen ? (
-                    <tr>
-                      <td colSpan={5} className="p-0">
-                        <div ref={panel}>
-                          <TaskDetails code={code} pipeline={pipeline} runId={runId} task={step.task_code} handler={step.handler} />
-                        </div>
-                      </td>
-                    </tr>
-                  ) : null}
-                </React.Fragment>
-              );
-            })}
-          </tbody>
-        </Table>
-      </div>
+  if (r.pipeline_code !== pipeline) return <Notice>Run #{runId} belongs to {r.pipeline_code}.</Notice>;
+  const byTask = new Map(steps.data?.steps.map(step => [step.task_code, step]));
+  const byCell = new Map(cells.filter(cell => cell.pipeline_run_id === runId).map(cell => [cell.task_code, cell]));
+  if (task) return <TaskDetails key={`${runId}:${task}`} code={code} pipeline={pipeline} run={r} task={task} handler={byTask.get(task)?.handler}
+    cell={byCell.get(task)} tab={tab} tryNumber={tryNumber} onTab={onTab} onTry={onTry} />;
+  const active = runTabs.some(item => item.id === tab) ? tab : "instances";
+  const duration = (cell?: GridCell) => cell?.start_date ? Math.max(0, (cell.end_date ? Date.parse(cell.end_date) : now) - Date.parse(cell.start_date)) : 0;
+  const max = Math.max(1, ...Array.from(byCell.values(), duration));
+  return <div className="grid gap-3">
+    <div className="flex flex-wrap items-center gap-2">
+      <h2 aria-label="Run identifier" title={r.run_label} className="text-base font-semibold">Run #{runId}</h2>
+      <StatusBadge status={r.status} />
+      {r.selected_task_ids?.length ? <span className="text-xs">{r.selected_task_ids.length} of {taskOrder.length} tasks</span> : null}
+      <RecoverRun code={code} run={r} /><RunActions code={code} run={r} />
+      {r.run_label ? <Button size="icon" variant="ghost" aria-label="Copy the run identifier" onClick={() => void navigator.clipboard.writeText(copyRunLabel(r.run_label ?? "")).then(() => toast("Run identifier copied."))}><Copy className="size-4" aria-hidden /></Button> : null}
     </div>
-  );
+    <FactList inline>
+      {r.run_date ? <Fact inline label="Run date">{r.run_date}</Fact> : null}
+      <Fact inline label="Trigger">{words(r.trigger_kind)}</Fact>
+      {r.started_by ? <Fact inline label="Started by">{r.started_by}</Fact> : null}
+      {r.start_date ? <Fact inline label="Started"><When iso={r.start_date} /></Fact> : null}
+      {r.end_date ? <Fact inline label="Ended"><When iso={r.end_date} /></Fact> : null}
+      {r.start_date ? <Fact inline label="Duration">{formatDuration(r.start_date, r.end_date, now)}</Fact> : null}
+    </FactList>
+    {/* Inputs given for this run change what it does, so they show with the run's facts, not behind a tab. */}
+    {r.parameter_overrides && Object.keys(r.parameter_overrides).length > 0 ? <section aria-label="Recorded task inputs" className="grid gap-1">
+      <h3 className="text-sm font-medium">Recorded task inputs</h3>
+      <ParamList entries={Object.entries(r.parameter_overrides).flatMap(([name, values]) => Object.entries(values).map(([key, value]): [string, string] => [`${name}.${key}`, value]))} />
+    </section> : null}
+    <Tabs tabs={runTabs} value={active} onChange={onTab} panelId="run-instance-tab" />
+    <div role="tabpanel" id="run-instance-tab" aria-labelledby={`tab-${active}`} className="grid gap-3">
+    {active === "details" ? <>
+      {slaVerdict(r) ? <StatusBadge status={slaVerdict(r)!} /> : null}
+    </> : null}
+    {active === "instances" ? <>
+      {steps.isError ? <Notice>{steps.error.message}</Notice> : null}
+      <Table aria-label="Task instances" className="stacked-table" unwrapped>
+        <thead><tr><Th>Task</Th><Th>Status</Th><Th>Try</Th><Th>Started</Th><Th>Duration</Th><Th>Runs when</Th></tr></thead>
+        <tbody>{taskOrder.map(name => {
+          const step = byTask.get(name);
+          const cell = byCell.get(name);
+          const status = taskStatus(step?.status ?? cell?.status ?? null, r);
+          return <tr key={name}>
+            <Td><button type="button" className="break-all text-left font-medium text-accent hover:underline" onClick={() => onTask(name)}>{name}</button></Td>
+            <Td data-label="Status"><StatusBadge quiet status={status} />{step?.status === "SKIPPED" ? <SkipReason code={code} pipeline={pipeline} runId={runId} task={name} /> : null}</Td>
+            <Td data-label="Try">{cell?.attempt_count || ""}</Td><Td data-label="Started">{cell?.start_date ? <When iso={cell.start_date} /> : null}</Td>
+            <Td data-label="Duration">{cell?.start_date ? <><span className="num">{formatDuration(cell.start_date, cell.end_date, now)}</span><span aria-hidden className={`block h-1 rounded ${solidClass(status)}`} style={{ width: `${Math.max(4, duration(cell) / max * 100)}%` }} /></> : null}</Td>
+            <Td data-label="Runs when">{step?.handler === "ALERT" ? alertCondition(step.parameters?.ALERT_ON) : step ? runConditionLabel(step.run_condition, step.run_condition_count) : null}</Td>
+          </tr>;
+        })}</tbody>
+      </Table>
+    </> : null}
+    </div>
+  </div>;
+}
+
+function alertCondition(event: string | undefined): string {
+  if (!event) return "On its configured pipeline event";
+  return event.split("|").map(value => {
+    const label = value.trim().replaceAll("_", " ").toLowerCase();
+    return label === "failure" || label === "pipeline failure" ? "When the pipeline fails"
+      : label === "success" || label === "pipeline success" ? "When the pipeline succeeds"
+        : `On ${label}`;
+  }).join(" · ");
 }

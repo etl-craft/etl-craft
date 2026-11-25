@@ -21,14 +21,16 @@ export interface RunFilters {
   pool?: string;
   agent?: string;
   failure_class?: string;
+  /** Only runs in these states, chosen in the database so paging keeps finding them. */
+  run_status?: string[];
 }
 
 /** A project's runs, or one pipeline's, newest first, a page at a time; every view of the runs shares it. */
 export function useRuns(code: string, pipeline?: string, filters: RunFilters = {}, grid?: { limit: number; selected?: number }) {
   const runs = useInfiniteQuery({
-    queryKey: ["runs", code, pipeline ?? "", filters.pool ?? "", filters.agent ?? "", filters.failure_class ?? "", ...(grid ? [grid] : [])],
+    queryKey: ["runs", code, pipeline ?? "", filters.pool ?? "", filters.agent ?? "", filters.failure_class ?? "", (filters.run_status ?? []).join(","), ...(grid ? [grid] : [])],
     initialPageParam: undefined as number | undefined,
-    queryFn: ({ pageParam }) => getJson<History>(`${project(code)}/history`, { all: true, limit: grid?.limit ?? PAGE, cells: grid ? true : undefined, extra_run_id: pageParam === undefined ? grid?.selected : undefined, pipeline_code: pipeline, before: pageParam, pool: filters.pool, agent: filters.agent, failure_class: filters.failure_class }),
+    queryFn: ({ pageParam }) => getJson<History>(`${project(code)}/history`, { all: true, limit: grid?.limit ?? PAGE, cells: grid ? true : undefined, extra_run_id: pageParam === undefined ? grid?.selected : undefined, pipeline_code: pipeline, before: pageParam, pool: filters.pool, agent: filters.agent, failure_class: filters.failure_class, run_status: filters.run_status }),
     getNextPageParam: (last) => last.before ?? (!grid && last.entries.length >= PAGE ? last.entries[last.entries.length - 1]?.pipeline_run_id : undefined),
     refetchInterval: 15_000,
   });

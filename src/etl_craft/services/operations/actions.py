@@ -119,6 +119,7 @@ from etl_craft.services.operations.requests import (
     RunId,
     RunRequest,
     RunSelection,
+    StepsInput,
     TagFilter,
     TaskSelection,
     ValidateInput,
@@ -236,7 +237,8 @@ _ROWS = (
     Action(ActionName.GRAPH, inspect.pipeline_graph, PipelineInput, models.GraphView, VIEWER, GET,
            f"{API}/graph",
            scope=ActionScope.PIPELINE),
-    Action(ActionName.STEPS, inspect.pipeline_steps, RunSelection, models.StepsView, VIEWER, GET,
+    Action(ActionName.STEPS, inspect.pipeline_steps, StepsInput,
+           models.StepsView | models.StepsWithSource, VIEWER, GET,
            f"{API}/steps",
            scope=ActionScope.PIPELINE),
     Action(ActionName.STATUS, status.pipeline_status, RunFilter,
@@ -540,6 +542,11 @@ def _require_trigger_groups(ctx: OperationContext, action: Action, request: obje
 
 def invoke(ctx: OperationContext, name: ActionName, request: object) -> object:
     """Run one action for ``ctx``'s caller: the only way an interface reaches an operation."""
+    if name == ActionName.STEPS and type(request) is RunSelection:
+        assert isinstance(request, RunSelection)
+        request = StepsInput(
+            pipeline_code=request.pipeline_code, run_id=request.run_id, run_key=request.run_key
+        )
     call = ACTIONS[name].call
     if call is None:
         raise UsageError(f"{name} is a long-running process; its interface starts it")

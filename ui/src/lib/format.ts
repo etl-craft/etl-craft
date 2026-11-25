@@ -1,15 +1,12 @@
 /** Times always show their zone. */
-export function formatTime(iso: string | null, timeZone: string): string {
+export function formatTime(iso: string | null, timeZone: string, compact = false): string {
   if (!iso) return "—";
   return new Intl.DateTimeFormat("en-GB", {
     timeZone,
-    day: "2-digit",
-    month: "short",
+    ...(compact ? {} : { day: "2-digit", month: "short", second: "2-digit", timeZoneName: "short" }),
     hour: "2-digit",
     minute: "2-digit",
-    second: "2-digit",
     hour12: false,
-    timeZoneName: "short",
   }).format(new Date(iso));
 }
 

@@ -116,10 +116,14 @@ def test_removed_definition_tab_keeps_the_addressed_run_and_task(scene, removed)
         page.goto(url + f"/ui/projects/default/pipelines/OPS?tab={removed}&run={run}&task=LOAD")
         page.wait_for_url(lambda value: "tab=overview" in value)
         assert f"run={run}" in page.url and "task=LOAD" in page.url
+        selection = page.get_by_role("navigation", name="Selection")
+        expect(selection.get_by_role("button", name=f"Run #{run}", exact=True)).to_be_visible()
+        expect(selection.get_by_text("LOAD", exact=True)).to_be_visible()
+        selection.get_by_role("button", name="OPS", exact=True).click()
         expect(page.get_by_role("tab", name="Overview", exact=True)).to_have_attribute(
             "aria-selected", "true"
         )
-        expect(page.get_by_role("tab", name=re.compile(rf"^Run #{run} ·"))).to_be_visible()
+        assert "run=" not in page.url and "task=" not in page.url
         assert not problems
         browser.close()
 

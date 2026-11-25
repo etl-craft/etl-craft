@@ -173,6 +173,20 @@ class TaskSelection(RunSelection):
 
 
 @dataclass(frozen=True, kw_only=True)
+class StepsInput(RunSelection):
+    """Inspect a run's steps, optionally including the deployed source of one task."""
+
+    source_task: str | None = None
+
+    def __post_init__(self) -> None:
+        """Require an exact run when requesting its deployed source."""
+        super().__post_init__()
+        optional_text("source_task", self.source_task)
+        if self.source_task is not None and self.run_id is None and self.run_key is None:
+            raise UsageError("`source_task` needs `run_id` or `run_key`; select the exact run")
+
+
+@dataclass(frozen=True, kw_only=True)
 class CapabilitiesInput(RunIdentity):
     """Inspect run controls, or the actions on a pipeline or project."""
 
@@ -295,6 +309,7 @@ class HistoryInput(RunFilter):
     pool: str | None = None
     agent: int | None = None
     failure_class: FailureClass | None = None
+    run_status: tuple[RunStatus, ...] = ()
 
     def __post_init__(self) -> None:
         """Bound the page before reading it."""
@@ -307,12 +322,12 @@ class HistoryInput(RunFilter):
             not self.cells or not self.all or self.extra_run_id < 1
         ):
             raise UsageError("`extra_run_id` needs a positive run id with `all` and `cells`")
-        if (self.pool, self.agent, self.failure_class) != (None, None, None) and (
-            self.task_code is not None or not self.all
-        ):
+        if (
+            (self.pool, self.agent, self.failure_class) != (None, None, None) or self.run_status
+        ) and (self.task_code is not None or not self.all):
             raise UsageError(
-                "`pool`, `agent` and `failure_class` filter a list of pipeline runs; "
-                "give `all` and omit `task_code`"
+                "`pool`, `agent`, `failure_class` and `run_status` filter a list of pipeline "
+                "runs; give `all` and omit `task_code`"
             )
         if self.task_code is not None and self.pipeline_code is None:
             raise UsageError("`task_code` needs `pipeline_code`; choose its pipeline")

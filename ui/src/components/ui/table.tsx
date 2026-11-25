@@ -25,7 +25,7 @@ function room(element: HTMLElement): number {
  * The one scrolling table: a long list scrolls inside a bounded box with its header kept in view, and
  * a list that continues on the server loads the next rows when the end comes into view.
  */
-export function Table({ className, more, children, ...props }: React.TableHTMLAttributes<HTMLTableElement> & { more?: More }) {
+export function Table({ className, more, children, unwrapped = false, ...props }: React.TableHTMLAttributes<HTMLTableElement> & { more?: More; unwrapped?: boolean }) {
   const box = React.useRef<HTMLDivElement>(null);
   const end = React.useRef<HTMLDivElement>(null);
   const { hasMore = false, loading = false, load } = more ?? {};
@@ -49,6 +49,7 @@ export function Table({ className, more, children, ...props }: React.TableHTMLAt
     watch.observe(end.current);
     return () => watch.disconnect();
   }, [hasMore, loading, load, children]);
+  if (unwrapped) return <table className={cn("w-full border-collapse text-[13px]", className)} {...props}>{children}</table>;
   return (
     <div ref={box} style={height ? { maxHeight: height } : undefined} className="max-h-[min(70dvh,48rem)] w-full overflow-auto">
       <table className={cn("w-full border-collapse text-[13px]", className)} {...props}>

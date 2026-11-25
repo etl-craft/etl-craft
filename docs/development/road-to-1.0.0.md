@@ -203,7 +203,7 @@ item's text, or work done early under another item.
 | S7.AU Available actions on every page | Done | S7.AU PR | Every action on the project and platform pages renders from the server's availability answer, grayed out with its reason as a hover annotation; the console keeps submit-time refusals |
 | S7.AV No implicit project | Done | #444 | Engine DB access without a selected project raises `ProjectNotSelectedError` (exit 32) naming the query or operation; entry points select their project; `setup` and bare `doctor` are project-aware |
 | S7.AW Public docs for 0.9.0 | Done | #446 | Release install and first steps in the README, private development docs, and a short 0.9.0 changelog summary |
-| S7.AX Pipeline, run and task views | In progress | #460 | S7.AX.1 batches grid cells and pipeline availability and bounds project history. |
+| S7.AX Pipeline, run and task views | In progress | #460 | S7.AX.1 batches grid cells and pipeline availability and bounds project history. S7.AX.2a: the Airflow-layout pipeline page with filters; S7.AX.2b (run page) next |
 | S7.M Stewardship uploads | Done (M2) | #296, #305 | Atomic receipts and safe stored names; processed layout, retention archives and verified reruns; crash recovery and guarded upload history |
 | S7.S Seed tables | Done | #308 | Typed pinned-bundle seeds replace reference tables until recorded stewardship handover |
 | S7.T Business calendars | Done | #276 | Shared holiday and weekend calendars for schedules, run dates, backfill and catch-up |
@@ -247,6 +247,16 @@ item's text, or work done early under another item.
   Acceptance availability: local DuckDB validation and the
   [reviewed production deploy](https://github.com/etl-craft/support-insights/actions/runs/45533244175)
   passed. SI_REFERENCE run 5 ended SUCCESS.
+
+- **S7.AX.2 Choices that differ from the item text** (owner, 2026-11-25, design at
+  https://claude.ai/artifact/Gf4FFMFkBkRXiExggb8svr). The pipeline page copies Airflow 3.4's layout:
+  the details panel takes most of the width (grid about 30%) and the grid shows 10 runs by default
+  and scrolls sideways, so "a 26-task, 25-run grid fits at 1440 px" no longer holds. Gantt and Graph
+  are left-panel views, not run tabs; the run keeps Task instances and Details. Added filters
+  (Tasks, Task status in the selected run, Run status on the server through `history.run_status`).
+  S7.AX.2 ships as two pull requests: 2a the pipeline page, 2b a full-width run page (header, error
+  summary, Graph / List / Gantt with rows in, written and rejected as three columns, a Recover menu
+  named "Recover failed tasks", "Recover from a task", "Rerun the whole run", and Events).
 
 - **S8.D Choices that differ from the item text.** `valid_count` and the validity percentage use
   audited counts, not live PRE_ODS rows, because PRE_ODS is replaced every run (owner): the

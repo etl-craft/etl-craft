@@ -200,14 +200,26 @@ def test_diagram_scrollbars_move_the_view_and_follow_its_controls(mappings, widt
         browser.close()
 
 
-@pytest.mark.parametrize("labels", ["id", "time"])
-def test_native_grid_scrollbar_keeps_the_latest_run_clickable(mappings, labels):
-    _, url = mappings
+def test_native_grid_scrollbar_keeps_the_latest_run_clickable(mappings):
+    from sqlalchemy import text
+
+    from etl_craft.core.actor import acting_as
+    from fixtures.metadata import add_task
+
+    ctx, url = mappings
+    with acting_as(ctx.actor), ctx.engine.begin() as conn:
+        pipeline = conn.execute(
+            text(
+                "SELECT PIPELINE_ID AS pipeline_id FROM CFG_PIPELINES WHERE PIPELINE_CODE='ORDERS'"
+            )
+        ).scalar_one()
+        for number in range(26):
+            add_task(conn, pipeline, f"setup_{number:02}")
     with sync_playwright() as pw:
         browser, page, problems = open_page(
             pw, viewport={"width": 1100, "height": 400}, show_scrollbars=True
         )
-        sign_in(page, url, f"/ui/projects/default/pipelines/ORDERS?columns={labels}")
+        sign_in(page, url, "/ui/projects/default/pipelines/ORDERS")
         divider = page.get_by_role("separator", name="Resize the panes", exact=True)
         divider.focus()
         for _ in range(30):
@@ -215,7 +227,7 @@ def test_native_grid_scrollbar_keeps_the_latest_run_clickable(mappings, labels):
         grid = page.get_by_role("table", name="Run grid")
         latest = grid.locator("thead th").last
         expect(latest).to_be_visible()
-        area = grid.locator("xpath=parent::div/parent::div")
+        area = grid.locator("xpath=parent::div")
         page.wait_for_function("e=>e.offsetWidth>e.clientWidth", arg=area.element_handle())
         page.wait_for_function(
             """([area,latest])=>{

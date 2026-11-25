@@ -122,7 +122,8 @@ def test_search_finds_pipelines_runs_and_remembers_what_was_opened(scene):
         page.get_by_label("Search pipelines, tasks, tables and runs").fill("EXTRACT")
         page.keyboard.press("Enter")
         page.get_by_role("link", name="EXTRACT").first.click()
-        expect(page).to_have_url(url + "/ui/projects/default/pipelines/ORDERS/tasks/EXTRACT")
+        # The task address opens the pipeline page with the task's own panel.
+        expect(page).to_have_url(url + "/ui/projects/default/pipelines/ORDERS?task=EXTRACT")
         page.goto(url + "/ui/projects/default/search")
         expect(page.get_by_role("heading", name="Search", exact=True)).to_be_visible()
         page.keyboard.press("/")
