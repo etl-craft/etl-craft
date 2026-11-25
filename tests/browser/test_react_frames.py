@@ -44,11 +44,14 @@ def test_diagram_scrollbars_move_the_view_and_follow_its_controls(mappings, widt
             return (Math.max(a,b)+0.05)/(Math.min(a,b)+0.05)>=3;
         }""")
         canvas = page.locator(".react-flow__viewport")
-        expect(canvas).to_be_visible()
+        expect(page.locator(".diagram-frame")).to_have_attribute("data-fitted", "true")
         horizontal = page.get_by_role("scrollbar", name="Diagram horizontal scrollbar", exact=True)
         vertical = page.get_by_role("scrollbar", name="Diagram vertical scrollbar", exact=True)
-        assert page.locator(".react-flow__handle").evaluate_all(
-            "handles=>handles.every(e=>getComputedStyle(e).opacity==='0')"
+        page.wait_for_function(
+            """() => {
+                const handles = [...document.querySelectorAll('.react-flow__handle')];
+                return handles.length && handles.every(e => getComputedStyle(e).opacity === '0');
+            }"""
         )
         node = page.locator(".diagram-node").first
         grips = page.locator(".react-flow__node").first.locator(
@@ -85,16 +88,19 @@ def test_diagram_scrollbars_move_the_view_and_follow_its_controls(mappings, widt
                 ".handle.bottom.right.window-corner"
             )
             expect(corner).to_be_visible()
-            assert (
-                grips.evaluate_all("""grips=>grips.filter(e=>
-                getComputedStyle(e,'::after').content!=='none').length""")
-                == 1
+            page.wait_for_function(
+                """node => [...node.querySelectorAll('.react-flow__resize-control.handle')]
+                    .filter(e => getComputedStyle(e, '::after').content !== 'none').length === 1""",
+                arg=page.locator(".react-flow__node").first.element_handle(),
             )
-            assert corner.evaluate("""e=>{
-                const dots=getComputedStyle(e,'::after');
-                return dots.width==='2px'&&dots.height==='2px'&&
-                    dots.transform==='none'&&dots.boxShadow!=='none';
-            }""")
+            page.wait_for_function(
+                """e => {
+                    const dots = getComputedStyle(e, '::after');
+                    return dots.width === '2px' && dots.height === '2px' &&
+                        dots.transform === 'none' && dots.boxShadow !== 'none';
+                }""",
+                arg=corner.element_handle(),
+            )
             columns = node.locator(".nowheel")
             assert columns.evaluate("e=>getComputedStyle(e).overflowY") == "auto"
             assert (
@@ -296,6 +302,7 @@ def test_expanded_window_scrolls_long_columns_without_moving_its_header_or_canva
             pw, viewport={"width": width, "height": 1000}, show_scrollbars=True
         )
         sign_in(page, url, route)
+        expect(page.locator(".diagram-frame")).to_have_attribute("data-fitted", "true")
         if view == "mapping":
             page.get_by_role("button", name="Show all columns", exact=True).click()
         else:
@@ -335,6 +342,7 @@ def test_mouse_resizing_stays_on_the_frame_instead_of_the_surrounding_canvas(map
     with sync_playwright() as pw:
         browser, page, problems = open_page(pw, viewport={"width": width, "height": 1000})
         sign_in(page, url, "/ui/projects/default/catalog/tasks/ORDERS.load?tab=mapping")
+        expect(page.locator(".diagram-frame")).to_have_attribute("data-fitted", "true")
         node = page.locator('[data-id="source:raw.orders"]')
         frame = node.locator(".diagram-node")
         resize = node.get_by_role("separator", name="Resize raw.orders width", exact=True)
@@ -382,6 +390,7 @@ def test_boundary_column_selection_ring_stays_inside_the_scrollport(mappings, wi
             show_scrollbars=True,
         )
         sign_in(page, url, route)
+        expect(page.locator(".diagram-frame")).to_have_attribute("data-fitted", "true")
         if view == "mapping":
             page.get_by_role("button", name="Show all columns", exact=True).click()
         else:

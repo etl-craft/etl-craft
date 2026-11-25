@@ -4,7 +4,7 @@ import { Scrollbar } from "@/components/scrollbar";
 import { cn } from "@/lib/utils";
 
 /** Application scroll tracks and canvas gestures control the same viewport. */
-function DiagramScrollbars({id}:{id:string}) {
+function DiagramScrollbars({id,onViewportMove}:{id:string;onViewportMove:()=>void}) {
   const flow = useReactFlow();
   const nodes = useNodes();
   const { x, y, zoom } = useViewport();
@@ -17,17 +17,17 @@ function DiagramScrollbars({id}:{id:string}) {
   const right = Math.max((bounds.x + bounds.width) * zoom + width, -x + width);
   const bottom = Math.max((bounds.y + bounds.height) * zoom + height, -y + height);
   return <>
-    <Scrollbar axis="horizontal" label="Diagram horizontal scrollbar" controls={id} className="diagram-scrollbar-horizontal" value={-x-left} maximum={Math.max(0,right-left-width)} page={width} onChange={offset=>{void flow.setViewport({...flow.getViewport(),x:-left-offset});}}/>
-    <Scrollbar axis="vertical" label="Diagram vertical scrollbar" controls={id} className="diagram-scrollbar-vertical" value={-y-top} maximum={Math.max(0,bottom-top-height)} page={height} onChange={offset=>{void flow.setViewport({...flow.getViewport(),y:-top-offset});}}/>
+    <Scrollbar axis="horizontal" label="Diagram horizontal scrollbar" controls={id} className="diagram-scrollbar-horizontal" value={-x-left} maximum={Math.max(0,right-left-width)} page={width} onChange={offset=>{onViewportMove();void flow.setViewport({...flow.getViewport(),x:-left-offset});}}/>
+    <Scrollbar axis="vertical" label="Diagram vertical scrollbar" controls={id} className="diagram-scrollbar-vertical" value={-y-top} maximum={Math.max(0,bottom-top-height)} page={height} onChange={offset=>{onViewportMove();void flow.setViewport({...flow.getViewport(),y:-top-offset});}}/>
     <span aria-hidden className="diagram-scrollbar-corner"/>
   </>;
 }
 
 /** A framed canvas reserves space for persistent scrollbars rather than covering its contents. */
-export function DiagramFrame({ children, className, id:providedId, ...props }: React.ComponentProps<"div">) {
+export function DiagramFrame({ children, className, id:providedId, onViewportMove, ...props }: React.ComponentProps<"div"> & {onViewportMove:()=>void}) {
   const generatedId=React.useId();
   const id=providedId??generatedId;
-  return <ReactFlowProvider><div id={id} {...props} className={cn("diagram-frame", className)}>{children}<DiagramScrollbars id={id}/></div></ReactFlowProvider>;
+  return <ReactFlowProvider><div id={id} {...props} className={cn("diagram-frame", className)}>{children}<DiagramScrollbars id={id} onViewportMove={onViewportMove}/></div></ReactFlowProvider>;
 }
 
 /** Controlled nodes retain measured handles when only selection or styling changes. */

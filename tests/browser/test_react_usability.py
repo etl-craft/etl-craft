@@ -148,6 +148,7 @@ def test_mapping_resize_grips_and_scrollbars_do_not_cover_column_controls(mappin
             pw, viewport={"width": width, "height": 1000}, show_scrollbars=True
         )
         sign_in(page, url, "/ui/projects/default/catalog/tasks/ORDERS.load?tab=mapping")
+        expect(page.locator(".diagram-frame")).to_have_attribute("data-fitted", "true")
         page.get_by_role("button", name="Show all columns", exact=True).click()
         source = page.locator('[data-id="source:raw.orders"]')
         page.mouse.move(0, 0)
@@ -225,7 +226,7 @@ def test_mapping_resize_grips_and_scrollbars_do_not_cover_column_controls(mappin
         page.mouse.move(*point)
         page.mouse.wheel(0, 160)
         page.wait_for_function("e=>e.scrollTop>0", arg=columns.element_handle())
-        assert page.locator(".react-flow__viewport").get_attribute("style") == transform
+        expect(page.locator(".react-flow__viewport")).to_have_attribute("style", transform)
         assert abs(source.locator(".mapping-drag-handle").bounding_box()["y"] - header["y"]) < 1
         assert columns.evaluate("""e=>{
             const frame=e.closest('.scroll-window');
@@ -259,12 +260,68 @@ def test_diagram_view_moves_with_buttons_without_dragging(mappings, width, view)
         browser, page, problems = open_page(pw, viewport={"width": width, "height": 1000})
         sign_in(page, url, routes[view])
         viewport = page.locator(".react-flow__viewport")
-        expect(viewport).to_be_visible()
+        expect(page.locator(".diagram-frame")).to_have_attribute("data-fitted", "true")
         for direction in ("right", "down", "left", "up"):
             before = viewport.get_attribute("style")
             button = page.get_by_role("button", name=f"Move view {direction}", exact=True)
             button.focus()
             page.keyboard.press("Enter")
             expect(viewport).not_to_have_attribute("style", before)
+        assert problems == []
+        browser.close()
+
+
+def test_pipeline_graph_keeps_a_moved_view_after_node_measurement(mappings):
+    _, url = mappings
+    with sync_playwright() as pw:
+        browser, page, problems = open_page(pw, viewport={"width": 1440, "height": 1000})
+        sign_in(page, url, "/ui/projects/default/pipelines/ORDERS?view=graph")
+        viewport = page.locator(".react-flow__viewport")
+        node = viewport.locator(".react-flow__node").first
+        expect(page.locator(".diagram-frame")).to_have_attribute("data-fitted", "true")
+        before = viewport.get_attribute("style")
+        page.get_by_role("button", name="Move view right", exact=True).click()
+        expect(viewport).not_to_have_attribute("style", before)
+        moved = viewport.get_attribute("style")
+
+        # Deliver a real ResizeObserver notification after moving the view, as a late tile
+        # layout would. Let React Flow's measurement and the following paint finish.
+        node.evaluate("""node => new Promise(resolve => {
+            const width = node.offsetWidth;
+            const observer = new ResizeObserver(() => {
+                if (node.offsetWidth === width) return;
+                observer.disconnect();
+                requestAnimationFrame(() => requestAnimationFrame(resolve));
+            });
+            observer.observe(node);
+            node.style.width = `${width + 32}px`;
+        })""")
+        expect(viewport).to_have_attribute("style", moved)
+        assert problems == []
+        browser.close()
+
+
+def test_pipeline_graph_keeps_a_moved_view_when_latest_run_arrives(mappings):
+    _, url = mappings
+    with sync_playwright() as pw:
+        browser, page, problems = open_page(pw, viewport={"width": 1440, "height": 1000})
+        history = []
+        page.route("**/history?**", lambda route: history.append(route))
+        sign_in(page, url, "/ui/projects/default/pipelines/ORDERS?view=graph")
+        frame = page.locator(".diagram-frame")
+        expect(frame).to_have_attribute("data-fitted", "true")
+        viewport = frame.locator(".react-flow__viewport")
+        before = viewport.get_attribute("style")
+        page.get_by_role("button", name="Move view right", exact=True).click()
+        expect(viewport).not_to_have_attribute("style", before)
+        moved = viewport.get_attribute("style")
+
+        assert history
+        for route in history:
+            route.continue_()
+        expect(
+            frame.get_by_test_id("rf__node-load").get_by_text("Success", exact=True)
+        ).to_be_visible()
+        expect(viewport).to_have_attribute("style", moved)
         assert problems == []
         browser.close()

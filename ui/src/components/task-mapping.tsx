@@ -3,7 +3,7 @@ import {DiagramFrame,useNodeMeasurements} from "@/components/diagram-frame";
 import {MappingBox,MappingLink,SHOWN_ROWS,ROW_HEIGHT,HEADER_HEIGHT,COLUMN_PADDING,type BoxData,type Port,type NodeSize,selectionForPort,highlightConnection,mappingWidth} from "@/components/mapping-node";
 import {useLegend} from "@/components/legend";
 import {mappingStageEntry,highlightedEntry,MappingConditions,mappingLogicEntry} from "@/components/diagram-key";
-import {panDiagram,fitDiagram,readableFit} from "@/lib/diagram-viewport";
+import {useDiagramViewport} from "@/lib/diagram-viewport";
 import * as React from "react";
 import { Background, MarkerType, ReactFlow, type Node, type Edge } from "@xyflow/react";
 import { Database, GitMerge, Filter, Sigma, Layers, FunctionSquare, ShieldCheck, type LucideIcon } from "lucide-react";
@@ -19,7 +19,6 @@ import type { CatalogDoc, CatalogTask, CatalogEdge } from "@/lib/catalog";
 
 const edgeTypes = {mapping:MappingLink};
 const nodeTypes = {mapping:MappingBox};
-const fitOptions = readableFit;
 
 export function mappingLine(state: string) {
   return { label: state === "declared" ? "Declared" : undefined, style: { stroke: state === "declared" ? "var(--kind-out)" : "var(--accent)", strokeDasharray: state === "declared" ? "5 4" : undefined } };
@@ -35,10 +34,8 @@ export function columnPaths(edges: CatalogEdge[], selected: string | null, targe
 
 /** The recorded edges drive the interactive column mapping; Column sources holds its table. */
 export function TaskMapping({ doc, task }: { doc: CatalogDoc; task: CatalogTask }) {
-  const frame = React.useRef<HTMLDivElement>(null);
   const input = React.useRef<HTMLInputElement>(null);
-  const flow=React.useRef<import("@xyflow/react").ReactFlowInstance<Node<BoxData>,Edge>|null>(null);
-  React.useEffect(()=>{const element=frame.current;if(!element)return;const observer=new ResizeObserver(()=>requestAnimationFrame(()=>fitDiagram(flow.current,frame.current)));observer.observe(element);return()=>observer.disconnect();},[]);
+  const {frameRef,takeControl,onInit,onMoveStart,onNodesChange,toolbar}=useDiagramViewport<Node<BoxData>,Edge>();
   const expansion = useDiagramExpansion(true);
   const [all, setAll] = React.useState(false);
   const [search, setSearch] = React.useState("");
@@ -218,12 +215,12 @@ export function TaskMapping({ doc, task }: { doc: CatalogDoc; task: CatalogTask 
   const conditions = nodes.find(node=>node.data.conditions?.length)?.data.conditions;
   const key=useLegend(unavailable?[]:[...nodes.map(node=>mappingStageEntry(node.data.kind,kindColor(node.data.kind),node.data.icon)),...nodes.filter(node=>node.data.columns.some(column=>column.logic)).map(node=>mappingLogicEntry(node.data.kind)),...(conditions?[{id:"stage-condition",group:"Conditions",name:"Stage condition",meaning:"Whole-stage logic not attached to one displayed field",sample:<MappingConditions conditions={conditions}/>}]:[]),{id:declared?"declared":"derived",group:"Lineage",name:declared?"Declared":"Derived",meaning:declared?"Documented by the developer; not verified":"Traced from the managed SELECT",sample:<svg width="36" height="12"><path d="M 0 6 H 36" style={mappingLine(task.lineage.state).style}/></svg>},...(lines.some(isHighlightedConnection)?[selected&&!paths.size?{...highlightedEntry,id:"condition-path",name:"Condition input path",meaning:"A selected input feeds a condition; no output-column path is recorded"}:highlightedEntry]:[]),...(nodes.some(node=>node.data.columns.some(column=>column.detail==="Key"))?[{id:"key",group:"Markers",name:"Key column",meaning:"Matches target rows when merging",sample:<span>Key</span>}]:[]),...(nodes.some(node=>node.data.columns.some(column=>column.detail==="Compare"))?[{id:"compare",group:"Markers",name:"Compare column",meaning:"Compared with the stored row to detect a changed value",sample:<span>Compare</span>}]:[]),...(task.mapping.steps.some(step=>step.logic?.some(row=>row.label==="Group by"))?[{id:"group",group:"Markers",name:"Group by",meaning:"Grouping column",sample:<span>Group by:</span>}]:[]),...["Y","N"].filter(value=>nodes.some(node=>node.id.startsWith("target:")&&node.data.columns.some(column=>column.detail.includes(value==="Y"?"Nullable":"Not null")))).map(value=>({id:`nullable:${value}`,group:"Markers",name:value==="Y"?"Nullable":"Not null",meaning:value==="Y"?"The target accepts NULL":"The target requires a value",sample:<span>{value==="Y"?"Nullable":"Not null"}</span>}))]);
   if(unavailable)return <div><p role="note" className="py-4 text-sm text-muted">{task.lineage.reason}</p>{task.target ? <Link className="text-sm text-accent" to={catalogPath(doc.project,"tables",task.target)}>Open {task.target}</Link> : null}</div>;
-  return <div ref={frame} onKeyDown={event=>{key.onKeyDown(event);if(!event.defaultPrevented)diagramKeys(event,()=>setSelected(null));}} className="grid min-w-0 gap-2 @3xl:flex @3xl:min-h-0 @3xl:flex-1 @3xl:flex-col">
+  return <div onKeyDown={event=>{key.onKeyDown(event);if(!event.defaultPrevented)diagramKeys(event,()=>setSelected(null));}} className="grid min-w-0 gap-2 @3xl:flex @3xl:min-h-0 @3xl:flex-1 @3xl:flex-col">
     {declared ? <p role="note" className="py-1 text-sm text-muted">The engine doesn't verify declared lineage against the script.</p> : null}
-    <DiagramToolbar pan={(dx,dy)=>panDiagram(flow.current,dx,dy)} zoomIn={()=>void flow.current?.zoomIn()} zoomOut={()=>void flow.current?.zoomOut()} fit={()=>fitDiagram(flow.current,frame.current,0.05)} reset={()=>void flow.current?.zoomTo(1)}><label className="flex min-w-0 items-center gap-2 text-xs"><span className="sr-only">Find a column</span><input ref={input} aria-label="Find a column" placeholder="Find a column" value={search} onChange={event=>setSearch(event.target.value)} className="h-control w-40 min-w-0 rounded-sm border border-border bg-surface px-2 focus-visible:outline-2 focus-visible:outline-ring"/></label><Button onClick={()=>setAll(!all)}>{all ? "Used columns" : "Show all columns"}</Button><Button onClick={expansion.toggleAll}>{expansion.expanded ? "Collapse all" : "Expand all"}</Button>{key.button}</DiagramToolbar>
+    <DiagramToolbar {...toolbar}><label className="flex min-w-0 items-center gap-2 text-xs"><span className="sr-only">Find a column</span><input ref={input} aria-label="Find a column" placeholder="Find a column" value={search} onChange={event=>setSearch(event.target.value)} className="h-control w-40 min-w-0 rounded-sm border border-border bg-surface px-2 focus-visible:outline-2 focus-visible:outline-ring"/></label><Button onClick={()=>setAll(!all)}>{all ? "Used columns" : "Show all columns"}</Button><Button onClick={expansion.toggleAll}>{expansion.expanded ? "Collapse all" : "Expand all"}</Button>{key.button}</DiagramToolbar>
     <p className="m-0 text-xs text-muted">Drag headers to move boxes; drag the background to pan. Resize from the bottom bezel or the edges.</p>
     {selected && !paths.size ? <p role="status" className="m-0 text-xs text-muted">No output-column path is recorded for {selected.replace(/^(source|target):/,"").replace(/:([^:]*)$/,".$1")}.</p> : null}
     <SourceAliases task={task}/>
-    {nodes.length ? <DiagramFrame className="relative h-[70dvh] min-h-80 min-w-0 overflow-hidden @3xl:h-auto @3xl:min-h-0 @3xl:flex-1" aria-label="Task mapping diagram" tabIndex={0}><ReactFlow nodes={nodes} edges={lines} edgeTypes={edgeTypes} nodeTypes={nodeTypes} onInit={instance=>{flow.current=instance;requestAnimationFrame(()=>fitDiagram(instance,frame.current));}} onPaneClick={()=>{setSelected(null);setConnection(null);}} fitView={false} fitViewOptions={fitOptions} minZoom={0.05} maxZoom={2} nodesDraggable nodesConnectable={false} onNodesChange={changes=>{measureNodes(changes);const moved=changes.flatMap(change=>change.type==="position" && change.position ? [[change.id,change.position] as const] : []);if(moved.length)setPositions(previous=>({...previous,...Object.fromEntries(moved)}));}} proOptions={{ hideAttribution: true }}><Background /></ReactFlow>{key.panel}</DiagramFrame> : null}
+    {nodes.length ? <DiagramFrame ref={frameRef} onViewportMove={takeControl} className="relative h-[70dvh] min-h-80 min-w-0 overflow-hidden @3xl:h-auto @3xl:min-h-0 @3xl:flex-1" aria-label="Task mapping diagram" tabIndex={0}><ReactFlow nodes={nodes} edges={lines} edgeTypes={edgeTypes} nodeTypes={nodeTypes} onInit={onInit} onMoveStart={onMoveStart} onPaneClick={()=>{setSelected(null);setConnection(null);}} minZoom={0.05} maxZoom={2} nodesDraggable nodesConnectable={false} onNodesChange={changes=>{measureNodes(changes);onNodesChange(changes);const moved=changes.flatMap(change=>change.type==="position" && change.position ? [[change.id,change.position] as const] : []);if(moved.length)setPositions(previous=>({...previous,...Object.fromEntries(moved)}));}} proOptions={{ hideAttribution: true }}><Background /></ReactFlow>{key.panel}</DiagramFrame> : null}
   </div>;
 }
