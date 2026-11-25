@@ -6,9 +6,16 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
-- Changed: the pipeline workspace puts run and task details beside the dependency-ordered
-  grid. Selecting a task opens its stored log, and links retain the selected run, task and try.
-  Inspect the deployed SQL or script from the task's SQL / script tab.
+- Changed: the pipeline page follows Airflow's layout. A dense grid of tasks by runs (dependency
+  order, alerts last, newest run at the right, 10 runs by default) sits beside the details of the
+  selected run or task; a path row (`pipeline › Run #n › task`) leads back up. The left panel
+  switches between Grid, Gantt (the selected run's timeline) and Graph. A selected task opens on
+  its log; its SQL / script tab shows the source as deployed for that run. Tasks, Task status (in
+  the selected run) and Run status filters are spreadsheet-style checklists kept in the address.
+  Old run, task and attempt addresses open the same selection; a task's address opens its own
+  panel (definition, history, lookups). Alert deliveries show one row per delivery.
+- Added: `history` accepts `run_status` (repeatable) to list only runs in those states; paging
+  keeps to the filter.
 
 - Changed: pipeline grids and pipeline lists load their run cells and action availability in
   batches. Project-wide run history uses a single paged run selection. The History API accepts

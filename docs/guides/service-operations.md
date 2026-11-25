@@ -71,6 +71,10 @@ The response includes the regular run page and its lightweight `cells`. Pass `ex
 to include a selected run outside the page and its cells without changing the cursor.
 Open an individual task's history for attempts and rule details.
 
+Add `run_status` (repeat it for several states, for example `run_status=FAILED&run_status=IN-PROGRESS`)
+to list only runs in those states; the cursor pages through matching runs only. A run named by
+`extra_run_id` is returned whatever its state.
+
 The grid response includes `task_order` in dependency depth and task-code order.
 Event-driven alerts follow the data tasks. Use that order for both the grid and its task list.
 
