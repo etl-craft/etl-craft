@@ -225,7 +225,12 @@ def bindings(sql, name=""):
             "backend_started": MOMENT,
         },
         "latest_finished_pipeline_run": {"ended_by": MOMENT},
-        "pipeline_run_history": {"before": 1000000000, "pipeline_ids": [1, 2]},
+        "pipeline_run_history": {
+            "before": 1000000000,
+            "pipeline_ids": [1, 2],
+            "status_filter": 1,
+            "statuses": ["FAILED", "IN-PROGRESS"],
+        },
         "history_cells": {"run_ids": [10, 20]},
         "run_interventions": {"run_ids": [10, 20]},
         "task_run_history": {"before": 1000000000},
