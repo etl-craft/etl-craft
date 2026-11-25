@@ -217,7 +217,7 @@ item's text, or work done early under another item.
 | S8.A The project layout | In progress | #319, #320 | Small-agent Python slots, compiled role images and singleton rollout; demo acceptance in progress |
 | S8.B Pipelines | Done | #322, #324, #325, #326, #327 | Demo source/ODS, bounded DM, all steward uploads and explicit drained maintenance validated in separate slices |
 | S8.C Configuration through CI | Done | support-insights#5, #7, #8, #11, #14, #18, #19, #31; etl-craft#451 | Secretless local DuckDB validation and reviewed developer-only deployment of one pinned project commit |
-| S8.D Views | Planned | | Fact and data-metrics views reconciled with independent reference queries |
+| S8.D Views | Done | #455, #456, support-insights#32 | Fact and data-metrics views reconciled live with independent reference queries; the acceptance found reused ROW_IDs (#456) and a stale cluster pin |
 | S8.E The CI pipelines | Planned | | Validate, deploy and manual/pre-release full-stack workflows |
 | S8.F Acceptance checks | Planned | | Rows, provenance, faults, UI and memory checks against the candidate |
 | S8.G The release gate | Planned | | Validate demo wheel/commit/scenario evidence through S7.O without running the external demo in package CI |
@@ -238,6 +238,18 @@ item's text, or work done early under another item.
   Acceptance availability: local DuckDB validation and the
   [reviewed production deploy](https://github.com/etl-craft/support-insights/actions/runs/45533244175)
   passed. SI_REFERENCE run 5 ended SUCCESS.
+
+- **S8.D Choices that differ from the item text.** `valid_count` and the validity percentage use
+  audited counts, not live PRE_ODS rows, because PRE_ODS is replaced every run (owner): the
+  successful append attempt's `INSERT_COUNT` minus the run's REJECT keys, over that count plus
+  `load_reject_count` (REJECT_LIMIT set-asides). `load_reject_count` is a column the item's table
+  does not list. Fact-view rejections bind to the originating pipeline run.
+- **S8.D for S8.H.** Turn on REJECT_LIMIT for the ingestion-to-PRE_ODS tasks with generated
+  malformed rows; `data_metrics_view` already counts them. Per-run reject counts undercount
+  business-key rules (a key already flagged records no new flag); every demo PRE_ODS rule keys on
+  `row_id`.
+- **One demo package pin.** The cluster images had their own pin and stayed on #449 after
+  S8.I; `build.sh` now reads `ci/PACKAGE_COMMIT` and a contract test refuses drift.
 
 - **S8.I deploy timing.** The first cluster `deploy --api` (1,384 config changes, 12 pipeline
   refreshes) took about 156 seconds on the server: about 67 seconds from bundle publication to
