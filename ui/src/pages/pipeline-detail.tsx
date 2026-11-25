@@ -31,7 +31,7 @@ import { describeCron, formatDuration } from "@/lib/format";
 import { ApiError, getJson, project } from "@/lib/api";
 import { pipelinesPath, projectHomePath, scheduledPath, taskPath } from "@/lib/routes";
 import { cn } from "@/lib/utils";
-import type { Graph, Pipeline, RunView, Steps } from "@/lib/types";
+import type { Graph, Pipeline, Steps } from "@/lib/types";
 import { useDocumentTitle } from "@/title";
 
 export function PipelineDetail() {
@@ -43,8 +43,9 @@ export function PipelineDetail() {
   const byTime = params.get("columns") === "time";
   const flow = params.get("flow") === "lr" ? "LR" : params.get("flow") === "tb" ? "TB" : undefined;
   const asLabel = params.get("run") ?? "";
-  const addressed = useRunReference(code, asLabel);
-  const chosen = addressed.data?.pipeline_run_id;
+  const numeric = /^[1-9]\d*$/.test(asLabel) && Number.isSafeInteger(Number(asLabel)) ? Number(asLabel) : undefined;
+  const addressed = useRunReference(code, numeric === undefined ? asLabel : "");
+  const chosen = numeric ?? addressed.data?.pipeline_run_id;
   const task = params.get("task");
   const filters = { pool: params.get("pool") ?? "", agent: params.get("agent") ?? "", failure_class: params.get("failure_class") ?? "" };
   const setFilter = (key: string, value: string) => {
@@ -62,8 +63,6 @@ export function PipelineDetail() {
     refetchInterval: 15_000,
   });
   const graph = useQuery({ queryKey: ["graph", code, pipeline], queryFn: () => getJson<Graph>(`${project(code)}/graph`, { pipeline_code: pipeline }) });
-  const list = useRuns(code, pipeline);
-  const all = list.all;
   const runsKey = `etl-craft-runs:${code}:${pipeline}`;
   const remembered = (() => {
     try {
@@ -74,6 +73,13 @@ export function PipelineDetail() {
   })();
   // The address wins, then what this pipeline's grid was last set to, then the default.
   const wanted = Math.min(200, Math.max(1, Number(params.get("runs")) || remembered || DEFAULT_RUNS));
+  const [gridSelection, setGridSelection] = React.useState<{ scope: string; run: number; extra?: number }>();
+  const gridExtra = gridSelection?.scope === runsKey && gridSelection?.run === chosen ? gridSelection?.extra : chosen;
+  const list = useRuns(code, pipeline, {}, { limit: Math.min(wanted, 100), selected: gridExtra });
+  const all = list.all;
+  const pages = list.runs.data?.pages;
+  const readError = list.runs.error;
+  const cells = React.useMemo(() => pages?.flatMap((page) => page.cells ?? []) ?? [], [pages]);
   // The runs asked for are loaded a page at a time until there are enough.
   const { hasNextPage, isFetchingNextPage, fetchNextPage } = list.runs;
   React.useEffect(() => {
@@ -84,10 +90,10 @@ export function PipelineDetail() {
   const selected = chosen ?? runs[0]?.pipeline_run_id;
   // A link to a run older than the grid's columns still opens it: the run is read by its number and shown as a column of its own.
   const outside = selected !== undefined && !gridRuns.some((r) => r.pipeline_run_id === selected);
-  const extraRun = useQuery({ queryKey: ["run", code, selected], queryFn: () => getJson<RunView>(`${project(code)}/runs/${selected}`), enabled: outside });
+  const extraRun = pages?.[0]?.extra_run;
   useDocumentTitle(selected === undefined ? pipeline : `${pipeline} #${selected}`, code, info.project && { type: info.project.environment_type, name: info.project.environment_name });
   const starts = autoStarts(useAutoStarts(), info.project?.allowed_auto_restarts);
-  const selectedRun = [...runs, ...(extraRun.data ? [extraRun.data] : [])].find((r) => r.pipeline_run_id === selected);
+  const selectedRun = [...runs, ...(extraRun ? [extraRun] : [])].find((r) => r.pipeline_run_id === selected);
   const steps = useQuery({
     queryKey: ["steps", code, pipeline, selected],
     queryFn: () => getJson<Steps>(`${project(code)}/steps`, { pipeline_code: pipeline, run_id: selected }),
@@ -98,6 +104,7 @@ export function PipelineDetail() {
   const tab=tabs.some(item=>item.id===asked)?asked:chosen!==undefined?"run":"overview";
   const state = params.get("status") ?? "";
   const select = (runId: number, taskCode?: string) => {
+    setGridSelection({ scope: runsKey, run: runId, extra: gridExtra });
     const next = new URLSearchParams(params);
     next.set("run", String(runId));
     next.delete("tab");
@@ -143,8 +150,8 @@ export function PipelineDetail() {
     return <Navigate replace to={`?${next}`}/>;
   }
   if(asked==="calendar")return <Navigate replace to={scheduledPath(code,pipeline)}/>;
-  if (asLabel && addressed.isError) return <Notice>{(addressed.error as Error).message}</Notice>;
-  if (asLabel && addressed.isPending) return <Loading what="the selected run" />;
+  if (numeric === undefined && asLabel && addressed.isError) return <Notice>{(addressed.error as Error).message}</Notice>;
+  if (numeric === undefined && asLabel && addressed.isPending) return <Loading what="the selected run" />;
   if (found.isError) return <Notice>{(found.error as Error).message}</Notice>;
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-2">
@@ -300,7 +307,8 @@ export function PipelineDetail() {
             {!graph.isSuccess ? (
               graph.isError ? <Notice className="m-3">{(graph.error as Error).message}</Notice> : <Loading what="tasks" className="p-3" />
             ) : view === "grid" ? (
-              <RunGrid code={code} pipeline={pipeline} graph={graph.data} runs={gridRuns} extra={outside && extraRun.data?.pipeline_code === pipeline ? extraRun.data : undefined} selected={selected} onSelect={select} bars={!hideBars} labels={byTime ? "time" : "id"} />
+              readError ? <Notice>{readError.message}</Notice> : list.runs.isPending ? <Loading what="run history" className="p-3" /> :
+              <RunGrid code={code} pipeline={pipeline} graph={graph.data} runs={gridRuns} cells={cells} extra={outside ? extraRun ?? undefined : undefined} selected={selected} onSelect={select} bars={!hideBars} labels={byTime ? "time" : "id"} />
             ) : (
               <div className="absolute inset-0 flex flex-col">
               {selectedRun ? (

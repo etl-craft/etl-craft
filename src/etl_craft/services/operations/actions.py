@@ -478,23 +478,32 @@ def admitted(ctx: OperationContext, name: ActionName, request: object) -> Iterat
                 yield
 
 
-def authorize_identity(ctx: OperationContext, action: Action, request: object) -> None:
+def authorize_identity(
+    ctx: OperationContext, action: Action, request: object, *, password_checked: bool = False
+) -> None:
     """Identity and target checks that no custom binding can bypass."""
-    personal.require_password_change(ctx, action.name)
+    if not password_checked:
+        personal.require_password_change(ctx, action.name)
     _require_trigger_groups(ctx, action, request)
     _require_project_identity(ctx, action, request)
 
 
 def authorize_action(
-    ctx: OperationContext, action: Action, request: object, required: ApiRole | None
+    ctx: OperationContext,
+    action: Action,
+    request: object,
+    required: ApiRole | None,
+    *,
+    snapshot: authorization.AdmissionSnapshot | None = None,
 ) -> None:
     """Check action admission without running the action or recording the request."""
-    authorize_identity(ctx, action, request)
+    # Definition availability already checks the password restriction at admission.
+    authorize_identity(ctx, action, request, password_checked=snapshot is not None)
     if action.name == ActionName.PIPELINE_REFRESH and isinstance(
         request, pipeline_refresh.InternalRefresh
     ):
         return
-    authorization.authorize(ctx, action, request, required)
+    authorization.authorize(ctx, action, request, required, snapshot=snapshot)
     if action.name == ActionName.PIPELINE_REFRESH:
         assert isinstance(request, pipeline_refresh.RefreshInput)
         pipeline_refresh.require_refresh_governance(ctx, request)

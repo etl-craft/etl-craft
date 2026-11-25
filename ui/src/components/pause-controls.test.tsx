@@ -65,9 +65,9 @@ it("always submits a visible task outcome with SKIPPED preselected",async()=>{
 
 it("keeps an open pause form and its chosen mode during a live list refresh", async()=>{
  const client=new QueryClient({defaultOptions:{queries:{retry:false,staleTime:Infinity}}});
- client.setQueryData(["action-availability","default","OPS",undefined],{actions:[
+ client.setQueryData(["action-availability","default",undefined,{pipeline_codes:["OPS"]}],{pipelines:{OPS:[
   {endpoint:"/api/v1/controls",method:"POST",control:"PAUSE",replacement:true,available:true,reason:""},
- ]});
+ ]}});
  client.setQueryData(["health"],{projects:[{project:"default",environment_type:"CUSTOM",environment_name:null,governance:"STRICT"}]});
  const paused={...pipeline,paused:{active_runs:"DRAIN",drained_runs:[],paused_by:"owner",paused_at:"2026-11-16T12:00:00Z",reason:"maintenance"}};
  client.setQueryData(["pipelines","default"],{pipelines:[paused]});

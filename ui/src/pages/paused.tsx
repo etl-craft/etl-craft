@@ -11,7 +11,7 @@ import { RunLabel } from "@/components/run-label";
 import { DataTable } from "@/components/data-table";
 import { When } from "@/components/when";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
-import { useProjectInfo } from "@/hooks";
+import { useActionAvailability, useProjectInfo } from "@/hooks";
 import { getJson, project } from "@/lib/api";
 import { pausedPath, pipelinePath, runPath } from "@/lib/routes";
 import type { Pipeline, TaskPause } from "@/lib/types";
@@ -32,7 +32,10 @@ export function Paused() {
   const info = useProjectInfo(code);
   useDocumentTitle("Paused", code, info.project && { type: info.project.environment_type, name: info.project.environment_name });
   const list = useQuery({ queryKey: ["pipelines", code], queryFn: () => getJson<{ pipelines: Pipeline[] }>(`${project(code)}/pipelines`), refetchInterval: 15_000 });
-  const paused = (list.data?.pipelines ?? []).filter(p => p.paused);
+  const paused = useMemo(() => (list.data?.pipelines ?? []).filter(p => p.paused), [list.data]);
+  const codeKey = JSON.stringify(paused.map(p => p.pipeline_code));
+  const batchCodes = useMemo<string[]>(() => JSON.parse(codeKey), [codeKey]);
+  useActionAvailability(code, undefined, batchCodes.length > 0, { pipeline_codes: batchCodes });
   const standing = (list.data?.pipelines ?? []).flatMap(p => p.task_pauses.map(t => ({ ...t, pipeline_code: p.pipeline_code })));
   const pipelineColumns = useMemo(() => [
     pipelines.accessor("pipeline_code", { header: "Pipeline", cell: c => <Link to={pipelinePath(code,c.getValue())} className="font-medium text-accent hover:underline">{c.getValue()}</Link> }),
@@ -41,8 +44,8 @@ export function Paused() {
     pipelines.display({ id:"by", header:"By", cell:c=>c.row.original.paused?.paused_by }),
     pipelines.display({ id:"since", header:"Since", cell:c=><When iso={c.row.original.paused?.paused_at} /> }),
     pipelines.display({ id:"reason", header:"Reason", cell:c=>c.row.original.paused?.reason }),
-    pipelines.display({ id:"actions", header:"Actions", size:210, cell:c=><PipelinePause code={code} pipeline={c.row.original} /> }),
-  ], [code]);
+    pipelines.display({ id:"actions", header:"Actions", size:210, cell:c=><PipelinePause code={code} pipeline={c.row.original} batchCodes={batchCodes} /> }),
+  ], [code, batchCodes]);
   const taskColumns = useMemo(() => [
     tasks.accessor("pipeline_code", {header:"Pipeline",cell:c=><Link to={pipelinePath(code,c.getValue())} className="text-accent hover:underline">{c.getValue()}</Link>}),
     tasks.accessor("task_code", {header:"Task"}),

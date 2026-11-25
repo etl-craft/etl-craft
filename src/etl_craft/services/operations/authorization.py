@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 from contextlib import nullcontext
 from dataclasses import dataclass, field
+from functools import cached_property
 from typing import Any
 
 from sqlalchemy.engine import Connection, Row
@@ -23,7 +24,14 @@ from etl_craft.engine.queries import statement
 from etl_craft.engine.repository.pipelines import read_tags, selected_project
 from etl_craft.services.operations.action_types import Action
 from etl_craft.services.operations.context import OperationContext
-from etl_craft.services.operations.permissions import has_role, project_not_found, require_project
+from etl_craft.services.operations.permissions import (
+    PipelineAccess,
+    has_role,
+    pipeline_access,
+    project_not_found,
+    project_permission,
+    require_project,
+)
 from etl_craft.services.operations.requests import BulkControlRequest
 
 PROJECT_MANAGE_ACTIONS = frozenset(
@@ -110,8 +118,36 @@ def pipeline_tags(conn: Connection, project_id: int | None) -> dict[str, tuple[s
         }
 
 
+@dataclass
+class AdmissionSnapshot:
+    """Shared authorization facts for read-only action availability inspection."""
+
+    conn: Connection
+    ctx: OperationContext
+
+    @cached_property
+    def bindings(self) -> Held:
+        """Read the bindings once for all scoped action decisions."""
+        return held(self.conn, self.ctx, self.ctx.project_id)
+
+    @cached_property
+    def permission(self) -> Permission | None:
+        """Read effective project permission once for all scoped action decisions."""
+        return project_permission(self.conn, self.ctx)
+
+    @cached_property
+    def pipelines(self) -> PipelineAccess:
+        """Evaluate the project's effective visibility in one read."""
+        return pipeline_access(self.conn, self.ctx)
+
+
 def authorize(
-    ctx: OperationContext, action: Action, request: object, required: ApiRole | None
+    ctx: OperationContext,
+    action: Action,
+    request: object,
+    required: ApiRole | None,
+    *,
+    snapshot: AdmissionSnapshot | None = None,
 ) -> None:
     """Allow the request, or refuse it.
 
@@ -127,13 +163,16 @@ def authorize(
 
     wide = isinstance(request, access.AccessFilter) and request.reaches_beyond_project
     scoped = action.scope != ActionScope.DEPLOYMENT or isinstance(request, access.AccessFilter)
-    with ctx.engine.connect() as conn:
+    with nullcontext(snapshot.conn) if snapshot else ctx.engine.connect() as conn:
         if not scoped or wide:
             if has_role(ctx.role, required) or action.name in held(conn, ctx, None).deployment:
                 return
             require_role(ctx, action, required)
-        found = held(conn, ctx, ctx.project_id)
-        _require_visible_project(conn, ctx, action, found)
+        found = snapshot.bindings if snapshot else held(conn, ctx, ctx.project_id)
+        if snapshot is None:
+            _require_visible_project(conn, ctx, action, found)
+        elif snapshot.permission is None and action.name not in found.project:
+            raise project_not_found(ctx.project)
         if action.name in PROJECT_MANAGE_ACTIONS:
             # Escalated to admin, only the account role allows it; otherwise a binding does.
             if required == ApiRole.ADMIN:

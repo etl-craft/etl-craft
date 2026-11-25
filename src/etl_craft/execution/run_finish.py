@@ -199,9 +199,8 @@ def _outcome(
     with engine.connect() as conn:
         bypasses = [
             change
-            for change in fetch_interventions(conn, run.pipeline_id, run.pipeline_run_id)
-            if change.pipeline_run_id == run.pipeline_run_id
-            and change.action == InterventionAction.GATE_BYPASS
+            for change in fetch_interventions(conn, {run.pipeline_run_id})
+            if change.action == InterventionAction.GATE_BYPASS
         ]
     if bypasses:
         where = sorted({change.task_code or run.pipeline_code for change in bypasses})

@@ -66,6 +66,18 @@ for the pipeline's single non-terminal run.
 | `RunSelection`, `TaskSelection`, `CapabilitiesInput`, `HistoryInput` | `status`, `steps`, `explain`, `capabilities`, `history` |
 | `PipelineInput`, `NoInput`, `AuditInput`, `ValidateInput`, `LineageInput` | `graph`, `pipeline`, `pipelines`, `audit`, `validate`, `lineage` |
 
+For a pipeline grid, request `history` with `pipeline_code`, `all=true`, and `cells=true`.
+The response includes the regular run page and its lightweight `cells`. Pass `extra_run_id`
+to include a selected run outside the page and its cells without changing the cursor.
+Open an individual task's history for attempts and rule details.
+
+For a list of pipelines, request `capabilities` with `definition=true` and repeat the
+`pipeline_codes` parameter for each displayed pipeline. The response's `pipelines` map
+contains action availability by visible pipeline code. The top-level `actions` still contains
+project availability and, for selections of up to 100 pipelines, bulk-control availability.
+Each pipeline's `control bulk` answer covers its admission to a bulk selection. Use the individual
+`control` answers to check whether at least one selected pipeline can perform the action now.
+
 Over HTTP (`ctx.transport` is `HTTP`) a whole-pipeline run is admitted for the controller,
 which runs it, and `force`, `skip` and `ignore_dependencies` (except with `standalone`) are
 refused with where they work. `ctx.child` controls the child process's logging and execution

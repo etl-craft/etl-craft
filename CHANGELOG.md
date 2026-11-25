@@ -6,6 +6,11 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+- Changed: pipeline grids and pipeline lists load their run cells and action availability in
+  batches. Project-wide run history uses a single paged run selection. The History API accepts
+  `cells` and `extra_run_id`, and definition capabilities return per-pipeline answers when given
+  `pipeline_codes`.
+
 - Fixed: ROW_IDs are no longer reused after a target is replaced or emptied.
 
 - Fixed: catalog comparisons omit the staged upload control `LOCKED` from inferred merge

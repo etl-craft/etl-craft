@@ -10,6 +10,8 @@ from pathlib import Path
 from typing import BinaryIO, ClassVar
 from uuid import uuid4
 
+from sqlalchemy.engine import Row
+
 from etl_craft.core.actor import acting_as
 from etl_craft.core.enums import ActionName, ActorKind, ApiRole, YesNo
 from etl_craft.core.enums_access import Permission
@@ -31,7 +33,7 @@ from etl_craft.engine.upload_storage import (
     unlink_file,
 )
 from etl_craft.engine.uploads import admit_queued
-from etl_craft.services.operations.authorization import allows
+from etl_craft.services.operations.authorization import AdmissionSnapshot, allows
 from etl_craft.services.operations.context import OperationContext
 from etl_craft.services.operations.permissions import pipeline_access
 from etl_craft.services.operations.recording import recorded
@@ -242,44 +244,61 @@ class UploadReceipt:
         return self.result
 
 
+def upload_principal(
+    ctx: OperationContext, account: Row[tuple[object, ...]] | None, code: str
+) -> OperationContext:
+    """Require an active account and cap its role at the currently stored one."""
+    if account is None or account.active_flag != YesNo.YES or ctx.role in {None, ApiRole.AGENT}:
+        raise PermissionDeniedError(
+            f"pipeline {code}, account {ctx.actor.name}: identity is missing, disabled or not "
+            "signed in; expected an active account with CAN_UPLOAD; sign in and ask a pipeline "
+            "manager for access"
+        )
+    assert ctx.role is not None
+    return replace(ctx, role=min(ctx.role, ApiRole(account.role), key=tuple(ApiRole).index))
+
+
+def check_upload_pipeline(
+    snapshot: AdmissionSnapshot, code: str, *, flags: tuple[int, str, str] | None = None
+) -> int:
+    """Apply upload grants and stewardship state from the current read snapshot."""
+    ctx = snapshot.ctx
+    access = snapshot.pipelines
+    custom = str(ActionName.UPLOAD) in snapshot.bindings.on(code)
+    if not custom:
+        access.require(ctx, code, ApiRole.VIEWER)
+    level = access.levels.get(code)
+    if ctx.actor.kind == ActorKind.SYSTEM or (
+        not custom
+        and (
+            level is None
+            or tuple(Permission).index(level) < tuple(Permission).index(Permission.CAN_UPLOAD)
+        )
+    ):
+        raise PermissionDeniedError(
+            f"account {ctx.actor.name}, pipeline {code}: permission={level}; "
+            "expected CAN_UPLOAD or higher on the pipeline; ask a pipeline manager for access"
+        )
+    if flags is None:
+        pipeline_id = resolve_pipeline_id(snapshot.conn, code)
+        row = snapshot.conn.execute(
+            statement(snapshot.conn, "stewardship_pipeline"), {"pipeline_id": pipeline_id}
+        ).one()
+        flags = pipeline_id, row.stewardable_flag, row.active_flag
+    pipeline_id, stewardable, active = flags
+    if stewardable != YesNo.YES or active != YesNo.YES:
+        raise UsageError(
+            f"pipeline {code}: STEWARDABLE_FLAG={stewardable}, ACTIVE_FLAG={active}; "
+            "expected both Y; select an active stewardable pipeline"
+        )
+    return pipeline_id
+
+
 def require_upload_pipeline(ctx: OperationContext, request: UploadRequest) -> int:
     """Recheck current grants before receipt and before its durable queue commit."""
     with ctx.engine.connect() as conn:
-        account = find_account(conn, ctx.actor.name)
-        if account is None or account.active_flag != YesNo.YES or ctx.role in {None, ApiRole.AGENT}:
-            raise PermissionDeniedError(
-                f"pipeline {request.pipeline_code}, account {ctx.actor.name}: identity is "
-                "missing, disabled or not signed in; expected an active account with CAN_UPLOAD; "
-                "sign in and ask a pipeline manager for access"
-            )
-        ctx = replace(ctx, role=min(ctx.role, ApiRole(account.role), key=tuple(ApiRole).index))
-        access = pipeline_access(conn, ctx)
-        custom = allows(ctx, ActionName.UPLOAD, request, conn=conn)
-        if not custom:
-            access.require(ctx, request.pipeline_code, ApiRole.VIEWER)
-        level = access.levels.get(request.pipeline_code)
-        if ctx.actor.kind == ActorKind.SYSTEM or (
-            not custom
-            and (
-                level is None
-                or tuple(Permission).index(level) < tuple(Permission).index(Permission.CAN_UPLOAD)
-            )
-        ):
-            raise PermissionDeniedError(
-                f"account {ctx.actor.name}, pipeline {request.pipeline_code}: permission={level}; "
-                "expected CAN_UPLOAD or higher on the pipeline; ask a pipeline manager for access"
-            )
-        pipeline_id = resolve_pipeline_id(conn, request.pipeline_code)
-        pipeline = conn.execute(
-            statement(conn, "stewardship_pipeline"), {"pipeline_id": pipeline_id}
-        ).one()
-        if pipeline.stewardable_flag != YesNo.YES or pipeline.active_flag != YesNo.YES:
-            raise UsageError(
-                f"pipeline {request.pipeline_code}: STEWARDABLE_FLAG={pipeline.stewardable_flag}, "
-                f"ACTIVE_FLAG={pipeline.active_flag}; "
-                "expected both Y; select an active stewardable pipeline"
-            )
-    return pipeline_id
+        principal = upload_principal(ctx, find_account(conn, ctx.actor.name), request.pipeline_code)
+        return check_upload_pipeline(AdmissionSnapshot(conn, principal), request.pipeline_code)
 
 
 @contextmanager

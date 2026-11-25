@@ -129,6 +129,30 @@
       "warehouse_statements": 5
     }
   },
+  "pipeline_capabilities": {
+    "postgresql": {
+      "engine_connections": 0,
+      "engine_statements": 22,
+      "engine_transactions": 4
+    },
+    "sqlite": {
+      "engine_connections": 0,
+      "engine_statements": 18,
+      "engine_transactions": 4
+    }
+  },
+  "pipeline_grid": {
+    "postgresql": {
+      "engine_connections": 0,
+      "engine_statements": 18,
+      "engine_transactions": 5
+    },
+    "sqlite": {
+      "engine_connections": 0,
+      "engine_statements": 13,
+      "engine_transactions": 5
+    }
+  },
   "postgres": {
     "APPEND_TABLE": {
       "engine_connections": 0,
@@ -192,6 +216,18 @@
       "engine_transactions": 6,
       "warehouse_connections": 1,
       "warehouse_statements": 3
+    }
+  },
+  "project_history": {
+    "postgresql": {
+      "engine_connections": 0,
+      "engine_statements": 19,
+      "engine_transactions": 5
+    },
+    "sqlite": {
+      "engine_connections": 0,
+      "engine_statements": 14,
+      "engine_transactions": 5
     }
   },
   "trino_iceberg": {

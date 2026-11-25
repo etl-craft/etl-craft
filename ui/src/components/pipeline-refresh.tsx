@@ -4,23 +4,24 @@ import { ActionButton } from "@/components/action-button";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { DropdownItem } from "@/components/dropdown";
 import { Button } from "@/components/ui/button";
-import { failureText, useActionAvailability } from "@/hooks";
+import { failureText, useActionAvailability, type AvailabilityRead } from "@/hooks";
 import { postJson, project } from "@/lib/api";
 
 type RefreshResults = { refreshes: { status: string }[] };
 type Menu = { open: boolean; setOpen: (open: boolean) => void };
 
 /** The server's reason the refresh is unavailable; undefined when it is available. */
-function useRefreshReason(code: string, pipeline?: string) {
-  const capabilities = useActionAvailability(code, pipeline);
+function useRefreshReason(code: string, pipeline?: string, batched?: AvailabilityRead) {
+  const single = useActionAvailability(code, pipeline, !batched);
+  const capabilities = batched ?? single;
   const answer = capabilities.data?.actions.find((action) => action.action === "pipelines refresh");
   return answer?.available ? undefined : answer?.reason ??
     (capabilities.isPending ? "Checking refresh availability…" : capabilities.error?.message ?? "Refresh availability is unavailable.");
 }
 
 /** The confirmation for a refresh. With `menu`, no button is drawn; a menu item opens it. */
-export function PipelineRefresh({ code, pipeline, onDone, menu }: { code: string; pipeline?: string; onDone: () => void; menu?: Menu }) {
-  const reason = useRefreshReason(code, pipeline);
+export function PipelineRefresh({ code, pipeline, onDone, menu, batched }: { code: string; pipeline?: string; onDone: () => void; menu?: Menu; batched?: AvailabilityRead }) {
+  const reason = useRefreshReason(code, pipeline, batched);
   return (
     <ActionButton<RefreshResults>
       code={code}
@@ -55,10 +56,11 @@ export function RefreshMenuItem({ code, pipeline, onSelect }: { code: string; pi
  * Refresh each selected pipeline with its own request, so every pipeline is authorized and
  * governed on its own and reports its own outcome, as the bulk pause does.
  */
-export function BulkRefresh({ code, pipelines }: { code: string; pipelines: string[] }) {
+export function BulkRefresh({ code, pipelines, batched }: { code: string; pipelines: string[]; batched?: AvailabilityRead }) {
   const [open, setOpen] = React.useState(false);
   const [lines, setLines] = React.useState<string[]>([]);
-  const availability = useActionAvailability(code);
+  const single = useActionAvailability(code, undefined, !batched);
+  const availability = batched ?? single;
   const answer = availability.data?.actions.find((action) => action.action === "pipelines refresh");
   const unavailable = !pipelines.length
     ? "Select pipelines first."
