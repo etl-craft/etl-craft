@@ -5,6 +5,11 @@ from collections.abc import Mapping
 from etl_craft.core.errors import SqlGuardError
 
 
+def is_upload_control(name: str) -> bool:
+    """Identify the staged upload control independently of identifier casing."""
+    return name.lower() == "locked"
+
+
 def boolean_problem(task: str, kind: str) -> str | None:
     """Use one strict SQL-type check for validation, refresh and staged rows."""
     kind = kind.upper()
@@ -18,7 +23,7 @@ def boolean_problem(task: str, kind: str) -> str | None:
 
 def target_problem(target: str, columns: Mapping[str, str]) -> str | None:
     """Reserve the control only on managed merge targets, not on landing tables."""
-    if any(c.lower() == "locked" for c in columns):
+    if any(map(is_upload_control, columns)):
         return (
             f"{target}: business column LOCKED is reserved for the upload control; "
             "rename the target column and update its declared columns and SELECT"

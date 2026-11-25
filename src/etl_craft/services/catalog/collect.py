@@ -84,6 +84,7 @@ from etl_craft.handlers.resources import LocalLocker
 from etl_craft.handlers.sql.creation import writer_action
 from etl_craft.handlers.sql.spec import read_action, read_setup_for
 from etl_craft.handlers.sql.tables import AUDIT_COLUMNS
+from etl_craft.handlers.sql.upload_controls import is_upload_control
 from etl_craft.services.catalog import mapping
 from etl_craft.services.catalog.gaps import infers_output_columns, table_records
 from etl_craft.services.catalog.metrics import RunKpis as RunKpis
@@ -505,8 +506,15 @@ def _connect_task(
             task.sources = lineage.sources
             task.lineage["reason"] = lineage.error if handler == Handler.SQL else None
             task.mapping = lineage.mapping
+            if action == SqlAction.SETUP_TABLE:
+                action = (params.get("SETUP_FOR") or "").strip().upper()
             if action != SqlAction.DELETE_ROWS:
-                task.column_edges = list(lineage.edges)
+                task.column_edges = [
+                    edge
+                    for edge in lineage.edges
+                    if action not in (SqlAction.SCD1_MERGE, SqlAction.SCD2_MERGE)
+                    or not is_upload_control(edge.target_column)
+                ]
     elif handler == Handler.PYTHON:
         written = (params.get("TARGET_OBJECT") or "").strip()
         task.target = name_of(written) if written else None

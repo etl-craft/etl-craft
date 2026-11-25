@@ -364,6 +364,27 @@ def test_warehouse_columns_add_types(project, tmp_path):
     assert not catalog.tables["mart.daily"].in_warehouse
 
 
+@pytest.mark.parametrize("action", ["SCD1_MERGE", "SCD2_MERGE", "SETUP_TABLE", "APPEND_TABLE"])
+def test_catalog_excludes_locked_only_from_merge_targets(project, action):
+    engine, config, _ = project
+    params = {"SETUP_FOR": "SCD2_MERGE"} if action == "SETUP_TABLE" else {}
+    with engine.begin() as conn:
+        pipeline = add_pipeline(conn, "UPLOAD")
+        add_task(
+            conn,
+            pipeline,
+            "publish",
+            SQL_ACTION=action,
+            TARGET_OBJECT="stage.corrections",
+            SELECT_QUERY="SELECT 1 AS id, CAST(NULL AS BOOLEAN) AS LOCKED",
+            **params,
+        )
+    catalog = build_catalog(engine, config)
+    columns = catalog.tables["stage.corrections"].columns
+    assert "id" in columns
+    assert ("locked" in columns) == (action == "APPEND_TABLE")
+
+
 def test_gap_snapshot_and_rows_show_both_directions_and_types(project, tmp_path):
     import duckdb
 

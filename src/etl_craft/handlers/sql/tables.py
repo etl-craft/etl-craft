@@ -28,6 +28,7 @@ from etl_craft.core.errors import SqlGuardError
 from etl_craft.core.protection import PROTECTION_COLUMNS
 from etl_craft.core.text import as_subquery
 from etl_craft.handlers.sql.session import ROW_ID_COLUMN, Session
+from etl_craft.handlers.sql.upload_controls import is_upload_control
 
 IDENTITY_COLUMNS = ("PIPELINE_ID", "PIPELINE_RUN_ID", "TASK_RUN_ID")
 
@@ -140,7 +141,7 @@ def create_target_shape(session: Session, stage: str, audit_columns: tuple[str, 
     columns = [
         name
         for name, _ in session.columns(stage)
-        if name.lower() != "locked" or "ETL_PROTECTION" not in audit_columns
+        if not is_upload_control(name) or "ETL_PROTECTION" not in audit_columns
     ]
     if session.dialect.identity_in_create:
         types = session.column_types(stage)
@@ -196,7 +197,7 @@ def declared_columns(
         {
             name: kind
             for name, kind in business
-            if name.lower() != "locked" or "ETL_PROTECTION" not in audit
+            if not is_upload_control(name) or "ETL_PROTECTION" not in audit
         }
         | {"PIPELINE_RUN_ID": "BIGINT"}
         | {name: session.dialect.audit_column_type(name) for name in audit}
@@ -307,9 +308,7 @@ def check_or_evolve(session: Session, stage: str, action: str, *, schema_evoluti
         (name, kind)
         for name, kind in session.columns(stage)
         if name.upper() != "HASH_KEY"
-        and not (
-            action in {SqlAction.SCD1_MERGE, SqlAction.SCD2_MERGE} and name.lower() == "locked"
-        )
+        and not (action in {SqlAction.SCD1_MERGE, SqlAction.SCD2_MERGE} and is_upload_control(name))
     ]
     stage_names = [name for name, _ in stage_columns]
     stage_set = {name.lower() for name in stage_names}
