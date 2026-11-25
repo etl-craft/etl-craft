@@ -11,14 +11,14 @@ import type { CatalogTask, CatalogEdge, CatalogDoc } from "@/lib/catalog";
 import { MarkerType } from "@xyflow/react";
 import type { Edge, Node } from "@xyflow/react";
 function render(element:ReactElement) { return rawRender(element,{wrapper:MemoryRouter}); }
-const captured = vi.hoisted(() => ({ edges: [] as Edge[], nodes: [] as Node[], fit: {} as {minZoom?:number}, renderBoxes: false }));
-vi.mock("@/components/diagram-frame",async importOriginal=>({...await importOriginal<typeof import("@/components/diagram-frame")>(),DiagramFrame:({children,...props}:React.ComponentProps<"div">)=><div {...props}>{children}</div>}));
+const captured = vi.hoisted(() => ({ edges: [] as Edge[], nodes: [] as Node[], renderBoxes: false }));
+vi.mock("@/components/diagram-frame",async importOriginal=>({...await importOriginal<typeof import("@/components/diagram-frame")>(),DiagramFrame:({children,...props}:React.ComponentProps<typeof import("@/components/diagram-frame").DiagramFrame>)=>{const {onViewportMove,...frame}=props;void onViewportMove;return <div {...frame}>{children}</div>;}}));
 vi.mock("@xyflow/react", async importOriginal => {
   const actual = await importOriginal<typeof import("@xyflow/react")>();
   const update = () => {};
   return { ...actual, Handle: () => null, NodeResizer: () => null, NodeResizeControl: () => null, useStore: (select:(state:{nodeLookup:Map<string,{measured?:{width:number;height:number}}>;transform:number[]})=>unknown)=>select({nodeLookup:new Map(),transform:[0,0,1]}), useUpdateNodeInternals: () => update,
-    ReactFlow: ({ edges, nodes, fitViewOptions, nodeTypes }: { edges: Edge[]; nodes: Node[]; fitViewOptions:{minZoom?:number}; nodeTypes: Record<string, ComponentType<{id: string; data: Node["data"]}>> }) => {
-    captured.edges = edges; captured.nodes = nodes; captured.fit=fitViewOptions;
+    ReactFlow: ({ edges, nodes, nodeTypes }: { edges: Edge[]; nodes: Node[]; nodeTypes: Record<string, ComponentType<{id: string; data: Node["data"]}>> }) => {
+    captured.edges = edges; captured.nodes = nodes;
     return captured.renderBoxes ? <>{nodes.map(node => {
       const Box = nodeTypes[node.type ?? "mapping"]!;
       return <div key={node.id} data-testid={node.id}><Box id={node.id} data={node.data}/></div>;
@@ -118,7 +118,6 @@ it("keeps named column ports through joins, filters, expressions and the write",
   const stages=["step:0","step:1","expression","write","target:mart.orders"].map(id=>captured.nodes.find(node=>node.id===id)!);
   expect(stages.every(node=>node.position.y===0)).toBe(true);
   expect(stages.every((node,index)=>index===0||node.position.x>stages[index-1]!.position.x)).toBe(true);
-  expect(captured.fit.minZoom).toBe(1);
   expect(screen.getByRole("button",{name:"Reset zoom"})).toBeTruthy();
   expect(captured.edges.every(edge => edge.type === "mapping")).toBe(true);
   expect(captured.edges.every(edge => typeof edge.markerEnd === "object" && edge.markerEnd?.type === MarkerType.ArrowClosed)).toBe(true);

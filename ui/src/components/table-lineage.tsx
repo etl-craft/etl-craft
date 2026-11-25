@@ -1,6 +1,6 @@
 import {DiagramFrame,useNodeMeasurements} from "@/components/diagram-frame";
 import * as React from "react";
-import {Background,MarkerType,ReactFlow,type Node,type Edge,type ReactFlowInstance} from "@xyflow/react";
+import {Background,MarkerType,ReactFlow,type Node,type Edge} from "@xyflow/react";
 import {Database} from "lucide-react";
 import {MappingBox,MappingLink,SHOWN_ROWS,ROW_HEIGHT,HEADER_HEIGHT,type BoxData,type NodeSize,highlightConnection,selectionForPort} from "@/components/mapping-node";
 import {DiagramToolbar} from "@/components/diagram-toolbar";
@@ -8,7 +8,7 @@ import {diagramKeys,useDiagramExpansion,connectionAction,isHighlightedConnection
 import {Button} from "@/components/ui/button";
 import {useLegend} from "@/components/legend";
 import {highlightedEntry} from "@/components/diagram-key";
-import {panDiagram,fitDiagram} from "@/lib/diagram-viewport";
+import {useDiagramViewport} from "@/lib/diagram-viewport";
 import {tableLineage,type CatalogDoc} from "@/lib/catalog";
 import {catalogPath} from "@/lib/routes";
 
@@ -17,8 +17,7 @@ const edgeTypes={mapping:MappingLink};
 
 /** Object and column views share the recorded catalog edges and the mapping node renderer. */
 export function TableLineage({doc,name,depth,direction}:{doc:CatalogDoc;name:string;depth:number;direction:"both"|"up"|"down"}) {
- const frame=React.useRef<HTMLDivElement>(null);
- const flow=React.useRef<ReactFlowInstance<Node<BoxData>,Edge>|null>(null);
+ const {frameRef,takeControl,onInit,onMoveStart,onNodesChange,toolbar}=useDiagramViewport<Node<BoxData>,Edge>();
  const expansion=useDiagramExpansion(false);
  const [selected,setSelected]=React.useState<string|null>(null);
  const [connection,setConnection]=React.useState<DiagramConnection|null>(null);
@@ -84,15 +83,10 @@ export function TableLineage({doc,name,depth,direction}:{doc:CatalogDoc;name:str
   },active,String(edge.data?.sentence)));
   edge.markerEnd={type:MarkerType.ArrowClosed,color:edge.style?.stroke,width:10,height:10,markerUnits:"userSpaceOnUse"};});
  const key=useLegend([...(nodes.some(node=>node.data.kind==="source")?[{id:"table",group:"Objects",name:"Related object",meaning:"An upstream or downstream table, view or external source",sample:<Database aria-hidden className="size-4" style={{color:"var(--kind-in)"}}/>}]:[]),{id:"current",group:"Objects",name:"Current object",meaning:"The table or view whose lineage is being explored",sample:<Database aria-hidden className="size-4" style={{color:"var(--kind-out)"}}/>},...(edges.some(edge=>edge.id.startsWith("table:"))?[{id:"object",group:"Lineage",name:"Object dependency",meaning:"A recorded source-to-target table relationship",sample:<svg width="36" height="12"><path d="M 0 6 H 36" stroke="var(--muted)"/></svg>}]:[]),...(edges.some(edge=>edge.id.startsWith("column:"))?[{id:"column",group:"Lineage",name:"Column path",meaning:"Expand a table to follow its recorded column connections",sample:<svg width="36" height="12"><path d="M 0 6 H 36" stroke="var(--muted)"/></svg>}]:[]),...(edges.some(edge=>edge.style?.strokeDasharray==="5 4")?[{id:"declared",group:"Lineage",name:"Declared",meaning:"Documented by the developer; not verified against script code",sample:<svg width="36" height="12"><path d="M 0 6 H 36" stroke="var(--muted)" strokeDasharray="5 4"/></svg>}]:[]),...(edges.some(edge=>edge.label)?[{id:"unavailable",group:"Lineage",name:"No recorded column path",meaning:"The object relationship exists, but no column connection is recorded",sample:<svg width="36" height="12"><path d="M 0 6 H 36" stroke="var(--muted)" strokeDasharray="3 4"/></svg>}]:[]),...(edges.some(isHighlightedConnection)?[highlightedEntry]:[])]);
- React.useEffect(()=>{
-  const element=frame.current;if(!element)return;
-  const observer=new ResizeObserver(()=>requestAnimationFrame(()=>fitDiagram(flow.current,element)));
-  observer.observe(element);return()=>observer.disconnect();
- },[]);
  return <div role="group" aria-label="Lineage diagram" tabIndex={0} className="flex h-[70dvh] min-h-0 flex-1 flex-col @3xl:h-full" onKeyDown={event=>{key.onKeyDown(event);if(!event.defaultPrevented)diagramKeys(event,()=>{setSelected(null);setConnection(null);});}}>
   <p className="m-0 px-3 py-1.5 text-xs text-muted">Click a header to expand columns; double-click to open catalog details, or use its actions menu. Select a column to follow its path. Drag headers to move boxes.</p>
-  <DiagramToolbar pan={(dx,dy)=>panDiagram(flow.current,dx,dy)} zoomIn={()=>void flow.current?.zoomIn()} zoomOut={()=>void flow.current?.zoomOut()} fit={()=>fitDiagram(flow.current,frame.current,0.05)} reset={()=>void flow.current?.zoomTo(1)}><Button onClick={expansion.toggleAll}>{expansion.expanded?"Collapse all":"Expand all"}</Button>{key.button}</DiagramToolbar>
+  <DiagramToolbar {...toolbar}><Button onClick={expansion.toggleAll}>{expansion.expanded?"Collapse all":"Expand all"}</Button>{key.button}</DiagramToolbar>
   {selected&&!paths.size?<p role="status" className="m-0 text-xs text-muted">No column path is recorded for {selected.replace(/:([^:]*)$/,".$1")}.</p>:null}
-  <DiagramFrame ref={frame} className="relative min-h-72 flex-1 @3xl:min-h-0"><ReactFlow nodes={nodes} edges={edges} nodeTypes={nodeTypes} edgeTypes={edgeTypes} minZoom={0.05} maxZoom={2} nodesConnectable={false} onNodesChange={changes=>{measureNodes(changes);const moved=changes.flatMap(change=>change.type==="position"&&change.position?[[change.id,change.position] as const]:[]);if(moved.length)setPositions(previous=>({...previous,...Object.fromEntries(moved)}));}} onInit={instance=>{flow.current=instance;requestAnimationFrame(()=>fitDiagram(instance,frame.current));}} onPaneClick={()=>{setSelected(null);setConnection(null);}} proOptions={{hideAttribution:true}}><Background/></ReactFlow>{key.panel}</DiagramFrame>
+  <DiagramFrame ref={frameRef} onViewportMove={takeControl} className="relative min-h-72 flex-1 @3xl:min-h-0"><ReactFlow nodes={nodes} edges={edges} nodeTypes={nodeTypes} edgeTypes={edgeTypes} minZoom={0.05} maxZoom={2} nodesConnectable={false} onNodesChange={changes=>{measureNodes(changes);onNodesChange(changes);const moved=changes.flatMap(change=>change.type==="position"&&change.position?[[change.id,change.position] as const]:[]);if(moved.length)setPositions(previous=>({...previous,...Object.fromEntries(moved)}));}} onInit={onInit} onMoveStart={onMoveStart} onPaneClick={()=>{setSelected(null);setConnection(null);}} proOptions={{hideAttribution:true}}><Background/></ReactFlow>{key.panel}</DiagramFrame>
  </div>;
 }

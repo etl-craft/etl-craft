@@ -301,8 +301,6 @@ export function PipelineDetail() {
               graph.isError ? <Notice className="m-3">{(graph.error as Error).message}</Notice> : <Loading what="tasks" className="p-3" />
             ) : view === "grid" ? (
               <RunGrid code={code} pipeline={pipeline} graph={graph.data} runs={gridRuns} extra={outside && extraRun.data?.pipeline_code === pipeline ? extraRun.data : undefined} selected={selected} onSelect={select} bars={!hideBars} labels={byTime ? "time" : "id"} />
-            ) : selected !== undefined && !steps.isSuccess ? (
-              steps.isError ? <Notice className="m-3">{(steps.error as Error).message}</Notice> : <Loading what="task statuses" className="p-3" />
             ) : (
               <div className="absolute inset-0 flex flex-col">
               {selectedRun ? (
@@ -313,6 +311,9 @@ export function PipelineDetail() {
                   <span className="num text-muted">{formatDuration(selectedRun.start_date, selectedRun.end_date)}</span>
                 </div>
               ) : null}
+              {selected !== undefined && !steps.isSuccess ? (
+                steps.isError ? <Notice className="m-3">{(steps.error as Error).message}</Notice> : <Loading what="task statuses" className="p-3" />
+              ) : null}
               <div className="relative min-h-0 flex-1">
               <RunGraph
                 catalogDetails={taskCode=>catalogPath(code,"tasks",`${pipeline}.${taskCode}`)}
@@ -320,7 +321,7 @@ export function PipelineDetail() {
                 direction={flow}
                 graph={graph.data}
                 statuses={Object.fromEntries((steps.data?.steps ?? []).map((step) => [step.task_code, taskStatus(step.status, selectedRun)]))}
-                plain={selected === undefined}
+                plain={!steps.isSuccess}
                 focused={focused}
                 onFocus={setFocused}
                 onOpen={(taskCode) => (selected === undefined ? navigate(taskPath(code, pipeline, taskCode)) : select(selected, taskCode))}

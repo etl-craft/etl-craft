@@ -4,10 +4,10 @@ import {useLegend,statusEntries} from "@/components/legend";
 import {dependencyEntries,taskEntries,highlightedEntry,RunConditionMark} from "@/components/diagram-key";
 import {DependencyBadge} from "@/components/dependency-mark";
 import {Switch} from "@/components/switch";
-import {panDiagram,fitDiagram,readableFit} from "@/lib/diagram-viewport";
+import {useDiagramViewport} from "@/lib/diagram-viewport";
 import { Box, CalendarClock, Play, Network, Hourglass, type LucideIcon } from "lucide-react";
 import * as React from "react";
-import { Background, Handle, MarkerType, Position, ReactFlow, getBezierPath, type EdgeProps, type Edge, type Node, type NodeProps, type ReactFlowInstance } from "@xyflow/react";
+import { Background, Handle, MarkerType, Position, ReactFlow, getBezierPath, type EdgeProps, type Edge, type Node, type NodeProps } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { edgeClass, statusMeta, StatusBadge } from "@/components/status";
 import { dependencyBadge, dependencyStyle, definitionLabel, dependencySentence } from "@/lib/catalog-flow";
@@ -51,11 +51,6 @@ const MAX_ROWS = 4;
 const MAX_COLS = 3;
 const GAP_ROW = 56;
 const GAP_COL = 40;
-/** Fitting a large graph never shrinks it below this zoom (12 px text stays readable): the rest is reached by panning. */
-const READABLE = 1;
-const FILL_FIT = { padding: 0.08, minZoom: READABLE, maxZoom: 1.3 };
-const DEFINITION_FIT = readableFit;
-const CARD_FIT = { padding: 0.12, minZoom: 0.8, maxZoom: 1 };
 
 const NODE_TONE: Record<Focus, string> = {
   none: "border-border-strong",
@@ -122,7 +117,7 @@ export function layout(
   onOpen: (task: string) => void = () => undefined,
   plain = false,
   direction: Direction = "LR",
-): { nodes: TaskNode[]; edges: Edge[]; height: number; columns: number } {
+): { nodes: TaskNode[]; edges: Edge[]; height: number } {
   const lineage = focused ? lineageOf(graph, focused) : null;
   const stateOf = (code: string): Focus => (!lineage ? "none" : code === focused ? "focus" : lineage.has(code) ? "lineage" : "dim");
   // A wave of many tasks wraps into extra columns; every column is centred on the tallest one.
@@ -168,7 +163,7 @@ export function layout(
       };
     }),
   );
-  return { nodes, edges, height: Math.min(460, Math.max(200, tallest * (HEIGHT + GAP_Y) + 40)), columns: column };
+  return { nodes, edges, height: Math.min(460, Math.max(200, tallest * (HEIGHT + GAP_Y) + 40)) };
 }
 
 export function RunGraph({
@@ -192,13 +187,13 @@ export function RunGraph({
   onOpen: (task: string) => void;
   /** Show task definitions only, with no run status. */
   plain?: boolean;
-  /** Take the height of the container and keep the whole graph in view as it is resized. */
+  /** Take the height of the container. */
   fill?: boolean;
   /** Left to right or top to bottom; when omitted a filled graph picks the one that suits its pane's shape. */
   direction?: Direction;
 }) {
   const expansion = useDiagramExpansion(false);
-  const frame = React.useRef<HTMLDivElement>(null);
+  const {flow,frame,scheduleFit,frameRef,takeControl,onInit,onMoveStart,onNodesChange,toolbar}=useDiagramViewport<TaskNode,Edge>({fitZoom:definition?0.05:0.7,refitOnMeasure:true});
   const [width, setWidth] = React.useState(0);
   const [frameHeight, setFrameHeight] = React.useState(0);
   const [chromeHeight,setChromeHeight]=React.useState(0);
@@ -212,14 +207,10 @@ export function RunGraph({
     });
     observer.observe(element);
     return () => observer.disconnect();
-  }, []);
-  const fitOptions = definition ? DEFINITION_FIT : fill ? FILL_FIT : CARD_FIT;
-  const flow = React.useRef<ReactFlowInstance | null>(null);
+  }, [frame]);
   const [wireFocus,setWireFocus]=React.useState<string|null|undefined>(undefined);
-  const measuredSizes=React.useRef(new Map<string,string>());
-  const definitionView=Boolean(definition);
   const shown: Direction = direction ?? (definition ? "LR" : fill && frameHeight > width ? "TB" : "LR");
-  const { nodes, edges, height, columns } = layout(graph, statuses, focused, onOpen, plain, shown);
+  const { nodes, edges, height } = layout(graph, statuses, focused, onOpen, plain, shown);
   nodes.forEach(node=>{node.data.upstreamCount=(graph.depends_on[node.id]??[]).length;node.data.inspectable=!definition;node.data.catalogDetails=catalogDetails?.(node.id)??undefined;node.data.expanded=expansion.isExpanded(node.id);node.data.onExpanded=()=>expansion.toggle(node.id);});
   let definitionHeight=280;
   if (definition) {
@@ -251,7 +242,6 @@ export function RunGraph({
   });
   const measureNodes=useNodeMeasurements(nodes);
   const key=useLegend([...dependencyEntries(plain&&!definition?[]:definition ? edges.map(edge=>edge.data?.definition as DefinitionEdge) : Object.values(graph.depends_on).flatMap(deps=>deps.map(([,kind])=>({dependency_type:kind})))),...(definition?taskEntries(definition.tasks):[]),...(!plain?statusEntries(Object.values(statuses)):[]),...(plain&&!definition?[{id:"lineage",group:"Lineage",name:"Table dependency",meaning:"The source table feeds the target table",sample:<svg width="36" height="12"><path d="M 0 6 H 36" stroke="var(--muted)"/></svg>}]:[]),...(edges.some(isHighlightedConnection)?[highlightedEntry]:[])]);
-  const wide = !definition && !fill && width > 0 && (definition ? Math.max(...nodes.map(node => node.position.x + (176))) + 48 : columns * (WIDTH + GAP_X) - GAP_X + 48) > width;
   // Bring a focused task into view when it is off-screen; leave the view alone when it is visible.
   React.useEffect(() => {
     if(wireFocus===focused)return;
@@ -264,43 +254,28 @@ export function RunGraph({
     void instance.setCenter(node.position.x + (instance.getNode(node.id)?.measured?.width ?? WIDTH) / 2, node.position.y + (instance.getNode(node.id)?.measured?.height ?? HEIGHT) / 2, { zoom, duration: 250 });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focused,wireFocus]);
-  // Definition diagrams keep their layout and change zoom to fit the pane.
-  React.useEffect(() => {
-    if (!focused && wireFocus!==focused && (definitionView || fill) && width > 0 && frameHeight > 0) {
-      if (wide) void flow.current?.setViewport({x:24,y:40,zoom:0.9});
-      else fitDiagram(flow.current,frame.current);
-    }
-  }, [definitionView, fill, width, frameHeight, shown, fitOptions, wide, focused,wireFocus]);
-  // A graph wider than its card keeps readable boxes starting at the left; a small one is fitted whole.
+  React.useEffect(scheduleFit,[scheduleFit,shown]);
   return (
     <div style={definition ? {height:`min(70vh, ${definitionHeight+(chromeHeight||(width<480?204:124))}px)`} : fill ? undefined : { height }} role="group" aria-label="Task graph" tabIndex={0} onKeyDown={key.onKeyDown} className={cn("flex w-full flex-col", fill && "h-full min-h-0",fill && definition && "@3xl:!h-full")}>
       {/* The hint sits above the canvas, so a graph shown at a readable size never runs under it. */}
       <p className="m-0 shrink-0 px-3 py-1.5 text-xs text-muted">
         {edges.length === 0 ? "No dependencies between these tasks: they can run at the same time." : focused ? `Showing everything upstream and downstream of ${focused}. Click the background to clear.` : "Click an icon to expand; select a wire to highlight its path."}
       </p>
-      <DiagramToolbar pan={(dx,dy)=>panDiagram(flow.current,dx,dy)} className="px-3" zoomIn={()=>void flow.current?.zoomIn()} zoomOut={()=>void flow.current?.zoomOut()} fit={()=>fitDiagram(flow.current,frame.current,definition?0.05:0.7)} reset={()=>void flow.current?.zoomTo(1)}>{definition ? <><Switch checked={definition.overlay??false} onChange={()=>definition.onOverlay?.()} label="Show last-run status"/><Button onClick={expansion.toggleAll}>{expansion.expanded?"Collapse all":"Expand all"}</Button></>:null}{key.button}</DiagramToolbar>
-      <DiagramFrame ref={frame} className="relative min-h-0 flex-1">
+      <DiagramToolbar {...toolbar} className="px-3">{definition ? <><Switch checked={definition.overlay??false} onChange={()=>definition.onOverlay?.()} label="Show last-run status"/><Button onClick={expansion.toggleAll}>{expansion.expanded?"Collapse all":"Expand all"}</Button></>:null}{key.button}</DiagramToolbar>
+      <DiagramFrame ref={frameRef} onViewportMove={takeControl} className="relative min-h-0 flex-1">
       <ReactFlow
-        key={`${wide ? "wide" : "fit"}:${shown}:${nodes.map((n) => n.id).join("|")}`}
         nodes={nodes}
         edges={edges}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
         fitView={false}
-        fitViewOptions={fitOptions}
-        defaultViewport={wide ? { x: 24, y: 40, zoom: 0.9 } : undefined}
         minZoom={0.05}
         maxZoom={1.5}
         nodesDraggable={false}
         nodesConnectable={false}
         onNodesChange={changes=>{
           measureNodes(changes);
-          let changed=false;
-          changes.forEach(change=>{if(change.type==="dimensions"&&change.dimensions){
-            const size=`${change.dimensions.width}:${change.dimensions.height}`;
-            if(measuredSizes.current.get(change.id)!==size){measuredSizes.current.set(change.id,size);changed=true;}
-          }});
-          if(changed&&wireFocus!==focused)requestAnimationFrame(()=>fitDiagram(flow.current,frame.current));
+          onNodesChange(changes);
         }}
         elementsSelectable
         onNodeClick={(_, node) => onFocus(node.id === focused ? null : node.id)}
@@ -311,10 +286,8 @@ export function RunGraph({
             if(element?.dataset.id)onFocus(element.dataset.id);
           }
         }}
-        onInit={(instance) => {
-          flow.current = instance as unknown as ReactFlowInstance;
-          requestAnimationFrame(()=>fitDiagram(flow.current,frame.current));
-        }}
+        onInit={onInit}
+        onMoveStart={onMoveStart}
         onPaneClick={() => onFocus(null)}
         proOptions={{ hideAttribution: true }}
       >
