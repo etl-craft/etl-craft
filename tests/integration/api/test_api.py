@@ -462,6 +462,36 @@ def test_grid_reads_extra_run_and_cells_without_moving_cursor(api):
     assert cell["task_run_label"]
 
 
+def test_run_status_filter_pages_through_matching_runs_only(api):
+    ctx, client, creds, first, _attempt = api
+    from fixtures.metadata import finish_run
+
+    with ctx.engine.begin() as conn:
+        pipeline = conn.execute(
+            text("SELECT PIPELINE_ID AS id FROM CFG_PIPELINES WHERE PIPELINE_CODE='P'")
+        ).scalar_one()
+        finish_run(conn, first, "FAILED")
+        middle = start_run(conn, pipeline)
+        finish_run(conn, middle)
+        newest = start_run(conn, pipeline)
+    url, viewer = "/api/v1/projects/default/history", headers(creds["viewer"])
+    page = {"pipeline_code": "P", "all": True, "cells": True, "limit": 1}
+    failed = client.get(url, headers=viewer, params=page | {"run_status": ["FAILED"]})
+    assert failed.status_code == 200, failed.text
+    body = failed.json()
+    # The newer SUCCESS and IN-PROGRESS runs are skipped by the query, not trimmed from a page.
+    assert [r["pipeline_run_id"] for r in body["entries"]] == [first]
+    assert {cell["pipeline_run_id"] for cell in body["cells"]} <= {first}
+    both = client.get(
+        url, headers=viewer, params=page | {"limit": 5, "run_status": ["FAILED", "IN-PROGRESS"]}
+    ).json()
+    assert [r["pipeline_run_id"] for r in both["entries"]] == [newest, first]
+    assert middle not in {r["pipeline_run_id"] for r in both["entries"]}
+    refused = client.get(url, headers=viewer, params={"pipeline_code": "P", "run_status": "FAILED"})
+    assert refused.status_code == 400
+    assert "`run_status` filter a list of pipeline runs" in refused.text
+
+
 def test_token_changes_are_not_captured_and_accept_no_project_scope(api):
     ctx, client, creds, _run, _attempt = api
     with ctx.engine.begin() as conn:

@@ -101,11 +101,12 @@ def test_grid_order_alignment_and_exact_selection(workspace, scheme, width):
         sign_in(page, url, base)
         grid = page.get_by_role("table", name="Run grid")
         expect(grid.get_by_role("rowheader")).to_have_text(order)
-        expect(grid.locator("thead th")).to_have_count(26)
-        if width == 1440:
-            assert grid.evaluate(
-                "(table) => table.parentElement.scrollWidth === table.parentElement.clientWidth"
-            )
+        # Ten runs by default; the newest sits at the right edge, scrolled into view.
+        expect(grid.locator("thead th")).to_have_count(11)
+        assert grid.evaluate(
+            "(table) => { const area = table.parentElement; "
+            "return area.scrollLeft + area.clientWidth >= area.scrollWidth - 1; }"
+        )
         grid.evaluate(
             "(table) => { table.parentElement.scrollTop = 80; "
             "table.parentElement.scrollLeft = 90; }"
@@ -119,9 +120,10 @@ def test_grid_order_alignment_and_exact_selection(workspace, scheme, width):
         instances = page.get_by_role("table", name="Task instances")
         expect(instances.get_by_role("button")).to_have_text(order)
         expect(instances.get_by_role("cell", name="When the pipeline fails")).to_have_count(2)
-        expect(grid.get_by_role("link", name=re.compile(rf"^Run #{current}(?: |$)"))).to_have_text(
-            re.compile(rf"#{current}\d{{2}}:\d{{2}}")
-        )
+        # The column shows only its bar; number, start time and duration are in its hover text.
+        column = grid.get_by_role("link", name=re.compile(rf"^Run #{current}(?: |$)"))
+        expect(column).to_have_attribute("title", re.compile(rf"^#{current} · .*\d{{2}}:\d{{2}}"))
+        expect(column).to_have_text("")
         grid.evaluate("(table) => { table.parentElement.scrollTop = 0; }")
         grid.get_by_role("button", name=re.compile(rf"^a in run {current}:")).click()
         expect(page).to_have_url(re.compile(rf"run={current}&task=a"))
@@ -180,5 +182,70 @@ def test_pipeline_header_distinguishes_partial_runs_and_unscheduled_triggers(sit
         expect(page.get_by_text("1 of 2 tasks", exact=True)).to_be_visible()
         page.goto(url + "/ui/projects/default/pipelines/EVENT_START")
         expect(page.get_by_text("Waits for object events", exact=True)).to_be_visible()
+        assert not problems
+        browser.close()
+
+
+def test_checklist_filters_pick_tasks_task_states_and_run_states(workspace):
+    url, order, current, failed, _first, _ = workspace
+    expect.set_options(timeout=12000)
+    with sync_playwright() as pw:
+        browser, page, problems = open_page(pw, viewport={"width": 1440, "height": 900})
+        sign_in(page, url, f"/ui/projects/default/pipelines/SI_SETUP?run={failed}")
+        grid = page.get_by_role("table", name="Run grid")
+        expect(grid.get_by_role("rowheader")).to_have_text(order)
+
+        # Tasks: an Excel-style checklist with search and Select all.
+        page.get_by_role("button", name=re.compile("^Tasks")).click()
+        page.get_by_label("Search tasks").fill("setup_0")
+        select_all = page.get_by_role("checkbox", name="Select all matches")
+        select_all.click()  # the tick follows the URL, so wait for it rather than check()
+        expect(select_all).to_be_checked()
+        page.keyboard.press("Escape")
+        expect(grid.get_by_role("rowheader")).to_have_text([f"setup_{i:02}" for i in range(10)])
+        page.get_by_role("button", name=re.compile(r"^Tasks \(10 selected\)")).click()
+        page.get_by_role("button", name="Clear").click()
+        page.keyboard.press("Escape")
+        expect(grid.get_by_role("rowheader")).to_have_text(order)
+
+        # Task status reads the selected run's column: only b failed in it.
+        page.get_by_role("button", name=re.compile(rf"^Task status in #{failed}")).click()
+        failed_box = page.get_by_role("checkbox", name="Failed")
+        failed_box.click()
+        expect(failed_box).to_be_checked()
+        page.keyboard.press("Escape")
+        expect(grid.get_by_role("rowheader")).to_have_text(["b"])
+        assert "task_status=FAILED" in page.url
+
+        # Run status is applied by the server: only the failed run remains as a column.
+        page.goto(url + "/ui/projects/default/pipelines/SI_SETUP?run_status=FAILED")
+        expect(grid.locator("thead a[title]")).to_have_count(1)
+        expect(grid.get_by_role("link", name=re.compile(rf"^Run #{failed}(?: |$)"))).to_be_visible()
+        assert not problems
+        browser.close()
+
+
+def test_grid_and_selected_task_follow_the_engine_without_a_reload(site):
+    ctx, url = site
+    owner = Actor("owner", ActorKind.USER)
+    with acting_as(owner), ctx.engine.begin() as conn:
+        pipeline = add_pipeline(conn, "LIVE_GRID")
+        load = add_task(conn, pipeline, "load", SELECT_QUERY="SELECT 1")
+        run = start_run(conn, pipeline)
+        task_run(conn, load, run, "IN-PROGRESS")
+    expect.set_options(timeout=40000)
+    with sync_playwright() as pw:
+        browser, page, problems = open_page(pw)
+        sign_in(page, url, f"/ui/projects/default/pipelines/LIVE_GRID?run={run}&task=load")
+        grid = page.get_by_role("table", name="Run grid")
+        cell = grid.get_by_role("button", name=re.compile(rf"^load in run {run}:"))
+        expect(cell).to_have_accessible_name(re.compile("running$"))
+        with acting_as(owner), ctx.engine.begin() as conn:
+            task_run(conn, load, run, "SUCCESS")
+            finish_run(conn, run)
+        # No reload: the polling queries bring the new states to the grid and the task header.
+        expect(cell).to_have_accessible_name(re.compile("success$"))
+        task = page.get_by_role("region", name="Task load", exact=True)
+        expect(task.get_by_text("Success", exact=True)).to_be_visible()
         assert not problems
         browser.close()

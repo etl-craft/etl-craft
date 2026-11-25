@@ -4,17 +4,24 @@ import { AccessTab } from "@/pages/admin/access";
 import { RunLabel } from "@/components/run-label";
 import { useQuery } from "@tanstack/react-query";
 import { When } from "@/components/when";
-import { Check, ChevronDown, PlayCircle } from "lucide-react";
+import { Check, ChevronDown, ChevronLeft, ChevronRight, PlayCircle } from "lucide-react";
 import * as React from "react";
 import { Navigate, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { ActionButton } from "@/components/action-button";
 import { DropdownContent, DropdownItem, DropdownLabel, DropdownMenu, DropdownSeparator, DropdownTrigger } from "@/components/dropdown";
 import { Button } from "@/components/ui/button";
 import { Segmented } from "@/components/segmented";
+import { ChecklistFilter } from "@/components/tag-filter";
 import { Switch } from "@/components/switch";
 import { Breadcrumbs, Fact, FactList, Field, inputClass, Loading, Notice, PageHeader, SelectField } from "@/components/common";
 import { AuditTab, OverviewTab, pipelineTabs } from "@/components/pipeline-tabs";
-import { StatusBadge, taskStatus } from "@/components/status";
+import { StatusBadge, statusMeta, taskStatus } from "@/components/status";
+
+/** Run states the server records; a task can also not have started in a run. */
+const RUN_STATES = ["IN-PROGRESS", "QUEUED", "FAILED", "SUCCESS", "SKIPPED", "CANCELLED"];
+const TASK_STATES = [...RUN_STATES, "NOT_STARTED"];
+/** The run counts the grid offers. */
+const RUN_COUNTS = [1, 5, 10, 25, 50];
 import { PauseState } from "@/components/pipeline-parts";
 import { RunGraph } from "@/components/lazy-run-graph";
 import { DEFAULT_RUNS, GRID_COLUMNS, MIN_TASKS, RunGrid } from "@/components/run-grid";
@@ -39,7 +46,7 @@ export function PipelineDetail() {
   const { project: code = "", pipeline = "" } = useParams();
   const [params, setParams] = useSearchParams();
   const asked = params.get("tab") ?? "";
-  const view = params.get("view") === "graph" ? "graph" : "grid";
+  const askedView = params.get("view");
   const hideBars = params.get("bars") === "off";
   const flow = params.get("flow") === "lr" ? "LR" : params.get("flow") === "tb" ? "TB" : undefined;
   const asLabel = params.get("run") ?? "";
@@ -47,6 +54,12 @@ export function PipelineDetail() {
   const addressed = useRunReference(code, numeric === undefined ? asLabel : "");
   const chosen = numeric ?? addressed.data?.pipeline_run_id;
   const task = params.get("task");
+  // Gantt shows one run's tasks beside the grid's rows, so it needs a selected run.
+  const view = askedView === "graph" ? "graph" : askedView === "gantt" && chosen !== undefined ? "gantt" : "grid";
+  const listParam = (key: string) => (params.get(key) ?? "").split(",").filter(Boolean);
+  const pickedTasks = listParam("tasks");
+  const taskStates = listParam("task_status");
+  const runStates = listParam("run_status");
   const filters = { pool: params.get("pool") ?? "", agent: params.get("agent") ?? "", failure_class: params.get("failure_class") ?? "" };
   const setFilter = (key: string, value: string) => {
     const next = new URLSearchParams(params);
@@ -75,7 +88,7 @@ export function PipelineDetail() {
   const wanted = Math.min(200, Math.max(1, Number(params.get("runs")) || remembered || DEFAULT_RUNS));
   const [gridSelection, setGridSelection] = React.useState<{ scope: string; run: number; extra?: number }>();
   const gridExtra = gridSelection?.scope === runsKey && gridSelection?.run === chosen ? gridSelection?.extra : chosen;
-  const list = useRuns(code, pipeline, {}, { limit: Math.min(wanted, 100), selected: gridExtra });
+  const list = useRuns(code, pipeline, { run_status: runStates.length ? runStates : undefined }, { limit: Math.min(wanted, 100), selected: gridExtra });
   const all = list.all;
   const pages = list.runs.data?.pages;
   const readError = list.runs.error;
@@ -105,8 +118,10 @@ export function PipelineDetail() {
     enabled: view === "graph" && selected !== undefined,
     refetchInterval: selectedRun?.status === "IN-PROGRESS" ? 5_000 : false,
   });
-  const tabs=pipelineTabs(selected);
-  const tab=tabs.some(item=>item.id===asked)?asked:chosen!==undefined || (task && selected !== undefined) ? "run" : "overview";
+  const tabs=pipelineTabs();
+  // A run or task chosen in the URL replaces the pipeline's tabs with that run's or task's view.
+  const inSelection = selected !== undefined && (chosen !== undefined || Boolean(task));
+  const tab=tabs.some(item=>item.id===asked)?asked:"overview";
   const state = params.get("status") ?? "";
   const select = (runId: number, taskCode?: string) => {
     setGridSelection({ scope: runsKey, run: runId, extra: gridExtra });
@@ -117,6 +132,17 @@ export function PipelineDetail() {
     next.delete("instance");
     if (taskCode) next.set("task", taskCode);
     else next.delete("task");
+    setParams(next, { replace: true });
+  };
+  const allTasks = pages?.[0]?.task_order ?? [];
+  // Task status reads one column, like a spreadsheet: the selected run, else the newest run shown.
+  const statusRun = chosen ?? gridRuns[0]?.pipeline_run_id;
+  const stateOf = new Map(cells.filter((cell) => cell.pipeline_run_id === statusRun).map((cell) => [cell.task_code, cell.status as string]));
+  const taskOrder = allTasks.filter((name) => (!pickedTasks.length || pickedTasks.includes(name))
+    && (!taskStates.length || taskStates.includes(stateOf.get(name) ?? "NOT_STARTED")));
+  const clearSelection = () => {
+    const next = new URLSearchParams(params);
+    for (const key of ["run", "task", "try", "instance", "tab"]) next.delete(key);
     setParams(next, { replace: true });
   };
   const apply = (value: string) => {
@@ -257,41 +283,27 @@ export function PipelineDetail() {
         )}
       </PageHeader>
       <SplitPane
-        id="pipeline"
-        initial={0.55}
-        minimumLeft={view === "grid" ? MIN_TASKS + 6 + GRID_COLUMNS.id.minimum + 24 : 0}
+        // The graph keeps its own wider split; the grid and Gantt give most of the width to the details.
+        key={view === "graph" ? "graph" : "grid"}
+        id={view === "graph" ? "pipeline-graph" : "pipeline-grid"}
+        initial={view === "graph" ? 0.7 : 0.3}
+        minimumLeft={view === "graph" ? 0 : MIN_TASKS + 6 + GRID_COLUMNS.id.minimum + 24}
         // On a narrow screen the selected run's details come before the grid of every run.
-        narrowFirst={tab === "run" ? "right" : "left"}
+        narrowFirst={inSelection ? "right" : "left"}
         className="lg:min-h-0 lg:flex-1"
         left={
         <Card className="flex min-h-0 flex-1 flex-col overflow-hidden">
-          <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5 border-b border-border px-3 py-2">
-            <Segmented label="Run view" value={view} options={[{ id: "grid", label: "Grid" }, { id: "graph", label: "Graph" }]} onSelect={(id) => choose("view", id === "grid" ? null : id)} />
-            {view === "graph" ? (
+          <div className="grid gap-1.5 border-b border-border px-3 py-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <Segmented label="Run view" value={view} options={[{ id: "grid", label: "Grid" }, ...(chosen !== undefined ? [{ id: "gantt", label: "Gantt" }] : []), { id: "graph", label: "Graph" }]} onSelect={(id) => choose("view", id === "grid" ? null : id)} />
+              {view === "graph" ? (
               <Segmented
                 label="Graph direction"
                 value={flow ?? null}
                 options={[{ id: "LR", label: "Horizontal" }, { id: "TB", label: "Vertical" }].map((o) => ({ ...o, title: flow === o.id ? `${o.label}; select again for automatic` : o.label }))}
                 onSelect={(id) => choose("flow", flow === id ? null : id.toLowerCase())}
               />
-            ) : (
-              <div className="flex items-center gap-2">
-                <label className="flex items-center gap-1.5 text-xs text-muted">
-                  Runs
-                  <input
-                    key={wanted}
-                    type="number"
-                    min={1}
-                    max={200}
-                    defaultValue={wanted}
-                    aria-label="How many runs to show"
-                    className="h-control w-16 rounded-md border border-border-strong bg-surface px-2 text-[13px] text-fg"
-                    onBlur={(event) => apply(event.currentTarget.value)}
-                    onKeyDown={(event) => event.key === "Enter" && apply(event.currentTarget.value)}
-                  />
-                </label>
-                <Button size="sm" variant="ghost" disabled={gridPage === 0} onClick={() => setGridPage(gridPage - 1)}>Newer</Button>
-                <Button size="sm" variant="ghost" disabled={isFetchingNextPage || (!hasNextPage && runs.length <= (gridPage + 1) * wanted)} onClick={() => void older()}>Older</Button>
+              ) : (
                 <DropdownMenu>
                   <DropdownTrigger asChild>
                     <Button size="sm" variant="outline">
@@ -300,7 +312,13 @@ export function PipelineDetail() {
                     </Button>
                   </DropdownTrigger>
                   <DropdownContent>
-                    <DropdownLabel>Grid</DropdownLabel>
+                    <DropdownLabel>Runs shown</DropdownLabel>
+                    {RUN_COUNTS.map((count) => (
+                      <DropdownItem key={count} onSelect={() => apply(String(count))}>
+                        <Check className={cn("size-4", wanted !== count && "invisible")} aria-hidden /> {count} runs
+                      </DropdownItem>
+                    ))}
+                    <DropdownSeparator />
                     <DropdownItem onSelect={() => choose("bars", hideBars ? null : "off")}>
                       <Check className={cn("size-4", hideBars && "invisible")} aria-hidden /> Duration bars
                     </DropdownItem>
@@ -308,15 +326,28 @@ export function PipelineDetail() {
                     <RefreshMenuItem code={code} pipeline={pipeline} onSelect={() => setRefreshOpen(true)} />
                   </DropdownContent>
                 </DropdownMenu>
+              )}
+            </div>
+            {view !== "graph" ? (
+              <div className="flex flex-wrap items-center gap-1.5">
+                <ChecklistFilter label="Tasks" noun="tasks" one="task" known={allTasks} selected={pickedTasks} onChange={(next) => choose("tasks", next.join(",") || null)} />
+                <ChecklistFilter label={`Task status${statusRun === undefined ? "" : ` in #${statusRun}`}`} noun="statuses" one="status" known={TASK_STATES} selected={taskStates}
+                  name={(state) => statusMeta(state).label} onChange={(next) => choose("task_status", next.join(",") || null)} />
+                <ChecklistFilter label="Run status" noun="statuses" one="status" known={RUN_STATES} selected={runStates}
+                  name={(state) => statusMeta(state).label} onChange={(next) => { setGridPage(0); choose("run_status", next.join(",") || null); }} />
+                <span className="ml-auto flex">
+                  <Button size="icon" variant="ghost" title="Older runs" aria-label="Older runs" disabled={isFetchingNextPage || (!hasNextPage && runs.length <= (gridPage + 1) * wanted)} onClick={() => void older()}><ChevronLeft className="size-4" aria-hidden /></Button>
+                  <Button size="icon" variant="ghost" title="Newer runs" aria-label="Newer runs" disabled={gridPage === 0} onClick={() => setGridPage(gridPage - 1)}><ChevronRight className="size-4" aria-hidden /></Button>
+                </span>
               </div>
-            )}
+            ) : null}
           </div>
           <div className={cn("relative min-h-0 flex-1 overflow-hidden", view !== "grid" && "max-lg:min-h-96")}>
             {!graph.isSuccess ? (
               graph.isError ? <Notice className="m-3">{(graph.error as Error).message}</Notice> : <Loading what="tasks" className="p-3" />
-            ) : view === "grid" ? (
+            ) : view !== "graph" ? (
               readError ? <Notice>{readError.message}</Notice> : list.runs.isPending ? <Loading what="run history" className="p-3" /> :
-              <RunGrid code={code} pipeline={pipeline} graph={graph.data} tasks={pages?.[0]?.task_order ?? []} runs={gridRuns} cells={cells} extra={outside ? extraRun ?? undefined : undefined} selected={chosen} task={task} onSelect={select} bars={!hideBars} />
+              <RunGrid code={code} pipeline={pipeline} graph={graph.data} tasks={taskOrder} gantt={view === "gantt" ? chosen : undefined} runs={gridRuns} cells={cells} extra={outside ? extraRun ?? undefined : undefined} selected={chosen} task={task} onSelect={select} bars={!hideBars} />
             ) : (
               <div className="absolute inset-0 flex flex-col">
               {selectedRun ? (
@@ -350,12 +381,33 @@ export function PipelineDetail() {
         }
         right={
         <Card className="flex min-h-0 flex-1 flex-col overflow-hidden">
-          <div className="px-3">
-            <Tabs tabs={tabs} value={tab} onChange={(id) => choose("tab", id)} />
-          </div>
-          <div role="tabpanel" id="tabpanel" data-scroll-area aria-labelledby={`tab-${tab}`} className="min-h-0 flex-1 overflow-auto p-4">
-            <h2 className="sr-only">{tabs.find(item=>item.id===tab)?.label}</h2>
-            {tab === "runs" ? (
+          {inSelection ? (
+            <nav aria-label="Selection" className="flex flex-wrap items-center gap-1 border-b border-border px-3 py-2 text-sm">
+              <Button size="sm" variant="ghost" onClick={clearSelection}>{pipeline}</Button>
+              <span aria-hidden className="text-muted">›</span>
+              {task ? <Button size="sm" variant="ghost" onClick={() => select(selected, undefined)}>Run #{selected}</Button> : <span aria-current="page" className="px-2 font-medium">Run #{selected}</span>}
+              {task ? <><span aria-hidden className="text-muted">›</span><span aria-current="page" className="break-all px-2 font-medium">{task}</span></> : null}
+            </nav>
+          ) : (
+            <div className="px-3">
+              <Tabs tabs={tabs} value={tab} onChange={(id) => choose("tab", id)} />
+            </div>
+          )}
+          <div role="tabpanel" id="tabpanel" data-scroll-area aria-labelledby={inSelection ? undefined : `tab-${tab}`} aria-label={inSelection ? (task ? `Task ${task}` : `Run #${selected}`) : undefined} className="min-h-0 flex-1 overflow-auto p-4">
+            {inSelection ? null : <h2 className="sr-only">{tabs.find(item=>item.id===tab)?.label}</h2>}
+            {inSelection ? (
+              <RunOverview code={code} pipeline={pipeline} runId={selected} task={task}
+                taskOrder={taskOrder} cells={cells} tab={params.get("instance") ?? ""}
+                tryNumber={params.has("try") ? Number(params.get("try")) : null}
+                onTask={(name) => select(selected, name ?? undefined)}
+                onTab={(next) => choose("instance", next)} onTry={(value) => {
+                  const next = new URLSearchParams(params);
+                  if (value === null) next.delete("try");
+                  else next.set("try", String(value));
+                  next.delete("instance");
+                  setParams(next, { replace: true });
+                }} />
+            ) : tab === "runs" ? (
               <RunsPanel
                 code={code}
                 pipeline={pipeline}
@@ -390,18 +442,6 @@ export function PipelineDetail() {
                   </>
                 }
               />
-            ) : tab === "run" && selected !== undefined ? (
-              <RunOverview code={code} pipeline={pipeline} runId={selected} task={task}
-                taskOrder={pages?.[0]?.task_order ?? []} cells={cells} tab={params.get("instance") ?? ""}
-                tryNumber={params.has("try") ? Number(params.get("try")) : null}
-                onTask={(name) => select(selected, name ?? undefined)}
-                onTab={(next) => choose("instance", next)} onTry={(value) => {
-                  const next = new URLSearchParams(params);
-                  if (value === null) next.delete("try");
-                  else next.set("try", String(value));
-                  next.delete("instance");
-                  setParams(next, { replace: true });
-                }} />
             ) : task && selected === undefined && !list.runs.isPending ? (
               <TaskDefinitionPanel code={code} pipeline={pipeline} task={task} />
             ) : !p || !graph.isSuccess ? (

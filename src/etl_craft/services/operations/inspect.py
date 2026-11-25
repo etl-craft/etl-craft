@@ -240,6 +240,9 @@ def _read_history(
         "pool": request.pool,
         "agent": None if request.agent is None else str(request.agent),
         "failure_class": request.failure_class,
+        # An empty status list keeps every run; the placeholder only keeps the IN list valid SQL.
+        "status_filter": int(bool(request.run_status)),
+        "statuses": [status.value for status in request.run_status] or [""],
     }
     entries: tuple[RunView | TaskRunView, ...]
     if task_code is None:
@@ -269,7 +272,9 @@ def _read_history(
         extra = _history_runs(
             conn,
             pipeline_ids,
-            dict.fromkeys(parameters) | {"run_id": request.extra_run_id, "limit": 1},
+            # A run selected outside the page is shown whatever the status filter.
+            dict.fromkeys(parameters)
+            | {"run_id": request.extra_run_id, "limit": 1, "status_filter": 0, "statuses": [""]},
         )
         listed.update(run.pipeline_run_id for run in extra)
     return HistoryView(
@@ -311,7 +316,7 @@ def _history_runs(
     if not pipeline_ids:
         return ()
     query = statement(conn, "pipeline_run_history").bindparams(
-        bindparam("pipeline_ids", expanding=True)
+        bindparam("pipeline_ids", expanding=True), bindparam("statuses", expanding=True)
     )
     return tuple(
         run_document(row._mapping)

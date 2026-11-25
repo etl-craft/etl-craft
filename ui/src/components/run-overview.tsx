@@ -17,12 +17,10 @@ import { unavailableAction, useActionAvailability } from "@/hooks";
 import { getJson, getText, project } from "@/lib/api";
 import { formatDuration } from "@/lib/format";
 import { Tabs } from "@/components/tabs";
-import { RunGraph } from "@/components/lazy-run-graph";
-import { RunTimeline } from "@/components/run-timeline";
 import { handlerLabel, runConditionLabel, words } from "@/lib/labels";
 import { When, useNow } from "@/components/when";
 import { itemsPath } from "@/lib/routes";
-import type { Capabilities, ControlView, Explanation, Graph, GridCell, RunView, Steps, TaskHistory } from "@/lib/types";
+import type { Capabilities, ControlView, Explanation, GridCell, RunView, Steps, TaskHistory } from "@/lib/types";
 
 function Why({ code, pipeline, runId, task }: { code: string; pipeline: string; runId: number; task: string }) {
   const why = useQuery({
@@ -91,10 +89,10 @@ function TaskSource({ code, pipeline, runId, task, attemptId }: {
   </div>;
 }
 
-function TaskDetails({ code, pipeline, run, task, handler, cell, tab, tryNumber, onTab, onTry, onBack }: {
+function TaskDetails({ code, pipeline, run, task, handler, cell, tab, tryNumber, onTab, onTry }: {
   code: string; pipeline: string; run: RunView; task: string; handler?: string; cell?: GridCell;
   tab: string; tryNumber: number | null; onTab: (tab: string) => void;
-  onTry: (value: number | null) => void; onBack: () => void;
+  onTry: (value: number | null) => void;
 }) {
   const panel = React.useRef<HTMLElement>(null);
   React.useLayoutEffect(() => {
@@ -120,9 +118,9 @@ function TaskDetails({ code, pipeline, run, task, handler, cell, tab, tryNumber,
   const status = attempt?.status ?? taskStatus(summary?.status ?? cell?.status ?? null, run);
   return <section ref={panel} aria-label={`Task ${task}`} className="grid scroll-mt-14 gap-3">
     <div className="flex flex-wrap items-center gap-2">
-      <Button size="sm" variant="ghost" onClick={onBack}>Run #{runId}</Button>
-      <h2 className="break-all text-base font-semibold">{task}</h2>
+      <h2 className="break-all text-lg font-semibold">{task}</h2>
       <StatusBadge status={status} />
+      <span className="text-xs text-muted">Run #{runId}</span>
       {handler ? <span className="text-xs text-muted">{handlerLabel(handler)}</span> : null}
       {attempt && attempt.attempt_number > 1 ? <span className="text-xs">Try {attempt.attempt_number}</span> : null}
     </div>
@@ -274,10 +272,8 @@ function SkipReason({ code, pipeline, runId, task }: { code: string; pipeline: s
   return failed?.length ? <span className="text-xs text-muted">Skipped: {failed.map((dependency) => dependency.upstream).join(", ")} failed</span> : null;
 }
 
-const runTabs = [
-  { id: "instances", label: "Task instances" }, { id: "timeline", label: "Timeline" },
-  { id: "graph", label: "Graph" }, { id: "details", label: "Details" },
-];
+// Gantt and Graph are views of the panel beside the grid, so the run keeps only its own tabs.
+const runTabs = [{ id: "instances", label: "Task instances" }, { id: "details", label: "Details" }];
 
 export function RunOverview({ code, pipeline, runId, task, taskOrder, cells, tab, tryNumber, onTask, onTab, onTry }: {
   code: string; pipeline: string; runId: number; task: string | null; taskOrder: string[]; cells: GridCell[];
@@ -286,7 +282,6 @@ export function RunOverview({ code, pipeline, runId, task, taskOrder, cells, tab
 }) {
   const toast = useToast();
   const now = useNow();
-  const [focused, setFocused] = React.useState<string | null>(null);
   const live = (status?: string) => (status === "IN-PROGRESS" ? 5_000 : false);
   const run = useQuery({
     queryKey: ["run", code, runId],
@@ -298,11 +293,6 @@ export function RunOverview({ code, pipeline, runId, task, taskOrder, cells, tab
     queryFn: () => getJson<Steps>(`${project(code)}/steps`, { pipeline_code: pipeline, run_id: runId }),
     refetchInterval: () => live(run.data?.status),
   });
-  const graph = useQuery({
-    queryKey: ["graph", code, pipeline],
-    queryFn: () => getJson<Graph>(`${project(code)}/graph`, { pipeline_code: pipeline }),
-    enabled: tab === "graph" && !task,
-  });
   if (run.isError) return <Notice>{run.error.message}</Notice>;
   const r = run.data;
   if (!r) return <Loading what="run" />;
@@ -310,7 +300,7 @@ export function RunOverview({ code, pipeline, runId, task, taskOrder, cells, tab
   const byTask = new Map(steps.data?.steps.map(step => [step.task_code, step]));
   const byCell = new Map(cells.filter(cell => cell.pipeline_run_id === runId).map(cell => [cell.task_code, cell]));
   if (task) return <TaskDetails key={`${runId}:${task}`} code={code} pipeline={pipeline} run={r} task={task} handler={byTask.get(task)?.handler}
-    cell={byCell.get(task)} tab={tab} tryNumber={tryNumber} onTab={onTab} onTry={onTry} onBack={() => onTask(null)} />;
+    cell={byCell.get(task)} tab={tab} tryNumber={tryNumber} onTab={onTab} onTry={onTry} />;
   const active = runTabs.some(item => item.id === tab) ? tab : "instances";
   const duration = (cell?: GridCell) => cell?.start_date ? Math.max(0, (cell.end_date ? Date.parse(cell.end_date) : now) - Date.parse(cell.start_date)) : 0;
   const max = Math.max(1, ...Array.from(byCell.values(), duration));
@@ -330,13 +320,15 @@ export function RunOverview({ code, pipeline, runId, task, taskOrder, cells, tab
       {r.end_date ? <Fact inline label="Ended"><When iso={r.end_date} /></Fact> : null}
       {r.start_date ? <Fact inline label="Duration">{formatDuration(r.start_date, r.end_date, now)}</Fact> : null}
     </FactList>
+    {/* Inputs given for this run change what it does, so they show with the run's facts, not behind a tab. */}
+    {r.parameter_overrides && Object.keys(r.parameter_overrides).length > 0 ? <section aria-label="Recorded task inputs" className="grid gap-1">
+      <h3 className="text-sm font-medium">Recorded task inputs</h3>
+      <ParamList entries={Object.entries(r.parameter_overrides).flatMap(([name, values]) => Object.entries(values).map(([key, value]): [string, string] => [`${name}.${key}`, value]))} />
+    </section> : null}
     <Tabs tabs={runTabs} value={active} onChange={onTab} panelId="run-instance-tab" />
     <div role="tabpanel" id="run-instance-tab" aria-labelledby={`tab-${active}`} className="grid gap-3">
-    {active === "timeline" ? <RunTimeline run={r} compact order={taskOrder} /> : null}
-    {active === "graph" && graph.data ? <RunGraph graph={graph.data} focused={focused} onFocus={setFocused} statuses={Object.fromEntries([...byTask].map(([name, step]) => [name, taskStatus(step.status, r)]))} onOpen={onTask} /> : null}
     {active === "details" ? <>
       {slaVerdict(r) ? <StatusBadge status={slaVerdict(r)!} /> : null}
-      {r.parameter_overrides ? <ParamList entries={Object.entries(r.parameter_overrides).flatMap(([name, values]) => Object.entries(values).map(([key, value]): [string, string] => [`${name}.${key}`, value]))} /> : null}
     </> : null}
     {active === "instances" ? <>
       {steps.isError ? <Notice>{steps.error.message}</Notice> : null}

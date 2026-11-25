@@ -195,6 +195,10 @@ def test_home_runs_and_run_detail_lead_to_a_confirmed_recovery(scene):
         graph.get_by_role("button", name="Node actions for LOAD").click()
         page.get_by_role("menuitem", name="Inspect task", exact=True).click()
         expect(page.get_by_role("region", name="Task LOAD", exact=True)).to_be_visible()
+        # Run actions live on the run: go up one level in the selection path.
+        page.get_by_role("navigation", name="Selection").get_by_role(
+            "button", name=re.compile(r"^Run #")
+        ).click()
         page.get_by_role("button", name="Recover run").click()
         dialog = page.get_by_role("dialog")
         expect(dialog.get_by_text("default")).to_be_visible()
@@ -441,7 +445,9 @@ def test_task_instances_open_the_task_panel_and_restore_the_run(scene):
         details = page.get_by_role("region", name="Task LOAD", exact=True)
         expect(details.get_by_role("tab", name="Logs")).to_have_attribute("aria-selected", "true")
         shoot(page, "run-page")
-        details.get_by_role("button", name=f"Run #{bad}", exact=True).click()
+        page.get_by_role("navigation", name="Selection").get_by_role(
+            "button", name=f"Run #{bad}", exact=True
+        ).click()
         expect(table).to_be_visible()
         assert problems == []
         browser.close()
@@ -461,7 +467,12 @@ def test_an_active_run_graph_refreshes_task_states_without_the_run_tab(site):
         browser, page, problems = open_page(pw, viewport={"width": 1280, "height": 900})
         sign_in(page, url, f"/ui/projects/default/pipelines/LIVE?run={run}")
         page.get_by_role("button", name="Graph", exact=True).click()
-        page.get_by_role("tab", name="Overview", exact=True).click()
+        page.get_by_role("navigation", name="Selection").get_by_role(
+            "button", name="LIVE", exact=True
+        ).click()
+        expect(page.get_by_role("tab", name="Overview", exact=True)).to_have_attribute(
+            "aria-selected", "true"
+        )
         page.wait_for_load_state("networkidle")
         graph = page.get_by_role("group", name="Task graph")
         copy_node = graph.locator('.react-flow__node[data-id="COPY"]')

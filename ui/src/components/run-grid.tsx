@@ -5,18 +5,20 @@ import { AppLink as Link } from "@/components/navigation";
 import { StatusMark, solidClass, statusMeta } from "@/components/status";
 import { useNow } from "@/components/when";
 import { useTimezone } from "@/hooks";
-import { formatDuration, formatTime } from "@/lib/format";
+import { formatDuration, formatSeconds, formatTime } from "@/lib/format";
 import { runPath } from "@/lib/routes";
 import type { Graph, GridCell, RunView } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
-export const DEFAULT_RUNS = 25;
+export const DEFAULT_RUNS = 10;
 export const MIN_TASKS = 126;
 export const GRID_COLUMNS = { id: { width: 18, minimum: 18 }, time: { width: 18, minimum: 18 } };
 
-export function RunGrid({ code, pipeline, graph, tasks, runs, cells, extra, selected, task, onSelect, bars = true }: {
+export function RunGrid({ code, pipeline, graph, tasks, runs, cells, extra, selected, task, onSelect, bars = true, gantt }: {
   code: string; pipeline: string; graph: Graph; tasks: string[]; runs: RunView[]; cells: GridCell[];
   extra?: RunView; selected?: number; task?: string | null;
+  /** The run whose task timings are drawn on the grid's own rows, after its cells. */
+  gantt?: number;
   onSelect: (runId: number, taskCode?: string) => void; bars?: boolean;
 }) {
   const [definition, setDefinition] = useState<string | null>(null);
@@ -38,9 +40,15 @@ export function RunGrid({ code, pipeline, graph, tasks, runs, cells, extra, sele
   const durations = shown.map((run) => run.start_date
     ? Math.max(0, ((run.end_date ? Date.parse(run.end_date) : now) - Date.parse(run.start_date)) / 1000) : 0);
   const longest = Math.max(0, ...durations);
+  // The Gantt spans the selected run's first task start to its last task end (or now, while running).
+  const spans = gantt === undefined ? [] : cells.filter((cell) => cell.pipeline_run_id === gantt && cell.start_date)
+    .map((cell) => [Date.parse(cell.start_date!), cell.end_date ? Date.parse(cell.end_date) : now] as const);
+  const from = spans.length ? Math.min(...spans.map(([start]) => start)) : 0;
+  const to = spans.length ? Math.max(from + 1000, ...spans.map(([, end]) => end)) : 0;
   return (
     <div tabIndex={0} className="relative flex h-full min-h-0 flex-col" onKeyDown={legend.onKeyDown}>
-      <div className="flex shrink-0 justify-end px-2">{legend.button}</div>
+      {/* The key sits over the duration scale's empty corner instead of taking a row of its own. */}
+      <div className="absolute right-2 top-1 z-30">{legend.button}</div>
       {legend.panel}
       <div ref={scroll} className="min-h-0 flex-1 overflow-auto scroll-pt-[100px]" data-scroll-area>
       <table aria-label="Run grid" className="w-max table-fixed border-separate border-spacing-0 text-xs">
@@ -48,7 +56,7 @@ export function RunGrid({ code, pipeline, graph, tasks, runs, cells, extra, sele
           <tr>
             <th scope="col" className="sticky left-0 z-10 min-w-32 max-w-44 bg-surface px-2 text-left align-bottom">
               {bars && longest > 0 ? <div aria-label="Duration scale" className="grid h-[100px] content-between text-[10px] font-normal text-muted">
-                <span>{Math.ceil(longest)} s</span><span>{Math.ceil(longest / 2)} s</span><span>0 s</span>
+                <span>{formatSeconds(longest)}</span><span>{formatSeconds(longest / 2)}</span><span>0s</span>
               </div> : null}
               <span className="block h-5">Task</span>
             </th>
@@ -59,17 +67,20 @@ export function RunGrid({ code, pipeline, graph, tasks, runs, cells, extra, sele
                 <Link to={runPath(code, pipeline, id)} title={title} aria-label={`Run ${title}`}
                   aria-current={id === selected && !task ? "true" : undefined}
                   onClick={(event) => { event.preventDefault(); onSelect(id); }}
-                  className={cn("flex w-full flex-col items-center justify-end focus-visible:outline-accent", bars ? "h-[100px]" : "h-[52px]")}>
+                  className={cn("flex w-full flex-col items-center justify-end focus-visible:outline-accent", bars ? "h-[100px]" : "h-5")}>
+                  {/* The bar's height is the run's duration against the longest loaded run; its number, time and duration are in the hover text. */}
                   {bars ? <span className={cn("relative flex w-[14px] items-end justify-center rounded-sm", solidClass(run.status))}
-                    style={{ height: Math.max(14, longest ? (durations[index] ?? 0) / longest * 47 : 0) }}>
+                    style={{ height: Math.max(14, longest ? (durations[index] ?? 0) / longest * 100 : 0) }}>
                     <StatusMark solid status={run.status} className="size-[14px] [&_svg]:size-[10px]" />
-                  </span> : null}
-                  <span className="flex h-[49px] items-center gap-1 text-[9px] font-normal tabular-nums [writing-mode:vertical-rl]" aria-hidden>
-                    #{id}{run.start_date ? <time dateTime={run.start_date} title={formatTime(run.start_date, timezone)} className="text-muted">{formatTime(run.start_date, timezone, true)}</time> : null}
-                  </span>
+                  </span> : <StatusMark solid status={run.status} className="size-[14px] [&_svg]:size-[10px]" />}
                 </Link>
               </th>;
             })}
+            {gantt !== undefined ? <th scope="col" className="min-w-60 px-2 text-left align-bottom font-normal text-muted">
+              <span className="block text-fg">Run #{gantt}</span>
+              {spans.length ? <span className="flex h-5 justify-between tabular-nums"><span>{formatTime(new Date(from).toISOString(), timezone)}</span><span>{formatSeconds((to - from) / 1000)}</span></span>
+                : <span className="block h-5">No task has started</span>}
+            </th> : null}
           </tr>
         </thead>
         <tbody>
@@ -90,6 +101,7 @@ export function RunGrid({ code, pipeline, graph, tasks, runs, cells, extra, sele
                 </button>
               </td>;
             })}
+            {gantt !== undefined ? <td className="h-5 min-w-60 px-2"><GanttBar cell={byRun.get(JSON.stringify([gantt, name]))} from={from} to={to} now={now} /></td> : null}
           </tr>)}
         </tbody>
       </table>
@@ -98,4 +110,16 @@ export function RunGrid({ code, pipeline, graph, tasks, runs, cells, extra, sele
       <GridTaskDetails code={code} pipeline={pipeline} task={definition} graph={graph} onClose={() => setDefinition(null)} />
     </div>
   );
+}
+
+/** One task's span in the selected run, placed on the run's time range; hover gives its times. */
+function GanttBar({ cell, from, to, now }: { cell?: GridCell; from: number; to: number; now: number }) {
+  if (!cell?.start_date || to <= from) return null;
+  const start = Date.parse(cell.start_date);
+  const end = cell.end_date ? Date.parse(cell.end_date) : now;
+  const label = `${cell.task_code}: ${statusMeta(cell.status).label.toLowerCase()}, ${formatDuration(cell.start_date, cell.end_date, now)}`;
+  return <div className="relative h-[14px] w-full" title={label}>
+    <span role="img" aria-label={label} className={cn("absolute inset-y-0 min-w-[3px] rounded-sm", solidClass(cell.status))}
+      style={{ left: `${(start - from) / (to - from) * 100}%`, width: `${Math.max(0, end - start) / (to - from) * 100}%` }} />
+  </div>;
 }

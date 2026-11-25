@@ -11,6 +11,7 @@ JOIN CFG_PIPELINES p ON p.PIPELINE_ID = r.PIPELINE_ID
 WHERE r.PIPELINE_ID IN :pipeline_ids
 AND (CAST(:run_id AS bigint) IS NULL OR r.PIPELINE_RUN_ID = :run_id)
 AND (CAST(:before AS bigint) IS NULL OR r.PIPELINE_RUN_ID < :before)
+AND (CAST(:status_filter AS integer) = 0 OR r.STATUS IN :statuses)
 AND ((CAST(:pool AS varchar) IS NULL AND CAST(:agent AS varchar) IS NULL
       AND CAST(:failure_class AS varchar) IS NULL)
      OR EXISTS (SELECT 1 FROM AUD_TASK_RUN_LOG l

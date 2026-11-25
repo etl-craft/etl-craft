@@ -10,10 +10,11 @@ import { formatSeconds } from "@/lib/format";
 import { catalogPath, pipelinePath, scheduledPath } from "@/lib/routes";
 import type { AuditRecords, Pipeline, RunView } from "@/lib/types";
 
-const PIPELINE_TABS = [{id:"overview",label:"Overview"},{id:"run",label:"Run"},{id:"runs",label:"Runs"},{id:"audit",label:"Audit log"},{id:"access",label:"Access"}];
+const PIPELINE_TABS = [{id:"overview",label:"Overview"},{id:"runs",label:"Runs"},{id:"audit",label:"Audit log"},{id:"access",label:"Access"}];
 
-export function pipelineTabs(runId?:number) {
-  return PIPELINE_TABS.filter(tab=>tab.id!=="run"||runId!==undefined).map(tab=>tab.id==="run"?{...tab,label:`Run #${runId}`}:tab);
+/** The pipeline's own tabs, shown while no run or task is selected. */
+export function pipelineTabs() {
+  return PIPELINE_TABS;
 }
 
 const WINDOWS: Record<string, { label: string; hours: number }> = {

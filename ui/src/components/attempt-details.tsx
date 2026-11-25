@@ -56,9 +56,11 @@ export function AttemptLog({ code, attempt, open = false, embedded = false }: { 
   return (
     <div className="grid gap-2">
       <div className="flex flex-wrap items-center gap-3">
-        <Button size="sm" className="w-fit" unavailableReason={logReason} onClick={() => setShown(!shown)} aria-expanded={visible}>
-          {visible ? "Hide log" : "Show log"}
-        </Button>
+        {embedded && !logReason ? null : (
+          <Button size="sm" className="w-fit" unavailableReason={logReason} onClick={() => setShown(!shown)} aria-expanded={visible}>
+            {visible ? "Hide log" : "Show log"}
+          </Button>
+        )}
         {visible && log.isSuccess ? (
           <>
             <input type="search" aria-label="Find in log" placeholder="Find in log" value={find} onChange={(event) => setFind(event.target.value)} className="h-control w-44 rounded-md border border-border-strong bg-surface px-2 text-xs" />

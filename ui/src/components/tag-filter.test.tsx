@@ -20,10 +20,11 @@ describe("the tag filter", () => {
     render(<TagFilter known={Array.from({ length: 1000 }, (_, i) => `team:t${i}`)} selected={[]} onToggle={() => undefined} onClear={() => undefined} />);
     expect(screen.queryAllByRole("checkbox")).toHaveLength(0);
     open();
-    expect(screen.getAllByRole("checkbox")).toHaveLength(300);
+    expect(screen.getAllByRole("listitem")).toHaveLength(300);
     expect(screen.getByRole("status").textContent).toBe("300 of 1000 shown; type to narrow.");
     fireEvent.change(screen.getByLabelText("Search tags"), { target: { value: "T99" } });
-    expect(screen.getAllByRole("checkbox")).toHaveLength(11); // t99, t990 to t999
+    expect(screen.getAllByRole("listitem")).toHaveLength(11); // t99, t990 to t999
+    expect(screen.getByRole("checkbox", { name: "Select all matches" })).toBeTruthy();
     fireEvent.change(screen.getByLabelText("Search tags"), { target: { value: "nothing" } });
     expect(screen.getByRole("status").textContent).toBe("No tag matches.");
   });

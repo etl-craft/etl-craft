@@ -25,7 +25,7 @@ const run = (id: number, pipeline: string) => ({
 
 function panel(pipeline: string | undefined, highlight?: number, codes?: ReadonlySet<string>) {
   const client = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
-  client.setQueryData(["runs", "demo", pipeline ?? "", "", "", ""], {
+  client.setQueryData(["runs", "demo", pipeline ?? "", "", "", "", ""], {
     pages: [{ entries: [run(6, "REF"), run(5, "SETUP")], before: null }],
     pageParams: [undefined],
   });
