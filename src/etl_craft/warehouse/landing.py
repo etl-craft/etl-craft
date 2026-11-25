@@ -1,6 +1,6 @@
 """Stream rows to bounded scratch storage before one atomic landing publication."""
 
-from collections.abc import Iterable, Iterator, Mapping
+from collections.abc import Callable, Iterable, Iterator, Mapping
 
 from sqlalchemy import text
 from sqlalchemy.engine import Connection
@@ -12,6 +12,7 @@ from etl_craft.core.text import sha256_hex
 from etl_craft.dialects.warehouse.base import WarehouseDialect
 from etl_craft.dialects.warehouse.copying import MAX_BOUND_VALUES
 from etl_craft.dialects.warehouse.landing import TAGS, columns, publish_statements, stage_insert
+from etl_craft.dialects.warehouse.row_ids import violations_sql
 
 BATCH_BYTES = 256 * 1024
 ROW_BYTES = 16 * 1024 * 1024
@@ -54,6 +55,7 @@ def publish(
     dialect: WarehouseDialect,
     write: LandingWrite,
     rows: Iterable[Mapping[str, object]],
+    reserve_ids: Callable[[str, int, int], int] | None = None,
 ) -> int:
     """Staging may commit independently; only publication changes the live target."""
     kinds = columns(dialect, write)
@@ -85,15 +87,48 @@ def publish(
             count += len(chunk)
         conn.commit()
         dialect.prepare_landing_publication(conn)
-        statements, parameters = publish_statements(conn, dialect, write, stage, kinds, actual)
+        base = None
+        if not dialect.row_id_generated(conn, target):
+            base = 0
+            count = int(conn.execute(text(f"SELECT COUNT(*) FROM {stage}")).scalar_one())
+            if reserve_ids is None:
+                raise HandlerError(f"{target}: missing target owner; use a managed writer")
+            maximum = int(
+                conn.execute(text(f"SELECT COALESCE(MAX(ROW_ID), 0) FROM {target}")).scalar_one()
+            )
+            base = reserve_ids(target, count, maximum)
+            if count:
+                fault_point("sql.row_id.after_reserve")
+        statements, parameters = publish_statements(
+            conn, dialect, write, stage, (kinds, actual), base
+        )
         fault_point("landing.before_publish")
         for sql in statements:
             conn.execute(text(sql), parameters)
         fault_point("landing.before_commit")
         conn.commit()
+        if base is not None and count:
+            verify_landing_ids(conn, target, base + 1, base + count, write.task_run_id)
         fault_point("landing.after_commit")
         return count
     finally:
         conn.rollback()
         conn.execute(text(f"DROP TABLE IF EXISTS {stage}"))
         conn.commit()
+
+
+def verify_landing_ids(conn: Connection, target: str, start: int, end: int, task_run: int) -> None:
+    """Refuse a committed landing publication with out-of-range or duplicate IDs."""
+    bad = (
+        conn.execute(
+            text(violations_sql(target)),
+            {"start": start, "end": end, "task_run": task_run},
+        )
+        .scalars()
+        .all()
+    )
+    if bad:
+        raise HandlerError(
+            f"{target}: ROW_ID reservation [{start}, {end}] has offending IDs {bad}; "
+            "inspect the committed target before retrying this attempt"
+        )

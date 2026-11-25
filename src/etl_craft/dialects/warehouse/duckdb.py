@@ -70,12 +70,14 @@ class DuckDBWarehouse(WarehouseDialect):
         rows = conn.execute(text(f"DESCRIBE {self.event_probe_sql(sql, 0)}")).all()
         return [(str(row[0]), str(row[1])) for row in rows]
 
-    def identity_setup_sql(self, target: str) -> tuple[str, ...]:
+    def identity_setup_sql(self, target: str, *, start: int = 1) -> tuple[str, ...]:
         """DuckDB requires a sequence because inline SQL identities are not implemented."""
         namespace, table = target.rsplit(".", 1)
-        return (f"CREATE OR REPLACE SEQUENCE {namespace}.etl_seq_{table}_row_id START 1",)
+        return (f"CREATE OR REPLACE SEQUENCE {namespace}.etl_seq_{table}_row_id START {start}",)
 
-    def identity_table_ddl(self, target: str, columns: str, params: Mapping[str, str]) -> str:
+    def identity_table_ddl(
+        self, target: str, columns: str, params: Mapping[str, str], *, start: int = 1
+    ) -> str:
         """Declare the key and sequence default together with the table's other columns."""
         namespace, table = target.rsplit(".", 1)
         return (
@@ -91,6 +93,7 @@ class DuckDBWarehouse(WarehouseDialect):
     sqlglot_dialect = "duckdb"
     replace_strategy: ReplaceStrategy = "transactional"
     surrogate_key: SurrogateKey = "sequence"
+    generator_metadata_sql = "COALESCE(column_default, '') LIKE 'nextval(%'"
     single_writer = True
     process_local_queries = True
 

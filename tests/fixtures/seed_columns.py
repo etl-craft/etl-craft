@@ -1,5 +1,6 @@
 """Omitted seed fields retain declared types without changing blank cells."""
 
+from contextlib import contextmanager
 from uuid import uuid4
 
 import pytest
@@ -7,10 +8,40 @@ from sqlglot import Dialect, exp
 
 from etl_craft.core.enums import SqlAction
 from etl_craft.core.errors import MetadataError
+from etl_craft.engine import locks
+from etl_craft.engine.repository.pipelines import selected_project
+from etl_craft.engine.task_store import LocalTaskStore
+from etl_craft.handlers.resources import LocalLocker
 from etl_craft.handlers.sql.seed import replace_seed
 from etl_craft.handlers.sql.session import Session
 from etl_craft.services.seeds import Seed, cast_rows
 from etl_craft.warehouse.connection import warehouse_dialect
+
+
+@contextmanager
+def seed_session(w, target):
+    locker = LocalLocker(w.engine_db, w.config)
+    with (
+        locks.target(target, w.catalog).hold(locker),
+        selected_project(1),
+        w.warehouse.connect() as conn,
+    ):
+        session = Session(
+            conn,
+            warehouse_dialect(w.config),
+            catalog=w.catalog,
+            action=SqlAction.CREATE_TABLE,
+            target_object=target,
+            task_run_id=0,
+            params={},
+        )
+        session.protection_store = LocalTaskStore.standalone(w.engine_db, w.config, locker)
+        try:
+            yield session
+        finally:
+            session.sweep()
+        conn.commit()
+        session.verify_row_ids()
 
 
 def check_omitted_seed_columns(w, folder):
@@ -36,25 +67,13 @@ def check_omitted_seed_columns(w, folder):
         "test",
     )
     try:
-        with w.warehouse.begin() as conn:
-            values = cast_rows(conn, seed)
+        with seed_session(w, f"{w.schema}.{name}") as session:
+            values = cast_rows(session.conn, seed)
             assert [{key.lower(): value for key, value in row.items()} for row in values] == [
                 {"id": 1, "name": "", "upload_id": None},
                 {"id": 2, "name": "Ada", "upload_id": None},
             ]
-            session = Session(
-                conn,
-                dialect,
-                catalog=w.catalog,
-                action=SqlAction.CREATE_TABLE,
-                target_object=f"{w.schema}.{name}",
-                task_run_id=0,
-                params={},
-            )
-            try:
-                replace_seed(session, seed.columns, values, None, "seed-deployer")
-            finally:
-                session.sweep()
+            replace_seed(session, seed.columns, values, None, "seed-deployer")
         assert w.rows(f"SELECT id,name,upload_id FROM {w.name(name)} ORDER BY id") == [
             (1, "", None),
             (2, "Ada", None),

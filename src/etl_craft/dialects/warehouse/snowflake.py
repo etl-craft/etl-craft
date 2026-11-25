@@ -25,7 +25,11 @@ from etl_craft.dialects.warehouse.base import (
     WarehouseDialect,
 )
 from etl_craft.dialects.warehouse.metadata import TableMetadata, describe_result
-from etl_craft.dialects.warehouse.replacement import identity_replacement, replacement_ddl
+from etl_craft.dialects.warehouse.replacement import (
+    IdentityReplacement,
+    identity_replacement,
+    replacement_ddl,
+)
 
 if TYPE_CHECKING:
     from etl_craft.config import ConnectionProfile
@@ -212,38 +216,39 @@ class SnowflakeWarehouse(WarehouseDialect):
         """Cast the value to text first: Snowflake's TRY_CAST reads text only."""
         return super().reject_checks(f"CAST({value} AS VARCHAR)", kind)
 
-    def identity_table_ddl(self, target: str, columns: str, params: Mapping[str, str]) -> str:
+    def identity_table_ddl(
+        self, target: str, columns: str, params: Mapping[str, str], *, start: int = 1
+    ) -> str:
         """Use an ordered native identity; inserts omit the managed key."""
-        return (
-            f"CREATE TABLE {target} ({columns}, "
-            "ROW_ID BIGINT AUTOINCREMENT START 1 INCREMENT 1 ORDER)"
-        )
+        return f"CREATE TABLE {target} ({columns}, {self.identity_column_ddl(start)})"
+
+    def identity_column_ddl(self, start: int) -> str:
+        """Declare Snowflake's ordered native generator."""
+        return f"ROW_ID BIGINT AUTOINCREMENT START {start} INCREMENT 1 ORDER"
 
     def identity_replacement_ddl(
         self,
         conn: Connection,
-        target: str,
-        candidate: str,
+        replacement: IdentityReplacement,
         columns: str,
         params: Mapping[str, str],
-        *,
-        existing: bool,
     ) -> tuple[str, str]:
         """Clone a fully populated identity candidate, preserving the target's grants."""
+        target, start = replacement.target, replacement.start
         ddl = (
             str(
                 conn.execute(
                     text("SELECT GET_DDL('TABLE', :target)"), {"target": target}
                 ).scalar_one()
             )
-            if existing
-            else self.identity_table_ddl(target, columns, params)
+            if replacement.existing
+            else self.identity_table_ddl(target, columns, params, start=start)
         )
         return identity_replacement(
             ddl,
             target,
-            candidate,
-            f"{columns}, ROW_ID BIGINT AUTOINCREMENT START 1 INCREMENT 1 ORDER",
+            replacement.candidate,
+            f"{columns}, {self.identity_column_ddl(start)}",
             "snowflake",
         )
 

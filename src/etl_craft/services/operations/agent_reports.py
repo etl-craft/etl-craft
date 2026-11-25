@@ -14,7 +14,8 @@ from typing import TypeVar
 from sqlalchemy.engine import Row
 
 from etl_craft.config.targets import active_catalog
-from etl_craft.core.actor import acting_as
+from etl_craft.core.actor import SYSTEM_ACTOR, acting_as
+from etl_craft.core.compatibility import ROW_ID_AGENT_PROTOCOL
 from etl_craft.core.counts import NO_COUNTS
 from etl_craft.core.enums import (
     ActionName,
@@ -74,8 +75,18 @@ def required(value: T | None, name: str) -> T:
 
 def _context(ctx: OperationContext, request: AgentTask) -> TaskContext:
     with ctx.engine.begin() as conn:
-        task_run = fence(conn, request.attempt_id, str(ctx.credential_token_id))
-        work = conn.execute(statement(conn, "agent_work"), {"attempt_id": request.attempt_id}).one()
+        owner = str(ctx.credential_token_id)
+        if request.operation != AgentReport.RESERVE_ROW_IDS:
+            fence(conn, request.attempt_id, owner)
+        work = conn.execute(
+            statement(conn, "agent_work"), {"attempt_id": request.attempt_id}
+        ).one_or_none()
+        if work is None or work.owner_id != owner:
+            raise StaleTransitionError(
+                f"attempt {request.attempt_id}: expected this agent's owned attempt; "
+                "report only the attempt admitted to this token"
+            )
+        task_run = int(work.task_run_id)
     context = build_task_context(
         ctx.engine,
         ctx.config,
@@ -141,6 +152,16 @@ def _lock(ctx: OperationContext, task: TaskContext, request: AgentTask) -> Agent
     allowed = {}
     if target := task.task_params.get("TARGET_OBJECT"):
         lock = locks.target(target, active_catalog(task.config))
+        if (
+            key == lock.key
+            and request.operation == AgentReport.LOCK
+            and task.handler in {Handler.SQL, Handler.PYTHON}
+            and not request.version.endswith(ROW_ID_AGENT_PROTOCOL)
+        ):
+            raise PermissionDeniedError(
+                f"attempt {task.attempt_id}: {lock.name} requires ROW_ID reservation support; "
+                "upgrade and restart the agent before writing"
+            )
         allowed[lock.key] = lock.name
     if task.handler == Handler.BUSINESS_RULES:
         for rule in _store(ctx, task).state().rules:
@@ -298,6 +319,7 @@ def report(ctx: OperationContext, request: AgentTask) -> AgentReply | Awaitable[
         ),
         AgentReport.BUNDLE: lambda: bundle_report(ctx, task, request),
         AgentReport.STATE: lambda: store.state(task.task_params.get("SQL_ACTION")),
+        AgentReport.RESERVE_ROW_IDS: lambda: _reserve(task, store, request),
         AgentReport.ERASURE_FILTERS: lambda: store_filters(
             store, required(request.target, "target")
         ),
@@ -328,6 +350,23 @@ def report(ctx: OperationContext, request: AgentTask) -> AgentReply | Awaitable[
         case AgentReport.RULE_END:
             store.end_rule(required(request.rule_ending, "rule_ending"))
     return AgentReply()
+
+
+def _reserve(task: TaskContext, store: LocalTaskStore, request: AgentTask) -> tuple[int, ...]:
+    target = required(task.task_params.get("TARGET_OBJECT"), "admitted target")
+    if request.target is not None or task.handler not in {Handler.SQL, Handler.PYTHON}:
+        raise PermissionDeniedError(
+            f"attempt {task.attempt_id}: {target} requires an admitted warehouse writer; "
+            "report the staged count and warehouse maximum only"
+        )
+    holder = resource_locks.Holder(
+        store.identity.holder_id, task.owner or "", SYSTEM_ACTOR, task.attempt_id
+    )
+    count = required(request.row_id_count, "row_id_count")
+    maximum = required(request.warehouse_row_id_max, "warehouse_row_id_max")
+    with acting_as(SYSTEM_ACTOR), resource_locks.holder_scope(holder):
+        base = store.reserve_row_ids(target, count, maximum)
+        return (base + 1, base + count) if count else ()
 
 
 def _start(ctx: OperationContext, task: TaskContext, request: AgentTask) -> AgentReply:

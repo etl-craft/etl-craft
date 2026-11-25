@@ -22,10 +22,12 @@ from etl_craft.core.errors import ConfigurationError, HandlerError
 from etl_craft.core.protection import PROTECTION_COLUMNS
 from etl_craft.core.text import qualify, split_object_ref
 from etl_craft.dialects.warehouse import WarehouseDialect
+from etl_craft.dialects.warehouse.row_ids import row_number
 from etl_craft.engine import locks
 from etl_craft.engine.project_scope import configured_project
 from etl_craft.engine.repository.tasks import fetch_task_parameters
 from etl_craft.engine.repository.validation import fetch_active_tasks
+from etl_craft.engine.task_store import LocalTaskStore
 from etl_craft.handlers.registry import TaskContext
 from etl_craft.handlers.resources import LocalLocker
 from etl_craft.handlers.sql import task_dialect
@@ -81,7 +83,7 @@ def adopt_target(engine: Engine, config: ConnectorConfig, request: AdoptRequest)
     with (
         locks.target(qualified, "").hold(locker),
         open_warehouse(config, locker) as warehouse,
-        warehouse.begin() as conn,
+        warehouse.connect() as conn,
     ):
         session = Session(
             conn,
@@ -92,7 +94,13 @@ def adopt_target(engine: Engine, config: ConnectorConfig, request: AdoptRequest)
             task_run_id=0,
             params={},
         )
-        result = _adopt(session, action, request)
+        session.protection_store = LocalTaskStore.standalone(engine, config, locker)
+        try:
+            result = _adopt(session, action, request)
+        finally:
+            session.sweep()
+        conn.commit()
+        session.verify_row_ids()
     if not result.adopted or result.dry_run or action not in MERGES:
         return result
     from etl_craft.services.rehash import rehash
@@ -196,12 +204,24 @@ def _adopt(session: Session, action: str, request: AdoptRequest) -> AdoptResult:
         f"SELECT {', '.join(business)} FROM ({select_sql}) etl_src WHERE 1 = 0",
         step="stage the adopted business columns",
     )
+    session.preserve_row_id_floor()
+    if session.dialect.surrogate_key != "computed":
+        candidate.generator_start = session.identity_start()
     create_target_shape(candidate, stage, audit)
     session.drop(stage)
-    row_id_columns, row_id_values = candidate.row_id_insert_parts()
+    row_id_columns = row_id_values = ""
+    source = f"({select_sql})"
+    if not candidate.row_id_generated():
+        source = session.create_scratch(
+            session.scratch("adopt_rows"), select_sql, step="stage the exact adoption rows"
+        )
+        count = session.count(f"SELECT COUNT(*) FROM {source}", step="count adopted source rows")
+        base = session.reserve_row_ids(count, existing="ROW_ID" in present, replacing=True)
+        row_id_columns = ", ROW_ID"
+        row_id_values = f", {row_number(base)}"
     insert = (
         f"INSERT INTO {candidate.target} ({', '.join(names)}{row_id_columns}) "
-        f"SELECT {', '.join(values)}{row_id_values} FROM ({select_sql}) s"
+        f"SELECT {', '.join(values)}{row_id_values} FROM {source} s"
     )
     params = {"now": datetime.now(UTC), "writer": ADOPT_WRITER}
     session.run(insert, params, step="copy the existing rows")

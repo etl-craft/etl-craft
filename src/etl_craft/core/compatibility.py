@@ -8,6 +8,14 @@ from etl_craft import __version__
 from etl_craft.core.enums import InputKind
 from etl_craft.core.errors import ConfigurationError
 
+ROW_ID_AGENT_PROTOCOL = "row-id-reservation"
+
+
+def row_id_agent_version(version: str) -> str:
+    """Identify agents that reserve computed IDs, including builds with the same package version."""
+    separator = "." if "+" in version else "+"
+    return f"{version}{separator}{ROW_ID_AGENT_PROTOCOL}"
+
 
 def require_peer_version(local: str, peer: str, component: str) -> None:
     """Accept same-major peers; document-schema checks enforce required fields separately."""

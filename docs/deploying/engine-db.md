@@ -243,6 +243,10 @@ keyed by the target's resolved catalog, schema and table (`TARGET_CATALOG_NAME`,
 target named with or without its catalog therefore shares one lock and one record.
 Business-rule flags in `AUD_BUSINESS_RULES_RESULTS` use the same components.
 
+`AUD_TARGET_ROW_IDS` keeps the highest reserved computed row ID under the canonical target
+lock key. The record survives a warehouse drop or replacement so the next table with the same
+identity continues above the reserved range.
+
 Run admission stores `METADATA_VERSION` and `METADATA_SNAPSHOT`, plus `BUNDLE_ID` when
 artifact storage is configured. `AUD_PROJECT_BUNDLES` holds immutable manifests and publication
 actors. See [pinned project bundles](project-bundles.md) for storage and upgrade behaviour.

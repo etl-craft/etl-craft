@@ -21,6 +21,7 @@ INTEGER_NAMES = frozenset(
         "offset",
         "length",
         "key",
+        "high_water",
         "pipeline",
         "project",
         "target",

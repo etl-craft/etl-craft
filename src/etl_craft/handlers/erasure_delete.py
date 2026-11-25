@@ -66,6 +66,7 @@ def count_or_delete(
                     recover(session, event_store)
                 count = int(conn.execute(text(plan.count), params).scalar_one())
                 if not dry_run and count:
+                    session.preserve_row_id_floor()
                     names = {c.lower(): c for c, _ in session.target_columns()}
                     keys = tuple(
                         dict.fromkeys(

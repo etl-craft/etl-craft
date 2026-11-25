@@ -1,8 +1,8 @@
 {
   "attempt": {
-    "engine_connections": 8,
-    "engine_statements": 89,
-    "engine_transactions": 24,
+    "engine_connections": 9,
+    "engine_statements": 91,
+    "engine_transactions": 25,
     "warehouse_connections": 1,
     "warehouse_statements": 5
   },
@@ -16,8 +16,8 @@
     },
     "CREATE_TABLE": {
       "engine_connections": 0,
-      "engine_statements": 5,
-      "engine_transactions": 5,
+      "engine_statements": 6,
+      "engine_transactions": 6,
       "warehouse_connections": 1,
       "warehouse_statements": 5
     },
@@ -65,8 +65,8 @@
     },
     "SETUP_TABLE": {
       "engine_connections": 0,
-      "engine_statements": 5,
-      "engine_transactions": 5,
+      "engine_statements": 6,
+      "engine_transactions": 6,
       "warehouse_connections": 1,
       "warehouse_statements": 4
     }
@@ -74,17 +74,17 @@
   "duckdb_iceberg": {
     "APPEND_TABLE": {
       "engine_connections": 0,
-      "engine_statements": 4,
-      "engine_transactions": 4,
+      "engine_statements": 7,
+      "engine_transactions": 5,
       "warehouse_connections": 1,
-      "warehouse_statements": 8
+      "warehouse_statements": 10
     },
     "CREATE_TABLE": {
       "engine_connections": 0,
-      "engine_statements": 5,
-      "engine_transactions": 5,
+      "engine_statements": 8,
+      "engine_transactions": 6,
       "warehouse_connections": 1,
-      "warehouse_statements": 6
+      "warehouse_statements": 9
     },
     "DELETE_ROWS": {
       "engine_connections": 0,
@@ -95,31 +95,31 @@
     },
     "DROP_TABLE": {
       "engine_connections": 0,
-      "engine_statements": 4,
-      "engine_transactions": 4,
+      "engine_statements": 7,
+      "engine_transactions": 5,
       "warehouse_connections": 1,
-      "warehouse_statements": 4
+      "warehouse_statements": 5
     },
     "OVERWRITE_TABLE": {
       "engine_connections": 0,
-      "engine_statements": 4,
-      "engine_transactions": 4,
+      "engine_statements": 7,
+      "engine_transactions": 5,
       "warehouse_connections": 1,
-      "warehouse_statements": 8
+      "warehouse_statements": 11
     },
     "SCD1_MERGE": {
       "engine_connections": 0,
-      "engine_statements": 5,
-      "engine_transactions": 5,
+      "engine_statements": 8,
+      "engine_transactions": 6,
       "warehouse_connections": 1,
-      "warehouse_statements": 8
+      "warehouse_statements": 11
     },
     "SCD2_MERGE": {
       "engine_connections": 0,
-      "engine_statements": 5,
-      "engine_transactions": 5,
+      "engine_statements": 8,
+      "engine_transactions": 6,
       "warehouse_connections": 1,
-      "warehouse_statements": 9
+      "warehouse_statements": 11
     },
     "SETUP_TABLE": {
       "engine_connections": 0,
@@ -139,8 +139,8 @@
     },
     "CREATE_TABLE": {
       "engine_connections": 0,
-      "engine_statements": 5,
-      "engine_transactions": 5,
+      "engine_statements": 6,
+      "engine_transactions": 6,
       "warehouse_connections": 1,
       "warehouse_statements": 4
     },
@@ -188,8 +188,8 @@
     },
     "SETUP_TABLE": {
       "engine_connections": 0,
-      "engine_statements": 5,
-      "engine_transactions": 5,
+      "engine_statements": 6,
+      "engine_transactions": 6,
       "warehouse_connections": 1,
       "warehouse_statements": 3
     }
@@ -197,17 +197,17 @@
   "trino_iceberg": {
     "APPEND_TABLE": {
       "engine_connections": 0,
-      "engine_statements": 4,
-      "engine_transactions": 4,
+      "engine_statements": 7,
+      "engine_transactions": 5,
       "warehouse_connections": 1,
-      "warehouse_statements": 6
+      "warehouse_statements": 9
     },
     "CREATE_TABLE": {
       "engine_connections": 0,
-      "engine_statements": 5,
-      "engine_transactions": 5,
+      "engine_statements": 8,
+      "engine_transactions": 6,
       "warehouse_connections": 1,
-      "warehouse_statements": 5
+      "warehouse_statements": 9
     },
     "CREATE_VIEW": {
       "engine_connections": 0,
@@ -225,31 +225,31 @@
     },
     "DROP_TABLE": {
       "engine_connections": 0,
-      "engine_statements": 4,
-      "engine_transactions": 4,
+      "engine_statements": 7,
+      "engine_transactions": 5,
       "warehouse_connections": 1,
-      "warehouse_statements": 2
+      "warehouse_statements": 3
     },
     "OVERWRITE_TABLE": {
       "engine_connections": 0,
-      "engine_statements": 4,
-      "engine_transactions": 4,
+      "engine_statements": 7,
+      "engine_transactions": 5,
       "warehouse_connections": 1,
-      "warehouse_statements": 5
+      "warehouse_statements": 8
     },
     "SCD1_MERGE": {
       "engine_connections": 0,
-      "engine_statements": 5,
-      "engine_transactions": 5,
+      "engine_statements": 8,
+      "engine_transactions": 6,
       "warehouse_connections": 1,
-      "warehouse_statements": 6
+      "warehouse_statements": 11
     },
     "SCD2_MERGE": {
       "engine_connections": 0,
-      "engine_statements": 5,
-      "engine_transactions": 5,
+      "engine_statements": 8,
+      "engine_transactions": 6,
       "warehouse_connections": 1,
-      "warehouse_statements": 7
+      "warehouse_statements": 11
     },
     "SETUP_TABLE": {
       "engine_connections": 0,

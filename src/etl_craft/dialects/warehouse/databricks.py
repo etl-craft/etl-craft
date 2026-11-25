@@ -27,7 +27,11 @@ from etl_craft.dialects.warehouse.base import (
     WarehouseDialect,
 )
 from etl_craft.dialects.warehouse.metadata import TableMetadata
-from etl_craft.dialects.warehouse.replacement import identity_replacement, replacement_ddl
+from etl_craft.dialects.warehouse.replacement import (
+    IdentityReplacement,
+    identity_replacement,
+    replacement_ddl,
+)
 
 if TYPE_CHECKING:
     from etl_craft.config import CloningConfig, ConnectionProfile
@@ -212,39 +216,39 @@ class DatabricksWarehouse(WarehouseDialect):
     token_username = "token"
     view_replacement = "alter"
 
-    def identity_table_ddl(self, target: str, columns: str, params: Mapping[str, str]) -> str:
+    def identity_table_ddl(
+        self, target: str, columns: str, params: Mapping[str, str], *, start: int = 1
+    ) -> str:
         """Declare Delta's identity before any rows are inserted."""
         location = (params.get("EXTERNAL_LOCATION") or "").strip()
         return (
-            f"CREATE TABLE {target} ({columns}, ROW_ID BIGINT GENERATED ALWAYS AS IDENTITY) "
+            f"CREATE TABLE {target} ({columns}, {self.identity_column_ddl(start)}) "
             f"{self.delta_clause(location)}"
         )
 
     def identity_replacement_ddl(
         self,
         conn: Connection,
-        target: str,
-        candidate: str,
+        replacement: IdentityReplacement,
         columns: str,
         params: Mapping[str, str],
-        *,
-        existing: bool,
     ) -> tuple[str, str]:
         """Prepare independent identity rows, then deep-clone them into the target atomically."""
-        if existing and params.get("EXTERNAL_LOCATION"):
+        target, start = replacement.target, replacement.start
+        if replacement.existing and params.get("EXTERNAL_LOCATION"):
             raise SqlGuardError(
                 f"{target}: replacement cannot change EXTERNAL_LOCATION; use OVERWRITE_TABLE"
             )
         ddl = (
             str(conn.execute(text(f"SHOW CREATE TABLE {target}")).scalar_one())
-            if existing
-            else self.identity_table_ddl(target, columns, params)
+            if replacement.existing
+            else self.identity_table_ddl(target, columns, params, start=start)
         )
         return identity_replacement(
             ddl,
             target,
-            candidate,
-            f"{columns}, ROW_ID BIGINT GENERATED ALWAYS AS IDENTITY",
+            replacement.candidate,
+            f"{columns}, {self.identity_column_ddl(start)}",
             "databricks",
         )
 

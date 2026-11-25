@@ -102,6 +102,7 @@ def run(context: TaskContext, engine_db: Engine | TaskStore) -> HandlerResult:
             with registering(*erased):
                 outcome = _apply(session, action)
             conn.commit()
+            session.verify_row_ids()
         from etl_craft.handlers.protection_recovery import committed
 
         committed(store, session.target, session.protection_requests)
@@ -361,6 +362,7 @@ def _uploaded_merge(session: Session, action: ActionContext) -> HandlerResult:
         protected_rows += guard.prevented_rows
         protected_values += guard.prevented_values
         session.conn.commit()
+        session.verify_row_ids()
 
         from etl_craft.handlers.protection_recovery import committed
 

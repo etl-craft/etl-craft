@@ -27,7 +27,8 @@ from etl_craft.core.failures import Failure
 from etl_craft.core.text import as_subquery
 from etl_craft.dialects import credentials
 from etl_craft.dialects.failure_evidence import classify
-from etl_craft.dialects.warehouse.metadata import TableMetadata
+from etl_craft.dialects.warehouse.metadata import TableMetadata, metadata_with_generator
+from etl_craft.dialects.warehouse.replacement import IdentityReplacement
 
 if TYPE_CHECKING:
     from etl_craft.config import CloningConfig, ConnectionProfile
@@ -40,11 +41,6 @@ REJECT_COLUMNS = (*REJECT_AUDIT, "REJECT_REASON", "REJECT_COLUMN")
 
 
 SurrogateKey = Literal["identity", "sequence", "computed"]
-
-
-def unbounded_varchar(data_type: str) -> str:
-    """Render string types for Iceberg storage that does not retain VARCHAR bounds."""
-    return re.sub(r"\bVARCHAR\s*\(\s*\d+\s*\)", "VARCHAR", data_type, flags=re.IGNORECASE)
 
 
 AUDIT_COLUMN_TYPES: dict[str, str] = {
@@ -101,6 +97,7 @@ class WarehouseDialect:
 
     spec: WarehouseSpec
     catalog_columns = True
+    generator_metadata_sql = "NULL"
     sqlalchemy_driver: str | None = None
 
     dml_rowcounts = False
@@ -168,11 +165,18 @@ class WarehouseDialect:
         """Exclude uncoordinated DML while protected data is checked and changed."""
         return None
 
-    def identity_table_ddl(self, target: str, columns: str, params: Mapping[str, str]) -> str:
+    def identity_table_ddl(
+        self, target: str, columns: str, params: Mapping[str, str], *, start: int = 1
+    ) -> str:
         """Create an empty table with the supplied columns and a generated ROW_ID."""
         raise NotImplementedError(f"{self.spec.key} does not declare identity columns in CREATE")
 
-    def identity_setup_sql(self, target: str) -> tuple[str, ...]:
+    def identity_column_ddl(self, start: int) -> str:
+        """Declare an identity for ROW_ID, using the warehouse default at one."""
+        options = f" (START WITH {start})" if start != 1 else ""
+        return f"ROW_ID BIGINT GENERATED ALWAYS AS IDENTITY{options}"
+
+    def identity_setup_sql(self, target: str, *, start: int = 1) -> tuple[str, ...]:
         """Prepare a separately declared generator only where the warehouse requires it."""
         return ()
 
@@ -183,12 +187,9 @@ class WarehouseDialect:
     def identity_replacement_ddl(
         self,
         conn: Connection,
-        target: str,
-        candidate: str,
+        replacement: IdentityReplacement,
         columns: str,
         params: Mapping[str, str],
-        *,
-        existing: bool,
     ) -> tuple[str, str]:
         """Return candidate creation and atomic publication SQL for an identity table."""
         raise NotImplementedError(f"{self.spec.key} does not publish identity table replacements")
@@ -199,6 +200,8 @@ class WarehouseDialect:
 
     def row_id_generated(self, conn: Connection, target: str) -> bool:
         """Whether inserts into this existing table omit ROW_ID and let its default fill it."""
+        if self.generator_metadata_sql != "NULL":
+            return bool(self.read_metadata(conn, target).generated)
         return self.surrogate_key != "computed"
 
     # Connecting
@@ -513,23 +516,20 @@ class WarehouseDialect:
 
     def read_metadata(self, conn: Connection, table: str) -> TableMetadata:
         """Read ordered types and nullability from the dialect's metadata source."""
-        query, parameters = self.column_metadata_query(
-            conn, table, self.hash_metadata_columns + ", is_nullable"
-        )
+        metadata = metadata_with_generator(self.hash_metadata_columns, self.generator_metadata_sql)
+        query, parameters = self.column_metadata_query(conn, table, metadata)
+        rows = conn.execute(text(query), parameters).all()
         return TableMetadata(
-            tuple(
-                (str(row[0]), str(row[1]), row[2], row[3], str(row[4]))
-                for row in conn.execute(text(query), parameters)
-            )
+            tuple((str(row[0]), str(row[1]), row[2], row[3], str(row[4])) for row in rows),
+            generated=next((bool(row[5]) for row in rows if row[5] is not None), None),
         )
 
     def task_metadata_query(
         self, conn: Connection, target: str, related: tuple[str, ...]
     ) -> tuple[str, dict[str, str | None]]:
         """Read target columns and related relation kinds in a single catalog snapshot."""
-        query, parameters = self.column_metadata_query(
-            conn, target, self.hash_metadata_columns + ", is_nullable"
-        )
+        metadata = metadata_with_generator(self.hash_metadata_columns, self.generator_metadata_sql)
+        query, parameters = self.column_metadata_query(conn, target, metadata)
         fields = []
         for index, name in enumerate(related):
             sql, values = self.relation_type_query(name)
@@ -763,10 +763,6 @@ class WarehouseDialect:
 
     update_uses_merge: bool = False
     """Whether a joined update needs MERGE rather than UPDATE ... FROM."""
-
-    def row_id_base_sql(self, target: str) -> str | None:
-        """Inline the allocation only where INSERT may read its own target."""
-        return None
 
     def supports_insert_merge(self, conn: Connection) -> bool:
         """Whether one MERGE can update and insert source rows."""

@@ -930,6 +930,12 @@ CREATE INDEX ix_aud_cfg_business_rules_history_row ON AUD_CFG_BUSINESS_RULES_HIS
 CREATE INDEX ix_aud_cfg_business_rules_history_current ON AUD_CFG_BUSINESS_RULES_HISTORY (BUSINESS_RULE_ID) WHERE CURRENT_FLAG = 'Y';
 CREATE INDEX ix_sql_edits_business_rules ON AUD_CFG_BUSINESS_RULES_HISTORY(PIPELINE_ID) WHERE substr(ACTOR,1,4)='sql:';
 
+-- Highest reserved computed ROW_ID for a warehouse target.
+CREATE TABLE AUD_TARGET_ROW_IDS (
+    LOCK_KEY BIGINT PRIMARY KEY,
+    HIGH_WATER BIGINT NOT NULL CHECK (HIGH_WATER >= 0)
+);
+
 -- The canonical hash version published after a target warehouse update commits.
 CREATE TABLE AUD_TARGET_HASH_VERSION (
     HASH_VERSION        INTEGER NOT NULL CHECK (HASH_VERSION IN (1,2)),

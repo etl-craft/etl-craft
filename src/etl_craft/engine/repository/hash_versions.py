@@ -61,7 +61,11 @@ def save_view_statement(conn: Connection, target: str, sha256: str) -> None:
     )
 
 
-def fetch_target_contract(conn: Connection, target: str) -> tuple[int | None, str | None]:
-    """Read both published contracts in one round trip under the target lock."""
-    row = conn.execute(statement(conn, "target_contract"), _key(target)).one()
-    return row.hash_version, row.statement_sha256
+def fetch_target_contract(
+    conn: Connection, target: str, lock_key: int
+) -> tuple[int | None, str | None, int]:
+    """Read the published contracts and generator start under the target lock."""
+    row = conn.execute(
+        statement(conn, "target_contract"), {**_key(target), "lock_key": lock_key}
+    ).one()
+    return row.hash_version, row.statement_sha256, int(row.row_id_high_water or 0) + 1

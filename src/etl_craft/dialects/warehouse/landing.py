@@ -11,6 +11,7 @@ from etl_craft.core.errors import HandlerError
 from etl_craft.core.landing import GENERATED_COLUMNS, LandingWrite
 from etl_craft.core.text import is_safe_identifier, is_safe_object_ref
 from etl_craft.dialects.warehouse.base import WarehouseDialect
+from etl_craft.dialects.warehouse.row_ids import row_number
 
 TAGS = {"landing_task_id": "BIGINT", "item_key": "VARCHAR(512)"}
 RESERVED = GENERATED_COLUMNS
@@ -56,10 +57,11 @@ def publish_statements(
     dialect: WarehouseDialect,
     write: LandingWrite,
     stage: str,
-    kinds: Mapping[str, str],
-    actual: Mapping[str, str],
+    shapes: tuple[Mapping[str, str], Mapping[str, str]],
+    base: int | None = None,
 ) -> tuple[tuple[str, ...], dict[str, object]]:
     """Delete owned old rows and insert new rows with one atomic target MERGE."""
+    kinds, actual = shapes
     target = write.contract.target
     parameters: dict[str, object] = {
         "landing_owner": write.contract.task_id,
@@ -85,11 +87,10 @@ def publish_statements(
         if stamp in actual:
             inserts[stamp] = actual[stamp]
             expressions[stamp] = "CURRENT_TIMESTAMP"
-    if not dialect.row_id_generated(conn, target):
-        base = conn.execute(text(f"SELECT COALESCE(MAX(row_id),0) FROM {target}")).scalar_one()
+    if base is not None:
         parameters["landing_base"] = int(base)
         inserts["row_id"] = "BIGINT"
-        expressions["row_id"] = ":landing_base + CAST(ROW_NUMBER() OVER (ORDER BY NULL) AS BIGINT)"
+        expressions["row_id"] = row_number(":landing_base")
     deleting = ", ".join(f"CAST(NULL AS {kind}) AS {name}" for name, kind in inserts.items())
     creating = ", ".join(f"{expressions[name]} AS {name}" for name in inserts)
     names = ", ".join(inserts)

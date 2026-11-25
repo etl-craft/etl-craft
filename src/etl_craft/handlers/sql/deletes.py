@@ -97,6 +97,7 @@ def _intent(
 
 def _hard(session: Session, action: ActionContext, stage: str, count_sql: str) -> int:
     task = action.task
+    session.preserve_row_id_floor()
     _intent(session, action, stage, ProtectionKind.HARD_DELETE)
     source = f"(SELECT DISTINCT {', '.join(task.merge_key)} FROM {stage})"
     mutation, qualifier = session.mutation_target()

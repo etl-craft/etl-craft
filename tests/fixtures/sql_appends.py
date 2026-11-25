@@ -64,7 +64,10 @@ def create_target_without_task_run_id(w, target, loads=0):
             if loads:
                 rows = " UNION ALL ".join(["SELECT CAST(1 AS BIGINT) AS id"] * loads)
                 history = build_stage(session, rows)
-                row_id_columns, row_id_values = session.row_id_insert_parts()
+                row_id_columns, row_id_values = ("", "")
+                if not session.row_id_generated():
+                    row_id_columns = ", ROW_ID"
+                    row_id_values = ", CAST(ROW_NUMBER() OVER (ORDER BY NULL) AS BIGINT)"
                 session.run(
                     f"INSERT INTO {session.target} (id, PIPELINE_RUN_ID, CREATE_DATE"
                     f"{row_id_columns}) SELECT id, 0, :now{row_id_values} FROM {history}",

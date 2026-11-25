@@ -12,7 +12,8 @@ from sqlalchemy.engine import Connection
 from etl_craft.config.auth import warehouse_by_key
 from etl_craft.core.errors import ConfigurationError, SqlGuardError
 from etl_craft.core.text import is_safe_identifier
-from etl_craft.dialects.warehouse.base import ReplaceStrategy, SurrogateKey, unbounded_varchar
+from etl_craft.dialects.warehouse.base import ReplaceStrategy, SurrogateKey
+from etl_craft.dialects.warehouse.metadata import unbounded_varchar
 from etl_craft.dialects.warehouse.snowflake import SnowflakeWarehouse
 
 if TYPE_CHECKING:

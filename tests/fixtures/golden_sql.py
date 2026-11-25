@@ -154,6 +154,8 @@ ICEBERG = {
 def answer(sql: str) -> Result:
     """Answer the reads actions make directly; every other statement returns no rows."""
     upper = sql.upper()
+    if upper.startswith("SELECT COUNT(*) FROM") or upper.startswith("SELECT COALESCE(MAX(ROW_ID"):
+        return Result([(1,)])
     if "NULL_KEYS" in upper:
         keys = ("source_rows", "duplicate_rows", "null_keys", "duplicate_keys", "new_keys")
         return Result([(1, 0, 0, 0, 1, None)], (*keys, "locked_type"))
@@ -285,8 +287,12 @@ def record(dialect: WarehouseDialect, scenario: Scenario, project: Path) -> list
     with patch("etl_craft.handlers.sql.session.event"):
         session = GoldenSession(conn, dialect, task.action, scenario)
         session.protection_store = Mock()
+        session.protection_store.reserve_row_ids.side_effect = lambda target, count, maximum: (
+            maximum
+        )
         store = Mock()
         store.target.return_value.hash_version = 2
+        session.protection_store.target.return_value.row_id_start = 1
         action = ActionContext(
             task=task,
             context=task_context,

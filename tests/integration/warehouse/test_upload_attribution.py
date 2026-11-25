@@ -14,6 +14,7 @@ pytestmark = pytest.mark.usefixtures("selected_default_project")
 
 def apply_upload_action(w, context):
     from etl_craft.dialects.warehouse.uploads import writer_parameters
+    from etl_craft.engine import locks
     from etl_craft.handlers.registry import task_store
     from etl_craft.handlers.sql.actions import ACTIONS
     from etl_craft.handlers.sql.context import ActionContext
@@ -23,7 +24,8 @@ def apply_upload_action(w, context):
     task = read_sql_task(context)
     store = task_store(context, w.engine_db)
     state = store.state(task.action)
-    with w.warehouse.begin() as conn:
+    lock = locks.target(task.target_object, w.catalog)
+    with store.hold(lock.key, lock.name, 30), w.warehouse.begin() as conn:
         session = Session(
             conn,
             sql.task_dialect(context),
@@ -33,6 +35,7 @@ def apply_upload_action(w, context):
             task_run_id=context.task_run_id,
             params=context.task_params,
         )
+        session.protection_store = store
         session.uploads = context.uploads
         session.bindings = writer_parameters(context.uploads)
         try:

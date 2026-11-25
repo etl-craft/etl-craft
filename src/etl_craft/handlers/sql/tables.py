@@ -181,10 +181,11 @@ def create_declared_target(
 def create_with_identity(session: Session, shape: dict[str, str], target: str) -> None:
     """Create a complete declared table and ROW_ID without a later key alteration."""
     columns = ", ".join(f"{name} {kind}" for name, kind in shape.items())
-    for sql in session.dialect.identity_setup_sql(target):
+    start = session.identity_start()
+    for sql in session.dialect.identity_setup_sql(target, start=start):
         session.run(sql, step="create the ROW_ID sequence")
     session.run(
-        session.dialect.identity_table_ddl(target, columns, session.params),
+        session.dialect.identity_table_ddl(target, columns, session.params, start=start),
         step="create the target with an identity ROW_ID",
     )
 
@@ -210,33 +211,21 @@ def sequence_name(session: Session) -> str:
 
 
 def add_row_id(session: Session) -> None:
-    """Give a new target its ROW_ID key: identity, sequence default, or computed (Iceberg)."""
+    """Give a new target its ROW_ID key: an identity or sequence default."""
     strategy = session.dialect.surrogate_key
     target = session.target
-    if strategy == "computed":
-        # Iceberg has no identity, sequences or enforced keys: number the rows in a rebuild.
-        rebuild = f"{target}__etl_rowid"
-        session.drop(rebuild)
-        session.create_table_as(
-            rebuild,
-            f"SELECT *, CAST(ROW_NUMBER() OVER (ORDER BY NULL) AS BIGINT) AS {ROW_ID_COLUMN} "
-            f"FROM {target}",
-            step="number the rows",
-        )
-        session.run(f"DROP TABLE {target}", step="replace the target")
-        session.rename(rebuild, target)
-        return
+    start = session.identity_start()
     if strategy == "sequence":
         sequence = sequence_name(session)
-        session.run(f"DROP SEQUENCE IF EXISTS {sequence}", step="clear the ROW_ID sequence")
-        session.run(f"CREATE SEQUENCE {sequence} START 1", step="create the ROW_ID sequence")
+        for sql in session.dialect.identity_setup_sql(target, start=start):
+            session.run(sql, step="create the ROW_ID sequence")
         session.run(
             f"ALTER TABLE {target} ADD COLUMN {ROW_ID_COLUMN} BIGINT DEFAULT nextval('{sequence}')",
             step="add ROW_ID",
         )
     else:
         session.run(
-            f"ALTER TABLE {target} ADD COLUMN {ROW_ID_COLUMN} BIGINT GENERATED ALWAYS AS IDENTITY",
+            f"ALTER TABLE {target} ADD COLUMN {session.dialect.identity_column_ddl(start)}",
             step="add ROW_ID",
         )
     session.run(f"ALTER TABLE {target} ADD PRIMARY KEY ({ROW_ID_COLUMN})", step="key on ROW_ID")
