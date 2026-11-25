@@ -478,8 +478,9 @@ def test_an_active_run_graph_refreshes_task_states_without_the_run_tab(site):
         copy_node = graph.locator('.react-flow__node[data-id="COPY"]')
         after_node = graph.locator('.react-flow__node[data-id="AFTER"]')
         done_node = graph.locator('.react-flow__node[data-id="DONE"]')
-        expect(copy_node.get_by_text("Running", exact=True)).to_be_visible()
-        expect(after_node.get_by_text("Queued", exact=True)).to_be_visible()
+        # The first states arrive with the graph's state request, which refreshes every 5 s.
+        expect(copy_node.get_by_text("Running", exact=True)).to_be_visible(timeout=12_000)
+        expect(after_node.get_by_text("Queued", exact=True)).to_be_visible(timeout=12_000)
         with acting_as(Actor("owner", ActorKind.USER)), ctx.engine.begin() as conn:
             task_run(conn, copy, run, RunStatus.SKIPPED)
             task_run(conn, after, run, RunStatus.IN_PROGRESS)
