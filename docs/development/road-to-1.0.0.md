@@ -216,7 +216,7 @@ item's text, or work done early under another item.
 | S7.N Faster complete pull-request CI | Done | #170 | Fail-closed collection/shard accounting, isolated schema templates and shared demo workers; complete checks in 6m33s-8m15s (owner-approved ten-minute target) |
 | S8.A The project layout | In progress | #319, #320 | Small-agent Python slots, compiled role images and singleton rollout; demo acceptance in progress |
 | S8.B Pipelines | Done | #322, #324, #325, #326, #327 | Demo source/ODS, bounded DM, all steward uploads and explicit drained maintenance validated in separate slices |
-| S8.C Configuration through CI | Planned | | Secretless local DuckDB validation and developer-token deployment of one pinned project commit |
+| S8.C Configuration through CI | Done | support-insights#5, #7, #8, #11, #14, #18, #19, #31; etl-craft#451 | Secretless local DuckDB validation and reviewed developer-only deployment of one pinned project commit |
 | S8.D Views | Planned | | Fact and data-metrics views reconciled with independent reference queries |
 | S8.E The CI pipelines | Planned | | Validate, deploy and manual/pre-release full-stack workflows |
 | S8.F Acceptance checks | Planned | | Rows, provenance, faults, UI and memory checks against the candidate |
@@ -225,6 +225,19 @@ item's text, or work done early under another item.
 | S8.I Support Insights on current main | Done | #449, support-insights#30 | `ALERT` tasks with `EMAIL` channels and `deploy` replace removed handlers and commands; the demo pins current main. The walkthrough found the 60-second `--api` read deadline (fixed in #449) |
 
 ### Handover notes
+
+- **S8.C Choices that differ from the item text.** Local CI uses `deploy --plan` for the
+  composite deployment plan and bootstraps its alert channel locally. Production alert
+  routing and connection-contract approval are one-time admin bootstrap steps outside CI.
+  The existing self-hosted runner container uses host networking on the demo workstation.
+  In-cluster runner provisioning stays with S8.E. In addition to `project/**` pushes to main,
+  deploy accepts changes to its own workflow and manual dispatch. It runs
+  `lineage --refresh` and `generate-docs --with-warehouse` before requesting SI_REFERENCE.
+  GitHub records the checked-out demo commit, and the run reason links to the workflow.
+  The results manifest belongs to the full-stack workflow and release gate in S8.E/S8.G.
+  Acceptance availability: local DuckDB validation and the
+  [reviewed production deploy](https://github.com/etl-craft/support-insights/actions/runs/45533244175)
+  passed. SI_REFERENCE run 5 ended SUCCESS.
 
 - **S8.I deploy timing.** The first cluster `deploy --api` (1,384 config changes, 12 pipeline
   refreshes) took about 156 seconds on the server: about 67 seconds from bundle publication to
