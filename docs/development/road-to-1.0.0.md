@@ -203,7 +203,7 @@ item's text, or work done early under another item.
 | S7.AU Available actions on every page | Done | S7.AU PR | Every action on the project and platform pages renders from the server's availability answer, grayed out with its reason as a hover annotation; the console keeps submit-time refusals |
 | S7.AV No implicit project | Done | #444 | Engine DB access without a selected project raises `ProjectNotSelectedError` (exit 32) naming the query or operation; entry points select their project; `setup` and bare `doctor` are project-aware |
 | S7.AW Public docs for 0.9.0 | Done | #446 | Release install and first steps in the README, private development docs, and a short 0.9.0 changelog summary |
-| S7.AX Pipeline, run and task views | In progress | #462 | S7.AX.2b adds the full-width run page and recovery previews. S7.AX.3 and S7.AX.4 remain |
+| S7.AX Pipeline, run and task views | In progress | #462, #464, #465 | S7.AX.2b adds the full-width run page and recovery previews; S7.AX.3 needs no slice of its own (#464, see Handover notes); a Back button on every page (#465). S7.AX.4 remains |
 | S7.M Stewardship uploads | Done (M2) | #296, #305 | Atomic receipts and safe stored names; processed layout, retention archives and verified reruns; crash recovery and guarded upload history |
 | S7.S Seed tables | Done | #308 | Typed pinned-bundle seeds replace reference tables until recorded stewardship handover |
 | S7.T Business calendars | Done | #276 | Shared holiday and weekend calendars for schedules, run dates, backfill and catch-up |
@@ -211,6 +211,7 @@ item's text, or work done early under another item.
 | S7.V Empty replacements | Done | #275 | ALLOW_EMPTY can refuse an empty CREATE_TABLE or OVERWRITE_TABLE before changing its target |
 | S7.W Docs toolchain after MkDocs 1.x | Planned | | Evaluate Zensical against the API pages, navigation and published versions; migrate only when every requirement works |
 | S7.AY ROW_IDs derived from the task run | Planned | | Replace the stored ROW_ID high-water and its reservation protocol with IDs built from the writing task run, on every warehouse |
+| S7.AZ Re-parse, not refresh | Planned | | The definition refresh becomes "re-parse" in the CLI, API, UI and docs; "refresh" means data only |
 | S7.O Package and demo repositories | Done | #317, #318 | Small package demo, public demo seed and pinned candidate evidence validation |
 | S7.P Obvious failures do not stop 1.0.0 | In progress | #173, #178 | Audit done (#173); the log-folder and port checks close their catalog rows (#178); item 4 keeps the catalog current |
 | S7.Q A generic ANSI SQL warehouse | Moved after 0.9.0 | | A `generic` dialect over SQLAlchemy for rare databases: ANSI SQL only, NULL-safe column comparison for merges, refusals for anything without an ANSI form |
@@ -219,14 +220,28 @@ item's text, or work done early under another item.
 | S8.A The project layout | In progress | #319, #320 | Small-agent Python slots, compiled role images and singleton rollout; demo acceptance in progress |
 | S8.B Pipelines | Done | #322, #324, #325, #326, #327 | Demo source/ODS, bounded DM, all steward uploads and explicit drained maintenance validated in separate slices |
 | S8.C Configuration through CI | Done | support-insights#5, #7, #8, #11, #14, #18, #19, #31; etl-craft#451 | Secretless local DuckDB validation and reviewed developer-only deployment of one pinned project commit |
-| S8.D Views | Done | #455, #456, support-insights#32 | Fact and data-metrics views reconciled live with independent reference queries; the acceptance found reused ROW_IDs (#456) and a stale cluster pin |
+| S8.D Views | Done | #455, #456, #464, #466, #467, support-insights#32, #35 | Fact and data-metrics views reconciled live with independent reference queries; the acceptance found reused ROW_IDs (#456) and a stale cluster pin; follow-ups fixed idle agent load, task-start logs and slow first bundle loads, and the demo scripts log through `task.logger` |
 | S8.E The CI pipelines | Planned | | Validate, deploy and manual/pre-release full-stack workflows |
 | S8.F Acceptance checks | Planned | | Rows, provenance, faults, UI and memory checks against the candidate |
 | S8.G The release gate | Planned | | Validate demo wheel/commit/scenario evidence through S7.O without running the external demo in package CI |
 | S8.H Support Insights scenario coverage | Planned | | Deterministic mixed-quality generators, every-feature demonstrations, business-rule and stewardship cases, and runnable README coverage |
+| S8.J Demo SQL that survives a full refresh | Planned | | Demo SQL filters by `$$pipeline_run_id_filter`, so a full refresh rebuilds from PRS history |
 | S8.I Support Insights on current main | Done | #449, support-insights#30 | `ALERT` tasks with `EMAIL` channels and `deploy` replace removed handlers and commands; the demo pins current main. The walkthrough found the 60-second `--api` read deadline (fixed in #449) |
 
 ### Handover notes
+
+- **S7.AX.3 Choices that differ from the item text.** The premise does not hold:
+  agents already send the task log in chunks while a task runs (`AUD_ATTEMPT_LOG_CHUNKS`, sent
+  within about 1 s), `attempt_log` serves them for a live attempt, and the Logs tab refetches
+  every 3 s. The "no log until the end" symptom on the demo had two other causes, both fixed in
+  #464: idle agents woke each other through statement-level notify triggers (525 Engine DB
+  commits a second with nothing queued), and nothing was logged before the handler started, so a
+  task's log stayed empty for the 60-110 s its start took. #467 removed most of that start time
+  (an agent's first bundle load: 34-56 s, now 0.3-1.3 s). Measured on the demo after both: the
+  first log line arrives 0.3-0.8 s after the agent takes the task, a running task's log grows in
+  the open Logs tab, and the grid shows a new run without a reload. S7.AX.3 needs no slice of its
+  own; the "a running task's log grows while it runs" point of Done when is met.
+  Acceptance availability: checked on the Support Insights cluster at package `2a7a5d86`.
 
 - **S7.AX.1 for S7.AX.2.** Read `history` with `cells=true` for the grid. The selected run
   outside the page arrives as `extra_run` when requested by ID. Fetch detailed task history
@@ -10106,6 +10121,31 @@ state:
 - [ ] No Engine DB table, query or agent report remains for ROW_ID allocation.
 - [ ] Every warehouse's merge and append tests pass, and Snowflake and Databricks run once.
 
+### S7.AZ Re-parse, not refresh
+
+Owner, 2026-11-25. "Refresh" names two different things: reloading data (`REFRESH_TYPE`,
+`--full-refresh`) and re-reading pipeline definitions into a pinned bundle (`pipelines refresh`,
+"Refresh pipeline" and "Refresh all" in the UI). Data engineers know the second one as
+re-parsing (Airflow's term; behaviour reference only).
+
+**Change.**
+
+- The definition refresh is called "re-parse" everywhere: `etl-craft pipelines re-parse`, the
+  action name, the API route, "Re-parse pipeline" and "Re-parse all" in the UI, its history
+  view, errors, the docs and the changelog. "Refresh" then means data only.
+- No alias: nothing is released before 0.9.0, so the old command name is deleted, not kept.
+  Stored action names in `AUD_ACTIONS` and built-in and custom role action sets follow the
+  pre-0.9.0 `schema.sql` rule.
+- `lineage --refresh` keeps its name until the owner decides; ask before renaming it.
+- Order: this plan entry, the package pull request, then a demo follow-up for its deploy
+  workflow and README.
+
+**Done when.**
+
+- [ ] No command, action, route, UI label or docs page uses "refresh" for definitions.
+- [ ] `pipelines refresh` fails as an unknown command, and a test covers it.
+- [ ] Role action sets that named the old action name the new one.
+
 ### S7.AW Public docs for 0.9.0
 
 Owner, 2026-11-23. 0.9.0 is the first public release, and the public face still shows the
@@ -10730,6 +10770,24 @@ the package, never worked around in the demo.
 - [x] No `EMAIL_ALERT`, `config apply`, `bundle publish` or `seed apply` remains in Support
   Insights.
 - [x] Its validate job and README walkthrough pass against the new pin.
+
+### S8.J Demo SQL that survives a full refresh
+
+Owner, 2026-11-25. Twelve demo SQL files filter with `pipeline_run_id = $$pipeline_run_id`, so a
+full refresh reads only the current run's rows and drops the rest of the history.
+
+**Change.**
+
+- Demo SQL filters with `$$pipeline_run_id_filter`, which is `1=1` on a full refresh, never
+  with a hard-coded `pipeline_run_id = $$pipeline_run_id`.
+- A full refresh rebuilds every layer from PRS history and never depends on source data that
+  expires (Kafka retention, MinIO lifecycle).
+
+**Done when.**
+
+- [ ] No demo SQL compares `pipeline_run_id` to `$$pipeline_run_id` directly; a demo test
+      enforces it.
+- [ ] A full refresh of each client pipeline on the demo reproduces the reference views.
 
 ## 0.9.0 release checklist
 
