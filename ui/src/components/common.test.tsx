@@ -1,7 +1,8 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { MemoryRouter } from "react-router-dom";
-import { Highlight, Notice, PageHeader, Pager, Stat } from "@/components/common";
+import { BrowserRouter, Link, Route, Routes, useLocation } from "react-router-dom";
+import { Highlight, Notice, Pager, Stat } from "@/components/common";
+import { BackButton } from "@/components/navigation";
 
 describe("Stat", () => {
   it("says an absent value quietly and a number loudly", () => {
@@ -29,20 +30,25 @@ describe("Notice", () => {
   });
 });
 
-describe("PageHeader", () => {
-  it("has a back arrow only on a page nested under another", () => {
-    const { rerender } = render(
-      <MemoryRouter>
-        <PageHeader title="Runs" />
-      </MemoryRouter>,
+describe("BackButton", () => {
+  function Shell() {
+    return (
+      <Routes>
+        <Route path="*" element={<><BackButton fallback="/projects/demo" /><p>{useLocation().pathname}</p><Link to="/projects/demo/runs">Runs</Link></>} />
+      </Routes>
     );
-    expect(screen.queryByRole("link", { name: /Back/ })).toBeNull();
-    rerender(
-      <MemoryRouter>
-        <PageHeader title="OPS" back={{ to: "/projects/demo/pipelines", label: "Pipelines" }} />
-      </MemoryRouter>,
-    );
-    expect(screen.getByRole("link", { name: "Back to Pipelines" })).toBeTruthy();
+  }
+  it("goes to the previous page, up to the fallback when opened directly, and is disabled at the fallback", () => {
+    window.history.replaceState(null, "", "/projects/demo/pipelines/OPS");
+    render(<BrowserRouter><Shell /></BrowserRouter>);
+    fireEvent.click(screen.getByRole("link", { name: "Runs" }));
+    expect(screen.getByText("/projects/demo/runs")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Back" }));
+    return screen.findByText("/projects/demo/pipelines/OPS").then(() => {
+      fireEvent.click(screen.getByRole("button", { name: "Back" }));
+      expect(screen.getByText("/projects/demo")).toBeTruthy();
+      expect((screen.getByRole("button", { name: "Back" }) as HTMLButtonElement).disabled).toBe(true);
+    });
   });
 });
 

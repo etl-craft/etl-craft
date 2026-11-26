@@ -6,6 +6,10 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+- Fixed: every page of the browser UI has a Back button at the left of the top bar, including
+  pages that are loading, failed to load or do not exist. It returns to the previous page; on a
+  page opened directly (a link or a reload) it goes to the project's home page. The arrow beside
+  some page titles, which always went to the list above, is gone.
 - Fixed: idle agents no longer keep the API and a PostgreSQL Engine DB busy. A claim that found no
   work rewrote the queued tasks' wait reasons, and the change signal fired even when no row
   changed, waking every waiting agent to do the same again (measured on an 11-agent deployment:

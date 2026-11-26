@@ -1,5 +1,5 @@
 import { DropdownSelect } from "@/components/dropdown";
-import { ArrowLeft, Inbox, type LucideIcon } from "lucide-react";
+import { Inbox, type LucideIcon } from "lucide-react";
 import * as React from "react";
 import { AppLink as Link } from "@/components/navigation";
 import { cn } from "@/lib/utils";
@@ -122,7 +122,6 @@ export function PageHeader({
   subtitle,
   actions,
   compact,
-  back,
   children,
 }: {
   title: React.ReactNode;
@@ -131,19 +130,12 @@ export function PageHeader({
   actions?: React.ReactNode;
   /** A smaller title and tighter spacing, for a page whose body is the point (a run). */
   compact?: boolean;
-  /** The page this one is nested under, such as the list it is one row of; a page reached from the navigation has none, so no arrow. */
-  back?: { to: string; label: string } | null;
   children?: React.ReactNode;
 }) {
   return (
     <header className={cn("flex flex-wrap items-start justify-between gap-y-2", compact ? "gap-x-3" : "gap-x-4")}>
       <div className={cn("grid min-w-0 flex-[1_1_16rem]", compact ? "gap-1" : "gap-2")}>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-          {back ? (
-            <Link to={back.to} aria-label={`Back to ${back.label}`} title={`Back to ${back.label}`} className="-ml-1 grid size-8 place-items-center rounded-md text-muted hover:bg-surface-2 hover:text-fg">
-              <ArrowLeft className="size-4" aria-hidden />
-            </Link>
-          ) : null}
           <h1 className={cn("m-0 break-words font-semibold tracking-tight", compact ? "text-lg" : "text-2xl leading-8")}>{title}</h1>
           {status}
         </div>

@@ -3,7 +3,7 @@ import { ChevronDown, LogOut, Menu, Moon, Search, Sun, X } from "lucide-react";
 import { words } from "@/lib/labels";
 import * as React from "react";
 import { Outlet, useLocation, useNavigate, useParams } from "react-router-dom";
-import { AppLink as Link } from "@/components/navigation";
+import { AppLink as Link, BackButton } from "@/components/navigation";
 import { Notice } from "@/components/common";
 import { SearchBox } from "@/components/search-box";
 import { EnvironmentBadge, EnvironmentSegment, EnvironmentStrip } from "@/components/environment-badge";
@@ -96,6 +96,7 @@ export function AppShell() {
         <Button variant="ghost" size="icon" className="lg:hidden" aria-label={open ? "Close menu" : "Open menu"} onClick={() => setOpen(!open)}>
           {open ? <X className="size-5" /> : <Menu className="size-5" />}
         </Button>
+        <BackButton fallback={code ? projectHomePath(code) : homePath} />
         <Link aria-label="etl-craft" to={code ? projectHomePath(code) : homePath} className="flex items-center gap-2 font-semibold">
           <Logo className="size-7" />
           <span className="hidden sm:inline">etl-craft</span>
