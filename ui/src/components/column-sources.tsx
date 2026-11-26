@@ -39,7 +39,7 @@ export function ColumnSources({code,doc,edges,tasks,target,column}:{code:string;
       {id:"how",header:"How",value:edge=>edge.transformation,size:240,cell:edge=><span className="text-muted">{edge.transformation}</span>},
       {id:"provenance",header:"Provenance",value:edge=>byTask.get(edge.task)?.lineage.state==="declared"?"Declared":"Derived",size:120},
       {id:"task",header:"Task",value:edge=>edge.task,size:260,cell:edge=>taskLink(edge.task)},
-    ])}/>:!unavailable.length?<EmptyState title="No column lineage was traced for this selection." nextStep="Choose All columns for declared table-level sources, or declare task sources and targets, refresh lineage, then rebuild the catalog."/>:null}
+    ])}/>:!unavailable.length?<EmptyState title="No column lineage was traced for this selection." nextStep="Choose All columns for declared table-level sources, or declare task sources and targets, re-parse lineage, then rebuild the catalog."/>:null}
     {logic.length?<section className="grid min-w-0 gap-2" aria-label="Task logic">
       <h3 className="m-0 text-sm font-semibold">Task logic</h3>
       <p className="m-0 text-xs text-muted">Stage and rule expressions for the writing tasks. This context is retained independently of the output-column filter above.</p>

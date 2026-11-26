@@ -70,7 +70,7 @@ def test_a_closed_input_is_not_an_acceptance(monkeypatch):
     assert output().confirm_emptying(WARNING, yes=False) is False
 
 
-def refresh_request():
+def reparse_request():
     return RunRequest(pipeline_code="P", full_refresh=True, reason="profile history corrected")
 
 
@@ -93,7 +93,7 @@ def asking(sent):
 def test_the_request_is_repeated_once_with_exactly_the_targets_the_server_named(monkeypatch):
     sent = []
     monkeypatch.setattr(run, "call", asking(sent))
-    assert run._call_run(args(yes=True), output(), refresh_request()) == "ran"
+    assert run._call_run(args(yes=True), output(), reparse_request()) == "ran"
     assert [r.empty_targets for r in sent] == [(), ("mart.orders",)]
     assert replace(sent[1], empty_targets=()) == sent[0]
 
@@ -103,7 +103,7 @@ def test_an_unconfirmed_request_raises_the_refusal_with_its_own_exit_code(monkey
     monkeypatch.setattr(run, "call", asking(sent))
     monkeypatch.setattr("etl_craft.cli.output.can_prompt", lambda: False)
     with pytest.raises(ConfirmationRequiredError) as refused:
-        run._call_run(args(yes=False), output(), refresh_request())
+        run._call_run(args(yes=False), output(), reparse_request())
     assert refused.value.exit_code == ExitCode.CONFIRMATION_REQUIRED == 31
     assert len(sent) == 1  # nothing was repeated, so nothing could have been emptied
 
@@ -111,5 +111,5 @@ def test_an_unconfirmed_request_raises_the_refusal_with_its_own_exit_code(monkey
 def test_a_request_that_needs_no_confirmation_is_sent_once(monkeypatch):
     sent = []
     monkeypatch.setattr(run, "call", lambda _a, _n, request, **_o: sent.append(request) or "ran")
-    assert run._call_run(args(yes=False), output(), refresh_request()) == "ran"
+    assert run._call_run(args(yes=False), output(), reparse_request()) == "ran"
     assert len(sent) == 1

@@ -483,7 +483,7 @@ def test_project_manage_is_required_for_every_deploy_action(isolation, monkeypat
     from etl_craft.services.operations.actions import PROJECT_MANAGE_ACTIONS
 
     admin, _ = isolation
-    # Standalone refresh needs a RELAXED project; the manager's refresh is checked on RELAXED.
+    # Standalone re-parse needs a RELAXED project; the manager's re-parse is checked on RELAXED.
     act(
         admin,
         ActionName.PROJECT_SET,
@@ -597,7 +597,7 @@ def test_local_task_dependency_explanations_remain_visible(isolation):
 
 def test_developer_lineage_refresh_keeps_deployment_role_and_visibility(isolation, monkeypatch):
     admin, _ = isolation
-    action = ACTIONS[ActionName.LINEAGE_REFRESH]
+    action = ACTIONS[ActionName.LINEAGE_REPARSE]
     called = []
     monkeypatch.setitem(
         ACTIONS,
@@ -675,7 +675,7 @@ def test_generated_catalog_omits_foreign_execution_identities(isolation, tmp_pat
 
 def test_aggregate_mutation_refusals_do_not_name_hidden_pipelines(isolation):
     admin, _ = isolation
-    for name in (ActionName.LINEAGE_REFRESH, ActionName.RECONCILE):
+    for name in (ActionName.LINEAGE_REPARSE, ActionName.RECONCILE):
         with pytest.raises(PermissionDeniedError) as caught:
             invoke(caller(admin, "operator", ApiRole.DEVELOPER), name, build(ACTIONS[name].request))
         message = str(caught.value)

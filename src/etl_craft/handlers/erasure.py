@@ -104,7 +104,7 @@ def project_coverage(engine: Engine, config: ConnectorConfig) -> Coverage:
     graph, scripts = project_graph(engine, config)
     with using(graph):
         lineages = [
-            scripts.get(t.task, t) for t in collect(engine, config, refresh=True, record=False)
+            scripts.get(t.task, t) for t in collect(engine, config, reparse=True, record=False)
         ]
         managed = _managed(engine, config)
         opaque_tasks, aggregates = boundaries(engine, config)

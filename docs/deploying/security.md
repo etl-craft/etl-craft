@@ -124,7 +124,7 @@ include every lower role; transports name operations, not their own permission r
 | --- | --- |
 | viewer | SCD provenance, reads, inspection, validation, configuration plan/export, YAML export, `docs-version --check`, `rehash --dry-run`, `setup --print-grants` |
 | operator | Run, backfill, mark, cancel, pause/resume and reconcile |
-| developer | `deploy`, project migrations, `generate-docs`, `lineage --refresh` |
+| developer | `deploy`, project migrations, `generate-docs`, `lineage --re-parse` |
 | admin | SCD value edits and human unlocks, accounts/tokens, setup/init-db, packaged Engine DB migrations, adopt-target, rehash, clone, controller/UI startup, publish-docs and docs-version writes |
 
 `migrate` runs on the controller's host only. It can apply project migrations as developer

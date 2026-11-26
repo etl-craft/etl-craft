@@ -97,7 +97,7 @@ def _plan(
     row = conn.execute(
         statement(conn, "controller_schedules"),
         {
-            "refresh_required": bool(ctx.engine.get_execution_options().get("refresh_required")),
+            "reparse_required": bool(ctx.engine.get_execution_options().get("reparse_required")),
             "pipeline_id": pipeline_id,
         },
     ).one_or_none()

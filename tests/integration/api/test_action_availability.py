@@ -1,4 +1,4 @@
-"""Refresh admission and read-only availability through public interfaces."""
+"""Re-parse admission and read-only availability through public interfaces."""
 
 import pytest
 from fastapi.testclient import TestClient
@@ -36,7 +36,7 @@ def test_refresh_availability_matches_public_admission(cli_project):
                         "project": "default",
                         "environment_type": environment,
                         "governance": governance,
-                        "reason": "Exercise refresh admission",
+                        "reason": "Exercise re-parse admission",
                     },
                 )
                 if (environment, governance) == (EnvironmentType.PROD, Governance.RELAXED):
@@ -47,25 +47,25 @@ def test_refresh_availability_matches_public_admission(cli_project):
                 assert changed.status_code == 200, changed.text
                 for role, headers in callers.items():
                     for selection in ({}, {"pipeline_code": "P"}):
-                        assert_refresh_availability(client, role, headers, governance, selection)
+                        assert_reparse_availability(client, role, headers, governance, selection)
 
 
-def assert_refresh_availability(client, role, headers, governance, selection):
+def assert_reparse_availability(client, role, headers, governance, selection):
     view = client.get(
         f"{PROJECT}/capabilities", headers=headers, params={"definition": True, **selection}
     )
-    response = client.post(f"{PROJECT}/pipelines/refresh", headers=headers, json=selection)
+    response = client.post(f"{PROJECT}/pipelines/re-parse", headers=headers, json=selection)
     if role == ApiRole.AGENT:
         assert view.status_code == response.status_code == 403
         assert response.json()["exit_code"] == ExitCode.PERMISSION_DENIED
         return
     assert view.status_code == 200, view.text
-    refresh = next(a for a in view.json()["actions"] if a["action"] == ActionName.PIPELINE_REFRESH)
+    reparse = next(a for a in view.json()["actions"] if a["action"] == ActionName.PIPELINE_REPARSE)
     allowed = role == ApiRole.ADMIN and governance == Governance.RELAXED
-    assert refresh["available"] is allowed, (role, governance, refresh)
+    assert reparse["available"] is allowed, (role, governance, reparse)
     assert response.status_code == (200 if allowed else 403), response.text
     if not allowed:
-        assert refresh["reason"] == response.json()["message"]
+        assert reparse["reason"] == response.json()["message"]
         assert response.json()["exit_code"] == ExitCode.PERMISSION_DENIED
 
 
@@ -92,12 +92,12 @@ def test_deployment_availability_without_an_active_project(engine_db, role):
 def test_cli_refuses_strict_refresh_and_deploy_still_refreshes(cli_project):
     p = cli_project
     for selection in ((), ("--pipeline", "P")):
-        code, output = p.run("pipelines", "refresh", *selection)
+        code, output = p.run("pipelines", "re-parse", *selection)
         assert code == ExitCode.PERMISSION_DENIED, output
         for part in ("default", "STRICT", "RELAXED", "etl-craft deploy"):
             assert part in output
     code, output = p.run("deploy", "--format", "json")
-    assert code == 0 and '"refreshes": [' in output and '"pipeline_code": "P"' in output, output
+    assert code == 0 and '"reparses": [' in output and '"pipeline_code": "P"' in output, output
     code, output = p.run(
         "project",
         "set",
@@ -106,11 +106,11 @@ def test_cli_refuses_strict_refresh_and_deploy_still_refreshes(cli_project):
         "--governance",
         "RELAXED",
         "--reason",
-        "Test standalone refresh",
+        "Test standalone re-parse",
     )
     assert code == 0, output
     for selection in ((), ("--pipeline", "P")):
-        code, output = p.run("pipelines", "refresh", *selection)
+        code, output = p.run("pipelines", "re-parse", *selection)
         assert code == 0, output
 
 
@@ -136,10 +136,10 @@ def test_authorized_deploy_can_refresh_without_a_standalone_refresh_grant(cli_pr
         reason="Permit this service to deploy",
     )
     with TestClient(create_app(ctx)) as client:
-        denied = client.post(f"{PROJECT}/pipelines/refresh", headers=headers, json={})
+        denied = client.post(f"{PROJECT}/pipelines/re-parse", headers=headers, json={})
         assert denied.status_code == 403, denied.text
         forged = client.post(
-            f"{PROJECT}/pipelines/refresh", headers=headers, json={"internal": True}
+            f"{PROJECT}/pipelines/re-parse", headers=headers, json={"internal": True}
         )
         assert forged.status_code == 400, forged.text
         deployed = client.post(
@@ -150,7 +150,7 @@ def test_authorized_deploy_can_refresh_without_a_standalone_refresh_grant(cli_pr
         assert deployed.status_code == 200, deployed.text
         assert any(
             row["pipeline_code"] == "P" and row["status"] == "SUCCESS"
-            for row in deployed.json()["refreshes"]
+            for row in deployed.json()["reparses"]
         )
 
 

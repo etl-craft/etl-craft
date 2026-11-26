@@ -269,10 +269,10 @@ def check_upload_controls(
             ActionName.PROJECT_SET,
             project=owner.project or owner.config.project,
             governance="RELAXED",
-            reason="Exercise standalone refresh",
+            reason="Exercise standalone re-parse",
         )
-        refreshed = act(owner, ActionName.PIPELINE_REFRESH, pipeline_code="P")
-        assert not refreshed.failed, refreshed.refreshes[0].findings
+        reparsed = act(owner, ActionName.PIPELINE_REPARSE, pipeline_code="P")
+        assert not reparsed.failed, reparsed.reparses[0].findings
         path = tmp_path / "release.csv"
         path.write_bytes(b"id|name|LOCKED\n1|admin|false\n2|changed|true\n3|new|false\n4|null|\n")
         assert (

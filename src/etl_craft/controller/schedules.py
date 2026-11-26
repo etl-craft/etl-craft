@@ -60,8 +60,8 @@ class Schedules:
                 statement(conn, "controller_schedules"),
                 {
                     "pipeline_id": None,
-                    "refresh_required": bool(
-                        ctx.engine.get_execution_options().get("refresh_required")
+                    "reparse_required": bool(
+                        ctx.engine.get_execution_options().get("reparse_required")
                     ),
                 },
             ).all()

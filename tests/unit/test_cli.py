@@ -273,3 +273,25 @@ def test_run_is_quiet_by_default_but_honours_explicit_info(capsys, restore_logge
     assert logging.getLogger("etl_craft").level == logging.WARNING
     assert main(["run", "--pipeline-code", "P", "--log-level", "INFO"], commands=[command]) == 0
     assert calls[-1].log_level == "INFO"
+
+
+@pytest.mark.parametrize(
+    ("argv", "message"),
+    [
+        (["pipelines", "refresh"], "invalid choice: 'refresh'"),
+        (["lineage", "--refresh"], "unrecognized arguments: --refresh"),
+    ],
+)
+def test_the_definition_refresh_is_gone_in_favour_of_re_parse(capsys, argv, message):
+    with pytest.raises(SystemExit) as exit_info:
+        main(argv)
+    assert exit_info.value.code == 2
+    assert message in capsys.readouterr().err
+
+
+def test_re_parse_is_the_pipelines_verb_and_the_lineage_flag(capsys):
+    for argv in (["pipelines", "--help"], ["lineage", "--help"]):
+        with pytest.raises(SystemExit):
+            main(argv)
+    out = capsys.readouterr().out
+    assert "re-parse" in out and "--re-parse" in out

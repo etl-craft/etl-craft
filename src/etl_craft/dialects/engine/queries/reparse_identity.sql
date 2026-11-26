@@ -1,0 +1,2 @@
+SELECT PIPELINE_CODE AS pipeline_code,BLOCK_ON_REPARSE_ERROR AS block_on_reparse_error
+FROM CFG_PIPELINES WHERE PIPELINE_ID=:pipeline_id

@@ -211,7 +211,7 @@ item's text, or work done early under another item.
 | S7.V Empty replacements | Done | #275 | ALLOW_EMPTY can refuse an empty CREATE_TABLE or OVERWRITE_TABLE before changing its target |
 | S7.W Docs toolchain after MkDocs 1.x | Planned | | Evaluate Zensical against the API pages, navigation and published versions; migrate only when every requirement works |
 | S7.AY ROW_IDs derived from the task run | Done | #470 | `ROW_ID = TASK_RUN_ID × 2^32 + n` on every warehouse; `AUD_TARGET_ROW_IDS`, the reservation report and ROW_ID generators are gone |
-| S7.AZ Re-parse, not refresh | Planned | | The definition refresh becomes "re-parse" in the CLI, API, UI and docs; "refresh" means data only |
+| S7.AZ Re-parse, not refresh | Done | #472 | `pipelines re-parse`, `lineage --re-parse`, re-parse routes, actions, UI labels, Engine DB names and docs; "refresh" means data only |
 | S7.BA Run conditions on task and pipeline rows | Planned | | A condition on each task and pipeline row replaces both dependency tables; fail-the-pipeline options |
 | S7.BB Run monitoring | Planned | | Task statistics, failure information, log events, per-task resources and an agent monitor in the S7.AX views |
 | S7.O Package and demo repositories | Done | #317, #318 | Small package demo, public demo seed and pinned candidate evidence validation |
@@ -231,6 +231,19 @@ item's text, or work done early under another item.
 | S8.I Support Insights on current main | Done | #449, support-insights#30 | `ALERT` tasks with `EMAIL` channels and `deploy` replace removed handlers and commands; the demo pins current main. The walkthrough found the 60-second `--api` read deadline (fixed in #449) |
 
 ### Handover notes
+
+- **S7.AZ Choices that differ from the item text.** The owner renamed `lineage --refresh` too
+  (`lineage --re-parse`, action `lineage re-parse`). Beyond the item's list, every definition
+  name follows: `AUD_PIPELINE_REFRESHES` becomes `AUD_PIPELINE_REPARSES` with `REPARSE_ID` and
+  `REPARSED_AT`, runs pin `SNAPSHOT_REPARSE_ID`, the pipeline column `BLOCK_ON_REFRESH_ERROR`
+  becomes `BLOCK_ON_REPARSE_ERROR`, JSON results list `reparses`, and modules, classes and
+  queries use "reparse". Data refreshes (`REFRESH_TYPE`, `--full-refresh`), sign-in refresh
+  tokens, cloned-mirror refreshes, page refreshes and the controller's periodic `refresh()`
+  passes keep their names. Support Insights follows with its next package pin: its
+  `pipelines.csv` has `BLOCK_ON_REFRESH_ERROR`, and its deploy workflow and README call
+  `lineage --refresh`.
+  Acceptance availability: SQLite and DuckDB suites ran locally; PostgreSQL ran in CI only
+  (the demo cluster stays up).
 
 - **S7.AY Choices that differ from the item text.**
   - A write numbers its rows after the largest ID its writer already holds in the target (one

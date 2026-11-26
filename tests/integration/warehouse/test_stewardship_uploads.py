@@ -426,10 +426,10 @@ def test_api_edit_and_cli_upload_keep_each_cells_actual_human_writer(
             ActionName.PROJECT_SET,
             project=owner.project or owner.config.project,
             governance="RELAXED",
-            reason="Exercise standalone refresh",
+            reason="Exercise standalone re-parse",
         )
-        refreshed = act(owner, ActionName.PIPELINE_REFRESH, pipeline_code="P")
-        assert not refreshed.failed, refreshed
+        reparsed = act(owner, ActionName.PIPELINE_REPARSE, pipeline_code="P")
+        assert not reparsed.failed, reparsed
         monkeypatch.setenv("ETL_CRAFT_TOKEN", tokens["bob"])
         assert (
             main(

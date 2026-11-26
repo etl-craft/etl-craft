@@ -53,10 +53,10 @@ def read(conn: Connection, run_id: int) -> tuple[Definition, int]:
 @contextmanager
 def for_admission(conn: Connection, pipeline_id: int) -> Iterator[Definition | None]:
     """Read the last passing definition before a new run's connection preflight."""
-    if not conn.engine.get_execution_options().get("refresh_required"):
+    if not conn.engine.get_execution_options().get("reparse_required"):
         yield None
         return
-    from etl_craft.engine.refreshes import admitted
+    from etl_craft.engine.reparses import admitted
 
     snapshot, _, bundle_id = admitted(conn, pipeline_id)
     definition = Definition.read(snapshot, bundle_id=bundle_id)

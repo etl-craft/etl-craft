@@ -38,7 +38,7 @@ PROJECT_MANAGE_ACTIONS = frozenset(
     {
         ActionName.RENAME,
         ActionName.CONFIG_PLAN,
-        ActionName.PIPELINE_REFRESH,
+        ActionName.PIPELINE_REPARSE,
         ActionName.MIGRATE,
         ActionName.DEPLOY,
         ActionName.GENERATE_DOCS,
@@ -46,7 +46,7 @@ PROJECT_MANAGE_ACTIONS = frozenset(
 )
 """Project actions only a binding gives (CAN_MANAGE or a custom role), never the account role."""
 
-EVERY_PIPELINE = frozenset({ActionName.RECONCILE, ActionName.LINEAGE_REFRESH})
+EVERY_PIPELINE = frozenset({ActionName.RECONCILE, ActionName.LINEAGE_REPARSE})
 """Project-wide run actions that need the action on every pipeline of the project."""
 
 
@@ -218,7 +218,7 @@ def _pipeline_rule(
         require_role(ctx, action, required)
         return True
     name = str(action.name)
-    if action.name == ActionName.LINEAGE_REFRESH:
+    if action.name == ActionName.LINEAGE_REPARSE:
         require_role(ctx, action, required)
     if isinstance(request, BulkControlRequest) and has_role(ctx.role, required):
         return True
@@ -229,10 +229,10 @@ def _pipeline_rule(
         return True
     if action.name in EVERY_PIPELINE:
         project_pipelines = pipeline_tags(conn, ctx.project_id)
-        # Lineage refresh needs every pipeline visible; reconcile needs the action on each.
+        # Lineage re-parse needs every pipeline visible; reconcile needs the action on each.
         if any(
             not found.reaches(code)
-            if action.name == ActionName.LINEAGE_REFRESH
+            if action.name == ActionName.LINEAGE_REPARSE
             else name not in found.on(code)
             for code in project_pipelines
         ):

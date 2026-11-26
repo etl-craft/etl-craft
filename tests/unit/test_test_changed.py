@@ -11,7 +11,7 @@ changed = load("test_changed")
 @pytest.mark.parametrize(
     "path",
     [
-        "src/etl_craft/dialects/engine/queries/refresh_good.sql",
+        "src/etl_craft/dialects/engine/queries/reparse_good.sql",
         "src/etl_craft/dialects/engine/sqlite/schema.sql",
         "src/etl_craft/dialects/engine/postgres/migrations/0067_pipeline_refresh.sql",
         "src/etl_craft/dialects/engine/migration-markers.toml",

@@ -37,7 +37,7 @@ def test_every_action_is_reachable_from_the_cli_or_a_route():
         (ActionName.CONFIG_PLAN, ApiRole.VIEWER),
         (ActionName.CONFIG_EXPORT, ApiRole.VIEWER),
         (ActionName.LINEAGE, ApiRole.VIEWER),
-        (ActionName.LINEAGE_REFRESH, ApiRole.DEVELOPER),
+        (ActionName.LINEAGE_REPARSE, ApiRole.DEVELOPER),
         (ActionName.GENERATE_DOCS, ApiRole.DEVELOPER),
         (ActionName.DOCS_VERSION, ApiRole.ADMIN),
         (ActionName.DOCS_VERSION_CHECK, ApiRole.VIEWER),

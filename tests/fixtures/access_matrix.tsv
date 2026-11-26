@@ -901,17 +901,17 @@ lineage	manage_sales	-	allow
 lineage	runner_role	-	allow
 lineage	rehash_action	-	allow
 lineage	agent	-	deny
-lineage refresh	admin	-	allow
-lineage refresh	developer	-	allow
-lineage refresh	operator	-	deny
-lineage refresh	viewer	-	deny
-lineage refresh	view_p1	-	deny
-lineage refresh	upload_t1	-	deny
-lineage refresh	run_p1	-	deny
-lineage refresh	manage_sales	-	deny
-lineage refresh	runner_role	-	deny
-lineage refresh	rehash_action	-	deny
-lineage refresh	agent	-	deny
+lineage re-parse	admin	-	allow
+lineage re-parse	developer	-	allow
+lineage re-parse	operator	-	deny
+lineage re-parse	viewer	-	deny
+lineage re-parse	view_p1	-	deny
+lineage re-parse	upload_t1	-	deny
+lineage re-parse	run_p1	-	deny
+lineage re-parse	manage_sales	-	deny
+lineage re-parse	runner_role	-	deny
+lineage re-parse	rehash_action	-	deny
+lineage re-parse	agent	-	deny
 login	admin	-	allow
 login	developer	-	allow
 login	operator	-	allow
@@ -1088,28 +1088,28 @@ pipeline	rehash_action	P1	allow
 pipeline	rehash_action	P2	allow
 pipeline	agent	P1	deny
 pipeline	agent	P2	deny
-pipeline refresh history	admin	P1	allow
-pipeline refresh history	admin	P2	allow
-pipeline refresh history	developer	P1	allow
-pipeline refresh history	developer	P2	allow
-pipeline refresh history	operator	P1	allow
-pipeline refresh history	operator	P2	allow
-pipeline refresh history	viewer	P1	allow
-pipeline refresh history	viewer	P2	allow
-pipeline refresh history	view_p1	P1	allow
-pipeline refresh history	view_p1	P2	allow
-pipeline refresh history	upload_t1	P1	allow
-pipeline refresh history	upload_t1	P2	allow
-pipeline refresh history	run_p1	P1	allow
-pipeline refresh history	run_p1	P2	allow
-pipeline refresh history	manage_sales	P1	allow
-pipeline refresh history	manage_sales	P2	allow
-pipeline refresh history	runner_role	P1	allow
-pipeline refresh history	runner_role	P2	allow
-pipeline refresh history	rehash_action	P1	allow
-pipeline refresh history	rehash_action	P2	allow
-pipeline refresh history	agent	P1	deny
-pipeline refresh history	agent	P2	deny
+pipeline re-parse history	admin	P1	allow
+pipeline re-parse history	admin	P2	allow
+pipeline re-parse history	developer	P1	allow
+pipeline re-parse history	developer	P2	allow
+pipeline re-parse history	operator	P1	allow
+pipeline re-parse history	operator	P2	allow
+pipeline re-parse history	viewer	P1	allow
+pipeline re-parse history	viewer	P2	allow
+pipeline re-parse history	view_p1	P1	allow
+pipeline re-parse history	view_p1	P2	allow
+pipeline re-parse history	upload_t1	P1	allow
+pipeline re-parse history	upload_t1	P2	allow
+pipeline re-parse history	run_p1	P1	allow
+pipeline re-parse history	run_p1	P2	allow
+pipeline re-parse history	manage_sales	P1	allow
+pipeline re-parse history	manage_sales	P2	allow
+pipeline re-parse history	runner_role	P1	allow
+pipeline re-parse history	runner_role	P2	allow
+pipeline re-parse history	rehash_action	P1	allow
+pipeline re-parse history	rehash_action	P2	allow
+pipeline re-parse history	agent	P1	deny
+pipeline re-parse history	agent	P2	deny
 pipelines	admin	-	allow
 pipelines	developer	-	allow
 pipelines	operator	-	allow
@@ -1121,28 +1121,28 @@ pipelines	manage_sales	-	allow
 pipelines	runner_role	-	allow
 pipelines	rehash_action	-	allow
 pipelines	agent	-	deny
-pipelines refresh	admin	P1	deny
-pipelines refresh	admin	P2	deny
-pipelines refresh	developer	P1	deny
-pipelines refresh	developer	P2	deny
-pipelines refresh	operator	P1	deny
-pipelines refresh	operator	P2	deny
-pipelines refresh	viewer	P1	deny
-pipelines refresh	viewer	P2	deny
-pipelines refresh	view_p1	P1	deny
-pipelines refresh	view_p1	P2	deny
-pipelines refresh	upload_t1	P1	deny
-pipelines refresh	upload_t1	P2	deny
-pipelines refresh	run_p1	P1	deny
-pipelines refresh	run_p1	P2	deny
-pipelines refresh	manage_sales	P1	deny
-pipelines refresh	manage_sales	P2	deny
-pipelines refresh	runner_role	P1	deny
-pipelines refresh	runner_role	P2	deny
-pipelines refresh	rehash_action	P1	deny
-pipelines refresh	rehash_action	P2	deny
-pipelines refresh	agent	P1	deny
-pipelines refresh	agent	P2	deny
+pipelines re-parse	admin	P1	deny
+pipelines re-parse	admin	P2	deny
+pipelines re-parse	developer	P1	deny
+pipelines re-parse	developer	P2	deny
+pipelines re-parse	operator	P1	deny
+pipelines re-parse	operator	P2	deny
+pipelines re-parse	viewer	P1	deny
+pipelines re-parse	viewer	P2	deny
+pipelines re-parse	view_p1	P1	deny
+pipelines re-parse	view_p1	P2	deny
+pipelines re-parse	upload_t1	P1	deny
+pipelines re-parse	upload_t1	P2	deny
+pipelines re-parse	run_p1	P1	deny
+pipelines re-parse	run_p1	P2	deny
+pipelines re-parse	manage_sales	P1	deny
+pipelines re-parse	manage_sales	P2	deny
+pipelines re-parse	runner_role	P1	deny
+pipelines re-parse	runner_role	P2	deny
+pipelines re-parse	rehash_action	P1	deny
+pipelines re-parse	rehash_action	P2	deny
+pipelines re-parse	agent	P1	deny
+pipelines re-parse	agent	P2	deny
 pool add	admin	-	allow
 pool add	developer	-	deny
 pool add	operator	-	deny

@@ -18,7 +18,7 @@ from etl_craft.services.operations.deploy import DeployInput
 from etl_craft.services.operations.documents import DocsInput, PublishInput
 from etl_craft.services.operations.maintenance import RehashInput
 from etl_craft.services.operations.requests import (
-    LineageRefreshInput,
+    LineageReparseInput,
     NoInput,
     RunRequest,
     TagFilter,
@@ -70,7 +70,7 @@ REQUESTS = {
     ActionName.PUBLISH_DOCS: PublishInput(),
     ActionName.DOCS_VERSION: NoInput(),
     ActionName.GENERATE_DOCS: DocsInput(),
-    ActionName.LINEAGE_REFRESH: LineageRefreshInput(),
+    ActionName.LINEAGE_REPARSE: LineageReparseInput(),
 }
 
 
@@ -89,7 +89,7 @@ REQUESTS = {
         (ActionName.PUBLISH_DOCS, ApiRole.ADMIN),
         (ActionName.DOCS_VERSION, ApiRole.ADMIN),
         (ActionName.GENERATE_DOCS, ApiRole.ADMIN),
-        (ActionName.LINEAGE_REFRESH, ApiRole.DEVELOPER),
+        (ActionName.LINEAGE_REPARSE, ApiRole.DEVELOPER),
     ],
 )
 def test_role_inheritance_and_refusal_records(project, role, name, required):

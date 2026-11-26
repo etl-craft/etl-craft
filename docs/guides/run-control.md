@@ -534,7 +534,7 @@ request for each code; editing tags later cannot change that selection.
 
 ## Standing task pauses
 
-A task pause applies across runs without changing config or requiring a refresh. Other branches
+A task pause applies across runs without changing config or requiring a re-parse. Other branches
 continue. A required `SUCCESS`, `FAILED` or `SKIPPED` outcome replaces execution. Reasons are required in STRICT projects and optional in RELAXED projects.
 
 ```bash

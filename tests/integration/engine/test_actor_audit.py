@@ -539,7 +539,7 @@ def test_cli_actor_requests_and_read_only_audit(
         result = main(["--config", str(config), *argv])
         assert result == 0, capsys.readouterr()
 
-    command("pipelines", "refresh", "--pipeline", "P")
+    command("pipelines", "re-parse", "--pipeline", "P")
     command("run", "--reason", "test requested run", "--pipeline-code", "P", "--init-only")
     with engine_db.engine.connect() as conn:
         run_id = conn.execute(
@@ -588,7 +588,7 @@ def test_cli_actor_requests_and_read_only_audit(
             (name, actor_name, "SERVICE")
             for name in (
                 "project list",
-                "pipelines refresh",
+                "pipelines re-parse",
                 "project list",
                 "run",
                 "project list",
@@ -655,7 +655,7 @@ def test_terminal_attempts_and_append_only_rows_are_immutable(engine_db):
         "AUD_DEPENDENCY_CONSUMPTION",
         "AUD_METADATA_CHANGES",
         "AUD_ACTIONS",
-        "AUD_PIPELINE_REFRESHES",
+        "AUD_PIPELINE_REPARSES",
     }
     for table, column in tables:
         if table.upper() not in protected:

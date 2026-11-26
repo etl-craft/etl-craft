@@ -402,14 +402,14 @@ class LineageInput(Request):
 
 
 @dataclass(frozen=True, kw_only=True)
-class LineageRefreshInput(LineageInput):
+class LineageReparseInput(LineageInput):
     """Work every task's lineage out again, then trace it."""
 
     def __post_init__(self) -> None:
-        """Refuse history: a refresh traces the current lineage."""
+        """Refuse history: a re-parse traces the current lineage."""
         super().__post_init__()
         if self.as_of is not None or self.version is not None:
-            raise UsageError("a lineage refresh cannot read history; omit `as_of` and `version`")
+            raise UsageError("a lineage re-parse cannot read history; omit `as_of` and `version`")
 
 
 @dataclass(frozen=True, kw_only=True)

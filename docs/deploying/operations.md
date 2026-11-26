@@ -4,7 +4,7 @@
 
 For SQLite without an explicit `Artifacts.Store`, include
 `<project_dir>/.etl-craft/artifacts` alongside the Engine DB file. It contains the immutable
-last-good refresh bundles; backing up only the SQLite file is insufficient.
+last-good re-parse bundles; backing up only the SQLite file is insufficient.
 
 
 The **Engine DB** holds your pipelines (the `CFG_` tables) and their history (the `AUD_` tables):

@@ -1,4 +1,4 @@
-"""Release obsolete bundles only after their last run and refresh reference disappears."""
+"""Release obsolete bundles only after their last run and re-parse reference disappears."""
 
 import json
 from datetime import datetime, timedelta

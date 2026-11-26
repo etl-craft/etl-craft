@@ -38,7 +38,7 @@ CONSOLE_ONLY = {
     ActionName.DEPLOY: "deploys the project directory on disk: metadata is code, CI deploys it",
     ActionName.RENAME: "renames change config files in the project repository",
     ActionName.HEALTH: "an unauthenticated liveness probe; System health is the page for people",
-    ActionName.PIPELINE_REFRESH_HISTORY: "Refresh shows its findings; older ones are a CLI read",
+    ActionName.PIPELINE_REPARSE_HISTORY: "Re-parse shows its findings; older ones are a CLI read",
     ActionName.TRIGGER_PIPELINE: "for external orchestrators; people use Run now",
     ActionName.CONFIG_PLAN: "metadata is code: CI plans a published bundle; not the UI",
     ActionName.ADOPT_TARGET: "rebuilds a warehouse table once, as an admin, from CLI or console",

@@ -16,7 +16,7 @@ in `craft-connector.yml`; the old setting and folder are not aliases. SQL files 
 
 Every Python task requires a `SCRIPT_KIND=INGESTION` or `SCRIPT_KIND=UTILITY` task parameter.
 Supply it in `task_parameters.csv` for new tasks; partial updates need not repeat a stored kind.
-Apply, validate and refresh refuse metadata with missing or invalid values. An upgrade
+Apply, validate and re-parse refuse metadata with missing or invalid values. An upgrade
 adds `INGESTION` to existing tasks and preserves their offsets, including partitions.
 
 - `INGESTION` reads source data. Its `row_count` is required (zero is a measured empty batch),
@@ -405,7 +405,7 @@ segments are delivered with the S7.A web UI.
 A bundled run uses the admitted Python files and metadata for every attempt. Editing the
 working tree does not change it. Install imported dependencies in the agent image and check
 with `etl-craft doctor --agent --api URL`. See [project bundles](../deploying/project-bundles.md).
-Every run uses the version that last passed `etl-craft pipelines refresh`. A script runs from
+Every run uses the version that last passed `etl-craft pipelines re-parse`. A script runs from
 that version's verified copy, with the project directory as its working directory, so relative
 paths it writes land in the project directory and the copy stays unchanged. Read the version's
 own files through `task.config.project_dir`; bytecode is not written into the cache.

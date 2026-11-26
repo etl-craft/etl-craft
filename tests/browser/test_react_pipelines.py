@@ -873,8 +873,8 @@ def test_alert_history_on_pipeline_and_project_has_status_time_and_no_secrets(
             ),
         )
         page.add_style_tag(url=url + "/dialog-transition.css")
-        refreshes = []
-        page.route("**/api/v1/project-health", lambda route: refreshes.append(route))
+        reparses = []
+        page.route("**/api/v1/project-health", lambda route: reparses.append(route))
         with page.expect_request("**/api/v1/project-health"):
             dialog.get_by_role("button", name="Set channel", exact=True).click()
         channels = page.get_by_role("table", name="Alert channels")
@@ -883,9 +883,9 @@ def test_alert_history_on_pipeline_and_project_has_status_time_and_no_secrets(
         shoot(page, f"alert-channel-admin-{appearance}-{width}")
         team.get_by_role("button", name="Disable", exact=True).click()
         dialog.get_by_label("Reason (kept in the audit trail)").fill("Retire team route")
-        assert refreshes
+        assert reparses
         with page.expect_response("**/api/v1/project-health"):
-            for route in refreshes:
+            for route in reparses:
                 response = route.fetch()
                 payload = response.json()
                 payload["projects"].append({**payload["projects"][0], "project": "secondary"})
@@ -1020,8 +1020,8 @@ def test_pipeline_list_shows_dependencies_and_links_the_latest_run(scene):
             ).to_be_visible()
         row = table.get_by_role("row").filter(has=page.get_by_role("link", name="OPS", exact=True))
         expect(row.get_by_text("SALES (HAS_DATA)", exact=True)).to_be_visible()
-        expect(page.get_by_role("button", name="Refresh all")).to_have_accessible_description(
-            re.compile("standalone pipeline refresh requires RELAXED")
+        expect(page.get_by_role("button", name="Re-parse all")).to_have_accessible_description(
+            re.compile("standalone pipeline re-parse requires RELAXED")
         )
         assert len(capabilities) == 1 and "pipeline_codes=" in capabilities[0]
         latest = row.get_by_role("link", name=re.compile(r"^#\d+$"))

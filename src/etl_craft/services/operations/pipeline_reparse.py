@@ -21,20 +21,20 @@ from etl_craft.engine.bundles import Bundle
 from etl_craft.engine.connection import read_snapshot
 from etl_craft.engine.project_files import collect, decode_files
 from etl_craft.engine.queries import statement
-from etl_craft.engine.refreshes import RefreshWrite, record
+from etl_craft.engine.reparses import ReparseWrite, record
 from etl_craft.services import lineage, validate
 from etl_craft.services.doctor import Status
 from etl_craft.services.operations.bundles import PublishBundle, publish
 from etl_craft.services.operations.context import OperationContext
 from etl_craft.services.operations.permissions import pipeline_access
 from etl_craft.services.operations.requests import Request
-from etl_craft.services.refresh_changes import differences
-from etl_craft.services.refresh_models import PipelineRefresh, RefreshFinding
-from etl_craft.services.refresh_models import RefreshResults as RefreshResults
+from etl_craft.services.reparse_changes import differences
+from etl_craft.services.reparse_models import PipelineReparse, ReparseFinding
+from etl_craft.services.reparse_models import ReparseResults as ReparseResults
 
 
 @dataclass(frozen=True, kw_only=True)
-class RefreshInput(Request):
+class ReparseInput(Request):
     """One pipeline, or every pipeline in the selected project.
 
     ``bundle`` (``latest`` or a bundle id) pins the definitions to that published bundle instead
@@ -46,12 +46,12 @@ class RefreshInput(Request):
 
 
 @dataclass(frozen=True, kw_only=True)
-class InternalRefresh(RefreshInput):
-    """A refresh called by deployment or controller maintenance."""
+class InternalReparse(ReparseInput):
+    """A re-parse called by deployment or controller maintenance."""
 
 
-def require_refresh_governance(ctx: OperationContext, request: RefreshInput) -> None:
-    """Require RELAXED for standalone refresh, including for an administrator."""
+def require_reparse_governance(ctx: OperationContext, request: ReparseInput) -> None:
+    """Require RELAXED for standalone re-parse, including for an administrator."""
     assert ctx.project_id is not None
     with ctx.engine.connect() as conn:
         policy = conn.execute(
@@ -60,30 +60,30 @@ def require_refresh_governance(ctx: OperationContext, request: RefreshInput) -> 
     if policy.governance != Governance.RELAXED:
         raise PermissionDeniedError(
             f"project {ctx.project!r}, environment {policy.environment_type}: governance is "
-            f"{policy.governance}; standalone pipeline refresh requires RELAXED; "
-            "use `etl-craft deploy` to refresh during deployment"
+            f"{policy.governance}; standalone pipeline re-parse requires RELAXED; "
+            "use `etl-craft deploy` to re-parse during deployment"
         )
 
 
-def history(ctx: OperationContext, request: RefreshInput) -> RefreshResults:
+def history(ctx: OperationContext, request: ReparseInput) -> ReparseResults:
     """Read persisted outcomes without changing the current files or metadata."""
     with ctx.engine.connect() as conn:
         policy = pipeline_access(conn, ctx)
         rows = conn.execute(
-            statement(conn, "refresh_history"),
+            statement(conn, "reparse_history"),
             {"project_id": ctx.project_id, "pipeline_code": request.pipeline_code},
         ).all()
-    return RefreshResults(
+    return ReparseResults(
         tuple(
-            PipelineRefresh(
-                int(row.refresh_id),
+            PipelineReparse(
+                int(row.reparse_id),
                 row.pipeline_code,
-                as_utc(row.refreshed_at),
+                as_utc(row.reparsed_at),
                 row.actor,
                 RunStatus(row.status),
                 row.metadata_version,
                 row.bundle_id,
-                tuple(RefreshFinding(**finding) for finding in json.loads(row.findings)),
+                tuple(ReparseFinding(**finding) for finding in json.loads(row.findings)),
                 row.previous_version is None
                 or (row.metadata_version, row.bundle_id)
                 != (row.previous_version, row.previous_bundle),
@@ -97,36 +97,36 @@ def history(ctx: OperationContext, request: RefreshInput) -> RefreshResults:
     )
 
 
-def refresh(ctx: OperationContext, request: RefreshInput) -> RefreshResults:
+def reparse(ctx: OperationContext, request: ReparseInput) -> ReparseResults:
     """Publish checked bytes and capture the matching metadata under the config writer lock."""
     assert ctx.project_id is not None
     for_engine(ctx.engine).artifact_location(ctx.config)
     with locks.MIGRATE.hold(ctx.engine):
-        return _refresh_locked(ctx, request)
+        return _reparse_locked(ctx, request)
 
 
-def _refresh_locked(
-    ctx: OperationContext, request: RefreshInput, *, missing_only: bool = False
-) -> RefreshResults:
+def _reparse_locked(
+    ctx: OperationContext, request: ReparseInput, *, missing_only: bool = False
+) -> ReparseResults:
     assert ctx.project_id is not None
     with read_snapshot(ctx.engine) as conn:
-        return refresh_on(conn, ctx, request, missing_only=missing_only, atomic=False)
+        return reparse_on(conn, ctx, request, missing_only=missing_only, atomic=False)
 
 
-def refresh_on(
+def reparse_on(
     conn: Connection,
     ctx: OperationContext,
-    request: RefreshInput,
+    request: ReparseInput,
     *,
     missing_only: bool = False,
     pipeline_ids: frozenset[int] | None = None,
     atomic: bool = True,
-) -> RefreshResults:
-    """Refresh a stable image; atomic callers hold MIGRATE/BUNDLES and own the writer."""
+) -> ReparseResults:
+    """Re-parse a stable image; atomic callers hold MIGRATE/BUNDLES and own the writer."""
     assert ctx.project_id is not None
     outcomes = []
     pipelines = conn.execute(
-        statement(conn, "refresh_pipelines"),
+        statement(conn, "reparse_pipelines"),
         {
             "project_id": ctx.project_id,
             "pipeline_code": request.pipeline_code,
@@ -141,14 +141,14 @@ def refresh_on(
                 f"pipeline {request.pipeline_code!r}: no active pipeline in project "
                 f"{ctx.project!r}; select an active pipeline shown by `etl-craft pipelines`"
             )
-        return RefreshResults(())
+        return ReparseResults(())
     config, bundle_id, bundle_problem = _project_bundle(
         ctx, conn if atomic else None, request.bundle
     )
     checked = _project_findings(conn, ctx, config)
     for pipeline in pipelines:
         snapshot = conn.execute(
-            statement(conn, "refresh_current"), {"pipeline_id": pipeline.pipeline_id}
+            statement(conn, "reparse_current"), {"pipeline_id": pipeline.pipeline_id}
         ).scalar_one()
         findings = tuple(
             finding
@@ -164,9 +164,9 @@ def refresh_on(
         passed = not any(finding.failed for finding in findings)
         now = datetime.now(UTC)
         with nullcontext(conn) if atomic else ctx.engine.begin() as writer:
-            refresh_id = record(
+            reparse_id = record(
                 writer,
-                RefreshWrite(
+                ReparseWrite(
                     ctx.project_id,
                     int(pipeline.pipeline_id),
                     snapshot,
@@ -177,8 +177,8 @@ def refresh_on(
                 ),
             )
         outcomes.append(
-            PipelineRefresh(
-                refresh_id,
+            PipelineReparse(
+                reparse_id,
                 pipeline.pipeline_code,
                 now,
                 ctx.actor.name,
@@ -192,15 +192,15 @@ def refresh_on(
                 previous_status,
             )
         )
-    return RefreshResults(tuple(outcomes))
+    return ReparseResults(tuple(outcomes))
 
 
 def _project_bundle(
     ctx: OperationContext,
     connection: Connection | None,
     selector: str | None = None,
-) -> tuple[ConnectorConfig, str | None, RefreshFinding | None]:
-    """Check the existing publication contract and freeze bytes once per project refresh."""
+) -> tuple[ConnectorConfig, str | None, ReparseFinding | None]:
+    """Check the existing publication contract and freeze bytes once per project re-parse."""
     bundle_id = None
     config = ctx.config
     bundle_problem = None
@@ -231,12 +231,12 @@ def _project_bundle(
             bundle = Bundle.load(conn, bundle_id)
         config = project_config(config, bundle.materialize(config) / "craft-connector.yml")
     except EtlCraftError as error:
-        bundle_problem = RefreshFinding(
+        bundle_problem = ReparseFinding(
             str(config.config_path),
             None,
             str(error),
             str(error),
-            "Correct the named project file or store and run `etl-craft pipelines refresh`.",
+            "Correct the named project file or store and run `etl-craft pipelines re-parse`.",
         )
     return config, bundle_id, bundle_problem
 
@@ -245,7 +245,7 @@ def _project_findings(
     conn: Connection,
     ctx: OperationContext,
     config: ConnectorConfig,
-) -> tuple[tuple[str, RefreshFinding], ...]:
+) -> tuple[tuple[str, ReparseFinding], ...]:
     """Run shared checks once per project; a pipeline request filters these same findings."""
     report = validate.validate_snapshot(conn, ctx.engine, config)
     found = [(finding.where, _validation_finding(finding)) for finding in report.findings]
@@ -255,12 +255,12 @@ def _project_findings(
                 found.append(
                     (
                         task.task,
-                        RefreshFinding(
+                        ReparseFinding(
                             f"Engine DB: {task.task}",
                             None,
                             task.task,
                             task.error,
-                            "Declare source columns or correct the named SQL, then refresh again.",
+                            "Declare source columns or correct the named SQL, then re-parse again.",
                             False,
                         ),
                     )
@@ -269,34 +269,34 @@ def _project_findings(
         found.append(
             (
                 "source lineage",
-                RefreshFinding(
+                ReparseFinding(
                     "Engine DB: lineage",
                     None,
                     str(error),
                     str(error),
-                    "Correct the named definition and run `etl-craft pipelines refresh`.",
+                    "Correct the named definition and run `etl-craft pipelines re-parse`.",
                 ),
             )
         )
     return tuple(found)
 
 
-def _validation_finding(finding: validate.Finding) -> RefreshFinding:
+def _validation_finding(finding: validate.Finding) -> ReparseFinding:
     """Preserve real script locations; database rows have no invented physical line number."""
     source = re.search(r"SCRIPT_FILE=['\"]([^'\"]+)['\"]", finding.message)
     line = re.search(r"\bline (\d+)", finding.message, re.IGNORECASE)
-    return RefreshFinding(
+    return ReparseFinding(
         source[1] if source is not None else f"Engine DB: {finding.where}",
         int(line[1]) if line is not None else None,
         finding.message,
         finding.message,
         finding.message.partition("; remedy: ")[2]
-        or "Correct the named metadata or project file and run `etl-craft pipelines refresh`.",
+        or "Correct the named metadata or project file and run `etl-craft pipelines re-parse`.",
         finding.status == Status.FAIL,
     )
 
 
-def initialize_missing(ctx: OperationContext) -> RefreshResults:
+def initialize_missing(ctx: OperationContext) -> ReparseResults:
     """Establish upgrade baselines without replacing any seeded successful version."""
     from etl_craft.core.actor import acting_as
     from etl_craft.core.enums import ActionName
@@ -307,17 +307,17 @@ def initialize_missing(ctx: OperationContext) -> RefreshResults:
     with acting_as(ctx.actor), locks.MIGRATE.hold(ctx.engine):
         with ctx.engine.connect() as conn:
             missing = conn.execute(
-                statement(conn, "refresh_pipelines"),
+                statement(conn, "reparse_pipelines"),
                 {"project_id": ctx.project_id, "pipeline_code": None, "missing_only": True},
             ).first()
         if missing is None:
-            return RefreshResults(())
+            return ReparseResults(())
         ActionRequest(
-            ActionName.PIPELINE_REFRESH,
+            ActionName.PIPELINE_REPARSE,
             {"upgrade": True},
             datetime.now(UTC),
             actor=ctx.actor,
             engine=ctx.engine,
             project_id=ctx.project_id,
         ).record()
-        return _refresh_locked(ctx, RefreshInput(), missing_only=True)
+        return _reparse_locked(ctx, ReparseInput(), missing_only=True)

@@ -43,7 +43,7 @@ def erasure_project(seed_project, monkeypatch):
         conn.execute("CREATE TABLE ds.people(person VARCHAR,n INTEGER)")
         conn.execute("INSERT INTO ds.people VALUES ('private-person-key',1),('retained',2)")
     result = publish(ctx)
-    assert all(str(r.status) == "SUCCESS" for r in result.refreshes), result
+    assert all(str(r.status) == "SUCCESS" for r in result.reparses), result
     return ctx
 
 

@@ -16,7 +16,7 @@ from etl_craft.cli.rendering import hours
 from etl_craft.core.enums import ActionName
 from etl_craft.core.errors import ExitCode
 from etl_craft.services.operations.models import PipelineListView
-from etl_craft.services.operations.pipeline_refresh import RefreshInput, RefreshResults
+from etl_craft.services.operations.pipeline_reparse import ReparseInput, ReparseResults
 from etl_craft.services.operations.requests import TagFilter
 
 
@@ -24,14 +24,16 @@ def _configure(parser: argparse.ArgumentParser) -> None:
     configure_output(parser)
     configure_tags(parser)
     verbs = parser.add_subparsers(dest="pipelines_verb")
-    refresh = verbs.add_parser("refresh", help="Validate and pin the current pipeline definitions.")
-    refresh.add_argument("--pipeline", dest="pipeline_code", help="Check only this pipeline.")
-    configure_output(refresh)
+    reparse = verbs.add_parser(
+        "re-parse", help="Validate and pin the current pipeline definitions."
+    )
+    reparse.add_argument("--pipeline", dest="pipeline_code", help="Check only this pipeline.")
+    configure_output(reparse)
 
 
 def _run(args: argparse.Namespace, out: Output) -> int:
-    if args.pipelines_verb == "refresh":
-        return _refresh(args, out)
+    if args.pipelines_verb == "re-parse":
+        return _reparse(args, out)
     done = call(args, ActionName.PIPELINES, request_from(args, TagFilter))
     assert isinstance(done, PipelineListView)
 
@@ -77,19 +79,19 @@ def _run(args: argparse.Namespace, out: Output) -> int:
     return ExitCode.SUCCESS
 
 
-def _refresh(args: argparse.Namespace, out: Output) -> int:
-    done = call(args, ActionName.PIPELINE_REFRESH, request_from(args, RefreshInput))
-    assert isinstance(done, RefreshResults)
+def _reparse(args: argparse.Namespace, out: Output) -> int:
+    done = call(args, ActionName.PIPELINE_REPARSE, request_from(args, ReparseInput))
+    assert isinstance(done, ReparseResults)
 
     def render() -> None:
-        for result in done.refreshes:
+        for result in done.reparses:
             if not result.changed:
                 out.line(
-                    f"{result.pipeline_code}: no changes since the last refresh at "
-                    f"{result.previous_refreshed_at} ({result.previous_status})"
+                    f"{result.pipeline_code}: no changes since the last re-parse at "
+                    f"{result.previous_reparsed_at} ({result.previous_status})"
                 )
             else:
-                out.line(f"{result.pipeline_code}: {result.status} refresh={result.refresh_id}")
+                out.line(f"{result.pipeline_code}: {result.status} re-parse={result.reparse_id}")
                 for change in result.changes:
                     out.line(f"  changed: {change}")
             for finding in result.findings:
@@ -105,5 +107,5 @@ COMMAND = Command(
     help="List the active pipelines.",
     configure=_configure,
     run=_run,
-    actions=(ActionName.PIPELINES, ActionName.PIPELINE_REFRESH),
+    actions=(ActionName.PIPELINES, ActionName.PIPELINE_REPARSE),
 )

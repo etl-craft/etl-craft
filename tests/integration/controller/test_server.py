@@ -275,11 +275,11 @@ def test_shutdown_interrupts_gate_wait_without_starting_a_task(cli_project):
             "--governance",
             "RELAXED",
             "--reason",
-            "Refresh the downstream test pipeline only",
+            "Re-parse the downstream test pipeline only",
         )[0]
         == 0
     )
-    assert p.run("pipelines", "refresh", "--pipeline", "P")[0] == 0
+    assert p.run("pipelines", "re-parse", "--pipeline", "P")[0] == 0
     assert p.run("pause", "--pipeline-code", "UPSTREAM", "--reason", "maintenance")[0] == 0
     assert (
         p.run(

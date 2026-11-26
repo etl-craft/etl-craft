@@ -11,7 +11,7 @@ def is_upload_control(name: str) -> bool:
 
 
 def boolean_problem(task: str, kind: str) -> str | None:
-    """Use one strict SQL-type check for validation, refresh and staged rows."""
+    """Use one strict SQL-type check for validation, re-parse and staged rows."""
     kind = kind.upper()
     if kind in {"BOOL", "BOOLEAN"}:
         return None

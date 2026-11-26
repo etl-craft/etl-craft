@@ -1,4 +1,4 @@
-"""``etl-craft deploy``: publish the project, apply its config, load its seeds, refresh."""
+"""``etl-craft deploy``: publish the project, apply its config, load its seeds, re-parse."""
 
 import argparse
 from pathlib import Path
@@ -66,8 +66,8 @@ def _render(out: Output, done: Deployment, files: int) -> None:
         return
     for load in done.seed_loads:
         out.line(load.message)
-    for checked in done.refreshes:
-        out.line(f"{checked.pipeline_code}: refresh {checked.status}")
+    for checked in done.reparses:
+        out.line(f"{checked.pipeline_code}: re-parse {checked.status}")
         for finding in checked.findings:
             out.line(f"  {finding.file}: {finding.message}; {finding.remedy}")
     out.line("deploy stopped at the failure above" if done.failed else "deployed")
@@ -75,7 +75,7 @@ def _render(out: Output, done: Deployment, files: int) -> None:
 
 COMMAND = Command(
     "deploy",
-    "Publish the project (with Artifacts.Store), apply its config, load its seeds and refresh "
+    "Publish the project (with Artifacts.Store), apply its config, load its seeds and re-parse "
     "its pipelines.",
     run,
     configure,

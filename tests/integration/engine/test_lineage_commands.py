@@ -261,7 +261,7 @@ def test_table_versions_ignore_cache_recomputation_and_close_on_retirement(
     assert first
     assert len(version_rows(engine)) == 3
     monkeypatch.setattr(lineage, "SQLGLOT_VERSION", "changed-parser-version")
-    collect(engine, config, refresh=True)
+    collect(engine, config, reparse=True)
     assert len(version_rows(engine)) == 3
     lineage_clock.instant += timedelta(hours=1)
     change_stage(engine)
@@ -330,7 +330,10 @@ def test_history_selectors_read_stored_versions_without_computing(
         (("--version", "1"), "`--version` needs `--table`"),
         (("--table", "staging.orders", "--version", "999"), "has no lineage version 999"),
         (("--table", "staging.orders", "--version", "0"), "positive version number"),
-        (("--as-of", "2026-10-13T08:00:00Z", "--refresh"), "a lineage refresh cannot read history"),
+        (
+            ("--as-of", "2026-10-13T08:00:00Z", "--re-parse"),
+            "a lineage re-parse cannot read history",
+        ),
         (("--as-of", "not-a-time"), "neither a pipeline_run_id nor an ISO 8601 time"),
     ],
 )
@@ -355,7 +358,7 @@ def test_concurrent_collectors_publish_one_table_version(project):
 
     def record():
         with acting_as(Actor("lineage-test", ActorKind.USER)):
-            return collect(engine, config, refresh=True)
+            return collect(engine, config, reparse=True)
 
     results = two_at_once(record, record, at="etl_craft.engine.locks.for_engine")
     assert all(results)

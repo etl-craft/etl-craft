@@ -58,31 +58,31 @@ that do not yet exist are skipped. With no active definitions it stays metadata-
 connects to the email relay. [`doctor`](../deploying/doctor-and-setup.md) checks connections.
 Column lineage is checked by [`lineage --strict`](lineage.md).
 
-## Refresh and the version that runs
+## Re-parse and the version that runs
 
-`etl-craft pipelines refresh` checks the selected project's **Engine DB state**, SQL, Python
+`etl-craft pipelines re-parse` checks the selected project's **Engine DB state**, SQL, Python
 scripts, lineage and immutable bundle. Use `--pipeline SALES_DAILY` to check one pipeline.
-Standalone refresh requires a RELAXED project and project management permission in the CLI,
-API and browser. An authorized `deploy` refreshes after applying config and loading seeds,
-including on STRICT projects. A failed refresh leaves those changes in place. Correct its
-findings and repeat the deployment or standalone refresh as the project allows.
+Standalone re-parse requires a RELAXED project and project management permission in the CLI,
+API and browser. An authorized `deploy` re-parses after applying config and loading seeds,
+including on STRICT projects. A failed re-parse leaves those changes in place. Correct its
+findings and repeat the deployment or standalone re-parse as the project allows.
 
 Each result records its actor, time, metadata hash, bundle and findings. Findings identify the
 file and line where available, or the exact Engine DB row when there is no source file, plus
-the value and remedy. The API exposes the refresh action and the pipeline-refresh history read.
+the value and remedy. The API exposes the re-parse action and the pipeline-reparse history read.
 A broken pipeline remains listed. Admission uses the most recent **passing** metadata snapshot
 and bundle, so later edits cannot change its tasks or executable files. Existing runs keep
 their own pinned version.
 
 A pipeline with no passing version cannot start. Its refusal lists the findings and how to
-refresh through `etl-craft deploy` or standalone refresh on RELAXED projects.
-`BLOCK_ON_REFRESH_ERROR=Y` in `pipelines.csv` also blocks
-new runs when the latest refresh failed; its default `N` allows the last passing version.
+re-parse through `etl-craft deploy` or standalone re-parse on RELAXED projects.
+`BLOCK_ON_REPARSE_ERROR=Y` in `pipelines.csv` also blocks
+new runs when the latest re-parse failed; its default `N` allows the last passing version.
 PostgreSQL direct config edits are detected through their `sql:` history on the controller's
 existing maintenance cycle. SQLite direct SQL edits remain unsupported.
 
-An unchanged refresh still records a result and shows the findings. Text says
-`SALES_DAILY: no changes since the last refresh at <time> (<result>)`; JSON includes
+An unchanged re-parse still records a result and shows the findings. Text says
+`SALES_DAILY: no changes since the last re-parse at <time> (<result>)`; JSON includes
 `"changed": false`. Changed results name the affected tables, tasks and files.
 
 ### Stores, upgrades and retention
@@ -90,20 +90,20 @@ An unchanged refresh still records a result and shows the findings. Text says
 With a SQLite Engine DB and no `Artifacts.Store`, bundles use
 `file://<project_dir>/.etl-craft/artifacts`. Doctor names this path. Ignore `.etl-craft/` in git
 and back it up together with the SQLite file. PostgreSQL deployments must configure a durable
-shared `Artifacts.Store`; setup, doctor and refresh refuse without it.
+shared `Artifacts.Store`; setup, doctor and re-parse refuse without it.
 
 The upgrade seeds passing versions only from successful runs that retained both their metadata
-snapshot and bundle. Setup or the first controller start automatically refreshes pipelines
+snapshot and bundle. Setup or the first controller start automatically re-parses pipelines
 without such a seed. Passing pipelines get a baseline; failing pipelines remain listed in
 setup and doctor and cannot start until corrected. Other pipelines are unaffected.
 
 Retention keeps the latest result, last passing snapshot and bundle while the pipeline exists.
 Older results follow `Retention.Config_history_days`. Bundles referenced by any retained run
-or refresh are protected, and shared file objects are removed only after their last bundle
+or re-parse are protected, and shared file objects are removed only after their last bundle
 reference disappears.
 
 Managed SQL task SELECTs must parse with sqlglot in the project's warehouse dialect. Both
-`validate` and refresh report an error with the file, line, column, parser message and dialect.
+`validate` and re-parse report an error with the file, line, column, parser message and dialect.
 Fix the SQL, or move vendor syntax sqlglot cannot parse into a `SQL_SCRIPT` task. Unmanaged
 SQL_SCRIPT statements are not required to parse. Existing admitted runs keep their pinned
-last-good version. Upgrade refresh failures remain listed and do not abort the upgrade.
+last-good version. Upgrade re-parse failures remain listed and do not abort the upgrade.

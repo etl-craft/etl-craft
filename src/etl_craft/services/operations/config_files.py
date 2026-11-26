@@ -126,7 +126,7 @@ def sync_folder(
 
     with ctx.engine.connect() as conn:
         pipelines = conn.execute(
-            statement(conn, "refresh_pipelines"),
+            statement(conn, "reparse_pipelines"),
             {
                 "project_id": ctx.project_id,
                 "pipeline_code": None,

@@ -37,7 +37,7 @@ makes the command exit `1` when there is one.
 
 Lineage is stored in `AUD_COLUMN_LINEAGE` and worked out again only for a task whose SELECT,
 target, source column names/types/order, warehouse dialect, active catalog or installed sqlglot
-version changed; `--refresh` works every task out again. Python scripts are
+version changed; `--re-parse` works every task out again. Python scripts are
 not traced: their SQL, if any, is inside the script.
 
 ## Table lineage versions
@@ -62,7 +62,7 @@ etl-craft lineage --table sales.orders --column amount_usd --version 5 --upstrea
 `--as-of` accepts the same run ID or ISO 8601 time as `config export --as-of`; a time without
 a timezone means UTC. `--version` requires `--table` because each table has its own numbering.
 It selects that table's version and reads the rest of the graph at the time that version began.
-The selectors are mutually exclusive and cannot be combined with `--refresh`. Historical reads
+The selectors are mutually exclusive and cannot be combined with `--re-parse`. Historical reads
 use retained version edges, never today's SQL, source contracts or task cache. A time before
 history starts fails with the earliest recorded time; an unknown table version fails with its
 number and the remedy. Version 5 remains readable after version 1000 becomes current.

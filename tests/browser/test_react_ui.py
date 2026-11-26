@@ -68,34 +68,34 @@ def test_both_refresh_controls_show_the_strict_reason(scene, scheme, width):
         )
         sign_in(page, url, "/ui/projects/default/pipelines")
         for path, label in (
-            ("pipelines", "Refresh all"),
-            ("pipelines/OPS", "Refresh pipeline"),
+            ("pipelines", "Re-parse all"),
+            ("pipelines/OPS", "Re-parse pipeline"),
         ):
             page.goto(f"{url}/ui/projects/default/{path}")
             if path == "pipelines":
-                refresh = page.get_by_role("button", name=label, exact=True)
-            else:  # the pipeline's refresh is an item in the grid's Options menu
+                reparse = page.get_by_role("button", name=label, exact=True)
+            else:  # the pipeline's re-parse is an item in the grid's Options menu
                 page.get_by_role("button", name="Options", exact=True).click()
-                refresh = page.get_by_role("menuitem", name=label, exact=True)
-                expect(refresh).to_have_attribute("aria-disabled", "true")
-            expect(refresh).to_have_accessible_description(
-                re.compile("standalone pipeline refresh requires RELAXED")
+                reparse = page.get_by_role("menuitem", name=label, exact=True)
+                expect(reparse).to_have_attribute("aria-disabled", "true")
+            expect(reparse).to_have_accessible_description(
+                re.compile("standalone pipeline re-parse requires RELAXED")
             )
             assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
             if path == "pipelines":
-                expect(refresh).to_be_disabled()
-                assert refresh.evaluate("""button => {
+                expect(reparse).to_be_disabled()
+                assert reparse.evaluate("""button => {
                     const [summary, actions] = button.closest('header').children;
                     const a = summary.getBoundingClientRect(), b = actions.getBoundingClientRect();
                     return a.right <= b.left || a.bottom <= b.top;
                 }""")
             expect(page.get_by_role("tooltip")).to_have_count(0)
             if width == 390:
-                refresh.tap(force=True)
+                reparse.tap(force=True)
             else:
-                refresh.hover()
+                reparse.hover()
             expect(page.get_by_role("tooltip")).to_contain_text(
-                "standalone pipeline refresh requires RELAXED"
+                "standalone pipeline re-parse requires RELAXED"
             )
             screenshots = os.environ.get("ETL_CRAFT_UI_SCREENSHOTS")
             if screenshots:
@@ -111,11 +111,11 @@ def test_refresh_selected_is_grayed_out_with_the_reason_on_strict(scene):
         browser, page, _ = open_page(pw, viewport={"width": 1280, "height": 1000})
         sign_in(page, url, "/ui/projects/default/pipelines")
         page.get_by_role("checkbox", name="Select OPS", exact=True).check()
-        refresh = page.get_by_role("button", name="Refresh selected", exact=True)
-        expect(refresh).to_be_disabled()
-        refresh.hover()
+        reparse = page.get_by_role("button", name="Re-parse selected", exact=True)
+        expect(reparse).to_be_disabled()
+        reparse.hover()
         expect(page.get_by_role("tooltip")).to_contain_text(
-            "standalone pipeline refresh requires RELAXED"
+            "standalone pipeline re-parse requires RELAXED"
         )
         browser.close()
 
@@ -373,7 +373,7 @@ def test_a_run_offers_its_logs_and_a_running_run_offers_reconcile(scene):
         expect(dialog.get_by_text("fences attempts", exact=False)).to_be_visible()
         dialog.get_by_role("button", name="Cancel").click()
         page.goto(url + "/ui/projects/default/pipelines")
-        expect(page.get_by_role("button", name="Refresh all")).to_be_visible()  # owner is admin
+        expect(page.get_by_role("button", name="Re-parse all")).to_be_visible()  # owner is admin
         assert problems == []
         browser.close()
 

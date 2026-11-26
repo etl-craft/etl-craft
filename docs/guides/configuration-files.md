@@ -60,7 +60,7 @@ Missing files and rows remain untouched. See the [multi-project layout and CI ex
 |---|---|
 | `etl-craft config export` | writes the Engine DB's rows as config files: the starting point for a project whose pipelines are in the Engine DB already. It refuses to overwrite files there unless given `--force`. It also seeds [source definitions](lineage.md#source-definitions-and-stars) from existing warehouse tables. With `--as-of`, it writes the rows as they stood at a moment instead (see [Configuration as of a moment](#configuration-as-of-a-moment)) |
 | `etl-craft config plan` | shows what `apply` would change and runs [`validate`](validating.md) on the result, then rolls it all back. Exits 1 when `validate` fails |
-| `etl-craft deploy` | makes the changes, in one transaction, unless `validate` fails the result: then it changes nothing and exits 1; then loads seeds and refreshes (see [Deploying](#deploying)) |
+| `etl-craft deploy` | makes the changes, in one transaction, unless `validate` fails the result: then it changes nothing and exits 1; then loads seeds and re-parses (see [Deploying](#deploying)) |
 
 Each takes `--config-dir PATH` for a folder other than `config/`, and `--format json` for a
 document (`etl-craft/config-sync/1`, or `etl-craft/config-export/1` from `export`).
@@ -99,9 +99,9 @@ development, test and production.
 Administrators manage pools with `etl-craft pool add|set|list|disable`, each with `--reason`.
 Tasks without `POOL` use their project's `DEFAULT_POOL`. Pipelines also have
 `MAX_PARALLEL_TASKS` (default 8), `PRIORITY` (default 0), and
-`BLOCK_ON_REFRESH_ERROR` (default `N`). Apply ends with a
-[pipeline refresh](validating.md#refresh-and-the-version-that-runs); changes remain committed
-if refresh fails, while admission keeps the last passing version.
+`BLOCK_ON_REPARSE_ERROR` (default `N`). Apply ends with a
+[pipeline re-parse](validating.md#re-parse-and-the-version-that-runs); changes remain committed
+if re-parse fails, while admission keeps the last passing version.
 [Placement](../deploying/agents.md#pools-limits-and-resource-placement) explains the limits.
 
 For each row of a file, `apply`:
@@ -229,7 +229,7 @@ etl-craft deploy
 2. It applies `config/`, unless `validate` fails the result. A project kept in
    [migrations](configuration-migrations.md) has no `config/`, and this step says it skipped.
 3. It loads the [seed tables](seeds.md), when the project has `seeds/`.
-4. It refreshes every pipeline, pinned to the bundle it published.
+4. It re-parses every pipeline, pinned to the bundle it published.
 
 `--plan` runs the same steps without writing: it checks the files, validates the config
 changes and rolls them back, and lists the seed tables. Its text is a review of the change in
@@ -308,13 +308,13 @@ project's approved published files. Publish its connection definitions as an adm
 Pipeline and task IDs, offsets (including timestamp and partition cursors), consumed files and
 keys, standing pauses, dependencies and recorded consumption remain intact. Direct pipeline
 grants and code references in trigger and WATERMARK_SOURCE_PIPELINES parameters follow the
-pipeline, with typed history. The rename and passing refreshes commit together: failed refresh
+pipeline, with typed history. The rename and passing re-parses commit together: failed re-parse
 findings roll everything back. Pipelines with trigger/watermark code references must also be
 idle because admitted runs retain their pinned old-code definitions. A non-terminal run,
 including a queued/manual run, or pending timestamp window refuses the rename. Finish or cancel it and explicitly resolve any pending
 window first. Existing codes, including retired codes, and invalid codes are refused.
 
-A cross-project dependency that cannot be refreshed from this project's folder refuses the
+A cross-project dependency that cannot be re-parsed from this project's folder refuses the
 rename and names the reference. Coordinate removing that dependency and restoring it after
 the rename. Team-owned CFG_ tables and team SQL text belong to the team: update those references
 yourself. The result repeats this responsibility and lists project config CSV files still

@@ -8,7 +8,7 @@ import { failureText, unavailableAction, useActionAvailability, useProjectInfo }
 import { ApiError, getJson, project } from "@/lib/api";
 import { useCatalog } from "@/lib/catalog";
 import { catalogPath, type CatalogKind } from "@/lib/routes";
-import type { LineageRefresh, Report } from "@/lib/types";
+import type { LineageReparse, Report } from "@/lib/types";
 import { useDocumentTitle } from "@/title";
 import { ArrowLeft, ChevronDown, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { DropdownContent, DropdownItem, DropdownMenu, DropdownTrigger } from "@/components/dropdown";
@@ -20,23 +20,23 @@ import { SplitPane } from "@/components/split-pane";
 
 type Done = { message?: string };
 
-const untraced = (r: LineageRefresh) => r.lineages.filter((l) => l.error);
+const untraced = (r: LineageReparse) => r.lineages.filter((l) => l.error);
 
-function describeRefresh(r: LineageRefresh): string {
+function describeReparse(r: LineageReparse): string {
   const bad = untraced(r).length;
   const traced = r.lineages.length - bad;
   return bad
-    ? `Lineage refreshed with errors: ${traced} of ${r.lineages.length} task(s) traced; ${bad} could not be traced (listed on this page). Rebuild the catalog to show it.`
-    : `Lineage refreshed: ${traced} task(s) traced. Rebuild the catalog to show it in the pages below.`;
+    ? `Lineage re-parsed with errors: ${traced} of ${r.lineages.length} task(s) traced; ${bad} could not be traced (listed on this page). Rebuild the catalog to show it.`
+    : `Lineage re-parsed: ${traced} task(s) traced. Rebuild the catalog to show it in the pages below.`;
 }
 
-/** A refresh's outcome stays on the page: a task whose SQL cannot be traced is named with its reason. */
-function LineageResult({ result }: { result: LineageRefresh }) {
+/** A re-parse's outcome stays on the page: a task whose SQL cannot be traced is named with its reason. */
+function LineageResult({ result }: { result: LineageReparse }) {
   const bad = untraced(result);
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Lineage refresh</CardTitle>
+        <CardTitle>Lineage re-parse</CardTitle>
         <span className="text-xs text-muted">
           {result.lineages.length - bad.length} of {result.lineages.length} task(s) traced
         </span>
@@ -63,10 +63,10 @@ export function Catalog() {
   const [params, setParams] = useSearchParams();
   const capabilities = useActionAvailability(code);
   const rebuildReason = unavailableAction(capabilities, "/docs");
-  const lineageReason = unavailableAction(capabilities, "/lineage/refresh");
+  const lineageReason = unavailableAction(capabilities, "/lineage/re-parse");
   const versionsReason = unavailableAction(capabilities, "/docs/versions");
   const info = useProjectInfo(code);
-  const [refreshed, setRefreshed] = React.useState<LineageRefresh | null>(null);
+  const [reparsed, setReparsed] = React.useState<LineageReparse | null>(null);
   const [chosen, setChosen] = React.useState<string | null>(null);
   // The built catalog is the last build; a missing build is shown in place of the explorer, with Rebuild still reachable.
   const built = useCatalog(code);
@@ -124,8 +124,8 @@ export function Catalog() {
                   <span className="font-medium">Validate metadata</span>
                   <span className="text-xs text-muted">Checks every pipeline and task definition without running anything.</span>
                 </DropdownItem>
-                <DropdownItem aria-label="Refresh lineage" unavailableReason={lineageReason} onSelect={() => setChosen("lineage")} className="grid gap-0.5">
-                    <span className="font-medium">Refresh lineage</span>
+                <DropdownItem aria-label="Re-parse lineage" unavailableReason={lineageReason} onSelect={() => setChosen("lineage")} className="grid gap-0.5">
+                    <span className="font-medium">Re-parse lineage</span>
                     <span className="text-xs text-muted">Works every task's lineage out again; the pages show it after the next rebuild.</span>
                 </DropdownItem>
                 <DropdownItem aria-label="Record catalog versions" unavailableReason={versionsReason} onSelect={() => setChosen("versions")} className="grid gap-0.5">
@@ -134,16 +134,16 @@ export function Catalog() {
                 </DropdownItem>
               </DropdownContent>
             </DropdownMenu>
-            <ActionButton<LineageRefresh>
+            <ActionButton<LineageReparse>
               code={code}
-              label="Refresh lineage"
-              title="Refresh lineage"
+              label="Re-parse lineage"
+              title="Re-parse lineage"
               effect="Works every task's lineage out again instead of reusing what was stored, then traces it. The catalog pages show the result after the next rebuild."
-              endpoint="/lineage/refresh" unavailableReason={lineageReason}
+              endpoint="/lineage/re-parse" unavailableReason={lineageReason}
               body={() => ({})}
               askReason={false}
-              describe={describeRefresh}
-              onDone={setRefreshed}
+              describe={describeReparse}
+              onDone={setReparsed}
               menu={{ open: chosen === "lineage", setOpen: (on) => setChosen(on ? "lineage" : null) }}
             />
             <ActionButton<Done> code={code} label="Record catalog versions" title="Record catalog versions" effect="Records the current definitions as the published catalog versions." endpoint="/docs/versions" unavailableReason={versionsReason} body={() => ({})} askReason={false} describe={() => "The catalog versions were recorded."} menu={{ open: chosen === "versions", setOpen: (on) => setChosen(on ? "versions" : null) }} />
@@ -151,7 +151,7 @@ export function Catalog() {
         }
       />
       {validate.isError ? <Notice>{failureText(validate.error)}</Notice> : null}
-      {refreshed ? <LineageResult result={refreshed} /> : null}
+      {reparsed ? <LineageResult result={reparsed} /> : null}
       {report ? (
         <Card>
           <CardHeader>

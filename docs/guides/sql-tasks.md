@@ -30,7 +30,7 @@ The engine reads the SQL, from a file or inline, with sqlglot in the warehouse's
 refuses it when it is not a query or anything in it writes, such as an `INSERT`, or a `DELETE`
 inside a `WITH`; a column named `copy` or `grant_date` is fine. The lexical fallback remains
 only a read-only check. Managed SELECTs must also parse in
-sqlglot's warehouse dialect before `validate` or pipeline refresh passes them. A parse failure
+sqlglot's warehouse dialect before `validate` or pipeline re-parse passes them. A parse failure
 names the file, line, column, dialect and parser message. Fix the SQL, or move vendor syntax
 sqlglot cannot parse into an unmanaged `SQL_SCRIPT` task. Execution of an already admitted,
 pinned run is unchanged.
@@ -92,7 +92,7 @@ WHERE CAST(ROW_ID AS VARCHAR) NOT IN ($$rule_flags(check_rows, REJECT))
 
 Name explicit unique row-rule types: `REJECT`, `INCOMPLETE`, `REPORT`. There is no default.
 The SQL task needs a direct same-pipeline SUCCESS dependency on that BUSINESS_RULES task.
-The selected ROW rules must share one active target table/key column. Validation and refresh
+The selected ROW rules must share one active target table/key column. Validation and re-parse
 refuse missing/incorrect edges and ambiguous contracts; execution also verifies the upstream
 is SUCCESS in this exact run. `ANY` does not bypass that requirement.
 
@@ -173,7 +173,7 @@ Set `WATERMARK_COLUMN=ods_changed_at`, a UTC `WATERMARK_START`, and, for example
 `WATERMARK_SOURCE_PIPELINES=["CLIENT_ALPHA","CLIENT_BETA","STEWARD_BUSINESS"]`.
 Alias the source `UPDATE_DATE`: the target's `UPDATE_DATE` is reserved for the engine.
 Leave the projected watermark out of `MERGE_COMPARE_COLUMNS`; it is a source position,
-not a business change. Configuration apply, validate and refresh report malformed JSON,
+not a business change. Configuration apply, validate and re-parse report malformed JSON,
 duplicate or unknown codes and incomplete bounded definitions as findings.
 
 The upper bound is the earliest of the reader's recorded attempt start and the recorded

@@ -8,12 +8,12 @@ from etl_craft.core.definitions import Definition, current, using
 from etl_craft.core.errors import MetadataError
 from etl_craft.engine.connection import read_snapshot
 from etl_craft.engine.queries import statement
-from etl_craft.engine.refreshes import admitted
+from etl_craft.engine.reparses import admitted
 from etl_craft.engine.repository.config_rows import TABLES
 
 
 def pinned(engine: Engine) -> tuple[Definition, dict[str, str | None]]:
-    """Retain the run's image and pin other pipelines to their last passing refresh."""
+    """Retain the run's image and pin other pipelines to their last passing re-parse."""
     running = current.get()
     images: list[tuple[int, Definition]] = []
     selected: dict[int, Definition] = {}
@@ -27,11 +27,11 @@ def pinned(engine: Engine) -> tuple[Definition, dict[str, str | None]]:
         for ref in pipelines:
             if ref.pipeline_id in selected:
                 continue
-            if engine.get_execution_options().get("refresh_required"):
+            if engine.get_execution_options().get("reparse_required"):
                 snapshot, _, bundle = admitted(conn, ref.pipeline_id)
             else:
                 snapshot = conn.execute(
-                    statement(conn, "refresh_current"), {"pipeline_id": ref.pipeline_id}
+                    statement(conn, "reparse_current"), {"pipeline_id": ref.pipeline_id}
                 ).scalar_one()
                 bundle = None
             images.append((ref.pipeline_id, Definition.read(snapshot, bundle_id=bundle)))
@@ -71,7 +71,8 @@ def pinned(engine: Engine) -> tuple[Definition, dict[str, str | None]]:
                     }:
                         raise MetadataError(
                             f"{table} identity {key}: conflicting pinned contracts; expected "
-                            "consistent table and column identities; refresh the affected pipelines"
+                            "consistent table and column identities; "
+                            "re-parse the affected pipelines"
                         )
                 rows[table][key] = row
     definition = Definition.read(

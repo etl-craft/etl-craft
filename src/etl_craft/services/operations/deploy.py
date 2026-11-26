@@ -1,10 +1,10 @@
-"""``etl-craft deploy``: publish, apply config, load seeds and refresh pipelines, in that order.
+"""``etl-craft deploy``: publish, apply config, load seeds and re-parse pipelines, in that order.
 
 With ``Artifacts.Store`` set, the caller uploads the project's files; deploy publishes them as a
 bundle and every later step reads that publication. Without a store, every step reads the
 project folder on this host, so the API refuses a deploy there. Config files are applied when
 the project has ``config/`` (a project kept in migrations has none); seed tables load when it
-has ``seeds/``; every pipeline is refreshed. The first failing step stops the rest.
+has ``seeds/``; every pipeline is re-parsed. The first failing step stops the rest.
 
 ``plan`` runs the same steps without writing: the upload is checked and unpacked but not
 published, the config changes are validated and rolled back, and the seed tables are listed.
@@ -31,7 +31,7 @@ from etl_craft.services.operations.config_files import sync_folder
 from etl_craft.services.operations.context import OperationContext
 from etl_craft.services.operations.requests import Request
 from etl_craft.services.operations.seeds import SeedLoad, apply_seeds
-from etl_craft.services.refresh_models import PipelineRefresh, RefreshResults
+from etl_craft.services.reparse_models import PipelineReparse, ReparseResults
 from etl_craft.services.seeds import discover
 
 CONNECTOR = "craft-connector.yml"
@@ -58,7 +58,7 @@ class Deployment:
     seeds: tuple[str, ...] = ()
     """The seed tables the project declares, loaded or (in a plan) to be loaded."""
     seed_loads: tuple[SeedLoad, ...] = ()
-    refreshes: tuple[PipelineRefresh, ...] = ()
+    reparses: tuple[PipelineReparse, ...] = ()
 
     @property
     def failed(self) -> bool:
@@ -66,7 +66,7 @@ class Deployment:
         return (
             (self.config is not None and self.config.failed)
             or any(load.status == SeedStatus.FAILED for load in self.seed_loads)
-            or any(result.status == RunStatus.FAILED for result in self.refreshes)
+            or any(result.status == RunStatus.FAILED for result in self.reparses)
         )
 
 
@@ -143,13 +143,13 @@ def _steps(
     done = replace(done, seed_loads=apply_seeds(replace(ctx, config=config), seeds).loads)
     if done.failed:
         return done
-    return replace(done, refreshes=_refresh(ctx, bundle_id))
+    return replace(done, reparses=_reparse(ctx, bundle_id))
 
 
-def _refresh(ctx: OperationContext, bundle_id: str | None) -> tuple[PipelineRefresh, ...]:
+def _reparse(ctx: OperationContext, bundle_id: str | None) -> tuple[PipelineReparse, ...]:
     from etl_craft.services.operations.actions import invoke
-    from etl_craft.services.operations.pipeline_refresh import InternalRefresh
+    from etl_craft.services.operations.pipeline_reparse import InternalReparse
 
-    checked = invoke(ctx, ActionName.PIPELINE_REFRESH, InternalRefresh(bundle=bundle_id))
-    assert isinstance(checked, RefreshResults)
-    return checked.refreshes
+    checked = invoke(ctx, ActionName.PIPELINE_REPARSE, InternalReparse(bundle=bundle_id))
+    assert isinstance(checked, ReparseResults)
+    return checked.reparses

@@ -6,6 +6,16 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+- Changed: re-reading pipeline definitions is called **re-parse**, and "refresh" now means
+  reloading data only (`REFRESH_TYPE`, `run --full-refresh`). `etl-craft pipelines refresh` is now
+  `etl-craft pipelines re-parse`, and `lineage --refresh` is now `lineage --re-parse`; the old
+  names are refused. The API routes are `POST /pipelines/re-parse` and `POST /lineage/re-parse`,
+  the action names `pipelines re-parse`, `pipeline re-parse history` and `lineage re-parse`
+  (role action sets follow), and JSON results list `reparses` with `reparse_id` and
+  `previous_reparsed_at`. The UI says **Re-parse pipeline**, **Re-parse all**, **Re-parse
+  selected** and **Re-parse lineage**. In the Engine DB, `AUD_PIPELINE_REFRESHES` is now
+  `AUD_PIPELINE_REPARSES` (`REPARSE_ID`, `REPARSED_AT`), runs pin `SNAPSHOT_REPARSE_ID`, and the
+  `pipelines.csv` column `BLOCK_ON_REFRESH_ERROR` is now `BLOCK_ON_REPARSE_ERROR`.
 - Changed: `ROW_ID` is computed the same way on every warehouse, from the task run that writes
   the row: `TASK_RUN_ID × 2^32 + n`, continuing after the largest ID that task run already holds
   in the target. IDs are never reused after a replace, drop, delete or warehouse restore, and
@@ -557,7 +567,7 @@ Engine DBs created before 0.9.0 must be recreated with `etl-craft init-db`.
   published over `--api` (`GET /api/v1/projects/{project}/config/plan` and `POST .../config/apply`).
   Bundles now include the project's `config/` folder (publish again to use an older project with
   `--bundle`), the apply pins its pipelines to that bundle instead of freezing the host's folder
-  (`RefreshInput` gains `bundle`), and the API refuses a folder: `config apply` without `--bundle`
+  (`ReparseInput` gains `bundle`), and the API refuses a folder: `config apply` without `--bundle`
   stays on the controller's host.
 - `etl-craft login --name NAME --password-stdin` signs in without a terminal, reading one password
   line from a pipe (as `setup --password-stdin` does), so a CI job can bootstrap an ephemeral Engine DB.
@@ -1040,7 +1050,7 @@ Warehouses are optional extras. Core bundles none. `all` is core plus the UI, fo
   last passing version; pipelines with no passing version cannot start. Config apply refreshes
   committed changes, and PostgreSQL direct edits trigger controller refreshes. Unchanged refreshes
   report their preceding result; changed refreshes name tables, tasks and files.
-- `BLOCK_ON_REFRESH_ERROR` in pipelines.csv defaults to N; Y blocks new runs after a failed refresh.
+- `BLOCK_ON_REPARSE_ERROR` in pipelines.csv defaults to N; Y blocks new runs after a failed refresh.
   SQLite defaults unset Artifacts.Store to `.etl-craft/artifacts` in the project directory.
 - DuckDB is explicitly bounded to `>=1.5.5,<2`; duckdb-engine's cap does not bound DuckDB itself.
   No new library ships. Local tests support parallel workers and affected-test selection.

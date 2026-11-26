@@ -1,4 +1,4 @@
-"""Refresh directly edited PostgreSQL metadata on the existing maintenance worker."""
+"""Re-parse directly edited PostgreSQL metadata on the existing maintenance worker."""
 
 import threading
 from dataclasses import replace
@@ -11,19 +11,19 @@ from etl_craft.engine.queries import statement
 from etl_craft.engine.repository.pipelines import selected_project
 from etl_craft.services.operations import OperationContext
 from etl_craft.services.operations.actions import invoke, project_settings
-from etl_craft.services.operations.pipeline_refresh import (
-    InternalRefresh,
-    RefreshInput,
+from etl_craft.services.operations.pipeline_reparse import (
+    InternalReparse,
+    ReparseInput,
     initialize_missing,
 )
 
 
-def refresh_due(ctx: OperationContext, stop: threading.Event) -> None:
+def reparse_due(ctx: OperationContext, stop: threading.Event) -> None:
     """Compare committed metadata hashes after SQL history exists; never poll project files."""
     if not for_engine(ctx.engine).supports_api_replicas or stop.is_set():
         return
     with ctx.engine.connect() as conn:
-        projects = conn.execute(statement(conn, "refresh_direct_projects")).all()
+        projects = conn.execute(statement(conn, "reparse_direct_projects")).all()
     for project in projects:
         if stop.is_set():
             return
@@ -35,16 +35,16 @@ def refresh_due(ctx: OperationContext, stop: threading.Event) -> None:
             project_id=int(project.project_id),
         )
         with acting_as(SYSTEM_ACTOR), selected_project(project.project_id):
-            selected = project_settings(scoped, ActionName.CLONE, RefreshInput())
+            selected = project_settings(scoped, ActionName.CLONE, ReparseInput())
             if _changed(selected):
-                invoke(selected, ActionName.PIPELINE_REFRESH, InternalRefresh())
+                invoke(selected, ActionName.PIPELINE_REPARSE, InternalReparse())
 
 
 def _changed(ctx: OperationContext) -> bool:
     """Detect late commits even when their history IDs or dates are older."""
     with ctx.engine.connect() as conn:
         pipelines = conn.execute(
-            statement(conn, "refresh_pipelines"),
+            statement(conn, "reparse_pipelines"),
             {
                 "project_id": ctx.project_id,
                 "pipeline_code": None,
@@ -53,13 +53,13 @@ def _changed(ctx: OperationContext) -> bool:
         ).all()
         for pipeline in pipelines:
             snapshot = conn.execute(
-                statement(conn, "refresh_current"),
+                statement(conn, "reparse_current"),
                 {
                     "pipeline_id": pipeline.pipeline_id,
                 },
             ).scalar_one()
             previous = conn.execute(
-                statement(conn, "refresh_latest_version"),
+                statement(conn, "reparse_latest_version"),
                 {
                     "pipeline_id": pipeline.pipeline_id,
                 },
@@ -88,7 +88,7 @@ def initialize(ctx: OperationContext) -> None:
         )
         with acting_as(SYSTEM_ACTOR), selected_project(project.project_id):
             if project.project_code != ctx.config.project:
-                scoped = project_settings(scoped, ActionName.CLONE, RefreshInput())
+                scoped = project_settings(scoped, ActionName.CLONE, ReparseInput())
             initialize_missing(scoped)
             from etl_craft.services.protection import startup
 

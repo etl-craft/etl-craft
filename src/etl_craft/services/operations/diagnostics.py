@@ -19,7 +19,7 @@ from etl_craft.services.operations.context import OperationContext
 from etl_craft.services.operations.permissions import visible_codes
 from etl_craft.services.operations.requests import (
     LineageInput,
-    LineageRefreshInput,
+    LineageReparseInput,
     NoInput,
     ValidateInput,
 )
@@ -108,22 +108,22 @@ class LineageView:
 
 def trace_lineage(ctx: OperationContext, request: LineageInput) -> LineageView:
     """Trace the stored lineage, now or at a recorded moment."""
-    return _trace(ctx, request, refresh=False)
+    return _trace(ctx, request, reparse=False)
 
 
-def refresh_lineage(ctx: OperationContext, request: LineageRefreshInput) -> LineageView:
+def reparse_lineage(ctx: OperationContext, request: LineageReparseInput) -> LineageView:
     """Work every task's lineage out again, record it, and trace it."""
-    return _trace(ctx, request, refresh=True)
+    return _trace(ctx, request, reparse=True)
 
 
-def _trace(ctx: OperationContext, query: LineageInput, *, refresh: bool) -> LineageView:
+def _trace(ctx: OperationContext, query: LineageInput, *, reparse: bool) -> LineageView:
     table, column = query.table, query.column
     upstream, downstream, depth = query.upstream, query.downstream, query.depth
     moment = None if query.as_of is None else resolve_as_of(ctx, query.as_of)
     if query.version is not None and query.table is not None:
         moment = _version_moment(ctx, query.table, query.version)
     lineages = tuple(
-        lineage.collect(ctx.engine, ctx.config, refresh=refresh)
+        lineage.collect(ctx.engine, ctx.config, reparse=reparse)
         if moment is None
         else lineage.historical_lineage(ctx.engine, ctx.config, moment)
     )

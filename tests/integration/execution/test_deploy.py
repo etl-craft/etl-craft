@@ -1,4 +1,4 @@
-"""`deploy` publishes, applies config, loads seeds and refreshes, and stops at a failure."""
+"""`deploy` publishes, applies config, loads seeds and re-parses, and stops at a failure."""
 
 import csv
 import json
@@ -82,7 +82,7 @@ def test_deploy_applies_and_pins_what_it_publishes_and_a_plan_writes_nothing(sce
     code, done = deployed(p)
     assert code == 0, done
     assert count_bundles(p) == bundles + 1 and "planned" in codes(p)
-    assert done["refreshes"] and {r["bundle_id"] for r in done["refreshes"]} == {done["bundle_id"]}
+    assert done["reparses"] and {r["bundle_id"] for r in done["reparses"]} == {done["bundle_id"]}
     assert done["config"]["directory"] == f"bundle {done['bundle_id']}"
 
 
@@ -94,7 +94,7 @@ def test_a_failed_config_step_stops_seeds_and_refresh(scene):
     )  # fmt: skip
     code, done = deployed(p)
     assert code == 1 and done["config"]["failed"], done
-    assert done["seed_loads"] == [] and done["refreshes"] == []
+    assert done["seed_loads"] == [] and done["reparses"] == []
     code, output = p.run("deploy")
     assert code == 1 and "validate failed the result" in output, output
 

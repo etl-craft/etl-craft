@@ -189,7 +189,7 @@ Pipeline Insights task totals expose `duplicates` and retain `null` when no run 
 `operations.status.explain(snapshot)` computes the same explanation from a captured
 `TaskSnapshot`. `validate` returns the validation report, `doctor` returns `DoctorView`, and
 `lineage` (`LineageInput`, with `direction` `BOTH`, `UPSTREAM` or `DOWNSTREAM`) returns
-`LineageView`; `lineage refresh` works every task's lineage out again first. Every document uses
+`LineageView`; `lineage re-parse` works every task's lineage out again first. Every document uses
 `to_json` and a versioned `SCHEMA`, matching CLI `--format json` output.
 
 Run results include `waiting=True` when a single-task command recorded nothing because

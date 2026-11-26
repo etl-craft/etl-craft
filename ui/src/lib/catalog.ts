@@ -240,7 +240,7 @@ export function impact(doc: CatalogDoc, name: string, depth = 4, direction: "bot
 
 /** The corrective action follows the failed comparison; it never changes warehouse data here. */
 export function gapRemedy(gap: CatalogGap): string {
-  if (/lineage/i.test(gap.attribute + gap.state)) return "Correct the named task's SELECT, refresh lineage, then rebuild the catalog.";
+  if (/lineage/i.test(gap.attribute + gap.state)) return "Correct the named task's SELECT, re-parse lineage, then rebuild the catalog.";
   if (/documentation/i.test(gap.attribute)) return "Add DOCUMENTATION to the task parameters and rebuild the catalog.";
   if (/unchecked/i.test(gap.state)) return "Rebuild the catalog with the warehouse comparison enabled.";
   return "Align the declared metadata and warehouse schema using config files or project migrations, then rebuild the catalog.";
