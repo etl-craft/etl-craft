@@ -48,6 +48,7 @@ from etl_craft.execution.classify import classify_failure
 from etl_craft.execution.context import build_task_context
 from etl_craft.execution.control_flow import process_local_queries
 from etl_craft.execution.leases import process_start
+from etl_craft.handlers import task_log
 from etl_craft.handlers.parameters import require_task_parameters
 from etl_craft.handlers.registry import HandlerResult, TaskContext, format_task_log, resolve_handler
 from etl_craft.warehouse.fencing import cancellation_scope, stop_current_queries
@@ -182,8 +183,8 @@ def run_handler(
     identity = _identity.get()
     if identity is not None:
         context = replace(context, attempt_id=identity[0], owner=identity[1])
-    logger.info("running the %s handler", context.handler)
     try:
+        task_log.opening(context)
         require_task_parameters(context.handler, context.task_params)
         if "WATERMARK_SOURCE_PIPELINES" in context.task_params:
             from etl_craft.execution.reconcile import settle_sources
@@ -202,26 +203,13 @@ def run_handler(
             ):
                 result = _invoke_handler(engine, context, alert)
     except EtlCraftError as error:
-        logger.error("task failed: %s", error)
         if context.handler != Handler.SQL_SCRIPT:
             logger.debug("traceback", exc_info=True)
-        _record_failure(
-            engine,
-            context.task_run_id,
-            error,
-            context.config,
-            script=context.handler in {Handler.PYTHON, Handler.FILE_VALIDATION},
-        )
+        _task_failed(engine, context, error)
         return error.exit_code
     except Exception as error:
         logger.exception("task failed with an unexpected %s", type(error).__name__)
-        _record_failure(
-            engine,
-            context.task_run_id,
-            error,
-            context.config,
-            script=context.handler in {Handler.PYTHON, Handler.FILE_VALIDATION},
-        )
+        _task_failed(engine, context, error)
         return ExitCode.UNEXPECTED
     with engine.begin() as conn:
         finish_task_run(
@@ -240,22 +228,13 @@ def run_handler(
         ):
             controls.acknowledge(conn, identity[0], ControlAcknowledgement.QUERIES)
     fault_point("child.after_outcome")
-    _log_success(result)
+    task_log.succeeded(result)
     return ExitCode.SUCCESS
 
 
-def _log_success(result: HandlerResult) -> None:
-    logger.info(
-        "task succeeded: source %s, target %s, inserted %s, updated %s, deleted %s, "
-        "rejected %s, duplicates %s",
-        result.source_count,
-        result.target_count,
-        result.insert_count,
-        result.update_count,
-        result.delete_count,
-        result.reject_count,
-        result.duplicate_count,
-    )
+def _task_failed(engine: Engine, context: TaskContext, error: BaseException) -> None:
+    script = context.handler in {Handler.PYTHON, Handler.FILE_VALIDATION}
+    _record_failure(engine, context.task_run_id, error, context.config, script=script)
 
 
 def _record_failure(
@@ -268,6 +247,7 @@ def _record_failure(
 ) -> None:
     identity = _identity.get()
     failure = classify_failure(error, config, script=script)
+    task_log.failed(error, failure)
     with engine.begin() as conn:
         if identity is not None:
             transitions.record_attempt_failure(conn, identity[0], failure)
@@ -281,13 +261,6 @@ def _record_failure(
             attempt_id=None if identity is None else identity[0],
             owner=None if identity is None else identity[1],
         )
-        if identity is not None:
-            logger.error(
-                "%s: %s %s; recorded RETRY_ON policy determines retry eligibility",
-                failure.kind,
-                failure.source,
-                failure.code or "",
-            )
 
 
 def run_as_process(

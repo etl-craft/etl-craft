@@ -55,6 +55,8 @@ from etl_craft.handlers.registry import HandlerResult, TaskContext, task_store
 from etl_craft.warehouse.connection import open_warehouse, warehouse_dialect
 
 logger = logging.getLogger(__name__)
+# The task log names at most this many newly flagged keys per rule; AUD_ holds them all.
+FLAGGED_KEYS_LOGGED = 20
 
 
 @dataclass(frozen=True)
@@ -365,6 +367,14 @@ class _RuleRunner:
             dropped,
             time.monotonic() - started,
         )
+        if new:
+            logger.info(
+                "rule %s flagged keys (%d of %d): %s",
+                rule.business_rule_name,
+                min(len(new), FLAGGED_KEYS_LOGGED),
+                len(new),
+                ", ".join(str(key) for key in new[:FLAGGED_KEYS_LOGGED]),
+            )
         return RuleOutcome(rule.business_rule_id, returned, dropped, len(new), len(passing))
 
     def _table(self, checked: _Rule, run_id: int) -> RuleOutcome:

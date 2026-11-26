@@ -203,7 +203,7 @@ item's text, or work done early under another item.
 | S7.AU Available actions on every page | Done | S7.AU PR | Every action on the project and platform pages renders from the server's availability answer, grayed out with its reason as a hover annotation; the console keeps submit-time refusals |
 | S7.AV No implicit project | Done | #444 | Engine DB access without a selected project raises `ProjectNotSelectedError` (exit 32) naming the query or operation; entry points select their project; `setup` and bare `doctor` are project-aware |
 | S7.AW Public docs for 0.9.0 | Done | #446 | Release install and first steps in the README, private development docs, and a short 0.9.0 changelog summary |
-| S7.AX Pipeline, run and task views | In progress | #462, #464, #465 | S7.AX.2b adds the full-width run page and recovery previews; S7.AX.3 needs no slice of its own (#464, see Handover notes); a Back button on every page (#465). S7.AX.4 remains |
+| S7.AX Pipeline, run and task views | Done | #462, #464, #465, #469 | S7.AX.2b adds the full-width run page and recovery previews; S7.AX.3 needs no slice of its own (#464, see Handover notes); a Back button on every page (#465); task logs open with the context and close with the outcome, and SQL steps show their statements (#469) |
 | S7.M Stewardship uploads | Done (M2) | #296, #305 | Atomic receipts and safe stored names; processed layout, retention archives and verified reruns; crash recovery and guarded upload history |
 | S7.S Seed tables | Done | #308 | Typed pinned-bundle seeds replace reference tables until recorded stewardship handover |
 | S7.T Business calendars | Done | #276 | Shared holiday and weekend calendars for schedules, run dates, backfill and catch-up |
@@ -229,6 +229,18 @@ item's text, or work done early under another item.
 | S8.I Support Insights on current main | Done | #449, support-insights#30 | `ALERT` tasks with `EMAIL` channels and `deploy` replace removed handlers and commands; the demo pins current main. The walkthrough found the 60-second `--api` read deadline (fixed in #449) |
 
 ### Handover notes
+
+- **S7.AX.4 Choices that differ from the item text.** The context block names the host the task
+  process runs on (an agent's pod, or the controller's host) rather than an agent record, and the
+  warehouse type and host rather than a connection name, since a project has one warehouse.
+  Task parameters show as the API shows them; `INPUT_PARAMS` shows its keys only, because its
+  values are bound into SQL and an existing test forbids them in logs. Step statements are cut at
+  20,000 characters (a SELECT with flagged keys inlined can be large); a failed statement is
+  logged whole. A failed warehouse statement's message gains a generic remedy, since the
+  database's own error names the cause. Business rules log newly flagged keys, capped at 20.
+  Acceptance availability: SQLite and DuckDB suites ran locally; PostgreSQL, Iceberg and agent
+  suites (the ROW_ID line runs on Iceberg only) ran in CI only, because the package service
+  stack stays down while the Support Insights cluster is up.
 
 - **S7.AX.3 Choices that differ from the item text.** The premise does not hold:
   agents already send the task log in chunks while a task runs (`AUD_ATTEMPT_LOG_CHUNKS`, sent

@@ -28,6 +28,7 @@ from etl_craft.execution.child import exit_now
 from etl_craft.execution.classify import classify_failure
 from etl_craft.execution.leases import process_start
 from etl_craft.execution.secret_pipe import read_values
+from etl_craft.handlers import task_log
 from etl_craft.handlers.parameters import require_task_parameters
 from etl_craft.handlers.registry import HandlerResult, TaskContext, format_task_log, resolve_handler
 from etl_craft.services.operations.agent_models import AgentTask
@@ -124,7 +125,6 @@ def main() -> int:
         sys.dont_write_bytecode = True
         os.chdir(config.project_dir)
         with cancellation_scope(config, store.session_tag):
-            require_task_parameters(context.handler, context.task_params)
             counts = _handler(context, store)
         result = replace(
             result,
@@ -139,6 +139,7 @@ def main() -> int:
     except Exception as error:
         # The process hook logs the failure after its classified ending has been saved.
         failure = classify_failure(error, config, script=context.handler in SCRIPT_HANDLERS)
+        task_log.failed(error, failure)
         result = replace(
             result,
             error_message=str(error),
@@ -181,7 +182,14 @@ def started_context(context: TaskContext, started: object) -> TaskContext:
 
 
 def _handler(context: TaskContext, store: RemoteTaskStore) -> HandlerResult:
-    logger.info("running the %s handler", context.handler)
+    task_log.opening(context)
+    require_task_parameters(context.handler, context.task_params)
+    result = _result(context, store)
+    task_log.succeeded(result)
+    return result
+
+
+def _result(context: TaskContext, store: RemoteTaskStore) -> HandlerResult:
     if context.handler == Handler.ALERT:
         reply = store.client.call(
             ActionName.AGENT_REPORT,

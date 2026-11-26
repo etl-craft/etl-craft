@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime
@@ -20,6 +21,8 @@ from etl_craft.handlers.registry import TaskContext
 from etl_craft.handlers.sql.session import Session
 from etl_craft.scripting import Offset
 from etl_craft.warehouse.connection import warehouse_dialect
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -130,7 +133,7 @@ def record_range(
         kind = session.column_types(stage)[column.lower()]
         if problem := session.dialect.timestamp_precision_problem(stage, column, kind):
             raise SqlGuardError(problem)
-        store.watermark(watermark.start.stored(), watermark.upper.stored())
+        _window(store, column, watermark.start.stored(), watermark.upper.stored())
         session.watermark_to = (
             None
             if context.backfill
@@ -163,12 +166,18 @@ def record_range(
         ).scalar_one()
         if advances:
             end = candidate
-    store.watermark(watermark.start.stored(), end.stored())
+    _window(store, column, watermark.start.stored(), end.stored())
     session.watermark_to = (
         StoredOffset(end.datatype, end.stored())
         if (value is not None or watermark.upper is not None) and not context.backfill
         else None
     )
+
+
+def _window(store: TaskStore, column: str, start: str, end: str) -> None:
+    """Record the attempt's watermark window and say it in the task log."""
+    logger.info("watermark window on %s: from %s to %s", column, start, end)
+    store.watermark(start, end)
 
 
 def source_pipelines(params: Mapping[str, str]) -> tuple[str, ...]:
