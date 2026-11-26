@@ -3,7 +3,7 @@
 import os
 from collections.abc import Iterator
 from contextlib import contextmanager, suppress
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from urllib.parse import unquote, urlsplit
 from uuid import uuid4
@@ -23,8 +23,15 @@ class ArtifactStore:
     config: ConnectorConfig
     location: str
     profile: str | None = None
+    _s3: S3Objects | None = field(default=None, init=False, repr=False)
 
     def _client(self) -> S3Objects:
+        """Build the S3 client once per store: creating one costs far more than a small read."""
+        if self._s3 is None:
+            self._s3 = self._new_client()
+        return self._s3
+
+    def _new_client(self) -> S3Objects:
         if self.profile not in self.config.object_stores:
             raise ConfigurationError(
                 f"artifact store {self.location}: profile={self.profile!r} is "

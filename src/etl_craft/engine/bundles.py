@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -65,16 +65,23 @@ class Bundle:
         return cls.load(conn, found)
 
     def read(self, config: ConnectorConfig, path: str) -> bytes:
-        """Only a named manifest file can be read from the immutable content store."""
-        if path not in self.files:
-            raise ResourceNotFoundError(
-                f"bundle {self.bundle_id}, path={path!r}: not in manifest; "
-                f"expected a recorded file; select a manifest path"
-            )
-        return ArtifactStore(config, self.store, self.profile).read(self.files[path])
+        """Read one manifest file."""
+        return self.reader(config)(path)
+
+    def reader(self, config: ConnectorConfig) -> Callable[[str], bytes]:
+        """Read manifest files, and only those, through one store connection."""
+        store = ArtifactStore(config, self.store, self.profile)
+
+        def read(path: str) -> bytes:
+            if path not in self.files:
+                raise ResourceNotFoundError(
+                    f"bundle {self.bundle_id}, path={path!r}: not in manifest; "
+                    f"expected a recorded file; select a manifest path"
+                )
+            return store.read(self.files[path])
+
+        return read
 
     def materialize(self, config: ConnectorConfig, *, cache: Path | None = None) -> Path:
         """Share the same verifier and cache protocol with API-only agents."""
-        return materialize(
-            self.bundle_id, self.files, lambda path: self.read(config, path), cache=cache
-        )
+        return materialize(self.bundle_id, self.files, self.reader(config), cache=cache)

@@ -143,11 +143,26 @@ def project_config_from_content(
         return project_config(ctx.config, path)
 
 
-def file_reply(bundle: Bundle, config: ConnectorConfig, path: str | None) -> dict[str, object]:
-    """Return hashes or one file without store credentials or local paths."""
-    if path is None:
+BATCH_BYTES = 8 * 1024 * 1024
+"""File bytes one bundle answer carries before the agent asks again for the rest."""
+
+
+def file_reply(
+    bundle: Bundle, config: ConnectorConfig, paths: tuple[str, ...]
+) -> dict[str, object]:
+    """Return hashes, or the requested files in order up to the batch size (at least one)."""
+    if not paths:
         return {"bundle_id": bundle.bundle_id, "files": dict(bundle.files)}
-    return {"content": base64.b64encode(bundle.read(config, path)).decode("ascii")}
+    read = bundle.reader(config)
+    content: dict[str, str] = {}
+    size = 0
+    for path in paths:
+        if content and size >= BATCH_BYTES:
+            break
+        data = read(path)
+        size += len(data)
+        content[path] = base64.b64encode(data).decode("ascii")
+    return {"content": content}
 
 
 def bundle_report(
@@ -161,4 +176,4 @@ def bundle_report(
         )
     with ctx.engine.connect() as conn:
         bundle = Bundle.load(conn, task.bundle_id)
-    return file_reply(bundle, ctx.config, request.bundle_path)
+    return file_reply(bundle, ctx.config, request.bundle_paths)

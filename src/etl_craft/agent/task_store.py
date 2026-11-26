@@ -30,6 +30,9 @@ from etl_craft.engine.timestamp_windows import TimestampWindow, WindowDefinition
 from etl_craft.services.operations.agent_models import AgentTask
 from etl_craft.services.operations.serialization import decode, from_json
 
+BUNDLE_PATHS = 1000
+"""Paths one bundle request names; the API answers with as many as its batch holds."""
+
 
 @dataclass
 class RemoteTaskStore:
@@ -341,21 +344,37 @@ class RemoteTaskStore:
                 f"hashes; check the API version"
             )
 
-        root = materialize(bundle_id, files, self.bundle_file)
+        names = list(files)
+        fetched: dict[str, bytes] = {}
+
+        def read(name: str) -> bytes:
+            # The manifest is read in order: one request brings this file and those after it.
+            if name not in fetched:
+                start = names.index(name)
+                fetched.update(self.bundle_files(names[start : start + BUNDLE_PATHS]))
+            return fetched.pop(name)
+
+        root = materialize(bundle_id, files, read)
         return project_config(config, root / "craft-connector.yml")
 
-    def bundle_file(self, path: str) -> bytes:
-        """Read one validated file from this attempt's pinned bundle."""
-        value = self.call(replace(self.request(AgentReport.BUNDLE), bundle_path=path))
-        if not isinstance(value, dict) or not isinstance(value.get("content"), str):
+    def bundle_files(self, paths: list[str]) -> dict[str, bytes]:
+        """Read the first path, and as many of the rest as the API's batch holds, in order."""
+        value = self.call(replace(self.request(AgentReport.BUNDLE), bundle_paths=tuple(paths)))
+        content = value.get("content") if isinstance(value, dict) else None
+        if (
+            not isinstance(content, dict)
+            or paths[0] not in content
+            or not set(content) <= set(paths)
+            or not all(isinstance(v, str) for v in content.values())
+        ):
             raise ServerError(
-                f"attempt {self.attempt_id}, file {path}: invalid bytes; expected "
-                f"base64 content; check the API"
+                f"attempt {self.attempt_id}, file {paths[0]}: invalid bundle answer; expected "
+                "base64 content for the requested paths; upgrade the API and agent together"
             )
         try:
-            return base64.b64decode(value["content"], validate=True)
+            return {path: base64.b64decode(data, validate=True) for path, data in content.items()}
         except ValueError as error:
             raise ServerError(
-                f"attempt {self.attempt_id}, file {path}: invalid encoding; expected "
-                f"base64; restore its artifact"
+                f"attempt {self.attempt_id}, files from {paths[0]}: invalid encoding; expected "
+                f"base64; restore the bundle's artifacts"
             ) from error

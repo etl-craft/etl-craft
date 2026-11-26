@@ -6,6 +6,11 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+- Fixed: an agent's first task after a restart or a deploy no longer waits 20-60 s for the project
+  bundle. The agent fetched each file in its own request, and the API built a new object-store
+  client for every file (measured on Support Insights: 116 files in 34-56 s). The agent now asks
+  for many files per request, the API answers with up to 8 MiB of them through one client, and
+  deploys reuse one client too. Agents and the API must run the same version.
 - Fixed: every page of the browser UI has a Back button at the left of the top bar, including
   pages that are loading, failed to load or do not exist. It returns to the previous page; on a
   page opened directly (a link or a reload) it goes to the project's home page. The arrow beside
