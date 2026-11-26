@@ -22,11 +22,34 @@ pytestmark = pytest.mark.parametrize(
 )
 
 
-@pytest.mark.parametrize("fan_out", [False, True], ids=["plain", "fan-out"])
+SCRIPT_OUTPUT = (
+    "import logging, subprocess, sys, threading, warnings\n"
+    "from etl_craft.scripting import ScriptResult\n"
+    "logging.basicConfig(level=logging.INFO)\n"
+    "def run(task):\n"
+    "    print('project copy ran')\n"
+    "    task.logger.info('marker task logger')\n"
+    "    logging.getLogger('vendor.client').info('marker named logger')\n"
+    "    logging.info('marker root logger')\n"
+    "    sys.stderr.write('marker stderr\\n')\n"
+    "    warnings.warn('marker warning')\n"
+    "    subprocess.run(['sh', '-c', 'echo marker command out; echo marker command err >&2'],"
+    " check=True)\n"
+    "    worker = threading.Thread(target=lambda: task.logger.info('marker thread'))\n"
+    "    worker.start(); worker.join()\n"
+    "    return ScriptResult(7)\n"
+)
+"""A script writing every way a production script logs: each line must reach the task log."""
+
+
+@pytest.mark.parametrize("script", ["plain", "fan-out", "output"])
 def test_agent_runs_its_pinned_bundle_without_engine_or_store_credentials(
-    cluster, monkeypatch, fan_out
+    cluster, monkeypatch, script
 ):
     p, url, token, agent_dir = cluster
+    fan_out = script == "fan-out"
+    if script == "output":
+        (agent_dir / "python_scripts" / "load.py").write_text(SCRIPT_OUTPUT)
     if fan_out:
         (agent_dir / "python_scripts" / "load.py").write_text(
             "from etl_craft.scripting import ScriptResult\n"
@@ -80,6 +103,18 @@ def test_agent_runs_its_pinned_bundle_without_engine_or_store_credentials(
         assert code == 0, output
         text_log = "".join(r.content for r in logs)
         assert "project copy ran" in text_log
+        if script == "output":
+            for marker in (
+                "task logger",
+                "named logger",
+                "root logger",
+                "stderr",
+                "warning",
+                "command out",
+                "command err",
+                "thread",
+            ):
+                assert f"marker {marker}" in text_log, marker
         # The agent's own line comes first, before the task process has imported anything.
         assert " INFO etl_craft.agent.loop: attempt " in logs[0].content.splitlines()[0]
         assert "claimed by agent" in logs[0].content and "starting the task process" in text_log
