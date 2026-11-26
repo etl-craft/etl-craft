@@ -29,7 +29,6 @@ COMPOSED = {ActionName.DATA_PROVENANCE: 'base + "/provenance"'}
 
 COVERED = {
     ActionName.ROLE_DESCRIBE: "the Roles dialog shows each full action set from the roles list",
-    ActionName.STATUS: "the run page shows each run's state through the run and history reads",
     ActionName.CATALOG_GAPS: "Insights shows the stored schema checks",
     ActionName.CONTROL_REQUEST: "each action's receipt shows the request's recorded status",
 }

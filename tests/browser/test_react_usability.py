@@ -134,7 +134,7 @@ def test_recent_run_strip_has_one_touch_target_and_a_keyboard_run_chooser(scene)
         expect(item).to_be_focused()
         expect(item).not_to_have_attribute("target", "_blank")
         page.keyboard.press("Enter")
-        expect(page).to_have_url(re.compile(rf"/pipelines/OPS\?run={bad}$"))
+        expect(page).to_have_url(re.compile(rf"/runs/OPS/{bad}$"))
         assert len(page.context.pages) == 1
         assert problems == []
         browser.close()

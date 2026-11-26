@@ -13,9 +13,9 @@ from fixtures.metadata import add_dependency, add_pipeline, add_task, start_run
 OWNER = Actor("owner", ActorKind.USER)
 
 
-def attempt(conn, summary, *, fail=None, not_before=None, previous=None):
+def attempt(conn, summary, *, fail=None, not_before=None, previous=None, log_path=None):
     attempt_id = transitions.queue_attempt(
-        conn, summary, OWNER, not_before=not_before, previous_attempt_id=previous
+        conn, summary, OWNER, not_before=not_before, previous_attempt_id=previous, log_path=log_path
     )
     lease = datetime.now(UTC) + timedelta(minutes=5)
     transitions.claim_attempt(conn, attempt_id, OWNER, owner="w1", lease_expires_at=lease)

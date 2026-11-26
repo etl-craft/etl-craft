@@ -35,6 +35,7 @@ from etl_craft.engine.queries import statement
 from etl_craft.engine.repository.group_claims import token_groups
 from etl_craft.engine.repository.pipelines import selected_project
 from etl_craft.engine.schema import InitResult
+from etl_craft.execution.recovery_preview import RecoveryPreview
 from etl_craft.services.catalog.gaps import GapSnapshot
 from etl_craft.services.config_files import ConfigExport, ConfigSync
 from etl_craft.services.insights import Insights
@@ -301,7 +302,8 @@ _ROWS = (
            triggers.TriggerView, OPERATOR, POST, f"{API}/triggers", REQUEST,
            scope=ActionScope.PIPELINE),
     Action(ActionName.RUN, runs.execute_run, RunRequest,
-           models.OperationResult | models.BackfillView, OPERATOR, POST, f"{API}/runs", REQUEST,
+           models.OperationResult | models.BackfillView | RecoveryPreview, OPERATOR, POST,
+           f"{API}/runs", REQUEST,
            scope=ActionScope.PIPELINE, long_running=True),
     Action(ActionName.ITEMS, items.inspect, items.ItemInput, items.ItemView, VIEWER,
            GET, f"{API}/pipelines/{{pipeline_code}}/runs/{{run_id}}/tasks/{{task_code}}/items",
@@ -314,7 +316,8 @@ _ROWS = (
            f"{API}/marks", REQUEST,
            scope=ActionScope.PIPELINE),
     Action(ActionName.CONTROL, controls.control, ControlRequest,
-           ControlView | models.OperationResult, OPERATOR, POST, f"{API}/controls", REQUEST,
+           ControlView | models.OperationResult | RecoveryPreview, OPERATOR, POST,
+           f"{API}/controls", REQUEST,
            scope=ActionScope.PIPELINE),
     Action(ActionName.CONTROL_BULK, controls.request_bulk_controls, BulkControlRequest,
            controls.BulkControlView, OPERATOR, POST, f"{API}/controls/bulk",
@@ -447,6 +450,10 @@ ACTIONS: dict[ActionName, Action] = {row.name: row for row in _ROWS}
 """Every action, by name."""
 
 
+def _dry_run(request: object) -> bool:
+    return isinstance(request, (RunRequest, ControlRequest)) and request.dry_run
+
+
 @contextmanager
 def admitted(ctx: OperationContext, name: ActionName, request: object) -> Iterator[None]:
     """Check the role and record the request once, then run the action's work inside.
@@ -466,13 +473,14 @@ def admitted(ctx: OperationContext, name: ActionName, request: object) -> Iterat
         try:
             authorize_action(ctx, action, request, required)
         except (PermissionDeniedError, ResourceNotFoundError) as error:
-            record_refusal(ctx, name, given, error)
+            if not _dry_run(request):
+                record_refusal(ctx, name, given, error)
             raise
         if name == ActionName.SETUP:
             from etl_craft.services.setup import require_setup_project
 
             require_setup_project(ctx.engine, ctx.config)
-        if action.audit == Audit.REQUEST:
+        if action.audit == Audit.REQUEST and not _dry_run(request):
             with recorded(ctx, name, given, on_completion=name == ActionName.MIGRATE):
                 yield
         else:
@@ -557,7 +565,8 @@ def invoke(ctx: OperationContext, name: ActionName, request: object) -> object:
             "use an agent token for claims"
         )
         assert isinstance(request, ACTIONS[name].request)
-        record_refusal(ctx, name, arguments(request), error)
+        if not _dry_run(request):
+            record_refusal(ctx, name, arguments(request), error)
         raise error
     try:
         ctx = _request_context(ctx, name, request)
@@ -566,7 +575,8 @@ def invoke(ctx: OperationContext, name: ActionName, request: object) -> object:
             request = resolve_run_reference(ctx, request)
     except (PermissionDeniedError, ResourceNotFoundError, RunStateError) as error:
         assert isinstance(request, ACTIONS[name].request)
-        record_refusal(ctx, name, arguments(request), error)
+        if not _dry_run(request):
+            record_refusal(ctx, name, arguments(request), error)
         raise
     claims = sso_groups.set(ctx.sso_group_ids)
     try:

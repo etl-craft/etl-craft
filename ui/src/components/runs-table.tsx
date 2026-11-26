@@ -10,7 +10,7 @@ import { StatusBadge } from "@/components/status";
 import { Card } from "@/components/ui/card";
 import { getJson, project } from "@/lib/api";
 import { formatDuration } from "@/lib/format";
-import { pipelineRunPath, runPath } from "@/lib/routes";
+import { runPath } from "@/lib/routes";
 import type { History, RunView } from "@/lib/types";
 
 const PAGE = 50;
@@ -61,7 +61,7 @@ export function RunsTable({ code, pipeline, status, codes, filters = {}, highlig
               id: "id",
               header: "Run",
               cell: (c) => (
-                <RunLabel truncate id={c.getValue()} label={c.row.original.run_label} to={pipeline ? runPath(code, c.row.original.pipeline_code, c.getValue()) : pipelineRunPath(code, c.row.original.pipeline_code, c.getValue())} />
+                <RunLabel truncate id={c.getValue()} label={c.row.original.run_label} to={runPath(code, c.row.original.pipeline_code, c.getValue())} />
               ),
             }),
             // Status precedes the remaining fields in both the table and phone cards.

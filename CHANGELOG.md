@@ -6,13 +6,18 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+- Added: a full-width run page with failure summaries, task Graph, sortable List, Gantt with a
+  critical path toggle, and filterable Events. Open it from a pipeline run or a run-number link.
+  The Recover menu previews tasks before sending the audited recovery request. The same preview
+  is available through `etl-craft run --dry-run` with `--recover`, `--restart` or `--rerun`.
+
 - Changed: the pipeline page follows Airflow's layout. A dense grid of tasks by runs (dependency
   order, alerts last, newest run at the right, 10 runs by default) sits beside the details of the
   selected run or task; a path row (`pipeline › Run #n › task`) leads back up. The left panel
   switches between Grid, Gantt (the selected run's timeline) and Graph. A selected task opens on
   its log; its SQL / script tab shows the source as deployed for that run. Tasks, Task status (in
   the selected run) and Run status filters are spreadsheet-style checklists kept in the address.
-  Old run, task and attempt addresses open the same selection; a task's address opens its own
+  Task and attempt addresses open the same selection; a task's address opens its own
   panel (definition, history, lookups). Alert deliveries show one row per delivery.
 - Added: `history` accepts `run_status` (repeatable) to list only runs in those states; paging
   keeps to the filter.

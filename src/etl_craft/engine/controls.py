@@ -120,6 +120,19 @@ def _dispatch(
         if pause is not None:
             standing_pauses.apply(conn, pause, scope.run_id)
             return False
+    return _dispatch_permission(policy, scope, wait=wait)
+
+
+def check_dispatch(conn: Connection, scope: DispatchScope, *, wait: bool = False) -> bool:
+    """Read the same dispatch fences a write checks under its admission locks."""
+    return _dispatch_permission(
+        dispatch_policy(conn, scope.run_id, scope.task_id), scope, wait=wait
+    )
+
+
+def _dispatch_permission(
+    policy: tuple[Row[tuple[object, ...]], ...], scope: DispatchScope, *, wait: bool
+) -> bool:
     if policy[0].draining and not policy[0].event_admitted:
         if wait:
             return False

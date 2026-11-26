@@ -5,6 +5,7 @@ import io
 import json
 import os
 import re
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -13,7 +14,9 @@ from sqlalchemy import text
 from test_react_ui import open_page, pause_item, sign_in
 
 from etl_craft.core.actor import Actor, ActorKind, acting_as
-from etl_craft.core.enums import ActionName
+from etl_craft.core.enums import ActionName, RunStatus
+from etl_craft.engine import transitions
+from etl_craft.execution.attempt_records import attempt_log_path
 from fixtures.actions import act
 from fixtures.metadata import (
     add_dependency,
@@ -24,6 +27,7 @@ from fixtures.metadata import (
     start_run,
     task_run,
 )
+from fixtures.run_scene import attempt
 
 pytestmark = pytest.mark.browser
 
@@ -525,7 +529,7 @@ def test_the_newest_grid_run_is_on_the_right_with_readable_status_symbols(scene)
         )
         sign_in(page, url, "/ui/projects/default/pipelines/SALES")
         newest = page.get_by_role("table", name="Run grid").locator("thead th a").last
-        expect(newest).to_have_attribute("href", re.compile(rf"/pipelines/SALES\?run={active}$"))
+        expect(newest).to_have_attribute("href", re.compile(rf"/runs/SALES/{active}$"))
         square = (
             page.get_by_role("table", name="Run grid")
             .get_by_role("img", name=re.compile("success$"))
@@ -563,15 +567,14 @@ def test_run_and_task_history_show_stored_labels_with_numeric_links(scene):
         expect(table.get_by_text(run.label, exact=True)).to_be_visible()
         expect(table.get_by_text(task.label, exact=True)).to_be_visible()
         link = table.get_by_role("link", name=f"#{run.id}", exact=True)
-        expect(link).to_have_attribute("href", re.compile(rf"[?&]run={run.id}(?:$|&)"))
+        expect(link).to_have_attribute("href", re.compile(rf"/runs/OPS/{run.id}$"))
         link.click()
-        expect(page.get_by_label("Run identifier", exact=True)).to_have_attribute(
-            "title", run.label
-        )
+        heading = page.get_by_role("heading", name=f"Run #{run.id}", exact=True)
+        expect(heading.locator("[title]")).to_have_attribute("title", run.label)
         page.evaluate(
             "navigator.clipboard.writeText = async (text) => { window.copiedLabel = text; }"
         )
-        page.get_by_role("button", name="Copy the run identifier", exact=True).click()
+        page.get_by_role("button", name="Copy id", exact=True).click()
         import shlex
 
         assert shlex.split(page.evaluate("window.copiedLabel")) == [run.label]
@@ -930,7 +933,7 @@ def test_the_run_grid_and_the_run_graph_float_a_key_that_names_their_marks(scene
 
 
 @pytest.mark.parametrize("width", [1023, 1024])
-def test_workspace_order_breakpoint_and_old_run_selection_round_trip(scene, width):
+def test_workspace_order_breakpoint_and_run_selection_round_trip(scene, width):
     ctx, url, _ = scene
     with acting_as(Actor("owner", ActorKind.USER)), ctx.engine.begin() as conn:
         pipeline = conn.execute(
@@ -946,7 +949,7 @@ def test_workspace_order_breakpoint_and_old_run_selection_round_trip(scene, widt
         grid = page.get_by_role("table", name="Run grid")
         headers = grid.locator("thead th a")
         expect(headers).not_to_have_count(0)
-        ids = [int(link.get_attribute("href").split("run=")[1]) for link in headers.all()]
+        ids = [int(link.get_attribute("href").rsplit("/", 1)[1]) for link in headers.all()]
         assert ids == sorted(ids), "the newest run must be on the right"
         page.wait_for_function(
             """stacked => {
@@ -969,7 +972,9 @@ def test_workspace_order_breakpoint_and_old_run_selection_round_trip(scene, widt
         run = ids[0]
         page.goto(url + f"/ui/projects/default/runs/OPS/{run}?task=LOAD&view=graph")
         expect(page.get_by_label("Task LOAD", exact=True)).to_be_visible()
-        assert f"run={run}" in page.url and "task=LOAD" in page.url and "view=graph" in page.url
+        assert (
+            f"/runs/OPS/{run}" in page.url and "task=LOAD" in page.url and "view=graph" in page.url
+        )
         page.evaluate("document.fonts.ready")
         page.reload()
         expect(page.get_by_label("Task LOAD", exact=True)).to_be_visible()
@@ -1013,12 +1018,224 @@ def test_pipeline_list_shows_dependencies_and_links_the_latest_run(scene):
         )
         assert len(capabilities) == 1 and "pipeline_codes=" in capabilities[0]
         latest = row.get_by_role("link", name=re.compile(r"^#\d+$"))
-        assert "?run=" in latest.get_attribute("href")
+        expect(latest).to_have_attribute("href", re.compile(r"/runs/OPS/\d+$"))
         page.evaluate("document.fonts.ready")
         latest.click()
-        # The latest run opens selected: its path row replaces the pipeline's tabs.
+        expect(page.get_by_role("heading", name=re.compile(r"^Run #"))).to_be_visible()
+        assert problems == []
+        browser.close()
+
+
+@pytest.mark.parametrize("scheme", ["light", "dark"])
+@pytest.mark.parametrize("width", [1440, 390])
+def test_run_page_opens_from_pipeline_grid_and_run_links(scene, scheme, width):
+    _, url, _ = scene
+    with sync_playwright() as pw:
+        browser, page, problems = open_page(
+            pw, color_scheme=scheme, viewport={"width": width, "height": 900}
+        )
+        sign_in(page, url, "/ui/projects/default/pipelines/OPS")
+        grid = page.get_by_role("table", name="Run grid")
+        column = (
+            grid.get_by_role("columnheader").get_by_role("link", name=re.compile(r"^Run #")).last
+        )
+        address = column.get_attribute("href")
+        assert address and "/runs/OPS/" in address
+        with page.context.expect_page() as opened:
+            column.click(modifiers=["Control"])
+        other = opened.value
+        expect(other.get_by_role("heading", name=re.compile(r"^Run #"))).to_be_visible()
+        other.close()
+
+        column.click()
+        page.get_by_role("link", name="Open run", exact=True).last.click()
+        expect(page).to_have_url(f"{url}{address}")
+        page.get_by_role("tab", name="List", exact=True).click()
+        tasks = page.get_by_role("table", name="Run tasks")
+        for label in ("Rows in", "Rows written", "Rows rejected"):
+            expect(tasks.get_by_role("columnheader", name=label)).to_be_visible()
+        tasks.get_by_role("columnheader", name="Task").get_by_role("button").click()
+        tasks.get_by_role("columnheader", name="Task").get_by_role("button").click()
+        expect(tasks.get_by_role("row").nth(1)).to_contain_text("LOAD")
+        page.get_by_role("searchbox", name="Search tasks by name").fill("extract")
+        expect(tasks.get_by_role("button", name="EXTRACT", exact=True)).to_be_visible()
+        expect(tasks.get_by_role("button", name="LOAD", exact=True)).to_have_count(0)
+        tasks.get_by_role("button", name="EXTRACT", exact=True).click()
+        expect(page.get_by_role("region", name="Task EXTRACT")).to_be_visible()
+
+        page.goto(f"{url}/ui/projects/default/runs?pipeline=OPS")
+        page.get_by_role("table", name="Pipeline runs").get_by_role(
+            "link", name=re.compile(r"#\d+")
+        ).first.click()
+        expect(page.get_by_role("heading", name=re.compile(r"^Run #"))).to_be_visible()
+        assert problems == []
+        browser.close()
+
+
+@pytest.mark.parametrize("scheme", ["light", "dark"])
+@pytest.mark.parametrize("width", [1440, 390])
+def test_run_page_shows_retry_error_and_events(site, scheme, width):
+    ctx, url = site
+    with acting_as(ctx.actor), ctx.engine.begin() as conn:
+        pipeline = add_pipeline(conn, "ORDERS")
+        extract = add_task(conn, pipeline, "EXTRACT")
+        load = add_task(conn, pipeline, "LOAD")
+        add_dependency(conn, pipeline, load, extract)
+        audit_task = add_task(conn, pipeline, "AUDIT")
+        for i in range(23):
+            add_dependency(conn, pipeline, add_task(conn, pipeline, f"EXPORT_{i:02}"), load)
+        run = start_run(conn, pipeline)
+        audit_summary = transitions.find_or_create_task_run(conn, audit_task, run).task_run_id
+        attempt(conn, audit_summary)
+        transitions.finish_task_run(conn, audit_summary, status=RunStatus.SUCCESS)
+        summary = transitions.find_or_create_task_run(conn, extract, run).task_run_id
+        extract_summary = summary
+        prior = attempt(conn, summary, fail="source reset the connection")
+        attempt(conn, summary, previous=prior, not_before=datetime.now(UTC))
+        transitions.finish_task_run(conn, summary, status=RunStatus.SUCCESS)
+        summary = transitions.find_or_create_task_run(conn, load, run).task_run_id
+        log = attempt_log_path(ctx.config, "ORDERS", run, "LOAD", 1, project_id=1)
+        log.parent.mkdir(parents=True)
+        log.write_text(
+            "INFO connecting to warehouse\nERROR connection refused\n" + "INFO cleanup\n" * 430,
+            encoding="utf-8",
+        )
+        attempt(conn, summary, fail="connection refused", log_path=str(log))
+        transitions.finish_task_run(
+            conn, summary, status=RunStatus.FAILED, error_message="connection refused"
+        )
+        finish_run(conn, run, "FAILED")
+        ended = datetime.now(UTC)
+        for summary_id, duration in ((audit_summary, 1), (extract_summary, 8), (summary, 5)):
+            conn.execute(
+                text(
+                    "UPDATE AUD_TASK_RUN_LOG SET START_DATE=:start, END_DATE=:end "
+                    "WHERE TASK_RUN_ID=:task"
+                ),
+                {"start": ended - timedelta(seconds=duration), "end": ended, "task": summary_id},
+            )
+    with sync_playwright() as pw:
+        browser, page, problems = open_page(
+            pw, color_scheme=scheme, viewport={"width": width, "height": 900}
+        )
+        sign_in(page, url, f"/ui/projects/default/runs/ORDERS/{run}")
+        failures = page.get_by_role("region", name="Failed tasks")
+        expect(failures).to_contain_text("connection refused")
+        expect(failures).to_contain_text("Try 1 of 1")
+        expect(page.get_by_role("group", name="Task graph")).to_be_visible()
         expect(
-            page.get_by_role("navigation", name="Selection").get_by_text(re.compile(r"^Run #"))
+            page.get_by_role("group", name="Task graph").get_by_text("LOAD", exact=True)
+        ).to_be_attached()
+        shoot(page, f"run-graph-{scheme}-{width}")
+        failures.get_by_role("button", name="Show task LOAD").click()
+        log_view = page.get_by_label("Attempt log", exact=True)
+        expect(log_view.get_by_text("ERROR connection refused", exact=True)).to_be_visible()
+        shoot(page, f"run-failed-log-{scheme}-{width}")
+        page.get_by_role("tab", name="List", exact=True).click()
+        page.get_by_role("button", name="Task status", exact=True).click()
+        page.get_by_role("checkbox", name="Failed", exact=True).check()
+        page.keyboard.press("Escape")
+        tasks = page.get_by_role("table", name="Run tasks")
+        expect(tasks.get_by_role("button", name="LOAD", exact=True)).to_be_visible()
+        expect(tasks.get_by_role("button", name="EXTRACT", exact=True)).to_have_count(0)
+        page.get_by_role("tab", name="Gantt", exact=True).click()
+        page.get_by_role("checkbox", name="Critical path").check()
+        critical = page.locator('[data-critical="true"]')
+        expect(critical.first).to_be_visible()
+        names = {bar.get_attribute("aria-label").split(",", 1)[0] for bar in critical.all()}
+        assert names == {"EXTRACT", "LOAD"}
+        page.get_by_role("tab", name="Events", exact=True).click()
+        page.get_by_role("combobox", name="Kind", exact=True).select_option("Task retried")
+        expect(page.get_by_role("list", name="Run events")).to_contain_text(
+            "Task retried · EXTRACT"
+        )
+        assert problems == []
+        browser.close()
+
+
+@pytest.mark.parametrize(
+    "choice,endpoint,command",
+    [
+        ("Recover failed tasks", "controls", "control"),
+        ("Recover from a task", "runs", "run"),
+        ("Rerun the whole run", "controls", "control"),
+    ],
+)
+def test_run_page_confirms_server_preview_then_audits_reason(site, choice, endpoint, command):
+    ctx, url = site
+    scripts = ctx.config.python_scripts_dir
+    scripts.mkdir(parents=True, exist_ok=True)
+    (scripts / "load.py").write_text(
+        "from etl_craft.scripting import ScriptResult\ndef run(task):\n    return ScriptResult()\n",
+        encoding="utf-8",
+    )
+    with acting_as(ctx.actor), ctx.engine.begin() as conn:
+        pipeline = add_pipeline(conn, "RECOVERY")
+        upstream = add_task(conn, pipeline, "load", "PYTHON", SCRIPT_FILE="load.py")
+        downstream = add_task(conn, pipeline, "publish", "PYTHON", SCRIPT_FILE="load.py")
+        add_dependency(conn, pipeline, downstream, upstream)
+        run = start_run(conn, pipeline)
+        task_run(conn, upstream, run, RunStatus.FAILED)
+        finish_run(conn, run, RunStatus.FAILED)
+
+    def audit():
+        with ctx.engine.connect() as conn:
+            return conn.execute(
+                text(
+                    "SELECT ACTOR AS actor, ARGUMENTS AS arguments FROM AUD_ACTIONS "
+                    "WHERE COMMAND=:command ORDER BY ACTION_ID"
+                ),
+                {"command": command},
+            ).all()
+
+    reason = f"Operator approved {choice.lower()}"
+    with sync_playwright() as pw:
+        browser, page, problems = open_page(pw)
+        sign_in(page, url, f"/ui/projects/default/runs/RECOVERY/{run}?task=load")
+        page.get_by_role("button", name="Recover", exact=True).click()
+        page.get_by_role("menuitem", name=choice, exact=True).click()
+        dialog = page.get_by_role("dialog")
+        dialog.get_by_label(re.compile("^Reason")).fill(reason)
+        before = audit()
+        dialog.get_by_role("button", name="Preview recovery", exact=True).click()
+        expect(dialog.get_by_role("heading", name="Will run", exact=True)).to_be_visible()
+        expect(dialog.get_by_role("heading", name="Will skip", exact=True)).to_be_visible()
+        expect(
+            dialog.get_by_role("heading", name="Depends on upstream", exact=True)
         ).to_be_visible()
+        expect(dialog.get_by_text("load", exact=True).last).to_be_visible()
+        assert audit() == before
+        with page.expect_response(
+            lambda response: (
+                response.url.endswith(f"/{endpoint}") and response.request.method == "POST"
+            )
+        ) as submitted:
+            dialog.get_by_role("button", name=choice, exact=True).click()
+        assert submitted.value.ok, submitted.value.text()
+        expect(dialog).not_to_be_visible()
+        new_rows = audit()[len(before) :]
+        requests = [
+            (row.actor, arguments)
+            for row in new_rows
+            if "_request_action_id" not in (arguments := json.loads(row.arguments))
+        ]
+        assert [(actor, arguments["reason"]) for actor, arguments in requests] == [
+            ("owner", reason)
+        ]
+        assert problems == []
+        browser.close()
+
+
+def test_run_page_follows_an_active_run_to_its_end(scene):
+    ctx, url, run = scene
+    with sync_playwright() as pw:
+        browser, page, problems = open_page(pw)
+        sign_in(page, url, f"/ui/projects/default/runs/SALES/{run}")
+        header = page.get_by_role("heading", name=f"Run #{run}", exact=True).locator("../..")
+        expect(header.get_by_text("Running", exact=True)).to_be_visible()
+        with acting_as(ctx.actor), ctx.engine.begin() as conn:
+            finish_run(conn, run, RunStatus.SUCCESS)
+        expect(header.get_by_text("Success", exact=True)).to_be_visible(timeout=10000)
+        expect(page.get_by_role("button", name="Cancel", exact=True)).to_have_count(0)
         assert problems == []
         browser.close()

@@ -22,7 +22,7 @@ import { getJson, project } from "@/lib/api";
 import { impact, isOpenGap, pipelineGraph, typeOf, type CatalogColumn, type CatalogDoc, type ImpactRow, type CatalogRun, type CatalogTable, type CatalogTask } from "@/lib/catalog";
 import { describeCron, formatDuration } from "@/lib/format";
 import { handlerLabel } from "@/lib/labels";
-import { catalogPath, pipelinePath, runsPath, taskPath } from "@/lib/routes";
+import { catalogPath, pipelinePath, runPath, runsPath, taskPath } from "@/lib/routes";
 import type { TablePreview } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { Disclosure, DisclosureSummary } from "@/components/dropdown";
@@ -121,7 +121,7 @@ function RunsTable({ code, pipeline, runs, task }: { code: string; pipeline: str
       data={runs}
       initialSort={[{ id: "run", desc: true }]}
       columns={columnsOf<CatalogRun>([
-        { id: "run", header: "Run", value: (r) => r.pipeline_run_id, size: 90, cell: (r) => <RunLabel id={r.pipeline_run_id} label={r.run_label} to={`${pipelinePath(code, pipeline)}?run=${r.pipeline_run_id}`} /> },
+        { id: "run", header: "Run", value: (r) => r.pipeline_run_id, size: 90, cell: (r) => <RunLabel id={r.pipeline_run_id} label={r.run_label} to={runPath(code, pipeline, r.pipeline_run_id)} /> },
         { id: "status", header: "Status", value: (r) => r.status, size: 130, cell: (r) => <StatusBadge quiet status={r.status} /> },
         { id: "started", header: "Started", value: (r) => r.start, size: 190, cell: (r) => <When iso={r.start} /> },
         { id: "duration", header: "Duration", value: (r) => (r.start && r.end ? new Date(r.end).getTime() - new Date(r.start).getTime() : null), size: 110, cell: (r) => formatDuration(r.start, r.end) },
@@ -396,7 +396,7 @@ export function TableObject({ code, doc, name, tab, onTab }: { code: string; doc
   const everyRun = writers.flatMap((w) => w.runs.map((r) => ({ ...r, pipeline: w.pipeline })));
   const lastWrite = everyRun.filter((r) => r.end).sort((a, b) => (b.end ?? "").localeCompare(a.end ?? ""))[0];
   const lastRun = everyRun.sort((a, b) => (b.start ?? "").localeCompare(a.start ?? ""))[0];
-  const runLink = (r: { pipeline: string; pipeline_run_id: number }) => `${pipelinePath(code, r.pipeline)}?run=${r.pipeline_run_id}`;
+  const runLink = (r: { pipeline: string; pipeline_run_id: number }) => runPath(code, r.pipeline, r.pipeline_run_id);
   const toTab = (id: string, label: string, children: React.ReactNode) => (
     <button type="button" className="cursor-pointer text-accent hover:underline" title={`Open ${label}`} onClick={() => onTab(id)}>
       {children}
@@ -563,7 +563,7 @@ export function TableObject({ code, doc, name, tab, onTab }: { code: string; doc
               data={history}
               columns={columnsOf<(typeof history)[number]>([
                 { id: "task", header: "Task", value: (r) => r.task, size: 280, cell: (r) => <Link className={link} to={catalogPath(code, "tasks", r.task)}>{r.task}</Link> },
-                { id: "run", header: "Run", value: (r) => r.pipeline_run_id, size: 90, cell: (r) => <RunLabel id={r.pipeline_run_id} label={r.run_label} to={`${pipelinePath(code, r.pipeline)}?run=${r.pipeline_run_id}`} /> },
+                { id: "run", header: "Run", value: (r) => r.pipeline_run_id, size: 90, cell: (r) => <RunLabel id={r.pipeline_run_id} label={r.run_label} to={runPath(code, r.pipeline, r.pipeline_run_id)} /> },
                 { id: "status", header: "Status", value: (r) => r.status, size: 130, cell: (r) => <StatusBadge quiet status={r.status} /> },
                 { id: "started", header: "Started", value: (r) => r.start, size: 190, cell: (r) => <When iso={r.start} /> },
                 { id: "duration", header: "Duration", value: (r) => (r.start && r.end ? new Date(r.end).getTime() - new Date(r.start).getTime() : null), size: 110, cell: (r) => formatDuration(r.start, r.end) },

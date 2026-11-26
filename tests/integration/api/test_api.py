@@ -1246,3 +1246,25 @@ def test_steps_source_reads_exact_bundle_bytes(api, tmp_path, contents, expected
     assert source["file"] == path
     assert source["text"] == contents[: 256 * 1024].decode(errors="ignore")
     assert source["truncated_at_bytes"] == (256 * 1024 - 1 if len(contents) > 256 * 1024 else None)
+
+
+@pytest.mark.parametrize("action", ["RECOVER", "RESTART"])
+def test_recovery_preview_has_the_same_http_refusal_as_submission(api, action):
+    _ctx, client, creds, run, _ = api
+    path = "/api/v1/projects/default/controls"
+    auth = headers(creds[ApiRole.OPERATOR])
+    scope = {
+        "pipeline_code": "P",
+        "run_id": run,
+        "action": action,
+        "reason": "verify that the live attempt has ended",
+    }
+    audit = "/api/v1/projects/default/audit"
+    before = client.get(audit, headers=auth).json()["actions"]
+    preview = client.post(path, headers=auth, json={**scope, "dry_run": True})
+    after = client.get(audit, headers=auth).json()["actions"]
+    assert after == before
+    actual = client.post(path, headers=auth, json=scope)
+    assert preview.status_code == actual.status_code == 409
+    assert preview.json()["message"] == actual.json()["message"]
+    assert "requires ended ownership" in preview.json()["message"]

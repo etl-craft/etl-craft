@@ -50,7 +50,7 @@ function compactSegments(timeline: TimelineSegment[]): TimelineSegment[] {
  * waits apart from execution. Every bar is a button whose description names its times and outcome; an open interval
  * runs to now and says so. Nothing is drawn from configuration or inferred from gaps between timestamps.
  */
-export function RunTimeline({ run, compact = false, order }: { run: RunView; compact?: boolean; order?: string[] }) {
+export function RunTimeline({ run, compact = false, order, onTask, critical, selected }: { run: RunView; compact?: boolean; order?: string[]; onTask?: (task: string) => void; critical?: Set<string>; selected?: string | null }) {
   const tz = useTimezone();
   const now = useNow();
   const [chosen, setChosen] = React.useState<string | null>(null);
@@ -91,18 +91,24 @@ export function RunTimeline({ run, compact = false, order }: { run: RunView; com
                     const width = Math.max(((endOf(s) - Date.parse(s.started_at)) / span) * 100, 0.6);
                     const { icon: Icon, spin } = statusMeta(s.outcome);
                     const execution = s.kind === "EXECUTION";
+                    const onCriticalPath = execution && s.task_code !== null && critical?.has(s.task_code);
+                    const label = describe(s, tz, open) + (onCriticalPath ? " On the critical path." : "");
                     return (
                       <button
                         key={keyOf(s)}
                         type="button"
-                        aria-label={describe(s, tz, open)}
-                        aria-pressed={keyOf(s) === chosen}
-                        title={describe(s, tz, open)}
-                        onClick={() => setChosen(keyOf(s))}
+                        aria-label={label}
+                        aria-pressed={selected !== undefined ? s.task_code !== null && s.task_code === selected : keyOf(s) === chosen}
+                        title={label}
+                        onClick={() => {
+                          setChosen(keyOf(s));
+                          if (s.task_code) onTask?.(s.task_code);
+                        }}
                         onFocus={() => setChosen(keyOf(s))}
                         data-open={open || undefined}
+                        data-critical={onCriticalPath || undefined}
                         className={cn(
-                          "timeline-bar absolute flex items-center overflow-hidden rounded-sm px-0.5 outline-offset-1",
+                          "data-[critical=true]:ring-2 data-[critical=true]:ring-inset data-[critical=true]:ring-accent aria-pressed:outline-2 aria-pressed:outline-accent timeline-bar absolute flex items-center overflow-hidden rounded-sm px-0.5 outline-offset-1",
                           execution ? cn("top-1 bottom-1", statusSolid(s.outcome)) : cn("top-0.5 bottom-0.5 text-fg", KIND[s.kind].className, compact && "opacity-40"),
                         )}
                         style={{ left: `${left}%`, width: `${Math.min(width, 100 - left)}%` }}

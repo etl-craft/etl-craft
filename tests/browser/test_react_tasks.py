@@ -64,7 +64,7 @@ def test_a_failed_task_explains_itself_and_leads_to_its_attempt_and_history(scen
     with sync_playwright() as pw:
         browser, page, problems = open_page(pw, viewport={"width": 1280, "height": 1000})
         page.context.set_default_timeout(8000)
-        sign_in(page, url, f"/ui/projects/default/runs/ORDERS/{bad}")
+        sign_in(page, url, f"/ui/projects/default/pipelines/ORDERS?run={bad}")
         page.get_by_role("table", name="Run grid").get_by_role(
             "img", name=f"LOAD in run {bad}: failed"
         ).click()
@@ -150,7 +150,7 @@ def test_a_viewer_reads_task_pages_with_disabled_controls(scene):
     with sync_playwright() as pw:
         browser, page, _ = open_page(pw)
         page.context.set_default_timeout(8000)
-        sign_in(page, url, f"/ui/projects/default/runs/ORDERS/{bad}", name="alice")
+        sign_in(page, url, f"/ui/projects/default/pipelines/ORDERS?run={bad}", name="alice")
         page.get_by_role("table", name="Run grid").get_by_role(
             "img", name=f"LOAD in run {bad}: failed"
         ).click()
@@ -207,7 +207,7 @@ def test_a_skipped_task_names_its_failed_upstream(site):
         finish_run(conn, run, RunStatus.FAILED)
     with sync_playwright() as pw:
         browser, page, problems = open_page(pw)
-        sign_in(page, url, f"/ui/projects/default/runs/SKIP_REASON/{run}")
+        sign_in(page, url, f"/ui/projects/default/pipelines/SKIP_REASON?run={run}")
         expect(
             page.get_by_role("table", name="Task instances").get_by_text("Skipped: SOURCE failed")
         ).to_be_visible()

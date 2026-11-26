@@ -384,22 +384,29 @@ def open_pause(
     with engine.connect() as conn:
         if pipeline_id is None:
             pipeline_id = resolve_pipeline_id(conn, pipeline_code)
-        pause = pauses.fetch_open_pause(conn, pipeline_id)
-        if (
-            pause is not None
-            and selector is not None
-            and (selector.run_id is not None or selector.run_key is not None)
+        return pause_for_selection(conn, pipeline_id, selector)
+
+
+def pause_for_selection(
+    conn: Connection, pipeline_id: int, selector: runlog.RunSelector | None
+) -> pauses.Pause | None:
+    """Read whether this exact run can proceed under the open pipeline pause."""
+    pause = pauses.fetch_open_pause(conn, pipeline_id)
+    if (
+        pause is not None
+        and selector is not None
+        and (selector.run_id is not None or selector.run_key is not None)
+    ):
+        if selector.run_id is None and not any(
+            r.run_key == selector.run_key for r in runlog.run_candidates(conn, pipeline_id)
         ):
-            if selector.run_id is None and not any(
-                r.run_key == selector.run_key for r in runlog.run_candidates(conn, pipeline_id)
-            ):
-                return pause
-            selected = runlog.select_run(conn, pipeline_id, selector)
-            if selected.status == RunStatus.IN_PROGRESS or controls.permits_paused(
-                conn, selected.pipeline_run_id
-            ):
-                return None
-        return pause
+            return pause
+        selected = runlog.select_run(conn, pipeline_id, selector)
+        if selected.status == RunStatus.IN_PROGRESS or controls.permits_paused(
+            conn, selected.pipeline_run_id
+        ):
+            return None
+    return pause
 
 
 def record_change(

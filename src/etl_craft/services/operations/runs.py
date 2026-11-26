@@ -15,6 +15,7 @@ from etl_craft.execution import interventions, reruns, runner
 from etl_craft.execution import pipeline as execution
 from etl_craft.execution.attempt_types import Override
 from etl_craft.execution.reconcile import reconcile
+from etl_craft.execution.recovery_preview import RecoveryPreview
 from etl_craft.execution.run_types import PipelineOutcome
 from etl_craft.services.cloning import run_hooks
 from etl_craft.services.operations.child_admission import guarded_children
@@ -66,7 +67,9 @@ HOST_ONLY = ("force", "skip", "ignore_dependencies")
 """Run options that only the controller's host can apply; the API refuses them."""
 
 
-def execute_run(ctx: OperationContext, request: RunRequest) -> OperationResult | BackfillView:
+def execute_run(
+    ctx: OperationContext, request: RunRequest
+) -> OperationResult | BackfillView | RecoveryPreview:
     """Run, resume, initialize, skip or backfill, as the validated request says.
 
     Over HTTP a whole-pipeline run is admitted for the controller, which runs it; the options in
@@ -74,6 +77,27 @@ def execute_run(ctx: OperationContext, request: RunRequest) -> OperationResult |
     """
     from etl_craft.services.operations.processes import connection_process
 
+    if request.request_key is not None and not request.params:
+        raise UsageError(
+            "request_key without overrides: expected params; "
+            "use a control request or supply --param"
+        )
+    if request.dry_run:
+        if ctx.transport == Transport.HTTP:
+            request = _over_http(request)
+        check_reason(request.reason)
+        with ctx.engine.connect() as conn:
+            pipeline_id = resolve_pipeline_id(conn, request.pipeline_code)
+        selector = selected_date(ctx, pipeline_id, request.selector, request.run_date)
+        assert request.task_code is not None
+        return reruns.preview_rerun(
+            ctx.engine,
+            ctx.config,
+            request.pipeline_code,
+            request.task_code,
+            selector=selector,
+            with_downstream=request.with_downstream,
+        )
     if request.params:
         from etl_craft.services.operations import run_parameters
 
@@ -93,11 +117,6 @@ def execute_run(ctx: OperationContext, request: RunRequest) -> OperationResult |
                 pipeline_run_id=run_id,
             )
         request = selected
-    elif request.request_key is not None:
-        raise UsageError(
-            "request_key without overrides: expected params; "
-            "use a control request or supply --param"
-        )
     if request.full_refresh:
         from etl_craft.services.operations import full_refresh
 

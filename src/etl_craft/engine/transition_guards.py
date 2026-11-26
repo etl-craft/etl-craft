@@ -2,11 +2,13 @@
 
 from datetime import UTC, datetime
 
-from sqlalchemy.engine import Connection
+from sqlalchemy.engine import Connection, Row
 
 from etl_craft.core.actor import Actor
+from etl_craft.core.enums import FINISHED_RUN_STATUSES, YesNo
 from etl_craft.core.errors import StaleTransitionError
 from etl_craft.engine.queries import statement
+from etl_craft.engine.runlog import fetch_exclusive_run_id
 
 
 def stale(
@@ -31,6 +33,20 @@ def stale(
         f"{kind} row_id={row_id}: expected status {expected}, owner={owner!r}; found {found}. "
         "Read the run history and refresh the status and owner before retrying."
     )
+
+
+def reopen_status(conn: Connection, run_id: int, owner: str | None) -> Row[tuple[object, ...]]:
+    """Check the same stable reopening prerequisites for a preview and a write."""
+    row = conn.execute(statement(conn, "transition_row_run"), {"row_id": run_id}).one_or_none()
+    if row is None or row.status not in FINISHED_RUN_STATUSES or row.owner_id != owner:
+        raise stale(conn, "run", run_id, "terminal; no other active run", owner)
+    scope = conn.execute(statement(conn, "run_task_selection"), {"pipeline_run_id": run_id}).one()
+    if (
+        scope.exclusive_run == YesNo.YES
+        and fetch_exclusive_run_id(conn, row.pipeline_id) is not None
+    ):
+        raise stale(conn, "run", run_id, "terminal; no other active run", owner)
+    return row
 
 
 def stale_attempt(

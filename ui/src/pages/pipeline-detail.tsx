@@ -6,6 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 import { When } from "@/components/when";
 import { Check, ChevronDown, ChevronLeft, ChevronRight, PlayCircle } from "lucide-react";
 import * as React from "react";
+import { AppLink } from "@/components/navigation";
 import { Navigate, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { ActionButton } from "@/components/action-button";
 import { DropdownContent, DropdownItem, DropdownLabel, DropdownMenu, DropdownSeparator, DropdownTrigger } from "@/components/dropdown";
@@ -38,7 +39,7 @@ import { autoStarts } from "@/lib/auto-starts";
 import { unavailableAction, useActionAvailability, useAutoStarts, useProjectInfo, useRunReference } from "@/hooks";
 import { describeCron, formatDuration } from "@/lib/format";
 import { ApiError, getJson, project } from "@/lib/api";
-import { pipelinesPath, projectHomePath, scheduledPath, taskPath } from "@/lib/routes";
+import { pipelinesPath, projectHomePath, runPath, scheduledPath, taskPath } from "@/lib/routes";
 import { cn } from "@/lib/utils";
 import type { Graph, Pipeline, RunView, Steps } from "@/lib/types";
 import { useDocumentTitle } from "@/title";
@@ -399,6 +400,7 @@ export function PipelineDetail() {
               <Button size="sm" variant="ghost" onClick={clearSelection}>{pipeline}</Button>
               <span aria-hidden className="text-muted">›</span>
               {task ? <Button size="sm" variant="ghost" onClick={() => select(selected, undefined)}>Run #{selected}</Button> : <span aria-current="page" className="px-2 font-medium">Run #{selected}</span>}
+              <Button asChild size="sm" variant="ghost"><AppLink to={runPath(code, pipeline, selected, task ?? undefined)}>Open run</AppLink></Button>
               {task ? <><span aria-hidden className="text-muted">›</span><span aria-current="page" className="break-all px-2 font-medium">{task}</span></> : null}
             </nav>
           ) : (

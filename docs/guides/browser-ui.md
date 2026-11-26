@@ -134,8 +134,14 @@ the dependency conditions and last-run IDs as well.
 
 A pipeline and its runs share one workspace. The grid shows tasks as rows and runs as columns,
 newest on the right, with duration bars above the same columns when enough runs exist. Grid/Graph
-switches views. The right pane contains Overview, the selected run, Runs, Audit log and Access. Selecting a run or task persists `?run=ID&task=CODE`; old run addresses
-redirect here while retaining task selections and view filters. Desktop panes scroll independently
+switches views. The right pane contains Overview, the selected run, Runs, Audit log and Access.
+Selecting a run or task persists `?run=ID&task=CODE`. **Open run**, run number links, and opening a
+grid column in a new tab lead to the full-width run page. It shows the run's recorded inputs,
+failed tasks, Graph, List, Gantt and Events. Select a task to open its log and try history.
+Choose **Recover failed tasks**, **Recover from a task** or **Rerun the whole run** in **Recover**.
+Enter a reason and ask for a preview. The dialog lists tasks that will run, tasks that will skip,
+and tasks whose dependencies resolve during execution. Confirm to record the actual request.
+Desktop panes scroll independently
 within the window; below 1024 pixels they stack. A selected run's panel comes first on a narrow
 screen. Overview links to the catalog for pipeline and task descriptions, keeping one documentation
 source.

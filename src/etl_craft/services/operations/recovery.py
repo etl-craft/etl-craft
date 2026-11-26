@@ -15,6 +15,10 @@ from etl_craft.engine.repository.dependencies import (
     fetch_pipeline_graph,
 )
 from etl_craft.engine.repository.tasks import resolve_task_id
+from etl_craft.engine.run_definitions import for_admission
+from etl_craft.engine.transition_guards import reopen_status
+from etl_craft.execution.recovery_preview import RecoveryPreview, plan_tasks
+from etl_craft.execution.run_start import load_pipeline
 from etl_craft.services.operations.context import OperationContext
 
 if TYPE_CHECKING:
@@ -62,6 +66,13 @@ def check_recovery(
             raise RunRefusedError(
                 f"run_id={run_id} is {selected.status}; RESTART needs a terminal source. "
                 f"Stop it first, or RECOVER unfinished work."
+            )
+        if runlog.fetch_run_kind(conn, selected.pipeline_run_id).full_refresh:
+            raise RunStateError(
+                f"pipeline_run_id={selected.pipeline_run_id} is a full refresh: a restart would "
+                "start an ordinary incremental run and lose its scope, and its append targets "
+                "would not be confirmed again. Recover the same run to continue it, or repeat "
+                "`etl-craft run --full-refresh` for a new one"
             )
         restart_selection(conn, selected, task_id)
     elif selected.status in {RunStatus.SUCCESS, RunStatus.SKIPPED, RunStatus.QUEUED}:
@@ -114,6 +125,33 @@ def restart_selection(
     return scope
 
 
+def preview_recovery(
+    conn: Connection,
+    pipeline_id: int,
+    selected: runlog.RunIdentity,
+    action: ControlAction,
+    task_id: int | None,
+) -> RecoveryPreview:
+    """Project the admitted graph for the same-run recovery or its replacement."""
+    run_id = selected.pipeline_run_id
+    if action == ControlAction.RESTART:
+        from etl_craft.services.operations.run_parameters import copy_for_restart
+
+        copy_for_restart(conn, run_id, pipeline_id)
+        with for_admission(conn, pipeline_id):
+            scope = restart_selection(conn, selected, task_id)
+            graph_data = fetch_pipeline_graph(conn, pipeline_id)
+            if scope is not None:
+                graph_data = run_scopes.selected_graph(graph_data, scope)
+            _, graph, codes = load_pipeline(conn, pipeline_id, graph_data=graph_data)
+        return plan_tasks(graph, codes, {})
+    if selected.status != RunStatus.IN_PROGRESS:
+        reopen_status(conn, run_id, None)
+    _, graph, codes = load_pipeline(conn, pipeline_id, run_id=run_id)
+    state = runlog.fetch_run_state(conn, run_id, graph.task_ids)
+    return plan_tasks(graph, codes, state, scope_only=task_id)
+
+
 def prepare_recovery(
     conn: Connection,
     ctx: OperationContext,
@@ -126,13 +164,6 @@ def prepare_recovery(
         if selected.status != RunStatus.IN_PROGRESS:
             transitions.reopen_run(conn, selected.pipeline_run_id, ctx.actor, reason=request.reason)
         return
-    if runlog.fetch_run_kind(conn, selected.pipeline_run_id).full_refresh:
-        raise RunStateError(
-            f"pipeline_run_id={selected.pipeline_run_id} is a full refresh: a restart would start "
-            "an ordinary incremental run and lose its scope, and its append targets would not be "
-            "confirmed again. Recover the same run to continue it, or repeat "
-            "`etl-craft run --full-refresh` for a new one"
-        )
     row = conn.execute(
         statement(conn, "transition_row_run"), {"row_id": selected.pipeline_run_id}
     ).one()

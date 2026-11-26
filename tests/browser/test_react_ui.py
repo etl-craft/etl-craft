@@ -171,9 +171,7 @@ def test_home_runs_and_run_detail_lead_to_a_confirmed_recovery(scene):
         page.get_by_role(
             "link", name="Runs", exact=True
         ).click()  # Operations, beside Held and paused
-        page.get_by_role(
-            "link", name=f"#{bad}"
-        ).first.click()  # the pipeline's workspace, this run selected
+        page.goto(f"{url}/ui/projects/default/pipelines/OPS?run={bad}")
         expect(page.get_by_role("heading", name="OPS", exact=True, level=1)).to_be_visible()
         expect(
             page.get_by_role("table", name="Run grid").locator("[aria-current=true]")
@@ -249,7 +247,7 @@ def test_a_viewer_sees_the_failed_run_but_no_recover_action(scene):
     )
     with sync_playwright() as pw:
         browser, page, _ = open_page(pw)
-        sign_in(page, url, f"/ui/projects/default/runs/OPS/{bad}", name="alice")
+        sign_in(page, url, f"/ui/projects/default/pipelines/OPS?run={bad}", name="alice")
         expect(page.get_by_label("Run identifier", exact=True)).to_have_attribute(
             "title", re.compile(rf"-{bad}$")
         )
@@ -272,7 +270,7 @@ def test_production_is_unmistakable_and_recovery_needs_the_project_code(scene):
     )
     with sync_playwright() as pw:
         browser, page, _ = open_page(pw)
-        sign_in(page, url, f"/ui/projects/default/runs/OPS/{bad}")
+        sign_in(page, url, f"/ui/projects/default/pipelines/OPS?run={bad}")
         expect(page).to_have_title(f"PRODUCTION · default · OPS #{bad} · etl-craft")
         strip = page.get_by_role("status").filter(has_text="PRODUCTION")
         expect(strip).to_be_visible()
@@ -354,7 +352,7 @@ def test_a_run_offers_its_logs_and_a_running_run_offers_reconcile(scene):
         running = start_run(conn, pipeline)
     with sync_playwright() as pw:
         browser, page, problems = open_page(pw, viewport={"width": 1280, "height": 900})
-        sign_in(page, url, f"/ui/projects/default/runs/OPS/{good}")
+        sign_in(page, url, f"/ui/projects/default/pipelines/OPS?run={good}")
         actions = page.get_by_role("button", name="Run actions, logs and key")
         actions.click()  # the logs are in the run's one actions menu
         link = page.get_by_role("menuitem", name="Download run log")
@@ -368,7 +366,7 @@ def test_a_run_offers_its_logs_and_a_running_run_offers_reconcile(scene):
         expect(reconcile).to_be_visible()
         expect(reconcile).not_to_have_attribute("aria-disabled", "true")
         page.keyboard.press("Escape")
-        page.goto(url + f"/ui/projects/default/runs/OPS/{running}")
+        page.goto(url + f"/ui/projects/default/pipelines/OPS?run={running}")
         page.get_by_role("button", name="Run actions, logs and key").click()
         page.get_by_role("menuitem").filter(has_text="Reconcile").click()
         dialog = page.get_by_role("dialog")
@@ -385,7 +383,7 @@ def test_shortcuts_copy_run_key_and_live_status_are_offered(scene):
     with sync_playwright() as pw:
         browser, page, problems = open_page(pw, viewport={"width": 1280, "height": 900})
         page.context.grant_permissions(["clipboard-read", "clipboard-write"], origin=url)
-        sign_in(page, url, f"/ui/projects/default/runs/OPS/{good}")
+        sign_in(page, url, f"/ui/projects/default/pipelines/OPS?run={good}")
         expect(page.get_by_role("status").filter(has_text="Live")).to_be_visible()
         page.get_by_role("button", name="Run actions, logs and key").click()
         page.get_by_role("menuitem", name="Copy run key").click()
@@ -423,14 +421,8 @@ def test_the_project_runs_list_and_a_pipeline_share_one_layout(scene):
         )  # the string identifier is the run number's tooltip
         shoot(page, "runs-list")
         page.get_by_role("link", name=f"#{good}", exact=True).click()
-        expect(
-            page.get_by_role("table", name="Run grid")
-        ).to_be_visible()  # the pipeline's workspace, this run selected
-        expect(
-            page.get_by_role("table", name="Run grid").locator("[aria-current=true]")
-        ).to_have_count(1)
-        shoot(page, "pipeline-highlight")
-        assert page.url.endswith(f"?run={good}")
+        expect(page.get_by_role("heading", name=f"Run #{good}", exact=True)).to_be_visible()
+        expect(page).to_have_url(f"{url}/ui/projects/default/runs/OPS/{good}")
         assert problems == []
         browser.close()
 
@@ -439,7 +431,7 @@ def test_task_instances_open_the_task_panel_and_restore_the_run(scene):
     _, url, _, bad = scene
     with sync_playwright() as pw:
         browser, page, problems = open_page(pw, viewport={"width": 1280, "height": 900})
-        sign_in(page, url, f"/ui/projects/default/runs/OPS/{bad}")
+        sign_in(page, url, f"/ui/projects/default/pipelines/OPS?run={bad}")
         table = page.get_by_role("table", name="Task instances")
         table.get_by_role("button", name="LOAD", exact=True).click()
         details = page.get_by_role("region", name="Task LOAD", exact=True)

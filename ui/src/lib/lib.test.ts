@@ -55,7 +55,7 @@ describe("run addresses and durations", () => {
 it("encodes complete run labels in workspace and nested run addresses", async () => {
   const { runPath, runBase, pipelineRunPath } = await import("@/lib/routes");
   const label = "SALES-2026-11-10 06:28:20-3";
-  expect(runPath("default", "SALES", label)).toContain("?run=" + encodeURIComponent(label));
+  expect(runPath("default", "SALES", label, "load/orders")).toBe(runBase("default", "SALES", label) + "?task=load%2Forders");
   expect(pipelineRunPath("default", "SALES", label)).toContain("?run=" + encodeURIComponent(label));
   expect(runBase("default", "SALES", label)).toContain("/" + encodeURIComponent(label));
 });

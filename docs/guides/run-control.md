@@ -406,6 +406,11 @@ of the immutable attempt outcome:
 
 ## Recover or restart an exact execution
 
+Use `--dry-run` with `--recover`, `--restart` or a task's `--rerun` to inspect the task
+selection before submitting the actual request. The preview groups tasks by eligibility in
+the current snapshot and explains which tasks depend on upstream outcomes. The preview
+does not create a run, control or action audit row.
+
 Recovery prepares the selected run to resume unfinished work. It retains `SUCCESS` and
 `SKIPPED` task summaries, immutable attempts, committed offsets/watermarks, admission decisions
 and human data locks. A failed or cancelled run reopens as a repair; a subsequent successful

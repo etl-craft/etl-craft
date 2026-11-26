@@ -42,6 +42,7 @@ from etl_craft.engine.run_creation import RunCreation
 from etl_craft.engine.run_creation import create as create_new_run
 from etl_craft.engine.timestamp_windows import record_watermark_range as record_watermark_range
 from etl_craft.engine.transition_guards import actor_parameters as actor_parameters
+from etl_craft.engine.transition_guards import reopen_status
 from etl_craft.engine.transition_guards import stale as _stale
 from etl_craft.engine.transition_guards import stale_attempt as stale_attempt
 from etl_craft.engine.uploads import end_uploads
@@ -358,11 +359,7 @@ def reopen_run(
     reason: str = "run reopened",
 ) -> None:
     """Reopen a terminal run and record REOPEN in the same transaction."""
-    row = conn.execute(
-        statement(conn, "transition_row_run"), {"row_id": pipeline_run_id}
-    ).one_or_none()
-    if row is None or row.status not in FINISHED_RUN_STATUSES:
-        raise _stale(conn, "run", pipeline_run_id, "terminal; no other active run", owner)
+    row = reopen_status(conn, pipeline_run_id, owner)
     try:
         with conn.begin_nested():
             _guard(
