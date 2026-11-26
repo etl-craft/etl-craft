@@ -155,7 +155,7 @@ export function ProjectDashboard() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-2">
-      <PageHeader back={null}
+      <PageHeader
         compact
         title="Home"
         subtitle={d ? <>Runs started <When iso={d.window_start} /> to <When iso={d.window_end} /></> : undefined}

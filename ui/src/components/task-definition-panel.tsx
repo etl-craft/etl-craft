@@ -42,7 +42,6 @@ export function TaskDefinitionPanel({ code, pipeline, task }: { code: string; pi
         ]}
       />
       <PageHeader
-        back={{ to: pipelinePath(code, pipeline, "tasks"), label: `${pipeline} tasks` }}
         title={task}
         status={paused ? <span className="text-idle">Paused by {paused.actor}: {paused.reason}</span> : null}
         actions={

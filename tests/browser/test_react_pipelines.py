@@ -399,8 +399,15 @@ def test_a_pipeline_keeps_task_definitions_and_catalog_links_in_the_grid(scene):
         ).to_have_attribute("href", "/ui/projects/default/catalog/pipelines/OPS")
         for name in ("Tasks", "Details", "Calendar", "Docs"):
             expect(page.get_by_role("tab", name=name, exact=True)).to_have_count(0)
-        page.get_by_role("link", name="Back to Pipelines").click()
+        crumbs = page.get_by_role("navigation", name="Breadcrumb")
+        crumbs.get_by_role("link", name="Pipelines").click()
         expect(page.get_by_role("table", name="Pipelines")).to_be_visible()
+        back = page.get_by_role("banner").get_by_role("button", name="Back", exact=True)
+        back.click()
+        expect(page).to_have_url(url + "/ui/projects/default/pipelines/OPS")
+        back.click()  # the app was opened on OPS: Back goes up to the project's home
+        expect(page).to_have_url(url + "/ui/projects/default")
+        expect(back).to_be_disabled()
         assert problems == []
         browser.close()
 

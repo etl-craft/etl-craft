@@ -206,7 +206,6 @@ export function PipelineDetail() {
       </div>
       <PageHeader
         compact
-        back={{ to: pipelinesPath(code), label: "Pipelines" }}
         title={pipeline}
         subtitle={p && p.pipeline_name !== pipeline ? p.pipeline_name : undefined}
         status={p ? <PauseState pipeline={p} /> : null}
