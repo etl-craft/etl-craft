@@ -1,6 +1,6 @@
 # Run conditions (S7.BA design note)
 
-Status: proposed, for owner approval before S7.BA.2. Behaviour reference: PowerCenter 10.5.1
+Status: approved by the owner; S7.BA.2 builds it. Behaviour reference: PowerCenter 10.5.1
 link conditions, predefined task variables and AND/OR input links (Workflow Basics guide,
 chapters 2 and 5; Advanced Workflow guide, chapter 14).
 
@@ -198,11 +198,10 @@ every fact and operator, retries, cancellation, `AT_LEAST`), the scheduler again
 dependency suites rewritten as conditions, gates and consumption on SQLite and PostgreSQL, the
 refusal messages, and the fail options.
 
-## Questions for the owner
+## Owner decisions
 
-1. Status keywords: etl-craft's `SUCCESS` (recommended, one vocabulary) or PowerCenter's
-   `SUCCEEDED`?
-2. Unknown at the end: a condition that is still unknown when every upstream is final (a NULL
-   count) is not met and the task is skipped with the reason. Agree?
-3. Evaluation record: one `AUD_GATE_DECISIONS` row per evaluation with the values read as JSON,
-   besides today's per-edge rows (recommended), or per-edge rows only?
+1. Status keywords are etl-craft's own: `SUCCESS`, `FAILED`, `SKIPPED`, `CANCELLED`.
+2. A condition still unknown when every upstream it names is final is not met: the task is
+   skipped with the reason.
+3. Each deciding evaluation adds one `AUD_GATE_DECISIONS` row with the condition text and the
+   values read as JSON, besides today's per-edge rows.
