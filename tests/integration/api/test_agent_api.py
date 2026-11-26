@@ -1290,10 +1290,13 @@ def test_agent_item_reports_are_fenced_and_shared_between_api_copies(agent_scene
         assert conn.execute(text("SELECT COUNT(*) AS n FROM AUD_TASK_ITEMS")).scalar_one() == 3
 
 
-def test_bundle_download_is_assigned_fenced_and_hides_store_credentials(agent_scene, tmp_path):
+def test_bundle_download_is_assigned_fenced_and_hides_store_credentials(
+    agent_scene, tmp_path, monkeypatch
+):
     import base64
 
     from etl_craft.config.object_models import Artifacts
+    from etl_craft.services.operations import bundles
 
     db, client, agent, person, _, config = agent_scene
     ctx = OperationContext(
@@ -1306,26 +1309,42 @@ def test_bundle_download_is_assigned_fenced_and_hides_store_credentials(agent_sc
         b"Secrets:\n  Source_type: ENVIRONMENT\nEngine:\n"
         b"  dev:\n    Jdbc_url: jdbc:sqlite:engine.db\n    Schema: main\n"
     )
+    scripts = {f"sql_scripts/s{n}.sql": f"SELECT {n}\n".encode() for n in range(3)}
     bundle = invoke(
         ctx,
         ActionName.DEPLOY,
-        DeployInput(files={"craft-connector.yml": base64.b64encode(content).decode()}),
+        DeployInput(
+            files={
+                path: base64.b64encode(data).decode()
+                for path, data in {"craft-connector.yml": content, **scripts}.items()
+            }
+        ),
     )
     attempt = claim(agent_scene)
     payload = {"version": __version__, "attempt_id": attempt, "operation": "BUNDLE"}
     manifest = client.post("/api/v1/agent/report", headers=agent, json=payload)
     assert manifest.status_code == 200, manifest.text
     data = manifest.json()["data"]
-    assert data["bundle_id"] == bundle.bundle_id and set(data["files"]) == {"craft-connector.yml"}
+    assert data["bundle_id"] == bundle.bundle_id
+    assert set(data["files"]) == {"craft-connector.yml", *scripts}
     assert str(tmp_path / "store") not in manifest.text
-    file = client.post(
-        "/api/v1/agent/report", headers=agent, json=payload | {"bundle_path": "craft-connector.yml"}
-    )
-    assert base64.b64decode(file.json()["data"]["content"]) == content
+
+    def files(paths):
+        answer = client.post(
+            "/api/v1/agent/report", headers=agent, json=payload | {"bundle_paths": paths}
+        )
+        assert answer.status_code == 200, answer.text
+        return {k: base64.b64decode(v) for k, v in answer.json()["data"]["content"].items()}
+
+    # One request carries every file that fits in the batch, in the order asked.
+    assert files(["craft-connector.yml", *scripts]) == {"craft-connector.yml": content, **scripts}
+    # A full batch stops after the file that fills it; the first path always comes back.
+    monkeypatch.setattr(bundles, "BATCH_BYTES", 1)
+    assert list(files([*scripts])) == ["sql_scripts/s0.sql"]
     assert client.post("/api/v1/agent/report", headers=person, json=payload).status_code == 403
     assert (
         client.post(
-            "/api/v1/agent/report", headers=agent, json=payload | {"bundle_path": "../outside"}
+            "/api/v1/agent/report", headers=agent, json=payload | {"bundle_paths": ["../outside"]}
         ).status_code
         == 404
     )

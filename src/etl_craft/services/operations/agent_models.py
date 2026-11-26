@@ -60,7 +60,7 @@ class AgentTask(AgentRequest):
     """Report one bounded operation against this token's exact owned attempt."""
 
     attempt_id: int
-    bundle_path: str | None = None
+    bundle_paths: tuple[str, ...] = field(default=(), metadata={"audit": False})
     upload_id: int | None = None
     wait_code: str | None = None
     file_path: str | None = None

@@ -289,7 +289,7 @@ class AgentLoop:
             work.holder_id,
         )
         path = folder / "craft-connector.yml"
-        path.write_bytes(store.bundle_file("craft-connector.yml"))
+        path.write_bytes(store.bundle_files(["craft-connector.yml"])["craft-connector.yml"])
         pinned = project_config(self.config, path)
         environment = child_environment(self.config) | child_environment(pinned)
         for name in (self.config.privacy_hmac_secret, pinned.privacy_hmac_secret):
