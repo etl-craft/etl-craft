@@ -69,6 +69,8 @@ def execute(args: argparse.Namespace, out: Output) -> int:
             "then run the returned execution_run_id explicitly"
         )
     if args.controls_file is not None:
+        if args.dry_run:
+            raise UsageError("--dry-run previews one recovery or restart; omit --controls-file")
         return _bulk(args, out)
     if args.pipeline_code is None:
         raise UsageError("recovery/restart/one-run permission needs `pipeline_code`")

@@ -50,6 +50,7 @@ from etl_craft.engine.repository.tasks import (
 from etl_craft.engine.run_definitions import for_run
 from etl_craft.execution import control_flow
 from etl_craft.execution.manual import select_tasks
+from etl_craft.execution.recovery_preview import RecoveryPreview
 from etl_craft.handlers.resources import LocalLocker
 from etl_craft.services.operations.context import OperationContext
 from etl_craft.services.operations.models import OperationResult
@@ -59,13 +60,18 @@ from etl_craft.services.operations.recovery import (
     check_recovery,
     control_effect,
     prepare_recovery,
+    preview_recovery,
 )
 from etl_craft.services.operations.requests import BulkControlRequest, ControlId, ControlRequest
 
 
-def control(ctx: OperationContext, request: ControlRequest) -> ControlView | OperationResult:
+def control(
+    ctx: OperationContext, request: ControlRequest
+) -> ControlView | OperationResult | RecoveryPreview:
     """Pause or resume a definition, or request a scoped control of one run or task."""
     check_reason(request.reason)
+    if request.dry_run:
+        return _preview(ctx, request)
     if request.action in DEFINITION_CONTROLS:
         from etl_craft.services.operations.pipelines import set_pause
 
@@ -82,6 +88,25 @@ def control(ctx: OperationContext, request: ControlRequest) -> ControlView | Ope
     return request_control(ctx, request)
 
 
+def _preview(ctx: OperationContext, request: ControlRequest) -> RecoveryPreview:
+    with control_scope(ctx, request) as run_id, ctx.engine.connect() as conn:
+        pipeline_id = resolve_pipeline_id(conn, request.pipeline_code)
+        selected = runlog.select_run(conn, pipeline_id, runlog.RunSelector(run_id=run_id))
+        task_id = _task_scope(conn, pipeline_id, run_id, request.task_code)
+        check_control(conn, ctx, request, selected, task_id)
+        return preview_recovery(conn, pipeline_id, selected, request.action, task_id)
+
+
+def _task_scope(
+    conn: Connection, pipeline_id: int, run_id: int, task_code: str | None
+) -> int | None:
+    if task_code is None:
+        return None
+    task_id = resolve_task_id(conn, pipeline_id, task_code)
+    run_scopes.check_task(conn, run_id, task_id)
+    return task_id
+
+
 def request_control(ctx: OperationContext, request: ControlRequest) -> ControlView:
     """Commit the dispatch fence first; return acceptance separately from agent completion."""
     check_reason(request.reason)
@@ -92,13 +117,7 @@ def request_control(ctx: OperationContext, request: ControlRequest) -> ControlVi
         standing_pauses.lock(conn, pipeline_id)
         controls.lock_run(conn, run_id)
         selected = runlog.select_run(conn, pipeline_id, runlog.RunSelector(run_id=run_id))
-        task_id = (
-            None
-            if request.task_code is None
-            else resolve_task_id(conn, pipeline_id, request.task_code)
-        )
-        if task_id is not None:
-            run_scopes.check_task(conn, run_id, task_id)
+        task_id = _task_scope(conn, pipeline_id, run_id, request.task_code)
         existing = _existing(conn, request, run_id, task_id)
         if existing is not None:
             return controls.get(conn, existing)
@@ -351,6 +370,16 @@ def _control_scope(
                     )
         yield selected.pipeline_run_id
         return
+    if request.dry_run:
+        with ctx.engine.connect() as conn:
+            for task_id in event_ids:
+                row = conn.execute(
+                    statement(conn, "resource_lock_read"), {"key": locks.event(task_id).key}
+                ).one_or_none()
+                if row is not None and not row.stale:
+                    raise _probe_busy(request.pipeline_code)
+        yield selected.pipeline_run_id
+        return
     try:
         with ExitStack() as stack:
             for task_id in sorted(event_ids):
@@ -359,10 +388,14 @@ def _control_scope(
                 )
             yield selected.pipeline_run_id
     except LockTimeoutError as error:
-        raise RunRefusedError(
-            f"{request.pipeline_code}: an event probe is active; no control was accepted. "
-            "Retry after its query finishes; an active probe cannot be acknowledged as stopped."
-        ) from error
+        raise _probe_busy(request.pipeline_code) from error
+
+
+def _probe_busy(pipeline_code: str) -> RunRefusedError:
+    return RunRefusedError(
+        f"{pipeline_code}: an event probe is active; no control was accepted. "
+        "Retry after its query finishes; an active probe cannot be acknowledged as stopped."
+    )
 
 
 def _new_paused(ctx: OperationContext, request: ControlRequest) -> ControlView:

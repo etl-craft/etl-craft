@@ -1,3 +1,4 @@
+import { dependencyWaves } from "@/lib/dependency-waves";
 import { useQuery } from "@tanstack/react-query";
 import { getText, project } from "@/lib/api";
 import type { Graph } from "@/lib/types";
@@ -173,23 +174,6 @@ export function schemasOf(doc: CatalogDoc): { schema: string; tables: CatalogTab
 /** A table's own type, preferring what the warehouse reports. */
 export const typeOf = (column: CatalogColumn): string => column.warehouse_type ?? column.declared_type ?? column.data_type ?? "—";
 
-/** Waves from the longest path to each node, so a graph reads left to right (or top to bottom). */
-function waves(nodes: string[], dependsOn: Record<string, [string, string][]>): string[][] {
-  const depth = new Map<string, number>();
-  const visit = (node: string, seen: Set<string>): number => {
-    if (depth.has(node)) return depth.get(node)!;
-    if (seen.has(node)) return 0;
-    seen.add(node);
-    const d = Math.max(-1, ...(dependsOn[node] ?? []).map(([up]) => visit(up, seen))) + 1;
-    depth.set(node, d);
-    return d;
-  };
-  for (const node of nodes) visit(node, new Set());
-  const out: string[][] = [];
-  for (const node of nodes) (out[depth.get(node) ?? 0] ??= []).push(node);
-  return out.filter(Boolean).map((wave) => wave.sort());
-}
-
 /** The tables upstream and downstream of one, up to `depth` steps each way, as a graph the task graph component draws. */
 export function tableLineage(doc: CatalogDoc, name: string, depth = 2, direction: "both" | "up" | "down" = "both"): Graph {
   const into = new Map<string, string[]>();
@@ -210,7 +194,7 @@ export function tableLineage(doc: CatalogDoc, name: string, depth = 2, direction
   if (direction !== "up") walk(name, out);
   const dependsOn: Record<string, [string, string][]> = {};
   for (const e of doc.table_edges) if (keep.has(e.source) && keep.has(e.target)) dependsOn[e.target] = [...(dependsOn[e.target] ?? []), [e.source, "SUCCESS"]];
-  return { waves: waves([...keep], dependsOn), conditional: [], depends_on: dependsOn };
+  return { waves: dependencyWaves([...keep], dependsOn), conditional: [], depends_on: dependsOn };
 }
 
 /** A pipeline's tasks and what they wait for, by task code. */
@@ -221,7 +205,7 @@ export function pipelineGraph(doc: CatalogDoc, pipeline: CatalogPipeline): Graph
     const inside = doc.definition_edges.filter(e => e.kind === "task" && e.target === task.label && byLabel.has(e.source)).map(e => [byLabel.get(e.source)!.code, e.dependency_type] as [string, string]);
     if (inside.length) dependsOn[task.code] = inside;
   }
-  return { waves: waves([...byLabel.values()].map((t) => t.code), dependsOn), conditional: [], depends_on: dependsOn };
+  return { waves: dependencyWaves([...byLabel.values()].map((t) => t.code), dependsOn), conditional: [], depends_on: dependsOn };
 }
 
 export interface ImpactRow {

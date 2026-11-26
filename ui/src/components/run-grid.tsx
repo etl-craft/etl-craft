@@ -59,7 +59,11 @@ export function RunGrid({ code, pipeline, graph, tasks, runs, cells, extra, sele
               return <th scope="col" key={id} className="w-[18px] min-w-[18px] p-0 align-bottom">
                 <Link to={runPath(code, pipeline, id)} title={title} aria-label={`Run ${title}`}
                   aria-current={id === selected && !task ? "true" : undefined}
-                  onClick={(event) => { event.preventDefault(); onSelect(id); }}
+                  onClick={(event) => {
+                    if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+                    event.preventDefault();
+                    onSelect(id);
+                  }}
                   className={cn("flex w-full flex-col items-center justify-end focus-visible:outline-accent", bars ? "h-[100px]" : "h-5")}>
                   {/* The bar's height is the run's duration against the longest loaded run; its number, time and duration are in the hover text. */}
                   {bars ? <span className={cn("relative flex w-[14px] items-end justify-center rounded-sm", solidClass(run.status))}

@@ -19,7 +19,7 @@ import { formatDuration } from "@/lib/format";
 import { Tabs } from "@/components/tabs";
 import { handlerLabel, runConditionLabel, words } from "@/lib/labels";
 import { When, useNow } from "@/components/when";
-import { itemsPath } from "@/lib/routes";
+import { itemsPath, runPath } from "@/lib/routes";
 import type { Capabilities, ControlView, Explanation, GridCell, RunView, Steps, TaskHistory } from "@/lib/types";
 
 function Why({ code, pipeline, runId, task }: { code: string; pipeline: string; runId: number; task: string }) {
@@ -89,8 +89,8 @@ function TaskSource({ code, pipeline, runId, task, attemptId }: {
   </div>;
 }
 
-function TaskDetails({ code, pipeline, run, task, handler, cell, tab, tryNumber, onTab, onTry }: {
-  code: string; pipeline: string; run: RunView; task: string; handler?: string; cell?: GridCell;
+export function TaskDetails({ code, pipeline, run, task, handler, cell, tab, tryNumber, onTab, onTry, firstError }: {
+  code: string; pipeline: string; run: RunView; task: string; handler?: string; cell?: GridCell; firstError?: boolean;
   tab: string; tryNumber: number | null; onTab: (tab: string) => void;
   onTry: (value: number | null) => void;
 }) {
@@ -107,7 +107,7 @@ function TaskDetails({ code, pipeline, run, task, handler, cell, tab, tryNumber,
   const runId = run.pipeline_run_id;
   const now = useNow();
   const history = useQuery({
-    queryKey: ["task-history", code, pipeline, runId, task],
+    queryKey: ["task-history", code, pipeline, runId, task, run.end_date],
     queryFn: () => getJson<TaskHistory>(`${project(code)}/history`, { pipeline_code: pipeline, run_id: runId, task_code: task }),
     refetchInterval: run.status === "IN-PROGRESS" ? 3_000 : false,
   });
@@ -142,7 +142,7 @@ function TaskDetails({ code, pipeline, run, task, handler, cell, tab, tryNumber,
     {history.isPending ? <Loading what="task history" /> : null}
     {history.isSuccess && tryNumber !== null && !attempt ? <Notice>Try {tryNumber} is not recorded for {task} in run #{runId}.</Notice> : null}
     {selectedTab === "logs" && attempt ? (attempt.log_path || LIVE.has(attempt.status)
-      ? <AttemptLog key={attempt.attempt_id} code={code} attempt={attempt} open embedded />
+      ? <AttemptLog key={attempt.attempt_id} code={code} attempt={attempt} open embedded jumpToError={firstError || isFailure(attempt.status)} />
       : <p className="m-0 text-sm text-muted">No log was recorded for this attempt.</p>) : null}
     {selectedTab === "logs" && history.isSuccess && !attempt && tryNumber === null ? <p className="text-sm text-muted">This task has no stored attempt log yet.</p> : null}
     {selectedTab === "source" ? <TaskSource code={code} pipeline={pipeline} runId={runId} task={task} attemptId={attempt?.attempt_id} /> : null}
@@ -314,22 +314,11 @@ export function RunOverview({ code, pipeline, runId, task, taskOrder, cells, tab
       <h2 aria-label="Run identifier" title={r.run_label} className="text-base font-semibold">Run #{runId}</h2>
       <StatusBadge status={r.status} />
       {r.selected_task_ids?.length ? <span className="text-xs">{r.selected_task_ids.length} of {taskOrder.length} tasks</span> : null}
+      <Button asChild size="sm"><Link to={runPath(code, pipeline, runId)}>Open run</Link></Button>
       <RecoverRun code={code} run={r} /><RunActions code={code} run={r} />
       {r.run_label ? <Button size="icon" variant="ghost" aria-label="Copy the run identifier" onClick={() => void navigator.clipboard.writeText(copyRunLabel(r.run_label ?? "")).then(() => toast("Run identifier copied."))}><Copy className="size-4" aria-hidden /></Button> : null}
     </div>
-    <FactList inline>
-      {r.run_date ? <Fact inline label="Run date">{r.run_date}</Fact> : null}
-      <Fact inline label="Trigger">{words(r.trigger_kind)}</Fact>
-      {r.started_by ? <Fact inline label="Started by">{r.started_by}</Fact> : null}
-      {r.start_date ? <Fact inline label="Started"><When iso={r.start_date} /></Fact> : null}
-      {r.end_date ? <Fact inline label="Ended"><When iso={r.end_date} /></Fact> : null}
-      {r.start_date ? <Fact inline label="Duration">{formatDuration(r.start_date, r.end_date, now)}</Fact> : null}
-    </FactList>
-    {/* Inputs given for this run change what it does, so they show with the run's facts, not behind a tab. */}
-    {r.parameter_overrides && Object.keys(r.parameter_overrides).length > 0 ? <section aria-label="Recorded task inputs" className="grid gap-1">
-      <h3 className="text-sm font-medium">Recorded task inputs</h3>
-      <ParamList entries={Object.entries(r.parameter_overrides).flatMap(([name, values]) => Object.entries(values).map(([key, value]): [string, string] => [`${name}.${key}`, value]))} />
-    </section> : null}
+    <RunFacts run={r} />
     <Tabs tabs={runTabs} value={active} onChange={onTab} panelId="run-instance-tab" />
     <div role="tabpanel" id="run-instance-tab" aria-labelledby={`tab-${active}`} className="grid gap-3">
     {active === "details" ? <>
@@ -365,4 +354,23 @@ function alertCondition(event: string | undefined): string {
       : label === "success" || label === "pipeline success" ? "When the pipeline succeeds"
         : `On ${label}`;
   }).join(" · ");
+}
+
+export function RunFacts({ run: r }: { run: RunView }) {
+  const now = useNow();
+  return <>
+    <FactList inline>
+      {r.run_date ? <Fact inline label="Run date">{r.run_date}</Fact> : null}
+      <Fact inline label="Trigger">{words(r.trigger_kind)}</Fact>
+      {r.started_by ? <Fact inline label="Started by">{r.started_by}</Fact> : null}
+      {r.start_date ? <Fact inline label="Started"><When iso={r.start_date} /></Fact> : null}
+      {r.end_date ? <Fact inline label="Ended"><When iso={r.end_date} /></Fact> : null}
+      {r.start_date ? <Fact inline label="Duration">{formatDuration(r.start_date, r.end_date, now)}</Fact> : null}
+    </FactList>
+    {/* Inputs given for this run change what it does, so they show with the run's facts, not behind a tab. */}
+    {r.parameter_overrides && Object.keys(r.parameter_overrides).length > 0 ? <section aria-label="Recorded task inputs" className="grid gap-1">
+      <h3 className="text-sm font-medium">Recorded task inputs</h3>
+      <ParamList entries={Object.entries(r.parameter_overrides).flatMap(([name, values]) => Object.entries(values).map(([key, value]): [string, string] => [`${name}.${key}`, value]))} />
+    </section> : null}
+  </>;
 }

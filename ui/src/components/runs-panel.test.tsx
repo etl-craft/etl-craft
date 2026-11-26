@@ -51,12 +51,12 @@ describe("the shared runs layout", () => {
     expect(screen.queryByRole("columnheader", { name: /Identifier/ })).toBeNull();
   });
 
-  it("opens a run in its pipeline workspace from both lists", () => {
+  it("opens the run page from both lists", () => {
     const { unmount } = panel(undefined);
-    expect(screen.getByRole("link", { name: "#6" }).getAttribute("href")).toBe("/projects/demo/pipelines/REF?run=6");
+    expect(screen.getByRole("link", { name: "#6" }).getAttribute("href")).toBe("/projects/demo/runs/REF/6");
     unmount();
     panel("REF");
-    expect(screen.getByRole("link", { name: "#6" }).getAttribute("href")).toBe("/projects/demo/pipelines/REF?run=6");
+    expect(screen.getByRole("link", { name: "#6" }).getAttribute("href")).toBe("/projects/demo/runs/REF/6");
   });
 
   it("marks the highlighted run and no other", () => {

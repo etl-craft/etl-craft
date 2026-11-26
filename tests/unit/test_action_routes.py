@@ -286,3 +286,24 @@ def test_an_audited_change_is_recorded_once_and_a_refusal_never_runs(operations,
     assert operations == [name]
     assert refused == [name] * (1 + len(below))
     assert entered == [name]
+
+
+def test_dry_run_is_sent_only_when_requested():
+    from dataclasses import replace
+
+    from etl_craft.core.enums import ControlAction
+    from etl_craft.services.operations.requests import (
+        BulkControlRequest,
+        ControlRequest,
+        RunRequest,
+    )
+
+    control = ControlRequest(
+        pipeline_code="P", run_id=1, action=ControlAction.RECOVER, request_key="recover"
+    )
+    rerun = RunRequest(pipeline_code="P", run_id=1, task_code="T", rerun=True)
+    for request in (control, rerun):
+        assert "dry_run" not in encode(request)
+        assert encode(replace(request, dry_run=True))["dry_run"] is True
+    bulk = encode(BulkControlRequest(requests=(control,)))
+    assert "dry_run" not in bulk["requests"][0]

@@ -207,6 +207,35 @@ class DependencyGraph:
         )
         return same + cross
 
+    def admission_range(
+        self, task_id: int, run_state: RunState, changing: set[int], succeeds: int | None
+    ) -> tuple[int, int, int, str]:
+        """Bound the satisfied edge count against the engine's admission threshold."""
+        by_upstream: dict[int, list[TaskEdge]] = {}
+        for edge in self._dependencies_of[task_id]:
+            by_upstream.setdefault(edge.depends_on_task_id, []).append(edge)
+        low, high = 0, self._nodes_by_id[task_id].cross_pipeline_edge_count
+        for upstream, edges in by_upstream.items():
+            states: tuple[TaskRunState, ...] = (run_state.get(upstream, TaskRunState()),)
+            if upstream in changing:
+                states = (
+                    TaskRunState(status=RunStatus.SUCCESS, rows_written=0),
+                    TaskRunState(status=RunStatus.SUCCESS, rows_written=1),
+                )
+                if upstream != succeeds:
+                    states += (
+                        TaskRunState(status=RunStatus.FAILED),
+                        TaskRunState(status=RunStatus.SKIPPED),
+                    )
+            counts = [sum(self._edge_satisfied(edge, state) for edge in edges) for state in states]
+            low += min(counts)
+            high += max(counts)
+        required = self.required_edge_count(task_id)
+        total = self.total_edge_count(task_id)
+        condition = self._nodes_by_id[task_id].run_condition or RunCondition.ALL
+        description = f"Needs {required} of {total} dependencies satisfied ({condition})."
+        return low, high, required, description
+
     def ready(
         self,
         run_state: RunState,

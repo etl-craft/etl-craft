@@ -8,17 +8,17 @@ export const projectsPath = "/projects";
 export const projectHomePath = (project: string): string => `/projects/${enc(project)}`;
 export const runsPath = (project: string, pipeline?: string): string =>
   `/projects/${enc(project)}/runs` + (pipeline ? `?pipeline=${enc(pipeline)}` : "");
-/** A run is its pipeline's workspace with the run selected; `task` opens one task of it. */
+/** Open a run, optionally with its task panel selected. */
 export const runPath = (project: string, pipeline: string, runId: number | string, task?: string): string =>
-  `/projects/${enc(project)}/pipelines/${enc(pipeline)}?run=${enc(String(runId))}` + (task ? `&task=${enc(task)}` : "");
-/** The address an attempt or a task's items hang from, and the one older links to a run use. */
+  runBase(project, pipeline, runId) + (task ? `?task=${enc(task)}` : "");
+/** The run address also anchors attempts and task items. */
 export const runBase = (project: string, pipeline: string, runId: number | string): string =>
   `/projects/${enc(project)}/runs/${enc(pipeline)}/${enc(String(runId))}`;
 export const pipelinesPath = (project: string, tags: string[] = []): string =>
   `/projects/${enc(project)}/pipelines` + (tags.length ? "?" + tags.map((t) => `tag=${enc(t)}`).join("&") : "");
 export const pipelinePath = (project: string, pipeline: string, tab?: string): string =>
   `/projects/${enc(project)}/pipelines/${enc(pipeline)}` + (tab ? `?tab=${tab}` : "");
-/** A pipeline's runs with one run highlighted: where the project's run list leads. */
+/** Return to a pipeline's workspace with one run selected. */
 export const pipelineRunPath = (project: string, pipeline: string, runId: number | string): string =>
   `/projects/${enc(project)}/pipelines/${enc(pipeline)}?run=${enc(String(runId))}`;
 export const scheduledPath = (project: string, pipeline?:string): string => `/projects/${enc(project)}/scheduled` + (pipeline ? `?pipeline=${enc(pipeline)}` : "");

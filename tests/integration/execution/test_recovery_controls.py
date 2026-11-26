@@ -304,6 +304,23 @@ def test_real_cli_prepares_restart_and_reads_its_capabilities(ctx, capsys, monke
 
     monkeypatch.setattr("etl_craft.cli.access_context", context)
     monkeypatch.setattr(common, "command_context", context)
+    preview_args = [
+        "run",
+        "--pipeline-code",
+        "P",
+        "--run-id",
+        str(run),
+        "--restart",
+        "--reason",
+        "repair",
+        "--format",
+        "json",
+        "--dry-run",
+    ]
+    assert main(preview_args) == 0
+    preview = json.loads(capsys.readouterr().out)
+    assert preview["schema"] == "etl-craft/recovery-preview/1"
+    assert {task["task_code"] for task in preview["will_run"]} == {"a", "b"}
     assert (
         main(
             [
@@ -340,3 +357,115 @@ def test_real_cli_prepares_restart_and_reads_its_capabilities(ctx, capsys, monke
         == 0
     )
     assert json.loads(capsys.readouterr().out)["schema"] == "etl-craft/capabilities/1"
+
+
+def audit_counts(ctx):
+    """Observe every audit table, including run rows and attempts."""
+    from sqlalchemy import MetaData, Table, func, inspect, select
+
+    with ctx.engine.connect() as conn:
+        names = (
+            name for name in inspect(conn).get_table_names() if name.upper().startswith("AUD_")
+        )
+        metadata = MetaData()
+        return {
+            name: conn.execute(select(func.count()).select_from(Table(name, metadata))).scalar_one()
+            for name in names
+        }
+
+
+@pytest.mark.parametrize("choice", ["RECOVER", "RESTART", "TASK"])
+@pytest.mark.parametrize("upstream_succeeds", [True, False])
+def test_preview_predicts_recovery_admissions_without_writing(ctx, choice, upstream_succeeds):
+    from etl_craft.services.operations.requests import RunRequest
+
+    with ctx.engine.begin() as conn:
+        pipeline_id = add_pipeline(conn, "P")
+        retained = add_task(conn, pipeline_id, "a", "PYTHON", BEHAVIOUR="succeed")
+        upstream = add_task(
+            conn,
+            pipeline_id,
+            "b",
+            "PYTHON",
+            BEHAVIOUR="succeed" if upstream_succeeds else "fail",
+        )
+        downstream = add_task(conn, pipeline_id, "after", "PYTHON", BEHAVIOUR="succeed")
+        add_dependency(conn, pipeline_id, downstream, upstream)
+        run = start_run(conn, pipeline_id)
+        task_run(conn, retained, run, RunStatus.SUCCESS)
+        task_run(conn, upstream, run, RunStatus.FAILED)
+        finish_run(conn, run, RunStatus.FAILED)
+    before = audit_counts(ctx)
+    if choice == "TASK":
+        action = ActionName.RUN
+        operation = RunRequest(
+            pipeline_code="P",
+            run_id=run,
+            task_code="b",
+            rerun=True,
+            with_downstream=True,
+            reason="retry source and its consumers",
+        )
+    else:
+        action = ActionName.CONTROL
+        operation = request(run, ControlAction(choice))
+    preview = invoke(ctx, action, replace(operation, dry_run=True))
+    assert audit_counts(ctx) == before
+    assert {task.task_code for task in preview.will_run} == (
+        {"a", "b"} if choice == "RESTART" else {"b"}
+    )
+    assert {task.task_code for task in preview.will_skip} == (
+        set() if choice == "RESTART" else {"a"}
+    )
+    assert {task.task_code for task in preview.depends_on_upstream} == {"after"}
+    assert "b succeeds" in preview.depends_on_upstream[0].reason
+
+    result = invoke(ctx, action, operation)
+    execution_id = run
+    if choice != "TASK":
+        execution_id = result.execution_run_id
+        pipeline.run_pipeline(
+            ctx.engine,
+            ctx.config,
+            "P",
+            selector=RunSelector(run_id=execution_id),
+            child=ctx.child,
+        )
+    with ctx.engine.connect() as conn:
+        attempted = set(
+            conn.execute(
+                text("""
+            SELECT t.TASK_CODE AS task_code
+            FROM AUD_TASK_ATTEMPTS a
+            JOIN AUD_TASK_RUN_LOG r ON r.TASK_RUN_ID=a.TASK_RUN_ID
+            JOIN CFG_TASKS t ON t.TASK_ID=r.TASK_ID
+            WHERE r.PIPELINE_RUN_ID=:run_id
+        """),
+                {"run_id": execution_id},
+            ).scalars()
+        )
+    expected = {"a", "b"} if choice == "RESTART" else {"b"}
+    if upstream_succeeds:
+        expected.add("after")
+    assert attempted == expected
+
+
+@pytest.mark.parametrize("action", [ControlAction.RECOVER, ControlAction.RESTART])
+def test_preview_and_live_recovery_refuse_the_same_live_owner(ctx, action):
+    _, run, _, _ = scene(ctx, RunStatus.IN_PROGRESS)
+    with ctx.engine.begin() as conn:
+        transitions.start_run(
+            conn,
+            run,
+            current_actor(),
+            owner="live",
+            lease_expires_at=datetime.now(UTC) + timedelta(minutes=10),
+        )
+    operation = request(run, action)
+    before = audit_counts(ctx)
+    with pytest.raises(RunRefusedError) as preview:
+        invoke(ctx, ActionName.CONTROL, replace(operation, dry_run=True))
+    assert audit_counts(ctx) == before
+    with pytest.raises(RunRefusedError) as actual:
+        invoke(ctx, ActionName.CONTROL, operation)
+    assert str(preview.value) == str(actual.value)

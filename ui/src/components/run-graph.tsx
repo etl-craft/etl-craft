@@ -38,6 +38,7 @@ interface TaskData extends Record<string, unknown> {
   vertical: boolean;
   status: string;
   focus: Focus;
+  blocked?: boolean;
   onOpen: (task: string) => void;
 }
 type TaskNode = Node<TaskData, "task">;
@@ -69,10 +70,10 @@ function Task({ data }: NodeProps<TaskNode>) {
   const task = data.definition;
   const symbol = task ? taskSymbol(task) : data.symbol ?? {icon:Box,label:"Task"};
   const status = plain ? null : <StatusBadge status={data.status} quiet/>;
-  const summary = <>{task?.active_flag==="N" ? <DiagramChip>Inactive</DiagramChip> : null}{task||data.symbol ? <span className="flex min-w-0 items-center justify-center gap-1"><span className="truncate" title={symbol.label}>{symbol.label}</span>{task ? <RunConditionMark task={task}/> : null}</span> : null}{status}</>;
+  const summary = <>{task?.active_flag==="N" ? <DiagramChip>Inactive</DiagramChip> : null}{task||data.symbol ? <span className="flex min-w-0 items-center justify-center gap-1"><span className="truncate" title={symbol.label}>{symbol.label}</span>{task ? <RunConditionMark task={task}/> : null}</span> : null}{status}{data.blocked ? <DiagramChip>Blocked by failure</DiagramChip> : null}</>;
   return <div data-focus={data.focus} className="relative" style={task?.active_flag === "N" ? {opacity:0.4} : undefined}>
     <Handle type="target" position={data.vertical ? Position.Top : Position.Left} className="!size-1.5 !border-0 !bg-border-strong"/>
-    <DiagramNode bodyClassName="flex h-26 min-h-0 flex-col" tile={!data.symbol} title={shownTitle(data.label,Boolean(task)||!data.symbol)} tooltip={data.tooltip ?? data.label} width={data.width??WIDTH} color={task?kindColor(task.script_kind??task.handler):plain?"var(--muted)":`var(--${statusMeta(data.status).tone}-solid)`} icon={symbol.icon} collapsedDescription={summary} expanded={data.expanded ?? false} onExpanded={() => data.onExpanded?.()} details={data.catalogDetails ? {to:data.catalogDetails}:undefined} onInspect={data.inspectable ? ()=>data.onOpen(data.label) : undefined} description={<>{task?.active_flag==="N" ? <DiagramChip>Inactive</DiagramChip> : null}{task||data.symbol ? symbol.label : null}{status}</>} className={cn(NODE_TONE[data.focus],plain ? "border-l-border-strong" : edgeClass(data.status))}>
+    <DiagramNode bodyClassName="flex h-26 min-h-0 flex-col" tile={!data.symbol} title={shownTitle(data.label,Boolean(task)||!data.symbol)} tooltip={data.tooltip ?? data.label} width={data.width??WIDTH} color={task?kindColor(task.script_kind??task.handler):plain?"var(--muted)":`var(--${statusMeta(data.status).tone}-solid)`} icon={symbol.icon} collapsedDescription={summary} expanded={data.expanded ?? false} onExpanded={() => data.onExpanded?.()} details={data.catalogDetails ? {to:data.catalogDetails}:undefined} onInspect={data.inspectable ? ()=>data.onOpen(data.label) : undefined} description={<>{task?.active_flag==="N" ? <DiagramChip>Inactive</DiagramChip> : null}{task||data.symbol ? symbol.label : null}{status}</>} className={cn(NODE_TONE[data.focus], data.blocked && "border-bad", plain ? "border-l-border-strong" : edgeClass(data.status))}>
       <ScrollWindow className="min-h-0 flex-1"><div className="grid min-w-max gap-1 px-2 pb-2 text-xs">{task ? <><span className="whitespace-nowrap" title={task.target ?? undefined}>{task.target ?? "No target"}</span><span>Runs when: <RunConditionMark task={task}/></span></> : data.symbol ? <span>{data.label.startsWith("Schedule:") ? "Schedules and triggers admit this pipeline." : data.label.startsWith("Downstream:") ? "Open the downstream pipeline to inspect its tasks." : "This gate waits for its upstream dependency."}</span> : <span>Upstream tasks: {data.upstreamCount??0}</span>}</div></ScrollWindow>
     </DiagramNode>
     <Handle type="source" position={data.vertical ? Position.Bottom : Position.Right} className="!size-1.5 !border-0 !bg-border-strong"/>
@@ -177,7 +178,9 @@ export function RunGraph({
   direction,
   definition,
   catalogDetails,
+  blocked,
 }: {
+  blocked?: string[];
   catalogDetails?: (node:string)=>string|null;
   definition?: { tasks: CatalogTask[]; edges: DefinitionEdge[]; overlay?:boolean; onOverlay?:()=>void; schedule?:string|null };
   graph: Graph;
@@ -211,6 +214,8 @@ export function RunGraph({
   const [wireFocus,setWireFocus]=React.useState<string|null|undefined>(undefined);
   const shown: Direction = direction ?? (definition ? "LR" : fill && frameHeight > width ? "TB" : "LR");
   const { nodes, edges, height } = layout(graph, statuses, focused, onOpen, plain, shown);
+  const blockedTasks = new Set(blocked);
+  nodes.forEach((node) => { node.data.blocked = blockedTasks.has(node.id); });
   nodes.forEach(node=>{node.data.upstreamCount=(graph.depends_on[node.id]??[]).length;node.data.inspectable=!definition;node.data.catalogDetails=catalogDetails?.(node.id)??undefined;node.data.expanded=expansion.isExpanded(node.id);node.data.onExpanded=()=>expansion.toggle(node.id);});
   let definitionHeight=280;
   if (definition) {

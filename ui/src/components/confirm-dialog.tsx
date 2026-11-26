@@ -17,6 +17,7 @@ export function ConfirmDialog({
   error,
   busy,
   onConfirm,
+  onReasonChange,
   onClose,
   askReason = true,
   governance = "STRICT",
@@ -34,6 +35,7 @@ export function ConfirmDialog({
   error: string | null;
   busy: boolean;
   onConfirm: (reason: string) => void;
+  onReasonChange?: () => void;
   onClose: () => void;
   /** False for requests that take no reason; the field is then not shown. */
   askReason?: boolean;
@@ -84,7 +86,8 @@ export function ConfirmDialog({
             <span className="font-medium">Reason (kept in the audit trail){!reasonRequired ? " (optional)" : ""}</span>
             <textarea
               value={reason}
-              onChange={(event) => setReason(event.target.value)}
+              disabled={busy}
+              onChange={(event) => { setReason(event.target.value); onReasonChange?.(); }}
               rows={3}
               required={reasonRequired}
               className="rounded-md border border-border-strong bg-surface p-2 text-sm"

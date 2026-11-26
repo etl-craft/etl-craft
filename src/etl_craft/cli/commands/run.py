@@ -19,6 +19,7 @@ from etl_craft.cli.output import Output
 from etl_craft.core import interrupts
 from etl_craft.core.enums import ActionName, RunStatus
 from etl_craft.core.errors import ConfirmationRequiredError, ExitCode, UsageError
+from etl_craft.execution.recovery_preview import RecoveryPreview
 from etl_craft.services.operations.models import BackfillView, OperationResult
 from etl_craft.services.operations.requests import RunRequest
 
@@ -28,6 +29,9 @@ def _configure(parser: argparse.ArgumentParser) -> None:
     configure_run_selector(parser)
     parser.add_argument("--pipeline-code", help="The pipeline to run.")
     control_requests.configure(parser)
+    parser.add_argument(
+        "--dry-run", action="store_true", help="Preview a rerun, recovery or restart."
+    )
     step = parser.add_mutually_exclusive_group()
     step.add_argument("--task-code", help="Run only this task, under the selected pipeline run.")
     step.add_argument(
@@ -105,6 +109,8 @@ def _run(args: argparse.Namespace, out: Output) -> int:
     if args.params and (item_requests.selected(args) or control_requests.selected(args)):
         raise UsageError("--param applies to a new run; omit item/control flags")
     if item_requests.selected(args):
+        if args.dry_run:
+            raise UsageError("--dry-run previews run recovery; omit item options")
         return item_requests.execute(args, out)
     if control_requests.selected(args):
         return control_requests.execute(args, out)
@@ -122,6 +128,9 @@ def _run(args: argparse.Namespace, out: Output) -> int:
     stopping = (signal.SIGINT, signal.SIGTERM, signal.SIGHUP)
     with interrupts.deferred(*stopping):
         done = _call_run(args, out, request)
+    if isinstance(done, RecoveryPreview):
+        out.result(done, args.output_format)
+        return ExitCode.SUCCESS
     assert isinstance(done, (OperationResult, BackfillView))
     out.result(done, args.output_format)
     one_task = args.task_code and not args.full_refresh  # a refresh's task only narrows its scope

@@ -427,6 +427,7 @@ class RunRequest(RunSelection):
     force: bool = False
     ignore_dependencies: bool = False
     rerun: bool = False
+    dry_run: bool = field(default=False, metadata={"omit_default": True})
     with_downstream: bool = False
     skip: bool = False
     run_date: date | None = None
@@ -463,6 +464,10 @@ class RunRequest(RunSelection):
             raise UsageError("`with_downstream` needs the `task_code` a full refresh starts from")
         if self.skip and (self.task_code or self.init_only or self.force):
             raise UsageError("`skip` records a whole run SKIPPED; it takes only `reason`")
+        if self.dry_run and (
+            not self.rerun or self.params or self.full_refresh or self.skip or self.backfill
+        ):
+            raise UsageError("dry_run previews a task rerun; give rerun and task_code only")
         self._check_backfill()
         self._check_full_refresh()
 
@@ -575,6 +580,7 @@ class ControlRequest(RunSelection):
     """One exact run or task scope, or a definition pause; repeated keys keep their identity."""
 
     action: ControlAction
+    dry_run: bool = field(default=False, metadata={"omit_default": True})
     reason: str = ""
     task_code: str | None = None
     request_key: str | None = None
@@ -590,6 +596,8 @@ class ControlRequest(RunSelection):
         super().__post_init__()
         object.__setattr__(self, "reason", reason_text(self.reason))
         optional_text("task_code", self.task_code)
+        if self.dry_run and self.action not in {ControlAction.RECOVER, ControlAction.RESTART}:
+            raise UsageError(f"dry_run with {self.action}: choose RECOVER or RESTART")
         if self.then is not None and self.then not in tuple(ResumeChoice):
             raise UsageError(
                 f"`then`={self.then!r}; expected run-now, catch-up or wait; choose one"
@@ -649,6 +657,8 @@ class BulkControlRequest(Request):
 
     def __post_init__(self) -> None:
         """Every object names its run and key, so no object falls back to an active run."""
+        if any(request.dry_run for request in self.requests):
+            raise UsageError("dry_run previews one request; submit it outside a bulk control")
         if not 1 <= len(self.requests) <= self.MAX_REQUESTS:
             raise UsageError(
                 f"`requests` has {len(self.requests)} objects; "

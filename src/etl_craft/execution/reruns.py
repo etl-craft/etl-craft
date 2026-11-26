@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import logging
 from dataclasses import replace
+from datetime import UTC, datetime
 
-from sqlalchemy.engine import Engine
+from sqlalchemy.engine import Connection, Engine
 
 from etl_craft.config import ConnectorConfig
 from etl_craft.core.enums import (
@@ -13,17 +14,22 @@ from etl_craft.core.enums import (
 )
 from etl_craft.core.errors import RunStateError
 from etl_craft.core.log import log_context
-from etl_craft.engine import runlog
+from etl_craft.engine import controls, runlog, standing_pauses
 from etl_craft.engine.project_scope import configured_project
 from etl_craft.engine.repository.pipelines import (
     resolve_pipeline_id,
 )
 from etl_craft.engine.repository.tasks import resolve_task_id
+from etl_craft.engine.run_definitions import for_run
+from etl_craft.engine.run_scopes import check_task
+from etl_craft.engine.transition_guards import reopen_status
 from etl_craft.execution.attempt_types import ChildOptions, Override, TaskOutcome
 from etl_craft.execution.interventions import (
     check_override,
+    pause_for_selection,
     reset_engine_skipped,
 )
+from etl_craft.execution.recovery_preview import RecoveryPreview, plan_tasks
 from etl_craft.execution.run_finish import finalize
 from etl_craft.execution.run_start import (
     load_pipeline,
@@ -32,6 +38,58 @@ from etl_craft.execution.run_types import PipelineOutcome, PipelineRun, RunHooks
 from etl_craft.execution.runner import run_task
 
 logger = logging.getLogger(__name__)
+
+
+def _rerun_scope(
+    conn: Connection, pipeline_code: str, task_code: str, selector: runlog.RunSelector
+) -> tuple[PipelineRun, int, str]:
+    pipeline_id = resolve_pipeline_id(conn, pipeline_code)
+    selected = runlog.select_run(conn, pipeline_id, selector)
+    run_id = selected.pipeline_run_id
+    with for_run(conn, run_id):
+        task_id = resolve_task_id(conn, pipeline_id, task_code)
+        check_task(conn, run_id, task_id)
+        detail, graph, codes = load_pipeline(conn, pipeline_id, run_id=run_id)
+    run = PipelineRun(pipeline_code, pipeline_id, run_id, graph, codes, detail.sla_in_hours)
+    return run, task_id, selected.status
+
+
+@configured_project
+def preview_rerun(
+    engine: Engine,
+    config: ConnectorConfig,
+    pipeline_code: str,
+    task_code: str,
+    *,
+    selector: runlog.RunSelector,
+    with_downstream: bool,
+) -> RecoveryPreview:
+    """Read the same pinned rerun scope without binding or starting an attempt."""
+    with engine.connect() as conn:
+        run, task_id, run_status = _rerun_scope(conn, pipeline_code, task_code, selector)
+        run_id = run.pipeline_run_id
+        selector = runlog.RunSelector(run_id=run_id)
+        pause = pause_for_selection(conn, run.pipeline_id, selector)
+        if pause is not None:
+            raise RunStateError(
+                f"{task_code}: {pipeline_code} is {pause.describe()}; nothing started or "
+                f"recorded. `etl-craft resume --pipeline-code {pipeline_code}` lets it run again"
+            )
+        pauses = standing_pauses.effects(conn, run.pipeline_id, run_id, datetime.now(UTC))
+        if task_id in pauses:
+            raise RunStateError(pauses[task_id].describe())
+        state = runlog.fetch_run_state(conn, run_id, run.graph.task_ids)
+        if task_id in state and state[task_id].status == RunStatus.IN_PROGRESS:
+            raise RunStateError(
+                f"{task_code}: already IN-PROGRESS under pipeline_run_id={run_id}; not "
+                "starting it twice"
+            )
+        if run_status != RunStatus.IN_PROGRESS:
+            reopen_status(conn, run_id, None)
+        controls.check_dispatch(conn, controls.DispatchScope(run.pipeline_id, run_id, task_id))
+        return plan_tasks(
+            run.graph, run.task_codes, state, selected=task_id, downstream=with_downstream
+        )
 
 
 @configured_project
@@ -58,19 +116,13 @@ def rerun_task(
     check_override(config, "`rerun`", reason)
     child = child or ChildOptions()
     with engine.connect() as conn:
-        pipeline_id = resolve_pipeline_id(conn, pipeline_code)
-        task_id = resolve_task_id(conn, pipeline_id, task_code)
-        selected = runlog.select_run(conn, pipeline_id, selector)
-        pipeline_run_id = selected.pipeline_run_id
-        before = pipeline_run_id if selected.status == RunStatus.IN_PROGRESS else None
+        run, task_id, status = _rerun_scope(conn, pipeline_code, task_code, selector)
+        pipeline_id, pipeline_run_id, graph = run.pipeline_id, run.pipeline_run_id, run.graph
+        before = pipeline_run_id if status == RunStatus.IN_PROGRESS else None
         failed_before = (
             runlog.fetch_task_run_status(conn, task_id, pipeline_run_id) == RunStatus.FAILED
         )
         selector = runlog.RunSelector(run_id=pipeline_run_id)
-        detail, graph, task_codes = load_pipeline(conn, pipeline_id, run_id=pipeline_run_id)
-    run = PipelineRun(
-        pipeline_code, pipeline_id, pipeline_run_id, graph, task_codes, detail.sla_in_hours
-    )
     override = Override(reason, rerun=True)
     first = run_task(
         engine, config, pipeline_code, task_code, child=child, override=override, selector=selector

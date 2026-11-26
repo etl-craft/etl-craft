@@ -21,7 +21,8 @@ import { ProjectDashboard, InsightsRedirect } from "@/pages/project-dashboard";
 import { Items } from "@/pages/items";
 import { HomeEntry, ProjectList } from "@/pages/home";
 import { PipelineDetail } from "@/pages/pipeline-detail";
-import { AttemptRedirect, RunRedirect, TaskRedirect } from "@/pages/run-redirect";
+import { RunPage } from "@/pages/run";
+import { AttemptRedirect, TaskRedirect } from "@/pages/run-redirect";
 import { Pipelines } from "@/pages/pipelines";
 import { Scheduled } from "@/pages/scheduled";
 import { Uploads } from "@/pages/uploads";
@@ -70,7 +71,7 @@ createRoot(document.getElementById("root")!).render(
             <Route path="projects/:project/runs" element={<Runs />} />
             <Route path="projects/:project/runs/:pipeline/:runId/tasks/:task/attempts/:attemptId" element={<AttemptRedirect />} />
             <Route path="projects/:project/runs/:pipeline/:runId/tasks/:task/items" element={<Items />} />
-            <Route path="projects/:project/runs/:pipeline/:runId" element={<RunRedirect />} />
+            <Route path="projects/:project/runs/:pipeline/:runId" element={<RunPage />} />
             <Route path="*" element={<p className="text-muted">That page does not exist. Use the navigation to go Home.</p>} />
           </Route>
         </Routes>

@@ -5,12 +5,12 @@ import { AppLink as Link } from "@/components/navigation";
 import { cn } from "@/lib/utils";
 
 /** The path to the page from the project's lists, each part a link except the last. */
-export function Breadcrumbs({ trail }: { trail: { label: string; to?: string }[] }) {
+export function Breadcrumbs({ trail, separator = "/" }: { trail: { label: string; to?: string }[]; separator?: string }) {
   return (
     <nav aria-label="Breadcrumb" className="flex flex-wrap items-center gap-1 text-xs text-muted">
       {trail.map((part, i) => (
         <React.Fragment key={`${i}:${part.label}`}>
-          {i > 0 ? <span aria-hidden>/</span> : null}
+          {i > 0 ? <span aria-hidden>{separator}</span> : null}
           {part.to ? (
             <Link to={part.to} className="hover:text-fg hover:underline">
               {part.label}

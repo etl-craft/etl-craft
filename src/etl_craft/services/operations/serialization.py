@@ -57,7 +57,11 @@ def _encode(obj: object) -> object:
     if isinstance(obj, date):
         return obj.isoformat()
     if is_dataclass(obj) and not isinstance(obj, type):
-        result = {f.name: _encode(getattr(obj, f.name)) for f in fields(obj)}
+        result = {}
+        for field in fields(obj):
+            value = getattr(obj, field.name)
+            if not field.metadata.get("omit_default") or value != field.default:
+                result[field.name] = _encode(value)
         schema = getattr(obj, "SCHEMA", None)
         return {"schema": schema, **result} if schema is not None else result
     if isinstance(obj, Mapping):
