@@ -159,7 +159,7 @@ Every attempt log opens with the same block: the try, attempt and host; the pipe
 run date and refresh type; the warehouse; and each task parameter. Parameters a team names in
 `Redaction.Sensitive_patterns` show as `[REDACTED]`, and `INPUT_PARAMS` lists its keys only,
 since its values are bound into SQL. A SQL task then logs each step with the statement it runs
-and the time it took, the watermark window, the ROW_IDs it reserved, and each business rule's
+and the time it took, the watermark window, the ROW_IDs it assigned, and each business rule's
 newly flagged keys (the first 20; `AUD_` tables hold them all). The log ends with the outcome:
 `task succeeded in <seconds>` with the counts, or `task failed after <seconds>` with the failure
 class, its source and the error, whose message names the remedy. A failed statement is logged

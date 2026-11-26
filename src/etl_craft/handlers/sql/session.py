@@ -1,7 +1,7 @@
 """One SQL task's work on the warehouse: statements, scratch tables and table shapes.
 
 Every statement goes through ``Session.run``, which logs its step with the row count the driver
-reports and how long it took, and the SQL itself at DEBUG. A database error becomes a
+reports and how long it took, and the SQL itself. A database error becomes a
 ``HandlerError`` naming the action, the target and the step, with the failing SQL written to
 the attempt's log, so a failed task can be debugged from its log alone.
 
@@ -24,13 +24,18 @@ from sqlalchemy.exc import SQLAlchemyError, StatementError
 
 from etl_craft.core.enums import SqlAction, TableFormat
 from etl_craft.core.errors import HandlerError, SqlGuardError
-from etl_craft.core.faults import fault_point
 from etl_craft.core.redaction import mask_text
 from etl_craft.core.text import qualify, split_object_ref
 from etl_craft.core.uploads import UploadWriter
 from etl_craft.dialects.warehouse import WarehouseDialect
 from etl_craft.dialects.warehouse.metadata import TableMetadata, ddl_tables, projection_names
-from etl_craft.dialects.warehouse.row_ids import violations_sql
+from etl_craft.dialects.warehouse.row_ids import (
+    WRITER_SPAN,
+    checked_base,
+    next_id_sql,
+    writer_floor,
+)
+from etl_craft.engine.audit import request_writer_id
 from etl_craft.engine.repository.offsets import StoredOffset
 
 if TYPE_CHECKING:
@@ -80,8 +85,6 @@ class Session:
         self.protection_active: bool | None = None
         self.protection_store: TaskStore | None = None
         self.protection_requests: list[str] = []
-        self.row_id_range: tuple[int, int] | None = None
-        self.generator_start: int | None = None
         self.uploads: tuple[UploadWriter, ...] = ()
         self.bindings: dict[str, object] = {}
         database, self.schema, self.table = split_object_ref(target_object)
@@ -103,7 +106,6 @@ class Session:
         self._types: dict[str, dict[str, str]] = {}
         self._names: dict[str, list[str]] = {}
         self._relations: dict[str, str | None] = {}
-        self._generators: dict[str, bool] = {}
         self._formats: dict[str, TableFormat] = {}
         event.listen(conn, "before_cursor_execute", self._invalidate)
 
@@ -124,7 +126,6 @@ class Session:
             self._types,
             self._names,
             self._relations,
-            self._generators,
             self._formats,
         ):
             for name in list(cache):
@@ -148,11 +149,8 @@ class Session:
             for row in rows
             if row[0] is not None
         ]
-        generated = next((bool(row[5]) for row in rows if row[5] is not None), None)
-        if generated is not None:
-            self._generators[self.target.lower()] = generated
         for index, name in enumerate(names):
-            self._relations[name.lower()] = rows[0][6 + index] if rows else None
+            self._relations[name.lower()] = rows[0][5 + index] if rows else None
 
     def select_columns(self, name: str, sql: str) -> list[str]:
         """Use explicit parsed aliases, or ask the warehouse about a dynamic projection."""
@@ -197,8 +195,6 @@ class Session:
         """Keep dialect-resolved physical spelling for case-aware maintenance reads."""
         key = name.lower()
         self._metadata[key] = found.columns
-        if found.generated is not None:
-            self._generators[key] = found.generated
         if found.table_format is not None:
             self._formats[key] = found.table_format
 
@@ -352,7 +348,7 @@ class Session:
         before = self._metadata.get(key)
         types = self._types.get(key)
         names = self._names.get(key)
-        generator, table_format = self._generators.get(key), self._formats.get(key)
+        table_format = self._formats.get(key)
         relation = self._relations.get(key)
         self.run(
             self.dialect.add_column_sql(name, column, data_type, target=name == self.target),
@@ -364,8 +360,6 @@ class Session:
             self._types[key] = {**types, column.lower(): data_type}
         if names is not None:
             self._names[key] = [*names, column]
-        if generator is not None:
-            self._generators[key] = generator
         if table_format is not None:
             self._formats[key] = table_format
         if relation is not None:
@@ -482,52 +476,27 @@ class Session:
         if qualified_from in self.scratch_tables:
             self.scratch_tables.remove(qualified_from)
 
-    def reserve_row_ids(self, count: int, *, existing: bool = True, replacing: bool = False) -> int:
-        """Reserve the exact staged insert count before any IDs are published."""
-        if not count and not (existing and replacing):
-            return 0
-        if self.protection_store is None:
-            raise SqlGuardError(f"{self.target}: missing target owner; use a managed writer")
-        maximum = (
-            self.count(f"SELECT COALESCE(MAX(ROW_ID), 0) FROM {self.target}", step="largest ROW_ID")
-            if existing
-            else 0
-        )
-        base = self.protection_store.reserve_row_ids(self.target, count, maximum)
+    def row_id_base(self, count: int, *, existing: bool = True) -> int:
+        """Return the ID before this write's ``count`` rows, in the writer's own range.
+
+        ``existing`` says the target already has a ROW_ID column to continue after.
+        """
+        # Whose rows these are: the task run, or outside one the audited request, negated.
+        writer = self.task_run_id or request_writer_id(f"{self.action} {self.target}")
+        floor = writer_floor(self.target, writer)
+        base = floor
+        if existing:
+            base = int(
+                self.run(
+                    next_id_sql(self.target),
+                    {"floor": floor, "ceiling": floor + WRITER_SPAN},
+                    step="largest ROW_ID of this writer",
+                ).scalar_one()
+            )
+        checked_base(self.target, writer, base, count)
         if count:
-            self.row_id_range = (base + 1, base + count)
-            logger.info("reserved ROW_ID %d to %d for %d row(s)", base + 1, base + count, count)
-            fault_point("sql.row_id.after_reserve")
+            logger.info("ROW_ID %d to %d for %d row(s)", base + 1, base + count, count)
         return base
-
-    def preserve_row_id_floor(self) -> None:
-        """Keep the largest visible computed ID before this operation removes rows."""
-        if (
-            any(name.lower() == "row_id" for name, _ in self.target_columns())
-            and not self.row_id_generated()
-        ):
-            self.reserve_row_ids(0, replacing=True)
-
-    def verify_row_ids(self) -> None:
-        """Fail the committed attempt if its target exceeds or duplicates the reservation."""
-        if self.row_id_range is None:
-            return
-        start, end = self.row_id_range
-        bad = (
-            self.run(
-                violations_sql(self.target),
-                {"start": start, "end": end, "task_run": self.task_run_id},
-                step="verify committed ROW_ID reservation",
-            )
-            .scalars()
-            .all()
-        )
-        if bad:
-            raise SqlGuardError(
-                f"{self.target}: ROW_ID reservation [{start}, {end}] has offending IDs {bad}; "
-                "inspect the committed target before retrying this attempt"
-            )
-        self.row_id_range = None
 
     def check_target_format(self) -> None:
         """Refuse a format mismatch before creating or evolving an existing target."""
@@ -544,27 +513,3 @@ class Session:
                 f"but this task resolves to {self.dialect.spec.table_format}; set TABLE_FORMAT="
                 f"{existing} or use a different TARGET_OBJECT. Migrate formats explicitly"
             )
-
-    def identity_start(self) -> int:
-        """Read the generator start under the lock for this target."""
-        if self.generator_start is not None:
-            return self.generator_start
-        if self.protection_store is None:
-            return 1
-        start = self.protection_store.target(self.target).row_id_start
-        if start >= 2**63:
-            raise SqlGuardError(
-                f"{self.target}: ROW_ID start {start} exceeds BIGINT; provide a fresh target"
-            )
-        return start
-
-    def row_id_generated(self) -> bool:
-        """Read the existing target's generator rather than assuming new-table defaults."""
-        logger.debug("read the ROW_ID generator of %s", self.target)
-        try:
-            key = self.target.lower()
-            if key not in self._generators:
-                self._generators[key] = self.dialect.row_id_generated(self.conn, self.target)
-            return self._generators[key]
-        except SQLAlchemyError as error:
-            self._fail("read the ROW_ID generator", error)

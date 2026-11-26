@@ -9,7 +9,6 @@ from pathlib import Path
 from etl_craft import __version__
 from etl_craft.agent.client import AgentClient
 from etl_craft.config import ConnectorConfig
-from etl_craft.core.compatibility import row_id_agent_version
 from etl_craft.core.enums import ActionName, AgentReport, SqlAction
 from etl_craft.core.erasure import ErasureFilter, ErasureReport
 from etl_craft.core.errors import ServerError
@@ -177,7 +176,7 @@ class RemoteTaskStore:
     def request(self, operation: AgentReport) -> AgentTask:
         """Bind every sub-operation to the exact attempt and package version."""
         return AgentTask(
-            version=row_id_agent_version(__version__),
+            version=__version__,
             attempt_id=self.attempt_id,
             operation=operation,
         )
@@ -185,33 +184,6 @@ class RemoteTaskStore:
     def call(self, request: AgentTask) -> object:
         """Leave all ownership and lifecycle decisions at the API tier."""
         return self.client.call(ActionName.AGENT_REPORT, request).data
-
-    def reserve_row_ids(self, target: str, count: int, maximum: int) -> int:
-        """Return the base committed for the new range of target IDs."""
-        response = self.call(
-            replace(
-                self.request(AgentReport.RESERVE_ROW_IDS),
-                row_id_count=count,
-                warehouse_row_id_max=maximum,
-            )
-        )
-        if count == 0 and response == []:
-            return maximum
-        if not isinstance(response, list) or len(response) != 2:
-            raise ServerError(
-                f"{target}: expected a committed ROW_ID range; upgrade the controller"
-            )
-        start, end = response
-        if (
-            type(start) is not int
-            or type(end) is not int
-            or end - start + 1 != count
-            or start <= maximum
-        ):
-            raise ServerError(
-                f"{target}: invalid ROW_ID reservation; check the controller protocol"
-            )
-        return start - 1
 
     def state(self, sql_action: str | None = None) -> TaskState:
         """Read the admitted task's metadata, checkpoints and related writers."""

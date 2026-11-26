@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
 from dataclasses import replace
 from typing import Any
 
@@ -11,10 +10,10 @@ from sqlalchemy.engine import Connection, CursorResult, Engine
 from sqlalchemy.engine.interfaces import DBAPIConnection
 
 from etl_craft.config.auth import warehouse_by_key
-from etl_craft.core.enums import FailureClass
+from etl_craft.core.enums import FailureClass, TableFormat
 from etl_craft.core.failures import Failure
 from etl_craft.dialects.failure_evidence import driver_error
-from etl_craft.dialects.warehouse.base import ReplaceStrategy, SurrogateKey, WarehouseDialect
+from etl_craft.dialects.warehouse.base import ReplaceStrategy, WarehouseDialect
 from etl_craft.dialects.warehouse.metadata import declarable_source
 
 
@@ -65,25 +64,13 @@ class DuckDBWarehouse(WarehouseDialect):
 
     def describe_select(self, conn: Connection, sql: str) -> list[tuple[str, str]] | None:
         """DESCRIBE a zero-row SELECT, preserving complete nested and decimal types."""
-        if self.surrogate_key == "computed" or not declarable_source(sql, self.sqlglot_dialect):
+        if self.spec.table_format == TableFormat.ICEBERG or not declarable_source(
+            sql, self.sqlglot_dialect
+        ):
+            # Iceberg column types come from the materialized stage.
             return None
         rows = conn.execute(text(f"DESCRIBE {self.event_probe_sql(sql, 0)}")).all()
         return [(str(row[0]), str(row[1])) for row in rows]
-
-    def identity_setup_sql(self, target: str, *, start: int = 1) -> tuple[str, ...]:
-        """DuckDB requires a sequence because inline SQL identities are not implemented."""
-        namespace, table = target.rsplit(".", 1)
-        return (f"CREATE OR REPLACE SEQUENCE {namespace}.etl_seq_{table}_row_id START {start}",)
-
-    def identity_table_ddl(
-        self, target: str, columns: str, params: Mapping[str, str], *, start: int = 1
-    ) -> str:
-        """Declare the key and sequence default together with the table's other columns."""
-        namespace, table = target.rsplit(".", 1)
-        return (
-            f"CREATE TABLE {target} ({columns}, ROW_ID BIGINT PRIMARY KEY "
-            f"DEFAULT nextval('{namespace}.etl_seq_{table}_row_id'))"
-        )
 
     def affected_rows(self, result: CursorResult[Any]) -> int:
         """DuckDB returns the exact modified count as its DML result's Count row."""
@@ -92,8 +79,6 @@ class DuckDBWarehouse(WarehouseDialect):
     spec = warehouse_by_key("duckdb")
     sqlglot_dialect = "duckdb"
     replace_strategy: ReplaceStrategy = "transactional"
-    surrogate_key: SurrogateKey = "sequence"
-    generator_metadata_sql = "COALESCE(column_default, '') LIKE 'nextval(%'"
     single_writer = True
     process_local_queries = True
 

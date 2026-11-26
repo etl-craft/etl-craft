@@ -431,7 +431,6 @@ def script_task(
         _locks=store,
         _items=store,
         _landing=lambda: store.state().landing,
-        _reserve_landing_ids=store.reserve_row_ids,
         _secret_values=context._secret_values or {},
         _secret_provider=context._secret_provider,
         logger=logging.getLogger(f"{SCRIPT_LOGGER}.{context.task_code}"),

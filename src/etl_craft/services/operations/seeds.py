@@ -241,6 +241,5 @@ def _load(ctx: OperationContext, seed: Seed) -> bool:
             finally:
                 session.sweep()
             conn.commit()
-            session.verify_row_ids()
         fault_point("seed.after_warehouse_commit")
     return merge is not None

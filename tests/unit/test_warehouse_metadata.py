@@ -15,7 +15,6 @@ from etl_craft.dialects.warehouse.metadata import (
     declarable_source,
     projection_names,
 )
-from etl_craft.dialects.warehouse.replacement import IdentityReplacement
 
 pytestmark = pytest.mark.unit
 
@@ -104,11 +103,10 @@ def test_only_vendor_missing_table_errors_become_empty_metadata(key, code, missi
         assert caught.value is error
 
 
-@pytest.mark.parametrize("generated", [None, "IDENTITY START 1", "AUTOINCREMENT START 1"])
-def test_snowflake_description_supplies_identity_without_an_extra_read(generated):
+def test_snowflake_description_supplies_columns_without_an_extra_read():
     conn = Mock()
     conn.execute.return_value.mappings.return_value.all.return_value = [
-        {"name": "ROW_ID", "type": "NUMBER(38,0)", "null?": "N", "default": generated},
+        {"name": "ROW_ID", "type": "NUMBER(38,0)", "null?": "N", "default": None},
         {"name": "NAME", "type": "VARCHAR(23)", "null?": "Y", "default": None},
     ]
     found = for_key("snowflake").read_metadata(conn, "cat.s.t")
@@ -116,7 +114,6 @@ def test_snowflake_description_supplies_identity_without_an_extra_read(generated
         ("ROW_ID", "NUMBER(38,0)", None, None, "NO"),
         ("NAME", "VARCHAR(23)", None, None, "YES"),
     )
-    assert found.generated is (generated is not None)
     conn.execute.assert_called_once()
 
 
@@ -240,64 +237,6 @@ def test_unknown_ddl_invalidates_all_metadata_and_known_ddl_only_its_tables(sql,
 )
 def test_source_types_with_inherited_collation_require_catalog_metadata(sql, expected):
     assert declarable_source(sql, "postgres") is expected
-
-
-@pytest.mark.parametrize(
-    ("key", "generator"),
-    [
-        ("postgres", "IDENTITY (START WITH 43)"),
-        ("duckdb", "START 43"),
-        ("snowflake", "AUTOINCREMENT START 43 INCREMENT 1"),
-        ("databricks", "IDENTITY (START WITH 43)"),
-    ],
-)
-def test_native_row_id_generator_starts_above_the_reserved_floor(key, generator):
-    dialect = for_key(key)
-    ddl = dialect.identity_table_ddl("c.s.target", "id BIGINT", {}, start=43)
-    setup = dialect.identity_setup_sql("c.s.target", start=43)
-    assert generator in "\n".join((*setup, ddl))
-
-
-@pytest.mark.parametrize("key", ["snowflake", "databricks"])
-@pytest.mark.parametrize("existing", [False, True])
-def test_identity_replacement_keeps_generator_and_publishes_only_from_candidate(key, existing):
-    conn = Mock()
-    identity = (
-        "AUTOINCREMENT START 1 INCREMENT 1"
-        if key == "snowflake"
-        else "GENERATED ALWAYS AS IDENTITY"
-    )
-    conn.execute.return_value.scalar_one.return_value = (
-        f"CREATE TABLE c.s.target (id BIGINT, ROW_ID BIGINT {identity}) COMMENT 'preserved'"
-    )
-    create, publish = for_key(key).identity_replacement_ddl(
-        conn, IdentityReplacement("c.s.target", "c.s.candidate", existing), "id BIGINT", {}
-    )
-    assert create.startswith("CREATE TABLE c.s.candidate")
-    assert "ROW_ID BIGINT" in create
-    assert identity.split()[0] in create
-    assert publish == (
-        "CREATE OR REPLACE TABLE c.s.target CLONE c.s.candidate COPY GRANTS"
-        if key == "snowflake"
-        else "CREATE OR REPLACE TABLE c.s.target DEEP CLONE c.s.candidate"
-    )
-    assert ("preserved" in create) is existing
-    assert conn.execute.call_count == int(existing)
-
-
-def test_existing_delta_identity_replacement_refuses_a_new_external_location_before_sql():
-    conn = Mock()
-    with pytest.raises(
-        SqlGuardError,
-        match=r"c\.s\.target: replacement cannot change EXTERNAL_LOCATION; use OVERWRITE_TABLE",
-    ):
-        for_key("databricks").identity_replacement_ddl(
-            conn,
-            IdentityReplacement("c.s.target", "c.s.candidate", existing=True),
-            "id BIGINT",
-            {"EXTERNAL_LOCATION": "s3://new"},
-        )
-    conn.execute.assert_not_called()
 
 
 @pytest.mark.parametrize("count, expected", [(7, 7), (-1, 8)])

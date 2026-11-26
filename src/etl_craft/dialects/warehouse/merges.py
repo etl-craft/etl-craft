@@ -71,7 +71,7 @@ class VersionMerge:
         )
         return f"({close} UNION ALL {insert})"
 
-    def counts(self, source: str | None = None) -> str:
+    def counts(self, source: str) -> str:
         """Measure business changes rather than provider-specific MERGE rowcounts."""
         closing = f"CASE WHEN {self.inserting} THEN 0 ELSE 1 END"
         if self.metadata_condition is not None:
@@ -79,7 +79,7 @@ class VersionMerge:
         return (
             f"SELECT COALESCE(SUM({closing}),0) "
             f"AS closed, COALESCE(SUM(CASE WHEN {self.inserting} THEN 1 ELSE 0 END),0) "
-            f"AS inserted FROM {source or self.source()} changes"
+            f"AS inserted FROM {source} changes"
         )
 
     def fallback(self, assignments: Mapping[str, str], metadata: Mapping[str, str]) -> str:

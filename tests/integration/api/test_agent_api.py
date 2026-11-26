@@ -11,7 +11,6 @@ from etl_craft import __version__
 from etl_craft.api.app import create_app
 from etl_craft.config import ConnectionProfile
 from etl_craft.core.actor import SYSTEM_ACTOR
-from etl_craft.core.compatibility import row_id_agent_version
 from etl_craft.core.enums import (
     ActionName,
     ApiRole,
@@ -242,82 +241,14 @@ def post(scene, route, **fields):
     return client.post(
         "/api/v1/agent/" + route,
         headers=headers,
-        json={"version": row_id_agent_version(__version__), **fields},
+        json={"version": __version__, **fields},
     )
 
 
-def test_row_id_reservations_require_the_live_target_holder(agent_scene):
-    from etl_craft.config.targets import active_catalog
-    from etl_craft.engine import locks
-    from etl_craft.engine.task_store import LocalTaskStore
-    from etl_craft.handlers.resources import LocalLocker
-
-    db, _, _, _, _, config = agent_scene
-    attempt = claim(agent_scene, TARGET_OBJECT="s.numbered", SQL_ACTION="APPEND_TABLE")
-    key = locks.target("s.numbered", active_catalog(config)).key
-    lock = {"attempt_id": attempt, "operation": "LOCK", "lock_key": key}
-    reserve = {
-        "attempt_id": attempt,
-        "operation": "RESERVE_ROW_IDS",
-        "row_id_count": 2,
-        "warehouse_row_id_max": 8,
-    }
-    old = post(agent_scene, "report", version=__version__, **lock)
-    assert old.status_code == 403 and "ROW_ID reservation support" in old.text
-    with locks.target("s.numbered", active_catalog(config)).hold(LocalLocker(db.engine, config)):
-        refused = post(agent_scene, "report", **reserve)
-        assert refused.status_code == 409 and "s.numbered" in refused.text
-    owned = post(agent_scene, "report", **lock)
-    assert owned.status_code == 200 and owned.json()["data"]["acquired"], owned.text
-    foreign = post(agent_scene, "report", **(reserve | {"target": "s.other"}))
-    assert foreign.status_code == 403 and "warehouse maximum only" in foreign.text
-    with db.engine.connect() as conn:
-        assert conn.execute(text("SELECT COUNT(*) FROM AUD_TARGET_ROW_IDS")).scalar_one() == 0
-    floor = post(agent_scene, "report", **(reserve | {"row_id_count": 0}))
-    assert floor.status_code == 200 and floor.json()["data"] == [], floor.text
-    reserve["warehouse_row_id_max"] = 0
-    first = post(agent_scene, "report", **reserve)
-    second = post(agent_scene, "report", **reserve)
-    assert first.status_code == second.status_code == 200, (first.text, second.text)
-    assert first.json()["data"] == [9, 10]
-    assert second.json()["data"] == [11, 12]
-    target = post(
-        agent_scene,
-        "report",
-        attempt_id=attempt,
-        operation="TARGET",
-        target=f"{active_catalog(config)}.s.numbered",
-    )
-    assert target.status_code == 200 and target.json()["data"]["row_id_start"] == 13
-    locker = LocalLocker(db.engine, config)
-    local = LocalTaskStore.standalone(db.engine, config, locker)
-    other = locks.target("s.local_numbered", active_catalog(config))
-    with other.hold(local):
-        for reply in (first, second):
-            base = local.reserve_row_ids("s.local_numbered", 2, 8)
-            assert reply.json()["data"] == [base + 1, base + 2]
-    with db.engine.begin() as conn:
-        conn.execute(
-            text("UPDATE AUD_TASK_ATTEMPTS SET LEASE_EXPIRES_AT=:past"),
-            {"past": datetime.now(UTC) - timedelta(seconds=1)},
-        )
-    stale = post(agent_scene, "report", **reserve)
-    assert stale.status_code == 409 and f"attempt {attempt}" in stale.text
-    assert "s.numbered" in stale.text
-    with db.engine.connect() as conn:
-        assert (
-            conn.execute(
-                text("SELECT HIGH_WATER FROM AUD_TARGET_ROW_IDS WHERE LOCK_KEY=:key"), {"key": key}
-            ).scalar_one()
-            == 12
-        )
-
-
-def test_agent_and_local_sql_load_publish_the_same_reserved_ids(agent_scene, monkeypatch):
+def test_agent_and_local_sql_loads_number_rows_from_the_same_task_run(agent_scene):
     from etl_craft.agent.task_store import RemoteTaskStore
     from etl_craft.core.enums import AgentReport
     from etl_craft.core.time import as_utc
-    from etl_craft.dialects.warehouse.duckdb import DuckDBWarehouse
     from etl_craft.handlers import sql
     from etl_craft.handlers.registry import TaskContext
     from etl_craft.services.operations.agent_models import AgentReply
@@ -325,7 +256,6 @@ def test_agent_and_local_sql_load_publish_the_same_reserved_ids(agent_scene, mon
     from etl_craft.warehouse.connection import build_warehouse_engine
 
     db, client, headers, _, _, config = agent_scene
-    monkeypatch.setattr(DuckDBWarehouse, "surrogate_key", "computed")
     params = {"SQL_ACTION": "APPEND_TABLE", "SELECT_QUERY": "SELECT 1 AS id UNION ALL SELECT 2"}
     attempt = queue(db, TARGET_OBJECT="main.remote_rows", **params)
     claimed = client.post(
@@ -366,7 +296,8 @@ def test_agent_and_local_sql_load_publish_the_same_reserved_ids(agent_scene, mon
                     )
                 )
                 conn.execute(text(f"INSERT INTO main.{target} (id, ROW_ID) VALUES (0, 30)"))
-        for expected in ([31, 32], [33, 34]):
+        floor = remote.task_run_id * 2**32
+        for expected in ([floor + 1, floor + 2], [floor + 1, floor + 2]):
             assert sql.run(remote, store).insert_count == 2
             assert sql.run(local, db.engine).insert_count == 2
             with warehouse.begin() as conn:
@@ -590,7 +521,7 @@ def test_a_stale_lock_passes_to_an_agent_only_after_it_confirms_the_holder(agent
             {"past": datetime.now(UTC) - timedelta(seconds=1)},
         )
     lock = {
-        "version": row_id_agent_version(__version__),
+        "version": __version__,
         "attempt_id": attempt,
         "operation": "LOCK",
         "lock_key": key,
@@ -1742,7 +1673,7 @@ def test_running_agent_refuses_api_upgrade_before_mutating_ownership(
     response = client.post(
         f"/api/v1/agent/{route}",
         headers=headers,
-        json={"version": row_id_agent_version(__version__), **fields},
+        json={"version": __version__, **fields},
     )
     assert response.status_code == 409
     for part in (

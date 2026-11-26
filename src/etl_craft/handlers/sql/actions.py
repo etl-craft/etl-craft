@@ -58,7 +58,7 @@ from etl_craft.handlers.sql.protection_columns import (
 )
 from etl_craft.handlers.sql.rejects import screen
 from etl_craft.handlers.sql.replacement import cleanup, recover_overwrite
-from etl_craft.handlers.sql.row_ids import numbered_merge_source, reserve_stage
+from etl_craft.handlers.sql.row_ids import numbered_merge_source, staged_base
 from etl_craft.handlers.sql.session import Session
 from etl_craft.handlers.sql.tables import (
     IDENTITY_COLUMNS,
@@ -108,10 +108,9 @@ def overwrite_table(session: Session, action: ActionContext) -> HandlerResult:
     actor_columns, actor_values = actor_parts(
         action.uploads, "UPLOAD_ID", (name for name, _ in session.target_columns())
     )
-    computed = not session.row_id_generated()
-    row_id_columns = ", ROW_ID" if computed else ""
-    base = reserve_stage(session, stage, replacing=True) if computed else 0
-    row_id_values = f", {row_number(base)}" if computed else ""
+    row_id_columns = ", ROW_ID"
+    base = staged_base(session, stage)
+    row_id_values = f", {row_number(base)}"
     select_sql = (
         f"SELECT {columns}, :pipeline_run_id, :pipeline_id, :task_run_id, :now"
         f"{actor_values}{row_id_values} "
@@ -248,11 +247,7 @@ def append_table(session: Session, action: ActionContext) -> HandlerResult:
         if source is not None
         else (stage, None)
     )
-    row_ids = (
-        ("", "")
-        if session.row_id_generated()
-        else (", ROW_ID", f", {row_number(reserve_stage(session, stage, replacing=True))}")
-    )
+    row_ids = (", ROW_ID", f", {row_number(staged_base(session, stage))}")
     if _empties_target(session, action):
         session.run(f"DELETE FROM {session.target}", {}, step="empty the target for a full refresh")
     else:
@@ -390,9 +385,8 @@ def scd1_merge(session: Session, action: ActionContext) -> HandlerResult:
     assignments, condition = _scd1_update(session, action, stage_columns)
     target = session.target
     key_match = _key_match(task.merge_key)
-    generated = session.row_id_generated()
     if session.dialect.supports_insert_merge(session.conn):
-        merge_source = stage if generated else numbered_merge_source(session, stage, key_match)
+        merge_source = numbered_merge_source(session, stage, key_match)
         if new is None:
             new = session.count(
                 f"SELECT COUNT(*) FROM {stage} s WHERE NOT EXISTS "
@@ -402,7 +396,7 @@ def scd1_merge(session: Session, action: ActionContext) -> HandlerResult:
         insert = _merge_insert_parts(
             session,
             stage_columns,
-            None if generated else (", ROW_ID", ", s.ROW_ID"),
+            (", ROW_ID", ", s.ROW_ID"),
             uploads=action.uploads,
         )
         result = session.run(
@@ -583,21 +577,17 @@ def _merge_versions(
         session.protection.request_id if session.protection else None
     )
     source = merge.source()
-    row_ids = None
-    if not session.row_id_generated():
-        source = session.create_scratch(
-            session.scratch("scd2_ids"),
-            f"SELECT * FROM {source} changes",
-            step="stage closure rows and successors",
-        )
-        counts = session.run(merge.counts(source), step="count staged version changes").one()
-        base = session.reserve_row_ids(int(counts.inserted))
-        values = row_number(base, f"PARTITION BY {merge.inserting} ")
-        allocated = f"CASE WHEN {merge.inserting} THEN {values} ELSE {merge.matched} END"
-        source = numbered_source(source, allocated, merge.allocated)
-        row_ids = (", ROW_ID", f", s.{merge.allocated}")
-    else:
-        counts = session.run(merge.counts(), step="count version changes").one()
+    source = session.create_scratch(
+        session.scratch("scd2_ids"),
+        f"SELECT * FROM {source} changes",
+        step="stage closure rows and successors",
+    )
+    counts = session.run(merge.counts(source), step="count staged version changes").one()
+    base = session.row_id_base(int(counts.inserted))
+    values = row_number(base, f"PARTITION BY {merge.inserting} ")
+    allocated = f"CASE WHEN {merge.inserting} THEN {values} ELSE {merge.matched} END"
+    source = numbered_source(source, allocated, merge.allocated)
+    row_ids = (", ROW_ID", f", s.{merge.allocated}")
     insert = _merge_insert_parts(session, columns, row_ids, uploads=action.uploads)
     session.run(
         merge.statement(source, _version_assignments(action), insert, metadata),
@@ -660,14 +650,11 @@ def _separate_versions(
 def _insert_merge_rows(
     session: Session, action: ActionContext, columns: list[str], body: str, *, step: str
 ) -> int:
-    row_ids = None
-    if not session.row_id_generated():
-        stage = session.create_scratch(
-            session.scratch("insert_ids"), f"SELECT s.* {body}", step="stage exact merge inserts"
-        )
-        base = reserve_stage(session, stage)
-        row_ids = (", ROW_ID", f", {row_number(base)}")
-        body = f"FROM {stage} s"
+    stage = session.create_scratch(
+        session.scratch("insert_ids"), f"SELECT s.* {body}", step="stage exact merge inserts"
+    )
+    row_ids = (", ROW_ID", f", {row_number(staged_base(session, stage))}")
+    body = f"FROM {stage} s"
     names, values = _merge_insert_parts(session, columns, row_ids, uploads=action.uploads)
     return session.mutate(
         f"INSERT INTO {session.target} ({names}) SELECT {values} {body}",
@@ -731,7 +718,6 @@ def drop_table(session: Session, action: ActionContext) -> HandlerResult:
     if session.target_relation_type() is None:
         logger.info("%s does not exist; nothing to drop", session.target)
         return HandlerResult()
-    session.preserve_row_id_floor()
     session.clear_hash_version = True
     session.run(f"DROP TABLE {session.target}", step="drop the target")
     return HandlerResult()

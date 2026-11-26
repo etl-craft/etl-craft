@@ -143,28 +143,20 @@ def create_target_shape(session: Session, stage: str, audit_columns: tuple[str, 
         for name, _ in session.columns(stage)
         if not is_upload_control(name) or "ETL_PROTECTION" not in audit_columns
     ]
-    if session.dialect.identity_in_create:
-        types = session.column_types(stage)
-        business = [(name, types[name.lower()]) for name in columns]
-        create_declared_target(session, business, audit_columns)
-        return
     parts = [f"s.{name}" for name in columns]
     parts.append("CAST(NULL AS BIGINT) AS PIPELINE_RUN_ID")
     parts.extend(
         f"CAST(NULL AS {session.dialect.audit_column_type(column)}) AS {column}"
         for column in audit_columns
     )
-    computed = session.dialect.surrogate_key == "computed"
-    if computed:
-        # Each insert fills a computed ROW_ID, so the empty table only needs the column.
-        parts.append(f"CAST(NULL AS BIGINT) AS {ROW_ID_COLUMN}")
+    # Each insert computes ROW_ID, so the empty table only needs the column.
+    parts.append(f"CAST(NULL AS BIGINT) AS {ROW_ID_COLUMN}")
     session.create_table_as(
         session.target,
         f"SELECT {', '.join(parts)} FROM {stage} s WHERE 1 = 0",
         step="create the target",
     )
-    if not computed:
-        add_row_id(session)
+    key_row_id(session, session.target)
 
 
 def create_declared_target(
@@ -173,20 +165,16 @@ def create_declared_target(
     audit_columns: tuple[str, ...],
     name: str | None = None,
 ) -> None:
-    """Declare business columns and the complete generated key in the CREATE statement."""
+    """Declare business columns, the managed columns and ROW_ID in the CREATE statement."""
     target = session.target if name is None else name
-    create_with_identity(session, declared_columns(session, business, audit_columns), target)
-
-
-def create_with_identity(session: Session, shape: dict[str, str], target: str) -> None:
-    """Create a complete declared table and ROW_ID without a later key alteration."""
+    shape = declared_columns(session, business, audit_columns)
+    key = " PRIMARY KEY" if session.dialect.enforces_primary_keys else ""
     columns = ", ".join(f"{name} {kind}" for name, kind in shape.items())
-    start = session.identity_start()
-    for sql in session.dialect.identity_setup_sql(target, start=start):
-        session.run(sql, step="create the ROW_ID sequence")
     session.run(
-        session.dialect.identity_table_ddl(target, columns, session.params, start=start),
-        step="create the target with an identity ROW_ID",
+        session.dialect.declared_table_ddl(
+            target, f"{columns}, {ROW_ID_COLUMN} BIGINT{key}", session.params
+        ),
+        step="create the target",
     )
 
 
@@ -205,30 +193,10 @@ def declared_columns(
     )
 
 
-def sequence_name(session: Session) -> str:
-    """Return the target's own ROW_ID sequence (DuckDB), in the target's schema."""
-    return session.qualify(f"{session.schema}.etl_seq_{session.table}_row_id")
-
-
-def add_row_id(session: Session) -> None:
-    """Give a new target its ROW_ID key: an identity or sequence default."""
-    strategy = session.dialect.surrogate_key
-    target = session.target
-    start = session.identity_start()
-    if strategy == "sequence":
-        sequence = sequence_name(session)
-        for sql in session.dialect.identity_setup_sql(target, start=start):
-            session.run(sql, step="create the ROW_ID sequence")
-        session.run(
-            f"ALTER TABLE {target} ADD COLUMN {ROW_ID_COLUMN} BIGINT DEFAULT nextval('{sequence}')",
-            step="add ROW_ID",
-        )
-    else:
-        session.run(
-            f"ALTER TABLE {target} ADD COLUMN {session.dialect.identity_column_ddl(start)}",
-            step="add ROW_ID",
-        )
-    session.run(f"ALTER TABLE {target} ADD PRIMARY KEY ({ROW_ID_COLUMN})", step="key on ROW_ID")
+def key_row_id(session: Session, target: str) -> None:
+    """Key a table created from a SELECT on ROW_ID, where the warehouse enforces keys."""
+    if session.dialect.enforces_primary_keys:
+        session.run(f"ALTER TABLE {target} ADD PRIMARY KEY ({ROW_ID_COLUMN})", step="key on ROW_ID")
 
 
 def require_target(session: Session) -> list[tuple[str, str]]:

@@ -23,7 +23,7 @@ def test_preview_resends_lift_double_lift_and_registration(erasure_world):
         assert conn.execute(text("SELECT COUNT(*) FROM AUD_ERASURE_SUBJECTS")).scalar_one() == 0
     assert sum(t.rows for t in act(ctx, ActionName.ERASE, **args).tables) == 2
     # A resend reaches landing outside etl-craft; the managed copy never writes it again.
-    w.execute(f"INSERT INTO {w.name('landing')} (person,n) VALUES (:key,3)", key=KEY)
+    w.execute(f"INSERT INTO {w.name('landing')} (person,n,row_id) VALUES (:key,3,3)", key=KEY)
     w.run(
         "copy",
         SQL_ACTION="CREATE_TABLE",

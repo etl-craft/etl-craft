@@ -14,7 +14,6 @@ DAY = f"({STAMP}+(d-1)*INTERVAL '1 day')"
 
 # Every run has its own task/attempt identity; completed days dominate the live working set.
 SEEDS = [
-    ("AUD_TARGET_ROW_IDS", "LOCK_KEY,HIGH_WATER", "p,p*100", "generate_series(1,:pipelines) p"),
     (
         "CFG_ALERT_CHANNELS",
         "CHANNEL_ID,PROJECT_ID,CHANNEL_NAME,KIND,URL_SECRET,SIGNING_SECRET,DEFAULT_ALERT_ON",

@@ -16,24 +16,15 @@ ColumnMetadata = tuple[str, str, int | None, int | None, str]
 
 @dataclass(frozen=True)
 class TableMetadata:
-    """Complete column types, with generator and storage evidence available in the same read."""
+    """Complete column types, with storage evidence available in the same read."""
 
     columns: tuple[ColumnMetadata, ...]
-    generated: bool | None = None
     table_format: TableFormat | None = None
 
 
 def unbounded_varchar(data_type: str) -> str:
     """Render string types for Iceberg storage that does not retain VARCHAR bounds."""
     return re.sub(r"\bVARCHAR\s*\(\s*\d+\s*\)", "VARCHAR", data_type, flags=re.IGNORECASE)
-
-
-def metadata_with_generator(columns: str, generator: str) -> str:
-    """Select types and generator evidence in one catalog read."""
-    return (
-        f"{columns}, is_nullable, CASE WHEN lower(column_name) = 'row_id' "
-        f"THEN {generator} END AS row_id_generated"
-    )
 
 
 def projection_names(sql: str, dialect: str | None, case: str | None) -> list[str] | None:

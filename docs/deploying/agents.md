@@ -213,14 +213,6 @@ automatic reassignment or deletion of historical contracts.
 
 ## Protection reports
 
-Computed warehouse ROW_IDs use the internal `RESERVE_ROW_IDS` report. The agent sends
-the staged insert count and warehouse maximum. The controller derives the target from the
-admitted task, checks its current lock and commits the range before the warehouse write.
-A zero count preserves the last visible ID before a destructive write and returns no IDs.
-A lost reply or a failed write can leave a gap. Upgrade agents with the controller. Older
-agents are refused a SQL or Python task's target lock before they can publish rows. The existing `TARGET` reply also returns
-the native generator start from the same high-water record for target creation.
-
 The internal `POST /api/v1/agent/report` protocol supports `PROTECTION_READ` and
 `PROTECTION_EVENT`. Agents and servers must run the same package version; the normal
 protocol-version refusal applies. No extra endpoint, credential, setting or CLI flag is needed.

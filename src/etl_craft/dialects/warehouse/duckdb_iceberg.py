@@ -14,7 +14,7 @@ from etl_craft.config.targets import attached_catalog_name
 from etl_craft.core.enums import AuthMode
 from etl_craft.core.errors import ConfigurationError, HandlerError, SqlGuardError
 from etl_craft.core.text import quote_identifier
-from etl_craft.dialects.warehouse.base import Presented, ReplaceStrategy, SurrogateKey
+from etl_craft.dialects.warehouse.base import Presented, ReplaceStrategy
 from etl_craft.dialects.warehouse.duckdb import DuckDBWarehouse
 
 if TYPE_CHECKING:
@@ -35,7 +35,6 @@ class DuckDBIcebergWarehouse(DuckDBWarehouse):
     spec = warehouse_by_key("duckdb_iceberg")
     replace_strategy: ReplaceStrategy = "copy_and_restore"
     single_writer = False
-    surrogate_key: SurrogateKey = "computed"
     enforces_primary_keys = False
     bearer_needs_user = False
 

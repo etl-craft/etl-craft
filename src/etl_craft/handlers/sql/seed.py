@@ -71,4 +71,4 @@ def replace_seed(
         f"SELECT {', '.join(projection)} FROM {stage}",
         step="stage the seed audit values",
     )
-    replace_select(session, f"SELECT * FROM {shaped}", shape)
+    replace_select(session, f"SELECT * FROM {shaped}", len(rows))

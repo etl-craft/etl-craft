@@ -230,7 +230,6 @@ EXPECTED = {
         "ALERT",
         "LOCK",
         "UNLOCK",
-        "RESERVE_ROW_IDS",
     },
 }
 

@@ -19,7 +19,7 @@ from typing import Any
 from unittest.mock import Mock, patch
 
 from etl_craft.config import ConnectionProfile, ConnectorConfig, SourceConfig
-from etl_craft.core.enums import RunStatus, SqlAction
+from etl_craft.core.enums import RunStatus, SqlAction, TableFormat
 from etl_craft.core.errors import EtlCraftError
 from etl_craft.dialects.warehouse import WarehouseDialect
 from etl_craft.engine.repository.tasks import TargetTask
@@ -232,7 +232,7 @@ class GoldenSession(Session):
 
     def describe_select(self, sql: str) -> list[tuple[str, str]] | None:
         own = type(self.dialect).describe_select is not WarehouseDialect.describe_select
-        if not own or self.dialect.surrogate_key == "computed":
+        if not own or self.dialect.spec.table_format == TableFormat.ICEBERG:
             return None
         return [(self.cased(name), kind) for name, kind, *_ in BUSINESS]
 
@@ -241,9 +241,6 @@ class GoldenSession(Session):
 
     def check_target_format(self) -> None:
         return None
-
-    def row_id_generated(self) -> bool:
-        return False
 
 
 STATE = TaskState(offset=None, rules=(), peers=(), peer_statuses={}, merge_conflict=None)
@@ -287,12 +284,8 @@ def record(dialect: WarehouseDialect, scenario: Scenario, project: Path) -> list
     with patch("etl_craft.handlers.sql.session.event"):
         session = GoldenSession(conn, dialect, task.action, scenario)
         session.protection_store = Mock()
-        session.protection_store.reserve_row_ids.side_effect = lambda target, count, maximum: (
-            maximum
-        )
         store = Mock()
         store.target.return_value.hash_version = 2
-        session.protection_store.target.return_value.row_id_start = 1
         action = ActionContext(
             task=task,
             context=task_context,

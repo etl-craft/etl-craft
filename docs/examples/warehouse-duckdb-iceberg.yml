@@ -1,8 +1,8 @@
 # Warehouse: DuckDB compute over an Iceberg REST catalog.
 #
 # DuckDB runs in memory (jdbc:duckdb: with no path); the tables live in the
-# catalog, attached under WAREHOUSE_CATALOG. Iceberg has no sequences or keys,
-# so ROW_ID is computed per insert, and each statement commits on its own.
+# catalog, attached under WAREHOUSE_CATALOG. Iceberg has no keys, and each
+# statement commits on its own.
 # Omit s3_key_id/s3_secret to use the ambient credential chain. The iceberg and
 # httpfs extensions are installed on first connection.
 #

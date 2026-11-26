@@ -501,25 +501,23 @@ columns. Merge updates, closed SCD2 versions and soft deletes stamp the executin
 identities; unchanged rows retain their provenance. `CREATED_BY` and `UPDATED_BY` hold the
 warehouse user the engine connects as.
 
-`ROW_ID` is an internal key, not a business key or a gap-free row counter. PostgreSQL uses
-identity columns and native DuckDB uses a sequence. New Databricks Delta tables, including
-UniForm tables, declare `GENERATED ALWAYS AS IDENTITY`; native Snowflake tables use ordered
-`AUTOINCREMENT`. Inserts omit generated keys, and overwrites and schema evolution retain their
-generator. Native cloud `CREATE_TABLE` prepares an independent table with its identity and rows,
-then atomically clones it into the target; a failed preparation or publication leaves the old
-target intact. Table properties survive and Snowflake replacement copies existing grants.
+`ROW_ID` is an internal key, not a business key or a gap-free row counter. It is computed the
+same way on every warehouse: `ROW_ID = TASK_RUN_ID × 2^32 + n`, where `TASK_RUN_ID` is the task
+run that wrote the row and `n` numbers its rows. `ROW_ID / 2^32` therefore names the writing task
+run. Task run IDs are unique and only increase, so an ID is never reused: not after a replace, a
+drop and recreate, a hard delete or a warehouse restore, and nothing about it is stored in the
+Engine DB. A write continues after the largest ID its task run already holds in the target, so a
+retry after a committed write, or a second landing item in the same run, never repeats one.
+Writes outside a task run (`seed` loads during `deploy`, `adopt`) use their audited request ID,
+negated, so their IDs are negative and never meet a task run's.
 
-Trino, DuckDB Iceberg and Snowflake Iceberg allocate `MAX(ROW_ID) + ROW_NUMBER()`. The Engine DB
-lock for the qualified target is held from before opening the warehouse transaction until that
-transaction commits, so competing task processes cannot read the same base. Older Databricks or
-Snowflake targets without a generator keep this computed strategy; an ordinary write does not
-rebuild them. A deliberate `CREATE_TABLE` replacement creates a new identity-backed target.
+Limits: fewer than 2^32 rows per task run and target, and task run and request IDs below 2^31.
+A write past the first limit fails before it writes, naming the target and the count.
 
-Generated keys need no `MAX(ROW_ID)` allocation. The same target mutation lock still coordinates
-writes with table replacement and hash upgrades, and serializes Databricks identity writes, whose
-concurrent transactions are unsupported. All competing etl-craft writers must use the same Engine
-DB. Writes from other tools are outside this lock; concurrent external writes to computed-key
-targets can produce duplicate keys.
+Targets have a plain `BIGINT` `ROW_ID` column, a primary key where the warehouse enforces keys
+(PostgreSQL, native DuckDB). The target mutation lock coordinates writes with table replacement
+and hash upgrades. Targets created by earlier etl-craft builds with an identity or sequence
+`ROW_ID` cannot be replaced atomically on Databricks and Snowflake: recreate them.
 
 ## When the target and the SELECT disagree
 
@@ -535,7 +533,7 @@ task fails with the reason when:
 With `SCHEMA_EVOLUTION = true`, new columns are appended with `ALTER TABLE ... ADD COLUMN`.
 They are nullable and NULL in existing rows. The engine reads complete types from the materialized
 stage, preserving precision, scale, declared lengths and nested types where the warehouse supports
-them. It keeps the existing table, rows, `ROW_ID` generator, storage location, comments, grants,
+them. It keeps the existing table, rows, `ROW_ID` values, storage location, comments, grants,
 partitioning and snapshot history. An overwrite still replaces rows using its publication strategy.
 Writes name their columns explicitly, so the SELECT's order need not match the table's order.
 

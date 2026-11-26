@@ -65,7 +65,6 @@ class PostgresWarehouse(WarehouseDialect):
     secure_view = "security_barrier"
     replace_strategy: ReplaceStrategy = "transactional"
     identifier_case = "lower"
-    generator_metadata_sql = "has_generator"
 
     def archive_type_matches(self, actual: str, expected: str) -> bool:
         """PostgreSQL reports VARCHAR through its SQL-standard spelling."""
@@ -118,12 +117,6 @@ class PostgresWarehouse(WarehouseDialect):
             "date": "DATE",
             "uuid": "UUID",
         }.get(name)
-
-    def identity_table_ddl(
-        self, target: str, columns: str, params: Mapping[str, str], *, start: int = 1
-    ) -> str:
-        """Declare ROW_ID's identity and key in the original CREATE."""
-        return f"CREATE TABLE {target} ({columns}, {self.identity_column_ddl(start)} PRIMARY KEY)"
 
     def supports_insert_merge(self, conn: Connection) -> bool:
         """PostgreSQL added MERGE in version 15."""
@@ -210,10 +203,7 @@ class PostgresWarehouse(WarehouseDialect):
             "format_type(a.atttypid, a.atttypmod) AS data_type, "
             "NULL AS numeric_precision, NULL AS numeric_scale, "
             "CASE WHEN a.attnotnull THEN 'NO' ELSE 'YES' END AS is_nullable, "
-            "(a.attidentity <> '' OR "
-            "COALESCE(pg_get_expr(d.adbin, d.adrelid), '') LIKE 'nextval(%') "
-            "AS has_generator, a.attnum AS ordinal_position FROM pg_attribute a "
-            "LEFT JOIN pg_attrdef d ON d.adrelid = a.attrelid AND d.adnum = a.attnum "
+            "a.attnum AS ordinal_position FROM pg_attribute a "
             "WHERE a.attrelid=to_regclass(:name) AND a.attnum>0 AND NOT a.attisdropped "
             "AND (CAST(:catalog AS varchar) IS NULL OR :catalog=current_database())) columns "
             "ORDER BY ordinal_position",

@@ -4,5 +4,4 @@ SELECT
        AND TARGET_TABLE_NAME=:table) AS hash_version,
     (SELECT STATEMENT_SHA256 FROM AUD_TARGET_VIEW_STATEMENT
      WHERE PROJECT_ID=:project_id AND TARGET_CATALOG_NAME=:catalog AND TARGET_SCHEMA_NAME=:schema
-       AND TARGET_TABLE_NAME=:table) AS statement_sha256,
-    (SELECT HIGH_WATER FROM AUD_TARGET_ROW_IDS WHERE LOCK_KEY=:lock_key) AS row_id_high_water
+       AND TARGET_TABLE_NAME=:table) AS statement_sha256

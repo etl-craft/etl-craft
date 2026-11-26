@@ -63,7 +63,8 @@ def erasure_world(sql_world, monkeypatch):
         SELECT_QUERY="SELECT 'retained' AS person, 1 AS n",
     )
     w.execute(
-        f"INSERT INTO {w.name('landing')} (person,n) VALUES (:key,2)", key="private-world-key"
+        f"INSERT INTO {w.name('landing')} (person,n,row_id) VALUES (:key,2,2)",
+        key="private-world-key",
     )
     w.run(
         "copy",

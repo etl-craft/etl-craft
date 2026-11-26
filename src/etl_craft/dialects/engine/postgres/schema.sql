@@ -943,11 +943,6 @@ CREATE INDEX ix_aud_cfg_business_rules_history_current ON AUD_CFG_BUSINESS_RULES
 CREATE INDEX ix_sql_edits_business_rules ON AUD_CFG_BUSINESS_RULES_HISTORY(PIPELINE_ID) WHERE substr(ACTOR,1,4)='sql:';
 
 -- Highest reserved computed ROW_ID for a warehouse target.
-CREATE TABLE AUD_TARGET_ROW_IDS (
-    LOCK_KEY BIGINT PRIMARY KEY,
-    HIGH_WATER BIGINT NOT NULL CHECK (HIGH_WATER >= 0)
-);
-
 -- The canonical hash version published after a target warehouse update commits.
 CREATE TABLE AUD_TARGET_HASH_VERSION (
     HASH_VERSION        INTEGER NOT NULL CONSTRAINT ck_target_hash_version CHECK (HASH_VERSION IN (1,2)),
@@ -2683,9 +2678,6 @@ CREATE TRIGGER trg_truncate_aud_cfg_task_parameters_history BEFORE TRUNCATE ON A
 CREATE TRIGGER trg_actor_guard_aud_cfg_business_rules_history BEFORE INSERT OR UPDATE OR DELETE ON AUD_CFG_BUSINESS_RULES_HISTORY FOR EACH ROW EXECUTE FUNCTION etl_craft_guard();
 
 CREATE TRIGGER trg_truncate_aud_cfg_business_rules_history BEFORE TRUNCATE ON AUD_CFG_BUSINESS_RULES_HISTORY FOR EACH STATEMENT EXECUTE FUNCTION etl_craft_guard();
-
-CREATE TRIGGER trg_actor_guard_aud_target_row_ids BEFORE INSERT OR UPDATE OR DELETE ON AUD_TARGET_ROW_IDS FOR EACH ROW EXECUTE FUNCTION etl_craft_guard();
-CREATE TRIGGER trg_truncate_aud_target_row_ids BEFORE TRUNCATE ON AUD_TARGET_ROW_IDS FOR EACH STATEMENT EXECUTE FUNCTION etl_craft_guard();
 
 CREATE TRIGGER trg_actor_guard_aud_target_hash_version BEFORE INSERT OR UPDATE OR DELETE ON AUD_TARGET_HASH_VERSION FOR EACH ROW EXECUTE FUNCTION etl_craft_guard();
 

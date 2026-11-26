@@ -19,7 +19,6 @@ from etl_craft.dialects.failure_evidence import driver_error
 from etl_craft.dialects.warehouse.base import (
     Presented,
     ReplaceStrategy,
-    SurrogateKey,
     WarehouseDialect,
 )
 from etl_craft.dialects.warehouse.metadata import unbounded_varchar
@@ -141,7 +140,6 @@ class TrinoIcebergWarehouse(WarehouseDialect):
     temporary_tables = False
     mutation_alias = False
     qualified_rename = True
-    surrogate_key: SurrogateKey = "computed"
     enforces_primary_keys = False
     bearer_needs_user = False
 

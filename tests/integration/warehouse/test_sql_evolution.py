@@ -53,7 +53,7 @@ def test_duckdb_iceberg_refuses_nested_additions_before_any_alter(sql_world):
 @pytest.mark.parametrize(
     "sql_world", [pytest.param("postgres", marks=pytest.mark.warehouse_postgres)], indirect=True
 )
-def test_postgres_evolution_preserves_dependent_view_index_comments_and_identity(sql_world):
+def test_postgres_evolution_preserves_dependent_view_index_comments_and_row_ids(sql_world):
     w = sql_world
     shape = "SELECT 1 AS id, CAST('Ann' AS VARCHAR(20)) AS name"
     w.setup("people", shape, "SCD1_MERGE")
@@ -93,7 +93,8 @@ def test_postgres_evolution_preserves_dependent_view_index_comments_and_identity
         "CAST(12.34 AS DECIMAL(12,2)) AS amount",
         **params,
     )
-    assert sorted(w.rows(f"SELECT row_id FROM {target}")) == [(1,), (2,)]
+    # The same task run numbers the second key after its first.
+    assert sorted(w.rows(f"SELECT row_id - task_run_id * 4294967296 FROM {target}")) == [(1,), (2,)]
 
 
 @pytest.mark.parametrize(
