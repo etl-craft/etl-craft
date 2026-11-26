@@ -4,6 +4,7 @@ from sqlalchemy import inspect, text
 
 from etl_craft.core.counts import Counts
 from etl_craft.engine import runlog, transitions
+from etl_craft.engine.condition_edges import derive_edges
 from etl_craft.engine.project_scope import configured_project
 from etl_craft.engine.queries import statement
 from etl_craft.engine.repository.pipelines import selected_project
@@ -72,17 +73,40 @@ def add_task(conn, pipeline_id, code, handler="SQL", **params):
 def add_dependency(
     conn, pipeline_id, task_id, depends_on, kind="SUCCESS", *, upstream_pipeline=None
 ):
-    return insert(
-        conn,
-        "INSERT INTO CFG_TASK_DEPENDENCY (PIPELINE_ID, TASK_ID, DEPENDS_ON_PIPELINE_ID, "
-        "DEPENDS_ON_TASK_ID, DEPENDENCY_TYPE) VALUES (:p, :t, :up, :u, :k)",
-        "TASK_DEPENDENCY_ID",
-        p=pipeline_id,
-        t=task_id,
-        up=upstream_pipeline or pipeline_id,
-        u=depends_on,
-        k=kind,
+    project_id = pipeline_project_id(conn, pipeline_id)
+    upstream = conn.execute(
+        text(
+            "SELECT t.TASK_CODE AS task_code, p.PIPELINE_ID AS pipeline_id, "
+            "p.PIPELINE_CODE AS pipeline_code, p.PROJECT_ID AS project_id, "
+            "j.PROJECT_CODE AS project_code FROM CFG_TASKS t "
+            "JOIN CFG_PIPELINES p ON p.PIPELINE_ID=t.PIPELINE_ID "
+            "JOIN CFG_PROJECTS j ON j.PROJECT_ID=p.PROJECT_ID WHERE t.TASK_ID=:task"
+        ),
+        {"task": depends_on},
+    ).one()
+    fact = {"SUCCESS": "SUCCESS", "FAILURE": "FAILED", "ALWAYS": "FINISHED", "HAS_DATA": "HAS_DATA"}
+    parts = [upstream.task_code, fact[kind]]
+    if (upstream_pipeline or upstream.pipeline_id) != pipeline_id:
+        parts.insert(0, upstream.pipeline_code)
+    if upstream.project_id != project_id:
+        parts.insert(0, upstream.project_code)
+    existing = conn.execute(
+        text("SELECT RUN_CONDITION FROM CFG_TASKS WHERE TASK_ID=:task"), {"task": task_id}
+    ).scalar_one()
+    reference = ".".join(parts)
+    condition = f"{existing} AND {reference}" if existing else reference
+    conn.execute(
+        text("UPDATE CFG_TASKS SET RUN_CONDITION=:condition WHERE TASK_ID=:task"),
+        {"condition": condition, "task": task_id},
     )
+    derive_edges(conn, project_id)
+    return conn.execute(
+        text(
+            "SELECT TASK_DEPENDENCY_ID FROM CFG_TASK_DEPENDENCY "
+            "WHERE TASK_ID=:task AND DEPENDS_ON_TASK_ID=:upstream"
+        ),
+        {"task": task_id, "upstream": depends_on},
+    ).scalar_one()
 
 
 def add_pipeline_dependency(conn, pipeline_id, depends_on, kind="SUCCESS"):

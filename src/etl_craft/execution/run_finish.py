@@ -6,11 +6,14 @@ import logging
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-from sqlalchemy.engine import Engine
+from sqlalchemy.engine import Connection, Engine
 
 from etl_craft.core.actor import SYSTEM_ACTOR, acting_as
+from etl_craft.core.conditions import Reading, describe
 from etl_craft.core.enums import (
-    SETTLED_STATUSES,
+    TERMINAL_STATUSES,
+    AttemptStatus,
+    GateOutcome,
     Handler,
     InterventionAction,
     RunStatus,
@@ -18,9 +21,13 @@ from etl_craft.core.enums import (
 )
 from etl_craft.core.graph import DependencyGraph, TaskRunState
 from etl_craft.engine import controls, runlog, transitions
+from etl_craft.engine.queries import statement
+from etl_craft.engine.repository import trackers
 from etl_craft.engine.repository.intervention_rows import fetch_interventions, fetch_task_rows
 from etl_craft.engine.repository.runs import fetch_task_statuses_for_run
+from etl_craft.engine.repository.tasks import fetch_admitted_parameters
 from etl_craft.execution import leases
+from etl_craft.execution.readiness import condition_decision
 from etl_craft.execution.run_types import (
     PipelineOutcome,
     PipelineRun,
@@ -28,6 +35,7 @@ from etl_craft.execution.run_types import (
     call_hook,
 )
 from etl_craft.execution.sla import SlaLapse, SlaWatch
+from etl_craft.handlers.parameters import pipeline_fail_options
 
 logger = logging.getLogger(__name__)
 
@@ -48,17 +56,25 @@ def settle_unsatisfiable(
     with engine.connect() as conn:
         run_state = runlog.fetch_run_state(conn, pipeline_run_id, list(graph.task_ids))
         fences = controls.blocked(conn, pipeline_run_id)
-    if None in fences:
+        cancelled = runlog.fetch_pipeline_run_status(conn, pipeline_run_id) == RunStatus.CANCELLED
+    if cancelled or None in fences:
         return []
     run_state.update(
         {t: TaskRunState(status=RunStatus.IN_PROGRESS) for t in fences if t is not None}
     )
     skipped: list[int] = []
     for task_id in graph.unsatisfiable(run_state, failures_final=failures_final):
-        reason = f"its dependencies can never be met under pipeline_run_id={pipeline_run_id}"
+        node = graph.node(task_id)
+        reading = Reading()
+        graph.evaluate(task_id, run_state, failures_final=failures_final, reading=reading)
+        reason = f"condition [{node.rule}] is not met: {describe(reading)}"
+        decision = condition_decision(task_id, node.rule, reading, GateOutcome.UNSATISFIED)
         with engine.begin() as conn:
             controls.lock_run(conn, pipeline_run_id)
-            if controls.blocked(conn, pipeline_run_id) != fences:
+            if (
+                controls.blocked(conn, pipeline_run_id) != fences
+                or runlog.fetch_pipeline_run_status(conn, pipeline_run_id) == RunStatus.CANCELLED
+            ):
                 return skipped
             binding = transitions.find_or_create_task_run(conn, task_id, pipeline_run_id)
             if not binding.created:
@@ -66,6 +82,8 @@ def settle_unsatisfiable(
             transitions.finish_task_run(
                 conn, binding.task_run_id, status=RunStatus.SKIPPED, error_message=reason
             )
+            trackers.record_decisions(conn, pipeline_run_id, (decision,))
+        run_state[task_id] = TaskRunState(status=RunStatus.SKIPPED)
         skipped.append(task_id)
         logger.info("%s: SKIPPED — %s", task_codes[task_id], reason)
     return skipped
@@ -74,9 +92,8 @@ def settle_unsatisfiable(
 @dataclass(frozen=True)
 class _Judgement:
     status: RunStatus
-    data_tasks: set[int]
-    alert_failures: list[str]
-    unsettled: dict[int, str]
+    failures: list[str]
+    tolerated: list[str]
 
 
 @acting_as(SYSTEM_ACTOR)
@@ -91,14 +108,9 @@ def finalize(
 
     A run whose data tasks all ended ``SKIPPED`` ends ``SKIPPED``, which a downstream
     ``SUCCESS`` dependency does not accept.
-    Alerts do not affect a data pipeline's outcome; a pipeline of only alerts judges its alerts.
+    Every task can fail the pipeline according to its configured options.
     """
     settle_unsatisfiable(engine, run.graph, run.pipeline_run_id, run.task_codes)
-    running = _running_elsewhere(engine, run.pipeline_code, run.pipeline_run_id)
-    if running is not None:
-        return running
-    judgement = _judge_run(engine, run)
-    status = judgement.status
     with engine.begin() as conn:
         controls.lock_run(conn, run.pipeline_run_id)
         if controls.blocked(conn, run.pipeline_run_id):
@@ -108,6 +120,11 @@ def finalize(
                 "request and release the exact scope before finalizing",
                 run.pipeline_run_id,
             )
+        running = _running_elsewhere(conn, run.pipeline_code, run.pipeline_run_id)
+        if running is not None:
+            return running
+        judgement = _judge_run(conn, run)
+        status = judgement.status
         breached_before = runlog.fetch_run_sla(conn, run.pipeline_run_id).sla_status
         backfill_run = runlog.fetch_run_kind(conn, run.pipeline_run_id).backfill
         ending = transitions.finalize_pipeline_run(
@@ -139,34 +156,53 @@ def finalize(
     return outcome
 
 
-def _judge_run(engine: Engine, run: PipelineRun) -> _Judgement:
-    """Judge data tasks, using alert outcomes only for an alert-only pipeline."""
-    with engine.connect() as conn:
-        run_state = runlog.fetch_run_state(conn, run.pipeline_run_id, list(run.graph.task_ids))
-        data_tasks = {
-            task.task_id
-            for task in fetch_task_statuses_for_run(conn, run.pipeline_id, run.pipeline_run_id)
-            if task.handler != Handler.ALERT
-        } & set(run.graph.task_ids)
-    judged_tasks = data_tasks or set(run.graph.task_ids)
-    alert_failures = sorted(
-        run.task_codes[task_id]
-        for task_id in set(run.graph.task_ids) - data_tasks
-        if run_state.get(task_id, TaskRunState()).status == RunStatus.FAILED
+def _judge_run(conn: Connection, run: PipelineRun) -> _Judgement:
+    """Judge every admitted task and apply the all-skipped rule."""
+    current = runlog.fetch_pipeline_run_status(conn, run.pipeline_run_id)
+    if current == RunStatus.CANCELLED:
+        return _Judgement(RunStatus.CANCELLED, [], [])
+    run_state = runlog.fetch_run_state(conn, run.pipeline_run_id, list(run.graph.task_ids))
+    data_tasks = {
+        task.task_id
+        for task in fetch_task_statuses_for_run(conn, run.pipeline_id, run.pipeline_run_id)
+        if task.handler != Handler.ALERT
+    } & set(run.graph.task_ids)
+    condition_skips = set(
+        conn.execute(
+            statement(conn, "condition_skips"),
+            {"run_id": run.pipeline_run_id, "result": GateOutcome.UNSATISFIED},
+        ).scalars()
     )
-    unsettled = {
-        task_id: run_state.get(task_id, TaskRunState()).status or "never started"
-        for task_id in judged_tasks
-        if run_state.get(task_id, TaskRunState()).status not in SETTLED_STATUSES
-    }
-    status = RunStatus.FAILED if unsettled else RunStatus.SUCCESS
-    if (
-        not unsettled
-        and judged_tasks
-        and all(run_state[task_id].status == RunStatus.SKIPPED for task_id in judged_tasks)
-    ):
+    failures, tolerated = [], []
+    for task_id in sorted(run.graph.task_ids, key=run.task_codes.__getitem__):
+        state = run_state.get(task_id, TaskRunState())
+        status = state.status
+        code = run.task_codes[task_id]
+        if status not in TERMINAL_STATUSES:
+            failures.append(f"{code} ({status or 'never started'})")
+            continue
+        if status in {RunStatus.SUCCESS, RunStatus.CANCELLED}:
+            continue
+        if status == RunStatus.FAILED and state.attempt_status == AttemptStatus.LOST:
+            failures.append(f"{code} ({AttemptStatus.LOST})")
+            continue
+        params = fetch_admitted_parameters(conn, task_id, run.pipeline_run_id)
+        fail_failed, fail_skipped = pipeline_fail_options(params)
+        if status == RunStatus.FAILED:
+            if fail_failed:
+                failures.append(f"{code} ({RunStatus.FAILED}) [FAIL_PIPELINE_IF_FAILED=Y]")
+            else:
+                tolerated.append(f"{code} (FAIL_PIPELINE_IF_FAILED=N)")
+        if status == RunStatus.SKIPPED and fail_skipped and task_id in condition_skips:
+            failures.append(f"{code} (FAIL_PIPELINE_IF_NOT_RUN=Y)")
+    judged_tasks = data_tasks or set(run.graph.task_ids)
+    if failures:
+        status = RunStatus.FAILED
+    elif judged_tasks and all(run_state[t].status == RunStatus.SKIPPED for t in judged_tasks):
         status = RunStatus.SKIPPED
-    return _Judgement(status, data_tasks, alert_failures, unsettled)
+    else:
+        status = RunStatus.SUCCESS
+    return _Judgement(status, failures, tolerated)
 
 
 def _outcome(
@@ -179,15 +215,12 @@ def _outcome(
 ) -> PipelineOutcome:
     """Describe the committed ending, its unsuccessful tasks, bypasses and SLA."""
     status = judgement.status
-    data_tasks, alert_failures = judgement.data_tasks, judgement.alert_failures
-    unsettled = judgement.unsettled
     message = f"{run.pipeline_code}: pipeline_run_id={run.pipeline_run_id} {status}"
-    if alert_failures and data_tasks:
-        message += f"; alert task(s) failed: {', '.join(alert_failures)} (see their attempt logs)"
-        logger.error("%s: alert task(s) failed: %s", run.pipeline_code, ", ".join(alert_failures))
-    if unsettled:
-        listed = ", ".join(f"{run.task_codes[t]} ({state})" for t, state in unsettled.items())
-        message += f" — {len(unsettled)} task(s) did not succeed: {listed}"
+    if judgement.tolerated:
+        message += f"; tolerated failure: {', '.join(judgement.tolerated)}"
+    if judgement.failures:
+        listed = ", ".join(judgement.failures)
+        message += f" — {len(judgement.failures)} task(s) did not succeed: {listed}"
         if never_ready:
             message += (
                 f"; {len(never_ready)} of them could not start because their dependencies "
@@ -213,7 +246,7 @@ def _outcome(
 
 
 def _running_elsewhere(
-    engine: Engine, pipeline_code: str, pipeline_run_id: int
+    conn: Connection, pipeline_code: str, pipeline_run_id: int
 ) -> PipelineOutcome | None:
     """Return the outcome that leaves the run open when a task of it is still running.
 
@@ -221,12 +254,9 @@ def _running_elsewhere(
     still ``IN-PROGRESS`` belongs to another process, or to one that died without recording an
     outcome. Either way the run must not be ended under it.
     """
-    with engine.connect() as conn:
-        running = [
-            row
-            for row in fetch_task_rows(conn, pipeline_run_id)
-            if row.status == RunStatus.IN_PROGRESS
-        ]
+    running = [
+        row for row in fetch_task_rows(conn, pipeline_run_id) if row.status == RunStatus.IN_PROGRESS
+    ]
     if not running:
         return None
     listed = ", ".join(f"{row.task_code} (task_run_id={row.task_run_id})" for row in running)

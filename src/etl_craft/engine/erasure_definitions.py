@@ -37,6 +37,7 @@ def pinned(engine: Engine) -> tuple[Definition, dict[str, str | None]]:
             images.append((ref.pipeline_id, Definition.read(snapshot, bundle_id=bundle)))
     images.extend(selected.items())
     identities = {table.table: table.id_column.lower() for table in TABLES}
+    identities["CFG_TASK_DEPENDENCY"] = "task_dependency_id"
     bundles: dict[str, str | None] = {}
     columns: dict[str, tuple[str, ...]] = {}
     rows: dict[str, dict[object, dict[str, object]]] = {}

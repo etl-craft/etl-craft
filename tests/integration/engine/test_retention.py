@@ -75,8 +75,8 @@ def test_retained_gate_decision_pins_selected_run_and_task(scene):
         dependency = insert(
             conn,
             "INSERT INTO CFG_TASK_DEPENDENCY "
-            "(PIPELINE_ID,TASK_ID,DEPENDS_ON_PIPELINE_ID,DEPENDS_ON_TASK_ID,"
-            "DEPENDENCY_TYPE) VALUES (:p,:other,:p,:t,'SUCCESS')",
+            "(PIPELINE_ID,TASK_ID,DEPENDS_ON_PIPELINE_ID,DEPENDS_ON_TASK_ID) "
+            "VALUES (:p,:other,:p,:t)",
             "TASK_DEPENDENCY_ID",
             p=pipeline,
             t=task,

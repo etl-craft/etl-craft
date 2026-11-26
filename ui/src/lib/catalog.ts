@@ -53,7 +53,8 @@ export interface CatalogTask {
   lineage: { state: "derived" | "declared" | "unavailable"; reason: string | null };
   mapping: { steps: { kind: string; expression: string; name: string; logic?: {expression:string;columns:string[];label:string}[] }[]; edges: CatalogEdge[]; source: string | null; write: { action: string | null; managed_columns: string[]; keys: Record<string, string> } };
   script_kind: string | null;
-  run_condition_count: number | null;
+  fail_pipeline_if_failed?: string;
+  fail_pipeline_if_not_run?: string;
   active_flag: string;
   target_active_flag: string;
   retries: number | null;

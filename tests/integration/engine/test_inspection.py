@@ -141,7 +141,7 @@ def test_explain_retains_recorded_cross_pipeline_decisions_and_retry_due(engine_
     assert done.dependencies[0].status == "SUCCESS"
 
 
-def test_gate_waits_are_visible_and_conditional_dependencies_use_the_required_count(engine_db):
+def test_gate_waits_are_visible_and_disjunction_reads_the_first_success(engine_db):
     from etl_craft.engine.queries import statement
 
     engine = engine_db.engine
@@ -155,7 +155,11 @@ def test_gate_waits_are_visible_and_conditional_dependencies_use_the_required_co
         add_dependency(conn, pipeline, task, first)
         add_dependency(conn, pipeline, task, second)
         conn.execute(
-            text("UPDATE CFG_TASKS SET RUN_CONDITION='ANY' WHERE TASK_ID=:task"), {"task": task}
+            text(
+                "UPDATE CFG_TASKS SET RUN_CONDITION='first.SUCCESS OR second.SUCCESS' "
+                "WHERE TASK_ID=:task"
+            ),
+            {"task": task},
         )
         run = start_run(conn, pipeline)
         summary = transitions.find_or_create_task_run(conn, first, run).task_run_id
@@ -181,7 +185,7 @@ def test_gate_waits_are_visible_and_conditional_dependencies_use_the_required_co
             {"pipeline_run_id": run, "task_id": None, "looks": 1},
         )
     done = act(ctx, ActionName.EXPLAIN, pipeline_code="P", task_code="any")
-    assert done.run_condition == "ANY" and done.required_count == 1
+    assert done.run_condition == "first.SUCCESS OR second.SUCCESS" and done.condition_met is True
     assert [dependency.met for dependency in done.dependencies] == [True, False]
     assert done.state == "not run"
 

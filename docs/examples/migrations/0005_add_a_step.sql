@@ -37,28 +37,14 @@ LEFT JOIN CFG_PIPELINES p ON p.PROJECT_ID = (SELECT PROJECT_ID FROM ETL_CRAFT_PR
 LEFT JOIN CFG_TASKS t ON t.PIPELINE_ID = p.PIPELINE_ID AND t.TASK_CODE = v.column2
                      AND t.ACTIVE_FLAG = 'Y';
 
-INSERT INTO CFG_TASK_DEPENDENCY (PIPELINE_ID, TASK_ID, DEPENDS_ON_PIPELINE_ID, DEPENDS_ON_TASK_ID,
-                                 DEPENDENCY_TYPE)
-SELECT t.PIPELINE_ID, t.TASK_ID, u.PIPELINE_ID, u.TASK_ID, v.column5
-FROM (VALUES
-    ('SALES_DAILY', 'validate_feed', 'SALES_DAILY', 'fetch_orders', 'SUCCESS'),
-    ('SALES_DAILY', 'load_orders', 'SALES_DAILY', 'validate_feed', 'SUCCESS')
-) v
-LEFT JOIN CFG_PIPELINES p ON p.PROJECT_ID = (SELECT PROJECT_ID FROM ETL_CRAFT_PROJECT)
-    AND p.PIPELINE_CODE = v.column1 AND p.ACTIVE_FLAG = 'Y'
-LEFT JOIN CFG_TASKS t ON t.PIPELINE_ID = p.PIPELINE_ID AND t.TASK_CODE = v.column2
-                     AND t.ACTIVE_FLAG = 'Y'
-LEFT JOIN CFG_PIPELINES up ON up.PROJECT_ID = (SELECT PROJECT_ID FROM ETL_CRAFT_PROJECT)
-    AND up.PIPELINE_CODE = v.column3 AND up.ACTIVE_FLAG = 'Y'
-LEFT JOIN CFG_TASKS u ON u.PIPELINE_ID = up.PIPELINE_ID AND u.TASK_CODE = v.column4
-                     AND u.ACTIVE_FLAG = 'Y';
+UPDATE CFG_TASKS SET RUN_CONDITION = 'fetch_orders.SUCCESS'
+WHERE TASK_CODE = 'validate_feed' AND PIPELINE_ID = (
+    SELECT PIPELINE_ID FROM CFG_TASKS WHERE TASK_ID =
+        (SELECT ID FROM codes_in_use WHERE CODE = 'SALES_DAILY.load_orders')
+);
 
--- The dependency the new step replaces: load_orders no longer waits on fetch_orders directly.
-UPDATE CFG_TASK_DEPENDENCY
-SET ACTIVE_FLAG = 'N'
-WHERE ACTIVE_FLAG = 'Y'
-  AND TASK_ID = (SELECT ID FROM codes_in_use WHERE CODE = 'SALES_DAILY.load_orders')
-  AND DEPENDS_ON_TASK_ID = (SELECT ID FROM codes_in_use WHERE CODE = 'SALES_DAILY.fetch_orders');
+UPDATE CFG_TASKS SET RUN_CONDITION = 'validate_feed.SUCCESS AND setup_orders.SUCCESS'
+WHERE TASK_ID = (SELECT ID FROM codes_in_use WHERE CODE = 'SALES_DAILY.load_orders');
 
 -- A parameter retired: fetch_orders goes back to the default retry delay.
 UPDATE CFG_TASK_PARAMETERS

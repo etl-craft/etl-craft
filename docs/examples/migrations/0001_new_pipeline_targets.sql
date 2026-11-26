@@ -33,18 +33,16 @@ VALUES
      '{"TAGS": ["sales"]}');
 
 -- Tasks: pipeline code, task code, TASK_TYPE (INGESTION or ETL), HANDLER (PYTHON, SQL,
--- BUSINESS_RULES or ALERT), then RUN_CONDITION and RUN_CONDITION_COUNT: NULL and NULL to
--- wait for every dependency, 'ANY' and NULL for any one of them, 'N' and a number for that many.
-INSERT INTO CFG_TASKS (PIPELINE_ID, TASK_CODE, TASK_TYPE, HANDLER, RUN_CONDITION,
-                       RUN_CONDITION_COUNT)
-SELECT p.PIPELINE_ID, v.column2, v.column3, v.column4, v.column5, CAST(v.column6 AS INTEGER)
+-- BUSINESS_RULES or ALERT), then the run condition. NULL starts with the run.
+INSERT INTO CFG_TASKS (PIPELINE_ID, TASK_CODE, TASK_TYPE, HANDLER, RUN_CONDITION)
+SELECT p.PIPELINE_ID, v.column2, v.column3, v.column4, v.column5
 FROM (VALUES
-    ('SALES_DAILY', 'fetch_orders', 'INGESTION', 'PYTHON', NULL, NULL),
-    ('SALES_DAILY', 'setup_orders', 'ETL', 'SQL', NULL, NULL),
-    ('SALES_DAILY', 'load_orders', 'ETL', 'SQL', NULL, NULL),
-    ('SALES_DAILY', 'check_orders', 'ETL', 'BUSINESS_RULES', NULL, NULL),
-    ('SALES_DAILY', 'on_failure', 'ETL', 'ALERT', NULL, NULL),
-    ('SALES_DAILY', 'alert', 'ETL', 'ALERT', NULL, NULL)
+    ('SALES_DAILY', 'fetch_orders', 'INGESTION', 'PYTHON', NULL),
+    ('SALES_DAILY', 'setup_orders', 'ETL', 'SQL', NULL),
+    ('SALES_DAILY', 'load_orders', 'ETL', 'SQL', 'fetch_orders.SUCCESS AND setup_orders.SUCCESS'),
+    ('SALES_DAILY', 'check_orders', 'ETL', 'BUSINESS_RULES', 'load_orders.HAS_DATA'),
+    ('SALES_DAILY', 'on_failure', 'ETL', 'ALERT', NULL),
+    ('SALES_DAILY', 'alert', 'ETL', 'ALERT', NULL)
 ) v
 LEFT JOIN CFG_PIPELINES p ON p.PROJECT_ID = (SELECT PROJECT_ID FROM ETL_CRAFT_PROJECT)
     AND p.PIPELINE_CODE = v.column1 AND p.ACTIVE_FLAG = 'Y';
@@ -94,27 +92,6 @@ LEFT JOIN CFG_PIPELINES p ON p.PROJECT_ID = (SELECT PROJECT_ID FROM ETL_CRAFT_PR
     AND p.PIPELINE_CODE = v.column1 AND p.ACTIVE_FLAG = 'Y'
 LEFT JOIN CFG_TASKS t ON t.PIPELINE_ID = p.PIPELINE_ID AND t.TASK_CODE = v.column2
                      AND t.ACTIVE_FLAG = 'Y';
-
--- Task dependencies: the task (pipeline code, task code), the task it waits on (pipeline code,
--- task code, in this pipeline or another), and DEPENDENCY_TYPE: SUCCESS, FAILURE, ALWAYS, or
--- HAS_DATA for a success that wrote rows. Alert tasks need none: the events they name start them.
-INSERT INTO CFG_TASK_DEPENDENCY (PIPELINE_ID, TASK_ID, DEPENDS_ON_PIPELINE_ID, DEPENDS_ON_TASK_ID,
-                                 DEPENDENCY_TYPE)
-SELECT t.PIPELINE_ID, t.TASK_ID, u.PIPELINE_ID, u.TASK_ID, v.column5
-FROM (VALUES
-    ('SALES_DAILY', 'load_orders', 'SALES_DAILY', 'fetch_orders', 'SUCCESS'),
-    ('SALES_DAILY', 'load_orders', 'SALES_DAILY', 'setup_orders', 'SUCCESS'),
-    ('SALES_DAILY', 'check_orders', 'SALES_DAILY', 'load_orders', 'HAS_DATA')
-) v
-LEFT JOIN CFG_PIPELINES p ON p.PROJECT_ID = (SELECT PROJECT_ID FROM ETL_CRAFT_PROJECT)
-    AND p.PIPELINE_CODE = v.column1 AND p.ACTIVE_FLAG = 'Y'
-LEFT JOIN CFG_TASKS t ON t.PIPELINE_ID = p.PIPELINE_ID AND t.TASK_CODE = v.column2
-                     AND t.ACTIVE_FLAG = 'Y'
-LEFT JOIN CFG_PIPELINES up ON up.PROJECT_ID = (SELECT PROJECT_ID FROM ETL_CRAFT_PROJECT)
-    AND up.PIPELINE_CODE = v.column3 AND up.ACTIVE_FLAG = 'Y'
-LEFT JOIN CFG_TASKS u ON u.PIPELINE_ID = up.PIPELINE_ID AND u.TASK_CODE = v.column4
-                     AND u.ACTIVE_FLAG = 'Y';
-
 
 -- Business rules: pipeline code, task code, BUSINESS_RULE_NAME, SEQUENCE_NUMBER (the wave the
 -- rule runs in), BUSINESS_RULE_TYPE (INCOMPLETE, REJECT or REPORT), BUSINESS_RULE_KEY_COLUMN,

@@ -382,7 +382,14 @@ def test_failed_refresh_lists_metadata_findings_without_losing_the_last_good_ver
                     conn, pipeline, "OTHER", "PYTHON", SCRIPT_FILE="python_scripts/work.py"
                 )
                 add_dependency(conn, pipeline, task, other)
-                add_dependency(conn, pipeline, other, task)
+                name = conn.execute(
+                    text("SELECT TASK_CODE AS code FROM CFG_TASKS WHERE TASK_ID=:task"),
+                    {"task": task},
+                ).scalar_one()
+                conn.execute(
+                    text("UPDATE CFG_TASKS SET RUN_CONDITION=:condition WHERE TASK_ID=:task"),
+                    {"task": other, "condition": f"{name}.SUCCESS"},
+                )
             else:
                 conn.execute(
                     text(

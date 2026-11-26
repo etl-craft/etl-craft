@@ -1,118 +1,81 @@
-# Dependencies and run conditions
+# Run conditions
 
-A pipeline's order comes from its `CFG_TASK_DEPENDENCY` rows, never from code. Each row says
-that a task waits on an upstream task, and which outcome of that upstream it waits for.
+Set `RUN_CONDITION` in `tasks.csv` to say when a task starts. A blank cell makes the
+task ready when the pipeline run starts. Deploy, project migrations and
+`etl-craft pipelines re-parse` derive the dependency edges from the conditions.
 
-## Dependency types
+## Expressions and facts
 
-| `DEPENDENCY_TYPE` | Satisfied when the upstream task is |
+Use a task code followed by a fact, such as `load.SUCCESS`, `pipeline.load.FAILED`, or
+`project.pipeline.load.FINISHED`. Keywords and facts are case-insensitive. You can
+combine expressions with `NOT`, `AND`, and `OR`, in that order of precedence.
+Parentheses group expressions, and `AT_LEAST(2, a.SUCCESS, b.SUCCESS, c.SUCCESS)`
+requires at least two of the three expressions to be true. The threshold must be
+between one and the number of expressions.
+
+| Facts | Values |
 |---|---|
-| `SUCCESS` | `SUCCESS` |
-| `FAILURE` | `FAILED`, for example an email alert that reports a failure |
-| `ALWAYS` | finished in any way: `SUCCESS`, `FAILED` or `SKIPPED` |
-| `HAS_DATA` | `SUCCESS` and wrote at least one row |
+| `SUCCESS`, `FAILED`, `SKIPPED`, `FINISHED`, `HAS_DATA` | Boolean. `HAS_DATA` requires a successful task that wrote at least one row. |
+| `STATUS` | `SUCCESS`, `FAILED`, `SKIPPED` or `CANCELLED` |
+| `SOURCE_ROWS`, `TARGET_ROWS`, `ROWS_WRITTEN`, `INSERTED`, `UPDATED`, `DELETED`, `REJECTED`, `DUPLICATES`, `ATTEMPTS`, `DURATION_SECONDS` | Integer |
+| `ERROR_CLASS` | `TRANSIENT`, `PERMANENT`, `UNKNOWN` or `NONE` |
 
-An upstream that has not run yet, or is still `IN-PROGRESS`, satisfies no dependency.
+Compare numeric facts with `=`, `<>`, `<`, `<=`, `>`, or `>=`. Use `=` or `<>`
+for status and error class, for example `load.STATUS = FAILED`.
 
-"Wrote" means inserted, updated or deleted, as `AUD_TASK_RUN_LOG.ROWS_WRITTEN` records: an
-`APPEND_TABLE` of no rows, or a merge that changed nothing, does not satisfy `HAS_DATA` however
-many rows its target holds. A Python task's `row_count` is the rows it wrote. A row recorded
-before `ROWS_WRITTEN` existed is judged by its `TARGET_COUNT`.
+The package demo's `DEMO.setup_fact` waits for
+`interactions.SUCCESS AND interactions.ROWS_WRITTEN > 0 AND retire_agents.SUCCESS`.
+See the [demo metadata](https://github.com/etl-craft/etl-craft/blob/main/examples/demo/metadata/demo.sql).
 
-## Run conditions
+## When a task starts
 
-`CFG_TASKS.RUN_CONDITION` sets how many of a task's dependencies must be satisfied before it
-starts. It counts every dependency of the task, including those on tasks in other pipelines.
+A true expression makes the task ready. A false expression skips it. An unknown
+expression waits. For example, `a.SUCCESS OR b.SUCCESS` is true as soon as either
+task succeeds. A count that a handler does not report is unknown. If no upstream
+can still change the answer, an unknown expression also skips the task. The
+engine records the reason and the values it read in `AUD_GATE_DECISIONS`.
 
-| `RUN_CONDITION` | The task starts when |
-|---|---|
-| empty or `ALL` | every dependency is satisfied |
-| `ANY` | at least one dependency is satisfied |
-| `N` | at least `RUN_CONDITION_COUNT` dependencies are satisfied |
-
-`RUN_CONDITION_COUNT` is set only with `N`, must be at least 1, and cannot exceed the task's
-number of dependencies, since the task could then never start.
-
-## Waves
-
-The engine checks the graph before a run: a task that depends on itself, a dependency on a task
-that does not exist, and a cycle are all errors, each with its own
-[exit status](../reference/exit-codes.md). The dependencies of an inactive task are ignored; an
-active task that depends on an inactive one in the same pipeline is an error, since it could
-never run. `etl-craft graph` shows the
-pipeline as waves, where each wave depends only on earlier ones. Waves are the guaranteed-safe
-order: an `ANY` or `N` task appears after all its upstreams, even though it may start sooner
-during a run.
-
-## During a run
-
-The engine starts every task that is ready, runs it, and looks again, until nothing is left
-to start.
-
-- **Ready:** a task is ready when it has not run under the active run, or it `FAILED`, and
-  its run condition is met.
-- **Retries resume:** a task that is `SUCCESS` or `SKIPPED` never runs again under the same run,
-  and one that is `IN-PROGRESS` is not started twice.
-- **Skipped:** a task that can never become ready is recorded `SKIPPED`. This happens when
-  too many of its upstreams are `SUCCESS` or `SKIPPED` without satisfying their dependency: a
-  `FAILURE` dependency on a task that succeeded, for example. Skipping cascades: a task that
-  waits for the skipped task's `SUCCESS` is skipped too, while an `ALWAYS` dependency on it is
-  satisfied.
-- **A failed upstream is not final while the run goes on:** a retry may still turn it into
-  `SUCCESS`, so its dependents wait rather than being skipped. Once nothing else can start, no
-  retry will come in this run, so the tasks waiting on the failure are recorded `SKIPPED`, and those that wait on them
-  with `ALWAYS` or `FAILURE`, such as an alert, then run. The run ends `FAILED`, and its summary
-  names the tasks skipped because of the failure.
-
-Dependencies on tasks in other pipelines are checked when the task itself starts, so they never
-cause a task to be skipped before it runs.
+Tasks in the same pipeline read each other's state under the same run. A failed
+upstream may still be retried, so its dependents wait until that failure is final.
+Tasks already successful or skipped under the run stay settled.
 
 ## Dependencies on other pipelines
 
-A pipeline can depend on another pipeline (`CFG_PIPELINE_DEPENDENCY`), and a task on a task in
-another pipeline (a `CFG_TASK_DEPENDENCY` row whose `DEPENDS_ON_PIPELINE_ID` is another
-pipeline). A pipeline's dependencies are checked before a new run of it starts; a task's, before
-the task runs.
+A reference to another pipeline reads the latest finished output. The gate can
+wait for an upstream run still in progress and checks that the output was not
+already consumed. A successful task consumes the output recorded at admission.
+Set `CONSUME_REPAIRS=N` on the consuming pipeline to accept only a new run
+identity for task conditions. Pipeline-level dependencies still use `pipeline_dependencies.csv` and its
+`DEPENDENCY_TYPE`: `SUCCESS`, `FAILURE`, `ALWAYS`, or `HAS_DATA`. They are
+checked before admitting a pipeline run. An unmet pipeline gate produces a
+skipped pipeline run. Each pipeline dependency has its own `CONSUME_REPAIRS`.
 
-1. **Wait for a running upstream.** While the upstream's latest run is `IN-PROGRESS`, the check
-   waits for it. It looks again at 70% of the upstream's average run length, then 80%, 90% and so
-   on; one check waits at most `Orchestration.Gate_wait_minutes` (an hour unless set; `0` judges
-   at once) and looks at most 30 times, across all its dependencies.
-2. **The last run decides.** The upstream's latest finished run must satisfy the dependency
-   type, just as within a pipeline. An older run that would have satisfied it does not count: if
-   the upstream succeeded yesterday and failed today, a `SUCCESS` dependency is not satisfied.
-3. **Consumption uses the admission decision.** A gate records each dependency it judges in
-   `AUD_GATE_DECISIONS`, with the selected upstream run, published output revision, result,
-   reason and decision time. Pipeline decisions are recorded with run creation; task decisions
-   are recorded with attempt admission. A successful downstream consumes only its recorded
-   `SATISFIED` decisions. Reopening an upstream, completing a newer run, or changing dependency
-   metadata while the downstream runs cannot change what that downstream consumes.
-4. **Repairs can be fresh output.** A higher upstream run id is new. The same run id is new only
-   when its published `OUTPUT_REVISION` is higher and this dependency has `CONSUME_REPAIRS = 'Y'`
-   (the default on both dependency tables). Set it to `N` when the dependency should accept only
-   new run identities. An older run id never becomes new merely by gaining a higher revision.
+Backfills assume cross-pipeline tasks delivered. They read `SUCCESS`, `FINISHED`
+and `HAS_DATA` as true, `FAILED` and `SKIPPED` as false, and `STATUS` as
+`SUCCESS`. Other cross-pipeline facts are unknown.
 
-A run starts at output revision 1. Reopening it sets `REPAIR_PENDING = 'Y'`; a successful ending
-publishes the repair by incrementing the revision once and clearing the flag. A failed or cancelled
-repair does not publish a revision. Cross-pipeline task decisions use their task run identity and
-the containing pipeline's published output revision.
+## Refusals
 
-`AUD_DEPENDENCY_CONSUMPTION` records the selected upstream identity and revision. Failed or skipped
-downstream work consumes nothing; bypassed decisions also consume nothing. Pipeline retries resume
-with their original admission decisions, while a retried task receives decisions for its new
-attempt. Skipped tasks can retain an unsatisfied decision without an execution attempt.
+Correct a misspelling such as `load.SUCESS` to `load.SUCCESS`. Use a numeric fact
+in a comparison such as `load.REJECTED = 0`. Remove self-references or one link
+in a cycle, and use only active tasks in projects you can view.
 
-`Orchestration.Dependency_gates: WARN` or `off` relaxes these checks per profile, recording
-each bypass; see [Relax dependency gates](run-control.md#relax-dependency-gates).
+## How a pipeline run ends
 
-A pipeline whose dependencies are not satisfied has its run recorded `SKIPPED`. A task whose
-dependencies on other pipelines are not satisfied is recorded `SKIPPED` too, unless an upstream in
-its own pipeline has not finished yet. `SKIPPED` is final for that run: the task does not run
-until a new run finds its dependencies satisfied. A run whose tasks were all skipped ends `SKIPPED`
-itself, so a pipeline that depends on it with `SUCCESS` is skipped in turn.
+Each task, including an alert, accepts these options in `task_parameters.csv`.
 
-A successful pipeline ending records its status, SLA result and admitted pipeline-dependency
-consumption in one Engine DB transaction. A successful task attempt records its outcome, summary,
-offset and admitted task-dependency consumption together. A crash before either commit leaves
-none of those ending writes; after the commit, it leaves all of them. Finalization hooks run
-after the pipeline transaction commits.
+| Option | Default | Effect when set to `Y` |
+|---|---|---|
+| `FAIL_PIPELINE_IF_FAILED` | `Y` | Its final failure fails the pipeline. |
+| `FAIL_PIPELINE_IF_NOT_RUN` | `N` | A skip caused by its condition fails the pipeline. |
+
+Other branches continue. An operator's skip does not trigger the second option,
+and a cancelled run stays cancelled. Engine trouble that leaves a task without a
+final outcome fails the pipeline. If no failure applies and every data task was
+skipped, the pipeline is skipped. In an alert-only pipeline this test includes
+every alert. Other runs succeed.
+
+For example, set `FAIL_PIPELINE_IF_FAILED=N` on `load_optional` and give a
+notification task the condition `load_optional.FAILED`. An exhausted retry
+leaves the load recorded as failed and starts the notification. The pipeline can
+succeed, with the tolerated failure named in its outcome.

@@ -12,6 +12,9 @@ consumption, alerts, timeouts and stopped-run recovery.
 `SOURCE_A` lands two rows per run; `SOURCE_B` lands one. `DEMO` consumes both
 sources and fails once at `flaky_feed` before succeeding. `EXPORT` deliberately
 exceeds its timeout and SLA. `BACKFILL` supports stopping and resuming a run.
+`DEMO.setup_fact` waits for `interactions` to succeed and write rows and for
+`retire_agents` to succeed. The conditions live in
+[the demo metadata](metadata/demo.sql), and deploy derives their edges.
 Three `ALERT` tasks email through the `oncall` and `leads` channels that `prepare.py`
 sets: a failure of `DEMO`, every ending of `DEMO`, and `EXPORT`'s SLA breach. The
 controller sends them, so start `etl-craft controller` to receive them.

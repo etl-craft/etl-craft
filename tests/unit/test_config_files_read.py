@@ -16,16 +16,13 @@ GOOD = {
     "pipelines.csv": "PIPELINE_CODE,PIPELINE_NAME,REFRESH_TYPE,SLA_IN_HOURS,PIPELINE_PARAMETERS\n"
     'SALES,Sales,FULL,1.5,"{""TAGS"": [""sales""]}"\n'
     "MART,Mart,FULL,,\n",
-    "tasks.csv": "PIPELINE_CODE,TASK_CODE,TASK_TYPE,HANDLER,RUN_CONDITION,RUN_CONDITION_COUNT,"
+    "tasks.csv": "PIPELINE_CODE,TASK_CODE,TASK_TYPE,HANDLER,RUN_CONDITION,"
     "ACTIVE_FLAG\n"
-    "SALES,load,ETL,SQL,,,Y\n"
-    "SALES,check,ETL,BUSINESS_RULES,N,1,Y\n"
-    "MART,build,ETL,SQL,,,N\n",
+    "SALES,load,ETL,SQL,,Y\n"
+    "SALES,check,ETL,BUSINESS_RULES,load.SUCCESS,Y\n"
+    "MART,build,ETL,SQL,,N\n",
     "task_parameters.csv": "PIPELINE_CODE,TASK_CODE,PARAMETER_NAME,PARAMETER_VALUE\n"
     'SALES,load,SELECT_QUERY,"SELECT id,\n       name FROM raw.orders"\n',
-    "task_dependencies.csv": "PIPELINE_CODE,TASK_CODE,DEPENDS_ON_PIPELINE_CODE,"
-    "DEPENDS_ON_TASK_CODE,DEPENDENCY_TYPE\n"
-    "SALES,check,SALES,load,SUCCESS\n",
     "pipeline_dependencies.csv": "PIPELINE_CODE,DEPENDS_ON_PIPELINE_CODE,DEPENDENCY_TYPE\n"
     "MART,SALES,SUCCESS\n",
     "business_rules.csv": "PIPELINE_CODE,TASK_CODE,BUSINESS_RULE_NAME,SEQUENCE_NUMBER,"
@@ -58,7 +55,7 @@ def test_good_files_read_with_types_defaults_and_quoted_cells(tmp_path):
         "N",
     )
     assert sales["ACTIVE_FLAG"] == "Y"
-    assert read.rows["tasks.csv"][("SALES", "check")].values["RUN_CONDITION_COUNT"] == 1
+    assert read.rows["tasks.csv"][("SALES", "check")].values["RUN_CONDITION"] == "load.SUCCESS"
     assert not read.rows["tasks.csv"][("MART", "build")].active
     query = read.rows["task_parameters.csv"][("SALES", "load", "SELECT_QUERY")]
     assert (query.line, query.values["PARAMETER_VALUE"]) == (
@@ -67,7 +64,7 @@ def test_good_files_read_with_types_defaults_and_quoted_cells(tmp_path):
     )
     assert len(read.revision) == 12
     assert read_config_files(tmp_path).revision == read.revision
-    (tmp_path / "tasks.csv").write_text(GOOD["tasks.csv"] + "SALES,extra,ETL,SQL,,,Y\n", "utf-8")
+    (tmp_path / "tasks.csv").write_text(GOOD["tasks.csv"] + "SALES,extra,ETL,SQL,,Y\n", "utf-8")
     assert read_config_files(tmp_path).revision != read.revision
 
 
@@ -98,15 +95,15 @@ def test_every_header_problem_is_named(tmp_path):
 @pytest.mark.parametrize(
     ("row", "expected"),
     [
-        ("SALES,load,ETL", "line 2: 3 values for 7 columns; quote a value that holds a comma"),
-        ("SALES,2load,ETL,SQL,,,Y", "column TASK_CODE: '2load' is not a code"),
-        ("SALES,load,BATCH,SQL,,,Y", "column TASK_TYPE: 'BATCH' is not one of INGESTION, ETL"),
-        ("SALES,load,ETL,SQL,,,y", "column ACTIVE_FLAG: 'y' is not one of Y, N"),
-        ("SALES,load,ETL,SQL,N,two,Y", "column RUN_CONDITION_COUNT: 'two' is not a whole number"),
-        ("SALES,load,ETL,SQL,N,0,Y", "column RUN_CONDITION_COUNT: 0 is less than 1"),
-        ("SALES,load,,SQL,,,Y", "column TASK_TYPE: is empty; this column needs a value"),
-        ("SALES,load,ETL,SQL,N,,Y", "line 2: RUN_CONDITION N needs a RUN_CONDITION_COUNT"),
-        ("SALES,load,ETL,SQL,ANY,2,Y", "RUN_CONDITION_COUNT goes with RUN_CONDITION N only"),
+        ("SALES,load,ETL", "line 2: 3 values for 6 columns; quote a value that holds a comma"),
+        ("SALES,2load,ETL,SQL,,Y", "column TASK_CODE: '2load' is not a code"),
+        ("SALES,load,BATCH,SQL,,Y", "column TASK_TYPE: 'BATCH' is not one of INGESTION, ETL"),
+        ("SALES,load,ETL,SQL,,y", "column ACTIVE_FLAG: 'y' is not one of Y, N"),
+        ("SALES,load,ETL,SQL,a.SUCESS,Y", "did you mean SUCCESS"),
+        ('SALES,load,ETL,SQL,"AT_LEAST(0, a.SUCCESS, b.SUCCESS)",Y', "count from 1 to"),
+        ("SALES,load,,SQL,,Y", "column TASK_TYPE: is empty; this column needs a value"),
+        ("SALES,load,ETL,SQL,a.STATUS,Y", "position"),
+        ("SALES,load,ETL,SQL,a.REJECTED > FAILED,Y", "expected a whole number"),
     ],
 )
 def test_a_bad_task_row_is_named_with_its_line_and_column(tmp_path, row, expected):
@@ -148,14 +145,11 @@ def test_duplicate_keys_self_dependencies_and_missing_references_are_named(tmp_p
         "SALES,load,RETRIES,1\nSALES,load,RETRIES,2\n",
         pipeline_dependencies="PIPELINE_CODE,DEPENDS_ON_PIPELINE_CODE,DEPENDENCY_TYPE\n"
         "MART,MART,SUCCESS\n",
-        task_dependencies="PIPELINE_CODE,TASK_CODE,DEPENDS_ON_PIPELINE_CODE,DEPENDS_ON_TASK_CODE,"
-        "DEPENDENCY_TYPE\nSALES,load,SALES,load,ALWAYS\n",
     )
     assert (
         "task_parameters.csv lines 2 and 3 both hold SALES.load RETRIES; keep one of them" in found
     )
     assert "pipeline_dependencies.csv line 2: pipeline MART depends on itself" in found
-    assert "task_dependencies.csv line 2: SALES.load depends on itself" in found
 
 
 def test_every_file_holds_its_table_with_active_flag_last():

@@ -227,3 +227,28 @@ def test_the_documented_examples_apply_in_two_projects_of_one_engine_db(
             ).all()
         )
     assert counts == {projects["east"]: 17, projects["west"]: 17}
+
+
+def test_project_migration_cannot_write_a_derived_task_edge(engine_db, projects, tmp_path):
+    from fixtures.metadata import add_task
+
+    east = projects["east"]
+    with acting_as(OWNER), engine_db.engine.begin() as conn:
+        pipeline = conn.execute(
+            text("SELECT PIPELINE_ID AS id FROM CFG_PIPELINES WHERE PROJECT_ID=:project"),
+            {"project": east},
+        ).scalar_one()
+        upstream = add_task(conn, pipeline, "upstream")
+        downstream = add_task(conn, pipeline, "downstream")
+    sql = (
+        "INSERT INTO CFG_TASK_DEPENDENCY "
+        "(PIPELINE_ID,TASK_ID,DEPENDS_ON_PIPELINE_ID,DEPENDS_ON_TASK_ID) "
+        f"VALUES ({pipeline},{downstream},{pipeline},{upstream});"
+    )
+    with pytest.raises(MigrationError, match=r"is derived.*change CFG_TASKS.RUN_CONDITION"):
+        migrate(engine_db, tmp_path, east, "0001_direct_edge.sql", sql)
+    with engine_db.engine.connect() as conn:
+        assert (
+            conn.execute(text("SELECT count(*) AS count FROM CFG_TASK_DEPENDENCY")).scalar_one()
+            == 0
+        )

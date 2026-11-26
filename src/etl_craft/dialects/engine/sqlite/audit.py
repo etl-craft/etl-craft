@@ -245,14 +245,8 @@ def _change_triggers(conn: Connection, table: str, capture: Capture) -> None:
             created = "etl_craft_actor()" if operation == "INSERT" else "OLD.CREATED_BY"
             create_date = NOW if operation == "INSERT" else "OLD.CREATE_DATE"
             guard = f" AND {not_inserting}" if operation == "UPDATE" else ""
-            dependency = (
-                "DEPENDS_ON_PIPELINE_ID=COALESCE(NEW.DEPENDS_ON_PIPELINE_ID, "
-                "(SELECT PIPELINE_ID FROM CFG_TASKS WHERE TASK_ID=NEW.DEPENDS_ON_TASK_ID)), "
-                if table.upper() == "CFG_TASK_DEPENDENCY" and operation == "INSERT"
-                else ""
-            )
             body += (
-                f"UPDATE {quote(table)} SET {dependency}CREATED_BY={created}, "
+                f"UPDATE {quote(table)} SET CREATED_BY={created}, "
                 f"CREATE_DATE={create_date}, "
                 f"UPDATED_BY=etl_craft_actor(), UPDATED_DATE={NOW} "
                 f"WHERE {quote(primary)}=NEW.{quote(primary)}{guard};"

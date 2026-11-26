@@ -16,7 +16,6 @@ Waves, the order that is always safe:
   1: extract
   2: load
   3: alert
-May start before their wave (an ANY or N run condition): alert
 Task dependencies:
   alert <- load (FAILURE)
   load <- UP.publish (SUCCESS)
@@ -44,7 +43,7 @@ upstreams, including tasks behind another blocked task.
 ## `etl-craft explain --pipeline-code SALES --task-code load [--run-id 42 | --run-key KEY]`
 
 Why the task is in its state and what would make it run. The explanation includes the run and
-its pause, the task summary and ordered attempts, its run condition and required count,
+its pause, the task summary and ordered attempts, its run condition and whether it was met,
 each same-pipeline and cross-pipeline dependency, recorded admission reasons and selected
 upstream identities, persisted gate waits and retry due time. It distinguishes a ready task
 that has not run, a gate wait, failure blocking, an unsatisfiable condition, a scheduled retry,

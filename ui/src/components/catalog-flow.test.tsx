@@ -37,12 +37,12 @@ describe("definition dependencies", () => {
     expect(dependencySentence("EXTRACT", "LOAD", "HAS_DATA")).toBe("LOAD runs only if EXTRACT succeeded and wrote rows");
     expect(definitionLabel({kind:"task", source:"a",target:"b",dependency_type:"SUCCESS",consume_repairs:"N"})).toContain("No repairs");
   });
-  it.each([["ALL", "All"], ["ANY", "Any"], ["N", "2 of 3"]])("explains %s", (condition, badge) => {
-    const task = { label:"P.LOAD", pipeline:"P", handler:"SQL", documentation:null, documentation_version:null, target:null, sources:[], script:null, lineage:{state:"derived",reason:null}, mapping:{steps:[],edges:[],source:null,write:{action:null,managed_columns:[],keys:{}}}, script_kind:null, active_flag:"Y", target_active_flag:"Y", secrets:[], downstream:[], rules:[], runs:[], code:"LOAD", run_condition:condition,run_condition_count:2,upstream:[["A","SUCCESS","Y"],["B","SUCCESS","Y"],["C","SUCCESS","Y"]], retries:3,retry_on:"TRANSIENT",timeout_seconds:1800 } as CatalogTask;
-    expect(runCondition(task)).toBe(badge);
+  it.each(["A.SUCCESS AND B.SUCCESS", "A.SUCCESS OR B.SUCCESS", "AT_LEAST(2, A.SUCCESS, B.SUCCESS, C.SUCCESS)"])("explains %s", (condition) => {
+    const task = { label:"P.LOAD", pipeline:"P", handler:"SQL", documentation:null, documentation_version:null, target:null, sources:[], script:null, lineage:{state:"derived",reason:null}, mapping:{steps:[],edges:[],source:null,write:{action:null,managed_columns:[],keys:{}}}, script_kind:null, active_flag:"Y", target_active_flag:"Y", secrets:[], downstream:[], rules:[], runs:[], code:"LOAD", run_condition:condition,upstream:[["A","SUCCESS","Y"],["B","SUCCESS","Y"],["C","SUCCESS","Y"]], retries:3,retry_on:"TRANSIENT",timeout_seconds:1800 } as CatalogTask;
+    expect(runCondition(task)).toBe(condition);
     expect(runsWhen(task)).toContain("retries 3 times");
     expect(runsWhen(task)).toContain("30 minutes");
-    expect(runsWhen(task)).toContain(condition === "N" ? "any 2 of" : condition.toLowerCase());
+    expect(runsWhen(task)).toContain(condition);
   });
   it("highlights all contributors to a target and everything a source feeds", () => {
     const edges = [{target_column:"amount",source_object:"raw.orders",source_column:"price"},{target_column:"amount",source_object:"raw.orders",source_column:"quantity"},{target_column:"tax",source_object:"raw.orders",source_column:"price"}] as CatalogEdge[];
@@ -55,7 +55,7 @@ describe("definition dependencies", () => {
 beforeEach(()=>{captured.renderBoxes = false; vi.stubGlobal("ResizeObserver",class {observe(){} disconnect(){}});});
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 function taskForMapping(state: "derived" | "declared" | "unavailable", edges: CatalogEdge[] = []): CatalogTask {
-  return { label: "P.load", pipeline:"P", code:"load",handler:"PYTHON",run_condition:null,run_condition_count:null,documentation:null,documentation_version:null,target:null,sources:[],script:null,lineage:{state,reason:state === "unavailable" ? "Python utility scripts run arbitrary code; lineage is not derived" : null},mapping:{steps:[],edges,source:null,write:{action:null,managed_columns:[],keys:{}}},script_kind:"UTILITY",active_flag:"Y",target_active_flag:"Y",retries:0,retry_on:"NONE",timeout_seconds:0,secrets:[],upstream:[],downstream:[],rules:[],runs:[] };
+  return { label: "P.load", pipeline:"P", code:"load",handler:"PYTHON",run_condition:null,documentation:null,documentation_version:null,target:null,sources:[],script:null,lineage:{state,reason:state === "unavailable" ? "Python utility scripts run arbitrary code; lineage is not derived" : null},mapping:{steps:[],edges,source:null,write:{action:null,managed_columns:[],keys:{}}},script_kind:"UTILITY",active_flag:"Y",target_active_flag:"Y",retries:0,retry_on:"NONE",timeout_seconds:0,secrets:[],upstream:[],downstream:[],rules:[],runs:[] };
 }
 it("labels declared lines distinctly and keeps derived lines plain", () => {
   expect(mappingLine("declared")).toEqual({ label:"Declared",style:{stroke:"var(--kind-out)",strokeDasharray:"5 4"}});
@@ -88,12 +88,10 @@ it("renders dependency icons, neutral badges and the no-repairs marker", async (
   rerender(<DependencyBadge edge={{dependency_type:"SUCCESS",consume_repairs:"Y"}} />);
   expect(container).toBeEmptyDOMElement();
 });
-it("explains mixed dependency kinds instead of saying every upstream succeeds", () => {
+it("shows the exact task condition with mixed facts", () => {
   const task = taskForMapping("derived");
-  task.upstream = [["P.extract","FAILURE","Y"],["P.notify","ALWAYS","Y"],["P.stage","HAS_DATA","Y"]];
-  expect(runsWhen(task)).toContain("P.extract fails");
-  expect(runsWhen(task)).toContain("P.notify finishes, whatever its outcome");
-  expect(runsWhen(task)).toContain("P.stage succeeds and writes rows");
+  task.run_condition = "extract.FAILED AND notify.FINISHED AND stage.HAS_DATA";
+  expect(runsWhen(task)).toContain(task.run_condition);
 });
 it("distinguishes source and target selections when a task reads its own target", () => {
   const edges = [{target_column:"amount",source_object:"mart.orders",source_column:"price"},{target_column:"price",source_object:"mart.orders",source_column:"amount"}] as CatalogEdge[];

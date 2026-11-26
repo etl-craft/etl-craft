@@ -53,6 +53,7 @@ class ExitCode(IntEnum):
     CONFIRMATION_REQUIRED = 31
     PROJECT_NOT_SELECTED = 32
     API_READ_TIMEOUT = 33
+    CONDITION = 34
 
 
 class EtlCraftError(Exception):
@@ -105,6 +106,12 @@ class GraphError(EtlCraftError):
 
     retryable = False
     exit_code = ExitCode.GRAPH
+
+
+class ConditionError(GraphError):
+    """A run condition does not parse, names something unknown, or mixes types."""
+
+    exit_code = ExitCode.CONDITION
 
 
 class RunStateError(EtlCraftError):

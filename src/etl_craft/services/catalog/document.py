@@ -89,7 +89,8 @@ def _task(catalog: Catalog, label: str, asset: TaskAsset) -> dict[str, Any]:
             for key in ("EVENT_TIMEOUT_MINUTES", "EVENT_POLL_SECONDS")
             if key in asset.params
         },
-        "run_condition_count": row.run_condition_count,
+        "fail_pipeline_if_failed": asset.params.get("FAIL_PIPELINE_IF_FAILED", "Y"),
+        "fail_pipeline_if_not_run": asset.params.get("FAIL_PIPELINE_IF_NOT_RUN", "N"),
         "active_flag": row.active_flag,
         "target_active_flag": row.target_active_flag,
         **asset.execution,

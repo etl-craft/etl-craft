@@ -83,7 +83,7 @@ def test_exported_files_load_back_without_a_change(exported):
 
     header = (exported.config_dir / "tasks.csv").read_text("utf-8").splitlines()[0]
     assert header == (
-        "PIPELINE_CODE,TASK_CODE,TASK_TYPE,HANDLER,RUN_CONDITION,RUN_CONDITION_COUNT,"
+        "PIPELINE_CODE,TASK_CODE,TASK_TYPE,HANDLER,RUN_CONDITION,"
         "TARGET_CATALOG_NAME,TARGET_SCHEMA_NAME,TARGET_TABLE_NAME,TARGET_ACTIVE_FLAG,ACTIVE_FLAG"
     )
     pipelines = {
@@ -122,7 +122,6 @@ def test_apply_inserts_updates_and_preserves_absent_keys(exported):
         "pipelines.csv",
         "tasks.csv",
         "task_parameters.csv",
-        "task_dependencies.csv",
         "pipeline_dependencies.csv",
         "business_rules.csv",
     ):
@@ -161,40 +160,22 @@ def test_apply_inserts_updates_and_preserves_absent_keys(exported):
                 "TASK_CODE": "archive",
                 "TASK_TYPE": "ETL",
                 "HANDLER": "PYTHON",
-                "RUN_CONDITION": "",
-                "RUN_CONDITION_COUNT": "",
+                "RUN_CONDITION": "publish.SUCCESS",
             },
         ],
     )
+    rules = {
+        ("SALES_DAILY", "check_orders"): "load_orders.HAS_DATA",
+        ("SALES_MART", "alert"): "archive.FINISHED",
+    }
     edit(
-        folder / "task_dependencies.csv",
-        lambda rows: (
-            [
-                {**row, "DEPENDENCY_TYPE": "HAS_DATA"}
-                if (row["TASK_CODE"], row["DEPENDS_ON_TASK_CODE"])
-                == ("check_orders", "load_orders")
-                else row
-                for row in rows
-            ]
-            + [
-                {
-                    "PIPELINE_CODE": "SALES_MART",
-                    "TASK_CODE": "archive",
-                    "DEPENDS_ON_PIPELINE_CODE": "SALES_MART",
-                    "DEPENDS_ON_TASK_CODE": "publish",
-                    "DEPENDENCY_TYPE": "SUCCESS",
-                    "CONSUME_REPAIRS": "Y",
-                },
-                {
-                    "PIPELINE_CODE": "SALES_MART",
-                    "TASK_CODE": "alert",
-                    "DEPENDS_ON_PIPELINE_CODE": "SALES_MART",
-                    "DEPENDS_ON_TASK_CODE": "archive",
-                    "DEPENDENCY_TYPE": "ALWAYS",
-                    "CONSUME_REPAIRS": "Y",
-                },
-            ]
-        ),
+        folder / "tasks.csv",
+        lambda rows: [
+            {**row, "RUN_CONDITION": rules[(row["PIPELINE_CODE"], row["TASK_CODE"])]}
+            if (row["PIPELINE_CODE"], row["TASK_CODE"]) in rules
+            else row
+            for row in rows
+        ],
     )
     logged = changes_logged(exported)
 
@@ -209,21 +190,17 @@ def test_apply_inserts_updates_and_preserves_absent_keys(exported):
         ("task_parameters.csv", "SALES_MART.archive SCRIPT_FILE"),
         ("task_parameters.csv", "SALES_MART.archive SCRIPT_KIND"),
         ("task_parameters.csv", "SALES_MART.archive RETRIES"),
-        ("task_dependencies.csv", "SALES_MART.archive on SALES_MART.publish SUCCESS"),
-        ("task_dependencies.csv", "SALES_MART.alert on SALES_MART.archive ALWAYS"),
-        ("task_dependencies.csv", "SALES_DAILY.check_orders on SALES_DAILY.load_orders HAS_DATA"),
     }
-    assert [
-        (change.row, change.columns[0].before, change.columns[0].after)
-        for change in done.changes
-        if change.operation == "update"
-    ] == [
-        (
-            "SALES_DAILY.alert ALERT_SUBJECT",
-            "$$pipeline_code: $$trigger",
-            "$$pipeline_code ended",
-        )
-    ]
+    assert by_operation["update"] == {
+        ("task_parameters.csv", "SALES_DAILY.alert ALERT_SUBJECT"),
+        ("tasks.csv", "SALES_DAILY.check_orders"),
+        ("tasks.csv", "SALES_MART.alert"),
+    }
+    assert exported.rows(
+        "SELECT RUN_CONDITION AS condition FROM CFG_TASKS t "
+        "JOIN CFG_PIPELINES p ON p.PIPELINE_ID=t.PIPELINE_ID "
+        "WHERE p.PIPELINE_CODE='SALES_MART' AND t.TASK_CODE='alert'"
+    ) == [("archive.FINISHED",)]
     assert "retire" not in by_operation
 
     assert exported.rows(
@@ -255,7 +232,6 @@ def test_plan_reports_what_apply_would_do_and_changes_nothing(exported):
     for name in (
         "tasks.csv",
         "task_parameters.csv",
-        "task_dependencies.csv",
         "pipeline_dependencies.csv",
         "business_rules.csv",
     ):
@@ -277,7 +253,7 @@ def test_a_configuration_that_validate_fails_is_not_applied(exported):
     edit(
         exported.config_dir / "tasks.csv",
         lambda rows: [
-            {**row, "RUN_CONDITION": "N", "RUN_CONDITION_COUNT": "5"}
+            {**row, "RUN_CONDITION": "AT_LEAST(5, daily_totals.SUCCESS, totals_by_region.SUCCESS)"}
             if (row["PIPELINE_CODE"], row["TASK_CODE"]) == ("SALES_MART", "publish")
             else row
             for row in rows
@@ -285,23 +261,15 @@ def test_a_configuration_that_validate_fails_is_not_applied(exported):
     )
     logged = changes_logged(exported)
 
-    done = sync(exported)
-
-    assert (done.applied, done.failed) == (False, True)
-    assert [change.row for change in done.changes] == ["SALES_MART.publish"]
-    assert [(f.where, f.message) for f in done.findings] == [
-        (
-            "SALES_MART",
-            "task publish requires 5 satisfied dependencies but only has 2 — it could never run",
-        )
-    ]
+    with pytest.raises(MetadataFileError, match=r"tasks.csv line .*RUN_CONDITION.*position"):
+        sync(exported)
     assert changes_logged(exported) == logged
     assert exported.rows(
         "SELECT t.RUN_CONDITION AS run_condition FROM CFG_TASKS t "
         "JOIN CFG_PIPELINES p ON p.PIPELINE_ID = t.PIPELINE_ID "
         "WHERE p.PIPELINE_CODE = 'SALES_MART' "
         "AND t.TASK_CODE = 'publish' AND t.ACTIVE_FLAG = 'Y'"
-    ) == [("ANY",)]
+    ) == [("daily_totals.SUCCESS OR totals_by_region.SUCCESS",)]
 
 
 def test_the_command_plans_applies_and_exports(metadata_project, capsys, monkeypatch):
@@ -764,3 +732,27 @@ def test_a_pipeline_names_a_calendar_from_the_config_files(exported):
     assert exported.rows(
         "SELECT CALENDAR_ID AS calendar FROM CFG_PIPELINES WHERE PIPELINE_CODE = 'SALES_MART'"
     ) == [(None,)]
+
+
+@pytest.mark.parametrize("parameter", ["FAIL_PIPELINE_IF_FAILED", "FAIL_PIPELINE_IF_NOT_RUN"])
+def test_invalid_fail_option_refuses_deploy_before_config_changes(exported, parameter):
+    edit(
+        exported.config_dir / "task_parameters.csv",
+        lambda rows: [
+            *rows,
+            {
+                "PIPELINE_CODE": "SALES_DAILY",
+                "TASK_CODE": "alert",
+                "PARAMETER_NAME": parameter,
+                "PARAMETER_VALUE": "true",
+            },
+        ],
+    )
+    logged = changes_logged(exported)
+    done = sync(exported)
+    assert done.failed and not done.applied
+    finding = next(finding for finding in done.findings if parameter in finding.message)
+    assert finding.where == "SALES_DAILY.alert"
+    for part in ("'true'", "expected Y or N", "task_parameters.csv", "deploy"):
+        assert part in finding.message
+    assert changes_logged(exported) == logged

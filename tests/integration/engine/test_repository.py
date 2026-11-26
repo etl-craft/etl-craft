@@ -9,12 +9,13 @@ from sqlalchemy import text
 from etl_craft.core.actor import SYSTEM_ACTOR, acting_as, current_actor
 from etl_craft.core.counts import Counts
 from etl_craft.core.enums import RunStatus, SlaStatus
-from etl_craft.core.errors import MetadataError, RunStateError
-from etl_craft.core.graph import TaskEdge, TaskRunState, build_graph
+from etl_craft.core.errors import ConditionError, MetadataError, RunStateError
+from etl_craft.core.graph import TaskEdge, build_graph
 from etl_craft.core.time import as_utc
 from etl_craft.engine import runlog, transitions
+from etl_craft.engine.condition_edges import derive_edges
 from etl_craft.engine.repository import business_rules, dependencies, pipelines, runs, tasks
-from fixtures.metadata import add_table, set_task_target, start_run
+from fixtures.metadata import add_dependency, add_table, set_task_target, start_run
 
 pytestmark = pytest.mark.usefixtures("selected_default_project")
 
@@ -46,23 +47,6 @@ def add_task(conn, pipeline_id, code, handler="SQL", *, active="Y", **params):
             {"task": task_id, "name": name, "value": value},
         )
     return task_id
-
-
-def add_dependency(conn, pipeline_id, task_id, depends_on, dependency_type="SUCCESS", **extra):
-    columns = "PIPELINE_ID, TASK_ID, DEPENDS_ON_TASK_ID, DEPENDENCY_TYPE"
-    values = ":pipeline, :task, :depends_on, :type"
-    params = {"pipeline": pipeline_id, "task": task_id, "depends_on": depends_on}
-    if "depends_on_pipeline" in extra:
-        columns += ", DEPENDS_ON_PIPELINE_ID"
-        values += ", :depends_on_pipeline"
-        params["depends_on_pipeline"] = extra["depends_on_pipeline"]
-    return insert(
-        conn,
-        f"INSERT INTO CFG_TASK_DEPENDENCY ({columns}) VALUES ({values})",
-        "TASK_DEPENDENCY_ID",
-        type=dependency_type,
-        **params,
-    )
 
 
 @pytest.fixture
@@ -123,7 +107,7 @@ def seeded(engine_db):
         add_dependency(conn, a, ids["rules"], ids["load"])
         add_dependency(conn, a, ids["alert"], ids["load"], "FAILURE")
         ids["cross"] = add_dependency(
-            conn, a, ids["load"], ids["upstream"], "HAS_DATA", depends_on_pipeline=ids["beta"]
+            conn, a, ids["load"], ids["upstream"], "HAS_DATA", upstream_pipeline=ids["beta"]
         )
         ids["pipeline_dependency"] = insert(
             conn,
@@ -238,11 +222,11 @@ def test_the_pipeline_graph(seeded):
     assert sorted(node.task_id for node in data.tasks) == sorted(
         ids[name] for name in ("extract", "setup", "load", "rules", "alert")
     )
-    assert TaskEdge(ids["load"], ids["setup"], "ALWAYS") in data.same_pipeline_edges
+    assert TaskEdge(ids["load"], ids["setup"]) in data.same_pipeline_edges
     assert len(data.same_pipeline_edges) == 4
     assert data.cross_pipeline_task_ids == {ids["load"]}
     load = next(node for node in data.tasks if node.task_id == ids["load"])
-    assert load.cross_pipeline_edge_count == 1
+    assert load.cross == {("PL_BETA", "publish"): ids["cross"]}
     graph = build_graph(data.tasks, data.same_pipeline_edges)
     assert graph.waves()[0] == sorted([ids["extract"], ids["setup"]])
 
@@ -250,16 +234,19 @@ def test_the_pipeline_graph(seeded):
 def test_inactive_tasks_in_the_pipeline_graph(seeded):
     engine, ids = seeded
     with engine.begin() as conn:
-        # A dependency of an inactive task is left out: that task does not run.
-        add_dependency(conn, ids["alpha"], ids["retired"], ids["load"])
-        assert len(dependencies.fetch_pipeline_graph(conn, ids["alpha"]).same_pipeline_edges) == 4
-        # An active task that waits on an inactive one could never run.
-        add_dependency(conn, ids["alpha"], ids["alert"], ids["retired"], "ALWAYS")
-        with pytest.raises(
-            MetadataError,
-            match=r"active tasks depend on inactive ones \(alert depends on old_task\)",
-        ):
-            dependencies.fetch_pipeline_graph(conn, ids["alpha"])
+        for which, condition in (("retired", "load_dim.SUCCESS"), ("alert", "old_task.FINISHED")):
+            conn.execute(
+                text("UPDATE CFG_TASKS SET RUN_CONDITION=:condition WHERE TASK_ID=:task"),
+                {"condition": condition, "task": ids[which]},
+            )
+            if which == "retired":
+                assert derive_edges(conn, 1) == 0
+                assert (
+                    len(dependencies.fetch_pipeline_graph(conn, ids["alpha"]).same_pipeline_edges)
+                    == 4
+                )
+        with pytest.raises(ConditionError, match=r"alert RUN_CONDITION.*old_task.*active task"):
+            derive_edges(conn, 1)
 
 
 def test_dependency_edges_for_the_gates(seeded):
@@ -276,14 +263,17 @@ def test_dependency_edges_for_the_gates(seeded):
                 ids["alpha"],
                 ids["beta"],
                 ids["upstream"],
-                "HAS_DATA",
                 "PL_BETA.publish",
+                "default",
+                "PL_BETA",
+                "publish",
+                True,
             )
         ]
         assert dependencies.fetch_cross_pipeline_task_edges(conn, ids["rules"]) == []
     with engine.begin() as conn:
         conn.execute(text("UPDATE CFG_PIPELINE_DEPENDENCY SET CONSUME_REPAIRS = 'N'"))
-        conn.execute(text("UPDATE CFG_TASK_DEPENDENCY SET CONSUME_REPAIRS = 'N'"))
+        conn.execute(text("UPDATE CFG_PIPELINES SET CONSUME_REPAIRS = 'N'"))
         assert (
             dependencies.fetch_pipeline_dependency_edges(conn, ids["alpha"])[0].consume_repairs
             is False
@@ -459,7 +449,11 @@ def test_run_state_and_statuses(seeded):
             conn, binding.task_run_id, status=RunStatus.SUCCESS, counts=Counts(target_count=5)
         )
         state = runlog.fetch_run_state(conn, run_id, [ids["extract"], ids["load"]])
-        assert state == {ids["extract"]: TaskRunState(RunStatus.SUCCESS, 5)}
+        assert set(state) == {ids["extract"]}
+        extract = state[ids["extract"]]
+        assert (extract.status, extract.target_count) == (RunStatus.SUCCESS, 5)
+        assert extract.ended is not None and extract.started is not None
+        assert extract.facts().value("HAS_DATA") is True
         assert runlog.fetch_run_state(conn, run_id, []) == {}
         statuses = {
             s.task_code: s for s in runs.fetch_task_statuses_for_run(conn, ids["alpha"], run_id)

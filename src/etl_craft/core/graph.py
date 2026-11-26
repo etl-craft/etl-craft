@@ -1,26 +1,27 @@
-"""The same-pipeline task dependency graph: validation, waves, readiness and dead ends.
+"""The same-pipeline task graph: validation, waves, readiness and dead ends.
 
-The graph holds a pipeline's tasks and the ``CFG_TASK_DEPENDENCY`` edges between them. Edges to
-tasks in other pipelines stay out of it, because they have no place in the pipeline's own
-order; each task records only how many it has, since its ``RUN_CONDITION`` counts them too.
-The cross-pipeline gate settles them at run time.
+The graph holds a pipeline's tasks, each with its parsed ``RUN_CONDITION``, and the edges its
+condition names inside the pipeline (``CFG_TASK_DEPENDENCY``, derived by ``deploy``). Names of
+tasks in other pipelines stay out of the order; the cross-pipeline gate binds them at run time
+and hands their facts to the evaluation.
 
-Given each task's status under the active run, the graph answers which tasks can start now
-(``ready``) and which never-run tasks can never start (``unsatisfiable``). A retry resumes: a
-task already ``SUCCESS`` or ``SKIPPED`` is never ready again.
+Given each task's state under the active run, the graph answers which tasks can start now
+(``ready``) and which never-run tasks can never start (``unsatisfiable``). Conditions are
+three-valued: a task starts when its condition is true, is skipped when it is false, and waits
+while it is not known. A retry resumes: a task already ``SUCCESS`` or ``SKIPPED`` is never ready
+again.
 """
 
 from __future__ import annotations
 
 from collections.abc import Iterator, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from datetime import datetime
 
+from etl_craft.core.conditions import Condition, Facts, Reading, Ref, Truth, evaluate
 from etl_craft.core.enums import (
     NOT_RETRYABLE_STATUSES,
     SETTLED_STATUSES,
-    TERMINAL_STATUSES,
-    DependencyType,
-    RunCondition,
     RunStatus,
 )
 from etl_craft.core.errors import ExitCode, GraphError
@@ -49,25 +50,33 @@ class UnknownTaskError(GraphError):
     exit_code = ExitCode.UNKNOWN_TASK
 
 
+Name = tuple[str, ...]
+
+
 @dataclass(frozen=True)
 class TaskNode:
     """A ``CFG_TASKS`` row, reduced to what the graph needs.
 
-    ``run_condition`` is ``None`` for ``ALL``, the default; ``run_condition_count`` is read only
-    under ``N``. ``cross_pipeline_edge_count`` is how many of the task's dependencies are on
-    tasks in other pipelines.
+    ``condition`` is the parsed ``RUN_CONDITION`` (``None``: the task starts with its run).
+    ``upstream`` maps each name the condition reads in this pipeline to its task id, and
+    ``cross`` each name in another pipeline to its ``TASK_DEPENDENCY_ID``.
     """
 
     task_id: int
-    run_condition: str | None = None
-    run_condition_count: int | None = None
-    cross_pipeline_edge_count: int = 0
     task_code: str | None = None
+    condition: Condition | None = None
+    upstream: Mapping[Name, int] = field(default_factory=dict)
+    cross: Mapping[Name, int] = field(default_factory=dict)
 
     @property
     def label(self) -> str:
         """``task load_orders`` when the code is known, else ``task_id=12``."""
         return f"task {self.task_code}" if self.task_code else f"task_id={self.task_id}"
+
+    @property
+    def rule(self) -> str:
+        """The condition as written, or what an empty one means."""
+        return self.condition.text if self.condition else "none (starts with its run)"
 
 
 @dataclass(frozen=True)
@@ -76,31 +85,61 @@ class TaskEdge:
 
     task_id: int
     depends_on_task_id: int
-    dependency_type: str
 
 
 @dataclass(frozen=True)
 class TaskRunState:
-    """What one dependency edge needs from its upstream's ``AUD_TASK_RUN_LOG`` row.
+    """One task's ``AUD_TASK_RUN_LOG`` row under the active run, as conditions read it.
 
-    ``status`` is ``None`` while the task has no row under the active run. ``rows_written`` is
-    reported inserts, updates or deletes, or ``None`` when unmeasured. A reported
-    ``target_count`` stands in when write counts are absent.
+    ``status`` is ``None`` while the task has no row. Counts are ``None`` where the handler did
+    not report them.
     """
 
     status: str | None = None
     target_count: int | None = None
     rows_written: int | None = None
+    source_count: int | None = None
+    insert_count: int | None = None
+    update_count: int | None = None
+    delete_count: int | None = None
+    reject_count: int | None = None
+    duplicate_count: int | None = None
+    attempt_count: int | None = None
+    started: datetime | None = None
+    ended: datetime | None = None
+    error_class: str | None = None
+    attempt_status: str | None = None
 
-    @property
-    def wrote_rows(self) -> bool:
-        """Whether the attempt wrote rows, as a ``HAS_DATA`` dependency asks."""
-        count = self.target_count if self.rows_written is None else self.rows_written
-        return count is not None and count > 0
+    def facts(self) -> Facts:
+        """Return what a condition can read about this task run."""
+        duration = (
+            int((self.ended - self.started).total_seconds())
+            if self.started is not None and self.ended is not None
+            else None
+        )
+        return Facts(
+            str(self.status),
+            {
+                "SOURCE_ROWS": self.source_count,
+                "TARGET_ROWS": self.target_count,
+                "ROWS_WRITTEN": self.rows_written,
+                "INSERTED": self.insert_count,
+                "UPDATED": self.update_count,
+                "DELETED": self.delete_count,
+                "REJECTED": self.reject_count,
+                "DUPLICATES": self.duplicate_count,
+            },
+            self.attempt_count,
+            duration,
+            self.error_class,
+        )
 
 
 RunState = Mapping[int, TaskRunState]
 """Each task's state under the active run, by task id; a missing task has not run."""
+
+CrossFacts = Mapping[int, Facts | None]
+"""Facts the gate bound for a task's cross-pipeline names, by ``TASK_DEPENDENCY_ID``."""
 
 
 class DependencyGraph:
@@ -118,6 +157,10 @@ class DependencyGraph:
     def task_ids(self) -> tuple[int, ...]:
         """The task ids, in the order they were supplied."""
         return self._task_ids
+
+    def node(self, task_id: int) -> TaskNode:
+        """Return the task's node."""
+        return self._nodes_by_id[task_id]
 
     def dependencies_of(self, task_id: int) -> list[TaskEdge]:
         """Return the edges ``task_id`` waits on."""
@@ -141,7 +184,7 @@ class DependencyGraph:
         """Return the tasks in static waves: each wave depends only on earlier waves.
 
         This is the guaranteed-safe order, not the earliest one: a task comes after every
-        upstream, even when its ``ANY`` or ``N`` condition could let it start sooner. ``graph``
+        upstream its condition names, even when an ``OR`` could let it start sooner. ``graph``
         prints it, generated DAGs chain it, and operator repairs use its topological order.
         Task ids within a wave are sorted.
         """
@@ -159,148 +202,84 @@ class DependencyGraph:
             remaining.difference_update(wave)
         return result
 
-    def total_edge_count(self, task_id: int) -> int:
-        """Return how many dependencies ``task_id`` has, cross-pipeline ones included."""
-        return (
-            len(self._dependencies_of[task_id])
-            + self._nodes_by_id[task_id].cross_pipeline_edge_count
-        )
-
-    def required_edge_count(self, task_id: int) -> int:
-        """Return how many of ``task_id``'s dependencies must be satisfied before it runs.
-
-        Every dependency under ``ALL``, one under ``ANY`` (none when there are none), and
-        ``run_condition_count`` under ``N``.
-        """
-        total = self.total_edge_count(task_id)
-        node = self._nodes_by_id[task_id]
-        condition = node.run_condition or RunCondition.ALL
-        if condition == RunCondition.ANY:
-            return 1 if total else 0
-        if condition == RunCondition.N:
-            return node.run_condition_count or 1
-        return total
-
-    def satisfied_edge_count(
+    def evaluate(
         self,
         task_id: int,
         run_state: RunState,
-        cross_pipeline_satisfied: int | None = None,
-    ) -> int:
-        """Return how many of ``task_id``'s dependencies are satisfied now.
+        cross: CrossFacts | None = None,
+        *,
+        failures_final: bool = False,
+        unknown: frozenset[int] = frozenset(),
+        reading: Reading | None = None,
+    ) -> Truth:
+        """Return the task's condition under ``run_state``; ``True`` when it has none.
 
-        ``cross_pipeline_satisfied`` is how many of its cross-pipeline dependencies the
-        cross-pipeline gate has confirmed. ``None`` means they have not been evaluated, and
-        they all count as satisfied: the scheduler has to consider the task for its gate to
-        evaluate them, so counting them as unsatisfied would never start it.
+        A same-pipeline name is not known while its task has not finished, while a ``FAILED``
+        task may still be retried (unless ``failures_final``), or when it is in ``unknown``. A
+        cross-pipeline name reads ``cross``, and is not known without it.
         """
         node = self._nodes_by_id[task_id]
-        cross = (
-            node.cross_pipeline_edge_count
-            if cross_pipeline_satisfied is None
-            else cross_pipeline_satisfied
-        )
-        same = sum(
-            1
-            for edge in self._dependencies_of[task_id]
-            if self._edge_satisfied(edge, run_state.get(edge.depends_on_task_id, TaskRunState()))
-        )
-        return same + cross
+        if node.condition is None:
+            return True
 
-    def admission_range(
-        self, task_id: int, run_state: RunState, changing: set[int], succeeds: int | None
-    ) -> tuple[int, int, int, str]:
-        """Bound the satisfied edge count against the engine's admission threshold."""
-        by_upstream: dict[int, list[TaskEdge]] = {}
-        for edge in self._dependencies_of[task_id]:
-            by_upstream.setdefault(edge.depends_on_task_id, []).append(edge)
-        low, high = 0, self._nodes_by_id[task_id].cross_pipeline_edge_count
-        for upstream, edges in by_upstream.items():
-            states: tuple[TaskRunState, ...] = (run_state.get(upstream, TaskRunState()),)
-            if upstream in changing:
-                states = (
-                    TaskRunState(status=RunStatus.SUCCESS, rows_written=0),
-                    TaskRunState(status=RunStatus.SUCCESS, rows_written=1),
-                )
-                if upstream != succeeds:
-                    states += (
-                        TaskRunState(status=RunStatus.FAILED),
-                        TaskRunState(status=RunStatus.SKIPPED),
-                    )
-            counts = [sum(self._edge_satisfied(edge, state) for edge in edges) for state in states]
-            low += min(counts)
-            high += max(counts)
-        required = self.required_edge_count(task_id)
-        total = self.total_edge_count(task_id)
-        condition = self._nodes_by_id[task_id].run_condition or RunCondition.ALL
-        description = f"Needs {required} of {total} dependencies satisfied ({condition})."
-        return low, high, required, description
+        def lookup(ref: Ref) -> Facts | None:
+            upstream = node.upstream.get(ref.parts)
+            if upstream is not None:
+                state = run_state.get(upstream, TaskRunState())
+                if upstream in unknown or not _final(state, failures_final):
+                    return None
+                return state.facts()
+            dependency = node.cross.get(ref.parts)
+            return None if dependency is None or cross is None else cross.get(dependency)
+
+        return evaluate(node.condition, lookup, reading)
 
     def ready(
         self,
         run_state: RunState,
-        cross_pipeline_satisfied: Mapping[int, int] | None = None,
+        cross: Mapping[int, CrossFacts] | None = None,
+        *,
+        failures_final: bool = False,
     ) -> list[int]:
-        """Return the sorted ids of the tasks that can start now.
+        """Return the sorted ids of the tasks that can start now, or need their gate checked.
 
-        A task is ready when its own status allows another attempt (it has not run, or it
-        ``FAILED``) and at least ``required_edge_count`` of its dependencies are satisfied.
-        An edge is satisfied when its upstream is:
-
-        - ``SUCCESS`` for a ``SUCCESS`` edge;
-        - ``FAILED`` for a ``FAILURE`` edge;
-        - terminal (``SUCCESS``, ``FAILED`` or ``SKIPPED``) for an ``ALWAYS`` edge;
-        - ``SUCCESS`` with a positive target count for a ``HAS_DATA`` edge.
-
-        ``cross_pipeline_satisfied`` maps a task id to its confirmed cross-pipeline count; a task
-        missing from it counts its cross-pipeline dependencies as satisfied (see
-        ``satisfied_edge_count``). That assumption alone never starts a task while one of its
-        same-pipeline upstreams has not finished: otherwise an ``ANY`` task would start next to
-        the upstream it waits on, find the cross-pipeline edge unsatisfied, and settle as
-        ``SKIPPED`` just before the upstream would have satisfied it.
+        A task whose status allows another attempt (it has not run, or it ``FAILED``) is ready
+        when its condition is true. A task whose condition reads another pipeline is also
+        returned, for its gate to bind those names, once every same-pipeline task it names has
+        finished, unless ``cross`` already holds its gate's answer.
         """
-        cross = cross_pipeline_satisfied or {}
+        bound = cross or {}
         result = []
         for task_id in self._task_ids:
             if run_state.get(task_id, TaskRunState()).status in NOT_RETRYABLE_STATUSES:
                 continue
-            required = self.required_edge_count(task_id)
-            supplied = cross.get(task_id)
-            if self.satisfied_edge_count(task_id, run_state, supplied) < required:
-                continue
-            if supplied is None and self._waits_on_unfinished_upstream(
-                task_id, run_state, required
+            value = self.evaluate(
+                task_id, run_state, bound.get(task_id), failures_final=failures_final
+            )
+            if value is True or (
+                value is None
+                and task_id not in bound
+                and self._waits_only_on_gate(task_id, run_state, failures_final)
             ):
-                continue
-            result.append(task_id)
+                result.append(task_id)
         return sorted(result)
 
-    def _waits_on_unfinished_upstream(
-        self, task_id: int, run_state: RunState, required: int
-    ) -> bool:
-        """Whether only assumed cross-pipeline edges carry ``task_id`` while an upstream runs.
-
-        A ``FAILED`` upstream counts as finished, so an ``ANY`` task can still start on its
-        cross-pipeline dependency once a same-pipeline upstream has failed.
-        """
-        if self.satisfied_edge_count(task_id, run_state, 0) >= required:
-            return False
-        return any(
-            run_state.get(edge.depends_on_task_id, TaskRunState()).status not in TERMINAL_STATUSES
-            for edge in self._dependencies_of[task_id]
+    def _waits_only_on_gate(self, task_id: int, run_state: RunState, failures_final: bool) -> bool:
+        node = self._nodes_by_id[task_id]
+        return bool(node.cross) and all(
+            _final(run_state.get(upstream, TaskRunState()), failures_final)
+            for upstream in node.upstream.values()
         )
 
     def unsatisfiable(self, run_state: RunState, *, failures_final: bool = False) -> list[int]:
-        """Return the sorted ids of the never-run tasks that can never become ready in this run.
+        """Return the sorted ids of the never-run tasks whose condition can never be true.
 
-        The caller records them ``SKIPPED``. A dependency is lost for good only when its
-        upstream is settled (``SUCCESS`` or ``SKIPPED``) and does not satisfy it; a ``FAILED``
-        upstream may still succeed on a retry, unless ``failures_final`` says no retry will come
-        in this run, and an ``IN-PROGRESS`` one has not finished.
+        The caller records them ``SKIPPED``. A condition is lost for good when it is false with
+        every unknown name still unknown, or when it stays unknown although every same-pipeline
+        task it names has settled and it names no other pipeline. A ``FAILED`` task may still
+        succeed on a retry, unless ``failures_final`` says no retry will come in this run.
         Skipping a task settles it, which can doom its own dependents, so the search repeats
-        until nothing changes. Cross-pipeline dependencies always count as still possible.
-
-        Only tasks with no status are reported; a task that already ran keeps its status.
+        until nothing changes. Names in other pipelines always count as still possible.
         """
         known = dict(run_state)
         result: set[int] = set()
@@ -310,7 +289,7 @@ class DependencyGraph:
                 for task_id in self._task_ids
                 if task_id not in result
                 and known.get(task_id, TaskRunState()).status is None
-                and self._is_unsatisfiable(task_id, known, failures_final)
+                and self._never(task_id, known, failures_final)
             ]
             if not newly:
                 return sorted(result)
@@ -318,61 +297,46 @@ class DependencyGraph:
                 result.add(task_id)
                 known[task_id] = TaskRunState(status=RunStatus.SKIPPED)
 
-    def _is_unsatisfiable(self, task_id: int, run_state: RunState, failures_final: bool) -> bool:
-        if not self.total_edge_count(task_id):
-            return False
-        still_possible = self._nodes_by_id[task_id].cross_pipeline_edge_count + sum(
-            1
-            for edge in self._dependencies_of[task_id]
-            if not self._edge_permanently_unsatisfiable(
-                edge, run_state.get(edge.depends_on_task_id, TaskRunState()), failures_final
+    def _never(self, task_id: int, run_state: RunState, failures_final: bool) -> bool:
+        node = self._nodes_by_id[task_id]
+        value = self.evaluate(task_id, run_state, failures_final=failures_final)
+        if value is False:
+            return True
+        return (
+            value is None
+            and not node.cross
+            and all(
+                _final(run_state.get(upstream, TaskRunState()), failures_final)
+                for upstream in node.upstream.values()
             )
         )
-        return still_possible < self.required_edge_count(task_id)
 
-    @classmethod
-    def _edge_permanently_unsatisfiable(
-        cls, edge: TaskEdge, upstream: TaskRunState, failures_final: bool
-    ) -> bool:
-        settled = upstream.status in SETTLED_STATUSES or (
-            failures_final and upstream.status == RunStatus.FAILED
-        )
-        if not settled:
-            return False
-        return not cls._edge_satisfied(edge, upstream)
+    def admission(self, task_id: int, run_state: RunState, changing: set[int]) -> Truth:
+        """Decide the task's condition with the ``changing`` tasks' outcomes not known yet."""
+        return self.evaluate(task_id, run_state, unknown=frozenset(changing))
 
-    @staticmethod
-    def _edge_satisfied(edge: TaskEdge, upstream: TaskRunState) -> bool:
-        if edge.dependency_type == DependencyType.SUCCESS:
-            return upstream.status == RunStatus.SUCCESS
-        if edge.dependency_type == DependencyType.FAILURE:
-            return upstream.status == RunStatus.FAILED
-        if edge.dependency_type == DependencyType.ALWAYS:
-            return upstream.status in TERMINAL_STATUSES
-        if edge.dependency_type == DependencyType.HAS_DATA:
-            return upstream.status == RunStatus.SUCCESS and upstream.wrote_rows
-        raise GraphError(f"unknown dependency_type: {edge.dependency_type!r}")
+
+def _final(state: TaskRunState, failures_final: bool) -> bool:
+    """Whether a task's outcome under the run is settled for a condition to read."""
+    return (
+        state.status in SETTLED_STATUSES
+        or state.status == RunStatus.CANCELLED
+        or (failures_final and state.status == RunStatus.FAILED)
+    )
 
 
 def build_graph(tasks: Sequence[TaskNode], edges: Sequence[TaskEdge]) -> DependencyGraph:
     """Validate ``CFG_`` rows and build their ``DependencyGraph``.
 
     Raises ``UnknownTaskError`` or ``SelfDependencyError`` for a bad edge, ``GraphError`` for a
-    duplicate task, an unknown dependency type or an invalid run condition, and ``CycleError``
-    when the edges loop. The Engine DB's CHECK constraints reject most of these on insert; the
-    graph checks them again so it is safe to use without one. An ``N`` count larger than the
-    task's number of dependencies spans two tables, so only the graph can reject it.
+    duplicate task, and ``CycleError`` when the edges loop. ``deploy`` refuses these before they
+    are stored; the graph checks them again so it is safe to use without one.
     """
     task_ids = tuple(t.task_id for t in tasks)
     task_id_set = set(task_ids)
     if len(task_id_set) != len(task_ids):
         raise GraphError("duplicate task_id in tasks list")
-
-    dependency_types = {member.value for member in DependencyType}
-    edge_count: dict[int, int] = dict.fromkeys(task_ids, 0)
     for edge in edges:
-        if edge.dependency_type not in dependency_types:
-            raise GraphError(f"unknown dependency_type: {edge.dependency_type!r}")
         if edge.task_id not in task_id_set:
             raise UnknownTaskError(f"edge references unknown task_id={edge.task_id}")
         if edge.depends_on_task_id not in task_id_set:
@@ -382,47 +346,15 @@ def build_graph(tasks: Sequence[TaskNode], edges: Sequence[TaskEdge]) -> Depende
         if edge.task_id == edge.depends_on_task_id:
             label = next(t.label for t in tasks if t.task_id == edge.task_id)
             raise SelfDependencyError(f"{label} depends on itself")
-        edge_count[edge.task_id] += 1
-
-    for task in tasks:
-        _check_run_condition(task, edge_count[task.task_id] + task.cross_pipeline_edge_count)
-
     graph = DependencyGraph(tuple(tasks), tuple(edges))
     _check_acyclic(graph)
     return graph
 
 
-def _check_run_condition(task: TaskNode, total_edges: int) -> None:
-    """Raise ``GraphError`` unless the task's run condition and count fit together."""
-    if task.run_condition is None:
-        if task.run_condition_count is not None:
-            raise GraphError(f"{task.label} sets run_condition_count with no run_condition")
-        return
-    if task.run_condition not in {member.value for member in RunCondition}:
-        raise GraphError(f"{task.label} has unknown run_condition: {task.run_condition!r}")
-    if task.run_condition != RunCondition.N:
-        if task.run_condition_count is not None:
-            raise GraphError(
-                f"{task.label} sets run_condition_count with "
-                f"run_condition={task.run_condition!r}, which ignores it"
-            )
-        return
-    if task.run_condition_count is None or task.run_condition_count < 1:
-        raise GraphError(
-            f"{task.label} has run_condition='N' but "
-            f"run_condition_count={task.run_condition_count!r}"
-        )
-    if task.run_condition_count > total_edges:
-        raise GraphError(
-            f"{task.label} requires {task.run_condition_count} satisfied "
-            f"dependencies but only has {total_edges} — it could never run"
-        )
-
-
 def _check_acyclic(graph: DependencyGraph) -> None:
     """Raise ``CycleError`` naming a cycle, if the graph has one.
 
-    A depth-first search with an explicit stack, so a dependency chain deeper tha Python's
+    A depth-first search with an explicit stack, so a dependency chain deeper than Python's
     recursion limit is still checked.
     """
     white, gray, black = 0, 1, 2

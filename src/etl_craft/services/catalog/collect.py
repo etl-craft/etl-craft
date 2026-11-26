@@ -35,7 +35,7 @@ from etl_craft.config.project import python_script
 from etl_craft.config.targets import active_catalog
 from etl_craft.core.business_rules import RuleObservation
 from etl_craft.core.enums import GapState, Handler, ScriptKind, SqlAction, YesNo
-from etl_craft.core.enums_lineage import LineageState
+from etl_craft.core.enums_lineage import DefinitionKind, LineageState
 from etl_craft.core.errors import EtlCraftError, MetadataError
 from etl_craft.core.redaction import public_parameters
 from etl_craft.core.text import is_safe_identifier
@@ -74,6 +74,7 @@ from etl_craft.engine.repository.source_columns import fetch_source_columns
 from etl_craft.engine.repository.tasks import TargetTask
 from etl_craft.engine.repository.triggers import TriggerLink, fetch_trigger_links
 from etl_craft.engine.repository.validation import (
+    DependencyEdge,
     fetch_pipeline_edges,
     fetch_task_dependency_edges,
 )
@@ -409,9 +410,9 @@ def collect_catalog(
         upstream = catalog.tasks.get(dependency.depends_on_label)
         if waiting is None or upstream is None:
             continue
-        waiting.upstream.append((upstream.label, dependency.dependency_type))
-        upstream.downstream.append((waiting.label, dependency.dependency_type))
-    _finish(catalog, engine, rule_rows, name_of, config)
+        waiting.upstream.append((upstream.label, dependency.kind))
+        upstream.downstream.append((waiting.label, dependency.kind))
+    _finish(catalog, engine, rule_rows, name_of, config, task_edges)
     _compare_catalog(catalog, engine, config, with_warehouse)
     return catalog
 
@@ -422,6 +423,7 @@ def _finish(
     rule_rows: Sequence[RuleRow],
     name_of: Callable[[str], str],
     config: ConnectorConfig,
+    task_edges: Sequence[DependencyEdge],
 ) -> None:
     """Attach the rules with their observations and the default-window Insights snapshot."""
     mapping.complete_definitions(catalog, config)
@@ -430,9 +432,20 @@ def _finish(
     pipelines = {asset.row.pipeline_id: code for code, asset in catalog.pipelines.items()}
     with engine.connect() as conn:
         _rules(catalog, rule_rows, fetch_rule_observations(conn), name_of)
+        kinds = {(edge.label, edge.depends_on_label): edge.kind for edge in task_edges}
         catalog.definition_edges = [
-            dict(r._mapping)
-            for r in conn.execute(statement(conn, "catalog_definition_dependencies"))
+            {
+                "kind": row.kind,
+                "target": row.target,
+                "source": row.source,
+                "dependency_type": (
+                    kinds.get((row.target, row.source), "CONDITION")
+                    if row.kind == DefinitionKind.TASK
+                    else row.rule
+                ),
+                "consume_repairs": row.consume_repairs,
+            }
+            for row in conn.execute(statement(conn, "catalog_definition_dependencies"))
         ]
         catalog.insights = measure(conn, pipelines, *window())
 

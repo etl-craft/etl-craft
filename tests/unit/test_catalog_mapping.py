@@ -15,7 +15,7 @@ pytestmark = pytest.mark.unit
 
 def task(handler="SQL", **params):
     return TaskAsset(
-        TaskRow(1, "P", "load", "ETL", handler, "N", None, run_condition_count=2),
+        TaskRow(1, "P", "load", "ETL", handler, "first.SUCCESS OR second.SUCCESS", None),
         params,
         None,
         None,
@@ -59,7 +59,8 @@ def test_shape_two_lineage_states_and_run_condition(handler, params, state, reas
     result = document(task(handler, **params))
     assert result["schema"] == "etl-craft/catalog/2"
     found = result["tasks"][0]
-    assert found["run_condition_count"] == 2
+    assert found["fail_pipeline_if_failed"] == "Y"
+    assert found["fail_pipeline_if_not_run"] == "N"
     assert found["lineage"]["state"] == state
     if reason:
         assert reason in found["lineage"]["reason"]

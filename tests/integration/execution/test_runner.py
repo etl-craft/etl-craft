@@ -10,6 +10,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import OperationalError
 
 from etl_craft.config import load_config
+from etl_craft.core.conditions import Facts
 from etl_craft.core.enums import RunStatus
 from etl_craft.core.errors import (
     ConfigurationError,
@@ -22,7 +23,7 @@ from etl_craft.execution import processes, runner
 from etl_craft.execution.attempt_types import ChildOptions
 from etl_craft.execution.gates import CrossPipelineCheck
 from etl_craft.execution.runner import run_task
-from fixtures.metadata import start_run
+from fixtures.metadata import add_dependency, start_run
 
 TESTS_DIR = Path(__file__).parents[2]
 CHILD = ChildOptions(module="fixtures.task_child", log_level="DEBUG", kill_grace_seconds=2)
@@ -108,13 +109,7 @@ def project(engine_db, tmp_path, request):
             ("after_ok", "ok", "SUCCESS"),
             ("on_failure", "ok", "FAILURE"),
         ):
-            conn.execute(
-                text(
-                    "INSERT INTO CFG_TASK_DEPENDENCY (PIPELINE_ID, TASK_ID, DEPENDS_ON_TASK_ID, "
-                    "DEPENDENCY_TYPE) VALUES (:p, :t, :u, :k)"
-                ),
-                {"p": ids["pipeline"], "t": ids[task], "u": ids[upstream], "k": kind},
-            )
+            add_dependency(conn, ids["pipeline"], ids[task], ids[upstream], kind)
         ids["run"] = start_run(conn, ids["pipeline"]) if getattr(request, "param", True) else None
     return engine, config, ids
 
@@ -275,7 +270,7 @@ def test_a_task_waits_for_its_dependencies_and_is_skipped_when_they_can_never_be
     engine, _, _ = project
     waiting = run(project, "after_ok")
     assert waiting.status == RunStatus.SKIPPED
-    assert "its dependencies are not met yet" in waiting.message
+    assert "its condition is not met yet" in waiting.message
     assert waiting.task_run_id is None
     run(project, "ok")
     assert run(project, "after_ok").status == RunStatus.SUCCESS
@@ -283,7 +278,7 @@ def test_a_task_waits_for_its_dependencies_and_is_skipped_when_they_can_never_be
     never = run(project, "on_failure")
     assert never.status == RunStatus.SKIPPED
     assert row(engine, never.task_run_id).status == RunStatus.SKIPPED
-    assert "can never be met" in row(engine, never.task_run_id).error_message
+    assert "condition [ok.FAILED] is not met" in row(engine, never.task_run_id).error_message
 
 
 def test_a_task_in_progress_is_not_started_twice(project):
@@ -322,27 +317,36 @@ def test_the_cross_pipeline_gate_decides_a_task_with_dependencies_elsewhere(proj
             ),
             {"q": other},
         ).scalar_one()
-        conn.execute(
-            text(
-                "INSERT INTO CFG_TASK_DEPENDENCY (PIPELINE_ID, TASK_ID, DEPENDS_ON_PIPELINE_ID, "
-                "DEPENDS_ON_TASK_ID, DEPENDENCY_TYPE) VALUES (:p, :t, :q, :u, 'SUCCESS')"
-            ),
-            {"p": ids["pipeline"], "t": ids["values"], "q": other, "u": upstream},
+        edge = add_dependency(
+            conn, ids["pipeline"], ids["values"], upstream, upstream_pipeline=other
         )
         ids["run"] = start_run(conn, ids["pipeline"])
     # An unfinished admission leaves no task summary, so a later check can admit it.
     unchecked = run(
         project,
         "values",
-        admission=CrossPipelineCheck(0, ("upstream X has not run",), definitive=False),
+        admission=CrossPipelineCheck(
+            {edge: None}, ("upstream Q.publish has not run",), definitive=False
+        ),
     )
     assert unchecked.status == RunStatus.SKIPPED and unchecked.task_run_id is None
-    assert "not run" in unchecked.message
-    refused = run(project, "values", admission=CrossPipelineCheck(0, ("upstream X has not run",)))
-    assert row(engine, refused.task_run_id).error_message == "upstream X has not run"
+    assert "still running" in unchecked.message
+    refused = run(
+        project,
+        "values",
+        admission=CrossPipelineCheck({edge: None}, ("upstream Q.publish has not run",)),
+    )
+    assert (
+        "condition [Q.publish.SUCCESS] is not met" in row(engine, refused.task_run_id).error_message
+    )
     with engine.begin() as conn:
         conn.execute(text("DELETE FROM AUD_TASK_RUN_LOG WHERE TASK_ID = :t"), {"t": ids["values"]})
-    assert run(project, "values", admission=CrossPipelineCheck(1)).status == RunStatus.SUCCESS
+    assert (
+        run(
+            project, "values", admission=CrossPipelineCheck({edge: Facts(RunStatus.SUCCESS)})
+        ).status
+        == RunStatus.SUCCESS
+    )
 
 
 def task_row_status(engine, task_id, run_id):

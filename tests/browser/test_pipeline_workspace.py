@@ -249,3 +249,31 @@ def test_grid_and_selected_task_follow_the_engine_without_a_reload(site):
         expect(task.get_by_text("Success", exact=True)).to_be_visible()
         assert not problems
         browser.close()
+
+
+@pytest.mark.parametrize("scheme", ["light", "dark"])
+@pytest.mark.parametrize("width", [1440, 390])
+def test_successful_run_shows_its_tolerated_failure(site, scheme, width):
+    ctx, url = site
+    with acting_as(Actor("owner", ActorKind.USER)), ctx.engine.begin() as conn:
+        pipeline = add_pipeline(conn, "OPTIONAL")
+        optional = add_task(conn, pipeline, "optional", FAIL_PIPELINE_IF_FAILED="N")
+        fallback = add_task(conn, pipeline, "fallback")
+        add_dependency(conn, pipeline, fallback, optional, "FAILURE")
+        run = start_run(conn, pipeline)
+        task_run(conn, optional, run, "FAILED")
+        task_run(conn, fallback, run, "SUCCESS")
+        finish_run(conn, run)
+    with sync_playwright() as pw:
+        browser, page, _ = open_page(
+            pw, color_scheme=scheme, viewport={"width": width, "height": 900}
+        )
+        sign_in(page, url, f"/ui/projects/default/runs/OPTIONAL/{run}")
+        summary = page.get_by_role("region", name="Tolerated failures")
+        expect(summary.get_by_text("optional", exact=True)).to_be_visible()
+        graph = page.get_by_role("group", name="Task graph")
+        expect(
+            graph.get_by_title("Failure of this task does not fail the pipeline run")
+        ).to_be_visible()
+        shoot(page, f"tolerated-failure-{scheme}-{width}")
+        browser.close()

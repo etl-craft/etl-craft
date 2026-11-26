@@ -1,5 +1,7 @@
 """Admission snapshots and repaired upstream revisions through the real command line."""
 
+import json
+
 import pytest
 from sqlalchemy import text
 
@@ -36,10 +38,9 @@ def upstream(project, *, task_edge=False, pipeline_edge=True, repairs="Y"):
             )
             conn.execute(
                 text(
-                    "UPDATE CFG_TASK_DEPENDENCY SET CONSUME_REPAIRS=:repairs "
-                    "WHERE TASK_DEPENDENCY_ID=:edge"
+                    "UPDATE CFG_PIPELINES SET CONSUME_REPAIRS=:repairs WHERE PIPELINE_ID=:pipeline"
                 ),
-                {"repairs": repairs, "edge": edge},
+                {"repairs": repairs, "pipeline": project.pipeline_id},
             )
     code, output = project.run(
         "project",
@@ -119,7 +120,10 @@ def test_task_consumes_its_claim_snapshot_after_upstream_repairs(cli_project):
     with project.engine.connect() as conn:
         assert tuple(
             conn.execute(
-                text("SELECT SELECTED_TASK_RUN_ID, SELECTED_REVISION FROM AUD_GATE_DECISIONS")
+                text(
+                    "SELECT SELECTED_TASK_RUN_ID, SELECTED_REVISION FROM AUD_GATE_DECISIONS "
+                    "WHERE TASK_DEPENDENCY_ID IS NOT NULL"
+                )
             ).one()
         ) == (task_run, 1)
         assert tuple(
@@ -129,7 +133,18 @@ def test_task_consumes_its_claim_snapshot_after_upstream_repairs(cli_project):
                 )
             ).one()
         ) == (task_run, 1)
-        attempt = conn.execute(text("SELECT ATTEMPT_ID FROM AUD_GATE_DECISIONS")).scalar_one()
+        decision = conn.execute(
+            text(
+                "SELECT CONDITION_TEXT AS condition_text, CONDITION_VALUES AS condition_values, "
+                "RESULT AS result FROM AUD_GATE_DECISIONS WHERE CONDITION_TEXT IS NOT NULL"
+            )
+        ).one()
+        assert decision.condition_text == "UP.publish.SUCCESS"
+        assert json.loads(decision.condition_values) == {"UP.publish.SUCCESS": True}
+        assert decision.result == "SATISFIED"
+        attempt = conn.execute(
+            text("SELECT ATTEMPT_ID FROM AUD_GATE_DECISIONS WHERE TASK_DEPENDENCY_ID IS NOT NULL")
+        ).scalar_one()
         assert attempt is not None
 
 
@@ -172,7 +187,10 @@ def test_repaired_upstream_is_new_only_when_the_dependency_consumes_repairs(
         )
         assert revisions == ([1, 2] if repairs == "Y" else [1])
         decisions = conn.execute(
-            text("SELECT SELECTED_REVISION, RESULT FROM AUD_GATE_DECISIONS ORDER BY DECISION_ID")
+            text(
+                "SELECT SELECTED_REVISION, RESULT FROM AUD_GATE_DECISIONS "
+                "WHERE CONDITION_TEXT IS NULL ORDER BY DECISION_ID"
+            )
         ).all()
         assert [tuple(row) for row in decisions] == [
             (1, "SATISFIED"),

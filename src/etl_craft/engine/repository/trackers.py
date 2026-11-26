@@ -115,12 +115,24 @@ def fetch_task_last_consumed(conn: Connection, task_dependency_id: int) -> Consu
 class GateDecision:
     """An immutable judgement, including the exact upstream snapshot it inspected."""
 
-    dependency_id: int
+    dependency_id: int | None
     task: bool
     selected: FinishedRun | None
     result: GateOutcome
     reason: str
     decided_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    task_id: int | None = None
+    condition: str | None = None
+    values: str | None = None
+
+    @classmethod
+    def evaluated(
+        cls, task_id: int, condition: str, values: str, result: GateOutcome, reason: str
+    ) -> GateDecision:
+        """Record one evaluation of a task's run condition, with the values it read."""
+        return cls(
+            None, True, None, result, reason, task_id=task_id, condition=condition, values=values
+        )
 
 
 def record_decisions(
@@ -140,6 +152,9 @@ def record_decisions(
                 "attempt_id": attempt_id,
                 "pipeline_dependency_id": None if decision.task else decision.dependency_id,
                 "task_dependency_id": decision.dependency_id if decision.task else None,
+                "task_id": decision.task_id,
+                "condition_text": decision.condition,
+                "condition_values": decision.values,
                 "selected_pipeline_run_id": None if selected is None else selected.pipeline_run_id,
                 "selected_task_run_id": selected.run_id
                 if selected is not None and decision.task

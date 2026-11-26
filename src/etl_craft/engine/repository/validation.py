@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from sqlalchemy import Boolean
 from sqlalchemy.engine import Connection
 
+from etl_craft.core.conditions import Scope, edge_kind, parse
 from etl_craft.engine.queries import statement
 
 
@@ -48,7 +49,7 @@ class DependencyEdge:
 
     pipeline_code: str
     task_code: str
-    dependency_type: str
+    run_condition: str
     written_pipeline_id: int | None
     depends_on_task_id: int
     depends_on_task_code: str
@@ -67,6 +68,17 @@ class DependencyEdge:
     def depends_on_label(self) -> str:
         """The upstream task, ``PIPELINE_CODE.TASK_CODE``."""
         return f"{self.depends_on_pipeline_code}.{self.depends_on_task_code}"
+
+    @property
+    def kind(self) -> str:
+        """What the condition reads of the upstream: one flag's kind, else ``CONDITION``."""
+        condition = parse(self.run_condition, Scope.TASK)
+        full = (*self.depends_on_pipeline_code.split("."), self.depends_on_task_code)
+        same = self.depends_on_pipeline_code == self.pipeline_code
+        for ref in condition.refs:
+            if full[-len(ref.parts) :] == ref.parts and (len(ref.parts) > 1 or same):
+                return edge_kind(condition, ref.parts)
+        return "CONDITION"
 
 
 def fetch_task_dependency_edges(conn: Connection) -> list[DependencyEdge]:

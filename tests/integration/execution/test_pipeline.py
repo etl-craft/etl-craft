@@ -4,8 +4,10 @@ Tasks run in real task processes whose handlers are fakes (``fixtures.task_child
 real Engine DB on both dialects.
 """
 
+import json
 import logging
 from dataclasses import replace
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -17,6 +19,7 @@ from etl_craft.config import (
     ConnectionProfile,
     load_config,
 )
+from etl_craft.core.actor import current_actor
 from etl_craft.core.counts import Counts
 from etl_craft.core.enums import RunStatus
 from etl_craft.core.errors import (
@@ -144,7 +147,8 @@ def test_a_pipeline_dispatches_ready_tasks_and_fails_when_a_task_fails(config, p
     run_id = outcome.pipeline_run_id
     assert outcome.status == RunStatus.FAILED
     assert outcome.message == (
-        f"P: pipeline_run_id={run_id} FAILED — 1 task(s) did not succeed: broken (FAILED); "
+        f"P: pipeline_run_id={run_id} FAILED — 1 task(s) did not succeed: broken (FAILED) "
+        "[FAIL_PIPELINE_IF_FAILED=Y]; "
         "skipped because of the failure: after_broken"
     )
     assert statuses(engine, run_id) == {
@@ -372,7 +376,7 @@ def test_alert_failures_do_not_change_the_data_outcome(config, engine_db, data_s
     with engine.begin() as conn:
         pipeline_id = add_pipeline(conn, "MAIL")
         data = add_task(conn, pipeline_id, "data")
-        notify = add_task(conn, pipeline_id, "notify", "ALERT")
+        notify = add_task(conn, pipeline_id, "notify", "ALERT", FAIL_PIPELINE_IF_FAILED="N")
         run_id = start_run(conn, pipeline_id)
         task_run(conn, data, run_id, data_status)
         notify_run = task_run(conn, notify, run_id, "IN-PROGRESS")
@@ -383,6 +387,280 @@ def test_alert_failures_do_not_change_the_data_outcome(config, engine_db, data_s
     assert outcome.status == data_status
     with engine.connect() as conn:
         assert runlog.fetch_task_run_status(conn, notify, run_id) == "FAILED"
+
+
+@pytest.mark.parametrize("handler", ["ALERT", "SQL"])
+@pytest.mark.parametrize("flag", [None, "N"])
+def test_failed_task_uses_pipeline_fail_option(config, engine_db, handler, flag):
+    engine = engine_db.engine
+    params = {} if flag is None else {"FAIL_PIPELINE_IF_FAILED": flag}
+    with engine.begin() as conn:
+        pipeline_id = add_pipeline(conn, "OPTIONS")
+        required = add_task(conn, pipeline_id, "required")
+        maybe = add_task(conn, pipeline_id, "maybe", handler, **params)
+        run_id = start_run(conn, pipeline_id)
+        task_run(conn, required, run_id, "SUCCESS")
+        task_run(conn, maybe, run_id, "FAILED")
+
+    outcome = finalize_pipeline(engine, config, "OPTIONS")
+    assert outcome.status == (RunStatus.SUCCESS if flag else RunStatus.FAILED)
+    if flag is None:
+        assert "maybe (FAILED) [FAIL_PIPELINE_IF_FAILED=Y]" in outcome.message
+    else:
+        assert "tolerated failure: maybe (FAIL_PIPELINE_IF_FAILED=N)" in outcome.message
+    assert run_row(engine, run_id).status == outcome.status
+
+
+@pytest.mark.parametrize("required", [False, True])
+@pytest.mark.parametrize("operator_skip", [False, True])
+def test_condition_skip_uses_pipeline_fail_option(config, engine_db, required, operator_skip):
+    engine = engine_db.engine
+    params = {"FAIL_PIPELINE_IF_NOT_RUN": "Y"} if required else {}
+    with engine.begin() as conn:
+        pipeline_id = add_pipeline(conn, "OPTIONS")
+        upstream = add_task(conn, pipeline_id, "upstream")
+        watched = add_task(conn, pipeline_id, "watched", **params)
+        add_dependency(conn, pipeline_id, watched, upstream, "FAILURE")
+        run_id = start_run(conn, pipeline_id)
+        task_run(conn, upstream, run_id, "SUCCESS")
+        if operator_skip:
+            task_run(conn, watched, run_id, "SKIPPED")
+
+    outcome = finalize_pipeline(engine, config, "OPTIONS")
+    fail = required and not operator_skip
+    assert outcome.status == (RunStatus.FAILED if fail else RunStatus.SUCCESS)
+    assert ("watched (FAIL_PIPELINE_IF_NOT_RUN=Y)" in outcome.message) == fail
+    with engine.connect() as conn:
+        assert runlog.fetch_task_run_status(conn, watched, run_id) == "SKIPPED"
+        decisions = conn.execute(
+            text(
+                "SELECT CONDITION_TEXT AS condition_text, CONDITION_VALUES AS condition_values "
+                "FROM AUD_GATE_DECISIONS WHERE PIPELINE_RUN_ID=:run AND TASK_ID=:task"
+            ),
+            {"run": run_id, "task": watched},
+        ).all()
+    if operator_skip:
+        assert decisions == []
+    else:
+        assert len(decisions) == 1
+        assert decisions[0].condition_text == "upstream.FAILED"
+        assert json.loads(decisions[0].condition_values) == {"upstream.FAILED": False}
+
+
+def test_resume_preserves_an_optional_failure_without_an_attempt(config, engine_db):
+    engine = engine_db.engine
+    with engine.begin() as conn:
+        pipeline = add_pipeline(conn, "OPTIONAL")
+        optional = add_task(
+            conn, pipeline, "optional", BEHAVIOUR="succeed", FAIL_PIPELINE_IF_FAILED="N"
+        )
+        fallback = add_task(conn, pipeline, "fallback", BEHAVIOUR="succeed")
+        add_dependency(conn, pipeline, fallback, optional, "FAILURE")
+        run_id = start_run(conn, pipeline)
+        task_run(conn, optional, run_id, "FAILED")
+
+    outcome = run_pipeline(engine, config, "OPTIONAL", child=CHILD, clock=NO_WAIT)
+    assert (outcome.pipeline_run_id, outcome.status) == (run_id, RunStatus.SUCCESS)
+    assert "tolerated failure: optional (FAIL_PIPELINE_IF_FAILED=N)" in outcome.message
+    assert statuses(engine, run_id)["fallback"][0] == RunStatus.SUCCESS
+
+
+def test_optional_failure_still_dispatches_its_failure_branch(config, engine_db):
+    engine = engine_db.engine
+    with engine.begin() as conn:
+        pipeline_id = add_pipeline(conn, "OPTIONAL")
+        optional = add_task(
+            conn, pipeline_id, "optional", BEHAVIOUR="fail", FAIL_PIPELINE_IF_FAILED="N"
+        )
+        fallback = add_task(conn, pipeline_id, "fallback", BEHAVIOUR="succeed")
+        required = add_task(conn, pipeline_id, "required", BEHAVIOUR="succeed")
+        downstream = add_pipeline(conn, "DOWNSTREAM")
+        add_pipeline_dependency(conn, downstream, pipeline_id)
+        add_dependency(conn, pipeline_id, fallback, optional, "FAILURE")
+        add_task(conn, downstream, "consume", BEHAVIOUR="succeed")
+    outcome = run_pipeline(engine, config, "OPTIONAL", child=CHILD, clock=NO_WAIT)
+    assert outcome.status == RunStatus.SUCCESS
+    assert "tolerated failure: optional (FAIL_PIPELINE_IF_FAILED=N)" in outcome.message
+    with engine.connect() as conn:
+        for task, status in (
+            (optional, RunStatus.FAILED),
+            (fallback, RunStatus.SUCCESS),
+            (required, RunStatus.SUCCESS),
+        ):
+            assert runlog.fetch_task_run_status(conn, task, outcome.pipeline_run_id) == status
+    consumed = run_pipeline(engine, config, "DOWNSTREAM", child=CHILD, clock=NO_WAIT)
+    assert consumed.status == RunStatus.SUCCESS
+    with engine.connect() as conn:
+        assert (
+            conn.execute(
+                text(
+                    "SELECT CONSUMED_PIPELINE_RUN_ID AS output FROM AUD_DEPENDENCY_CONSUMPTION "
+                    "WHERE PIPELINE_RUN_ID=:run"
+                ),
+                {"run": consumed.pipeline_run_id},
+            ).scalar_one()
+            == outcome.pipeline_run_id
+        )
+
+
+@pytest.mark.parametrize("lost", [False, True])
+def test_incomplete_optional_task_still_fails_its_run(config, engine_db, lost):
+    engine = engine_db.engine
+    with engine.begin() as conn:
+        pipeline = add_pipeline(conn, "INCOMPLETE")
+        task = add_task(conn, pipeline, "optional", FAIL_PIPELINE_IF_FAILED="N")
+        run = start_run(conn, pipeline)
+        if lost:
+            actor = current_actor()
+            summary = transitions.find_or_create_task_run(conn, task, run).task_run_id
+            attempt = transitions.queue_attempt(conn, summary, actor)
+            transitions.claim_attempt(
+                conn,
+                attempt,
+                actor,
+                owner="expired",
+                lease_expires_at=datetime.now(UTC) - timedelta(minutes=1),
+            )
+            transitions.lose_attempt(conn, attempt, actor, owner="expired")
+    outcome = finalize_pipeline(engine, config, "INCOMPLETE")
+    assert outcome.status == RunStatus.FAILED
+    assert ("optional (LOST)" if lost else "optional (never started)") in outcome.message
+    assert "tolerated failure" not in outcome.message
+
+
+def test_cancelled_run_does_not_evaluate_a_remaining_condition(config, engine_db):
+    from etl_craft.execution.run_finish import finalize
+    from etl_craft.execution.run_start import load_pipeline
+    from etl_craft.execution.run_types import PipelineRun, default_hooks
+
+    engine = engine_db.engine
+    with engine.begin() as conn:
+        pipeline = add_pipeline(conn, "CANCEL_TEST")
+        upstream = add_task(conn, pipeline, "upstream")
+        watched = add_task(conn, pipeline, "watched", FAIL_PIPELINE_IF_NOT_RUN="Y")
+        add_dependency(conn, pipeline, watched, upstream, "FAILURE")
+        run_id = start_run(conn, pipeline)
+        task_run(conn, upstream, run_id, "SUCCESS")
+        detail, graph, codes = load_pipeline(conn, pipeline, run_id=run_id)
+        transitions.cancel_pipeline_run(conn, run_id)
+    run = PipelineRun("CANCEL_TEST", pipeline, run_id, graph, codes, detail.sla_in_hours)
+    assert finalize(engine, run, default_hooks(config, engine)).status == RunStatus.CANCELLED
+    with engine.connect() as conn:
+        assert runlog.fetch_task_run_status(conn, watched, run_id) is None
+
+
+def test_recorded_conditions_cover_task_facts_and_operators(config, engine_db):
+    from etl_craft.engine.condition_edges import derive_edges
+
+    engine = engine_db.engine
+    facts = {
+        "SUCCESS": True,
+        "FAILED": False,
+        "SKIPPED": False,
+        "FINISHED": True,
+        "HAS_DATA": True,
+        "STATUS": "SUCCESS",
+        "ERROR_CLASS": "NONE",
+        "ATTEMPTS": 1,
+        "DURATION_SECONDS": 0,
+        "SOURCE_ROWS": 3,
+        "TARGET_ROWS": 3,
+        "ROWS_WRITTEN": 3,
+        "INSERTED": 3,
+        "UPDATED": 0,
+        "DELETED": 0,
+        "REJECTED": 0,
+        "DUPLICATES": 0,
+    }
+    yes = (
+        "source.SUCCESS",
+        "NOT source.FAILED",
+        "NOT source.SKIPPED",
+        "source.FINISHED",
+        "source.HAS_DATA",
+        "source.STATUS = SUCCESS",
+        "source.ERROR_CLASS = NONE",
+        "source.ATTEMPTS = 1",
+        "source.DURATION_SECONDS = 0",
+        "source.SOURCE_ROWS > 2",
+        "source.TARGET_ROWS >= 3",
+        "source.ROWS_WRITTEN < 4",
+        "source.INSERTED <= 3",
+        "source.UPDATED <> 1",
+        "source.DELETED = 0",
+        "source.REJECTED = 0",
+        "source.DUPLICATES = 0",
+    )
+    no = (
+        "NOT source.SUCCESS",
+        "source.FAILED",
+        "source.SKIPPED",
+        "NOT source.FINISHED",
+        "NOT source.HAS_DATA",
+        "source.STATUS <> SUCCESS",
+        "source.ERROR_CLASS <> NONE",
+        "source.ATTEMPTS = 2",
+        "source.DURATION_SECONDS = 1",
+        "source.SOURCE_ROWS > 3",
+        "source.TARGET_ROWS >= 4",
+        "source.ROWS_WRITTEN < 3",
+        "source.INSERTED <= 2",
+        "source.UPDATED <> 0",
+        "source.DELETED = 1",
+        "source.REJECTED = 1",
+        "source.DUPLICATES = 1",
+    )
+    with engine.begin() as conn:
+        pipeline = add_pipeline(conn, "FACTS")
+        source = add_task(conn, pipeline, "source")
+        true_task = add_task(conn, pipeline, "true_task", BEHAVIOUR="succeed")
+        false_task = add_task(conn, pipeline, "false_task")
+        for task_id, rule in ((true_task, " AND ".join(yes)), (false_task, " OR ".join(no))):
+            conn.execute(
+                text("UPDATE CFG_TASKS SET RUN_CONDITION=:rule WHERE TASK_ID=:task"),
+                {"rule": rule, "task": task_id},
+            )
+        derive_edges(conn, 1)
+        run_id = start_run(conn, pipeline)
+        source_run = transitions.find_or_create_task_run(conn, source, run_id).task_run_id
+        transitions.finish_task_run(
+            conn,
+            source_run,
+            status=RunStatus.SUCCESS,
+            counts=Counts(
+                source_count=3,
+                target_count=3,
+                insert_count=3,
+                update_count=0,
+                delete_count=0,
+                reject_count=0,
+                duplicate_count=0,
+            ),
+        )
+        conn.execute(
+            text("UPDATE AUD_TASK_RUN_LOG SET END_DATE=START_DATE WHERE TASK_RUN_ID=:id"),
+            {"id": source_run},
+        )
+
+    outcome = run_pipeline(engine, config, "FACTS", child=CHILD, clock=NO_WAIT)
+    assert (outcome.pipeline_run_id, outcome.status) == (run_id, RunStatus.SUCCESS)
+    with engine.connect() as conn:
+        rows = conn.execute(
+            text(
+                "SELECT TASK_ID AS task_id, RESULT AS result, CONDITION_VALUES AS condition_values "
+                "FROM AUD_GATE_DECISIONS WHERE PIPELINE_RUN_ID=:run AND CONDITION_TEXT IS NOT NULL"
+            ),
+            {"run": run_id},
+        )
+        rows = rows.all()
+        assert {row.task_id: row.result for row in rows} == {
+            true_task: "SATISFIED",
+            false_task: "UNSATISFIED",
+        }
+        for row in rows:
+            assert json.loads(row.condition_values) == {
+                f"source.{fact}": value for fact, value in facts.items()
+            }
 
 
 def test_the_command_line(config, pipeline, capsys, monkeypatch, engine_db):

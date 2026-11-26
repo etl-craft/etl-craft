@@ -34,13 +34,14 @@ from etl_craft.core.enums import (
     SqlAction,
     YesNo,
 )
-from etl_craft.core.errors import EtlCraftError
+from etl_craft.core.errors import ConditionError, EtlCraftError
 from etl_craft.core.graph import build_graph, cycles
 from etl_craft.core.placement import ResourceRequest, resource_request
 from etl_craft.core.script_kinds import script_kind
 from etl_craft.core.text import is_metadata_code, qualify
 from etl_craft.dialects.business_rules import expand_scope, output_key
 from etl_craft.dialects.query_analysis import managed_select_problem, output_columns, read_query
+from etl_craft.engine.condition_edges import problem as condition_problem
 from etl_craft.engine.connection import read_snapshot
 from etl_craft.engine.project_scope import configured_project
 from etl_craft.engine.queries import statement
@@ -73,7 +74,7 @@ from etl_craft.handlers import (
     sql_script,
 )
 from etl_craft.handlers.business_rules import check_output, check_rule
-from etl_craft.handlers.parameters import parameter_problems
+from etl_craft.handlers.parameters import parameter_problems, pipeline_fail_options
 from etl_craft.handlers.registry import TaskContext
 from etl_craft.handlers.resources import LocalLocker
 from etl_craft.handlers.sql import task_dialect
@@ -166,6 +167,15 @@ def validate_snapshot(
 ) -> Report:
     """Check metadata and source definitions from the caller's stable Engine DB view."""
     report = validate_on(conn, config, pipeline_code)
+    report.findings.extend(environment_findings(conn, engine, config))
+    return report
+
+
+def environment_findings(
+    conn: Connection, engine: Engine, config: ConnectorConfig
+) -> list[Finding]:
+    """Check objects that require warehouse access or an external project input."""
+    report = Report()
     definitions = fetch_source_columns(conn)
     dialect, catalog = dialect_and_catalog(config)
     grouped: dict[str, list[SourceColumn]] = {}
@@ -211,7 +221,7 @@ def validate_snapshot(
 
     for message in problems_on(conn, engine, config, check_coverage=False):
         report.fail("erasure", message)
-    return report
+    return report.findings
 
 
 def validate_on(
@@ -232,6 +242,10 @@ def validate_on(
         pipeline_codes=[code for code, _ in pipeline_parameters],
     )
     report = Report()
+    project = conn.execute(
+        statement(conn, "project_by_code"), {"code": config.project}
+    ).one_or_none()
+    issue = None if project is None else condition_problem(conn, int(project.project_id))
     dialect, _ = dialect_and_catalog(config)
     for row in conn.execute(statement(conn, "inactive_table_columns")):
         report.fail(
@@ -244,7 +258,7 @@ def validate_on(
         if problem:
             report.fail(f"source {definition.table_name}.{definition.column_name}", problem)
     _schedules(conn, config, report)
-    _pipelines(conn, config, data, report)
+    _pipelines(conn, config, data, report, issue)
     _dependencies(data, report)
     _target_formats(config, data, report)
     for task in data.tasks:
@@ -254,6 +268,11 @@ def validate_on(
         return pipeline_code is None or where.split(".", 1)[0] == pipeline_code
 
     report.findings = [f for f in report.findings if mine(f.where) or f.where.startswith("source ")]
+    if issue is not None:
+        from etl_craft.services.config_files import condition_location, config_directory
+
+        where = condition_location(config_directory(config), issue)
+        report.fail(where, f"column RUN_CONDITION: {issue}")
     report.pipelines = sum(1 for code in data.pipeline_codes if mine(code))
     report.tasks = sum(1 for task in data.tasks if mine(task.label))
     return report
@@ -290,7 +309,14 @@ def _schedules(conn: Connection, config: ConnectorConfig, report: Report) -> Non
                 )
 
 
-def _pipelines(conn: Connection, config: ConnectorConfig, data: _Metadata, report: Report) -> None:
+def _pipelines(
+    conn: Connection,
+    config: ConnectorConfig,
+    data: _Metadata,
+    report: Report,
+    condition_issue: str | None,
+) -> None:
+    invalid_pipeline = (condition_issue or "").partition(" RUN_CONDITION ")[0].rpartition(".")[0]
     for code, stored in data.pipeline_parameters:
         if not is_metadata_code(code):
             report.fail(code, _code_problem("PIPELINE_CODE", code))
@@ -305,6 +331,8 @@ def _pipelines(conn: Connection, config: ConnectorConfig, data: _Metadata, repor
                 "remove the unknown key or replace it with an allowed key; "
                 + input_refusal(InputKind.PARAMETER, name),
             )
+        if code == invalid_pipeline:
+            continue
         try:
             pipeline_id = resolve_pipeline_id(conn, code)
             for where, message in graph_problems(conn, pipeline_id, data.tasks, data.edges):
@@ -360,17 +388,23 @@ def _dependencies(data: _Metadata, report: Report) -> None:
                 edge.label,
                 f"depends on {edge.depends_on_label}, whose {what} is inactive and no longer "
                 "runs, so once its last run is consumed the dependency is never satisfied "
-                "again; deactivate the dependency too, or reactivate it",
+                "again; change RUN_CONDITION to remove the reference, or reactivate it",
             )
         upstream = by_id.get(edge.depends_on_task_id)
-        if edge.dependency_type == DependencyType.HAS_DATA and upstream is not None:
+        if upstream is None:
+            continue
+        try:
+            kind = edge.kind
+        except ConditionError as error:
+            report.fail(edge.label, f"RUN_CONDITION {error}; correct the condition and deploy")
+            continue
+        if kind == DependencyType.HAS_DATA:
             reason = _no_rows_reason(upstream, data.params[upstream.task_id])
             if reason:
                 report.fail(
                     edge.label,
-                    f"has a HAS_DATA dependency on {edge.depends_on_label}, which {reason}, so "
-                    "the dependency is never satisfied and the task is always skipped; use "
-                    "SUCCESS",
+                    f"RUN_CONDITION reads {edge.depends_on_label}.HAS_DATA, which {reason}, so "
+                    "the condition is never met and the task is always skipped; use SUCCESS",
                 )
 
 
@@ -402,6 +436,7 @@ def _task(
             ResourceRequest(0, 0) if task.handler == Handler.EVENT_WAIT else request,
             params.get("POOL", data.placement.default_pool),
         )
+        pipeline_fail_options(params)
         task_timeout_seconds(params, config)
         task_retry_policy(params, config, task.handler)
     except EtlCraftError as error:

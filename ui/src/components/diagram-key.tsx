@@ -7,12 +7,12 @@ import {taskSymbol,kindColor,kindLabels} from "@/components/task-symbol";
 import type {CatalogTask} from "@/lib/catalog";
 
 export function dependencyEntries(edges:{dependency_type:string;consume_repairs?:string}[]):LegendEntry[] {
- const rows=[...new Set(edges.map(edge=>edge.dependency_type))].map(kind=>({id:`dependency:${kind}`,group:"Dependencies",name:dependencyBadge(kind)||"Succeeded",meaning:kind==="HAS_DATA"?"Requires success and written rows":kind==="FAILURE"?"Runs after failure":kind==="ALWAYS"?"Runs after any outcome":"Requires success",sample:<span className="inline-grid gap-1"><svg width="32" height="12"><path d="M 0 6 H 32" style={dependencyStyle(kind)}/></svg><DependencyBadge edge={{dependency_type:kind,consume_repairs:"Y"}}/></span>}));
+ const rows=[...new Set(edges.map(edge=>edge.dependency_type))].map(kind=>({id:`dependency:${kind}`,group:"Dependencies",name:dependencyBadge(kind)||"Succeeded",meaning:kind==="HAS_DATA"?"Requires success and written rows":kind==="FAILURE"?"Runs after failure":kind==="ALWAYS"?"Runs after any outcome":kind==="CONDITION"?"Reads facts in the run condition":"Requires success",sample:<span className="inline-grid gap-1"><svg width="32" height="12"><path d="M 0 6 H 32" style={dependencyStyle(kind)}/></svg><DependencyBadge edge={{dependency_type:kind,consume_repairs:"Y"}}/></span>}));
  if(edges.some(edge=>edge.consume_repairs==="N"))rows.push({id:"no-repairs",group:"Dependencies",name:"No repairs",meaning:"A repaired revision is not consumed",sample:<DependencyBadge edge={{dependency_type:"SUCCESS",consume_repairs:"N"}}/>});
  return rows;
 }
 export function taskEntries(tasks:CatalogTask[]):LegendEntry[] {
- return tasks.flatMap(task=>{const {icon:Icon,label}=taskSymbol(task);return [{id:`handler:${label}`,group:"Task kinds",name:label,meaning:"Task handler",sample:<Icon className="size-4" style={{color:kindColor(task.script_kind??task.handler)}}/>},{id:`condition:${runCondition(task)}`,group:"Run conditions",name:runCondition(task),meaning:"Required upstream dependency conditions",sample:<RunConditionMark task={task}/>},...(task.active_flag==="N"?[{id:"inactive",group:"Task kinds",name:"Inactive",meaning:"Visible in the definition; not executed",sample:<span className="opacity-40"><DiagramChip>Inactive</DiagramChip></span>}]:[])];});
+ return tasks.flatMap(task=>{const {icon:Icon,label}=taskSymbol(task);return [{id:`handler:${label}`,group:"Task kinds",name:label,meaning:"Task handler",sample:<Icon className="size-4" style={{color:kindColor(task.script_kind??task.handler)}}/>},{id:`condition:${runCondition(task)}`,group:"Run conditions",name:runCondition(task),meaning:"Required upstream dependency conditions",sample:<ConditionMark task={task}/>},...(task.active_flag==="N"?[{id:"inactive",group:"Task kinds",name:"Inactive",meaning:"Visible in the definition; not executed",sample:<span className="opacity-40"><DiagramChip>Inactive</DiagramChip></span>}]:[])];});
 }
 const STAGES:Record<string,[string,string]>={
   source:["Source","An input object read by this task"],
@@ -45,6 +45,6 @@ export function MappingConditions({conditions}:{conditions:string[]}) {
  return <span title={conditions.join("; ")}>{conditions.length} condition{conditions.length===1?"":"s"} across columns</span>;
 }
 
-export function RunConditionMark({task}:{task:CatalogTask}) {
+export function ConditionMark({task}:{task:CatalogTask}) {
  return <span className="shrink-0 rounded-sm border border-border px-1">{runCondition(task)}</span>;
 }

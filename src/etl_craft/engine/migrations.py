@@ -31,6 +31,7 @@ from etl_craft.core.text import sha256_hex, strip_comments_and_literals
 from etl_craft.dialects.engine import for_engine
 from etl_craft.dialects.engine.tables import AUDIT_TABLES, CONFIG_TABLES
 from etl_craft.engine import locks
+from etl_craft.engine.condition_edges import derive_edges
 from etl_craft.engine.migration_steps import MARKERS, NO_TARGET, Target, TargetOptions
 from etl_craft.engine.queries import run_script, statement
 
@@ -247,6 +248,7 @@ def _run_project(conn: Connection, migration: MigrationFile, target: Target) -> 
             dialect.refresh_metadata_triggers(conn)
     dialect.project_view(conn, None)
     resolve_project_sources(conn, target.catalog, target.warehouse_dialect)
+    derive_edges(conn, scope.project_id)
 
 
 def _run_engine(conn: Connection, migration: MigrationFile) -> None:

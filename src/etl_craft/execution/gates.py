@@ -39,6 +39,7 @@ from typing import TypeVar
 from sqlalchemy.engine import Engine
 
 from etl_craft.core import interrupts
+from etl_craft.core.conditions import Facts
 from etl_craft.core.enums import (
     TERMINAL_STATUSES,
     DependencyType,
@@ -54,6 +55,7 @@ from etl_craft.engine.repository.dependencies import (
     fetch_cross_pipeline_task_edges,
     fetch_pipeline_dependency_edges,
 )
+from etl_craft.engine.runlog import fetch_task_run_facts
 
 logger = logging.getLogger(__name__)
 
@@ -157,8 +159,31 @@ def judge(
 ) -> tuple[int | None, str]:
     """Return the upstream run that satisfies a dependency, or ``None`` and why none does.
 
-    Only the latest finished run is judged. A higher run id is new; the same id is new only
-    with a higher revision and ``consume_repairs``. Its status must satisfy ``dependency_type``.
+    Only the latest finished run is judged: it must be fresh (see ``fresh``) and its status
+    must satisfy ``dependency_type``.
+    """
+    run_id, why = fresh(run, last_consumed, consume_repairs=consume_repairs)
+    if run_id is None or run is None:
+        return None, why
+    if not satisfies(dependency_type, run):
+        detail = " with no rows written" if run.status == RunStatus.SUCCESS else ""
+        return None, (
+            f"last finished run {run.run_id} ended {run.status}{detail}, which does not satisfy "
+            f"a {dependency_type} dependency"
+        )
+    return run.run_id, why
+
+
+def fresh(
+    run: trackers.FinishedRun | None,
+    last_consumed: trackers.ConsumedRun | int | None,
+    *,
+    consume_repairs: bool = True,
+) -> tuple[int | None, str]:
+    """Return the upstream's latest finished run when it is fresh, or ``None`` and why not.
+
+    A higher run id than the last consumed one is new; the same id is new only with a higher
+    revision and ``consume_repairs``.
     """
     if run is None:
         return None, "has no finished run"
@@ -186,12 +211,6 @@ def judge(
         or (run.run_id == last.run_id and (not consume_repairs or run.revision <= last.revision))
     ):
         return None, f"has no run since run {last.run_id}, which was already consumed"
-    if not satisfies(dependency_type, run):
-        detail = " with no rows written" if run.status == RunStatus.SUCCESS else ""
-        return None, (
-            f"last finished run {run.run_id} ended {run.status}{detail}, which does not satisfy "
-            f"a {dependency_type} dependency"
-        )
     return run.run_id, f"last finished run {run.run_id} ended {run.status}"
 
 
@@ -233,19 +252,21 @@ def _wait_while_running(
 
 @dataclass(frozen=True)
 class CrossPipelineCheck:
-    """What a gate found for a task's dependencies on tasks in other pipelines.
+    """What a gate bound for a task's names in other pipelines.
 
-    ``consumed`` maps each satisfied dependency to the upstream task run that satisfied it, for
-    the gate to record once the task succeeds. ``definitive`` is false when the gate did not
-    really check, so its reasons never record the task ``SKIPPED``. ``bypassed`` holds the
-    dependencies ``Dependency_gates`` let through without being satisfied.
+    ``facts`` maps each ``TASK_DEPENDENCY_ID`` to the facts of the upstream's fresh output, or
+    to ``None`` when it has none, for the task's condition to read. ``consumed`` maps each bound
+    dependency to that task run, for the gate to record once the task succeeds. ``definitive``
+    is false when the gate did not really check (an upstream is still running), so the task
+    waits. ``bypassed`` is true when ``Dependency_gates`` lets the task run whatever the names
+    read.
     """
 
-    satisfied_count: int
+    facts: dict[int, Facts | None] = field(default_factory=dict)
     reasons: tuple[str, ...] = ()
     consumed: dict[int, int] = field(default_factory=dict)
     definitive: bool = True
-    bypassed: tuple[str, ...] = ()
+    bypassed: bool = False
     decisions: tuple[trackers.GateDecision, ...] = ()
     next_check_at: datetime | None = None
 
@@ -271,35 +292,31 @@ class TrackedGate:
         self,
         engine: Engine,
         task_id: int,
-        needed: int,
         *,
         budget: WaitBudget | None = None,
         waiter: Callable[..., datetime | None] | None = None,
     ) -> CrossPipelineCheck:
-        """Check the task's cross-pipeline dependencies until ``needed`` are satisfied.
+        """Bind each of the task's names in other pipelines to the upstream's fresh output.
 
-        Dependencies after that are neither checked nor waited for. Under ``warn`` the ones not
-        satisfied are bypassed; under ``off`` none is checked and all are bypassed.
+        Under ``off`` nothing is bound and the task runs bypassed; under ``warn`` names are
+        bound and a condition they leave unmet is bypassed by the caller.
         """
         with engine.connect() as conn:
             edges = fetch_cross_pipeline_task_edges(conn, task_id)
         if self.policy == GatePolicy.OFF:
             return CrossPipelineCheck(
-                needed,
-                decisions=tuple(gates_off(edge.task_dependency_id, task=True) for edge in edges),
-                bypassed=tuple(
-                    f"upstream task {edge.depends_on_label} ({edge.dependency_type}) not checked"
-                    for edge in edges
+                reasons=tuple(
+                    f"upstream task {edge.depends_on_label} not checked" for edge in edges
                 ),
+                decisions=tuple(gates_off(edge.task_dependency_id, task=True) for edge in edges),
+                bypassed=True,
             )
         budget = budget or WaitBudget.start(self.clock, self.wait_seconds)
-        satisfied = 0
+        facts: dict[int, Facts | None] = {}
         reasons: list[str] = []
         consumed: dict[int, int] = {}
         decisions: list[trackers.GateDecision] = []
         for edge in edges:
-            if satisfied >= needed:
-                break
             label = f"upstream task {edge.depends_on_label}"
             next_check = (waiter or _wait_while_running)(
                 partial(_read, engine, trackers.fetch_latest_task_run, edge.depends_on_task_id),
@@ -311,33 +328,34 @@ class TrackedGate:
                 self.clock,
             )
             if next_check is not None:
-                return CrossPipelineCheck(0, definitive=False, next_check_at=next_check)
+                return CrossPipelineCheck(definitive=False, next_check_at=next_check)
             with engine.connect() as conn:
                 run = trackers.fetch_latest_finished_task_run(conn, edge.depends_on_task_id)
                 last = trackers.fetch_task_last_consumed(conn, edge.task_dependency_id)
-            run_id, why = judge(
-                edge.dependency_type, run, last, consume_repairs=edge.consume_repairs
-            )
+                run_id, why = fresh(run, last, consume_repairs=edge.consume_repairs)
+                bound = None if run_id is None else fetch_task_run_facts(conn, run_id)
             decisions.append(
                 trackers.GateDecision(
                     edge.task_dependency_id,
                     True,
                     run,
-                    judged(run_id is not None, self.policy),
+                    GateOutcome.SATISFIED if run_id is not None else GateOutcome.UNSATISFIED,
                     why,
                 )
             )
+            facts[edge.task_dependency_id] = None if bound is None else bound.facts()
             if run_id is None:
-                reasons.append(f"{label} ({edge.dependency_type}) {why}")
+                reasons.append(f"{label} {why}")
                 continue
-            logger.info("%s (%s) is satisfied: %s", label, edge.dependency_type, why)
-            satisfied += 1
+            logger.info("%s: bound %s", label, why)
             consumed[edge.task_dependency_id] = run_id
-        if self.policy == GatePolicy.WARN and satisfied < needed:
-            return CrossPipelineCheck(
-                needed, consumed=consumed, bypassed=tuple(reasons), decisions=tuple(decisions)
-            )
-        return CrossPipelineCheck(satisfied, tuple(reasons), consumed, decisions=tuple(decisions))
+        return CrossPipelineCheck(
+            facts,
+            tuple(reasons),
+            consumed,
+            bypassed=self.policy == GatePolicy.WARN,
+            decisions=tuple(decisions),
+        )
 
 
 def _read(engine: Engine, fetch: Callable[..., T], *args: object) -> T:
@@ -449,7 +467,6 @@ def check_gate(
     pipeline_id: int,
     *,
     task_id: int | None = None,
-    needed: int = 0,
     clock: Clock | None = None,
     policy: GatePolicy = GatePolicy.ENFORCE,
     wait_seconds: float = WAIT_LIMIT_SECONDS,
@@ -495,9 +512,7 @@ def check_gate(
         return now + timedelta(seconds=delay)
 
     check = (
-        TrackedGate(clock, policy, wait_seconds).check(
-            engine, task_id, needed, budget=budget, waiter=poll
-        )
+        TrackedGate(clock, policy, wait_seconds).check(engine, task_id, budget=budget, waiter=poll)
         if task_id is not None
         else check_pipeline_dependencies(
             engine, pipeline_id, clock, policy, wait_seconds, budget=budget, waiter=poll
@@ -524,11 +539,8 @@ def check_gate(
             conn.execute(
                 statement(conn, "finish_gate_wait"), {**params, "looks": min(looks, MAX_LOOKS)}
             )
-    satisfied = (
-        check.satisfied_count >= needed
-        if isinstance(check, CrossPipelineCheck)
-        else check.satisfied
-    )
+    # A task's bound names are judged by its condition, which the caller evaluates.
+    satisfied = True if isinstance(check, CrossPipelineCheck) else check.satisfied
     return GateResult(
         GateOutcome.WAIT if check.next_check_at is not None else judged(satisfied),
         check,

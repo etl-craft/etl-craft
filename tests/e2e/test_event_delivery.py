@@ -38,8 +38,8 @@ def test_installed_event_pipeline_records_rows_and_consumes_delivery(tmp_path):
         "SELECT TASK_ID,'EVENT_SQL','SELECT 1 AS ready' FROM CFG_TASKS WHERE TASK_CODE='row';\n"
         "INSERT INTO CFG_TASK_PARAMETERS (TASK_ID,PARAMETER_NAME,PARAMETER_VALUE) "
         "SELECT TASK_ID,'EVENT_POLL_SECONDS','1' FROM CFG_TASKS WHERE TASK_CODE='row';\n"
-        "INSERT INTO CFG_TASKS (TASK_CODE,TASK_TYPE,PIPELINE_ID,HANDLER) "
-        "SELECT 'files','ETL',PIPELINE_ID,'SQL' FROM CFG_PIPELINES;\n"
+        "INSERT INTO CFG_TASKS (TASK_CODE,TASK_TYPE,PIPELINE_ID,HANDLER,RUN_CONDITION) "
+        "SELECT 'files','ETL',PIPELINE_ID,'SQL','wait.SUCCESS' FROM CFG_PIPELINES;\n"
         "INSERT INTO CFG_TASK_PARAMETERS (TASK_ID,PARAMETER_NAME,PARAMETER_VALUE) "
         "SELECT TASK_ID,'SQL_ACTION','CREATE_TABLE' FROM CFG_TASKS WHERE TASK_CODE='files';\n"
         "INSERT INTO CFG_TABLES (SCHEMA_NAME,TABLE_NAME) VALUES ('main','records');\n"
@@ -48,11 +48,6 @@ def test_installed_event_pipeline_records_rows_and_consumes_delivery(tmp_path):
         "INSERT INTO CFG_TASK_PARAMETERS (TASK_ID,PARAMETER_NAME,PARAMETER_VALUE) "
         "SELECT TASK_ID,'SELECT_QUERY','SELECT * FROM read_csv([$$event_files], header=true)' "
         "FROM CFG_TASKS WHERE TASK_CODE='files';\n"
-        "INSERT INTO CFG_TASK_DEPENDENCY (PIPELINE_ID,TASK_ID,DEPENDS_ON_TASK_ID,DEPENDENCY_TYPE) "
-        "SELECT downstream.PIPELINE_ID,downstream.TASK_ID,upstream.TASK_ID,'SUCCESS' "
-        "FROM CFG_TASKS downstream JOIN CFG_TASKS upstream "
-        "ON upstream.PIPELINE_ID=downstream.PIPELINE_ID "
-        "WHERE downstream.TASK_CODE='files' AND upstream.TASK_CODE='wait';\n"
     )
     scripts = project / "python_scripts"
     scripts.mkdir()

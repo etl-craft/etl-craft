@@ -135,17 +135,8 @@ def test_config_apply_keeps_other_projects_and_links_same_code_upstream(engine_d
             },
         ),
         (
-            "task_dependencies.csv",
-            {
-                "PIPELINE_CODE": "SHARED",
-                "TASK_CODE": "T",
-                "DEPENDS_ON_PROJECT_CODE": "default",
-                "DEPENDS_ON_PIPELINE_CODE": "SHARED",
-                "DEPENDS_ON_TASK_CODE": "T",
-                "DEPENDENCY_TYPE": "SUCCESS",
-                "CONSUME_REPAIRS": "Y",
-                "ACTIVE_FLAG": "Y",
-            },
+            "tasks.csv",
+            {"RUN_CONDITION": "default.SHARED.T.SUCCESS"},
         ),
     ):
         path = folder / name

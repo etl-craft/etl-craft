@@ -19,7 +19,6 @@ from etl_craft.engine.repository.config_rows import (
     PIPELINES,
     SOURCE_COLUMNS,
     TABLES,
-    TASK_DEPENDENCIES,
     TASK_PARAMETERS,
     TASKS,
     ConfigTable,
@@ -70,8 +69,6 @@ def _ends(table: ConfigTable, values: Mapping[str, Value]) -> list[tuple[str, Ke
             ),
         ]
     ends: list[tuple[str, Key]] = [("task", (values["PIPELINE_CODE"], values["TASK_CODE"]))]
-    if table is TASK_DEPENDENCIES and not values["DEPENDS_ON_PROJECT_CODE"]:
-        ends.append(("task", (values["DEPENDS_ON_PIPELINE_CODE"], values["DEPENDS_ON_TASK_CODE"])))
     if table is BUSINESS_RULES:
         ends.append(("table", tuple(values[name] for name in OBJECT_TABLES.key)))
     return ends
@@ -126,10 +123,7 @@ def _links(
                 f"set the {kind}'s ACTIVE_FLAG to Y, or this row's to N"
             )
         found.append(parent)
-    if (
-        table in (PIPELINE_DEPENDENCIES, TASK_DEPENDENCIES)
-        and file_row.values["DEPENDS_ON_PROJECT_CODE"]
-    ):
+    if table is PIPELINE_DEPENDENCIES and file_row.values["DEPENDS_ON_PROJECT_CODE"]:
         found.append(external_dependency(conn, table, file_row))
     if table is PIPELINES:
         calendar = int(found[0].row_id) if found else None
@@ -149,13 +143,6 @@ def _links(
         return {"TASK_ID": int(found[0].row_id)}
     if table is PIPELINE_DEPENDENCIES:
         return {"PIPELINE_ID": int(found[0].row_id), "DEPENDS_ON_PIPELINE_ID": int(found[1].row_id)}
-    if table is TASK_DEPENDENCIES:
-        return {
-            "PIPELINE_ID": found[0].parents[0],
-            "TASK_ID": int(found[0].row_id),
-            "DEPENDS_ON_PIPELINE_ID": found[1].parents[0],
-            "DEPENDS_ON_TASK_ID": int(found[1].row_id),
-        }
     return {
         "PIPELINE_ID": found[0].parents[0],
         "TASK_ID": int(found[0].row_id),
@@ -181,7 +168,7 @@ def external_dependency(conn: Connection, table: ConfigTable, file_row: FileRow)
             "apply the upstream project's active definitions first"
         )
     return StoredRow(
-        int(upstream.task_id if table is TASK_DEPENDENCIES else upstream.pipeline_id),
+        int(upstream.pipeline_id),
         True,
         (int(upstream.pipeline_id),),
         True,
@@ -230,7 +217,6 @@ def resolved_files(
         BUSINESS_RULES,
         TASKS,
         PIPELINE_DEPENDENCIES,
-        TASK_DEPENDENCIES,
     ):
         if table.file not in resolved:
             continue
@@ -242,7 +228,7 @@ def resolved_files(
                 else OBJECT_TABLES.key
             )
             values = row.values
-            if table in (PIPELINE_DEPENDENCIES, TASK_DEPENDENCIES):
+            if table is PIPELINE_DEPENDENCIES:
                 upstream = values["DEPENDS_ON_PROJECT_CODE"]
                 values = values | {
                     "DEPENDS_ON_PROJECT_CODE": None if upstream == config.project else upstream

@@ -418,7 +418,11 @@ def test_preview_predicts_recovery_admissions_without_writing(ctx, choice, upstr
         set() if choice == "RESTART" else {"a"}
     )
     assert {task.task_code for task in preview.depends_on_upstream} == {"after"}
-    assert "b succeeds" in preview.depends_on_upstream[0].reason
+    assert preview.depends_on_upstream[0].reason == (
+        "Condition: b.SUCCESS. "
+        + ("b runs again first; " if choice == "TASK" else "")
+        + "it depends on how b ends"
+    )
 
     result = invoke(ctx, action, operation)
     execution_id = run

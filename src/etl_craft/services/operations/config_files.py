@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from pathlib import Path
@@ -13,9 +14,15 @@ from sqlalchemy.engine import Connection
 
 from etl_craft.config import ConnectorConfig
 from etl_craft.config.project import project_config
+from etl_craft.core.conditions import Scope, parse
 from etl_craft.core.enums import ActionName, ApiRole, Transport
 from etl_craft.core.enums_access import Permission
-from etl_craft.core.errors import PermissionDeniedError, ResourceNotFoundError, UsageError
+from etl_craft.core.errors import (
+    ConditionError,
+    PermissionDeniedError,
+    ResourceNotFoundError,
+    UsageError,
+)
 from etl_craft.core.time import as_utc
 from etl_craft.engine.bundles import Bundle
 from etl_craft.engine.queries import statement
@@ -211,26 +218,41 @@ def check_dependencies(
     """Recheck deployment rights and upstream project access before publishing file changes."""
     if not allows(ctx, ActionName.DEPLOY, ConfigDirectory(), conn=conn):
         require_project(conn, ctx, Permission.CAN_MANAGE)
-    for filename in ("pipeline_dependencies.csv", "task_dependencies.csv"):
-        for row in files.rows.get(filename, {}).values():
-            code = row.values["DEPENDS_ON_PROJECT_CODE"]
-            if not row.active or not code or code == ctx.project:
-                continue
-            upstream = conn.execute(
-                statement(conn, "project_by_code"), {"code": code}
-            ).one_or_none()
-            visible = (
-                upstream is not None
-                and project_permission(
-                    conn, replace(ctx, project=str(code), project_id=int(upstream.project_id))
-                )
-                is not None
+    for filename, row, code in _upstream_projects(files):
+        if code == ctx.project:
+            continue
+        upstream = conn.execute(statement(conn, "project_by_code"), {"code": code}).one_or_none()
+        visible = (
+            upstream is not None
+            and project_permission(
+                conn, replace(ctx, project=str(code), project_id=int(upstream.project_id))
             )
-            if not visible:
-                raise ResourceNotFoundError(
-                    f"{filename} line {row.line}: project {ctx.project!r} "
-                    "declares upstream project "
-                    f"{code!r}, which is missing or not permitted; "
-                    "expected CAN_VIEW on the upstream "
-                    "project; ask its project manager or a deployment administrator for access"
-                )
+            is not None
+        )
+        if not visible:
+            raise ResourceNotFoundError(
+                f"{filename} line {row.line}: project {ctx.project!r} "
+                "declares upstream project "
+                f"{code!r}, which is missing or not permitted; "
+                "expected CAN_VIEW on the upstream "
+                "project; ask its project manager or a deployment administrator for access"
+            )
+
+
+def _upstream_projects(
+    files: config_files.ConfigFiles,
+) -> Iterator[tuple[str, config_files.FileRow, str]]:
+    """Yield each other project an active row names: a dependency row or a condition name."""
+    for row in files.rows.get("pipeline_dependencies.csv", {}).values():
+        if row.active and row.values["DEPENDS_ON_PROJECT_CODE"]:
+            yield "pipeline_dependencies.csv", row, str(row.values["DEPENDS_ON_PROJECT_CODE"])
+    for row in files.rows.get("tasks.csv", {}).values():
+        text = str(row.values.get("RUN_CONDITION") or "").strip()
+        if not row.active or not text:
+            continue
+        try:
+            condition = parse(text, Scope.TASK)
+        except ConditionError:
+            continue  # validation reports the unparsable condition with its position
+        for code in dict.fromkeys(ref.parts[0] for ref in condition.refs if len(ref.parts) == 3):
+            yield "tasks.csv", row, code

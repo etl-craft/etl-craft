@@ -14,7 +14,6 @@ from etl_craft.core.enums import (
     ActionName,
     AttemptStatus,
     ControlAction,
-    DependencyType,
     RunStatus,
 )
 from etl_craft.core.errors import RunRefusedError, RunStateError, UsageError
@@ -440,8 +439,11 @@ def test_task_pause_skips_an_admitted_unstarted_task_and_records_its_version(ctx
     p, a, b = seed(ctx)
     with ctx.engine.begin() as conn:
         conn.execute(
-            text("UPDATE CFG_TASK_DEPENDENCY SET DEPENDENCY_TYPE=:kind WHERE TASK_ID=:task"),
-            {"kind": DependencyType.ALWAYS, "task": b},
+            text(
+                "UPDATE CFG_TASKS SET RUN_CONDITION="
+                "REPLACE(RUN_CONDITION, '.SUCCESS', '.FINISHED') WHERE TASK_ID=:task"
+            ),
+            {"task": b},
         )
         run = start_run(conn, p)
     invoke(
@@ -631,9 +633,7 @@ def test_an_admitted_dependency_wait_finishes_during_drain_without_dispatching(c
         run = start_run(conn, pipeline)
     now = datetime.now(UTC)
     with selected_project(1):
-        first = check_gate(
-            ctx.engine, run, pipeline, task_id=target, needed=1, clock=Clock(now=lambda: now)
-        )
+        first = check_gate(ctx.engine, run, pipeline, task_id=target, clock=Clock(now=lambda: now))
     assert first.next_check_at is not None
     pause(ctx)
     with ctx.engine.begin() as conn:

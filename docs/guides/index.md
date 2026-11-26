@@ -14,8 +14,8 @@ How to model and run pipelines with etl-craft.
   the project and merged into the Engine DB by `etl-craft deploy`.
 - [Configuration migrations](configuration-migrations.md): writing `CFG_` rows with SQL in project
   migrations, with an example of each kind of change.
-- [Dependencies and run conditions](dependencies.md): dependency types, `ALL`, `ANY` and `N`
-  conditions, waves, and which tasks run, wait or are skipped.
+- [Run conditions](dependencies.md): task facts, expressions, and which tasks run,
+  wait or are skipped.
 - [SQL tasks](sql-tasks.md): the SELECT, inline or from `sql_scripts/`, the pipeline-id tokens,
   the nine actions, and what the engine checks and logs.
 - [SQL scripts](sql-scripts.md): unmanaged procedures, maintenance and DML, bound inputs,

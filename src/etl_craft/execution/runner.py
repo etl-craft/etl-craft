@@ -25,11 +25,13 @@ from sqlalchemy.engine import Connection, Engine
 
 from etl_craft.config import ConnectorConfig
 from etl_craft.core.actor import SYSTEM_ACTOR, acting_as, current_actor
+from etl_craft.core.conditions import describe
 from etl_craft.core.enums import (
     FINISHED_RUN_STATUSES,
     SETTLED_STATUSES,
     AttemptStatus,
     DeploymentProfile,
+    GateOutcome,
     Handler,
     RunStatus,
 )
@@ -40,7 +42,7 @@ from etl_craft.core.errors import (
 from etl_craft.core.faults import fault_point
 from etl_craft.core.graph import build_graph
 from etl_craft.core.text import byte_tail
-from etl_craft.engine import run_scopes, runlog, transitions
+from etl_craft.engine import controls, run_scopes, runlog, transitions
 from etl_craft.engine.process_reservations import connection_slot
 from etl_craft.engine.project_scope import configured_project
 from etl_craft.engine.queries import statement
@@ -85,7 +87,13 @@ from etl_craft.execution.processes import (
     ChildSpec,
     run_child,
 )
-from etl_craft.execution.readiness import backfill_cross_check, describe_unready, upstream_pending
+from etl_craft.execution.readiness import (
+    backfill_cross_check,
+    condition_decision,
+    describe_unready,
+    evaluate_condition,
+    upstream_pending,
+)
 from etl_craft.execution.reconcile import reconcile
 from etl_craft.execution.retries import refresh_retries
 from etl_craft.execution.secret_pipe import task_values, with_values
@@ -193,7 +201,11 @@ def _run_local(
         decisions: tuple[trackers.GateDecision, ...] = ()
         if not options.force:
             blocked, cross = preflight(
-                engine, gate, pipeline_id, task_id, task_code, pipeline_run_id, options.admission
+                engine,
+                gate,
+                pipeline_id,
+                TaskRun(pipeline_code, task_code, task_id, pipeline_run_id, options.force),
+                options.admission,
             )
             if blocked is not None:
                 logger.info(blocked.message)
@@ -205,7 +217,7 @@ def _run_local(
                     pipeline_id,
                     pipeline_run_id,
                     config.dependency_gates,
-                    cross.bypassed,
+                    cross.reasons,
                     task_id=task_id,
                 )
         task = TaskRun(
@@ -350,7 +362,7 @@ def _run_overridden(
     return outcome
 
 
-NO_CROSS = CrossPipelineCheck(0)
+NO_CROSS = CrossPipelineCheck()
 """What a preflight that stopped before the cross-pipeline gate reports from it."""
 
 
@@ -373,16 +385,17 @@ def preflight(
     engine: Engine,
     gate: TrackedGate,
     pipeline_id: int,
-    task_id: int,
-    task_code: str,
-    pipeline_run_id: int,
+    task: TaskRun,
     admission: CrossPipelineCheck | None = None,
+    *,
+    failures_final: bool = False,
 ) -> tuple[TaskOutcome | None, CrossPipelineCheck]:
     """Return the outcome that stops the task from running now, if any, and the gate's check.
 
     The check says what the task consumes once it succeeds, and what ``Dependency_gates``
     bypassed.
     """
+    task_id, task_code, pipeline_run_id = task.task_id, task.task_code, task.pipeline_run_id
     with for_run(engine, pipeline_run_id):
         with engine.connect() as conn:
             status = runlog.fetch_task_run_status(conn, task_id, pipeline_run_id)
@@ -412,41 +425,41 @@ def preflight(
             return _record_skipped(engine, task_id, pipeline_run_id, task_code, reason), NO_CROSS
 
         graph = build_graph(graph_data.tasks, graph_data.same_pipeline_edges)
-        still_needed = graph.required_edge_count(task_id) - graph.satisfied_edge_count(
-            task_id, run_state, 0
-        )
-        cross = CrossPipelineCheck(0)
-        if still_needed > 0 and task_id in graph_data.cross_pipeline_task_ids:
+        cross = NO_CROSS
+        checked = False
+        local = graph.evaluate(task_id, run_state, failures_final=failures_final)
+        if local is None and task_id in graph_data.cross_pipeline_task_ids:
+            checked = True
             if backfill:
-                cross = backfill_cross_check(engine, task_id, still_needed)
+                cross = backfill_cross_check(engine, task_id)
             else:
-                cross = (
-                    admission
-                    if admission is not None
-                    else gate.check(engine, task_id, still_needed)
-                )
-            still_needed -= cross.satisfied_count
-        if still_needed <= 0:
-            return None, cross
-
-        unready = describe_unready(graph, task_id, pipeline_run_id)
-        if cross.reasons:
-            reasons = "; ".join(cross.reasons)
-            if cross.definitive and not upstream_pending(graph, task_id, run_state):
-                return _record_skipped(
-                    engine, task_id, pipeline_run_id, task_code, reasons, decisions=cross.decisions
-                ), NO_CROSS
-            return _skipped(
-                f"{task_code}: {reasons}, and {unready}; nothing recorded", waiting=True
+                cross = admission if admission is not None else gate.check(engine, task_id)
+            if not cross.definitive:
+                waiting = f"{task_code}: an upstream in another pipeline is still running"
+                return _skipped(f"{waiting}; nothing recorded", waiting=True), NO_CROSS
+        result, reading, resolution = evaluate_condition(
+            graph, run_state, task_id, cross, failures_final=failures_final
+        )
+        node = graph.node(task_id)
+        if result is True:
+            if node.condition is None:
+                return None, cross
+            outcome = GateOutcome.BYPASSED if resolution.bypassed else GateOutcome.SATISFIED
+            decided = condition_decision(task_id, node.rule, reading, outcome)
+            return None, replace(resolution, decisions=(*resolution.decisions, decided))
+        if result is False or (checked and not upstream_pending(graph, task_id, run_state)):
+            decided = condition_decision(task_id, node.rule, reading, GateOutcome.UNSATISFIED)
+            return _record_skipped(
+                engine,
+                task_id,
+                pipeline_run_id,
+                task_code,
+                f"condition [{node.rule}] is not met: {describe(reading)}",
+                decisions=(*cross.decisions, decided),
             ), NO_CROSS
-        if task_id in graph.unsatisfiable(run_state):
-            never = describe_unready(graph, task_id, pipeline_run_id, can_never=True)
-            return _record_skipped(engine, task_id, pipeline_run_id, task_code, never), NO_CROSS
-        waiting = f"{task_code}: {unready}; nothing recorded, run it again once they are"
-        return _skipped(waiting, waiting=True), NO_CROSS
-
-
-"""The dependency types on another pipeline that a backfill counts as met without checking."""
+        reasons = "; ".join(cross.reasons) or f"condition [{node.rule}] read {describe(reading)}"
+        waiting = f"{task_code}: {describe_unready(graph, task_id, pipeline_run_id)} ({reasons})"
+        return _skipped(f"{waiting}; nothing recorded", waiting=True), NO_CROSS
 
 
 def _skipped(message: str, *, waiting: bool = False) -> TaskOutcome:
@@ -469,8 +482,13 @@ def _record_skipped(
     and stays ``FAILED``.
     """
     with engine.begin() as conn:
+        controls.lock_run(conn, pipeline_run_id)
+        if runlog.fetch_pipeline_run_status(conn, pipeline_run_id) == RunStatus.CANCELLED:
+            return TaskOutcome(
+                RunStatus.CANCELLED, f"{task_code}: run {pipeline_run_id} is cancelled"
+            )
         binding = transitions.find_or_create_task_run(conn, task_id, pipeline_run_id)
-        if not binding.created and binding.status != RunStatus.SKIPPED:
+        if not binding.created:
             return TaskOutcome(
                 RunStatus(binding.status),
                 f"{task_code}: {binding.status} earlier under pipeline_run_id={pipeline_run_id} "

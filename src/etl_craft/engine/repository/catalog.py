@@ -66,7 +66,6 @@ class TaskRow:
     run_condition: str | None
     last_run: LastRun | None
     has_successful_run: bool = False
-    run_condition_count: int | None = None
     active_flag: str = YesNo.YES
     target_active_flag: str = YesNo.YES
 
@@ -143,7 +142,6 @@ def fetch_catalog_tasks(conn: Connection) -> list[TaskRow]:
             if r.run_status is not None
             else None,
             bool(r.has_successful_run),
-            r.run_condition_count,
             r.active_flag,
             r.target_active_flag,
         )

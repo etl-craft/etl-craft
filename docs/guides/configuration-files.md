@@ -12,7 +12,6 @@ etl-craft/
 │   ├── pipelines.csv              CFG_PIPELINES
 │   ├── tasks.csv                  CFG_TASKS
 │   ├── task_parameters.csv        CFG_TASK_PARAMETERS
-│   ├── task_dependencies.csv      CFG_TASK_DEPENDENCY
 │   ├── pipeline_dependencies.csv  CFG_PIPELINE_DEPENDENCY
 │   ├── business_rules.csv         CFG_BUSINESS_RULES
 │   ├── tables.csv                 CFG_TABLES
@@ -72,7 +71,6 @@ config 6da809c4700d from /srv/sales/etl-craft/config: 5 change(s)
   insert     tasks.csv                  SALES_MART.archive
   update     task_parameters.csv        SALES_DAILY.fetch_orders RETRIES  (PARAMETER_VALUE: '2' -> '3')
   insert     task_parameters.csv        SALES_MART.archive SCRIPT_FILE
-  insert     task_dependencies.csv      SALES_MART.archive on SALES_MART.publish SUCCESS
 [FAIL] SALES_MART: depends on pipeline SALES_DAILY_EU, which is inactive and no longer runs, so once its last run is consumed the dependency is never satisfied again; deactivate the dependency too, or reactivate the pipeline
 validate failed the result, so nothing was changed
 ```
@@ -90,7 +88,6 @@ development, test and production.
 | `pipelines.csv` | `PIPELINE_CODE` |
 | `tasks.csv` | `PIPELINE_CODE`, `TASK_CODE` |
 | `task_parameters.csv` | `PIPELINE_CODE`, `TASK_CODE`, `PARAMETER_NAME` |
-| `task_dependencies.csv` | `PIPELINE_CODE`, `TASK_CODE`, `DEPENDS_ON_PROJECT_CODE`, `DEPENDS_ON_PIPELINE_CODE`, `DEPENDS_ON_TASK_CODE`, `DEPENDENCY_TYPE` |
 | `pipeline_dependencies.csv` | `PIPELINE_CODE`, `DEPENDS_ON_PROJECT_CODE`, `DEPENDS_ON_PIPELINE_CODE`, `DEPENDENCY_TYPE` |
 | `business_rules.csv` | `PIPELINE_CODE`, `TASK_CODE`, `BUSINESS_RULE_NAME` |
 | `tables.csv` | `CATALOG_NAME`, `SCHEMA_NAME`, `TABLE_NAME` |
@@ -143,10 +140,9 @@ and require any remaining mandatory values.
 |---|---|---|
 | `calendars.csv` | **`CALENDAR_CODE`**, `CALENDAR_NAME`, `WEEKEND_DAYS`, `ACTIVE_FLAG` | Empty `WEEKEND_DAYS` means no weekend |
 | `calendar_holidays.csv` | **`CALENDAR_CODE`**, **`HOLIDAY_DATE`**, `HOLIDAY_NAME`, `ACTIVE_FLAG` | |
-| `pipelines.csv` | **`PIPELINE_CODE`**, **`PIPELINE_NAME`**, `DESCRIPTION`, **`REFRESH_TYPE`**, `RUN_SCHEDULE`, `SCHEDULE_TIMEZONE`, `SCHEDULE_START_DATE`, `CATCHUP`, `MAX_CATCHUP_RUNS`, `OVERLAP_POLICY`, `AUTO_RESTART_CONDITION`, `SLA_IN_HOURS`, `PIPELINE_PARAMETERS`, `CALENDAR_CODE`, `NON_BUSINESS_DAY`, `ACTIVE_FLAG` | `CATCHUP` `N`, `MAX_CATCHUP_RUNS` `1`, `OVERLAP_POLICY` `SKIP`, `AUTO_RESTART_CONDITION` `SCHEDULE`, `NON_BUSINESS_DAY` `SKIP`; empty `CALENDAR_CODE` means no calendar |
-| `tasks.csv` | **`PIPELINE_CODE`**, **`TASK_CODE`**, **`TASK_TYPE`**, **`HANDLER`**, `RUN_CONDITION`, `RUN_CONDITION_COUNT`, `TARGET_CATALOG_NAME`, `TARGET_SCHEMA_NAME`, `TARGET_TABLE_NAME`, `TARGET_ACTIVE_FLAG`, `ACTIVE_FLAG` | `TARGET_ACTIVE_FLAG` `Y` |
+| `pipelines.csv` | **`PIPELINE_CODE`**, **`PIPELINE_NAME`**, `DESCRIPTION`, **`REFRESH_TYPE`**, `RUN_SCHEDULE`, `SCHEDULE_TIMEZONE`, `SCHEDULE_START_DATE`, `CATCHUP`, `MAX_CATCHUP_RUNS`, `OVERLAP_POLICY`, `AUTO_RESTART_CONDITION`, `SLA_IN_HOURS`, `PIPELINE_PARAMETERS`, `CALENDAR_CODE`, `NON_BUSINESS_DAY`, `CONSUME_REPAIRS`, `ACTIVE_FLAG` | `CATCHUP` `N`, `MAX_CATCHUP_RUNS` `1`, `OVERLAP_POLICY` `SKIP`, `AUTO_RESTART_CONDITION` `SCHEDULE`, `NON_BUSINESS_DAY` `SKIP`; empty `CALENDAR_CODE` means no calendar |
+| `tasks.csv` | **`PIPELINE_CODE`**, **`TASK_CODE`**, **`TASK_TYPE`**, **`HANDLER`**, `RUN_CONDITION`, `TARGET_CATALOG_NAME`, `TARGET_SCHEMA_NAME`, `TARGET_TABLE_NAME`, `TARGET_ACTIVE_FLAG`, `ACTIVE_FLAG` | `TARGET_ACTIVE_FLAG` `Y`; empty condition starts with the run |
 | `task_parameters.csv` | **`PIPELINE_CODE`**, **`TASK_CODE`**, **`PARAMETER_NAME`**, `PARAMETER_VALUE`, `ACTIVE_FLAG` | |
-| `task_dependencies.csv` | **`PIPELINE_CODE`**, **`TASK_CODE`**, **`DEPENDS_ON_PIPELINE_CODE`**, **`DEPENDS_ON_TASK_CODE`**, **`DEPENDENCY_TYPE`**, `CONSUME_REPAIRS`, `ACTIVE_FLAG` | `CONSUME_REPAIRS` `Y` |
 | `pipeline_dependencies.csv` | **`PIPELINE_CODE`**, **`DEPENDS_ON_PIPELINE_CODE`**, **`DEPENDENCY_TYPE`**, `CONSUME_REPAIRS`, `ACTIVE_FLAG` | `CONSUME_REPAIRS` `Y` |
 | `business_rules.csv` | **`PIPELINE_CODE`**, **`TASK_CODE`**, **`BUSINESS_RULE_NAME`**, **`SEQUENCE_NUMBER`**, **`BUSINESS_RULE_TYPE`**, `BUSINESS_RULE_LEVEL`, `BUSINESS_RULE_KEY_COLUMN`, `CATALOG_NAME`, **`SCHEMA_NAME`**, **`TABLE_NAME`**, **`BUSINESS_RULE_SQL`**, `ACTIVE_FLAG` | |
 
@@ -156,7 +152,12 @@ and require any remaining mandatory values.
 Every file's `ACTIVE_FLAG` defaults to `Y`. The columns mean what they mean in the tables:
 see [Pipelines and tasks](pipelines-and-tasks.md),
 [Dependencies and run conditions](dependencies.md) and [Business rules](business-rules.md).
-Each handler's guide lists its task parameters. Values are written as follows:
+Each handler's guide lists its task parameters. All handlers accept
+`FAIL_PIPELINE_IF_FAILED` and `FAIL_PIPELINE_IF_NOT_RUN`; see
+[How a pipeline run ends](dependencies.md#how-a-pipeline-run-ends). Pipeline
+`CONSUME_REPAIRS` defaults to `Y` for task conditions that read other pipelines.
+
+Values are written as follows:
 
 - codes start with an ASCII letter, then letters, digits or `_`, at most 128 characters;
 - `Y` and `N`, and every other fixed choice, are upper case;
@@ -165,7 +166,7 @@ Each handler's guide lists its task parameters. Values are written as follows:
 - `WEEKEND_DAYS` lists distinct day names `MON`–`SUN` separated by `|`, such as `SAT|SUN`;
 - `NON_BUSINESS_DAY` is `SKIP` or `NEXT_BUSINESS_DAY` (see
   [Business calendars](../deploying/controller.md#business-calendars));
-- `SLA_IN_HOURS` is a number; `MAX_CATCHUP_RUNS`, `RUN_CONDITION_COUNT` and `SEQUENCE_NUMBER`
+- `SLA_IN_HOURS` is a number; `MAX_CATCHUP_RUNS` and `SEQUENCE_NUMBER`
   are whole numbers;
 - a task parameter's value is text, stored as written, JSON included.
 
@@ -250,7 +251,7 @@ on the host.
 
 | Exit | What happened | What to do |
 |---|---|---|
-| `25` | a file cannot be read or holds a bad row. Every problem is listed at once, with its file, line and column, the value found and what was expected, such as `tasks.csv line 7, column RUN_CONDITION_COUNT: 'two' is not a whole number` or `task_dependencies.csv line 4: task SALES.lod is not in tasks.csv` | correct the files; nothing was changed |
+| `25` | A file cannot be read or holds a bad row. The report names the file, line, column, value and expected input. | Correct the files and deploy again. |
 | `1` | `validate` failed the result, as in the plan above | correct the files; nothing was changed |
 | `12` | the Engine DB has no `CFG_` tables yet | run `etl-craft setup`, then the command again |
 | `25` | a row is active, but its pipeline or task has no row in the Engine DB and is inactive in its file | set the pipeline's or task's `ACTIVE_FLAG` to `Y`, or the row's to `N` |

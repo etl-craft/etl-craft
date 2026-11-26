@@ -43,8 +43,8 @@ def snapshot(ctx):
         view.tasks[0].task_id,
         "load",
         None,
-        "ALL",
-        0,
+        "",
+        True,
         (),
         (),
         (),
@@ -96,7 +96,7 @@ def test_explanation_goldens(snapshot, state, action):
     elif state == "blocked by failure":
         captured = replace(
             captured,
-            required_count=1,
+            condition_met=False,
             dependencies=(
                 DependencyView("upstream", "SUCCESS", "FAILED", False, "Failed upstream."),
             ),
@@ -121,7 +121,7 @@ def test_explanation_goldens(snapshot, state, action):
     assert doc["schema"] == "etl-craft/explanation/1"
     assert doc["run"]["pipeline_run_id"] == captured.run.pipeline_run_id
     assert doc["task_id"] == captured.task_id
-    assert doc["required_count"] == captured.required_count
+    assert doc["condition_met"] == captured.condition_met
     assert json.loads(json.dumps(doc)) == doc
 
 

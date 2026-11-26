@@ -212,7 +212,7 @@ item's text, or work done early under another item.
 | S7.W Docs toolchain after MkDocs 1.x | Planned | | Evaluate Zensical against the API pages, navigation and published versions; migrate only when every requirement works |
 | S7.AY ROW_IDs derived from the task run | Done | #470 | `ROW_ID = TASK_RUN_ID × 2^32 + n` on every warehouse; `AUD_TARGET_ROW_IDS`, the reservation report and ROW_ID generators are gone |
 | S7.AZ Re-parse, not refresh | Done | #472 | `pipelines re-parse`, `lineage --re-parse`, re-parse routes, actions, UI labels, Engine DB names and docs; "refresh" means data only |
-| S7.BA Run conditions on task and pipeline rows | Planned | | A condition on each task and pipeline row replaces both dependency tables; fail-the-pipeline options |
+| S7.BA Run conditions on task and pipeline rows | In progress | [#474](https://github.com/etl-craft/etl-craft/pull/474) | S7.BA.2 done. Tasks declare run conditions and decide pipeline failure. |
 | S7.BB Run monitoring | Planned | | Task statistics, failure information, log events, per-task resources and an agent monitor in the S7.AX views |
 | S7.O Package and demo repositories | Done | #317, #318 | Small package demo, public demo seed and pinned candidate evidence validation |
 | S7.P Obvious failures do not stop 1.0.0 | In progress | #173, #178 | Audit done (#173); the log-folder and port checks close their catalog rows (#178); item 4 keeps the catalog current |
@@ -235,6 +235,19 @@ item's text, or work done early under another item.
 - **S7.BA design.** The design note is [run-conditions.md](run-conditions.md): grammar, facts,
   three-valued evaluation, cross-pipeline binding, the derived `CFG_CONDITION_EDGES` table, the
   decision record, the fail options and the refusals. S7.BA.2 starts after the owner approves it.
+- **S7.BA.2 Choices that differ from the item text.**
+  - The engine retains `CFG_TASK_DEPENDENCY` for derived edges with stable identifiers, preserving
+    dependency consumption history.
+  - Conditions use `SUCCESS` (owner decision 1 in [run-conditions.md](run-conditions.md)).
+  - The pipeline is a container. Every task, including ALERT, accepts both fail options.
+    `FAIL_PIPELINE_IF_FAILED` defaults to `Y` and optional tasks set it to `N`.
+    `FAIL_PIPELINE_IF_NOT_RUN` defaults to `N`. Engine trouble always fails the run.
+    This supersedes the design note's defaults and status rules (owner, 2026-11-27).
+  - `examples/demo` is converted in S7.BA.2 because the installed-wheel gate seeds it;
+    the Support Insights repository conversion stays in the follow-up slice.
+  - **Acceptance availability.** SQLite and PostgreSQL, installed-wheel demos, and UI checks
+    ran locally. Chromium intermittently failed to load the bundled font on both branches.
+    Cloud suites were outside the scope of the Engine DB and execution changes.
 - **S8.J Choices that differ from the item text.** The twelve tasks set
   `PIPELINE_RUN_ID_SUBSTITUTION=false` beside `PIPELINE_RUN_ID_FILTER=true` rather than dropping
   the old row: `deploy` never retires a missing row, and refuses `ACTIVE_FLAG=N` for a key a fresh

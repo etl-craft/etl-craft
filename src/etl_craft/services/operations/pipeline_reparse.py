@@ -2,6 +2,7 @@
 
 import json
 import re
+from collections.abc import Sequence
 from contextlib import nullcontext
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
@@ -12,12 +13,18 @@ from etl_craft.config import ConnectorConfig
 from etl_craft.config.project import project_config
 from etl_craft.core.enums import RunStatus
 from etl_craft.core.enums_access import Governance
-from etl_craft.core.errors import EtlCraftError, PermissionDeniedError, ResourceNotFoundError
+from etl_craft.core.errors import (
+    ConditionError,
+    EtlCraftError,
+    PermissionDeniedError,
+    ResourceNotFoundError,
+)
 from etl_craft.core.text import sha256_hex
 from etl_craft.core.time import as_utc
 from etl_craft.dialects.engine import for_engine
 from etl_craft.engine import locks
 from etl_craft.engine.bundles import Bundle
+from etl_craft.engine.condition_edges import derive_edges
 from etl_craft.engine.connection import read_snapshot
 from etl_craft.engine.project_files import collect, decode_files
 from etl_craft.engine.queries import statement
@@ -109,8 +116,20 @@ def _reparse_locked(
     ctx: OperationContext, request: ReparseInput, *, missing_only: bool = False
 ) -> ReparseResults:
     assert ctx.project_id is not None
-    with read_snapshot(ctx.engine) as conn:
-        return reparse_on(conn, ctx, request, missing_only=missing_only, atomic=False)
+    with ctx.engine.connect() as reader:
+        if not _reparse_targets(reader, ctx, request, missing_only, None):
+            return ReparseResults(())
+    config, bundle_id, bundle_problem = _project_bundle(ctx, None, request.bundle)
+    with read_snapshot(ctx.engine) as snapshot:
+        findings = validate.environment_findings(snapshot, ctx.engine, config)
+    with ctx.engine.begin() as conn:
+        return reparse_on(
+            conn,
+            ctx,
+            request,
+            missing_only=missing_only,
+            checked=(config, bundle_id, bundle_problem, findings),
+        )
 
 
 def reparse_on(
@@ -120,66 +139,59 @@ def reparse_on(
     *,
     missing_only: bool = False,
     pipeline_ids: frozenset[int] | None = None,
-    atomic: bool = True,
+    checked: tuple[ConnectorConfig, str | None, ReparseFinding | None, list[validate.Finding]]
+    | None = None,
 ) -> ReparseResults:
-    """Re-parse a stable image; atomic callers hold MIGRATE/BUNDLES and own the writer."""
+    """Re-parse a stable image; callers hold MIGRATE/BUNDLES and own the writer."""
     assert ctx.project_id is not None
     outcomes = []
-    pipelines = conn.execute(
-        statement(conn, "reparse_pipelines"),
-        {
-            "project_id": ctx.project_id,
-            "pipeline_code": request.pipeline_code,
-            "missing_only": missing_only,
-        },
-    ).all()
-    if pipeline_ids is not None:
-        pipelines = [p for p in pipelines if p.pipeline_id in pipeline_ids]
+    pipelines = _reparse_targets(conn, ctx, request, missing_only, pipeline_ids)
     if not pipelines:
-        if request.pipeline_code is not None:
-            raise ResourceNotFoundError(
-                f"pipeline {request.pipeline_code!r}: no active pipeline in project "
-                f"{ctx.project!r}; select an active pipeline shown by `etl-craft pipelines`"
-            )
         return ReparseResults(())
-    config, bundle_id, bundle_problem = _project_bundle(
-        ctx, conn if atomic else None, request.bundle
-    )
-    checked = _project_findings(conn, ctx, config)
-    for pipeline in pipelines:
+    condition_failure = _derive_conditions(conn, ctx.project_id)
+    if checked is None:
+        config, bundle_id, bundle_problem = _project_bundle(ctx, conn, request.bundle)
+        checked = (
+            config,
+            bundle_id,
+            bundle_problem,
+            validate.environment_findings(conn, ctx.engine, config),
+        )
+    config, bundle_id, bundle_problem, environment = checked
+    project_findings = _project_findings(conn, config, environment)
+    for pipeline_id, pipeline_code in pipelines:
         snapshot = conn.execute(
-            statement(conn, "reparse_current"), {"pipeline_id": pipeline.pipeline_id}
+            statement(conn, "reparse_current"), {"pipeline_id": pipeline_id}
         ).scalar_one()
         findings = tuple(
             finding
-            for where, finding in checked
-            if where.partition(".")[0] == pipeline.pipeline_code or where.startswith("source ")
+            for where, finding in project_findings
+            if where.partition(".")[0] == pipeline_code or where.startswith("source ")
         )
-        if bundle_problem is not None:
-            findings = (*findings, bundle_problem)
-        with nullcontext(conn) if atomic else ctx.engine.connect() as published:
-            changes, previous_time, previous_status = differences(
-                published, int(pipeline.pipeline_id), snapshot, bundle_id
-            )
+        findings += tuple(
+            finding for finding in (condition_failure, bundle_problem) if finding is not None
+        )
+        changes, previous_time, previous_status = differences(
+            conn, int(pipeline_id), snapshot, bundle_id
+        )
         passed = not any(finding.failed for finding in findings)
         now = datetime.now(UTC)
-        with nullcontext(conn) if atomic else ctx.engine.begin() as writer:
-            reparse_id = record(
-                writer,
-                ReparseWrite(
-                    ctx.project_id,
-                    int(pipeline.pipeline_id),
-                    snapshot,
-                    bundle_id,
-                    tuple(asdict(finding) for finding in findings),
-                    now,
-                    passed,
-                ),
-            )
+        reparse_id = record(
+            conn,
+            ReparseWrite(
+                ctx.project_id,
+                int(pipeline_id),
+                snapshot,
+                bundle_id,
+                tuple(asdict(finding) for finding in findings),
+                now,
+                passed,
+            ),
+        )
         outcomes.append(
             PipelineReparse(
                 reparse_id,
-                pipeline.pipeline_code,
+                pipeline_code,
                 now,
                 ctx.actor.name,
                 RunStatus.SUCCESS if passed else RunStatus.FAILED,
@@ -193,6 +205,48 @@ def reparse_on(
             )
         )
     return ReparseResults(tuple(outcomes))
+
+
+def _derive_conditions(conn: Connection, project_id: int) -> ReparseFinding | None:
+    try:
+        derive_edges(conn, project_id)
+    except ConditionError as error:
+        return ReparseFinding(
+            "Engine DB (tasks.csv)",
+            None,
+            str(error),
+            str(error),
+            "Correct RUN_CONDITION and deploy or re-parse again.",
+        )
+    return None
+
+
+def _reparse_targets(
+    conn: Connection,
+    ctx: OperationContext,
+    request: ReparseInput,
+    missing_only: bool,
+    pipeline_ids: frozenset[int] | None,
+) -> Sequence[tuple[int, str]]:
+    rows = conn.execute(
+        statement(conn, "reparse_pipelines"),
+        {
+            "project_id": ctx.project_id,
+            "pipeline_code": request.pipeline_code,
+            "missing_only": missing_only,
+        },
+    )
+    pipelines = [
+        (int(row.pipeline_id), str(row.pipeline_code))
+        for row in rows
+        if pipeline_ids is None or row.pipeline_id in pipeline_ids
+    ]
+    if not pipelines and request.pipeline_code is not None:
+        raise ResourceNotFoundError(
+            f"pipeline {request.pipeline_code!r}: no active pipeline in project "
+            f"{ctx.project!r}; select an active pipeline shown by `etl-craft pipelines`"
+        )
+    return pipelines
 
 
 def _project_bundle(
@@ -243,12 +297,15 @@ def _project_bundle(
 
 def _project_findings(
     conn: Connection,
-    ctx: OperationContext,
     config: ConnectorConfig,
+    environment: list[validate.Finding],
 ) -> tuple[tuple[str, ReparseFinding], ...]:
-    """Run shared checks once per project; a pipeline request filters these same findings."""
-    report = validate.validate_snapshot(conn, ctx.engine, config)
-    found = [(finding.where, _validation_finding(finding)) for finding in report.findings]
+    """Run checks on the derived graph, adding the already checked warehouse findings."""
+    report = validate.validate_on(conn, config)
+    found = [
+        (finding.where, _validation_finding(finding))
+        for finding in (*report.findings, *environment)
+    ]
     try:
         for task in lineage.collect(conn, config, record=False):
             if task.error is not None:

@@ -22,6 +22,7 @@ EXIT_CODES = {
     errors.UsageError: ExitCode.USAGE,
     errors.MetadataError: ExitCode.METADATA,
     errors.GraphError: ExitCode.GRAPH,
+    errors.ConditionError: ExitCode.CONDITION,
     SelfDependencyError: ExitCode.SELF_DEPENDENCY,
     CycleError: ExitCode.DEPENDENCY_CYCLE,
     UnknownTaskError: ExitCode.UNKNOWN_TASK,

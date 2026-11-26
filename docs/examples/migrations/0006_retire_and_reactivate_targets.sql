@@ -41,15 +41,6 @@ UPDATE CFG_BUSINESS_RULES
 SET ACTIVE_FLAG = 'N'
 WHERE ACTIVE_FLAG = 'Y' AND TASK_ID IN (SELECT ID FROM retired_tasks);
 
--- Dependencies both ways: what a retired task waits on, and what waits on it. A task that waited
--- on one starts without it from now on; validate fails a RUN_CONDITION_COUNT larger than the
--- dependencies left.
-UPDATE CFG_TASK_DEPENDENCY
-SET ACTIVE_FLAG = 'N'
-WHERE ACTIVE_FLAG = 'Y'
-  AND (TASK_ID IN (SELECT ID FROM retired_tasks)
-       OR DEPENDS_ON_TASK_ID IN (SELECT ID FROM retired_tasks));
-
 UPDATE CFG_TASKS
 SET ACTIVE_FLAG = 'N', TARGET_ACTIVE_FLAG=CASE WHEN TARGET_TABLE_ID IS NULL THEN TARGET_ACTIVE_FLAG ELSE 'N' END
 WHERE ACTIVE_FLAG = 'Y' AND TASK_ID IN (SELECT ID FROM retired_tasks);
@@ -65,7 +56,8 @@ SET ACTIVE_FLAG = 'N'
 WHERE ACTIVE_FLAG = 'Y' AND PIPELINE_ID IN (SELECT ID FROM retired_pipelines);
 
 -- Reactivate publish without replacing its ID or its existing history.
-UPDATE CFG_TASKS SET ACTIVE_FLAG='Y', HANDLER='PYTHON', RUN_CONDITION='ANY', RUN_CONDITION_COUNT=NULL
+UPDATE CFG_TASKS SET ACTIVE_FLAG='Y', HANDLER='PYTHON',
+    RUN_CONDITION='daily_totals.SUCCESS OR totals_by_region.SUCCESS'
 WHERE TASK_ID IN (SELECT ID FROM retired_tasks WHERE CODE='SALES_MART.publish');
 
 -- Change the existing script setting and reactivate the existing parameters.
@@ -77,13 +69,6 @@ WHERE TASK_ID IN (SELECT ID FROM retired_tasks WHERE CODE='SALES_MART.publish');
 INSERT INTO CFG_TASK_PARAMETERS (TASK_ID, PARAMETER_NAME, PARAMETER_VALUE)
 SELECT ID, 'INPUT_PARAMS', '{"partner": "acme"}' FROM retired_tasks
 WHERE CODE='SALES_MART.publish';
-
--- Reactivate the dependency rows by their original IDs, both ways.
-UPDATE CFG_TASK_DEPENDENCY SET ACTIVE_FLAG='Y'
-WHERE (TASK_ID IN (SELECT ID FROM retired_tasks WHERE CODE='SALES_MART.publish')
-       OR DEPENDS_ON_TASK_ID IN (SELECT ID FROM retired_tasks WHERE CODE='SALES_MART.publish'))
-  AND TASK_ID IN (SELECT TASK_ID FROM CFG_TASKS WHERE ACTIVE_FLAG='Y')
-  AND DEPENDS_ON_TASK_ID IN (SELECT TASK_ID FROM CFG_TASKS WHERE ACTIVE_FLAG='Y');
 
 DROP TABLE retired_tasks;
 DROP TABLE retired_pipelines;

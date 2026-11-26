@@ -9,6 +9,7 @@ from datetime import UTC, datetime
 from sqlalchemy.engine import Connection, Engine
 
 from etl_craft.config import ConnectorConfig
+from etl_craft.core.conditions import Facts
 from etl_craft.core.enums import (
     RunStatus,
 )
@@ -179,9 +180,9 @@ def _rerun_downstream(
                 run_state = runlog.fetch_run_state(
                     conn, run.pipeline_run_id, list(run.graph.task_ids)
                 )
-            if run.graph.satisfied_edge_count(later, run_state) < run.graph.required_edge_count(
-                later
-            ):
+            # Inputs from other pipelines were admitted for this run, so they read as delivered.
+            delivered = {dep: Facts.delivered() for dep in run.graph.node(later).cross.values()}
+            if run.graph.evaluate(later, run_state, delivered) is not True:
                 left.append(run.task_codes[later])
                 continue
             ran.append(

@@ -50,16 +50,12 @@ WHERE PARAMETER_NAME = 'ALERT_ON' AND ACTIVE_FLAG = 'Y'
                   WHERE p.PIPELINE_CODE IN ('SALES_DAILY', 'SALES_DAILY_EU', 'SALES_DAILY_US')
                     AND t.TASK_CODE = 'alert' AND t.ACTIVE_FLAG = 'Y');
 
--- A dependency's type, found by both of its tasks.
-UPDATE CFG_TASK_DEPENDENCY
-SET DEPENDENCY_TYPE = 'SUCCESS'
-WHERE ACTIVE_FLAG = 'Y'
-  AND TASK_ID = (SELECT ID FROM codes_in_use WHERE CODE = 'SALES_DAILY.check_orders')
-  AND DEPENDS_ON_TASK_ID = (SELECT ID FROM codes_in_use WHERE CODE = 'SALES_DAILY.load_orders');
+-- Change task conditions. The renamed totals task is referenced by its new code.
+UPDATE CFG_TASKS SET RUN_CONDITION = 'load_orders.SUCCESS'
+WHERE TASK_ID = (SELECT ID FROM codes_in_use WHERE CODE = 'SALES_DAILY.check_orders');
 
--- A run condition: RUN_CONDITION and RUN_CONDITION_COUNT change together.
-UPDATE CFG_TASKS
-SET RUN_CONDITION = 'ANY', RUN_CONDITION_COUNT = NULL
+UPDATE CFG_TASKS SET RUN_CONDITION =
+    'daily_totals.SUCCESS OR totals_by_region.SUCCESS OR customer_totals.SUCCESS'
 WHERE TASK_ID = (SELECT ID FROM codes_in_use WHERE CODE = 'SALES_MART.publish');
 
 -- A business rule, found by its task and name.
