@@ -86,10 +86,16 @@ def test_append_table_adds_rows_on_every_run(sql_world):
     assert (first.insert_count, second.insert_count, second.target_count) == (2, 1, 3)
     rows = sorted_rows(w, f"SELECT id, pipeline_run_id FROM {w.name('events')}")
     assert rows == [(1, w.pipeline_run_id - 1), (2, w.pipeline_run_id - 1), (3, w.pipeline_run_id)]
-    # Each run numbers its own rows from 1, in its own task run's range.
+    # Each run numbers its own rows from 1, in its own task run's range; which row gets which
+    # number within a run is not ordered.
     assert sorted_rows(
-        w, f"SELECT id, row_id - task_run_id * 4294967296 FROM {w.name('events')}"
-    ) == [(1, 1), (2, 2), (3, 1)]
+        w,
+        f"SELECT pipeline_run_id, row_id - task_run_id * 4294967296 FROM {w.name('events')}",
+    ) == [
+        (w.pipeline_run_id - 1, 1),
+        (w.pipeline_run_id - 1, 2),
+        (w.pipeline_run_id, 1),
+    ]
     # No shape check: a column the target lacks fails the insert with the database's message.
     with pytest.raises(HandlerError, match="append the SELECT's rows failed"):
         w.run("append", SELECT_QUERY="SELECT 4 AS id, 'x' AS extra", **params)
