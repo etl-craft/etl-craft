@@ -22,50 +22,55 @@ copied verbatim. When a memory note and the code disagree, the code wins; check 
 
 ### Open work, in order
 
-Done since this handover was written: #464 (idle agent load, task-start log
-lines), #465 (Back button on every page), #466 (script output reaches the task log), #467
-(batched bundle download), Support Insights #35 (demo scripts log through `task.logger`), and the
-plan PR that re-scopes S7.AX.3 and plans S7.AZ and S8.J. The demo cluster runs package
-`2a7a5d86` with row-level notify triggers and the package health probe. Measured there: 48 idle
-commits/s (was 525), first task log line 0.3-0.8 s after the claim (was 60-110 s), an agent's
-first bundle load 0.3-1.3 s (was 34-56 s), live logs and grid refresh without a reload.
+Done since this handover was written: #464 (idle agent load, task-start log lines), #465 (Back
+button on every page), #466 (script output reaches the task log), #467 (batched bundle download),
+#469 (S7.AX.4: task logs open with the context and close with the outcome; the doubled catalog is
+fixed), #470 (S7.AY: `ROW_ID = TASK_RUN_ID × 2^32 + n` on every warehouse), Support Insights #35
+(demo scripts log) and #36 (pin at `2cd3ac6`), and the plan PR that re-scopes S7.AX.3 and plans
+S7.AZ and S8.J. The demo cluster runs package `2cd3ac6`; every pipeline is resumed, and the
+generators stay paused until demo testing.
 
-1. **Demo pin:** `ci/PACKAGE_COMMIT` is still `468cd019` while the images run `2a7a5d86`
-   (`update.sh` keeps the pinned tag); bump it with `build.sh` in the next demo PR.
-2. **Browser suite font flake:** on this workstation 5-15 browser tests per run fail on one
-   console error, `ERR_TOO_MANY_RETRIES` loading `inter-latin-wght-normal-*.woff2`; they pass when
-   run alone. Find the cause (the test server's handling of the font request under load) rather
-   than retrying.
-3. **Do not run the package service stack while k3d is up** (the demo repo's AGENTS.md). Run
-   package suites that need services with the cluster stopped, or rely on CI.
-4. **S7.AX.4: task logs that explain a failure.** Add a context block (try, agent, connection,
-   run date and parameters, watermark window, non-secret task parameters), the rendered SQL per
-   step with secrets masked, rule results with flagged keys (capped), the reserved ROW_ID range
-   and an outcome block. On failure, add the error, the failing statement, its class and the
-   remedy. Defect to fix there: the SQL log line doubles the catalog
-   (`warehouse.warehouse.pre_ods...`).
-5. **Verify a possible false FAILURE alert email** from a manual, non-failed alert run (seen on
-   `SI_STEWARD_DS_AGENTS`). Scheduled alert tasks on successful runs sent nothing on
-   2026-11-26 (no new `AUD_ALERT_DELIVERIES` rows), so check the manual case it was seen on.
-6. **S7.AZ Re-parse rename (owner decision, now planned):** the definition refresh becomes "re-parse" (Airflow
-   style): `pipelines re-parse`, and "Re-parse pipeline" / "Re-parse all" in the UI. "Refresh"
-   means data only (`REFRESH_TYPE`, `--full-refresh`). No alias before 0.9.0. Ask the owner
-   before renaming `lineage --refresh`. The order is a plan PR, then the package PR, then a demo
-   follow-up.
-7. **S8.J Full-refresh-safe demo SQL (owner decision, now planned):** demo SQL uses `$$pipeline_run_id_filter`
-   (1=1 on a full refresh), never `pipeline_run_id = $$pipeline_run_id`. 12 demo scripts are
-   hard-coded. A full refresh rebuilds from PRS history and never depends on expiring sources.
-8. **S7.AY: ROW_IDs derived from the task run** (`TASK_RUN_ID*2^32+row`). It replaces the stored
-   high-water mark (`AUD_TARGET_ROW_IDS`), which the owner judged a bad idea. Plan PR #459 is
-   merged.
-9. **Cloud suite:** add optional `ETL_CRAFT_TEST_SNOWFLAKE_EXTERNAL_VOLUME`, passed as
-   `EXTERNAL_VOLUME` + `BASE_LOCATION`. The suite still hard-codes `SNOWFLAKE_MANAGED`, which the
-   current trial account (GCP me-central2) lacks. Volume `ETL_CRAFT_ICEBERG` (GCS bucket
-   `vcg-etl-craft-test`) works. `.env` already has the variable.
-10. **Then:** S8.E, S8.F, S8.G, S8.H (+REJECT_LIMIT in the demo) and S8.A acceptance.
-    Backlog: #440 leftovers (the Accounts header at 390 px, ActionButton mapping), deploy
-    ~156 s perf, the per-run business-key reject undercount (a known limit), and Snowflake
-    Postgres for 0.9.0 evidence (needs a new account).
+Owner direction: etl-craft does what Informatica PowerCenter does, minus the visual
+designer; pipelines stay code. The PowerCenter 10.5.1 manuals are the behaviour reference; their
+text is extracted in `~/.cache/pc-docs/` on this workstation. The roadmap carries S7.BA, S7.BB
+and "After 1.0.0: road to PowerCenter".
+
+1. **S7.AZ Re-parse rename:** `pipelines re-parse`, "Re-parse pipeline" / "Re-parse all".
+   "Refresh" means data only. No alias before 0.9.0. Ask the owner before renaming
+   `lineage --refresh`. Then a demo follow-up for its deploy workflow and README.
+2. **S8.J Full-refresh-safe demo SQL:** demo SQL uses `$$pipeline_run_id_filter`, never
+   `pipeline_run_id = $$pipeline_run_id` (12 demo scripts).
+3. **S7.BA Run conditions:** design note first (S7.BA.1), owner approval, then the package
+   slices and the demo config.
+4. **S7.BB Run monitoring:** layout design first (S7.BB.1), owner approval, then the slices.
+   It may overlap with demo testing.
+5. **Demo testing and fixes:** start the generators, let the client pipelines run on real data,
+   fix findings. Known findings to start from: the success line prints `None` for counts a
+   handler does not produce; SQL steps log internal column-lookup queries at INFO (move them to
+   DEBUG); long parameters such as `DOCUMENTATION` print in full. Verify the possible false
+   FAILURE alert email from a manual alert run (seen on `SI_STEWARD_DS_AGENTS`).
+6. **Before release evidence (prerequisites, not optional):**
+   - Cloud suite: add `ETL_CRAFT_TEST_SNOWFLAKE_EXTERNAL_VOLUME`, passed as `EXTERNAL_VOLUME` +
+     `BASE_LOCATION`, instead of the hard-coded `SNOWFLAKE_MANAGED` the trial account lacks. The
+     volume is `ETL_CRAFT_ICEBERG` on `gcs://vcg-etl-craft-test/iceberg/`; `.env` has the
+     variable.
+   - Eight Snowflake native tests fail on main and on #470 alike: the erasure filter quotes a
+     lowercase `"id"` (`invalid identifier`), `test_business_rule_queries_on_snowflake` (000904),
+     and `test_source_definitions_on_snowflake[NATIVE]` (no declared columns), across
+     `test_cloud_protection.py`'s provider tests. Fix them.
+   - Databricks could not start compute on #470's run: run Databricks native once when compute
+     is available.
+7. **Browser suite font flake:** 5-15 browser tests per run fail on `ERR_TOO_MANY_RETRIES`
+   loading `inter-latin-wght-normal-*.woff2` and pass alone. Find the cause.
+8. **Then:** S8.E, S8.F, S8.G, S8.H (+REJECT_LIMIT in the demo) and S8.A acceptance.
+   Backlog: #440 leftovers (the Accounts header at 390 px, ActionButton mapping), deploy
+   ~156 s perf, the per-run business-key reject undercount (a known limit), and Snowflake
+   Postgres for 0.9.0 evidence (needs a new account).
+
+Working rules on this workstation: do not run the package service stack while k3d is up; stop
+the cluster (`k3d cluster stop support-insights`), run the suites, `make services-down`, start it
+again. Run pytest with `TMPDIR=$HOME/.cache/etl-craft-tmp`; `/tmp` is a 7.5 GiB tmpfs and a full
+local suite fills it. Clear `/tmp/pytest-of-venkatcg` before a pull request.
 
 ### Findings from 2026-11-26 (demo cluster, package `a0e08c64`)
 
