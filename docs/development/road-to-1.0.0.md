@@ -227,10 +227,19 @@ item's text, or work done early under another item.
 | S8.F Acceptance checks | Planned | | Rows, provenance, faults, UI and memory checks against the candidate |
 | S8.G The release gate | Planned | | Validate demo wheel/commit/scenario evidence through S7.O without running the external demo in package CI |
 | S8.H Support Insights scenario coverage | Planned | | Deterministic mixed-quality generators, every-feature demonstrations, business-rule and stewardship cases, and runnable README coverage |
-| S8.J Demo SQL that survives a full refresh | Planned | | Demo SQL filters by `$$pipeline_run_id_filter`, so a full refresh rebuilds from PRS history |
+| S8.J Demo SQL that survives a full refresh | In progress | support-insights#37 | Demo SQL filters by `$$pipeline_run_id_filter`, enforced by a demo test; the full-refresh check on the demo waits for demo testing |
 | S8.I Support Insights on current main | Done | #449, support-insights#30 | `ALERT` tasks with `EMAIL` channels and `deploy` replace removed handlers and commands; the demo pins current main. The walkthrough found the 60-second `--api` read deadline (fixed in #449) |
 
 ### Handover notes
+
+- **S7.BA design.** The design note is [run-conditions.md](run-conditions.md): grammar, facts,
+  three-valued evaluation, cross-pipeline binding, the derived `CFG_CONDITION_EDGES` table, the
+  decision record, the fail options and the refusals. S7.BA.2 starts after the owner approves it.
+- **S8.J Choices that differ from the item text.** The twelve tasks set
+  `PIPELINE_RUN_ID_SUBSTITUTION=false` beside `PIPELINE_RUN_ID_FILTER=true` rather than dropping
+  the old row: `deploy` never retires a missing row, and refuses `ACTIVE_FLAG=N` for a key a fresh
+  Engine DB has never stored. The demo cluster is stopped until the application work is done, so
+  the full-refresh check against the reference views waits for demo testing.
 
 - **S7.AZ Choices that differ from the item text.** The owner renamed `lineage --refresh` too
   (`lineage --re-parse`, action `lineage re-parse`). Beyond the item's list, every definition
