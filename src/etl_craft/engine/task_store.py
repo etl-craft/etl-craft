@@ -61,7 +61,6 @@ from etl_craft.engine.repository.tasks import (
     TargetTask,
 )
 from etl_craft.engine.resource_locks import currently_holds, holder_tag
-from etl_craft.engine.row_ids import reserve_row_ids
 from etl_craft.engine.timestamp_windows import (
     TimestampWindow,
     WindowDefinition,
@@ -110,7 +109,6 @@ class TargetState:
 
     hash_version: int | None
     view_statement: str | None
-    row_id_start: int = 1
 
 
 @dataclass(frozen=True)
@@ -168,10 +166,6 @@ class TaskStore(ResourceLocker, ItemStore, Protocol):
         self, wait_code: str, path: str, digest: tuple[str, int], reason: str | None
     ) -> None:
         """Record this validator's decision on one file its wait admitted in this run."""
-        ...
-
-    def reserve_row_ids(self, target: str, count: int, maximum: int) -> int:
-        """Return the base of a durable reservation for the owned target."""
         ...
 
     def state(self, sql_action: str | None = None) -> TaskState:
@@ -425,10 +419,6 @@ class LocalTaskStore:
             finally:
                 self._contracts.clear()
 
-    def reserve_row_ids(self, target: str, count: int, maximum: int) -> int:
-        """Return the base committed for the new range of target IDs."""
-        return reserve_row_ids(self.engine, self.config, target, count, maximum)
-
     def state(self, sql_action: str | None = None) -> TaskState:
         """Read only metadata belonging to the selected task and its run."""
         from etl_craft.engine.repository.pipelines import (
@@ -555,8 +545,7 @@ class LocalTaskStore:
             return self._contracts[target.lower()]
         with self.engine.connect() as conn:
             self._assert(conn)
-            lock = locks.target(target, "")
-            return TargetState(*fetch_target_contract(conn, target, lock.key))
+            return TargetState(*fetch_target_contract(conn, target))
 
     def publish(self, publication: TargetPublication) -> None:
         """Publish only after the caller's warehouse commit."""

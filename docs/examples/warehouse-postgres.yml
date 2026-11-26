@@ -1,7 +1,7 @@
 # Warehouse on PostgreSQL — the reference launch path.
 #
 # Native tables only (Postgres has no Iceberg tables, so Table_format: ICEBERG
-# is refused here). Identity ROW_ID, enforced primary keys, full transactions.
+# is refused here). ROW_ID primary key, enforced primary keys, full transactions.
 #
 # Each setting is marked `# variable` or `# value`. A variable is looked up in
 # the secrets source (here: the process environment); when it is not set, the

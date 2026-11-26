@@ -5,6 +5,7 @@ import pytest
 from etl_craft.core.errors import HandlerError, InjectedFaultError, SqlGuardError
 from etl_craft.services.adopt_target import AdoptRequest, adopt_target
 from etl_craft.warehouse.connection import warehouse_dialect
+from fixtures.requests import recorded_request
 
 
 def check_append_retries(w, target):
@@ -64,10 +65,8 @@ def create_target_without_task_run_id(w, target, loads=0):
             if loads:
                 rows = " UNION ALL ".join(["SELECT CAST(1 AS BIGINT) AS id"] * loads)
                 history = build_stage(session, rows)
-                row_id_columns, row_id_values = ("", "")
-                if not session.row_id_generated():
-                    row_id_columns = ", ROW_ID"
-                    row_id_values = ", CAST(ROW_NUMBER() OVER (ORDER BY NULL) AS BIGINT)"
+                row_id_columns = ", ROW_ID"
+                row_id_values = ", CAST(ROW_NUMBER() OVER (ORDER BY NULL) AS BIGINT)"
                 session.run(
                     f"INSERT INTO {session.target} (id, PIPELINE_RUN_ID, CREATE_DATE"
                     f"{row_id_columns}) SELECT id, 0, :now{row_id_values} FROM {history}",
@@ -107,16 +106,17 @@ def check_identity_inputs(w, target):
 
 def adopt(w, target, **options):
     """Adopt ``target`` in the world's schema with the service the CLI and API call."""
-    return adopt_target(
-        w.engine_db,
-        w.config,
-        AdoptRequest(
-            f"{w.schema}.{target}",
-            options.get("select"),
-            options.get("keep_original", False),
-            options.get("dry_run", False),
-        ),
-    )
+    with recorded_request(w.engine_db, "adopt"):
+        return adopt_target(
+            w.engine_db,
+            w.config,
+            AdoptRequest(
+                f"{w.schema}.{target}",
+                options.get("select"),
+                options.get("keep_original", False),
+                options.get("dry_run", False),
+            ),
+        )
 
 
 def create_foreign_table(w, target, select):

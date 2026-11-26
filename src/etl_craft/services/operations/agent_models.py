@@ -82,8 +82,6 @@ class AgentTask(AgentRequest):
     rule_id: int | None = None
     rule_ending: RuleEnding | None = None
     lock_key: int | None = None
-    row_id_count: int | None = None
-    warehouse_row_id_max: int | None = None
     lock_wait_seconds: float = 30
     confirmed_holder: str | None = None
     status: AttemptStatus | None = None

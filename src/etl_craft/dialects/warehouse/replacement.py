@@ -1,7 +1,6 @@
-"""Preserve warehouse-provided table properties during atomic CTAS or identity clone publication."""
+"""Preserve warehouse-provided table properties during atomic CTAS publication."""
 
 from collections.abc import Callable
-from dataclasses import dataclass
 from typing import Any, ClassVar
 
 from sqlglot import exp, parse_one
@@ -11,16 +10,6 @@ from sqlglot.generators.databricks import DatabricksGenerator
 from sqlglot.parsers.databricks import DatabricksParser
 
 from etl_craft.core.errors import SqlGuardError
-
-
-@dataclass(frozen=True)
-class IdentityReplacement:
-    """Warehouse names and generator start for publishing a replacement."""
-
-    target: str
-    candidate: str
-    existing: bool
-    start: int = 1
 
 
 class _DatabricksReplacement(Databricks):
@@ -67,79 +56,6 @@ def replacement_ddl(ddl: str, target: str, select_sql: str, dialect: str) -> str
             properties.append("expressions", exp.CopyGrantsProperty())
             create.set("properties", properties)
         return create.sql(dialect=format_, unsupported_level=ErrorLevel.RAISE)
-    except SqlglotError as error:
-        raise SqlGuardError(
-            f"{target}: cannot preserve its table definition; use a table-preserving write"
-        ) from error
-
-
-def identity_replacement(
-    ddl: str, target: str, candidate: str, columns: str, dialect: str
-) -> tuple[str, str]:
-    """Carry table properties into an identity candidate and publish it with an atomic clone.
-
-    The candidate uses independent managed storage. Only publication writes the original
-    external location. Only the managed identity and collations inherited from the preserved
-    table default are accepted; other column constraints are refused.
-    """
-    try:
-        format_ = _DatabricksReplacement() if dialect == "databricks" else dialect
-        create = parse_one(ddl, read=format_)
-        if not isinstance(create, exp.Create) or not isinstance(create.this, exp.Schema):
-            raise SqlGuardError(
-                f"{target}: cannot read a complete table definition for replacement"
-            )
-        default = create.find(exp.CollateProperty) if dialect == "databricks" else None
-        for column in create.this.expressions:
-            if not isinstance(column, exp.ColumnDef):
-                raise SqlGuardError(f"{target}: replacement cannot preserve column metadata")
-            constraints = [
-                constraint
-                for constraint in column.args.get("constraints") or []
-                if not (
-                    default is not None
-                    and isinstance(constraint.kind, exp.CollateColumnConstraint)
-                    and constraint.kind.this.sql().upper() == default.this.sql().upper()
-                )
-            ]
-            managed = column.name.lower() == "row_id" and all(
-                isinstance(
-                    c.kind, (exp.GeneratedAsIdentityColumnConstraint, exp.NotNullColumnConstraint)
-                )
-                for c in constraints
-            )
-            if constraints and not managed:
-                raise SqlGuardError(
-                    f"{target}: replacement cannot preserve column metadata; "
-                    "use a table-preserving write instead"
-                )
-        shape = parse_one(f"CREATE TABLE {candidate} ({columns})", read=format_)
-        if default is not None and any(
-            collation.this.sql().upper() != default.this.sql().upper()
-            for collation in shape.find_all(exp.CollateColumnConstraint)
-        ):
-            raise SqlGuardError(f"{target}: replacement cannot change column collations")
-        create.set("this", shape.this)
-        create.set("replace", False)
-        create.set("exists", False)
-        create.set("expression", None)
-        location = ""
-        properties = create.args.get("properties")
-        if properties is not None:
-            kept = []
-            for property_ in properties.expressions:
-                if isinstance(property_, exp.LocationProperty):
-                    location = f" LOCATION {property_.this.sql(dialect=format_)}"
-                elif not isinstance(property_, exp.CopyGrantsProperty):
-                    kept.append(property_)
-            properties.set("expressions", kept)
-        candidate_ddl = create.sql(dialect=format_, unsupported_level=ErrorLevel.RAISE)
-        clone = (
-            f"DEEP CLONE {candidate}{location}"
-            if dialect == "databricks"
-            else f"CLONE {candidate} COPY GRANTS"
-        )
-        return candidate_ddl, f"CREATE OR REPLACE TABLE {target} {clone}"
     except SqlglotError as error:
         raise SqlGuardError(
             f"{target}: cannot preserve its table definition; use a table-preserving write"

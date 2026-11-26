@@ -48,4 +48,4 @@ def replace_landing(
         task.warehouse() as engine,
         engine.connect() as conn,
     ):
-        return publish(conn, warehouse_dialect(task.config), write, rows, task._reserve_landing_ids)
+        return publish(conn, warehouse_dialect(task.config), write, rows)

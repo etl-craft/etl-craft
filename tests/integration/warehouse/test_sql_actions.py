@@ -34,7 +34,11 @@ def test_create_table_stamps_the_run_and_numbers_the_rows(sql_world):
         (1, "a", w.pipeline_run_id),
         (2, "b", w.pipeline_run_id),
     ]
-    assert sorted_rows(w, f"SELECT row_id FROM {w.name('orders')}") == [(1,), (2,)]
+    # ROW_ID is the writing task run's ID times 2^32 plus the row's number.
+    assert sorted_rows(w, f"SELECT row_id - task_run_id * 4294967296 FROM {w.name('orders')}") == [
+        (1,),
+        (2,),
+    ]
     # The stage is gone.
     assert w.tables() == ["orders"]
 
@@ -82,7 +86,10 @@ def test_append_table_adds_rows_on_every_run(sql_world):
     assert (first.insert_count, second.insert_count, second.target_count) == (2, 1, 3)
     rows = sorted_rows(w, f"SELECT id, pipeline_run_id FROM {w.name('events')}")
     assert rows == [(1, w.pipeline_run_id - 1), (2, w.pipeline_run_id - 1), (3, w.pipeline_run_id)]
-    assert sorted_rows(w, f"SELECT row_id FROM {w.name('events')}") == [(1,), (2,), (3,)]
+    # Each run numbers its own rows from 1, in its own task run's range.
+    assert sorted_rows(
+        w, f"SELECT id, row_id - task_run_id * 4294967296 FROM {w.name('events')}"
+    ) == [(1, 1), (2, 2), (3, 1)]
     # No shape check: a column the target lacks fails the insert with the database's message.
     with pytest.raises(HandlerError, match="append the SELECT's rows failed"):
         w.run("append", SELECT_QUERY="SELECT 4 AS id, 'x' AS extra", **params)
@@ -355,7 +362,8 @@ def test_a_sql_script_with_pipeline_run_id_filter_reads_this_runs_rows(sql_world
     other_run = w.pipeline_run_id
     w.new_run()
     w.execute(
-        f"INSERT INTO {w.name('events')} (id, pipeline_run_id) VALUES (2, {w.pipeline_run_id})"
+        f"INSERT INTO {w.name('events')} (id, pipeline_run_id, row_id) "
+        f"VALUES (2, {w.pipeline_run_id}, 2)"
     )
     sql_script = w.project / "sql_scripts" / "loads" / "events.sql"
     sql_script.parent.mkdir(parents=True)

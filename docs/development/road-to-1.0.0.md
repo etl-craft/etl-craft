@@ -210,7 +210,7 @@ item's text, or work done early under another item.
 | S7.U Personal-data erasure | Done | #309 | Standing table/column erasure follows pinned lineage, with private keys and recoverable ERASURE tasks |
 | S7.V Empty replacements | Done | #275 | ALLOW_EMPTY can refuse an empty CREATE_TABLE or OVERWRITE_TABLE before changing its target |
 | S7.W Docs toolchain after MkDocs 1.x | Planned | | Evaluate Zensical against the API pages, navigation and published versions; migrate only when every requirement works |
-| S7.AY ROW_IDs derived from the task run | Planned | | Replace the stored ROW_ID high-water and its reservation protocol with IDs built from the writing task run, on every warehouse |
+| S7.AY ROW_IDs derived from the task run | Done | #470 | `ROW_ID = TASK_RUN_ID × 2^32 + n` on every warehouse; `AUD_TARGET_ROW_IDS`, the reservation report and ROW_ID generators are gone |
 | S7.AZ Re-parse, not refresh | Planned | | The definition refresh becomes "re-parse" in the CLI, API, UI and docs; "refresh" means data only |
 | S7.O Package and demo repositories | Done | #317, #318 | Small package demo, public demo seed and pinned candidate evidence validation |
 | S7.P Obvious failures do not stop 1.0.0 | In progress | #173, #178 | Audit done (#173); the log-folder and port checks close their catalog rows (#178); item 4 keeps the catalog current |
@@ -229,6 +229,31 @@ item's text, or work done early under another item.
 | S8.I Support Insights on current main | Done | #449, support-insights#30 | `ALERT` tasks with `EMAIL` channels and `deploy` replace removed handlers and commands; the demo pins current main. The walkthrough found the 60-second `--api` read deadline (fixed in #449) |
 
 ### Handover notes
+
+- **S7.AY Choices that differ from the item text.**
+  - A write numbers its rows after the largest ID its writer already holds in the target (one
+    `MAX(ROW_ID)` over the writer's range in the warehouse), not from 1. This is the item's
+    "verify retries for every action that inserts rows" point. An append clears its task run's
+    rows first, but an SCD1 merge retried after a committed write, and a Python landing that
+    writes several items in one task run, would otherwise repeat IDs.
+  - Writers without a task run: seed loads during `deploy` and `adopt` use their audited request
+    ID (`AUD_ACTIONS`), negated, so their range never meets a task run's. They fail when no
+    recorded request exists. No other writer exists ("values" in the item text matches none).
+  - New targets get a plain `BIGINT` `ROW_ID`, with a primary key where the warehouse enforces
+    keys (PostgreSQL, native DuckDB). Before this, that was the unused `enforces_primary_keys`.
+    Databricks and Snowflake targets created earlier with an identity `ROW_ID` cannot be replaced
+    atomically and must be recreated (pre-0.9.0 rule).
+  - The agent protocol suffix that gated reservation support is removed with the report.
+  - Writers without a task run take their writer from the audited request in one place, the
+    session: seeds, `adopt` and the values API (human edits, the item's "values").
+  - Protected SCD targets found a key's latest version by the highest ROW_ID, which no longer
+    orders writes. It is now the active version, else the version a soft delete closed, with
+    `UPDATE_DATE` and then ROW_ID only breaking ties.
+  Acceptance availability: SQLite, DuckDB, PostgreSQL, Trino and both Iceberg warehouses ran
+  locally with the demo cluster stopped. Snowflake native passed the touched SQL action,
+  landing and protection tests except eight that fail the same way on main (erasure filter
+  quoting, a business-rule identifier, source definitions). Snowflake Iceberg lacks the
+  `SNOWFLAKE_MANAGED` volume and Databricks could not start compute on its one try.
 
 - **S7.AX.4 Choices that differ from the item text.** The context block names the host the task
   process runs on (an agent's pod, or the controller's host) rather than an agent record, and the

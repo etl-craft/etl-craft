@@ -156,7 +156,9 @@ def walk_every_action(w):
             "create", SQL_ACTION="CREATE_TABLE", TARGET_OBJECT=names["orders"], SELECT_QUERY=shape
         )
         assert created.insert_count == 1
-        assert w.rows(f"SELECT row_id FROM {w.name(names['orders'])}") == [(1,)]
+        assert w.rows(
+            f"SELECT row_id - task_run_id * 4294967296 FROM {w.name(names['orders'])}"
+        ) == [(1,)]
         for column, action in (("UPDATE_DATE", "OVERWRITE_TABLE"), ("CREATE_DATE", "APPEND_TABLE")):
             w.execute(
                 f"{dialect.alter_table_keyword()} {w.name(names['orders'])} "
@@ -365,23 +367,25 @@ def walk_row_id_generation(w):
     names = [target, target + "_create", target + "_append", target + "_legacy"]
     try:
         check_row_id_generation(w, target)
-        from etl_craft.warehouse.connection import warehouse_dialect
-
-        dialect = warehouse_dialect(w.config)
-        if dialect.identity_in_create:
-            legacy = target + "_legacy"
-            w.execute(
-                f"CREATE TABLE {w.name(legacy)} AS SELECT CAST(1 AS BIGINT) AS id, "
-                "CAST(1 AS BIGINT) AS pipeline_run_id, CURRENT_TIMESTAMP AS create_date, "
-                "CAST(NULL AS BIGINT) AS task_run_id, CAST(7 AS BIGINT) AS row_id"
+        # A table written before etl-craft keeps its IDs; new rows take their task run's range.
+        legacy = target + "_legacy"
+        w.execute(
+            f"CREATE TABLE {w.name(legacy)} AS SELECT CAST(1 AS BIGINT) AS id, "
+            "CAST(1 AS BIGINT) AS pipeline_run_id, CURRENT_TIMESTAMP AS create_date, "
+            "CAST(NULL AS BIGINT) AS task_run_id, CAST(7 AS BIGINT) AS row_id"
+        )
+        w.run(
+            legacy,
+            SQL_ACTION="APPEND_TABLE",
+            TARGET_OBJECT=legacy,
+            SELECT_QUERY="SELECT CAST(2 AS BIGINT) AS id",
+        )
+        assert sorted(
+            w.rows(
+                f"SELECT id, COALESCE(row_id - task_run_id * 4294967296, row_id) "
+                f"FROM {w.name(legacy)}"
             )
-            w.run(
-                legacy,
-                SQL_ACTION="APPEND_TABLE",
-                TARGET_OBJECT=legacy,
-                SELECT_QUERY="SELECT CAST(2 AS BIGINT) AS id",
-            )
-            assert sorted(w.rows(f"SELECT row_id FROM {w.name(legacy)}")) == [(7,), (8,)]
+        ) == [(1, 7), (2, 1)]
     finally:
         for name in names:
             w.execute(f"DROP TABLE IF EXISTS {w.name(name)}")

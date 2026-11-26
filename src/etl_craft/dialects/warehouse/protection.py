@@ -25,10 +25,17 @@ class ProtectionSql:
         )
 
     def current(self) -> str:
-        """Use the latest physical version, including a deleted key awaiting revival."""
+        """Use the latest physical version, including a deleted key awaiting revival.
+
+        A key has at most one active version; without one, its latest is the version a soft
+        delete closed. ROW_ID names the writing task run, not when it wrote, so it only breaks
+        a tie after the time of the last change.
+        """
         return (
             f"SELECT * FROM (SELECT t.*, ROW_NUMBER() OVER (PARTITION BY {self.key_hash} "
-            f"ORDER BY t.ROW_ID DESC) AS etl_rank FROM {self.target} t) v WHERE etl_rank = 1"
+            "ORDER BY CASE WHEN t.ACTIVE_FLAG = 'Y' THEN 0 WHEN t.DELETE_FLAG = 'Y' THEN 1 "
+            "ELSE 2 END, t.UPDATE_DATE DESC, t.ROW_ID DESC) AS etl_rank "
+            f"FROM {self.target} t) v WHERE etl_rank = 1"
         )
 
     def incoming(

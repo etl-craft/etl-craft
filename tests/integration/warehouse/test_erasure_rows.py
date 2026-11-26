@@ -20,7 +20,7 @@ def test_renames_people_versions_rejects_boundaries_and_resends(sql_world, monke
         TARGET_OBJECT="landing",
         SELECT_QUERY="SELECT 'retained' AS person, 1 AS n",
     )
-    w.execute(f"INSERT INTO {w.name('landing')} (person,n) VALUES (:key, 2)", key=KEY)
+    w.execute(f"INSERT INTO {w.name('landing')} (person,n,row_id) VALUES (:key,2,2)", key=KEY)
     w.run(
         "first",
         SQL_ACTION="CREATE_TABLE",
@@ -73,7 +73,7 @@ def test_renames_people_versions_rejects_boundaries_and_resends(sql_world, monke
         ]
     assert w.rows(f"SELECT COUNT(*) FROM {w.name('hashed')}") == [(2,)]
     assert KEY not in repr(report)
-    w.execute(f"INSERT INTO {w.name('landing')} (person,n) VALUES (:key, 3)", key=KEY)
+    w.execute(f"INSERT INTO {w.name('landing')} (person,n,row_id) VALUES (:key,3,3)", key=KEY)
     assert sum(t.rows for t in apply_entries(w.engine_db, config, (entry,)).tables) == 1
     second = ErasureEntry(w.name("hashed"), "identifier", KEY.upper(), "b" * 64)
     assert sum(t.rows for t in apply_entries(w.engine_db, config, (second,)).tables) == 1
@@ -100,7 +100,7 @@ def test_erasure_and_merge_take_the_same_target_lock(sql_world, monkeypatch):
         TARGET_OBJECT="landing",
         SELECT_QUERY="SELECT 'retained' AS person, 1 AS n",
     )
-    w.execute(f"INSERT INTO {w.name('landing')} (person,n) VALUES (:key,2)", key=KEY)
+    w.execute(f"INSERT INTO {w.name('landing')} (person,n,row_id) VALUES (:key,2,2)", key=KEY)
     w.setup("people", "SELECT CAST('x' AS VARCHAR(100)) AS person, 1 AS n", "SCD1_MERGE")
     params = {
         "SQL_ACTION": "SCD1_MERGE",
@@ -154,7 +154,7 @@ def test_two_direct_columns_are_one_atomic_table_selection(sql_world, monkeypatc
         TARGET_OBJECT="landing",
         SELECT_QUERY="SELECT 'retained' AS person, 1 AS n",
     )
-    w.execute(f"INSERT INTO {w.name('landing')} (person,n) VALUES (:key,2)", key=KEY)
+    w.execute(f"INSERT INTO {w.name('landing')} (person,n,row_id) VALUES (:key,2,2)", key=KEY)
     w.run(
         "copies",
         SQL_ACTION="CREATE_TABLE",

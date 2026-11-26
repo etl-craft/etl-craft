@@ -21,13 +21,10 @@ from etl_craft.dialects.failure_evidence import driver_error, sqlstate
 from etl_craft.dialects.warehouse.base import (
     Presented,
     ReplaceStrategy,
-    SurrogateKey,
     WarehouseDialect,
 )
 from etl_craft.dialects.warehouse.metadata import TableMetadata, describe_result
 from etl_craft.dialects.warehouse.replacement import (
-    IdentityReplacement,
-    identity_replacement,
     replacement_ddl,
 )
 
@@ -100,7 +97,8 @@ class SnowflakeWarehouse(WarehouseDialect):
 
     def describe_select(self, conn: Connection, sql: str) -> list[tuple[str, str]] | None:
         """Read scalar source types from a zero-row result without creating a stage."""
-        if self.surrogate_key == "computed":
+        if self.spec.table_format == TableFormat.ICEBERG:
+            # Iceberg column types come from the materialized stage.
             return None
         return describe_result(conn, self.event_probe_sql(sql, 0), self.result_type)
 
@@ -194,19 +192,12 @@ class SnowflakeWarehouse(WarehouseDialect):
                 )
                 for row in rows
             ),
-            generated=any(
-                str(row["name"]).lower() == "row_id"
-                and bool(re.search(r"AUTOINCREMENT|IDENTITY", str(row["default"]), re.I))
-                for row in rows
-            ),
         )
 
     sqlglot_dialect = "snowflake"
     replace_strategy: ReplaceStrategy = "create_or_replace"
     identifier_case = "upper"
     qualified_rename = True
-    surrogate_key: SurrogateKey = "identity"
-    identity_in_create = True
     enforces_primary_keys = False
     key_file_connect_args = ("private_key_file", "private_key_file_pwd")
     secure_view = "keyword"
@@ -215,42 +206,6 @@ class SnowflakeWarehouse(WarehouseDialect):
     def reject_checks(self, value: str, kind: str) -> list[tuple[str, str]]:
         """Cast the value to text first: Snowflake's TRY_CAST reads text only."""
         return super().reject_checks(f"CAST({value} AS VARCHAR)", kind)
-
-    def identity_table_ddl(
-        self, target: str, columns: str, params: Mapping[str, str], *, start: int = 1
-    ) -> str:
-        """Use an ordered native identity; inserts omit the managed key."""
-        return f"CREATE TABLE {target} ({columns}, {self.identity_column_ddl(start)})"
-
-    def identity_column_ddl(self, start: int) -> str:
-        """Declare Snowflake's ordered native generator."""
-        return f"ROW_ID BIGINT AUTOINCREMENT START {start} INCREMENT 1 ORDER"
-
-    def identity_replacement_ddl(
-        self,
-        conn: Connection,
-        replacement: IdentityReplacement,
-        columns: str,
-        params: Mapping[str, str],
-    ) -> tuple[str, str]:
-        """Clone a fully populated identity candidate, preserving the target's grants."""
-        target, start = replacement.target, replacement.start
-        ddl = (
-            str(
-                conn.execute(
-                    text("SELECT GET_DDL('TABLE', :target)"), {"target": target}
-                ).scalar_one()
-            )
-            if replacement.existing
-            else self.identity_table_ddl(target, columns, params, start=start)
-        )
-        return identity_replacement(
-            ddl,
-            target,
-            replacement.candidate,
-            f"{columns}, {self.identity_column_ddl(start)}",
-            "snowflake",
-        )
 
     def is_bigint_type(self, data_type: str) -> bool:
         """Recognize native and Iceberg BIGINT's Snowflake numeric representations."""
@@ -272,15 +227,6 @@ class SnowflakeWarehouse(WarehouseDialect):
         if flag not in {"YES", "NO"}:
             raise SqlGuardError(f"{target}: cannot determine table format from IS_ICEBERG={flag!r}")
         return TableFormat.ICEBERG if flag == "YES" else TableFormat.NATIVE
-
-    def row_id_generated(self, conn: Connection, target: str) -> bool:
-        """Recognize actual native identity metadata, including targets created before this run."""
-        rows = conn.execute(text(f"DESCRIBE TABLE {target}")).mappings()
-        return any(
-            str(row["name"]).lower() == "row_id"
-            and bool(re.search(r"AUTOINCREMENT|IDENTITY", str(row["default"]), re.I))
-            for row in rows
-        )
 
     def present(self, profile: ConnectionProfile, secret: str, url: WarehouseUrl) -> Presented:
         """Name the connector's own authenticator for oauth, sso and sts."""

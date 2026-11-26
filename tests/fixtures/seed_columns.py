@@ -16,6 +16,7 @@ from etl_craft.handlers.sql.seed import replace_seed
 from etl_craft.handlers.sql.session import Session
 from etl_craft.services.seeds import Seed, cast_rows
 from etl_craft.warehouse.connection import warehouse_dialect
+from fixtures.requests import recorded_request
 
 
 @contextmanager
@@ -24,6 +25,7 @@ def seed_session(w, target):
     with (
         locks.target(target, w.catalog).hold(locker),
         selected_project(1),
+        recorded_request(w.engine_db, "deploy"),
         w.warehouse.connect() as conn,
     ):
         session = Session(
@@ -41,7 +43,6 @@ def seed_session(w, target):
         finally:
             session.sweep()
         conn.commit()
-        session.verify_row_ids()
 
 
 def check_omitted_seed_columns(w, folder):

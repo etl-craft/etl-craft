@@ -6,6 +6,15 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+- Changed: `ROW_ID` is computed the same way on every warehouse, from the task run that writes
+  the row: `TASK_RUN_ID × 2^32 + n`, continuing after the largest ID that task run already holds
+  in the target. IDs are never reused after a replace, drop, delete or warehouse restore, and
+  nothing about them is stored in the Engine DB. Seed loads and `adopt` use their audited request
+  ID, negated. New targets get a plain `BIGINT` `ROW_ID` (a primary key on PostgreSQL and native
+  DuckDB) instead of an identity column or sequence. `AUD_TARGET_ROW_IDS` and the agent's
+  `RESERVE_ROW_IDS` report are removed; agents and the API must run the same version. Limits:
+  fewer than 2^32 rows per task run and target. Databricks and Snowflake targets created earlier
+  with an identity `ROW_ID` must be recreated before a `CREATE_TABLE` can replace them.
 - Changed: every task log opens with the try, attempt, host, pipeline run, run date, refresh
   type, warehouse and task parameters (sensitive ones `[REDACTED]`, `INPUT_PARAMS` as keys only),
   and closes with `task succeeded in <seconds>` and the counts, or `task failed after <seconds>`

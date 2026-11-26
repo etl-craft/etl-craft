@@ -17,7 +17,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from etl_craft.core.actor import Actor, current_actor
 from etl_craft.core.enums import ActionOutcome
-from etl_craft.core.errors import EtlCraftError, ExitCode
+from etl_craft.core.errors import EtlCraftError, ExitCode, HandlerError
 from etl_craft.core.text import mask_arguments
 from etl_craft.dialects.engine import for_engine
 from etl_craft.engine.queries import statement
@@ -156,3 +156,17 @@ def command_request(
 def current_request() -> ActionRequest | None:
     """Return the audited request being served, for an action that records its completion."""
     return _request.get()
+
+
+def request_writer_id(subject: str) -> int:
+    """Return the ROW_ID writer of work outside a task run: its audited request, negated.
+
+    Task runs number rows from their positive ``TASK_RUN_ID``; the sign keeps the two apart.
+    """
+    request = current_request()
+    if request is None or request.action_id is None:
+        raise HandlerError(
+            f"{subject}: no audited request to number ROW_IDs from; expected a recorded "
+            "etl-craft action; run it through the etl-craft CLI or API"
+        )
+    return -request.action_id

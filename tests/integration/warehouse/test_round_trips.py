@@ -182,7 +182,7 @@ def test_query_description_is_exact_or_defers_to_ctas(sql_world):
         options = {"SETUP_FOR": "APPEND_TABLE"} if action == "SETUP_TABLE" else {}
         w.run(target, SQL_ACTION=action, TARGET_OBJECT=target, SELECT_QUERY=select, **options)
         if action == "SETUP_TABLE":
-            w.execute(f"INSERT INTO {w.name(target)} (name) VALUES ('Ann')")
+            w.execute(f"INSERT INTO {w.name(target)} (name, row_id) VALUES ('Ann', 1)")
         with w.warehouse.connect() as conn:
             if w.kind == "postgres":
                 actual = conn.execute(
@@ -241,7 +241,8 @@ def test_computed_merges_allocate_only_new_keys_in_one_mutation(sql_world):
             .mappings()
             .all()
         )
-    assert {row["row_id"] for row in rows} == {1, 2, 5, 6, 7}
+    floor = context.task_run_id * 2**32
+    assert {row["row_id"] for row in rows} == {1, 2, 5, floor + 1, floor + 2}
     assert sorted((row["id"], row["name"]) for row in rows) == [
         (1, "new"),
         (1, "new"),

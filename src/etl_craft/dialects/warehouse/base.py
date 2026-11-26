@@ -27,8 +27,7 @@ from etl_craft.core.failures import Failure
 from etl_craft.core.text import as_subquery
 from etl_craft.dialects import credentials
 from etl_craft.dialects.failure_evidence import classify
-from etl_craft.dialects.warehouse.metadata import TableMetadata, metadata_with_generator
-from etl_craft.dialects.warehouse.replacement import IdentityReplacement
+from etl_craft.dialects.warehouse.metadata import TableMetadata
 
 if TYPE_CHECKING:
     from etl_craft.config import CloningConfig, ConnectionProfile
@@ -38,9 +37,6 @@ REJECT_AUDIT = ("PIPELINE_RUN_ID", "PIPELINE_ID", "TASK_RUN_ID", "CREATE_DATE", 
 """Actor and run stamps on the engine's reject ledgers."""
 REJECT_COLUMNS = (*REJECT_AUDIT, "REJECT_REASON", "REJECT_COLUMN")
 """Required private columns that distinguish a reject ledger from a business table."""
-
-
-SurrogateKey = Literal["identity", "sequence", "computed"]
 
 
 AUDIT_COLUMN_TYPES: dict[str, str] = {
@@ -97,7 +93,6 @@ class WarehouseDialect:
 
     spec: WarehouseSpec
     catalog_columns = True
-    generator_metadata_sql = "NULL"
     sqlalchemy_driver: str | None = None
 
     dml_rowcounts = False
@@ -135,11 +130,6 @@ class WarehouseDialect:
     mutation_alias: bool = True
     # Whether ALTER TABLE ... RENAME TO needs a qualified new name.
     qualified_rename: bool = False
-    # How ROW_ID is generated: an identity column, a sequence default, or computed per insert
-    # where the table format has neither (Iceberg).
-    surrogate_key: SurrogateKey = "identity"
-    identity_in_create: bool = False
-    """Whether ROW_ID must be declared when creating the table, rather than added later."""
     # Whether the database enforces a PRIMARY KEY, which business rules rely on.
     enforces_primary_keys: bool = True
     # Whether only one process may write at a time (a DuckDB file).
@@ -165,44 +155,17 @@ class WarehouseDialect:
         """Exclude uncoordinated DML while protected data is checked and changed."""
         return None
 
-    def identity_table_ddl(
-        self, target: str, columns: str, params: Mapping[str, str], *, start: int = 1
-    ) -> str:
-        """Create an empty table with the supplied columns and a generated ROW_ID."""
-        raise NotImplementedError(f"{self.spec.key} does not declare identity columns in CREATE")
-
-    def identity_column_ddl(self, start: int) -> str:
-        """Declare an identity for ROW_ID, using the warehouse default at one."""
-        options = f" (START WITH {start})" if start != 1 else ""
-        return f"ROW_ID BIGINT GENERATED ALWAYS AS IDENTITY{options}"
-
-    def identity_setup_sql(self, target: str, *, start: int = 1) -> tuple[str, ...]:
-        """Prepare a separately declared generator only where the warehouse requires it."""
-        return ()
+    def declared_table_ddl(self, target: str, columns: str, params: Mapping[str, str]) -> str:
+        """Create an empty table from declared ``columns``, ROW_ID among them."""
+        return f"CREATE TABLE {target} ({columns})"
 
     def describe_select(self, conn: Connection, sql: str) -> list[tuple[str, str]] | None:
         """Return complete source types without staging when the dialect can describe queries."""
         return None
 
-    def identity_replacement_ddl(
-        self,
-        conn: Connection,
-        replacement: IdentityReplacement,
-        columns: str,
-        params: Mapping[str, str],
-    ) -> tuple[str, str]:
-        """Return candidate creation and atomic publication SQL for an identity table."""
-        raise NotImplementedError(f"{self.spec.key} does not publish identity table replacements")
-
     def existing_table_format(self, conn: Connection, target: str) -> TableFormat:
         """Read a table's format, or use the sole format supported by this dialect."""
         return self.spec.table_format
-
-    def row_id_generated(self, conn: Connection, target: str) -> bool:
-        """Whether inserts into this existing table omit ROW_ID and let its default fill it."""
-        if self.generator_metadata_sql != "NULL":
-            return bool(self.read_metadata(conn, target).generated)
-        return self.surrogate_key != "computed"
 
     # Connecting
 
@@ -516,19 +479,18 @@ class WarehouseDialect:
 
     def read_metadata(self, conn: Connection, table: str) -> TableMetadata:
         """Read ordered types and nullability from the dialect's metadata source."""
-        metadata = metadata_with_generator(self.hash_metadata_columns, self.generator_metadata_sql)
+        metadata = f"{self.hash_metadata_columns}, is_nullable"
         query, parameters = self.column_metadata_query(conn, table, metadata)
         rows = conn.execute(text(query), parameters).all()
         return TableMetadata(
-            tuple((str(row[0]), str(row[1]), row[2], row[3], str(row[4])) for row in rows),
-            generated=next((bool(row[5]) for row in rows if row[5] is not None), None),
+            tuple((str(row[0]), str(row[1]), row[2], row[3], str(row[4])) for row in rows)
         )
 
     def task_metadata_query(
         self, conn: Connection, target: str, related: tuple[str, ...]
     ) -> tuple[str, dict[str, str | None]]:
         """Read target columns and related relation kinds in a single catalog snapshot."""
-        metadata = metadata_with_generator(self.hash_metadata_columns, self.generator_metadata_sql)
+        metadata = f"{self.hash_metadata_columns}, is_nullable"
         query, parameters = self.column_metadata_query(conn, target, metadata)
         fields = []
         for index, name in enumerate(related):

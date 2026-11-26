@@ -58,7 +58,7 @@ def publish_statements(
     write: LandingWrite,
     stage: str,
     shapes: tuple[Mapping[str, str], Mapping[str, str]],
-    base: int | None = None,
+    base: int,
 ) -> tuple[tuple[str, ...], dict[str, object]]:
     """Delete owned old rows and insert new rows with one atomic target MERGE."""
     kinds, actual = shapes
@@ -87,10 +87,9 @@ def publish_statements(
         if stamp in actual:
             inserts[stamp] = actual[stamp]
             expressions[stamp] = "CURRENT_TIMESTAMP"
-    if base is not None:
-        parameters["landing_base"] = int(base)
-        inserts["row_id"] = "BIGINT"
-        expressions["row_id"] = row_number(":landing_base")
+    parameters["landing_base"] = int(base)
+    inserts["row_id"] = "BIGINT"
+    expressions["row_id"] = row_number(":landing_base")
     deleting = ", ".join(f"CAST(NULL AS {kind}) AS {name}" for name, kind in inserts.items())
     creating = ", ".join(f"{expressions[name]} AS {name}" for name in inserts)
     names = ", ".join(inserts)
