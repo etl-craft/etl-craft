@@ -166,7 +166,7 @@ def source_pipeline_ids(conn: Connection, codes: tuple[str, ...]) -> tuple[int, 
     except MetadataError as error:
         raise MetadataError(
             f"WATERMARK_SOURCE_PIPELINES={codes!r}: {error}; expected existing unique project "
-            "pipeline codes; correct the parameter and refresh the reader pipeline"
+            "pipeline codes; correct the parameter and re-parse the reader pipeline"
         ) from error
 
 

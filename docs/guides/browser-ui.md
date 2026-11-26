@@ -36,8 +36,8 @@ action. Form fields remain editable when their selected target is refused.
 | Mark status and reset offset/watermark | Missing operator permission; no selected run; a running task or a task without the requested checkpoint kind |
 | Item rerun/cancel/mark and rerun failed items | Missing operator permission; task/attempt/item state or no failed items |
 | Upload | Missing CAN_UPLOAD; inactive or non-stewardable pipeline |
-| Refresh pipeline/all | Missing management grant or STRICT governance |
-| Rebuild catalog, refresh lineage, record versions and Check now | Missing role/grant; on-demand warehouse checks disabled where applicable |
+| Re-parse pipeline/all | Missing management grant or STRICT governance |
+| Rebuild catalog, re-parse lineage, record versions and Check now | Missing role/grant; on-demand warehouse checks disabled where applicable |
 | Validate and table Data preview | Missing view/developer access; restricted pipeline scope, missing warehouse or a table outside the catalog |
 | Look up, edit and unlock values | Missing role; a non-merge task or conflicting merge definition; unlock requires a human administrator |
 | Purge, rehash/preview SQL and clone | Missing administrator role; missing common merge contract or cloning switched off |
@@ -204,7 +204,7 @@ the filter is the same `tag` parameter as `etl-craft pipelines --tag` and
 `GET /api/v1/projects/{project}/pipelines?tag=…`, so the page, the CLI and the API return the
 same pipelines, with the same `next_run`, `schedule_problem` and `recent_runs` fields in JSON.
 
-Use **Refresh all** on the Pipelines list or **Refresh pipeline** on a pipeline's detail
+Use **Re-parse all** on the Pipelines list or **Re-parse pipeline** on a pipeline's detail
 page to validate the current definitions and record the versions that pass. Hover over,
 focus or tap a disabled control to read the server's reason, such as STRICT governance
 or missing project management permission. **Rebuild catalog** is on the Catalog page.
@@ -269,9 +269,9 @@ task** and **Rerun from here** (with the tasks that depend on it) in this run, *
 time) and **Resume task**, and, for a fan-out task, **Items**: each item's status, rows and error,
 with Rerun, Cancel and Mark as per item and **Rerun failed items**. A run that is still going has
 **Reconcile**, which records attempts whose owner stopped renewing their lease as LOST so their
-tasks can be retried. The pipeline header has **Refresh**, which validates and pins the current
+tasks can be retried. The pipeline header has **Re-parse**, which validates and pins the current
 definition. Each posts the same `/api/v1` request as the CLI (`run`, `mark`, `pause`, `items`,
-`reconcile`, `pipelines refresh`).
+`reconcile`, `pipelines re-parse`).
 
 The list, pipeline and run pages refresh themselves every 10 to 30 seconds while you use them,
 as you, and stop refreshing in a background tab.
@@ -405,9 +405,9 @@ locked against the next merge. Administrators can **Save values** (edited values
 and **Unlock** values so the next merge applies source values again. Every lookup, edit and
 unlock is recorded.
 
-## Catalog and refresh actions
+## Catalog and re-parse actions
 
-The **Catalog** page shows **Validate metadata**, **Rebuild catalog**, **Refresh lineage** and
+The **Catalog** page shows **Validate metadata**, **Rebuild catalog**, **Re-parse lineage** and
 **Record catalog versions**. Disabled actions explain the server's refusal on hover or focus. Rebuild
 requires project management permission and generates the catalog from current metadata.
 

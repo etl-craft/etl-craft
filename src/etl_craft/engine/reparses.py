@@ -1,4 +1,4 @@
-"""Durable refresh images and the last passing definition used at admission."""
+"""Durable re-parse images and the last passing definition used at admission."""
 
 import json
 from dataclasses import dataclass
@@ -13,7 +13,7 @@ from etl_craft.engine.queries import statement
 
 
 @dataclass(frozen=True)
-class RefreshWrite:
+class ReparseWrite:
     """A validation outcome and its immutable metadata and optional project publication."""
 
     project_id: int
@@ -25,22 +25,22 @@ class RefreshWrite:
     passed: bool
 
 
-def record(conn: Connection, result: RefreshWrite) -> int:
+def record(conn: Connection, result: ReparseWrite) -> int:
     """Store one image per changed hash; unchanged outcomes reference its owning record."""
     from etl_craft.core.enums import RunStatus
 
     digest = sha256_hex(result.snapshot.encode())
     previous = conn.execute(
-        statement(conn, "refresh_latest_snapshot"), {"pipeline_id": result.pipeline_id}
+        statement(conn, "reparse_latest_snapshot"), {"pipeline_id": result.pipeline_id}
     ).one_or_none()
     reference = (
-        int(previous.refresh_id)
+        int(previous.reparse_id)
         if previous is not None and previous.metadata_version == digest
         else None
     )
     return int(
         conn.execute(
-            statement(conn, "refresh_insert"),
+            statement(conn, "reparse_insert"),
             {
                 "project_id": result.project_id,
                 "pipeline_id": result.pipeline_id,
@@ -50,7 +50,7 @@ def record(conn: Connection, result: RefreshWrite) -> int:
                 "status": RunStatus.SUCCESS if result.passed else RunStatus.FAILED,
                 "metadata_version": digest,
                 "snapshot": result.snapshot if reference is None else None,
-                "snapshot_refresh_id": reference,
+                "snapshot_reparse_id": reference,
                 "bundle_id": result.bundle_id,
                 "findings": json.dumps(result.findings),
             },
@@ -63,20 +63,20 @@ def admitted(conn: Connection, pipeline_id: int) -> tuple[str, str, str]:
     from etl_craft.core.enums import RunStatus, YesNo
 
     params = {"pipeline_id": pipeline_id}
-    identity = conn.execute(statement(conn, "refresh_identity"), params).one()
-    block = identity.block_on_refresh_error == YesNo.YES
-    good = conn.execute(statement(conn, "refresh_good"), params).one_or_none()
-    latest = conn.execute(statement(conn, "refresh_latest"), params).one_or_none()
+    identity = conn.execute(statement(conn, "reparse_identity"), params).one()
+    block = identity.block_on_reparse_error == YesNo.YES
+    good = conn.execute(statement(conn, "reparse_good"), params).one_or_none()
+    latest = conn.execute(statement(conn, "reparse_latest"), params).one_or_none()
     if good is None or (block and latest is not None and latest.status == RunStatus.FAILED):
         findings = [] if latest is None else json.loads(latest.findings)
         messages = (
-            "; ".join(str(finding["message"]) for finding in findings) or "no refresh recorded"
+            "; ".join(str(finding["message"]) for finding in findings) or "no re-parse recorded"
         )
-        reason = "no version has passed yet" if good is None else "BLOCK_ON_REFRESH_ERROR=Y"
+        reason = "no version has passed yet" if good is None else "BLOCK_ON_REPARSE_ERROR=Y"
         raise RunRefusedError(
             f"pipeline {identity.pipeline_code!r}: {reason}; findings: {messages}; "
             "correct the findings "
-            "and run `etl-craft deploy` (or `etl-craft pipelines refresh` on RELAXED "
+            "and run `etl-craft deploy` (or `etl-craft pipelines re-parse` on RELAXED "
             "projects) before admitting a new run"
         )
     return str(good.snapshot), str(good.metadata_version), str(good.bundle_id)

@@ -20,7 +20,7 @@ import { Card } from "@/components/ui/card";
 import { unavailableAction, useActionAvailability, useProjectInfo } from "@/hooks";
 import { getJson, project } from "@/lib/api";
 import { pipelinePath, runPath } from "@/lib/routes";
-import { BulkRefresh, PipelineRefresh } from "@/components/pipeline-refresh";
+import { BulkReparse, PipelineReparse } from "@/components/pipeline-reparse";
 import type { BulkOutcome, Pipeline } from "@/lib/types";
 import { useDocumentTitle } from "@/title";
 
@@ -135,7 +135,7 @@ export function Pipelines() {
         subtitle={tags.length ? `Tagged ${tags.join(" and ")}` : undefined}
         actions={
           <div className="flex flex-wrap items-start gap-2">
-          <PipelineRefresh code={code} batched={availability} onDone={() => void list.refetch()} />
+          <PipelineReparse code={code} batched={availability} onDone={() => void list.refetch()} />
           <CsvButton
             name={`${code}-pipelines.csv`}
             header={["pipeline", "name", "description", "tags", "schedule", "dependencies", "last_run", "next_run", "automatic_runs", "paused_tasks"]}
@@ -158,12 +158,12 @@ export function Pipelines() {
           <span className="text-sm font-medium">{selected.length} selected</span>
           {bulk("PAUSE", "Pause")}
           {bulk("RESUME", "Resume")}
-          <BulkRefresh code={code} pipelines={selected} batched={availability} />
+          <BulkReparse code={code} pipelines={selected} batched={availability} />
         </div>
         <LegendView entries={statusEntries(shown.flatMap(pipeline=>pipeline.recent_runs.map(run=>run.status)))}><DataTable
           label="Pipelines"
           data={shown}
-          empty={list.isSuccess ? (tags.length ? <EmptyState title="No pipeline carries every selected tag." nextStep="Clear a tag to broaden the list." /> : <EmptyState title="This project has no active pipeline." nextStep="Add a pipeline in the project config files, apply them, then refresh the pipeline definitions." />) : undefined}
+          empty={list.isSuccess ? (tags.length ? <EmptyState title="No pipeline carries every selected tag." nextStep="Clear a tag to broaden the list." /> : <EmptyState title="This project has no active pipeline." nextStep="Add a pipeline in the project config files, apply them, then re-parse the pipeline definitions." />) : undefined}
           rowId={(p) => p.pipeline_code}
           selection={{
             ids: chosen,

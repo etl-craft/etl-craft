@@ -66,7 +66,7 @@ def publish_project(project, agent_dir):
     ).decode()
     ctx = OperationContext(project.engine, project.config, SYSTEM_ACTOR, role=ApiRole.ADMIN)
     publication = invoke(ctx, ActionName.DEPLOY, DeployInput(files=uploaded))
-    assert publication.refreshes and not publication.failed, publication
+    assert publication.reparses and not publication.failed, publication
 
 
 def start_ui(project, *, fault=None):

@@ -104,8 +104,8 @@ SEEDS = [
         "generate_series(1,:pipelines) p",
     ),
     (
-        "AUD_PIPELINE_REFRESHES",
-        "REFRESH_ID,PROJECT_ID,PIPELINE_ID,REFRESHED_AT,ACTOR,ACTOR_KIND,STATUS,"
+        "AUD_PIPELINE_REPARSES",
+        "REPARSE_ID,PROJECT_ID,PIPELINE_ID,REPARSED_AT,ACTOR,ACTOR_KIND,STATUS,"
         "METADATA_VERSION,METADATA_SNAPSHOT,BUNDLE_ID,FINDINGS",
         f"{RUN_ID},1,p,{DAY},'plan','SYSTEM','SUCCESS',repeat('a',64),"
         "jsonb_build_object('CFG_PIPELINES',jsonb_build_object('rows',"

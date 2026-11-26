@@ -59,7 +59,7 @@ from etl_craft.services.cloning import cloning_problem
 from etl_craft.services.erasure import doctor_checks as erasure_checks
 from etl_craft.services.operations.accounts import has_admin
 from etl_craft.services.protection import problems as protection_problems
-from etl_craft.services.refresh_upgrade import refresh_checks
+from etl_craft.services.reparse_upgrade import reparse_checks
 from etl_craft.warehouse.connection import (
     build_warehouse_engine,
     is_in_memory,
@@ -781,8 +781,8 @@ def _guard_checks(conn: Connection) -> list[Check]:
 
 
 def _project_guard_checks(conn: Connection, project_id: int, governance: str) -> list[Check]:
-    """Report configuration, refresh and calendar findings for the selected project."""
-    checks = refresh_checks(conn, project_id)
+    """Report configuration, re-parse and calendar findings for the selected project."""
+    checks = reparse_checks(conn, project_id)
     if governance == Governance.RELAXED and not for_engine(conn).supports_api_replicas:
         checks.append(
             Check(

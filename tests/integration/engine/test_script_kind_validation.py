@@ -1,4 +1,4 @@
-"""Apply, validate and refresh reject bad kinds without replacing the last good version."""
+"""Apply, validate and re-parse reject bad kinds without replacing the last good version."""
 
 import csv
 
@@ -6,24 +6,24 @@ import pytest
 from sqlalchemy import text
 
 from etl_craft.core.enums import ActionName
-from etl_craft.engine.refreshes import admitted
+from etl_craft.engine.reparses import admitted
 from etl_craft.services.config_files import read_config_files, sync_config
 from etl_craft.services.validate import validate
 from fixtures.actions import act
-from integration.engine.test_pipeline_refresh import refresh_project as refresh_project
+from integration.engine.test_pipeline_reparse import reparse_project as reparse_project
 
 
 @pytest.mark.parametrize("value", [None, "OTHER"])
-def test_python_kind_required_by_apply_validate_and_refresh(refresh_project, tmp_path, value):
-    ctx, pipeline, _ = refresh_project
+def test_python_kind_required_by_apply_validate_and_refresh(reparse_project, tmp_path, value):
+    ctx, pipeline, _ = reparse_project
     act(
         ctx,
         ActionName.PROJECT_SET,
         project=ctx.project or ctx.config.project,
         governance="RELAXED",
-        reason="Exercise standalone refresh",
+        reason="Exercise standalone re-parse",
     )
-    good = act(ctx, ActionName.PIPELINE_REFRESH, pipeline_code="P")
+    good = act(ctx, ActionName.PIPELINE_REPARSE, pipeline_code="P")
     assert not good.failed
     with ctx.engine.begin() as conn:
         conn.execute(
@@ -39,10 +39,10 @@ def test_python_kind_required_by_apply_validate_and_refresh(refresh_project, tmp
     assert all(finding.where == "P.T" for finding in findings)
     assert all("INGESTION" in f.message and "UTILITY" in f.message for f in findings)
     assert any(repr(value) in f.message for f in findings)
-    failed = act(ctx, ActionName.PIPELINE_REFRESH, pipeline_code="P")
-    assert failed.failed and any("SCRIPT_KIND" in f.message for f in failed.refreshes[0].findings)
+    failed = act(ctx, ActionName.PIPELINE_REPARSE, pipeline_code="P")
+    assert failed.failed and any("SCRIPT_KIND" in f.message for f in failed.reparses[0].findings)
     with ctx.engine.connect() as conn:
-        assert admitted(conn, pipeline)[1] == good.refreshes[0].metadata_version
+        assert admitted(conn, pipeline)[1] == good.reparses[0].metadata_version
     with ctx.engine.begin() as conn:
         conn.execute(
             text(
@@ -77,20 +77,20 @@ def test_python_kind_required_by_apply_validate_and_refresh(refresh_project, tmp
         assert row.value == "INGESTION" and row.active == "Y"
 
 
-def test_invalid_live_kind_keeps_the_last_passing_script_executable(refresh_project):
+def test_invalid_live_kind_keeps_the_last_passing_script_executable(reparse_project):
     from etl_craft.core.enums import RunStatus
 
-    ctx, pipeline, _ = refresh_project
+    ctx, pipeline, _ = reparse_project
     act(
         ctx,
         ActionName.PROJECT_SET,
         project=ctx.project or ctx.config.project,
         governance="RELAXED",
-        reason="Exercise standalone refresh",
+        reason="Exercise standalone re-parse",
     )
-    good = act(ctx, ActionName.PIPELINE_REFRESH, pipeline_code="P")
+    good = act(ctx, ActionName.PIPELINE_REPARSE, pipeline_code="P")
     assert not good.failed
-    ctx.engine.update_execution_options(refresh_required=True)
+    ctx.engine.update_execution_options(reparse_required=True)
     with ctx.engine.begin() as conn:
         conn.execute(
             text(
@@ -98,7 +98,7 @@ def test_invalid_live_kind_keeps_the_last_passing_script_executable(refresh_proj
                 "WHERE PARAMETER_NAME='SCRIPT_KIND'"
             )
         )
-    assert act(ctx, ActionName.PIPELINE_REFRESH, pipeline_code="P").failed
+    assert act(ctx, ActionName.PIPELINE_REPARSE, pipeline_code="P").failed
     outcome = act(ctx, ActionName.RUN, pipeline_code="P", reason="test requested run")
     assert outcome.status == RunStatus.SUCCESS, outcome.message
     with ctx.engine.connect() as conn:
@@ -106,4 +106,4 @@ def test_invalid_live_kind_keeps_the_last_passing_script_executable(refresh_proj
             text("SELECT STATUS AS status,INSERT_COUNT AS inserted FROM AUD_TASK_RUN_LOG")
         ).one()
         assert row.status == RunStatus.SUCCESS and row.inserted == 1
-        assert admitted(conn, pipeline)[1] == good.refreshes[0].metadata_version
+        assert admitted(conn, pipeline)[1] == good.reparses[0].metadata_version

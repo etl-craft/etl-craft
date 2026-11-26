@@ -47,7 +47,7 @@ agent and an HTTPS proxy. It is separate from the repository's development servi
    `etl-craft token create --name agent-one --role agent --pool default`.
    Set `CONTROLLER_TOKEN` and `AGENT_TOKEN` from your secret manager, then run
    `docker compose up -d --wait`. Follow [project bundles](project-bundles.md) to publish and
-   refresh your project's execution files before submitting work.
+   re-parse your project's execution files before submitting work.
 4. Point clients and agents at the proxy's HTTPS URL. Check the controller and UI
    `/health` endpoints directly on the internal network. Scrape `/metrics` there too.
    The proxy leaves `/metrics` private.

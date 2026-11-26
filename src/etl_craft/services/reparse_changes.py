@@ -1,4 +1,4 @@
-"""Describe changed metadata identities and project file contents between refreshes."""
+"""Describe changed metadata identities and project file contents between re-parses."""
 
 import json
 from datetime import datetime
@@ -16,7 +16,7 @@ def differences(
 ) -> tuple[tuple[str, ...], datetime | None, RunStatus | None]:
     """Compare against the latest outcome, including failed outcomes."""
     previous = conn.execute(
-        statement(conn, "refresh_previous"), {"pipeline_id": pipeline_id}
+        statement(conn, "reparse_previous"), {"pipeline_id": pipeline_id}
     ).one_or_none()
     old = {} if previous is None else json.loads(previous.snapshot)
     current = json.loads(snapshot)
@@ -51,6 +51,6 @@ def differences(
     )
     return (
         tuple(changes),
-        None if previous is None else as_utc(previous.refreshed_at),
+        None if previous is None else as_utc(previous.reparsed_at),
         None if previous is None else RunStatus(previous.status),
     )

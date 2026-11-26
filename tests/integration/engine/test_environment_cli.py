@@ -101,7 +101,7 @@ def test_cli_omitted_recovery_reason_obeys_governance(
         governance="RELAXED",
         reason="Set up the pipeline",
     )
-    checked = act(ctx, ActionName.PIPELINE_REFRESH)
+    checked = act(ctx, ActionName.PIPELINE_REPARSE)
     assert not checked.failed, checked
     act(ctx, ActionName.PROJECT_SET, project="default", governance=policy, reason="Test policy")
     with project.engine.begin() as conn:
@@ -288,7 +288,7 @@ def test_run_override_reasons_share_governance(
         governance="RELAXED",
         reason="Set up the pipeline",
     )
-    checked = act(ctx, ActionName.PIPELINE_REFRESH)
+    checked = act(ctx, ActionName.PIPELINE_REPARSE)
     assert not checked.failed, checked
     act(ctx, ActionName.PROJECT_SET, project="default", governance=policy, reason="Test policy")
     if kind == "rerun":

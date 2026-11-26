@@ -131,10 +131,10 @@ def test_crash_after_upstream_commit_is_finished_by_repeating_erase(erasure_proj
         ActionName.PROJECT_SET,
         project=ctx.project or ctx.config.project,
         governance="RELAXED",
-        reason="Exercise standalone refresh",
+        reason="Exercise standalone re-parse",
     )
-    refreshed = act(ctx, ActionName.PIPELINE_REFRESH)
-    assert all(str(r.status) == "SUCCESS" for r in refreshed.refreshes), refreshed
+    reparsed = act(ctx, ActionName.PIPELINE_REPARSE)
+    assert all(str(r.status) == "SUCCESS" for r in reparsed.reparses), reparsed
     code = """
 import sys
 from etl_craft.config import load_config
@@ -200,10 +200,10 @@ def test_doctor_reports_unfollowed_table_with_reason_and_remedy(erasure_project)
         ActionName.PROJECT_SET,
         project=ctx.project or ctx.config.project,
         governance="RELAXED",
-        reason="Exercise standalone refresh",
+        reason="Exercise standalone re-parse",
     )
-    refreshed = act(ctx, ActionName.PIPELINE_REFRESH)
-    assert all(str(r.status) == "SUCCESS" for r in refreshed.refreshes), refreshed
+    reparsed = act(ctx, ActionName.PIPELINE_REPARSE)
+    assert all(str(r.status) == "SUCCESS" for r in reparsed.reparses), reparsed
     act(
         ctx,
         ActionName.ERASE,
@@ -505,10 +505,10 @@ def test_sql_writers_never_write_erased_keys_and_keep_null_identifiers(erasure_p
         ActionName.PROJECT_SET,
         project=ctx.project or ctx.config.project,
         governance="RELAXED",
-        reason="Exercise standalone refresh",
+        reason="Exercise standalone re-parse",
     )
-    refreshed = act(ctx, ActionName.PIPELINE_REFRESH)
-    assert all(str(r.status) == "SUCCESS" for r in refreshed.refreshes), refreshed
+    reparsed = act(ctx, ActionName.PIPELINE_REPARSE)
+    assert all(str(r.status) == "SUCCESS" for r in reparsed.reparses), reparsed
     args = {"table": "ds.people", "column": "person", "value": "private-person-key"}
     act(ctx, ActionName.ERASE, **args, reason="request")
     # A source resends the erased identifier, next to a row with no identifier at all.
@@ -571,10 +571,10 @@ def test_a_script_that_resends_an_erased_key_has_it_removed_in_the_same_attempt(
         ActionName.PROJECT_SET,
         project=ctx.project or ctx.config.project,
         governance="RELAXED",
-        reason="Exercise standalone refresh",
+        reason="Exercise standalone re-parse",
     )
-    refreshed = act(ctx, ActionName.PIPELINE_REFRESH)
-    assert all(str(r.status) == "SUCCESS" for r in refreshed.refreshes), refreshed
+    reparsed = act(ctx, ActionName.PIPELINE_REPARSE)
+    assert all(str(r.status) == "SUCCESS" for r in reparsed.reparses), reparsed
     act(
         ctx,
         ActionName.ERASE,

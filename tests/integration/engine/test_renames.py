@@ -213,7 +213,7 @@ def test_failed_refresh_rolls_back_rename_and_history(rename_project):
         before = conn.execute(
             text("SELECT COUNT(*) AS n FROM AUD_CFG_PIPELINES_HISTORY")
         ).scalar_one()
-    with pytest.raises(RunRefusedError, match="rename refresh failed") as error:
+    with pytest.raises(RunRefusedError, match="rename re-parse failed") as error:
         rename(ctx)
     assert "correct" in str(error.value).lower()
     with ctx.engine.connect() as conn:
@@ -229,7 +229,7 @@ def test_failed_refresh_rolls_back_rename_and_history(rename_project):
             == before
         )
         assert (
-            conn.execute(text("SELECT COUNT(*) AS n FROM AUD_PIPELINE_REFRESHES")).scalar_one() == 0
+            conn.execute(text("SELECT COUNT(*) AS n FROM AUD_PIPELINE_REPARSES")).scalar_one() == 0
         )
         assert conn.execute(text("SELECT COUNT(*) AS n FROM AUD_PROJECT_BUNDLES")).scalar_one() == 0
 
@@ -453,9 +453,9 @@ def test_rename_requires_management_in_the_selected_project(rename_project):
         ActionName.PROJECT_SET,
         project=ctx.project or ctx.config.project,
         governance="RELAXED",
-        reason="Exercise standalone refresh",
+        reason="Exercise standalone re-parse",
     )
-    act(ctx, ActionName.PIPELINE_REFRESH)
+    act(ctx, ActionName.PIPELINE_REPARSE)
     manager = replace(ctx, role=ApiRole.OPERATOR)
     with pytest.raises(ResourceNotFoundError, match=r"not permitted|not found"):
         rename(replace(manager, project="OTHER", project_id=None))
@@ -559,9 +559,9 @@ def test_generated_api_rename_uses_project_permission_and_reason(rename_project,
         ActionName.PROJECT_SET,
         project=ctx.project or ctx.config.project,
         governance="RELAXED",
-        reason="Exercise standalone refresh",
+        reason="Exercise standalone re-parse",
     )
-    act(ctx, ActionName.PIPELINE_REFRESH)
+    act(ctx, ActionName.PIPELINE_REPARSE)
     token = act(ctx, ActionName.TOKEN_CREATE, name="api-manager", role=ApiRole.VIEWER)
     client = TestClient(create_app(ctx))
     headers = {"Authorization": "Bearer " + token.token}
@@ -683,7 +683,7 @@ def test_rename_refuses_unrefreshable_cross_project_reference(rename_project):
         "P",
         "cross-project",
         "DEPENDENT",
-        "cannot be refreshed",
+        "cannot be re-parsed",
         "removing those dependencies",
     ):
         assert part in str(error.value)
@@ -695,7 +695,7 @@ def test_unrelated_failed_pipeline_does_not_block_rename(rename_project):
         other = add_pipeline(conn, "BROKEN")
         add_task(conn, other, "missing", "PYTHON", SCRIPT_FILE="python_scripts/missing.py")
     result = rename(ctx)
-    assert {r.pipeline_code for r in result.refreshes} == {"NEW"}
+    assert {r.pipeline_code for r in result.reparses} == {"NEW"}
 
 
 def test_rename_waits_for_bundle_upload_without_holding_a_writer(rename_project, monkeypatch):
@@ -823,9 +823,9 @@ def test_api_rename_uses_the_selected_projects_published_files(rename_project):
         ActionName.PROJECT_SET,
         project=other.project or other.config.project,
         governance="RELAXED",
-        reason="Exercise standalone refresh",
+        reason="Exercise standalone re-parse",
     )
-    assert not act(other, ActionName.PIPELINE_REFRESH).failed
+    assert not act(other, ActionName.PIPELINE_REPARSE).failed
     token = act(ctx, ActionName.TOKEN_CREATE, name="other-manager", role=ApiRole.VIEWER)
     act(
         ctx,

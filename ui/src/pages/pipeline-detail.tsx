@@ -26,7 +26,7 @@ const RUN_COUNTS = [1, 5, 10, 25, 50];
 import { PauseState } from "@/components/pipeline-parts";
 import { RunGraph } from "@/components/lazy-run-graph";
 import { DEFAULT_RUNS, GRID_COLUMNS, MIN_TASKS, RunGrid } from "@/components/run-grid";
-import { PipelineRefresh, RefreshMenuItem } from "@/components/pipeline-refresh";
+import { PipelineReparse, ReparseMenuItem } from "@/components/pipeline-reparse";
 import { TaskDefinitionPanel } from "@/components/task-definition-panel";
 import { RunOverview } from "@/components/run-overview";
 import { RunTimeline } from "@/components/run-timeline";
@@ -177,7 +177,7 @@ export function PipelineDetail() {
   const [requestKey, setRequestKey] = React.useState("");
   const [fullRefresh, setFullRefresh] = React.useState(false);
   const [refreshTask, setRefreshTask] = React.useState("");
-  const [refreshOpen, setRefreshOpen] = React.useState(false);
+  const [reparseOpen, setReparseOpen] = React.useState(false);
   const [refreshDownstream, setRefreshDownstream] = React.useState(false);
   /** The append targets the server asked to confirm emptying, and whether the person accepted. */
   const [toEmpty, setToEmpty] = React.useState<string[]>([]);
@@ -202,7 +202,7 @@ export function PipelineDetail() {
       <Breadcrumbs trail={[{ label: code, to: projectHomePath(code) }, { label: "Pipelines", to: pipelinesPath(code) }, { label: pipeline }]} />
       {/* The confirmation lives outside the Options menu, which closes when an item is chosen. */}
       <div hidden>
-        <PipelineRefresh code={code} pipeline={pipeline} onDone={() => void found.refetch()} menu={{ open: refreshOpen, setOpen: setRefreshOpen }} />
+        <PipelineReparse code={code} pipeline={pipeline} onDone={() => void found.refetch()} menu={{ open: reparseOpen, setOpen: setReparseOpen }} />
       </div>
       <PageHeader
         compact
@@ -332,7 +332,7 @@ export function PipelineDetail() {
                       <Check className={cn("size-4", hideBars && "invisible")} aria-hidden /> Duration bars
                     </DropdownItem>
                     <DropdownSeparator />
-                    <RefreshMenuItem code={code} pipeline={pipeline} onSelect={() => setRefreshOpen(true)} />
+                    <ReparseMenuItem code={code} pipeline={pipeline} onSelect={() => setReparseOpen(true)} />
                   </DropdownContent>
                 </DropdownMenu>
               )}

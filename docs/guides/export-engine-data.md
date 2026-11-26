@@ -65,7 +65,7 @@ never interpolate an untrusted identifier. Set `INPUT_PARAMS` to the project ID,
 `{"project_id": 1}`, and pass `task.input_params["project_id"]` as the bound value. Use
 `conn.execute(text(query), {"project_id": project_id}).mappings()` to read named columns.
 `AUD_ACTIONS` entries without that project ID are deliberately excluded. Column lineage is the
-current refreshed lineage, not a history of every run's SQL; nullable source columns can
+current re-parsed lineage, not a history of every run's SQL; nullable source columns can
 represent expressions with no source column.
 
 Serialize the selected rows into your destination's schema and deliver them with its ordinary

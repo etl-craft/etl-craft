@@ -2,7 +2,7 @@
 
 Run the [Quick Start](../../docs/quick-start.md) with SQLite, DuckDB and Mailpit.
 Persistent views are exercised where the warehouse supports them. DuckDB/Iceberg
-uses a table summary and separately asserts the CREATE_VIEW refusal during refresh.
+uses a table summary and separately asserts the CREATE_VIEW refusal during re-parse.
 Iceberg fixture cleanup removes both views and tables before deleting its namespaces.
 
 This project is the installed-package contract fixture, with two small Python

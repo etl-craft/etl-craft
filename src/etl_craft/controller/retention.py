@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from etl_craft.controller.cloning import clone_due
-from etl_craft.controller.refresh import refresh_due
+from etl_craft.controller.reparse import reparse_due
 from etl_craft.controller.schema_checks import schema_checks_due
 from etl_craft.core.actor import SYSTEM_ACTOR, acting_as
 from etl_craft.core.enums import ActionName
@@ -72,7 +72,7 @@ def maintain(
     """Share the maintenance worker; coalesce elapsed clone and check ticks, never queue them."""
     from etl_craft.controller.uploads import admit_pending
 
-    refresh_due(ctx, stop)
+    reparse_due(ctx, stop)
     admit_pending(ctx)
     try:
         purge_due(ctx, now, stop)

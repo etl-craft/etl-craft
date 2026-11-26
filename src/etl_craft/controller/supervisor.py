@@ -197,7 +197,7 @@ def serve(ctx: OperationContext, stop: threading.Event) -> None:
     outage = OutageBudget(ctx.config.limits.engine_db_outage_seconds)
     try:
         with acting_as(ctx.actor), leadership(ctx.engine, ctx.config) as leader:
-            from etl_craft.controller.refresh import initialize
+            from etl_craft.controller.reparse import initialize
 
             reconcile(ctx.engine)
             initialize(ctx)

@@ -138,7 +138,7 @@ def test_wait_handoff_and_each_child_ending(trigger_scene, ending):
 def test_real_attempt_frees_its_slot_after_handoff(trigger_scene):
     trigger_scene = trigger_scene()
     project, ctx, _, task, run = trigger_scene
-    from etl_craft.services.operations.pipeline_refresh import RefreshInput
+    from etl_craft.services.operations.pipeline_reparse import ReparseInput
 
     act(
         ctx,
@@ -146,10 +146,10 @@ def test_real_attempt_frees_its_slot_after_handoff(trigger_scene):
         project="default",
         environment_type="CUSTOM",
         governance="RELAXED",
-        reason="Refresh test fixture",
+        reason="Re-parse test fixture",
     )
-    refresh = invoke(ctx, ActionName.PIPELINE_REFRESH, RefreshInput(pipeline_code="CHILD"))
-    assert not refresh.failed, refresh
+    reparse = invoke(ctx, ActionName.PIPELINE_REPARSE, ReparseInput(pipeline_code="CHILD"))
+    assert not reparse.failed, reparse
     spec = admit_attempt(
         project.engine,
         project.config,
@@ -822,7 +822,7 @@ def test_explicit_rerun_of_ended_parent_keeps_controller_wait_open(trigger_scene
 
     scene = trigger_scene()
     project, ctx, _, _, run = scene
-    from etl_craft.services.operations.pipeline_refresh import RefreshInput
+    from etl_craft.services.operations.pipeline_reparse import ReparseInput
 
     act(
         ctx,
@@ -830,9 +830,9 @@ def test_explicit_rerun_of_ended_parent_keeps_controller_wait_open(trigger_scene
         project="default",
         environment_type="CUSTOM",
         governance="RELAXED",
-        reason="Refresh test fixture",
+        reason="Re-parse test fixture",
     )
-    checked = invoke(ctx, ActionName.PIPELINE_REFRESH, RefreshInput(pipeline_code="CHILD"))
+    checked = invoke(ctx, ActionName.PIPELINE_REPARSE, ReparseInput(pipeline_code="CHILD"))
     assert not checked.failed, checked
     first = invoke(ctx, ActionName.TRIGGER_PIPELINE, owned(scene))
     with project.engine.begin() as conn:

@@ -379,16 +379,16 @@ def _collect(
     config: ConnectorConfig,
     keys: dict[int, str | None],
     *,
-    refresh: bool = False,
+    reparse: bool = False,
     record: bool = True,
 ) -> list[TaskLineage]:
-    """Compute active SQL lineage, reusing cached edges unless refresh was requested."""
+    """Compute active SQL lineage, reusing cached edges unless re-parse was requested."""
     dialect, catalog = dialect_and_catalog(config)
     with engine.connect() if isinstance(engine, Engine) else nullcontext(engine) as conn:
         params_by_task = fetch_all_task_parameters(conn, Handler.SQL)
         tasks = [(ref, params_by_task.get(ref.task_id, {})) for ref in fetch_sql_tasks(conn)]
         defined = fetch_source_columns(conn)
-        cache = {} if refresh else fetch_lineage_cache(conn)
+        cache = {} if reparse else fetch_lineage_cache(conn)
     schemas, invalid = _source_schemas(defined, dialect, catalog)
     ordered, processed, writers = _ordered_tasks(engine, config, tasks)
     owned = engine_columns(tasks, catalog)
@@ -487,7 +487,7 @@ def collect(
     engine: Engine | Connection,
     config: ConnectorConfig,
     *,
-    refresh: bool = False,
+    reparse: bool = False,
     record: bool = True,
 ) -> list[TaskLineage]:
     """Compute task lineage and publish table versions once under the recording lock."""
@@ -500,7 +500,7 @@ def collect(
             if record and isinstance(engine, Engine)
             else nullcontext()
         ):
-            results = _collect(engine, config, keys, refresh=refresh, record=record)
+            results = _collect(engine, config, keys, reparse=reparse, record=record)
             if record:
                 assert isinstance(engine, Engine)
                 _, catalog = dialect_and_catalog(config)

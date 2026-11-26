@@ -33,7 +33,7 @@ missing declaration, a different catalog or an invalid value, naming the file, r
 value and remedy. Types are never inferred. Keys must match the merge keys when a pipeline
 merges into the table. The seed then receives that merge's audit columns and version-2 hashes.
 
-`deploy` loads them, after applying the config and before refreshing the pipelines:
+`deploy` loads them, after applying the config and before re-parsing the pipelines:
 
 ```bash
 etl-craft validate --project support

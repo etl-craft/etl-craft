@@ -239,16 +239,16 @@ def test_sso_ids_survive_rename_refresh_and_logout_but_current_restrictions_appl
             ),
             {"id": replacement.group_id},
         )
-    refreshed = act(ctx, ActionName.REFRESH, token=session.refresh_token)
-    assert refreshed.metadata.expires_at == refresh_end
-    caller = authenticated_context(ctx, refreshed.metadata)
+    reparsed = act(ctx, ActionName.REFRESH, token=session.refresh_token)
+    assert reparsed.metadata.expires_at == refresh_end
+    caller = authenticated_context(ctx, reparsed.metadata)
     assert act(caller, ActionName.PIPELINE, pipeline_code="PRIVATE").pipeline_code == "PRIVATE"
     with pytest.raises(ResourceNotFoundError, match=r"OTHER.*missing or not permitted"):
         act(caller, ActionName.PIPELINE, pipeline_code="OTHER")
     with ctx.engine.connect() as conn:
         ids = conn.execute(
             text("SELECT SSO_GROUP_IDS AS ids FROM CFG_API_TOKENS WHERE TOKEN_ID=:id"),
-            {"id": refreshed.metadata.token_id},
+            {"id": reparsed.metadata.token_id},
         ).scalar_one()
         assert json.loads(ids) == [group_id]
         audit = conn.execute(

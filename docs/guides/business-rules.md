@@ -94,7 +94,7 @@ use a 4,096-character storage limit, consistent with bounded Engine DB error/rea
 An overlong value fails with its field, length, limit and remedy; it is never truncated.
 Malformed outputs are FAILED rule runs with the diagnostic in `DETAIL` and the attempt log.
 Validation checks explicit output lists statically, as for ROW rules; wildcard or unresolved
-outputs need a zero-row warehouse probe. This lets a pipeline refresh before its upstream
+outputs need a zero-row warehouse probe. This lets a pipeline re-parse before its upstream
 setup task creates the target. Execution always checks the actual columns and values.
 
 A valid `PASSED=N` on `REJECT` fails the task and prevents its success-dependent tasks from
@@ -189,7 +189,7 @@ etl-craft run --reason "requested data load" --pipeline-code SALES_DAILY --task-
 
 Use the exact pipeline/task and run identity for your project. Teams own scheduling through
 ordinary BR tasks and `CFG_PIPELINES.RUN_SCHEDULE`, time zone, catch-up, overlap, pause and
-deactivation controls. A schedule or pipeline refresh does not imply a full check. No rules
+deactivation controls. A schedule or pipeline re-parse does not imply a full check. No rules
 are automatically rechecked periodically; request `--force` explicitly for global reconciliation.
 `AUD_TASK_RUN_LOG` records the keys flagged as `INSERT_COUNT` and those cleared as
 `UPDATE_COUNT`. Each rule also reports `returned`, `flagged` (new flags), `cleared` and

@@ -160,7 +160,7 @@ outside `MERGE_COMPARE_COLUMNS`. Ordinary unprotected merges can retain nested c
 their whole-row fingerprint stays NULL when a business type cannot be hashed. The first edit,
 lock or upload is refused before writing that target, naming its column and type: cast the
 value to a scalar type in the SELECT. No locked column is omitted from the fingerprint.
-`validate` and pipeline refresh report the same problem earlier for declared columns of
+`validate` and pipeline re-parse report the same problem earlier for declared columns of
 stewardable merge targets.
 
 Stewards can also release an existing row lock and all value locks through a USER upload row

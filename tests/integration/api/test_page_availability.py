@@ -124,7 +124,7 @@ def test_deployment_page_role_matrix(cli_project):
                             continue
                         if not has_role(role, action.role):
                             assert not answer["available"], (role, name, answer)
-                            if name not in (ActionName.GENERATE_DOCS, ActionName.PIPELINE_REFRESH):
+                            if name not in (ActionName.GENERATE_DOCS, ActionName.PIPELINE_REPARSE):
                                 assert str(action.role) in answer["reason"], answer
                         if not answer["available"]:
                             assert answer["reason"], answer

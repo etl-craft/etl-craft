@@ -55,7 +55,7 @@ from etl_craft.services.operations.controls import check_control, control_scope
 from etl_craft.services.operations.documents import DocsInput, require_warehouse_check
 from etl_craft.services.operations.maintenance import RehashInput, require_cloning
 from etl_craft.services.operations.personal import require_local_password
-from etl_craft.services.operations.pipeline_refresh import RefreshInput
+from etl_craft.services.operations.pipeline_reparse import ReparseInput
 from etl_craft.services.operations.pipeline_resume import require_open_pause
 from etl_craft.services.operations.previews import PreviewInput, preview_parts
 from etl_craft.services.operations.recovery import control_effect
@@ -63,7 +63,7 @@ from etl_craft.services.operations.requests import (
     BulkControlRequest,
     CapabilitiesInput,
     ControlRequest,
-    LineageRefreshInput,
+    LineageReparseInput,
     LogInput,
     MarkRequest,
     NoInput,
@@ -586,8 +586,8 @@ def _definition_capabilities(
     pipeline = request.pipeline_code
     selected: dict[ActionName, object] = {
         ActionName.VALIDATE: ValidateInput(),
-        ActionName.PIPELINE_REFRESH: RefreshInput(pipeline_code=pipeline),
-        ActionName.LINEAGE_REFRESH: LineageRefreshInput(),
+        ActionName.PIPELINE_REPARSE: ReparseInput(pipeline_code=pipeline),
+        ActionName.LINEAGE_REPARSE: LineageReparseInput(),
         ActionName.DOCS_VERSION: NoInput(),
         ActionName.GENERATE_DOCS: DocsInput(with_warehouse=request.with_warehouse),
         ActionName.RECONCILE: ReconcileInput(pipeline_code=pipeline),

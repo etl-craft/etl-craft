@@ -70,7 +70,7 @@ from etl_craft.services.operations import (
     models,
     offsets,
     personal,
-    pipeline_refresh,
+    pipeline_reparse,
     previews,
     processes,
     project_health,
@@ -110,7 +110,7 @@ from etl_craft.services.operations.requests import (
     ControlRequest,
     HistoryInput,
     LineageInput,
-    LineageRefreshInput,
+    LineageReparseInput,
     LogInput,
     MarkRequest,
     NoInput,
@@ -217,12 +217,12 @@ _ROWS = (
            GET, f"{API}/health"),
     Action(ActionName.RENAME, renames.rename, renames.RenameInput, renames.RenameResult,
            DEVELOPER, POST, f"{API}/renames", REQUEST, scope=ActionScope.PROJECT),
-    Action(ActionName.PIPELINE_REFRESH, pipeline_refresh.refresh, pipeline_refresh.RefreshInput,
-           pipeline_refresh.RefreshResults, DEVELOPER, POST, f"{API}/pipelines/refresh",
+    Action(ActionName.PIPELINE_REPARSE, pipeline_reparse.reparse, pipeline_reparse.ReparseInput,
+           pipeline_reparse.ReparseResults, DEVELOPER, POST, f"{API}/pipelines/re-parse",
            audit=REQUEST, scope=ActionScope.PIPELINE, long_running=True),
-    Action(ActionName.PIPELINE_REFRESH_HISTORY, pipeline_refresh.history,
-           pipeline_refresh.RefreshInput, pipeline_refresh.RefreshResults, VIEWER, GET,
-           f"{API}/pipeline-refreshes", scope=ActionScope.PIPELINE),
+    Action(ActionName.PIPELINE_REPARSE_HISTORY, pipeline_reparse.history,
+           pipeline_reparse.ReparseInput, pipeline_reparse.ReparseResults, VIEWER, GET,
+           f"{API}/pipeline-reparses", scope=ActionScope.PIPELINE),
     Action(ActionName.PIPELINES, inspect.list_pipelines, TagFilter, models.PipelineListView, VIEWER,
            GET, f"{API}/pipelines",
            scope=ActionScope.PIPELINE),
@@ -375,8 +375,8 @@ _ROWS = (
            ADMIN, POST, f"{API}/groups/members", REQUEST),
     Action(ActionName.GROUP_REMOVE_MEMBER, groups.remove_member, groups.GroupMember, groups.Groups,
            ADMIN, POST, f"{API}/groups/members/remove", REQUEST),
-    Action(ActionName.LINEAGE_REFRESH, diagnostics.refresh_lineage, LineageRefreshInput,
-           diagnostics.LineageView, DEVELOPER, POST, f"{API}/lineage/refresh", REQUEST,
+    Action(ActionName.LINEAGE_REPARSE, diagnostics.reparse_lineage, LineageReparseInput,
+           diagnostics.LineageView, DEVELOPER, POST, f"{API}/lineage/re-parse", REQUEST,
            scope=ActionScope.PIPELINE, long_running=True),
     Action(ActionName.GENERATE_DOCS, documents.generate_docs, documents.DocsInput,
            documents.DocsBuild, DEVELOPER, POST, f"{API}/docs", REQUEST, scope=ActionScope.PROJECT,
@@ -509,14 +509,14 @@ def authorize_action(
     """Check action admission without running the action or recording the request."""
     # Definition availability already checks the password restriction at admission.
     authorize_identity(ctx, action, request, password_checked=snapshot is not None)
-    if action.name == ActionName.PIPELINE_REFRESH and isinstance(
-        request, pipeline_refresh.InternalRefresh
+    if action.name == ActionName.PIPELINE_REPARSE and isinstance(
+        request, pipeline_reparse.InternalReparse
     ):
         return
     authorization.authorize(ctx, action, request, required, snapshot=snapshot)
-    if action.name == ActionName.PIPELINE_REFRESH:
-        assert isinstance(request, pipeline_refresh.RefreshInput)
-        pipeline_refresh.require_refresh_governance(ctx, request)
+    if action.name == ActionName.PIPELINE_REPARSE:
+        assert isinstance(request, pipeline_reparse.ReparseInput)
+        pipeline_reparse.require_reparse_governance(ctx, request)
     if action.name == ActionName.ACCOUNT_DISABLE and isinstance(request, accounts.AccountName):
         accounts.require_other_account(ctx, request)
 
@@ -596,7 +596,7 @@ def invoke(ctx: OperationContext, name: ActionName, request: object) -> object:
 def project_settings(ctx: OperationContext, name: ActionName, request: object) -> OperationContext:
     """Use approved project connections for operations that inspect warehouse resources."""
     if ctx.transport == Transport.LOCAL and (
-        not ctx.config.artifacts.store or name in (ActionName.PIPELINE_REFRESH, ActionName.RENAME)
+        not ctx.config.artifacts.store or name in (ActionName.PIPELINE_REPARSE, ActionName.RENAME)
     ):
         return ctx
     if (
@@ -612,10 +612,10 @@ def project_settings(ctx: OperationContext, name: ActionName, request: object) -
         ActionName.UPLOAD,
         ActionName.RUN,
         ActionName.VALIDATE,
-        ActionName.PIPELINE_REFRESH,
+        ActionName.PIPELINE_REPARSE,
         ActionName.RENAME,
         ActionName.LINEAGE,
-        ActionName.LINEAGE_REFRESH,
+        ActionName.LINEAGE_REPARSE,
         ActionName.CATALOG_GAPS,
         ActionName.REHASH,
         ActionName.RECONCILE,

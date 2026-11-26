@@ -16,7 +16,7 @@ from etl_craft.core.full_refresh import FullRefresh
 from etl_craft.engine import runlog, standing_pauses
 from etl_craft.engine.metrics import lifecycle
 from etl_craft.engine.queries import statement
-from etl_craft.engine.refreshes import admitted
+from etl_craft.engine.reparses import admitted
 
 
 @dataclass(frozen=True)
@@ -44,9 +44,9 @@ def create(conn: Connection, pipeline_id: int, actor: Actor, options: RunCreatio
     _validate(pipeline_id, status, trigger_kind)
     standing_pauses.lock(conn, pipeline_id)
     _upload_admission(conn, pipeline_id, options)
-    refresh = (
+    reparse = (
         admitted(conn, pipeline_id)
-        if conn.engine.get_execution_options().get("refresh_required")
+        if conn.engine.get_execution_options().get("reparse_required")
         and status != RunStatus.SKIPPED
         else None
     )
@@ -59,10 +59,10 @@ def create(conn: Connection, pipeline_id: int, actor: Actor, options: RunCreatio
                 {
                     **actor_parameters(actor),
                     "pipeline_id": pipeline_id,
-                    "use_refresh": refresh is not None,
-                    "refresh_snapshot": None if refresh is None else refresh[0],
-                    "refresh_version": None if refresh is None else refresh[1],
-                    "refresh_bundle": None if refresh is None else refresh[2],
+                    "use_reparse": reparse is not None,
+                    "reparse_snapshot": None if reparse is None else reparse[0],
+                    "reparse_version": None if reparse is None else reparse[1],
+                    "reparse_bundle": None if reparse is None else reparse[2],
                     "use_bundles": bool(
                         conn.engine.get_execution_options().get("bundles_enabled", False)
                     ),

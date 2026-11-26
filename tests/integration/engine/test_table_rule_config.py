@@ -136,10 +136,10 @@ def test_rule_level_refused_by_apply_validate_and_refresh(
         ActionName.PROJECT_SET,
         project=ctx.project or ctx.config.project,
         governance="RELAXED",
-        reason="Exercise standalone refresh",
+        reason="Exercise standalone re-parse",
     )
-    refreshed = act(ctx, ActionName.PIPELINE_REFRESH, pipeline_code="P")
-    assert refreshed.failed and any(expected in f.message for f in refreshed.refreshes[0].findings)
+    reparsed = act(ctx, ActionName.PIPELINE_REPARSE, pipeline_code="P")
+    assert reparsed.failed and any(expected in f.message for f in reparsed.reparses[0].findings)
 
 
 def test_partial_rule_level_updates_keep_id_and_omitted_level(rule_project, tmp_path):
@@ -237,7 +237,7 @@ def test_table_reject_stops_downstream_and_records_the_attempt_log(rule_project)
 )
 def test_table_output_validation_findings_keep_last_good_version(rule_project, sql, expected):
     from etl_craft.core.enums import RunStatus
-    from etl_craft.engine.refreshes import admitted
+    from etl_craft.engine.reparses import admitted
 
     ctx, pipeline, _, rule = rule_project
     act(
@@ -245,11 +245,11 @@ def test_table_output_validation_findings_keep_last_good_version(rule_project, s
         ActionName.PROJECT_SET,
         project=ctx.project or ctx.config.project,
         governance="RELAXED",
-        reason="Exercise standalone refresh",
+        reason="Exercise standalone re-parse",
     )
-    good = act(ctx, ActionName.PIPELINE_REFRESH, pipeline_code="P")
-    assert not good.failed, good.refreshes[0].findings
-    ctx.engine.update_execution_options(refresh_required=True)
+    good = act(ctx, ActionName.PIPELINE_REPARSE, pipeline_code="P")
+    assert not good.failed, good.reparses[0].findings
+    ctx.engine.update_execution_options(reparse_required=True)
     with ctx.engine.begin() as conn:
         conn.execute(
             text(
@@ -259,10 +259,10 @@ def test_table_output_validation_findings_keep_last_good_version(rule_project, s
         )
     findings = validate(ctx.engine, ctx.config).findings
     assert any(expected in f.message and "table check" in f.message for f in findings)
-    failed = act(ctx, ActionName.PIPELINE_REFRESH, pipeline_code="P")
-    assert failed.failed and any(expected in f.message for f in failed.refreshes[0].findings)
+    failed = act(ctx, ActionName.PIPELINE_REPARSE, pipeline_code="P")
+    assert failed.failed and any(expected in f.message for f in failed.reparses[0].findings)
     with ctx.engine.connect() as conn:
-        assert admitted(conn, pipeline)[1] == good.refreshes[0].metadata_version
+        assert admitted(conn, pipeline)[1] == good.reparses[0].metadata_version
     done = act(ctx, ActionName.RUN, pipeline_code="P", reason="test requested run")
     assert done.status == RunStatus.SUCCESS, done.message
 
@@ -384,9 +384,9 @@ def test_table_refresh_checks_explicit_output_before_the_target_is_created(rule_
             ActionName.PROJECT_SET,
             project=ctx.project or ctx.config.project,
             governance="RELAXED",
-            reason="Exercise standalone refresh",
+            reason="Exercise standalone re-parse",
         )
-        result = act(ctx, ActionName.PIPELINE_REFRESH, pipeline_code="P")
-        assert not result.failed, result.refreshes[0].findings
+        result = act(ctx, ActionName.PIPELINE_REPARSE, pipeline_code="P")
+        assert not result.failed, result.reparses[0].findings
     finally:
         warehouse.dispose()

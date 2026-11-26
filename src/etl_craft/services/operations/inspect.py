@@ -397,8 +397,8 @@ def get_pipeline(ctx: OperationContext, request: PipelineInput) -> PipelineView:
 
 
 def _pinned(ctx: OperationContext) -> bool:
-    """Whether schedules read the refreshed pipeline definitions, as the controller does."""
-    return bool(ctx.engine.get_execution_options().get("refresh_required"))
+    """Whether schedules read the re-parsed pipeline definitions, as the controller does."""
+    return bool(ctx.engine.get_execution_options().get("reparse_required"))
 
 
 def get_run(ctx: OperationContext, request: RunId) -> RunView:

@@ -53,7 +53,7 @@ etl-craft deploy --project SALES --project-dir ./sales-project
 Review the plan before applying it. `--plan` checks the uploaded files, validates and rolls
 back config changes, and lists seed tables; it publishes nothing and changes nothing.
 Deploy uploads the project, publishes a bundle to the configured store, applies config files,
-loads seeds and refreshes pipelines in that order. It stops at the first failure. A project
+loads seeds and re-parses pipelines in that order. It stops at the first failure. A project
 without `config/` skips that step. See [configuration files](configuration-files.md) for the
 CSV format and merge rules.
 

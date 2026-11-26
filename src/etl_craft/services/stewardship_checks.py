@@ -1,4 +1,4 @@
-"""Stewardable graph and managed-write checks shared by validate and refresh."""
+"""Stewardable graph and managed-write checks shared by validate and re-parse."""
 
 from collections.abc import Sequence
 

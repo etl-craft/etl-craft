@@ -32,7 +32,7 @@ def documentation_hash(text: str) -> str:
     return sha256_hex(text.strip().encode())
 
 
-def refresh_versions(conn: Connection, *, record: bool = True) -> list[DocumentationVersion]:
+def reparse_versions(conn: Connection, *, record: bool = True) -> list[DocumentationVersion]:
     """Return every documented task's version, recording a new one where the text changed.
 
     Without ``record`` nothing is written, and a changed text reports its next version.

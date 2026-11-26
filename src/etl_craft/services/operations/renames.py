@@ -1,4 +1,4 @@
-"""Attributed code changes preserve executable identity and refresh in one transaction."""
+"""Attributed code changes preserve executable identity and re-parse in one transaction."""
 
 import json
 from dataclasses import dataclass
@@ -21,9 +21,9 @@ from etl_craft.services.config_renames import mentioned_files
 from etl_craft.services.operations.authorization import allows
 from etl_craft.services.operations.context import OperationContext
 from etl_craft.services.operations.permissions import require_project
-from etl_craft.services.operations.pipeline_refresh import RefreshInput, refresh_on
+from etl_craft.services.operations.pipeline_reparse import ReparseInput, reparse_on
 from etl_craft.services.operations.requests import Request, optional_text, require_text
-from etl_craft.services.refresh_models import PipelineRefresh
+from etl_craft.services.reparse_models import PipelineReparse
 from etl_craft.warehouse.connection import single_writer_lock
 
 
@@ -57,12 +57,12 @@ class RenameResult:
     old_code: str
     new_code: str
     config_files: tuple[str, ...]
-    refreshes: tuple[PipelineRefresh, ...]
+    reparses: tuple[PipelineReparse, ...]
     message: str = "References in team-owned CFG_ tables and team SQL are the team's to update."
 
 
 def rename(ctx: OperationContext, request: RenameInput) -> RenameResult:
-    """Rename only quiescent metadata; references and passing refreshes commit with it."""
+    """Rename only quiescent metadata; references and passing re-parses commit with it."""
     check_reason(request.reason)
     for_engine(ctx.engine).artifact_location(ctx.config)
     old = request.task_code or request.pipeline_code
@@ -79,14 +79,14 @@ def rename(ctx: OperationContext, request: RenameInput) -> RenameResult:
             ):
                 pipeline_id = _quiescent_pipeline(conn, ctx, request)
                 task_id, affected = _change(conn, ctx, request, pipeline_id)
-                refreshed = refresh_on(conn, ctx, RefreshInput(), pipeline_ids=affected)
-                if refreshed.failed:
+                reparsed = reparse_on(conn, ctx, ReparseInput(), pipeline_ids=affected)
+                if reparsed.failed:
                     raise RunRefusedError(
-                        f"pipeline {request.pipeline_code!r}: rename refresh failed; expected "
+                        f"pipeline {request.pipeline_code!r}: rename re-parse failed; expected "
                         "passing affected definitions; correct these findings and retry: "
                         + "; ".join(
                             f"{f.file}:{f.line}: {f.value}: {f.message}; {f.remedy}"
-                            for r in refreshed.refreshes
+                            for r in reparsed.reparses
                             for f in r.findings
                             if f.failed
                         )
@@ -99,7 +99,7 @@ def rename(ctx: OperationContext, request: RenameInput) -> RenameResult:
         old,
         request.to,
         files,
-        refreshed.refreshes,
+        reparsed.reparses,
     )
 
 
@@ -152,7 +152,7 @@ def _change(
     if external:
         raise RunRefusedError(
             f"pipeline {request.pipeline_code!r}: cross-project references "
-            f"{[(r.project_id, r.pipeline_code) for r in external]!r} cannot be refreshed "
+            f"{[(r.project_id, r.pipeline_code) for r in external]!r} cannot be re-parsed "
             "from this project folder; expected safely refreshable references; coordinate "
             "removing those dependencies before renaming and restore them afterward"
         )

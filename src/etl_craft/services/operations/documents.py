@@ -14,7 +14,7 @@ from etl_craft.engine.audit import ActionRequest, current_request
 from etl_craft.engine.queries import statement
 from etl_craft.services.catalog.collect import build_catalog
 from etl_craft.services.catalog.site import write_site
-from etl_craft.services.documentation import DocumentationVersion, refresh_versions
+from etl_craft.services.documentation import DocumentationVersion, reparse_versions
 from etl_craft.services.operations.context import OperationContext
 from etl_craft.services.operations.permissions import pipeline_access, visible_dependents
 from etl_craft.services.operations.requests import NoInput, Request
@@ -150,7 +150,7 @@ def check_versions(ctx: OperationContext, request: NoInput) -> DocsVersions:
         access = pipeline_access(conn, ctx)
         return DocsVersions(
             tuple(
-                v for v in refresh_versions(conn, record=False) if access.permits(v.pipeline_code)
+                v for v in reparse_versions(conn, record=False) if access.permits(v.pipeline_code)
             )
         )
 
@@ -158,4 +158,4 @@ def check_versions(ctx: OperationContext, request: NoInput) -> DocsVersions:
 def record_versions(ctx: OperationContext, request: NoInput) -> DocsVersions:
     """Record a new version of each changed task documentation."""
     with ctx.engine.begin() as conn:
-        return DocsVersions(tuple(refresh_versions(conn, record=True)))
+        return DocsVersions(tuple(reparse_versions(conn, record=True)))

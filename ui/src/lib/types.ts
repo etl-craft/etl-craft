@@ -461,8 +461,8 @@ export interface TaskLineage {
   cached: boolean;
 }
 
-/** What a lineage refresh answers: every task traced again, and which of them could not be. */
-export interface LineageRefresh {
+/** What a lineage re-parse answers: every task traced again, and which of them could not be. */
+export interface LineageReparse {
   lineages: TaskLineage[];
   failed: boolean;
 }

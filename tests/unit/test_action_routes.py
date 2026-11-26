@@ -199,10 +199,10 @@ def test_a_malformed_value_is_refused_by_name_before_the_operation_runs(server, 
 def operations(monkeypatch):
     """Every action's operation replaced by one that records it ran."""
     from etl_craft.core.governance import ProjectPolicy
-    from etl_craft.services.operations import authorization, governance, pipeline_refresh
+    from etl_craft.services.operations import authorization, governance, pipeline_reparse
 
     monkeypatch.setattr(governance, "project_policy", lambda ctx, request: ProjectPolicy())
-    monkeypatch.setattr(pipeline_refresh, "require_refresh_governance", lambda ctx, request: None)
+    monkeypatch.setattr(pipeline_reparse, "require_reparse_governance", lambda ctx, request: None)
     ran = []
     # Transport tests isolate identity lookup; grant resolution is exercised on both Engine DBs.
     monkeypatch.setattr(actions, "_request_context", lambda ctx, name, request: ctx)

@@ -677,11 +677,11 @@ def test_bounded_source_findings_are_shared_by_validate_refresh_and_config_apply
         ActionName.PROJECT_SET,
         project=ctx.project or ctx.config.project,
         governance="RELAXED",
-        reason="Exercise standalone refresh",
+        reason="Exercise standalone re-parse",
     )
-    refresh = act(ctx, ActionName.PIPELINE_REFRESH, pipeline_code="SALES").refreshes[0]
-    assert refresh.status == RunStatus.FAILED
-    assert any(f.failed and "WATERMARK_SOURCE_PIPELINES" in f.message for f in refresh.findings)
+    reparse = act(ctx, ActionName.PIPELINE_REPARSE, pipeline_code="SALES").reparses[0]
+    assert reparse.status == RunStatus.FAILED
+    assert any(f.failed and "WATERMARK_SOURCE_PIPELINES" in f.message for f in reparse.findings)
     with engine.begin() as conn:
         conn.execute(
             text(
@@ -811,7 +811,7 @@ def test_a_pipeline_that_takes_uploads_needs_one_validation_task(project):
     assert any("FILE_VALIDATION tasks=0 on a pipeline that takes uploads" in m for m in messages)
 
 
-@pytest.mark.parametrize("entrypoint", ["validate", "refresh"])
+@pytest.mark.parametrize("entrypoint", ["validate", "re-parse"])
 def test_stewardable_nested_merge_columns_fail_early_in_validate_and_refresh(project, entrypoint):
     from etl_craft.core.actor import SYSTEM_ACTOR
     from etl_craft.core.enums import ActionName, ApiRole, RunStatus
@@ -851,9 +851,9 @@ def test_stewardable_nested_merge_columns_fail_early_in_validate_and_refresh(pro
             ActionName.PROJECT_SET,
             project=ctx.project or ctx.config.project,
             governance="RELAXED",
-            reason="Exercise standalone refresh",
+            reason="Exercise standalone re-parse",
         )
-        result = act(ctx, ActionName.PIPELINE_REFRESH).refreshes[0]
+        result = act(ctx, ActionName.PIPELINE_REPARSE).reparses[0]
         assert result.status == RunStatus.FAILED
         messages = [finding.message for finding in result.findings]
     for part in (
@@ -866,7 +866,7 @@ def test_stewardable_nested_merge_columns_fail_early_in_validate_and_refresh(pro
         assert any(part in message for message in messages), messages
 
 
-@pytest.mark.parametrize("entrypoint", ["validate", "refresh"])
+@pytest.mark.parametrize("entrypoint", ["validate", "re-parse"])
 @pytest.mark.parametrize("problem", ["target", "stage"])
 def test_locked_upload_control_refused_early_by_validate_and_refresh(project, entrypoint, problem):
     from etl_craft.core.actor import SYSTEM_ACTOR
@@ -912,9 +912,9 @@ def test_locked_upload_control_refused_early_by_validate_and_refresh(project, en
             ActionName.PROJECT_SET,
             project=ctx.project or ctx.config.project,
             governance="RELAXED",
-            reason="Exercise standalone refresh",
+            reason="Exercise standalone re-parse",
         )
-        result = act(ctx, ActionName.PIPELINE_REFRESH).refreshes[0]
+        result = act(ctx, ActionName.PIPELINE_REPARSE).reparses[0]
         assert result.status == RunStatus.FAILED
         messages = [finding.message for finding in result.findings]
     parts = (

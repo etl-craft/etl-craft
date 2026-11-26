@@ -8,7 +8,7 @@ from etl_craft.core.enums import RunStatus
 
 
 @dataclass(frozen=True)
-class RefreshFinding:
+class ReparseFinding:
     """A file location where applicable, or an exact Engine DB metadata identity."""
 
     file: str
@@ -20,31 +20,31 @@ class RefreshFinding:
 
 
 @dataclass(frozen=True)
-class PipelineRefresh:
+class PipelineReparse:
     """One durable result; the bundle and metadata version identify the checked bytes."""
 
-    refresh_id: int
+    reparse_id: int
     pipeline_code: str
-    refreshed_at: datetime
+    reparsed_at: datetime
     actor: str
     status: RunStatus
     metadata_version: str
     bundle_id: str | None
-    findings: tuple[RefreshFinding, ...]
+    findings: tuple[ReparseFinding, ...]
     changed: bool = True
     changes: tuple[str, ...] = ()
-    previous_refreshed_at: datetime | None = None
+    previous_reparsed_at: datetime | None = None
     previous_status: RunStatus | None = None
 
 
 @dataclass(frozen=True)
-class RefreshResults:
-    """Project refresh results, or the recorded history for a pipeline."""
+class ReparseResults:
+    """Project re-parse results, or the recorded history for a pipeline."""
 
-    SCHEMA: ClassVar[str] = "etl-craft/pipeline-refresh/1"
-    refreshes: tuple[PipelineRefresh, ...]
+    SCHEMA: ClassVar[str] = "etl-craft/pipeline-reparse/1"
+    reparses: tuple[PipelineReparse, ...]
 
     @property
     def failed(self) -> bool:
         """Whether any checked pipeline failed validation."""
-        return any(result.status == RunStatus.FAILED for result in self.refreshes)
+        return any(result.status == RunStatus.FAILED for result in self.reparses)

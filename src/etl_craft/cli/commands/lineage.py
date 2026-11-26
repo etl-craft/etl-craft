@@ -10,7 +10,7 @@ from etl_craft.core.enums import ActionName, LineageDirection
 from etl_craft.core.errors import ExitCode
 from etl_craft.services.lineage import COPY, Edge, TaskLineage
 from etl_craft.services.operations.diagnostics import LineageView
-from etl_craft.services.operations.requests import LineageInput, LineageRefreshInput
+from etl_craft.services.operations.requests import LineageInput, LineageReparseInput
 
 
 def _configure(parser: argparse.ArgumentParser) -> None:
@@ -46,7 +46,10 @@ def _configure(parser: argparse.ArgumentParser) -> None:
     )
     parser.add_argument("--depth", type=int, help="Stop after this many steps.")
     parser.add_argument(
-        "--refresh", action="store_true", help="Work every task's lineage out again."
+        "--re-parse",
+        dest="reparse",
+        action="store_true",
+        help="Work every task's lineage out again.",
     )
     parser.add_argument(
         "--strict", action="store_true", help="Exit 1 when any SQL task cannot be traced."
@@ -54,8 +57,8 @@ def _configure(parser: argparse.ArgumentParser) -> None:
 
 
 def _run(args: argparse.Namespace, out: Output) -> int:
-    if args.refresh:
-        done = call(args, ActionName.LINEAGE_REFRESH, request_from(args, LineageRefreshInput))
+    if args.reparse:
+        done = call(args, ActionName.LINEAGE_REPARSE, request_from(args, LineageReparseInput))
     else:
         done = call(args, ActionName.LINEAGE, request_from(args, LineageInput))
     assert isinstance(done, LineageView)
@@ -122,5 +125,5 @@ COMMAND = Command(
     help="Show where tables and columns come from and where they go.",
     configure=_configure,
     run=_run,
-    actions=(ActionName.LINEAGE, ActionName.LINEAGE_REFRESH),
+    actions=(ActionName.LINEAGE, ActionName.LINEAGE_REPARSE),
 )
