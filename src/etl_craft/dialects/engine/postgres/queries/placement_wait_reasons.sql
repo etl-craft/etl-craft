@@ -8,8 +8,8 @@ WITH scope AS not materialized (
  JOIN CFG_PIPELINES p ON p.PIPELINE_ID=r.PIPELINE_ID
  JOIN CFG_PROJECTS project ON project.PROJECT_ID=p.PROJECT_ID
  LEFT JOIN AUD_PROJECT_BUNDLES b ON b.BUNDLE_ID=r.BUNDLE_ID
-)
-UPDATE AUD_TASK_ATTEMPTS AS a SET ERROR_MESSAGE=CASE
+), reasons AS (
+SELECT a.ATTEMPT_ID AS attempt_id, CASE
 WHEN NOT EXISTS (SELECT 1 FROM CFG_POOLS p WHERE p.POOL_NAME='default')
 THEN 'CFG_POOLS.default is missing; expected the deployment admission row; restore default using etl-craft pool add --name default --reason REASON'
 WHEN NOT EXISTS (SELECT 1 FROM CFG_POOLS p WHERE p.POOL_NAME=a.POOL AND p.ACTIVE_FLAG='Y')
@@ -35,6 +35,13 @@ ELSE 'needs ' || COALESCE((SELECT v.PARAMETER_VALUE FROM CFG_TASK_PARAMETERS v J
  || ' and ' || CAST(:cpu_free AS varchar) || ' CPU free of ' || CAST(:cpu_capacity AS varchar)
  || '; ' || a.SLOT_KIND || ' slots ' || CAST(CASE WHEN a.SLOT_KIND='python' THEN :python_free_slots ELSE :warehouse_free_slots END AS varchar)
  || ' free of ' || CAST(CASE WHEN a.SLOT_KIND='python' THEN :python_capacity_slots ELSE :warehouse_capacity_slots END AS varchar)
- || '. Add capacity or adjust task requests or agent slots' END
+ || '. Add capacity or adjust task requests or agent slots' END AS reason
+FROM AUD_TASK_ATTEMPTS a
 WHERE a.STATUS='QUEUED' AND a.OWNER_ID IS NULL
 AND (CAST(:attempt_id AS bigint) IS NULL OR a.ATTEMPT_ID=:attempt_id) AND (CAST(:pool AS varchar) IS NULL OR a.POOL=:pool)
+)
+UPDATE AUD_TASK_ATTEMPTS SET ERROR_MESSAGE=(
+ SELECT w.reason FROM reasons w WHERE w.attempt_id=AUD_TASK_ATTEMPTS.ATTEMPT_ID)
+WHERE ATTEMPT_ID IN (
+ SELECT w.attempt_id FROM reasons w JOIN AUD_TASK_ATTEMPTS c ON c.ATTEMPT_ID=w.attempt_id
+ WHERE c.ERROR_MESSAGE IS DISTINCT FROM w.reason)

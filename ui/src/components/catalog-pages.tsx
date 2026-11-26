@@ -496,7 +496,7 @@ export function TableObject({ code, doc, name, tab, onTab }: { code: string; doc
         <TableData code={code} table={table.name} />
       ) : on === "lineage" ? (
         <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-2">
-          <div className="flex shrink-0 flex-wrap items-end gap-3">
+          <div className="flex shrink-0 flex-wrap items-center gap-3">
             <SelectField compact label="Direction" value={direction} onChange={(v) => setDirection(v as typeof direction)}>
               <option value="both">Upstream and downstream</option>
               <option value="up">Upstream only</option>
@@ -540,7 +540,7 @@ export function TableObject({ code, doc, name, tab, onTab }: { code: string; doc
       ) : on === "columns" ? (
         <Section
           title="Column sources"
-          aside={<div className="flex min-w-0 max-w-full flex-wrap items-end gap-3 [&_label]:max-w-full [&_select]:max-w-full">
+          aside={<div className="flex min-w-0 max-w-full flex-wrap items-center gap-3 [&_label]:max-w-full [&_select]:max-w-full">
             {writers.length>1?<SelectField compact label="Writing task" value={writer} onChange={setWriter}><option value="">All writing tasks</option>{writers.map(task=><option key={task.label} value={task.label}>{task.label}</option>)}</SelectField>:null}
             <SelectField compact label="Column" value={column} onChange={setColumn}>
               <option value="">All columns</option>
@@ -679,7 +679,7 @@ export function TablesList({ code, doc }: { code: string; doc: CatalogDoc }) {
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 p-4">
       <Title icon={Table2} name="All tables" />
-      <div className="flex flex-wrap items-end gap-3">
+      <div className="flex flex-wrap items-center gap-3">
         <label className="grid gap-1 text-xs text-muted">
           Find a table
           <input type="search" value={text} onChange={(event) => setText(event.target.value)} placeholder="Name contains…" className="h-control w-64 rounded-md border border-border-strong bg-surface px-2 text-sm text-fg" />

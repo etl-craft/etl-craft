@@ -151,12 +151,7 @@ def configure(
     Returns the installed handler. Calling it again replaces the handler it installed before.
     """
     numeric_level = parse_level(level)
-    formatter = (
-        JsonFormatter() if parse_format(fmt) is LogFormat.JSON else logging.Formatter(TEXT_FORMAT)
-    )
-    formatter.converter = time.gmtime
-    formatter.default_time_format = "%Y-%m-%dT%H:%M:%S"
-    formatter.default_msec_format = "%s.%03dZ"
+    formatter = _formatter(parse_format(fmt))
     logger = logging.getLogger(ROOT_LOGGER)
     for existing in [h for h in logger.handlers if isinstance(h, _ConfiguredHandler)]:
         logger.removeHandler(existing)
@@ -166,6 +161,26 @@ def configure(
     logger.addHandler(handler)
     logger.setLevel(numeric_level)
     return handler
+
+
+def _formatter(fmt: LogFormat) -> logging.Formatter:
+    formatter = JsonFormatter() if fmt is LogFormat.JSON else logging.Formatter(TEXT_FORMAT)
+    formatter.converter = time.gmtime
+    formatter.default_time_format = "%Y-%m-%dT%H:%M:%S"
+    formatter.default_msec_format = "%s.%03dZ"
+    return formatter
+
+
+def text_line(name: str, message: str) -> str:
+    """Format one INFO line exactly as a configured text handler would, newline included.
+
+    For a process that writes into another process's log file before that process starts.
+    """
+    record = logging.makeLogRecord(
+        {"name": name, "levelno": logging.INFO, "levelname": "INFO", "msg": message}
+    )
+    ContextFilter().filter(record)
+    return _formatter(LogFormat.TEXT).format(record) + "\n"
 
 
 @contextmanager

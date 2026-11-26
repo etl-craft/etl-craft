@@ -6,7 +6,8 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from etl_craft.cli import build_parser, main
+from etl_craft.cli import main
+from etl_craft.cli.app import build_parser
 from etl_craft.cli.commands import Command
 from etl_craft.core.enums import ActionName, ControlAction
 from etl_craft.core.errors import ExitCode
@@ -142,7 +143,7 @@ def test_retry_due_and_settled_state_take_precedence(snapshot):
 def test_optional_command_configuration_is_built_and_runs(capsys, monkeypatch):
     from contextlib import nullcontext
 
-    monkeypatch.setattr("etl_craft.cli.access_context", lambda args: nullcontext())
+    monkeypatch.setattr("etl_craft.cli.app.access_context", lambda args: nullcontext())
     command = Command("plain", "No command options.", run=lambda args, out: 0)
     assert build_parser([command]).parse_args(["plain"]).handler is command.run
     assert main(["plain"], commands=[command]) == 0

@@ -3,7 +3,7 @@
 import pytest
 import yaml
 
-from etl_craft.cli import build_parser
+from etl_craft.cli.app import build_parser
 from etl_craft.config import load_config
 from etl_craft.core.errors import ConfigurationError
 

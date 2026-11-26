@@ -60,7 +60,11 @@ def test_agent_runs_its_pinned_bundle_without_engine_or_store_credentials(
                     "FROM AUD_TASK_ATTEMPTS"
                 )
             ).one()
-            logs = conn.execute(text("SELECT CONTENT AS content FROM AUD_ATTEMPT_LOG_CHUNKS")).all()
+            logs = conn.execute(
+                text(
+                    "SELECT CONTENT AS content FROM AUD_ATTEMPT_LOG_CHUNKS ORDER BY SEQUENCE_NUMBER"
+                )
+            ).all()
         if fan_out:
             with p.engine.connect() as conn:
                 items = conn.execute(
@@ -74,7 +78,13 @@ def test_agent_runs_its_pinned_bundle_without_engine_or_store_credentials(
         assert row.target_count == 7
         code, output = p.run("agent", "health", "--project-dir", str(agent_dir))
         assert code == 0, output
-        assert "project copy ran" in "".join(r.content for r in logs)
+        text_log = "".join(r.content for r in logs)
+        assert "project copy ran" in text_log
+        # The agent's own line comes first, before the task process has imported anything.
+        assert " INFO etl_craft.agent.loop: attempt " in logs[0].content.splitlines()[0]
+        assert "claimed by agent" in logs[0].content and "starting the task process" in text_log
+        order = [text_log.index(s) for s in ("loading project bundle", "loaded project bundle in")]
+        assert order == sorted(order) and order[-1] < text_log.index("running the PYTHON handler")
         agent.signal(signal.SIGTERM)
         assert agent.wait(timeout=40) == 0, agent.output
         p.wait_for("SELECT STATUS FROM AUD_AGENTS", expected="GONE")
@@ -757,6 +767,18 @@ def test_agent_terminal_exit_records_real_evidence(cluster, monkeypatch, outcome
         ).scalar_one()
     assert {r["kind"] for r in evidence} == {"PROCESS", "QUERIES"}
     assert all(r["evidence_kind"] == "VERIFIED" for r in evidence)
+    if outcome == "FAILED":
+        with p.engine.connect() as conn:
+            log = "".join(
+                conn.execute(
+                    text(
+                        "SELECT CONTENT AS content FROM AUD_ATTEMPT_LOG_CHUNKS "
+                        "ORDER BY SEQUENCE_NUMBER"
+                    )
+                ).scalars()
+            )
+        assert "ERROR etl_craft.agent.child: agent task failed" in log, log
+        assert "PermanentError: deliberate failed writer" in log, log
     assert attempt.pid and attempt.birth and attempt.instance == registered
     agent.signal(signal.SIGTERM)
     assert agent.wait(timeout=40) == 0, agent.output + controller.output

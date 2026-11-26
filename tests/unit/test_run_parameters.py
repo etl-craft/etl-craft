@@ -38,7 +38,7 @@ def test_run_parameter_refusals_explain_the_input_and_remedy(values, parts):
 
 
 def test_cli_retains_override_assignments_for_the_shared_operation():
-    from etl_craft.cli import build_parser
+    from etl_craft.cli.app import build_parser
 
     args = build_parser().parse_args(
         ["run", "--pipeline-code", "P", "--param", "load.INPUT_PARAMS={}", "--request-key", "one"]

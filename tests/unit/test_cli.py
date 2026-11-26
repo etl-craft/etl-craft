@@ -21,7 +21,7 @@ pytestmark = pytest.mark.unit
 @pytest.fixture(autouse=True)
 def handler_boundary(monkeypatch):
     # These tests supply synthetic commands and isolate parser, dispatch and error rendering.
-    monkeypatch.setattr("etl_craft.cli.access_context", lambda args: nullcontext())
+    monkeypatch.setattr("etl_craft.cli.app.access_context", lambda args: nullcontext())
 
 
 def test_version_flag_prints_the_package_version(capsys):
