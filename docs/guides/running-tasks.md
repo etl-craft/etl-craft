@@ -152,12 +152,22 @@ the task's process wrote: etl-craft's own log records, and anything a script pri
 Every etl-craft record in it names the pipeline, task, run and attempt:
 
 ```
-2026-09-25T10:15:02.114Z INFO etl_craft.execution.child [task_run_id=412 pipeline=SALES_DAILY task=load_orders pipeline_run_id=97 attempt=2]: running the SQL handler
+2026-09-25T10:15:02.114Z INFO etl_craft.handlers.task_log [task_run_id=412 pipeline=SALES_DAILY task=load_orders pipeline_run_id=97 attempt=2]: task SALES_DAILY.load_orders: try 2, attempt 1033, SQL handler, on host etl-01
 ```
+
+Every attempt log opens with the same block: the try, attempt and host; the pipeline run, its
+run date and refresh type; the warehouse; and each task parameter. Parameters a team names in
+`Redaction.Sensitive_patterns` show as `[REDACTED]`, and `INPUT_PARAMS` lists its keys only,
+since its values are bound into SQL. A SQL task then logs each step with the statement it runs
+and the time it took, the watermark window, the ROW_IDs it reserved, and each business rule's
+newly flagged keys (the first 20; `AUD_` tables hold them all). The log ends with the outcome:
+`task succeeded in <seconds>` with the counts, or `task failed after <seconds>` with the failure
+class, its source and the error, whose message names the remedy. A failed statement is logged
+whole just above it.
 
 `--log-format json` writes the same records as one JSON object per line, with those names as
 fields. Text timestamps are UTC with millisecond precision and a `Z` suffix. `run` shows WARNING and above by default;
-use `--log-level INFO` for terminal progress or `--log-level DEBUG` for the SQL each action runs.
+use `--log-level INFO` for terminal progress and the SQL each action runs.
 The quiet terminal default retains INFO records in child attempt logs. An explicit log level
 applies to both the terminal and child logs.
 Other commands retain their INFO default.

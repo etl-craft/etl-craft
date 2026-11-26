@@ -341,3 +341,47 @@ def test_missing_script_bind_is_permanent_and_has_no_warehouse_effect(project):
             )
     finally:
         warehouse.dispose()
+
+
+def test_a_failing_sql_task_log_explains_the_failure(project):
+    engine, config = project
+    warehouse = build_warehouse_engine(config)
+    try:
+        with warehouse.begin() as conn:
+            conn.exec_driver_sql("CREATE TABLE main.source (id INTEGER)")
+            conn.exec_driver_sql("INSERT INTO main.source VALUES (7)")
+    finally:
+        warehouse.dispose()
+    with engine.begin() as conn:
+        pipeline = add_pipeline(conn, "P")
+        for code, column in (("good", "id"), ("bad", "missing_column")):
+            add_task(
+                conn,
+                pipeline,
+                code,
+                Handler.SQL,
+                SQL_ACTION="CREATE_TABLE",
+                TARGET_OBJECT=f"warehouse.main.{code}_target",
+                SELECT_QUERY=f"SELECT {column} FROM main.source",
+                RETRY_ON="NONE",
+            )
+    assert run_pipeline(engine, config, "P").status == RunStatus.FAILED
+    good, bad = (
+        next(config.log_dir.glob(f"project-1/P/run-*/{code}.attempt-1.log")).read_text("utf-8")
+        for code in ("good", "bad")
+    )
+    for log in (good, bad):
+        assert ": try 1, attempt " in log and "SQL handler, on host " in log
+        assert "pipeline run " in log and " as of " in log and "warehouse: DuckDB" in log
+        assert "parameter SQL_ACTION = CREATE_TABLE" in log
+        assert "warehouse.warehouse." not in log
+    # Each step shows its statement, then its timing; the outcome closes the log.
+    assert "SELECT id FROM main.source" in good
+    assert "CREATE_TABLE warehouse.main.good_target from SELECT_QUERY" in good
+    assert "task succeeded in " in good
+    # A failure names the failing statement, the database's error, the remedy and its class.
+    failing = bad.split("stage the SELECT failed; the statement was:\n", 1)[1]
+    assert failing.splitlines()[0].endswith("AS SELECT missing_column FROM main.source")
+    assert "missing_column" in bad.split("task failed after ", 1)[1]
+    assert "correct the task's SQL or the objects it reads" in bad
+    assert "PERMANENT failure" in bad

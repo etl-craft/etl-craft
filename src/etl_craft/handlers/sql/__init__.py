@@ -57,7 +57,7 @@ def run(context: TaskContext, engine_db: Engine | TaskStore) -> HandlerResult:
     logger.info(
         "%s %s from %s on %s",
         task.action,
-        f"{catalog}.{task.target_object}",
+        qualify(task.target_object, catalog),
         task.source,
         dialect.spec.display_name,
     )

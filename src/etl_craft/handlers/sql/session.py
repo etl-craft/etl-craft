@@ -40,6 +40,18 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 ROW_ID_COLUMN = "ROW_ID"
+# A statement longer than this (a SELECT with thousands of flagged keys inlined) is cut in the
+# step line; a failing statement is still logged whole.
+STATEMENT_LOG_CHARS = 20_000
+
+
+def shown_statement(sql: str) -> str:
+    """Return ``sql`` for a step line, cut to ``STATEMENT_LOG_CHARS`` with the count left out."""
+    if len(sql) <= STATEMENT_LOG_CHARS:
+        return sql
+    return f"{sql[:STATEMENT_LOG_CHARS]}\n... ({len(sql) - STATEMENT_LOG_CHARS} more characters)"
+
+
 """The engine-generated key every table the engine creates gets."""
 
 
@@ -166,6 +178,7 @@ class Session:
         try:
             return self.dialect.describe_select(self.conn, sql)
         except SQLAlchemyError as error:
+            logger.error("stage the SELECT failed; the statement was:\n%s", sql)
             self._fail("stage the SELECT", error)
 
     def _shape(self, name: str) -> Sequence[tuple[str, str, int | None, int | None, str]]:
@@ -195,7 +208,7 @@ class Session:
         self, sql: str, params: Mapping[str, Any] | None = None, *, step: str
     ) -> CursorResult[Any]:
         """Run one statement, logging it; ``HandlerError`` naming ``step`` when it fails."""
-        logger.debug("%s: %s", step, sql)
+        logger.info("%s:\n%s", step, shown_statement(sql))
         started = time.monotonic()
         try:
             result = self.conn.execute(text(sql), self.bindings | dict(params or {}))
@@ -224,7 +237,7 @@ class Session:
 
     def create_table_as(self, name: str, select_sql: str, *, step: str) -> None:
         """CREATE TABLE ... AS SELECT in the task's dialect and table format."""
-        logger.debug("%s: CREATE TABLE %s AS %s", step, name, select_sql)
+        logger.info("%s: CREATE TABLE %s AS\n%s", step, name, shown_statement(select_sql))
         started = time.monotonic()
         try:
             self.dialect.create_table_as(self.conn, name, select_sql, self.params)
@@ -238,7 +251,7 @@ class Session:
 
         It takes the dialect's own table format, never the target's storage settings.
         """
-        logger.debug("%s: CREATE TABLE %s AS %s", step, name, select_sql)
+        logger.info("%s: CREATE TABLE %s AS\n%s", step, name, shown_statement(select_sql))
         try:
             self.dialect.backup_table(self.conn, name, f"({select_sql}) etl_src")
         except SQLAlchemyError as error:
@@ -254,7 +267,8 @@ class Session:
         detail = str(cause).strip().splitlines()[0] if str(cause).strip() else repr(cause)
         failure = HandlerError(
             f"{self.action} {self.target}: {step} failed: "
-            f"{type(cause).__name__}: {mask_text(detail)}"
+            f"{type(cause).__name__}: {mask_text(detail)}; the attempt log shows the statement: "
+            "correct the task's SQL or the objects it reads, or rerun if the warehouse was down"
         )
         sensitive = mask_text(str(error)) != str(error)
         if sensitive:
@@ -482,6 +496,7 @@ class Session:
         base = self.protection_store.reserve_row_ids(self.target, count, maximum)
         if count:
             self.row_id_range = (base + 1, base + count)
+            logger.info("reserved ROW_ID %d to %d for %d row(s)", base + 1, base + count, count)
             fault_point("sql.row_id.after_reserve")
         return base
 

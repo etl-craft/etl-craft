@@ -30,9 +30,10 @@ def test_watermark_batches_and_retry(sql_world):
         ),
     ],
 )
-def test_typed_watermarks(sql_world, kind, start, select, expected):
+def test_typed_watermarks(sql_world, caplog, kind, start, select, expected):
     w = sql_world
     w.setup("typed", select, "APPEND_TABLE")
+    caplog.set_level("INFO", logger="etl_craft.handlers.sql.watermarks")
     result = w.run(
         "typed_load",
         SQL_ACTION="APPEND_TABLE",
@@ -43,6 +44,7 @@ def test_typed_watermarks(sql_world, kind, start, select, expected):
         WATERMARK_START=start,
     )
     assert result.offset.offset_type == kind and result.offset.offset_value == expected
+    assert f"watermark window on cursor: from {start} to {expected}" in caplog.text
 
 
 @pytest.mark.parametrize(

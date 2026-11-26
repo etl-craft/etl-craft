@@ -1,6 +1,7 @@
 """``run --task-code`` end to end: real task processes against a real Engine DB, both dialects."""
 
 import logging
+import re
 from pathlib import Path
 
 import pytest
@@ -170,7 +171,10 @@ def test_a_task_succeeds_and_records_its_counts_and_output(project):
         f"pipeline_run_id={ids['run']} attempt=1]"
     )
     assert f"INFO etl_craft.handlers.fake {context}: fake handler doing succeed" in log
-    assert f"INFO etl_craft.execution.child {context}: task succeeded: source 10" in log
+    assert f"INFO etl_craft.handlers.task_log {context}: task P.ok: try 1, attempt " in log
+    assert "parameter BEHAVIOUR = succeed" in log
+    assert f"INFO etl_craft.handlers.task_log {context}: task succeeded in " in log
+    assert "s: source 10, target 9, inserted 7" in log
 
 
 def test_reported_values_are_listed_in_the_task_log(project):
@@ -188,8 +192,11 @@ def test_a_handler_error_fails_the_task_with_its_message(project):
     assert outcome.message == "fails: FAILED — the source file is missing"
     recorded = row(engine, outcome.task_run_id)
     assert recorded.error_message == "the source file is missing"
-    assert "ERROR etl_craft.execution.child" in recorded.task_log
-    assert "task failed: the source file is missing" in attempt_log(project, "fails")
+    assert "ERROR etl_craft.handlers.task_log" in recorded.task_log
+    assert re.search(
+        r"task failed after [0-9.]+s: [A-Z]+ failure \([^)]+\): the source file is missing",
+        attempt_log(project, "fails"),
+    )
 
 
 def test_an_unexpected_error_fails_the_task_with_its_traceback_in_the_log(project):
@@ -247,7 +254,7 @@ def test_a_retry_is_a_new_attempt_on_the_same_row_with_its_own_log(project, tmp_
         2,
         None,
     )
-    assert "task failed: the source file is missing" in attempt_log(project, "fails", 1)
+    assert ": the source file is missing" in attempt_log(project, "fails", 1)
     assert "task failed" not in attempt_log(project, "fails", 2)
 
 

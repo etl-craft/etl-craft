@@ -6,6 +6,15 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+- Changed: every task log opens with the try, attempt, host, pipeline run, run date, refresh
+  type, warehouse and task parameters (sensitive ones `[REDACTED]`, `INPUT_PARAMS` as keys only),
+  and closes with `task succeeded in <seconds>` and the counts, or `task failed after <seconds>`
+  with the failure class and the error. SQL tasks log each step's statement at INFO (cut at 20,000
+  characters; a failed statement is logged whole), the watermark window, the reserved ROW_IDs, and
+  each business rule's newly flagged keys (the first 20). A failed warehouse statement's message
+  now says what to do. `--log-level DEBUG` is no longer needed to see the SQL.
+- Fixed: a SQL task whose `TARGET_OBJECT` names its database no longer logs the catalog twice
+  (`warehouse.warehouse.pre_ods...`).
 - Fixed: an agent's first task after a restart or a deploy no longer waits 20-60 s for the project
   bundle. The agent fetched each file in its own request, and the API built a new object-store
   client for every file (measured on Support Insights: 116 files in 34-56 s). The agent now asks

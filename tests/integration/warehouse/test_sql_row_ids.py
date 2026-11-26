@@ -101,7 +101,7 @@ def test_failed_computed_allocation_releases_the_target_lock(sql_world, monkeypa
 
 
 @warehouses("trino_iceberg", "duckdb_iceberg")
-def test_replacement_and_following_append_keep_computed_ids_monotonic(sql_world):
+def test_replacement_and_following_append_keep_computed_ids_monotonic(sql_world, caplog):
     w = sql_world
     w.setup("events", "SELECT 0 AS id", "OVERWRITE_TABLE")
     w.run(
@@ -134,13 +134,15 @@ def test_replacement_and_following_append_keep_computed_ids_monotonic(sql_world)
         MERGE_KEY="id",
         SELECT_QUERY="SELECT 1 AS id UNION ALL SELECT 2 AS id",
     )
-    w.run(
-        "load_second",
-        SQL_ACTION="APPEND_TABLE",
-        TARGET_OBJECT="appends",
-        SELECT_QUERY="SELECT 3 AS id",
-    )
+    with caplog.at_level("INFO", logger="etl_craft.handlers.sql.session"):
+        w.run(
+            "load_second",
+            SQL_ACTION="APPEND_TABLE",
+            TARGET_OBJECT="appends",
+            SELECT_QUERY="SELECT 3 AS id",
+        )
     assert w.rows(f"SELECT id, row_id FROM {w.name('appends')}") == [(3, 3)]
+    assert "reserved ROW_ID 3 to 3 for 1 row(s)" in caplog.text
 
 
 @warehouses("trino_iceberg", "duckdb_iceberg")

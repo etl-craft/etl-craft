@@ -277,8 +277,11 @@ def test_complete_queries_run_without_a_predicate_wrapper(world, query, expected
     assert {key for _, key, active, _ in flags(w) if active == "Y"} == expected
 
 
-def test_duplicate_and_outside_keys_report_counts_without_duplicate_flags(world, caplog):
+def test_duplicate_and_outside_keys_report_counts_without_duplicate_flags(
+    world, caplog, monkeypatch
+):
     w = world
+    monkeypatch.setattr("etl_craft.handlers.business_rules.FLAGGED_KEYS_LOGGED", 2)
     rule = add_rule(
         w,
         "counts",
@@ -294,6 +297,9 @@ def test_duplicate_and_outside_keys_report_counts_without_duplicate_flags(world,
         "dropped": 1,
     }
     assert "7 returned, 3 flagged, 0 cleared, 1 dropped" in caplog.text
+    # The log names the newly flagged keys, cut to the cap.
+    shown = caplog.text.split("rule counts flagged keys (2 of 3): ", 1)[1].splitlines()[0]
+    assert len(shown.split(", ")) == 2
     assert len(flags(w)) == 3
 
 

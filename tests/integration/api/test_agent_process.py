@@ -119,7 +119,8 @@ def test_agent_runs_its_pinned_bundle_without_engine_or_store_credentials(
         assert " INFO etl_craft.agent.loop: attempt " in logs[0].content.splitlines()[0]
         assert "claimed by agent" in logs[0].content and "starting the task process" in text_log
         order = [text_log.index(s) for s in ("loading project bundle", "loaded project bundle in")]
-        assert order == sorted(order) and order[-1] < text_log.index("running the PYTHON handler")
+        assert order == sorted(order) and order[-1] < text_log.index("PYTHON handler, on host ")
+        assert "task succeeded in " in text_log
         agent.signal(signal.SIGTERM)
         assert agent.wait(timeout=40) == 0, agent.output
         p.wait_for("SELECT STATUS FROM AUD_AGENTS", expected="GONE")
