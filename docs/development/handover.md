@@ -22,33 +22,22 @@ copied verbatim. When a memory note and the code disagree, the code wins; check 
 
 ### Open work, in order
 
-1. **Branch `fix/engine-idle-agent-load` (pushed, commit `1b75da88`, no PR yet).**
-   Contents: the idle notification storm fix, a cheap `agent health`, task-start log lines, the
-   child logger name fix, and inline compact toolbar labels (UI alignment, owner screenshot of
-   the log toolbar). Done: `make static`, `make docs`, unit and touched integration suites.
-   Still to do:
-   - the browser suite with screenshots
-     (`ETL_CRAFT_UI_SCREENSHOTS=<dir> uv run pytest -q -n 4 tests/browser`). Review the toolbars,
-     especially the Pool / Agent id text inputs inside compact labels (`inputClass` has `w-full`
-     and may collapse inside a fit-width label);
-   - `make ui-check` (vitest, lint, and a rebuild check of the shipped `spa/`);
-   - open the PR with the body in [Appendix A](#appendix-a-drafted-pr-body) (fill in the browser
-     line), then `gh pr merge --squash --auto`.
-2. **After it merges, on the demo cluster (`../support-insights`):**
-   - recreate the three notify triggers on the Engine DB as `FOR EACH ROW` (see `schema.sql`);
-   - run `sh infra/bootstrap/update.sh ../etl-craft`;
-   - run `kubectl apply -k infra/kubernetes`, which also restores the package probe that was
-     hand-patched to a shell check;
-   - recheck: the idle commit rate (it was 525/s), the gap from task start to its first log line
-     (it was 60-110 s), live logs in the UI, and grid refresh without a reload.
-   - Support Insights PR #34 (`update.sh` reads `ci/PACKAGE_COMMIT`) was on auto-merge.
-     `ci/PACKAGE_COMMIT` is still `468cd019`; bump it with `build.sh` in the next demo PR.
-3. **Next `docs(plan)` PR (one plan PR at a time):**
-   - re-scope **S7.AX.3**: live log transport already works (chunks reach the Engine DB within
-     ~1 s, the API serves them for live attempts, the UI refetches every 3 s); what remains is
-     covered by item 1;
-   - add the re-parse rename and the full-refresh-safe demo SQL slice (below) if they are not
-     planned yet.
+Done since this handover was written: #464 (idle agent load, task-start log
+lines), #465 (Back button on every page), #466 (script output reaches the task log), #467
+(batched bundle download), Support Insights #35 (demo scripts log through `task.logger`), and the
+plan PR that re-scopes S7.AX.3 and plans S7.AZ and S8.J. The demo cluster runs package
+`2a7a5d86` with row-level notify triggers and the package health probe. Measured there: 48 idle
+commits/s (was 525), first task log line 0.3-0.8 s after the claim (was 60-110 s), an agent's
+first bundle load 0.3-1.3 s (was 34-56 s), live logs and grid refresh without a reload.
+
+1. **Demo pin:** `ci/PACKAGE_COMMIT` is still `468cd019` while the images run `2a7a5d86`
+   (`update.sh` keeps the pinned tag); bump it with `build.sh` in the next demo PR.
+2. **Browser suite font flake:** on this workstation 5-15 browser tests per run fail on one
+   console error, `ERR_TOO_MANY_RETRIES` loading `inter-latin-wght-normal-*.woff2`; they pass when
+   run alone. Find the cause (the test server's handling of the font request under load) rather
+   than retrying.
+3. **Do not run the package service stack while k3d is up** (the demo repo's AGENTS.md). Run
+   package suites that need services with the cluster stopped, or rely on CI.
 4. **S7.AX.4: task logs that explain a failure.** Add a context block (try, agent, connection,
    run date and parameters, watermark window, non-secret task parameters), the rendered SQL per
    step with secrets masked, rule results with flagged keys (capped), the reserved ROW_ID range
@@ -56,13 +45,14 @@ copied verbatim. When a memory note and the code disagree, the code wins; check 
    remedy. Defect to fix there: the SQL log line doubles the catalog
    (`warehouse.warehouse.pre_ods...`).
 5. **Verify a possible false FAILURE alert email** from a manual, non-failed alert run (seen on
-   `SI_STEWARD_DS_AGENTS`).
-6. **Re-parse rename (owner decision):** the definition refresh becomes "re-parse" (Airflow
+   `SI_STEWARD_DS_AGENTS`). Scheduled alert tasks on successful runs sent nothing on
+   2026-11-26 (no new `AUD_ALERT_DELIVERIES` rows), so check the manual case it was seen on.
+6. **S7.AZ Re-parse rename (owner decision, now planned):** the definition refresh becomes "re-parse" (Airflow
    style): `pipelines re-parse`, and "Re-parse pipeline" / "Re-parse all" in the UI. "Refresh"
    means data only (`REFRESH_TYPE`, `--full-refresh`). No alias before 0.9.0. Ask the owner
    before renaming `lineage --refresh`. The order is a plan PR, then the package PR, then a demo
    follow-up.
-7. **Full-refresh-safe demo SQL (owner decision):** demo SQL uses `$$pipeline_run_id_filter`
+7. **S8.J Full-refresh-safe demo SQL (owner decision, now planned):** demo SQL uses `$$pipeline_run_id_filter`
    (1=1 on a full refresh), never `pipeline_run_id = $$pipeline_run_id`. 12 demo scripts are
    hard-coded. A full refresh rebuilds from PRS history and never depends on expiring sources.
 8. **S7.AY: ROW_IDs derived from the task run** (`TASK_RUN_ID*2^32+row`). It replaces the stored
