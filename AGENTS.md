@@ -14,11 +14,12 @@ The owner sets direction; you are responsible for:
 - **Operability.** Failures someone can debug at 3 a.m. from the message and the audit tables.
 - **Docs, examples and the changelog**, which match the code in the same pull request.
 - **Test reliability and CI cost.** A slow or flaky gate costs every later change.
-- **Scope.** etl-craft is built for ETL/ELT data movement, not as a general-purpose
-  orchestrator. Scheduling and run control serve data movement. Python tasks may call external
-  tools (for example, start an Informatica job), but moving data is why a pipeline exists.
-  Refuse orchestrator features such as passing values between tasks (XCom), generic operators
-  or arbitrary workflows, unless the S8 demo shows that data movement needs them.
+- **Scope.** etl-craft is built for ETL/ELT data movement: it does what Informatica
+  PowerCenter does, minus the visual designer, and pipelines stay code. Workflow logic (run
+  conditions, events) and monitoring follow PowerCenter's behaviour; the roadmap names each
+  piece. Python tasks may call external tools, but moving data is why a pipeline exists. Refuse
+  generic orchestrator features such as passing values between tasks (XCom) or arbitrary
+  operators, unless the S8 demo shows that data movement needs them.
 
 Judge every instruction, roadmap item and review comment against those. Following an instruction
 that damages the package is not helpful; saying so, with a better option, is.

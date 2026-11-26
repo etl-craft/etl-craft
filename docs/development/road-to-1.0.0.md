@@ -212,6 +212,8 @@ item's text, or work done early under another item.
 | S7.W Docs toolchain after MkDocs 1.x | Planned | | Evaluate Zensical against the API pages, navigation and published versions; migrate only when every requirement works |
 | S7.AY ROW_IDs derived from the task run | Done | #470 | `ROW_ID = TASK_RUN_ID × 2^32 + n` on every warehouse; `AUD_TARGET_ROW_IDS`, the reservation report and ROW_ID generators are gone |
 | S7.AZ Re-parse, not refresh | Planned | | The definition refresh becomes "re-parse" in the CLI, API, UI and docs; "refresh" means data only |
+| S7.BA Run conditions on task and pipeline rows | Planned | | A condition on each task and pipeline row replaces both dependency tables; fail-the-pipeline options |
+| S7.BB Run monitoring | Planned | | Task statistics, failure information, log events, per-task resources and an agent monitor in the S7.AX views |
 | S7.O Package and demo repositories | Done | #317, #318 | Small package demo, public demo seed and pinned candidate evidence validation |
 | S7.P Obvious failures do not stop 1.0.0 | In progress | #173, #178 | Audit done (#173); the log-folder and port checks close their catalog rows (#178); item 4 keeps the catalog current |
 | S7.Q A generic ANSI SQL warehouse | Moved after 0.9.0 | | A `generic` dialect over SQLAlchemy for rare databases: ANSI SQL only, NULL-safe column comparison for merges, refusals for anything without an ANSI form |
@@ -10205,6 +10207,119 @@ development history.
 - [x] The README and changelog summary describe 0.9.0 as published, with no development history.
 - [x] `make docs` passes with no development page in the published nav and no broken link.
 
+### S7.BA Run conditions on task and pipeline rows
+
+Owner, 2026-11-26, from the PowerCenter 10.5.1 Workflow Basics and Advanced Workflow guides
+(behaviour reference only: link conditions, predefined task variables, AND/OR input links and
+"fail parent"). etl-craft is built to do what PowerCenter does, minus the visual designer;
+pipelines stay code.
+
+**Problem.** A task's start rule is split across `CFG_TASK_DEPENDENCY`, `CFG_PIPELINE_DEPENDENCY`
+and `CFG_TASKS.RUN_CONDITION` / `RUN_CONDITION_COUNT`, so one rule is edited in three files. Only
+four outcomes can be tested (`SUCCESS`, `FAILURE`, `ALWAYS`, `HAS_DATA`): "run when the load wrote
+rows and rejected none" cannot be written. A pipeline cannot be failed by a task that failed or
+did not run while the rest of the run continues.
+
+**Change.**
+
+- `CFG_TASKS.RUN_CONDITION` holds a condition in a closed grammar: names, `AND`, `OR`, `NOT`,
+  parentheses, comparisons (`=`, `<>`, `<`, `<=`, `>`, `>=`), integer and keyword literals, and
+  `AT_LEAST(n, condition, ...)` in place of `RUN_CONDITION_COUNT`. No other functions, no
+  arithmetic and no templating. A name is `task.FACT`, `pipeline.task.FACT` or
+  `project.pipeline.task.FACT`. Facts are read from the audit tables: `SUCCEEDED`, `FAILED`,
+  `SKIPPED`, `FINISHED`, `STATUS`, `SOURCE_ROWS`, `TARGET_ROWS`, `ROWS_WRITTEN`, `INSERTED`,
+  `UPDATED`, `DELETED`, `REJECTED`, `DUPLICATES`, `ATTEMPTS`, `DURATION_SECONDS` and
+  `ERROR_CLASS`; the design note fixes the list and each fact's type. `HAS_DATA` stays as the
+  shorthand for `ROWS_WRITTEN > 0`. An empty condition starts the task when its run starts.
+- `CFG_PIPELINES.START_CONDITION` holds the same grammar over other pipelines
+  (`pipeline.FACT`, `project.pipeline.FACT`), with pipeline facts (status and summed counts). It
+  replaces `CFG_PIPELINE_DEPENDENCY`. A name in another pipeline refers to that pipeline's
+  latest finished output not yet consumed by this pipeline, as admission decides today.
+  `CONSUME_REPAIRS` moves to the consuming pipeline's row and covers all its upstream names.
+- `deploy` and `validate` parse every condition and refuse unknown tasks, pipelines, projects
+  and facts, wrong types, cycles (across pipelines too) and projects the deploying account cannot
+  see. The message names the file, row, column, position, value found and the remedy.
+- `deploy` writes the dependency edges the conditions name into one engine-owned table that no
+  team writes; the scheduler, gates, graphs, catalog and lineage read it. Order still comes from
+  rows, never from code.
+- The engine evaluates a condition once every name it reads has finished. A false condition
+  skips the task with the reason, the expression and the values it read; the evaluation is
+  recorded in `AUD_GATE_DECISIONS` and in the task log. Recorded consumption decisions keep their
+  current meaning.
+- `FAIL_PIPELINE_IF_FAILED` and `FAIL_PIPELINE_IF_NOT_RUN` (task parameters, `Y`/`N`, default
+  `N`): the run ends `FAILED` when the task fails, or is skipped by its condition, while the
+  other branches still finish.
+- Delete `CFG_TASK_DEPENDENCY`, `CFG_PIPELINE_DEPENDENCY`, `RUN_CONDITION_COUNT`, their config
+  files and `DependencyType`, with their code and docs, under the pre-0.9.0 `schema.sql` rule.
+
+**Not in this item.** Decision, Control and Timer tasks (conditions and the fail options cover
+them) and user-defined workflow variables (passing values between tasks).
+
+**Slices.** Each is one pull request, in this order.
+
+1. **S7.BA.1 Design note:** the grammar, the facts and their types, the derived edge table, the
+   binding of names in other pipelines, and the refusal messages. The owner approves it first.
+2. **S7.BA.2 Task conditions and the fail options;** `CFG_TASK_DEPENDENCY` is deleted.
+3. **S7.BA.3 Pipeline start conditions;** `CFG_PIPELINE_DEPENDENCY` is deleted.
+4. **Support Insights follow-up:** `tasks.csv` and `pipelines.csv` carry the conditions; the
+   dependency files go.
+
+**Done when.**
+
+- [ ] No dependency table, config file, enum or doc page remains; `tasks.csv` and
+      `pipelines.csv` hold every start rule.
+- [ ] Every fact and operator has a true and a false evaluation test, recorded with the values
+      read, on SQLite and PostgreSQL Engine DBs.
+- [ ] An unknown name, fact or project, a wrong type or a cycle fails `deploy` and `validate`
+      with the file, row and position.
+- [ ] `FAIL_PIPELINE_IF_FAILED` and `FAIL_PIPELINE_IF_NOT_RUN` end the run `FAILED` while other
+      branches finish.
+- [ ] The Support Insights demo runs on conditions.
+
+### S7.BB Run monitoring
+
+Owner, 2026-11-26, from the PowerCenter 10.5.1 Workflow Monitor chapters (behaviour reference
+only): the run, task and agent views show what PowerCenter's Workflow Monitor shows. PowerCenter
+is the more intuitive monitor and Airflow the more familiar layout; these views add
+PowerCenter's information to the approved S7.AX layout without changing its navigation.
+
+**Change.**
+
+1. **Task statistics.** For a task instance: source rows read and failed, target rows applied
+   and affected, inserted, updated, deleted, rejected and duplicates, throughput (rows a second)
+   and duration, each beside the median of the task's recent successful runs. Only counts its
+   handler produces are shown.
+2. **Run statistics.** The run page lists every task's rows, throughput and duration in one
+   sortable table.
+3. **Failure information.** First and last error, the failure class, a stable error code (the
+   error class's exit code name), the failing step and a link to its log line.
+4. **Log events.** The Logs tab filters by severity and step, jumps to the first error, and
+   shows condition evaluations (S7.BA) as events beside the S7.AX.4 context and outcome blocks.
+5. **Resources.** Agents sample each task process: peak CPU and peak memory are recorded on the
+   attempt and shown in its statistics. An agent monitor lists every agent's running attempts
+   with process id, CPU, memory, swap, pool and free slots.
+6. **Waiting.** A task waiting for a slot shows that state and its wait reason in the grid and
+   the run.
+
+**Slices.** Each is one pull request, in this order.
+
+1. **S7.BB.1 Layout:** a design of where each panel goes at 1440 and 390 px, light and dark,
+   built on the S7.AX views; the owner approves it before any code.
+2. **S7.BB.2 Data:** attempt resource samples, error codes and the statistics in one request
+   per page, with statement budgets.
+3. **S7.BB.3 Task and run statistics and failure information.**
+4. **S7.BB.4 Log events.**
+5. **S7.BB.5 Agent monitor and waiting state.**
+
+**Done when.**
+
+- [ ] The owner approved the layout before S7.BB.2.
+- [ ] Clicking a task shows its statistics, failure information and resources in the first
+      screen from one request, with a recorded statement budget.
+- [ ] The log filters by severity and step and jumps to the first error.
+- [ ] The agent monitor shows each agent's running tasks with CPU and memory.
+- [ ] Browser tests cover each panel at 1440 and 390 px, light and dark.
+
 ### S7.AX Pipeline, run and task views
 
 Owner, 2026-11-25, from the Support Insights walkthrough: the pipeline page, the run tab and the
@@ -10982,6 +11097,25 @@ rules on real data.
 *Done when:* a case runs its pipelines and dependents end to end from input files, compares
 every expected table and rule result, starts clean every time, honours both keep options, and
 CI can gate a deploy on it.
+
+## After 1.0.0: road to PowerCenter
+
+Owner, 2026-11-26: etl-craft is built to do what PowerCenter does, minus the visual designer;
+pipelines stay code. These come after 1.0.0, each designed when it is taken up:
+
+- **Events between branches:** a branch raises a named event and another waits for it
+  (PowerCenter Event-Raise and Event-Wait), where a dependency on the last task is not enough.
+- **Suspend on error:** a failed task leaves the run suspended while other branches finish; the
+  operator fixes the cause and resumes from the failed task, with an optional alert.
+- **Impact analysis:** for a table, column or task, every task that reads or writes it, in
+  `deploy --plan` and the catalog.
+- **Test load:** run a task on N source rows into a scratch copy of its target and report
+  counts, rejects and rule results.
+- **Compare runs:** two runs side by side: definition version, parameters, counts and durations.
+- **Alert variables:** run and task statistics in alert templates, and the task log attached.
+- **Masking on clone:** mask declared sensitive columns when cloning to non-production.
+- **Schedule end options:** end after N runs or on a date.
+- **Team metadata fields** on objects beyond tags.
 
 ## After 1.0.0: provider integration follow-ups
 
