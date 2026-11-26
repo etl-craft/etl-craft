@@ -133,7 +133,7 @@ The drafted body for `fix/engine-idle-agent-load` is in
 
 *When translating ambiguous/conflicting source material into concrete code or schema in this repo, tag every judgment call inline instead of silently deciding*
 
-When resolving ambiguity or conflicts in source material (pasted notes, verbal corrections, prior drafts) into concrete SQL/code, tag every place a real judgment call was made — using a small closed vocabulary of tags (e.g. `[DEVIATION]`, `[ADDITION]`, `[CHOICE]`) — and roll them up into a summary block at the end of the artifact.
+When resolving ambiguity or conflicts in source material (pasted notes, verbal corrections, prior drafts) into concrete SQL/code, tag every place a real judgment call was made — using a small closed vocabulary of tags (deviation, addition and choice tags) — and roll them up into a summary block at the end of the artifact.
 
 **Why:** `sql/schema.sql` in etl-craft demonstrates this pattern deliberately: every place the DDL differs from literally-pasted schema drafts, adds something not requested, or picks an implementation approach over what notes said ("WILL BE ENFORCED AS TRIGGER") is flagged inline and summarized at the file's end, explicitly so it can be challenged/signed-off rather than skimmed past. CLAUDE.md calls this out as something to read "before writing any code," not a one-off flourish — it's the project's working method for schema-first, sign-off-gated development.
 
@@ -159,420 +159,13 @@ When a large build is already underway and the user sends a new message that sub
 
 **How to apply:** If a mid-build message reads as "also, X should actually work like Y" about the thing currently on the workbench, rewrite that thing now — don't finish the original plan and append a TODO. Re-run/extend the tests for the affected module rather than assuming the original tests still fully specify correct behavior. Watch for an explicit scope cap in the same message (here: "team should use airflow" for anything fancier) and honor it as a hard stop, not just a suggestion — the user pairs expansion with a boundary in the same message more often than not.
 
-### etl-craft-schema-first-workflow
-
-*etl-craft build status: EVERY originally-scoped CLAUDE.md item is now built on branch schema-review (schema signed off + post-signoff additions; resolver/run/orchestrator/generate-yml/crash-detection/warehouse/validate/ClickHouse/cross-pipeline-polling/Airflow-settings/global-DAG/finalize-only/execution-engine/lineage/migrate/data-model-cleanup/$$pipeline_id-revert/audit-column-checks/steps/history/EMAIL_ALERT+SMTP/interactive-configure/Cloning/generate-docs); nothing from the original spec remains unbuilt — BUT a 2026-09-20 code review found real bugs and gaps in the finished result, tracked in ITERATION_2.md, see [[project-etl-craft-iteration-2-backlog]]*
-
-Schema sign-off gate has been cleared (2026-09-19): `sql/schema.sql` (moved to `sql/`) was walked through flag-by-flag with the user and every `[DEVIATION]`/`[ADDITION]`/`[CHOICE]` was confirmed as written, none changed. **One post-signoff schema change has since been made** (below) — flagged in its own "POST-SIGNOFF CHANGES" block at the end of schema.sql, kept separate from the original sign-off summary rather than folded in silently.
-
-**Built and committed on branch `schema-review`, in order, all with real Docker verification:**
-- `resolver.py`, Engine DB access layer, `cfg.py`, `handlers.py` (stub, intentionally last), `runner.py` (`run --task_code`), `orchestrator.py` (`run --pipeline_code`), `run --init-only`, `generate_yml.py`, crash detection, Data DB/warehouse connector (`warehouse.py`), `validate`, real ClickHouse connectivity, cross-pipeline dependency polling (`crosspipe.py`), and most recently **configurable Airflow-facing generate-yml settings + an optional global DAG**.
-- **Configurable Airflow settings (2026-09-19)**: `CFG_PIPELINES` gained 7 nullable columns (CATCHUP, TAGS, RETRIES, RETRY_DELAY_MINUTES, DEPENDS_ON_PAST, EMAIL_ON_FAILURE, EMAIL_RECIPIENTS — the post-signoff schema change above) and `craft-connector.yml` gained a new `[Orchestrator]` section with the same 7 fields as global defaults plus `Global_dag: true|false` (defaults false, per explicit instruction). `generate_yml._resolve()` does three-tier resolution for each: pipeline column → global config → final hardcoded default (unchanged from before). `owner` still comes from `CREATED_BY`, not part of this.
-- **Optional global DAG (2026-09-19)**: `generate-yml --global` (mutually exclusive with `--pipeline_code`), refused unless `[Orchestrator].Global_dag` is enabled. Each node represents `TriggerDagRunOperator`-style triggering of that pipeline's own DAG (`trigger_dag_id` key, hand-rolled, never importing airflow) — confirmed with the user specifically because a bare `run --pipeline_code X` is already refused under `Mode=orchestrator`, so a global-DAG node literally can't shell out to it the way per-pipeline nodes shell out to `run --task_code`.
-- **Bug found and fixed (environmental, not code)**: `cfg.fetch_all_pipeline_dependency_edges()` is the first genuinely *global* query (not scoped to one pipeline_id) — it was the first to surface that `make db-schema-test` ran directly against the persistent dev Postgres database instead of a disposable one (contradicting `sql/schema_test.sql`'s own header), leaving `PL_A`/`PL_B` rows behind permanently. Fixed the Makefile target to create/use/drop a genuinely disposable database. **If a `test_integration.py` run ever shows unexpected extra rows in a "global" query result, check whether `make db-schema-test` was run recently without this fix** (shouldn't recur now, but worth knowing the failure signature).
-- **Cross-pipeline dependency polling (2026-09-19)** resolves `CFG_PIPELINE_DEPENDENCY` and cross-pipeline `CFG_TASK_DEPENDENCY` edges at runtime (percentage-based poll schedule, confirmed with the user). **Real behavior change to already-shipped code**: `run_task()` no longer raises `DependenciesNotMetError` on an unmet dependency — it now records the task `SKIPPED` and exits 0. Came from detailed, explicit user instruction.
-- **[CHOICE] `crosspipe.py`'s public functions take an `Engine`, not a `Connection`** — found during review that holding one connection open across a real, up-to-an-hour `sleep()` would risk connection-pool exhaustion under many concurrent Airflow tasks.
-- **Real Postgres/SQLAlchemy bugs found via testing, not assumed**: (1) a bind parameter compared only via `IS NULL` needs an explicit `CAST(... AS BIGINT)`; (2) SQLAlchemy's `text()` treats `::` right after a bind name as an escaped colon, not a cast — `:name::bigint` silently never substitutes; use `CAST(:name AS ...)` instead, everywhere in this codebase.
-- **`--finalize-only` (2026-09-19) closed the orchestrator-mode finalize gap**: `orchestrator.finalize_active_run()` is a synthetic "last task" mirroring `--init-only`'s synthetic first one — computes SUCCESS/FAILED from every task's own current status and writes it to `AUD_PIPELINES_RUN_LOG`, which previously only happened inside `run_pipeline()` (refused under `Mode=orchestrator`). `generate-yml` now gives every DAG a `__finalize__` task depending (ALWAYS) on every leaf task. `run_pipeline()` was refactored to share the same underlying logic (`_finalize_from_task_states`), not just gain a parallel copy.
-- **Mid-session, an unrelated in-progress `git merge origin/main` was found sitting unresolved** (started outside this session, e.g. via an IDE's Git integration — not something I ran). Conflict was on `.github/workflows/ci.yml`; resolved by keeping this branch's version (confirmed byte-for-byte a strict superset of origin/main's changes) and completing an ordinary merge commit. **If `git status` ever shows unexpected "unmerged paths" or merge markers again, stop and ask before touching it** — per the safety protocol, that's exactly the kind of state to investigate, not act on unilaterally.
-- Open question #1 (Data DB section name) resolved: `[Warehouse]`, proven against both Postgres and real ClickHouse (`clickhouse-sqlalchemy` optional extra, never a hard dependency).
-- **The execution engine itself (2026-09-19)**: `handlers.py`'s stub registry is closed out except `EMAIL_ALERT`. Four new modules — `execution.py` (shared `TaskExecutionContext`/`HandlerError`/`HandlerResult`, split out to break a circular import), `sql_actions.py` (the 7 closed SQL actions — `CREATE_TABLE`/`SETUP_TABLE`/`OVERWRITE_TABLE`/`SCD1_MERGE`/`SCD2_MERGE`/`DROP_TABLE`/`DELETE_ROWS`), `business_rules.py`, `scripts.py` (`HANDLER=PYTHON`). Came from a very detailed, explicit multi-message spec (statement-by-statement action mechanics, audit-column sets per action, schema-check/evolution via `information_schema` with no registry table, ANSI-only SQL, never-trust-cursor-rowcount row counting) — implement-faithfully-and-flag-the-rest mode, not open design.
-- **[DEVIATION, post-signoff, mid-build correction]** `CFG_TASK_PARAMS` → `CFG_TASK_PARAMETERS`, `VARIABLE_NAME`/`VARIABLE_VALUE` → `PARAMETER_NAME`/`PARAMETER_VALUE` — the user corrected this naming *while I was already reading the codebase to build against it*; caught before any code used the old names, so no rework beyond the schema+code+comment sweep.
-- **Two real bugs caught by actually running the code against Docker Postgres, not by review**: (1) the schema-evolution rebuild's `ALTER TABLE ... RENAME TO` used the new table's own name instead of the original target's name, so Postgres correctly rejected it as a duplicate — found by exercising the evolve-a-column path for real. (2) `business_rules.py`'s first version shared one Engine DB transaction across every rule in a task; a later rule's failure rolled back an earlier rule's already-committed results *and* the FAILED marker for the broken rule itself — found by asserting the FAILED row existed after a deliberately malformed rule and watching it not exist. Fixed by giving each rule its own independently-committed transaction (the module now takes an `Engine`, not a shared `Connection`).
-- **[CHOICE] `sql_actions.py` never relies on a DBAPI cursor's `rowcount`** — every count (`insert_count`/`update_count`/`delete_count`) is computed with its own `COUNT(*)`/`EXISTS` query run *before* the mutating statement, per explicit instruction ("we correct impact counts").
-- **[CHOICE] Postgres has no `CREATE OR REPLACE TABLE`** — schema evolution emulates it portably: `CREATE TABLE <new> AS SELECT ... FROM <target>` → `DROP TABLE <target>` → `ALTER TABLE <new> RENAME TO <target>`, with the new column landing at the position the author's SELECT implies (verified: a column inserted mid-schema, not appended after the engine-managed columns).
-- **A second, very detailed refinement round on the execution engine (2026-09-20)**, same session: `HASH_KEY` on SCD1/SCD2 (MD5 of `MERGE_COMPARE_COLUMNS`, computed *after* the schema-shape check — computing it earlier broke that check on every run, caught immediately); `substitute_pipeline_id` gained "auto-append `WHERE` if none exists" / "leave completely alone if a real `WHERE` already exists" (the latter for static/reference tables — broke nearly every existing inline-`VALUES` test fixture, fixed by adding explicit `WHERE 1=1` to each); `DROP_TABLE` now also checks its `CREATE_TABLE` sibling reached `SUCCESS` under *this* run, not just that it exists in `CFG_`; every task (any `HANDLER`) now declares `SOURCE_OBJECT`/`TARGET_OBJECT` for lineage, checked by `validate` (found a real `bool_or`/`NULL` bug in the check itself — an all-NULL LEFT JOIN group made `bool_or` return `NULL`, and `HAVING NOT NULL` silently excludes the row, hiding exactly the tasks with zero params at all); new `lineage --table` and `migrate` CLI commands; `business_rules.py` now runs same-`SEQUENCE_NUMBER` rules in real parallel via `ThreadPoolExecutor` (each thread its own Data DB connection); pipe (`|`) is now the *only* multi-value separator anywhere, including `RETURN_VALUES` (retrofit from comma); `scripts.py`'s return-variable contract fully specified (`INGESTION_COUNT`/`LATEST_OFFSET_UPDATE` mandatory, `value|datatype` offset format, `TASK_LOG` gets "NAME = value" lines via a new shared `execution.format_task_log()`); coverage gate relaxed 100%→80% per explicit instruction (still 100% in practice); migration tooling (`SCHEMA_MIGRATIONS` table + `migrate.py`) closes CLAUDE.md open question #7 — deliberately no retroactive migration files for anything already in schema.sql, since `sql/migrations/` starting empty is consistent with a fresh `SCHEMA_MIGRATIONS` table having zero rows.
-- **Data-modeling cleanup (2026-09-20), same session, per "think like an data modelling architect"**: `CFG_TASKS.SCRIPT_NAME`/`RETURN_VALUES`/`SCHEMA_EVOLUTION` — each only ever meaningful for a *subset* of rows (PYTHON-only or SQL-only) — removed as columns entirely and moved into `CFG_TASK_PARAMETERS` as ordinary parameter rows, read via `ctx.task_params.get(...)`; `execution.TaskExecutionContext` lost the three dedicated fields, not just their source. `CFG_PIPELINES`' 7 separate Airflow-facing columns (CATCHUP/TAGS/RETRIES/RETRY_DELAY_MINUTES/DEPENDS_ON_PAST/EMAIL_ON_FAILURE/EMAIL_RECIPIENTS) collapsed into one `PIPELINE_PARAMETERS JSONB` column — psycopg3 deserializes JSONB to a plain dict automatically (confirmed directly), so `cfg.fetch_pipeline_detail` just reads the blob and pulls the same UPPERCASE keys back out; `generate_yml.py` itself needed zero changes. **Test fixtures, not test counts, absorbed this** — `conftest.py`'s `insert_committed_task(schema_evolution=, script_name=, return_values=)` kept its exact kwarg shape for ~30 existing call sites but now writes CFG_TASK_PARAMETERS rows under the hood. Still 294 tests, 100% coverage, no new tests needed since existing ones already exercised every path once fixtures spoke the new storage location. **If you ever see CFG_TASKS.SCRIPT_NAME or CFG_PIPELINES.CATCHUP referenced anywhere (old docs, a stale branch), that's pre-2026-09-20 — those are gone as columns.**
-- **`$$pipeline_id` auto-append reverted; audit-column-presence check added (2026-09-20), same session, per explicit correction ("this was a bad idea") — see [[critical-but-scoped-engineering]] for the meta-instruction that came with it.** `substitute_pipeline_id`'s auto-append-a-`WHERE`-when-absent case (added in the round directly above, bullet starting "A second, very detailed refinement round") is now **gone** — back to a strict two-case rule: token present → substitute; token absent → leave `sql` completely untouched regardless of `WHERE`. **The bullet above describing the auto-append case is now stale/superseded — don't trust it as current behavior.** New, separate addition: `_check_or_evolve_schema` now verifies an already-existing target actually has every engine-managed audit column the action needs (`PIPELINE_RUN_ID` + `AUDIT_COLUMNS[action]`) *before* comparing business columns, raising a clear `HandlerError` naming what's missing if not — runs regardless of `SCHEMA_EVOLUTION`. `_delete_rows`' soft-delete path gets the same treatment for `DELETE_FLAG` specifically (proposed as a scoped extension beyond the literal ask, stated to the user, not corrected) — **the check only lives inside the `else` branch (not `hard_delete`)**; a `HARD_DELETE=true` task does a real `DELETE` and never needs `DELETE_FLAG` to exist, confirmed correct on user review and locked in with `test_sql_delete_rows_hard_delete_ignores_missing_delete_flag`. Deliberately presence-only, not type-checking — out of scope per the same instruction. No schema.sql changes at all this round — pure `sql_actions.py`. 4 new integration tests + 1 existing unit test rewritten (not deleted) to assert the opposite of what it used to. 298 tests total, 100% coverage maintained.
-- **Everything else CLAUDE.md ever called for, built in one large round (2026-09-20), per explicit request to "implement 1,2,3(SMTP),5,6 and anything else pending" — nothing from the original spec remains unbuilt.** No `sql/schema.sql` changes anywhere in this round.
-  - `steps`/`history` CLI commands close out the last two "conceptually agreed but not yet built" read-only query verbs (`cfg.fetch_pipeline_steps`/`fetch_pipeline_run_history`/`fetch_task_run_history`).
-  - `EMAIL_ALERT` + SMTP (`email_alert.py`), a new `[Email]` craft-connector.yml section (`config.EmailConfig`, its own small `none|password` auth vocabulary). Mid-round, the user sent a real-time follow-up (while I was already mid-build) substantially expanding scope: **every email is now HTML with inline CSS**, and a new `EMAIL_PIPELINES` task parameter (`ALL` | one code | pipe-separated "some") triggers an appended multi-pipeline status digest — a summary table plus one collapsible `<details>` section per pipeline showing its latest run's per-task breakdown, SUCCESS green / FAILED red, other statuses neutral grey. User explicitly capped scope: "any other template, team should use airflow" — no general templating engine. **If you see email_alert.py described anywhere as plain-text-only, that's stale — HTML+digest is the current, correct behavior.**
-  - Interactive `configure` (`configure.configure_interactive`) — mirrors `configure_from_env`'s merge semantics, adds y/n-gated optional `[Warehouse]`/`[Email]` setup blocks `configure_from_env` never had. Deliberately doesn't prompt for the 7 `[Orchestrator]` global defaults.
-  - `Cloning`'s actual copy mechanism (`cloning.py`) — truncate-then-reinsert per table (not a true row-level merge, flagged), generic cross-dialect column types. **Two real bugs caught by testing, not review**: (1) the same-database safety guard's first version compared the *built* `Engine.url` objects, which are always blank on both sides since `db.build_engine`/`warehouse.build_data_engine` deliberately never render a secret into a URL — the guard silently never fired; fixed by comparing the two profiles' own `jdbc_url` strings instead. (2) Proving the real copy mechanism against actual ClickHouse (not just Postgres standing in for "some dialect," since cloning Postgres-onto-itself is exactly the destructive case the safety guard exists to refuse) surfaced two more genuine ClickHouse quirks: it requires an explicit table `ENGINE` clause SQLAlchemy Core can't express portably (worked around with a hand-built raw `CREATE TABLE ... ENGINE = MergeTree()`, detected via `dialect.name == "clickhouse"`, never an import — same Non-goals-respecting spirit as everywhere else), and its own reflection resolves the target database from the blank `Engine.url` too (needs `schema=` passed explicitly), and it refuses an unconditional `DELETE` (switched to `TRUNCATE TABLE` everywhere, which every dialect touched so far supports).
-  - `generate-docs` (`docs_generator.py`) — a static site (`index.html` + one page per pipeline + `search-index.json` + `style.css`/`search.js`) built entirely from the existing read-layer functions, no new query logic. **[CHOICE]** search is a small dependency-free vanilla-JS substring search, not a vendored Fuse.js/Lunr.js — stays functional with no CDN access.
-  - 368 tests total (up from 298), 100% coverage save 4 lines in `cloning.py`'s own type-dispatch function (Numeric/Boolean branches + a defensive except, left uncovered per this project's "high-quality, not chased to 100%" coverage philosophy). `make check`/`make db-schema-test` both clean.
-- Tooling: uv-managed, `black`/`ruff`/`pydocstyle`, **coverage gate 80% (relaxed from 100%, ~100% actual)**. Tests: exactly two files (`test_unit.py` no-Docker, `test_integration.py` real-Docker, skips cleanly). **368 tests**, as of the latest commit (up from 242 at the start of this session's continuation).
-- **Recurring bug class**: any `test_integration.py` test needing real Postgres/ClickHouse but not depending on the relevant engine fixture (`postgres_engine`/`clickhouse_engine`) skips the reachability guard and hard-fails instead of skipping when Docker is down. Always add the fixture as a dependency on any new real-DB test purely for its skip check.
-- CLI shape is `etl-craft run --pipeline_code X --task_code Y` (named flags) — user corrected this explicitly early on.
-- All of this is recorded in CLAUDE.md's "Where things stand" section in full detail — treat CLAUDE.md as the primary source, this memory as a pointer/summary only.
-
-**How to apply:** Before assuming a command or module isn't built, read CLAUDE.md's current "Where things stand" section first — as of 2026-09-20, everything CLAUDE.md ever called for is built. **"Built" is not the same as "correct", though: a full review on 2026-09-20 found four reproduced P0 correctness bugs plus ~36 other gaps, all tracked in `ITERATION_2.md` as `E2-01`…`E2-40` — read that file before starting new work (see [[project-etl-craft-iteration-2-backlog]]).** Nothing from the original *spec* remains unbuilt. Any future work is either a refinement/correction of something existing (the established pattern all session: revert/extend/fix, verify against real Docker Postgres+ClickHouse, document with [DEVIATION]/[ADDITION]/[CHOICE] tags, test, commit) or a genuinely new feature request. The user has given increasingly detailed, explicit step-by-step instructions in recent rounds (not just "your judgment") — when instructions are that specific, implement them faithfully and flag remaining ambiguity, rather than defaulting back to inventing a design; the same session also showed the user will correct a naming choice mid-stream (`CFG_TASK_PARAMS`→`CFG_TASK_PARAMETERS`) even after implementation has started, and will send substantial scope-expanding follow-ups *mid-turn* while a feature is already being built (the EMAIL_ALERT HTML-digest expansion) — treat both as authoritative and fold them in immediately, not as a one-off patch or a "next round" deferral. Genuine semantic/architectural gaps still get asked rather than guessed — that pattern should continue. The schema is no longer purely "signed off and frozen" — post-signoff changes are a real, expected category, though this entire round needed none. When adding a genuinely new cross-dialect mechanism (cloning, warehouse.py before it), budget time to actually test against real ClickHouse, not just Postgres standing in for "some dialect" — this session has now twice found real, non-obvious dialect-specific bugs (mandatory ENGINE clause, blank-URL-based reflection, no unconditional DELETE) that only surfaced that way.
-
-### project-etl-craft-iteration-2-backlog
-
-*etl-craft on iteration-2: 2026-09-24 SQLite became the default Engine DB (Postgres = production); iteration 3 remediation through E3-16 complete; E2-18/E2-20 remain deferred*
-
-##### 2026-09-24 — SQLite is the default Engine DB, PostgreSQL recommended for production
-
-Per explicit instruction. Engine DB is no longer "always Postgres": `jdbc:sqlite:<path>` +
-`auth_mode: none`, `schema_sqlite.sql`, `locks.py` (advisory lock or file lock), zero-config
-`setup` writing `Engine: {Profile, Jdbc_url}` literally (SQLite only). `setup` refuses to swap an
-existing Postgres Engine DB for the default. The full suite also runs on SQLite via
-`ETL_CRAFT_TEST_ENGINE=sqlite` (`make test-sqlite-engine`, CI, `make check`), with
-`conftest.POSTGRES_ENGINE_ONLY` naming the tests built on a Postgres-only premise. Uncommitted
-at hand-off unless a later note says otherwise. Flagged, not fixed: `SETUP_TABLE` drops and
-recreates its target every run. CLAUDE.md's dated entry has the detail.
-
-##### Latest handoff — Codex, 2026-09-23
-
-Iteration 3 round-2 remediation is complete: E3-08–E3-13 and E3-15 fixed;
-E3-14's rename claim does not reproduce (both paths rename a freshly created
-replacement using the current format). E3-16 fixes validation rejecting supported
-Snowflake-managed Iceberg storage. The original review entries below are historical.
-Databricks preferred URLs now retain only public JDBC parameters before persistence;
-joining an existing run leaves its gate consumption unchanged; token manifests reject
-unused fields. Local dialect SQL, alert ordering, and migration-ledger gaps are covered.
-
-User-requested SCD1 PRESERVE_TARGET defaults false. True uses COALESCE(source, target),
-including effective-value hashing for detection and storage, so repeated partial records
-cause no false updates. Inserts remain unchanged. Parameter docs and validation updated.
-
-make check: 619 passed, 4 credential-gated cloud skips, 95.36% coverage;
-schema, mypy, Black, Ruff, pydocstyle, and wheel smoke passed. Cloud tests were not
-rerun; Claude's historical live verification remains applicable. E3-08/E3-09 regression
-tests failed against 3915fd8 before passing with the fixes; E3-16 failed before its fix.
-E2-18 logging and E2-20 task output capture remain deferred.
-
-The user requested a final commit and Codex co-author attribution on that commit and
-on historical 8e0f96f. That rewrite changes descendant hashes; a local backup branch
-preserves the original history. Completed: final commit `8c93faf`; `8e0f96f` amended
-to `4611a0c`, both with Codex co-author attribution. Backup:
-`backup/iteration-2-before-codex-amend-20260923`. Working tree clean; nothing pushed.
-
-Iteration 2 plus **three external review rounds** are done on branch `iteration-2` (cut from
-`schema-review`; neither is pushed). `E2-01`…`E2-60` closed except two deferred, across 11
-commits. 470 tests, 97% coverage, `make check` / `make db-schema-test` / wheel smoke all clean.
-
-**Deferred, not done — say so, do not call the iteration complete**: `E2-18` (logging — there
-is still no `logging` use at all; `cli.py` has 71 `print` calls) and `E2-20` (task output
-discarded). Round 3 caught these being wrongly marked closed; that correction is the reason
-the file's status line can be trusted now.
-
-`ITERATION_2.md` ends with a completion summary and a "what the next review should know"
-section; `CLAUDE.md`'s "Where things stand" has one dated entry per phase with full reasoning.
-
-**Three settled decisions were reversed, each on explicit instruction and each recorded where
-the original decision lived** — do not treat any of them as drift:
-- The **"no SQL parser" Non-goal**: `sqlglot` is now a hard dependency, used only by
-  `column_lineage.py` for column-level lineage.
-- **Interactive `configure` is gone**, replaced by an idempotent dbt-style `etl-craft setup`.
-- **`run_task` no longer writes `SKIPPED` for a merely-not-yet-met dependency** (E2-47); only
-  "can never be satisfied" writes a terminal row.
-
-**Real scope limits, stated in CLAUDE.md rather than hidden** — do not "fix" these by
-accident:
-- ~~ClickHouse limits~~ **Gone with ClickHouse itself (2026-09-21).** `qualify()` is back to
-  always emitting three-part `database.schema.table`, and no action is refused on dialect
-  grounds.
-- **DuckDB admits one writing process at a time.** The engine serializes Data DB access for it
-  behind an Engine DB advisory lock (`warehouse.data_db`), so a parallel wave queues rather
-  than failing. Postgres is unaffected and stays fully parallel.
-- **Still open** (raised, not built): E2-11's poll shape, E2-14's field-name freeze, E2-22's
-  `AUD_` retention policy.
-
-**The lesson worth keeping from round 3**: a regression (`TIMESTAMP WITH TIME ZONE`) survived a
-whole iteration because every SQL-action test pointed `[Warehouse]` at the same Postgres. When
-adding a dialect branch, add a test that runs against that dialect — `make_config(
-clickhouse_warehouse=True)` now exists for exactly this.
-
-**Why:** the user works in review rounds — build, hand to an external review, fold the
-findings back in. Round 2 already did this once and found nine real issues in phase 1's own
-new surface, which is the pattern to expect again.
-
-**How to apply:** read `ITERATION_2.md`'s completion section first. When new findings arrive,
-number them from E2-53 and keep the never-renumber rule. Turn every reproduction into a
-regression test and watch it fail against the pre-fix code first — that discipline caught two
-tests in this iteration that were passing for the wrong reason. See
-[[project-etl-craft-schema-first-workflow]] and [[feedback-flag-judgment-calls]].
-
-
-##### Round 3 (2026-09-20) — review of the completed iteration 2
-
-Iteration 2 is declared complete (commit `314e0c3`, 500 tests, mypy/ruff/black/pydocstyle clean,
-wheel smoke test passing for real). A third review added **E2-53…E2-60**.
-
-Independently re-verified as genuinely fixed: E2-01, E2-02, E2-03, E2-04, E2-05, E2-06, E2-13,
-E2-37. The wheel install path works end to end.
-
-Four reproduced findings, plus one process finding that matters most:
-- **E2-57: `ITERATION_2.md` claims all 52 items closed, but E2-18 (logging) and E2-20 (task
-  output capture) were never built** — `grep -rn logging src/etl_craft` returns nothing. Fix the
-  status line before anything else; the file's value is that it can be trusted.
-- **E2-53** ClickHouse: every SQL action's DDL path fails (no ENGINE clause, non-nullable NULL
-  casts, and `TIMESTAMP WITH TIME ZONE` — the last a regression introduced by E2-33). No test
-  ever runs a SQL action against ClickHouse.
-- **E2-54** `PRIMARY_KEY` (E2-03's fix) and `SCD2_MERGE` are mutually exclusive.
-- **E2-55** Under `Mode=orchestrator` a failed task cannot be re-run after the run finalizes, and
-  the error recommends `--force`, which that mode refuses.
-- **E2-56** `generate-docs` writes the lineage cache through `engine.connect()`, so it is rolled
-  back — and a read-only verb now writes.
-
-**How to apply:** read `ITERATION_2.md`'s round-3 section and its "still to raise rather than
-guess" list before starting; four items there need a design answer rather than a guess.
-
-
-##### Round 4 (2026-09-21) — round 3's fixes, and the ClickHouse -> DuckDB move
-
-**ClickHouse is no longer a supported warehouse. PostgreSQL and DuckDB are**, per explicit
-decision ("we need acid and ansi, so moving to duckdb"). `duckdb-engine` is a hard dependency —
-a scoped, documented reversal of the no-bundled-dialects Non-goal, because DuckDB is embedded.
-
-All eight round-3 findings independently verified fixed, including E2-57 handled the honest way
-(E2-18/E2-20 recorded as deferred-not-done rather than the claim being widened). **Positive worth
-keeping:** all ten SQL shapes `sql_actions.py` emits run unmodified on DuckDB — the ANSI
-discipline meant a warehouse swap cost one dialect branch, not a rewrite.
-
-Four new findings (E2-61..E2-64), all reproduced, all about DuckDB's *process* model rather than
-its SQL:
-- **E2-61, the big one:** DuckDB's file lock is exclusive **across processes**, and the engine runs
-  one subprocess per task. Any wave with 2+ SQL tasks fails all but one; concurrent pipelines
-  conflict; and read-only verbs (`validate`, `doctor`, `generate-docs`) fail while any task runs.
-  Same-process threading is fine, so business-rule waves work. `runner.py` documents the smaller
-  *fork* sibling of this hazard but nothing addresses the cross-process case. **Scope question
-  answered 2026-09-21: DuckDB is a preferred, first-class warehouse alongside Postgres (Postgres
-  remains the only Engine DB), so E2-61 is a bug to fix, not a limitation to document.** The
-  remaining choice is serialize / retry-on-lock / in-process; under Mode=orchestrator only the
-  first two are available, since Airflow owns the process model there.
-- **E2-62** the DuckDB catalog is `Path(file).stem`, unvalidated — `my-warehouse.duckdb` makes
-  every SQL action a parser error.
-- **E2-63** `jdbc:duckdb:` is documented as in-memory but builds `duckdb:///memory`, a *file named
-  `memory`* in the cwd.
-- **E2-64** the surrogate-key sequence is named from the bare table name, so `staging.orders` and
-  `marts.orders` collide.
-
-**Method note carried forward:** the DuckDB tests prove the dialect; what is missing is a test that
-proves the *deployment* — a real multi-task wave, in real subprocesses, against a real DuckDB file.
-That one test would have caught E2-61 and E2-63 together.
-
-
-##### Round 4 outcome (2026-09-21) — all four fixed, architecture settled
-
-**Architecture, settled by explicit decision: `engine: postgres` / `warehouse: postgres,
-(duckdb + iceberg)`.** Postgres is a first-class warehouse with no caveats. Commit `da90877`,
-486 tests, 97% coverage, everything clean.
-
-- **E2-61 fixed by queueing, per explicit decision to keep the subprocess model** (it is what
-  crash detection and "local runs mirror an orchestrator" are built on). `warehouse.data_db()`
-  is now the single route to the Data DB; on a single-writer warehouse it holds a Postgres
-  advisory lock **in the Engine DB** for the duration, so tasks queue. No-op for Postgres.
-  Verified: `lock_timeout` does apply to `pg_advisory_xact_lock`.
-- **E2-64 was worse than the review reported.** The review probed on one connection, where the
-  `DROP SEQUENCE` fails loudly. The engine uses one connection per task process, where it
-  succeeds **silently** — both tables share a reset sequence and a later insert into an
-  untouched table dies with `Duplicate key "ROW_ID: 2"`. Always check a finding against the
-  engine's *real* connection/process shape before accepting its severity.
-- **E2-62/E2-63 fixed** in `translate_jdbc_url`; `doctor` refuses an in-memory warehouse.
-- **Found while fixing: `setup` never wrote a `[Warehouse]` section**, so the one command meant
-  to reach a working deployment could not run a single SQL task. Now writes it from
-  `ETL_CRAFT_WAREHOUSE_JDBC_URL`/`_PROFILE`/`_USER`/`_AUTH_MODE`.
-
-**Iceberg is added scope, not built.** Analysis is in `ITERATION_2.md`'s closing section. Two
-things decide the design and must not be guessed: DuckDB's Iceberg **write** support needs
-verifying against a real catalog (reads are near-universal, writes are not, and this engine
-only writes), and **Iceberg has no primary keys or sequences**, which collides with E2-54's
-`ROW_ID` identity key and `validate`'s PK introspection. When it lands, `is_single_writer`
-returns False and E2-61's serialization stops applying.
-
-**Method note, proven twice this round:** a test that stops at "it was created" can pass against
-the bug — the first E2-64 test did. Assert the aftermath. And the missing test shape was the
-*deployment*, not the dialect: `test_run_pipeline_runs_a_parallel_wave_against_a_duckdb_warehouse`
-(real subprocesses, real DuckDB file) is the one that catches this whole class.
-
-
-##### Round 5 (2026-09-22) — round 4's fixes, and the Iceberg warehouse
-
-**Warehouse architecture again widened**: engine is always Postgres; warehouse is **Postgres, or a
-SQL engine over Iceberg** (Trino / Databricks / Snowflake), with DuckDB kept for local dev. On any
-non-Postgres warehouse every table the engine creates must be an Iceberg table. A local
-Trino + Iceberg REST + MinIO stack is now in docker-compose.
-
-Round 4 all fixed. E2-61 solved well: the subprocess model stays and Data DB access **queues behind
-a Postgres advisory lock held in the Engine DB** (reachable from every contending process,
-including remote Airflow workers); queueing not retrying, and `doctor` reports it.
-
-**A correction worth remembering: E2-64 was wrong in the dangerous direction.** The round-4 probe
-used one connection, where DuckDB refuses the DROP SEQUENCE loudly. The engine uses one connection
-*per task process*, where it succeeds **silently** and corrupts an unrelated table. A review probe
-that doesn't reproduce the engine's own connection topology can understate severity.
-
-Five new findings (E2-65..E2-69), all on the Iceberg path, three sharing one root cause —
-**Trino does not roll back**:
-- **E2-65** (reproduced) `DELETE_ROWS` hard-delete emits `DELETE FROM <t> t` and Trino rejects the
-  alias; `_update_target` fixed this for UPDATE and its docstring asserts "only UPDATE needs this".
-- **E2-66** (reproduced) the stage is an ordinary table on Trino, so a failed action leaves a real
-  Iceberg table (`etl_stage_<task_run_id>`) in the team's schema permanently, one per failure.
-- **E2-67** (reproduced) the atomicity caveat names MySQL/Oracle but not Trino, where *nothing*
-  rolls back — DML included.
-- **E2-68** (from code) cloning still uses `MetaData.create_all`, so mirrored tables are
-  non-Iceberg on Databricks/Snowflake — the exact artifact the Snowflake guard refuses to produce.
-- **E2-69** (from code) `_is_iceberg_backed` decides by dialect name, so a Trino URL pointing at a
-  `hive` catalog is silently treated as Iceberg.
-
-**Method note:** the Iceberg end-to-end test covers `SCD1_MERGE` only, and the one action probed
-outside it was broken. Extending it across the remaining six actions is the highest-value
-follow-up.
-
-
-##### Round 6 (2026-09-22) — round 5's fixes, and declared table formats
-
-Round 5 all fixed (E2-66 re-probed live: no leak). **Non-Iceberg formats are now allowed on
-Snowflake/Databricks**: `CFG_TASK_PARAMETERS.TABLE_FORMAT` (iceberg|native) over
-`[Warehouse].Table_format`, default `iceberg`, declared never inferred.
-
-**E2-70 — found by them, not me, by taking round 5's own advice:** extending the Trino test across
-the whole vocabulary immediately showed `SCD2_MERGE` entirely broken there (its second scratch
-table still emitted `CREATE TEMPORARY TABLE`). **Why my probe missed it, and the rule that follows:
-I hand-wrote the SQL shapes and ran them directly, which proves the dialect accepts a shape but
-never proves the code emits it. Reproduce through `run_task`, not hand-written SQL.**
-
-Three new findings:
-- **E2-71 (reproduced)** `PRIMARY_KEY` was replaced by the generated `ROW_ID` in E2-54 but is still
-  documented as live in `sql_actions.py`'s docstring, `docs/parameters.md`, and `KNOWN_PARAMETERS`
-  — so declaring it succeeds, does nothing, and `validate` stays silent. `ROW_ID` is documented
-  nowhere, though it is what `BUSINESS_RULE_KEY_COLUMN` must name. Recurrence of E2-58's class.
-- **E2-72 (from code)** `verify_iceberg_catalog` reads `[Warehouse].Table_format` only, but
-  `TABLE_FORMAT` is per-task — a task declaring iceberg under a native warehouse skips the guard.
-- **E2-73 (from code)** none of `TABLE_FORMAT`/`EXTERNAL_VOLUME`/`BASE_LOCATION` is checked by
-  `validate`; the newest parameters have the least pre-flight checking.
-
-
-##### Round 7 (2026-09-22) — E2-74..E2-89, all sixteen fixed; iteration 2 fully closed
-
-533 → 546 tests. Headline: `SCD2_MERGE` didn't converge on retry (E2-74, real data loss — new-row
-leg wasn't scoped to active rows) and the E2-04 dedupe guard was unreachable on Iceberg (E2-75,
-last `CREATE TEMPORARY TABLE` site). Also: `--config` was dropped for spawned tasks (E2-78), and
-the Engine DB write transaction was removed from around long-running handlers since it pinned the
-`xmin` horizon for the whole database (E2-80/81). "Data DB" renamed to "warehouse" throughout
-(`build_data_engine`→`build_warehouse_engine`, `data_db()`→`open_warehouse()`) in the same round.
-E2-18 (logging)/E2-20 (task output) still honestly deferred — **now three rounds running**.
-
-
-##### Business-rule key fix + round 8 (2026-09-22) — `ROW_ID` was the wrong BR key; then landed
-
-Separately: `BUSINESS_RULE_KEY_COLUMN` forced onto `ROW_ID` (E2-54's fix) was itself wrong —
-`ROW_ID` is regenerated by every full-replace action, so a flag recorded against it silently
-re-attributes to a different row after a truncate. `validate` no longer requires
-`BUSINESS_RULE_KEY_COLUMN == PK`; a new check flags one keyed on `ROW_ID` for a
-`CREATE_TABLE`/`OVERWRITE_TABLE` target specifically. **Lesson: fixing stale docs by reading the
-code tells you what the code does, not whether it's right** — the wrong "key on ROW_ID" guidance
-had been written into `docs/parameters.md` while fixing an unrelated doc bug.
-
-
-##### The canonical config-manifest pivot (2026-09-22/23, commits `578ab74`.."8e0f96f") — NOT reflected in CLAUDE.md
-
-**This is the thing to know before touching `craft-connector.yml` or `setup`/`configure.py`.**
-The config format was rewritten: `[Execution]/[Source]/[Postgres]/[Warehouse]/[Orchestrator]` →
-`Orchestration:/Secrets:/Engine:/Warehouse:/Cloning:/Dag_defaults:/Email:`, each of
-`Engine`/`Warehouse`/`Email` now `Profile` + `Variables` (field → *name* of the env/`.env` var
-holding the real value, not the value itself). `config.py` reads **both** shapes losslessly into
-one `ConnectorConfig`; every downstream reader is format-agnostic. Migration tooling was also
-rewritten: `migrate.py` now separates package ENGINE history from optional PROJECT history and
-keeps a SHA-256 checksum ledger (`sql/migrations/0004_migration_streams_and_checksums.sql`). New
-files not yet cross-referenced from CLAUDE.md: `SECURITY.md`, `docs/operations.md`,
-`docs/release-checklist.md`, `CHANGELOG.md`. **`CLAUDE.md`'s own `craft-connector.yml` living-spec
-section still shows the old format** — this is the first time in the project's history that
-`CLAUDE.md` wasn't updated in the same commit as the change it describes.
-
-
-##### Iteration 3, round 2 (2026-09-23) — E3-01..E3-07 all verified FIXED; new E3-08..E3-15, one a real secret leak
-
-Commit `3915fd8` fixed all seven round-1 findings in the same commit as a large new feature (live
-Databricks/Snowflake cloud verification via a "preferred connection shape" — separate
-jdbc_url/catalog/schema/token fields instead of one packed JDBC URL). Re-verified all seven live
-against Docker Postgres; all genuinely fixed, each with a regression test confirmed to fail
-pre-fix. `make check`: 578 passed, 4 skipped (Databricks x2 + Snowflake x2, correctly credential-
-gated), 94.17% coverage, mypy/black/ruff/pydocstyle clean.
-
-**E3-08, the one to know about before touching `warehouse.py`'s `preferred_connection_url` or
-`configure.py`'s legacy-manifest write path: a Databricks token can be written in cleartext into
-`craft-connector.yml`.** `preferred_connection_url`'s Databricks branch appends
-`;ConnCatalog=...;ConnSchema=...` onto the caller's `jdbc_url` **verbatim** — despite its own
-docstring calling the result "credential-free" — never stripping `AuthMech`/`UID`/`PWD` if the
-base URL already has them (only the separate connect-time *parser* does, too late). For a **new**
-canonical manifest this is harmless (only variable names get persisted). For an **existing legacy
-manifest** — an explicitly supported upgrade path — `_write_legacy_manifest` writes the resolved
-URL **literally to disk**. Reproduced directly: pasting Databricks' own full JDBC connection-string
-(which naturally includes `PWD=<token>` — that's literally what Databricks' UI hands you to copy)
-as `WAREHOUSE_JDBC_URL` and running `setup` against a pre-existing legacy manifest wrote the token
-into the committed config file. No test covers `_write_legacy_manifest` at all. Fix direction:
-sanitize inside `preferred_connection_url` itself, not only at parse time.
-
-**E3-09, a residual gap in E3-02's own fix.** `run_pipeline` only threads `gate.consumed` through
-when it itself mints the run (`existing is None`); when it joins a run `init_pipeline_run` already
-gated separately (legal: `--init-only` works under both modes), `gate_consumed` stays `None` and
-finalize re-derives, silently re-clobbering the watermark E3-02 was built to protect. Reachable via
-`--init-only` then a later bare `run --pipeline_code X` under `Mode=local`. Untested.
-
-Minor findings also opened this round (E3-10 test gap, E3-11 CLAUDE.md's own test-count claims are
-internally inconsistent — 584/573/265 vs the actual 578+4 — E3-12 CLAUDE.md's craft-connector.yml
-section wasn't updated for the new preferred-connection fields, same pattern as E3-01's own root
-cause recurring inside the commit that fixed it, E3-13 the new Databricks/Snowflake SQL logic in
-sql_actions.py has zero non-cloud-credentialed test coverage, E3-14 `_alter_table_keyword` trusts
-the task's current TABLE_FORMAT param rather than the target's actual creation format, E3-15
-token-connection validation branches untested). Full detail, fix directions, and suggested order of
-work are in `ITERATION_3.md` — it now has two rounds recorded in one file (mirroring
-`ITERATION_2.md`'s own multi-round convention), not a new file per round.
-
-`ITERATION_2.md`'s accidental uncommitted deletion (flagged in round 1) is resolved — the file is
-restored, tracked, and the working tree is clean.
-
-##### Iteration 3, round 1 (2026-09-23) — see `ITERATION_3.md` at the repo root — all fixed same day
-
-A fresh review (not requested as part of building anything — a standalone "check shippability and
-bugs" pass) found: `make check` fully clean (559 passed, 94.19% cov, mypy/black/ruff/pydocstyle/
-schema-test/wheel-smoke all clean) — engineering baseline strong, but one real shippability blocker
-(E3-01) plus four more confirmed correctness bugs in untested scenario space (E3-02..E3-05), plus
-two minor ones (E3-06/E3-07). `ITERATION_2.md`'s uncommitted deletion was restored (non-destructive,
-still in HEAD, no explanation existed for the deletion).
-
-**All seven fixed the same day, each with a regression test verified to fail against the pre-fix
-code first:**
-- **E3-01** (the shippability blocker): `setup`'s bootstrap-input names and the `Variables` names it
-  writes into the manifest are now the *same* string (`ENGINE_JDBC_URL`, `WAREHOUSE_JDBC_URL`, ...,
-  matching the docs), so the variable a team sets serves both purposes — no second, undocumented
-  convention to silently clobber a hand-authored manifest. Secret pointers are flat (`ENGINE_SECRET`)
-  rather than profile-embedded, letting `config.py`'s existing tiered fallback do the multi-tier job.
-  Verified via `scripts/wheel-smoke.sh` against real Docker Postgres.
-- **E3-02**: the pipeline-level cross-pipeline tracker now consumes *immediately* when
-  `init_pipeline_run`'s gate resolves (not deferred to whatever eventually finalizes the run) — the
-  only fix that actually closes the gap, since under `Mode=orchestrator`, init (`--init-only`) and
-  finalize (`--finalize-only`) are separate CLI invocations with no way to share an in-memory value.
-  `run_pipeline` (local mode) threads its own gate result through the same way `runner.py:323`
-  already does for tasks.
-- **E3-03**: `fetch_recorded_versions()` now keyed by `(pipeline_code, task_code)`, not bare
-  `task_code` — `TASK_CODE` is only unique per pipeline.
-- **E3-04**: `validate`'s `EMAIL_ALERT`-ordering check now sources `all_tasks`/`alerts` from every
-  active task in the pipeline, not `CFG_TASK_DEPENDENCY` edge endpoints — a zero-edge task (on
-  either side: the leaf being checked for, or the alert task itself) was invisible before.
-- **E3-05**: `business_rules.py`'s results-commit block now has its own `try`/`except` marking
-  `FAILED`, mirroring the warehouse-fetch step's existing one.
-- **E3-06**: `setup` now has `ETL_CRAFT_CLONING_EXTERNAL_VOLUME`/`_BASE_LOCATION` bootstrap inputs
-  and preserves a hand-added value it wasn't given one for, instead of always replacing the whole
-  `Cloning` block.
-- **E3-07**: `cloning.py`'s Snowflake-Iceberg DDL now rejects a quote in
-  `External_volume`/`Base_location` before interpolating, matching `sql_actions.py`'s own guard.
-
-**Documentation debt (D-1..D-6) also closed**: `CLAUDE.md`'s `craft-connector.yml` section rewritten
-to the current canonical format (with the legacy format also documented as still-supported); a new
-dated "Where things stand" entry records round 7, the business-rule-key correction, and the
-config-manifest pivot — all of which had shipped without an entry, which is what let the doc-sync
-gap open in the first place; the Architecture section's warehouse bullet now states plainly which
-targets are verified (Postgres, DuckDB, Trino-over-Iceberg) versus credential-gated and unverified
-in this environment (Databricks, Snowflake); `sql/schema.sql`'s POST-SIGNOFF trailer gained the
-missing entry for migration `0004`; `generate-yml --global` is its own CLI table row.
-
-**Final state**: 571 tests collected (569 passed + 2 honestly-skipped Databricks/Snowflake),
-94%+ coverage, `make check` (black/ruff/pydocstyle/mypy/schema-test/pytest) and
-`scripts/wheel-smoke.sh` all clean. Databricks/Snowflake execution paths remain genuinely unverified
-— no credentials available in this environment; stated as such in CLAUDE.md rather than implied
-fixed.
 
 ### feedback_decide_dont_block
 
 *Prefers Claude to make the call and keep building rather than stacking up blocking design questions*
 
 Make the call and keep building. Do not stack up blocking design questions —
-"I don't want to keep running into walls" (2026-09-21, after a third
+"I don't want to keep running into walls" (after a third
 consecutive AskUserQuestion on the same DuckDB concurrency thread).
 
 **Why:** the user engages readily with design questions when they open new
@@ -671,13 +264,13 @@ for a future 0.2.0 (release evidence per release/README.md, cloud suites via
 `scripts/acceptance_cloud.py --env-file .env --wheel ...`; run suites sequentially — parallel runs
 and network blips caused spurious failures during 0.1.0).
 
-**Status (2026-10-10 evening):** v0.3.0 RELEASED (tag on 404dc96, release/0.3.0 = cf35231 + version bump +
+**Status:** v0.3.0 RELEASED (tag on 404dc96, release/0.3.0 = cf35231 + version bump +
 test fix 9517c30 + evidence; GitHub Release with wheel, sdist, SHA256SUMS; no pools). Merge-back PR #138
 (chore/merge-release-0.3.0, pools entry kept under Unreleased) — merge with a MERGE COMMIT, not squash.
 Dependabot #135-#137 merged. Local branches next: #139 feat/sql-create-view (gate+cloud done, demos running),
 then feat/services-config-files, then feat/sql-sqlglot-analysis (stacked on views); roadmap rows use #PRNUM
 placeholders. Then S5.C. 0.4.0 after the soak passes on 2026-10-17.
-**Status (2026-10-11):** all PRs through #142 are merged: merge-back #138, CREATE_VIEW with statement hash
+**Status:** all PRs through #142 are merged: merge-back #138, CREATE_VIEW with statement hash
 (AUD_TARGET_VIEW_STATEMENT, migration 0019), CSV config files, sqlglot guard, and roadmap S5.K-S5.N
 (rejects, watermarks, event waits, column lineage from declared sources). S5.K merged as #143
 (REJECT_LIMIT, SKIP_REJECTS_OVER_LIMIT, <target>__rejects with audit columns, NOT NULL check,
@@ -739,7 +332,7 @@ namespaces; keep the core backend-agnostic. The user welcomes design challenges
 Never delete branches, local or remote: merge with `gh pr merge N --squash` (no `--delete-branch`), and
 don't prune or clean up old branches even when merged or stale.
 
-**Why:** the user keeps every branch to show the work was done in phases (2026-10-04, after I had been
+**Why:** the user keeps every branch to show the work was done in phases (after I had been
 merging with `--delete-branch`).
 **How to apply:** every PR merge in etl-craft and elsewhere for this user. If a branch was deleted, it can
 be restored from the PR's head commit (`refs/pull/N/head`); creating a `release/**` branch triggers the
@@ -775,7 +368,7 @@ Built instead: project skills `pre-pr-checks` and `roadmap-item` in `.claude/ski
 
 On 2026-10-15 the user asked about five more (they named them approximately):
 - **NVIDIA SkillSpector** ("specktor"): a static scanner for skills. The owner said not to add it
-  (2026-10-15). A one-off scan rated `fixing-accessibility` SAFE before it was vendored; HIGH findings on chisel and
+ . A one-off scan rated `fixing-accessibility` SAFE before it was vendored; HIGH findings on chisel and
   anti-slop were false positives.
 - **ui-skills** (ibelick, MIT): vendored only `fixing-accessibility` (plain HTML, scanned SAFE).
   `baseline-ui` assumes React/Tailwind. `improve-ui` (read-only audit) is worth reconsidering at S7.A.
@@ -831,7 +424,7 @@ back before local warehouse tests.
 
 After a reboot, the Iceberg REST fixture container can keep a stuck SQLite catalog: every commit returns HTTP 500 `SQLITE_BUSY` (main fails the same way), and `docker restart` does not help. Recreate it: `docker compose up -d --force-recreate --no-deps iceberg-rest` (safe during the soak, which uses DuckDB and Mailpit only). Seen 2026-10-11.
 
-**Swap and the demo server (2026-11-03).** This workstation is also the "laptop server" that hosts the S8 demo cluster and its self-hosted GitHub runner (owner). Swap already exists: 15 GiB zram (zstd, about 4:1, prio 100) plus a 16 GiB NVMe swapfile at /swap/swapfile (prio 10), with swappiness at 150. The owner wants the demo to use swap. Kubernetes pods get no swap by default (NoSwap sets memory.swap.max=0), so the k3d kubelet needs LimitedSwap, verified on a pod's cgroup. Idle demo services can swap out while suites run; still run one suite at a time.
+**Swap and the demo server.** This workstation is also the "laptop server" that hosts the S8 demo cluster and its self-hosted GitHub runner (owner). Swap already exists: 15 GiB zram (zstd, about 4:1, prio 100) plus a 16 GiB NVMe swapfile at /swap/swapfile (prio 10), with swappiness at 150. The owner wants the demo to use swap. Kubernetes pods get no swap by default (NoSwap sets memory.swap.max=0), so the k3d kubelet needs LimitedSwap, verified on a pod's cgroup. Idle demo services can swap out while suites run; still run one suite at a time.
 
 ### require-services-scope
 
@@ -871,7 +464,7 @@ is `soak-result.json`, written at 2026-10-17 08:01 UTC.
 soak result to the CHANGELOG's Verified section, then tag and publish 0.4.0 like 0.3.0. If it fails,
 fix the cause on `main`, cherry-pick the fix to the release line, and restart the soak.
 
-**Outcome (2026-10-16):** a reboot stopped the soak at about 05:09 UTC on 16 October, after
+**Outcome:** a reboot stopped the soak at about 05:09 UTC on 16 October, after
 5 days 21 hours. The last check (04:59 UTC) passed with no problems: every due tick produced one
 run (563, 564 and 564), 12,945 attempts succeeded (1 expected flaky-feed failure), and 88 kills
 were recovered. No soak-result.json was written. The owner said not to restart it ("it is fine
@@ -927,7 +520,7 @@ run, so a gate problem surfaces early.
 
 *The user finds criticism hard; raise problems as concrete fixes, and never bring up adoption, stars, marketing or "vibe coded" judgments about etl-craft*
 
-The user said (2026-10-10) they are not good at handling criticism and feel defeated even by genuine
+The user said they are not good at handling criticism and feel defeated even by genuine
 issues. etl-craft will be open source once published; they will talk about it publicly only once it
 works correctly, so zero stars and no users are expected and do not matter yet. Contributors are welcome.
 
@@ -940,7 +533,7 @@ the work. Keep being honest about real defects: [[fail-loudly-with-debug-data]] 
 
 *Support Insights runs only after every planned feature is built, as the final proof; its generators must deliberately emit realistic bad source data that etl-craft must handle*
 
-User direction (2026-10-10): the Support Insights rebuild (roadmap S8, the 1.0 gate) runs only after
+User direction: the Support Insights rebuild (roadmap S8, the 1.0 gate) runs only after
 everything planned is built, and must help find and fix issues rather than be a half-baked setup. The
 final project must stand on its own. Its generators deliberately produce bad data the way real systems do,
 and the emulation should cover most of what messy real-world sources cause (duplicates and replays, late
@@ -962,12 +555,12 @@ table (PR #293). The owner will judge the UI against the demo's real failures.
 
 *Why etl-craft exists — Informatica's operational basics (audit above all) for SQL warehouses, which Airflow + dbt setups lack; a lasting open-source tool, not a product or company*
 
-The user (2026-10-10): etl-craft will not be sold or turned into a company; it should be a good tool people
+The user: etl-craft will not be sold or turned into a company; it should be a good tool people
 keep using, not a week of hype. The idea comes from Informatica and the basics it has that Airflow + dbt
 setups lack: one tool instead of two, and above all audit tracking ("a must in any system"), which dbt
 removes. Matching all of Informatica is not the target; its operational basics for SQL warehouses are.
 
-The user sharpened this (2026-10-15/16):
+The user sharpened this:
 - **Orchestrator:** closest to Airflow plus PowerCenter's Workflow Manager and Workflow Monitor (PowerCenter-style operator actions, not constrained like Airflow).
 - **Execution engine:** a better dbt. It handles ingestion too, and its predetermined action templates replace dbt's Jinja.
 - **Documentation:** comes from metadata. Docs are given as task parameters and the docs build collects them. Column-level lineage, execution graphs, pipeline health, metadata views and a DAG dashboard come built in.
@@ -991,7 +584,7 @@ See [[support-insights-final-emulation]] and [[user-feedback-style]].
 
 *HARD RULE — etl-craft is not published (PyPI, announcements, posts) before 1.0; it is talked about only once results back it up*
 
-The user (2026-10-10): "It will only get published after 1.0, not before, that is a hard rule. We will
+The user: "It will only get published after 1.0, not before, that is a hard rule. We will
 only talk about it when we have stuff to back it up." The repository being public on GitHub is not
 publishing.
 
@@ -1050,7 +643,7 @@ checks on team CFG_ tables; don't make package CI depend on the demo repo.
 
 When the owner dislikes a behaviour (e.g. "I hate it when the orchestrator restarts a failed SQL
 transformation"), don't remove the option for everyone. Make the safe behaviour the default and
-keep the other choices configurable. Their words (2026-10-15): "this is for everyone, not just
+keep the other choices configurable. Their words: "this is for everyone, not just
 me. if someone actually uses it is a different case."
 
 **Why:** etl-craft is a tool for many teams; one person's taste shouldn't remove a choice
@@ -1064,7 +657,7 @@ TRANSIENT (default), TRANSIENT_AND_UNKNOWN and ANY. See [[decide-dont-block]].
 *Express new behaviour as ordinary tasks plus CFG_TASK_DEPENDENCY rows; don't invent hooks, per-task pre/post parameters or special execution paths*
 
 When a feature can be modelled as ordinary tasks wired by normal dependencies, do that rather than
-inventing a new mechanism. The owner (2026-10-15), rejecting PRE_SQL_FILE/POST_SQL_FILE/PRE_SCRIPT
+inventing a new mechanism. The owner, rejecting PRE_SQL_FILE/POST_SQL_FILE/PRE_SCRIPT
 hooks: "Think of it like a normal task dependency in our architecture. It follows the same
 dependency rules. We don't need to invent anything, just python tasks and sql tasks."
 
@@ -1084,7 +677,7 @@ See [[choices-for-all-users]] and [[decide-dont-block]].
 
 *Perfect what etl-craft offers rather than adding breadth — no chasing databases, connectors or integrations; never Jinja/macros; don't compare against the union of many tools*
 
-The owner (2026-10-16): "Building 1000 things would be a waste. We should perfect what we offer."
+The owner: "Building 1000 things would be a waste. We should perfect what we offer."
 They also said "We may not even see any adoption for a long time."
 
 - **Comparisons.** Don't treat the union of many tools' features as one competitor's shortcomings.
@@ -1127,7 +720,7 @@ Owner 2026-10-19: if Snowflake/Databricks capacity is unavailable on the first t
 
 ### project-standalone-no-airflow
 
-*2026-10-19 owner dropped Airflow/remote mode; etl-craft is standalone; S5.AA is PR #221 (2026-10-20); S5.AB next*
+*2026-10-19 owner dropped Airflow/remote mode; etl-craft is standalone; S5.AA is PR #221; S5.AB next*
 
 Owner 2026-10-19: etl-craft is a standalone orchestrator from 1.0.0; Airflow support (generate-yml, etl-craft-airflow, remote mode) is deleted outright, no shims. Plan PR #218 adds S5.Y (two slices: export, then remote mode) and S5.AA (one action table for role/audit/placement/route, generated API routes, one request per action, then names/folders, then typed values), ordered before S5.X, S5.C and S7.A. Other agents may implement the slices. PR #220 (S5.Y.2) keeps Allow_schedule (per-env controller schedule off) and PIPELINE_PARAMETERS.TAGS, and plans S5.AB tags/filters, S5.AC RUN_PIPELINE trigger tasks (WAIT = controller holds wait, DETACH = agent confirms then ends), S5.AD per-pipeline permission groups (grants on pipeline or tag), S7.A.4 Databricks+PowerCenter navigation; order S5.AA → AB → AC → AD → S5.X/S5.C. 2026-10-20: S5.AA merged #221, S5.AB #222, S5.AC #223. Plan PR #224 adds S5.AE (one gateway): controller (one active, vertical scaling, --no-ui serves only /health), stateless `etl-craft ui` copies (2+), agents talk only to the API (no Engine DB creds); only controller + ui hold DB creds (owner chose two DB clients over one); [ui]/[all] extras replace [server]; --api replaces --controller; agent API built inside S5.C.
 
@@ -1159,7 +752,7 @@ Owner 2026-10-19: build features from other tools' documented behaviour (PowerCe
 
 *2026-10-20 owner: after Codex's S5.AD + plan-bundle PR, add six specific test skills and complete the testing suite before 1.0.0*
 
-Skills shipped in PR #226 (2026-10-20); next is the gap audit + missing tests. Owner 2026-10-20: once Codex finishes S5.AD with the plan bundle (S5.AF indexes, S6.A/S6.B retention+archive gaps, S5.F run-pinned metadata, S7.A.4 new-tab rule), add test-expert skills in `.agents/skills/` (symlinked from `.claude/skills/`, shared by Claude and Codex) and then complete the testing suite with them before 1.0.0.
+Skills shipped in PR #226; next is the gap audit + missing tests. Owner 2026-10-20: once Codex finishes S5.AD with the plan bundle (S5.AF indexes, S6.A/S6.B retention+archive gaps, S5.F run-pinned metadata, S7.A.4 new-tab rule), add test-expert skills in `.agents/skills/` (symlinked from `.claude/skills/`, shared by Claude and Codex) and then complete the testing suite with them before 1.0.0.
 
 Skills agreed: test-etl-correctness, test-run-state, test-chaos-recovery, test-security, test-upgrades, test-failure-messages. Each is a repo-specific failure-mode checklist pointing at real code/fixtures, with an independent oracle per check and a mutation check proving the test fails without the change. UI browser testing waits for S7.A; query performance is S5.AF's guard.
 
@@ -1194,9 +787,9 @@ Agreed 2026-10-21; prompt given to Codex to add to the plan in the S5.C PR.
 **Why:** owner wants 1.0 complete for the core job, not breadth; pushes back on features that add surface without solving a real failure.
 **How to apply:** don't re-propose the rejected items; when proposing scope, check whether existing features already cover it and say honestly where the owner's call is wrong. Related: [[feedback-critical-scoped-engineering]], [[feedback-perfect-not-breadth]].
 
-**Events and streams (2026-10-21, later):** event waits are for discrete file/row triggers; cloud file arrivals use the cloud's own event + an external function writing a signal row (guide docs/guides/external-events.md: claim, delete on success, release on failure, park after 3 failed runs). No native bucket listing (S5.AG removed); Object_stores profiles moved into S5.F. Streams are read as scheduled micro-batches with per-partition offsets (S5.AH), never stream-triggered.
+**Events and streams (later):** event waits are for discrete file/row triggers; cloud file arrivals use the cloud's own event + an external function writing a signal row (guide docs/guides/external-events.md: claim, delete on success, release on failure, park after 3 failed runs). No native bucket listing (S5.AG removed); Object_stores profiles moved into S5.F. Streams are read as scheduled micro-batches with per-partition offsets (S5.AH), never stream-triggered.
 
-**UI and roles (2026-10-22):** S7.A gains a command center (actions from the action table only, never a shell; no host or metadata actions; forms from request types with the CLI line shown; audited). S7.B gains IAM-like custom roles: `role` and `access grant/revoke/explain` commands + API + command center (not config files); bindings of account/group to role on deployment/pipeline/tag replace grants.csv and the account role column; built-in roles fixed; no self-escalation; last admin kept.
+**UI and roles:** S7.A gains a command center (actions from the action table only, never a shell; no host or metadata actions; forms from request types with the CLI line shown; audited). S7.B gains IAM-like custom roles: `role` and `access grant/revoke/explain` commands + API + command center (not config files); bindings of account/group to role on deployment/pipeline/tag replace grants.csv and the account role column; built-in roles fixed; no self-escalation; last admin kept.
 
 ### project-endurance-run
 
@@ -1219,7 +812,7 @@ Owner 2026-10-21: "I dont even want a soak personally"; agreed to a 72-hour acce
 etl-craft never claims to be better than any other application (Airflow, dbt, PowerCenter or
 others), in docs, README, PR text or posts. It should simply be better.
 
-**Why:** the owner (2026-10-23): "We won't claim that we are better, we should silently be
+**Why:** the owner: "We won't claim that we are better, we should silently be
 better." Comparisons invite arguments; results speak.
 
 **How to apply:** other tools are behaviour references only ([[feedback-no-reverse-engineering]]).
@@ -1234,7 +827,7 @@ put one in project text. Related: [[project-publish-after-1-0]].
 A feature another tool advertises (Airflow, dbt and the like) may be exactly the property the
 owner finds annoying; etl-craft exists because those tools are annoying to use.
 
-**Why:** the owner (2026-10-24): "Something you feel like an advantage or selling point from a
+**Why:** the owner: "Something you feel like an advantage or selling point from a
 competitor application would feel like an annoying property to me. That is the reason I wanted
 to make this, like how dbt and airflow are very annoying."
 
@@ -1246,10 +839,10 @@ gap. Related: [[feedback-quietly-better]], [[feedback-no-reverse-engineering]],
 
 ### feedback-ui-databricks-template
 
-*Owner-approved UI direction (2026-10-25): Databricks as the whole template, sign-in first, shaded light + dark theme, command console, notes out of the page*
+*Owner-approved UI direction: Databricks as the whole template, sign-in first, shaded light + dark theme, command console, notes out of the page*
 
 The owner rejected text-like wireframes and minor restyles as "clunky"; the rebuild modelled on
-the Databricks workspace was called "so much better" (2026-10-25, PR #253, S7.A.0).
+the Databricks workspace was called "so much better" (PR #253, S7.A.0).
 
 - Databricks is the whole template: top bar (project switcher, global search, theme switch,
   avatar), sidebar, Jobs-style pipeline pages (Runs/Matrix/Tasks/Permissions + details panel),
@@ -1268,7 +861,7 @@ it instead of rebuilding to match the wireframe; one shared implementation, choi
 
 ### project-ui-capability-gaps
 
-*UI/admin plan written in PR #255 (2026-10-25): S7.Z governance+environments, S7.AA refresh, S7.AB standing controls, S7.A.5 matrix, S7.A.6 usability*
+*UI/admin plan written in PR #255: S7.Z governance+environments, S7.AA refresh, S7.AB standing controls, S7.A.5 matrix, S7.A.6 usability*
 
 Owner 2026-10-25: S6 completes before S7.A. Before UI work, a docs(plan) update is pending, and
 the owner will say when to do it. UI = Databricks layout + PowerCenter capabilities; no missed
@@ -1291,7 +884,7 @@ Planned content:
    views with an override badge. Proposed: an Active-overrides tile, config plan/apply notes,
    overridden SUCCESS = no data for HAS_DATA and no fresh output for consumers.
 
-4. Usability rules, drawn from Airflow's UI failures (2026-10-25 research): a failure summary
+4. Usability rules, drawn from Airflow's UI failures: a failure summary
    first and jump-to-error in logs, never a bare "not found" (say pending, removed or unreadable);
    every action previews its exact scope, with no flag checkboxes like Airflow's Clear; selection
    is a click that stays, with sticky headers and full names; bounded paged reads and per-view
@@ -1335,7 +928,7 @@ Planned content:
    scripts and runs validate, lineage and bundle checks. On errors the pipeline stays listed with
    an error badge and a broken graph (red nodes and edges; file, line and remedy). Proposed
    default: the last good version stays active and runnable, shown clearly; a per-pipeline option
-   blocks it until fixed. The owner agreed to this default (2026-10-25).
+   blocks it until fixed. The owner agreed to this default.
 
 **Why:** the owner wants no missed buttons and PowerCenter-level control without config edits.
 **Status:** written as PR #255 on 2026-10-25. DIRECT_CONFIG_EDITS was replaced by one `GOVERNANCE` column (STRICT/RELAXED; PROD must be STRICT) that also makes intervention reasons optional and typed confirmations plain (owner: "relax rules if the admin allows it, for everything").
@@ -1345,7 +938,7 @@ Planned content:
 
 *Owner finds git worktrees confusing; use one folder and plain branches, and explain git steps simply*
 
-The owner said (2026-10-25) they are a bit of a novice with git worktrees, which confuse them.
+The owner said they are a bit of a novice with git worktrees, which confuse them.
 Don't create worktrees. Use the one project folder with plain branches. Before switching branches
 there, check that Codex isn't working in it (or ask), and describe git steps in plain words.
 
@@ -1820,7 +1413,7 @@ E. watermark lookback (or document the pattern).
 
 *2026-11-07 owner says the UI is boring/under-designed; polish is a major need; style mix Linear (highest weight) + Databricks + Datadog*
 
-Owner (2026-11-07): the current UI is "very boring", people would not want to keep working in it; UI/UX is lacking more than the backend. Wants a mix of Linear (highest weight: fast, keyboard-driven, crisp), Databricks (calm, dense layout, already approved) and Datadog (data-rich: sparklines, timelines, colour).
+Owner: the current UI is "very boring", people would not want to keep working in it; UI/UX is lacking more than the backend. Wants a mix of Linear (highest weight: fast, keyboard-driven, crisp), Databricks (calm, dense layout, already approved) and Datadog (data-rich: sparklines, timelines, colour).
 
 **Why:** adoption depends on the product being pleasant to use daily.
 **How to apply:** make UI polish its own item, separate from the #363 redesign: foundation first (colour, type scale, layered surfaces, motion in shared components), then command palette, sparklines/timeline strips, log viewer, saved views, density switch. Review own screenshots (light/dark/390px) before showing. Keep the Databricks layout and status-colour rules. See [[feedback-ui-databricks-template]], [[feedback-review-own-screenshots]], [[project-2026-11-07-close]].
@@ -1846,7 +1439,7 @@ Owner (2026-11-07): the current UI is "very boring", people would not want to ke
 
 *2026-11-17 owner-agreed order of \"one complete implementation\" rebuilds found by the duct-tape audit*
 
-Audit of patched-together aspects (2026-11-17); owner: "I am fine with the rest". Order:
+Audit of patched-together aspects; owner: "I am fine with the rest". Order:
 1. Engine DB baseline (in progress, branch refactor/engine-baseline): delete 97 migrations,
    conversion steps, legacy queries/registries; remaining: normalization.py,
    refresh_upgrade.py, upgrade_signin.py, part of schema_status.py; fix tests; baseline ledger
@@ -1859,7 +1452,7 @@ Audit of patched-together aspects (2026-11-17); owner: "I am fine with the rest"
    outside dialects; golden-SQL tests prove byte-identical SQL (avoids cloud spend).
 5. DONE #427/#428. Authorization: one evaluator, built-in CAN_* as stored action sets, declarative per-action rules.
 6. DONE #429. Alerts: one ALERT task naming one channel of kind EMAIL/WEBHOOK/SLACK (Enforce_sla kept as per-env SLA_BREACH gate).
-7. PR #430 (2026-11-18). Deploy: one application command `deploy` (+ `--plan`): bundle only when Artifacts.Store,
+7. PR #430. Deploy: one application command `deploy` (+ `--plan`): bundle only when Artifacts.Store,
    config always, seeds only when declared ("no seeds declared" is not an error), pipelines
    refresh always; stops at first failure. Owner decided: REMOVE standalone bundle publish,
    config apply and seed apply; keep read-only config plan/export, validate, pipelines refresh.
@@ -1868,7 +1461,7 @@ Audit of patched-together aspects (2026-11-17); owner: "I am fine with the rest"
    deletes erased keys from its target inside the same attempt before succeeding;
    HANDLER=ERASURE deleted; `erase` keeps its one-time delete. Why: no daily re-run, and
    resent PII never creates new time-travel versions.
-Warehouse PR decisions (2026-11-18): rehash stays (design rule); upgrade-targets replaced by
+Warehouse PR decisions: rehash stays (design rule); upgrade-targets replaced by
 `adopt-target` (rebuild + swap, original dropped by default, --keep-original keeps
 <target>_pre_adopt), admin only, CLI/UI console only (no page).
 Also to examine: pauses/controls cluster, 12 run-shaped reads, retention modules.
@@ -1966,7 +1559,7 @@ licence terms (free ≤3-person companies) before use.
 
 *2026-11-12 owner agreed: before 0.9.0 delete planning docs (rewrite-plan, ui-wireframes, metadata-and-ui), unpublish and trim the roadmap, write docs/reference/design.md, regenerate screenshots*
 
-Owner (2026-11-12): before 0.9.0, clean up the planning files so only correct documentation remains.
+Owner: before 0.9.0, clean up the planning files so only correct documentation remains.
 
 Plan (owner asked to keep it in memory; not yet a roadmap item):
 1. Delete `docs/development/rewrite-plan.md` and `docs/development/ui-wireframes/` (129 files, 1.9 MB).
@@ -1983,7 +1576,7 @@ Plan (owner asked to keep it in memory; not yet a roadmap item):
 
 Authorization rebuild (plan step 5, option 1): PR a = decision matrix (#427, tests/fixtures/access_matrix.tsv); PR b = one evaluator with built-in CAN_* stored as CFG_ROLE_ACTIONS rows.
 
-Owner decisions for PR b (2026-11-18):
+Owner decisions for PR b:
 1. **Additive grants.** Project-wide grants (including viewer/operator audience defaults) always apply; a pipeline/tag grant only raises access on that pipeline. Today the first built-in grant on a pipeline/tag makes it private to its grantees — remove that.
 2. **A pipeline/tag grant opens the project**, limited to the granted pipelines, so it always works. Today such a grant without project-wide access silently gives nothing.
 
@@ -2077,7 +1670,7 @@ Reference to use (owner): https://airflow.apache.org/docs/apache-airflow/stable/
 
 ### airflow-3-grid-task-instance-spec
 
-*Concrete numbers and structure read from Airflow 3 React UI source (2026-11-25) for the S7.AX pipeline/run/task redesign*
+*Concrete numbers and structure read from Airflow 3 React UI source for the S7.AX pipeline/run/task redesign*
 
 Source: apache/airflow main, airflow-core/src/airflow/ui/src/layouts/Details/Grid/{constants.ts,Bar.tsx,GridTI.tsx,Grid.tsx,TaskNames.tsx,DurationAxis.tsx}, layouts/Details/{DetailsLayout.tsx,NavTabs.tsx}, pages/TaskInstance/{TaskInstance.tsx,Header.tsx,Logs/TaskLogHeader.tsx}. User docs: https://airflow.apache.org/docs/apache-airflow/stable/ui.html
 
