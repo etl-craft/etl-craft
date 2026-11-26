@@ -218,11 +218,12 @@ export function SelectField({
 
 export const inputClass = "h-control w-full rounded-md border border-border-strong bg-surface px-2.5 text-[13px] text-fg";
 
-/** A labelled control: one style for every form; `compact` is the small muted label used above toolbar filters. */
+/** A labelled control: one style for every form; `compact` puts a small muted label beside a toolbar filter. */
 export function Field({ label, compact, hideLabel, children }: { label: string; compact?: boolean; hideLabel?: boolean; children: React.ReactNode }) {
   return (
-    // A toolbar filter keeps the width of its control; a form field fills its column.
-    <label className={cn("grid gap-1", compact ? "w-fit justify-self-start text-xs text-muted" : "text-sm")}>
+    // A toolbar filter sits on the toolbar's one line, as tall as the buttons beside it; a form
+    // field stacks its label and fills its column.
+    <label className={cn(compact ? "flex w-fit max-w-full items-center gap-2 whitespace-nowrap text-xs text-muted" : "grid gap-1 text-sm")}>
       <span className={hideLabel ? "sr-only" : compact ? undefined : "font-medium"}>{label}</span>
       {children}
     </label>

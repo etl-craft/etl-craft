@@ -15,7 +15,7 @@ from types import FrameType, TracebackType
 from etl_craft import __version__
 from etl_craft.agent.client import AgentClient
 from etl_craft.agent.task_store import RemoteTaskStore
-from etl_craft.config import load_config
+from etl_craft.config import ConnectorConfig, load_config
 from etl_craft.core import log
 from etl_craft.core.alerts import HTTP_TIMEOUT, RETRY_DELAYS
 from etl_craft.core.counts import Counts
@@ -34,7 +34,8 @@ from etl_craft.services.operations.agent_models import AgentTask
 from etl_craft.services.operations.serialization import encode, from_json
 from etl_craft.warehouse.fencing import cancellation_scope, confirm_stopped, stop_current_queries
 
-logger = logging.getLogger(__name__)
+# Named explicitly: this module runs as ``python -m``, where ``__name__`` is ``"__main__"``.
+logger = logging.getLogger("etl_craft.agent.child")
 
 
 def _interrupt(signum: int, frame: FrameType | None) -> None:
@@ -118,7 +119,7 @@ def main() -> int:
                 f"attempt {args.attempt_id}: no pinned bundle; expected a published project; "
                 "publish a bundle and start a new run"
             )
-        config = store.project(config, context.bundle_id)
+        config = _load_bundle(store, config, context.bundle_id)
         context = replace(context, config=config)
         sys.dont_write_bytecode = True
         os.chdir(config.project_dir)
@@ -152,6 +153,17 @@ def main() -> int:
     return int(result.exit_code or 0)
 
 
+def _load_bundle(
+    store: RemoteTaskStore, config: ConnectorConfig, bundle_id: str
+) -> ConnectorConfig:
+    """Fetch the pinned project, saying so in the task log: on a busy host it can take a while."""
+    logger.info("loading project bundle %s", bundle_id)
+    loading = time.monotonic()
+    loaded = store.project(config, bundle_id)
+    logger.info("loaded project bundle in %.1fs", time.monotonic() - loading)
+    return loaded
+
+
 def failed(kind: type[BaseException], error: BaseException, trace: TracebackType | None) -> None:
     """Log a masked process-boundary failure and exit without waiting for script threads."""
     logger.error("agent task failed", exc_info=(kind, error, trace))
@@ -169,6 +181,7 @@ def started_context(context: TaskContext, started: object) -> TaskContext:
 
 
 def _handler(context: TaskContext, store: RemoteTaskStore) -> HandlerResult:
+    logger.info("running the %s handler", context.handler)
     if context.handler == Handler.ALERT:
         reply = store.client.call(
             ActionName.AGENT_REPORT,

@@ -302,7 +302,7 @@ def test_real_cli_prepares_restart_and_reads_its_capabilities(ctx, capsys, monke
     def context(args, role=None):
         yield ctx
 
-    monkeypatch.setattr("etl_craft.cli.access_context", context)
+    monkeypatch.setattr("etl_craft.cli.app.access_context", context)
     monkeypatch.setattr(common, "command_context", context)
     preview_args = [
         "run",

@@ -8,7 +8,7 @@ import os
 
 import mkdocs_gen_files
 
-from etl_craft.cli import build_parser
+from etl_craft.cli.app import build_parser
 
 # argparse wraps help text to the terminal width; a fixed width keeps the page stable.
 os.environ["COLUMNS"] = "100"

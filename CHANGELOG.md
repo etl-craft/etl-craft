@@ -6,6 +6,18 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+- Fixed: idle agents no longer keep the API and a PostgreSQL Engine DB busy. A claim that found no
+  work rewrote the queued tasks' wait reasons, and the change signal fired even when no row
+  changed, waking every waiting agent to do the same again (measured on an 11-agent deployment:
+  525 Engine DB commits a second with nothing queued). Signals now fire only for changed rows, and
+  wait reasons are written only when they change.
+- Fixed: `etl-craft agent health` answers without loading the command tree: about 0.13 s instead
+  of about 2 s of CPU per probe, well inside a 3-second Kubernetes probe timeout.
+- Fixed: an agent task's log starts the moment the agent takes the task (attempt, try, agent,
+  pool and slot), then shows loading the project bundle and the handler starting, so a running
+  task's log is no longer empty until its handler logs. Lines the agent's task process logged
+  itself, including the traceback of a failed task, were dropped; they now reach the task log.
+
 - Added: a full-width run page with failure summaries, task Graph, sortable List, Gantt with a
   critical path toggle, and filterable Events. Open it from a pipeline run or a run-number link.
   The Recover menu previews tasks before sending the audited recovery request. The same preview

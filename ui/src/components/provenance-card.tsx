@@ -34,7 +34,7 @@ export function ProvenanceCard({ code, pipeline, task, keys, columns }: { code: 
       <div className="grid gap-4 p-4">
         <p className="m-0 text-[13px] text-muted">Look up one business key in this task&apos;s target to see who last wrote each value and which values are locked against the next merge.</p>
         <form
-          className="flex flex-wrap items-end gap-3"
+          className="flex flex-wrap items-center gap-3"
           onSubmit={(event) => {
             event.preventDefault();
             if (!lookupReason) look.mutate();

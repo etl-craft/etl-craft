@@ -5,6 +5,7 @@ import math
 from dataclasses import replace
 from pathlib import Path
 
+from etl_craft.cli.agent_health import agent_health
 from etl_craft.cli.client import ApiClient
 from etl_craft.cli.commands.common import Command, call, configure_output
 from etl_craft.cli.lifecycle import shutdown_event
@@ -41,9 +42,9 @@ def _configure(parser: argparse.ArgumentParser) -> None:
 
 def _run(args: argparse.Namespace, out: Output) -> int:
     if args.operation == "health":
-        from etl_craft.agent.renewal import require_recent_renewal
-
-        require_recent_renewal(_config_path(args).parent)
+        if args.project_dir is not None and args.config is not None:
+            raise UsageError("choose --project-dir or --config, not both")
+        agent_health(args.project_dir, args.config)
         return ExitCode.SUCCESS
     if not args.api:
         raise UsageError(

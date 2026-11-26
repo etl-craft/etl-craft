@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from etl_craft.cli import build_parser
+from etl_craft.cli.app import build_parser
 
 pytestmark = pytest.mark.docs
 

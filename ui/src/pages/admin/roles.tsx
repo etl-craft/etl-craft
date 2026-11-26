@@ -143,7 +143,7 @@ function WideAccess() {
     <Card className="min-w-0">
       <CardHeader>
         <CardTitle>Access to {label} · {bindings.length}</CardTitle>
-        <div className="flex flex-wrap items-end gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <SelectField compact label="Reach" value={reach} onChange={setReach}>
             <option value="deployment">Every project</option>
             {ENVIRONMENTS.map((e) => (

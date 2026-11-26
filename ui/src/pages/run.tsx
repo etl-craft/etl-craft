@@ -279,7 +279,7 @@ function RunEvents({ code, run }: { code: string; run: RunView }) {
   const names = options(events.map((event) => event.task)).filter((name) => name !== "-");
   const kinds = options(events.map((event) => event.kind));
   return <>
-    <div className="flex flex-wrap gap-3">
+    <div className="flex flex-wrap items-center gap-3">
       <SelectField compact label="Task" value={task} onChange={setTask}><option value="">All tasks</option>{names.map((name) => <option key={name}>{name}</option>)}</SelectField>
       <SelectField compact label="Kind" value={kind} onChange={setKind}><option value="">All kinds</option>{kinds.map((name) => <option key={name} value={name}>{name}</option>)}</SelectField>
     </div>

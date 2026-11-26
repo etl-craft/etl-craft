@@ -10,7 +10,7 @@ from pathlib import Path
 import mkdocs_gen_files
 import pytest
 
-from etl_craft.cli import build_parser
+from etl_craft.cli.app import build_parser
 from etl_craft.config.loader import settings_by_section
 from etl_craft.config.loader_helpers import shown
 from etl_craft.config.managed_engine import MANAGED_FIELDS

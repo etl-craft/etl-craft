@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import NoReturn
 
 from etl_craft.api.console import Console, ConsoleResult
-from etl_craft.cli import as_flags, build_parser
+from etl_craft.cli.app import as_flags, build_parser
 from etl_craft.cli.commands import COMMANDS, Command
 from etl_craft.cli.output import Output
 from etl_craft.cli.prompts import CONSOLE

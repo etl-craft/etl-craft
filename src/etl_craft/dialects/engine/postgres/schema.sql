@@ -2578,7 +2578,7 @@ CREATE TRIGGER trg_truncate_aud_pipelines_run_log BEFORE TRUNCATE ON AUD_PIPELIN
 
 CREATE TRIGGER trg_attribute_aud_pipelines_run_log BEFORE INSERT OR UPDATE ON AUD_PIPELINES_RUN_LOG FOR EACH ROW EXECUTE FUNCTION etl_craft_attribute();
 
-CREATE TRIGGER trg_notify_aud_pipelines_run_log AFTER INSERT OR UPDATE OR DELETE ON aud_pipelines_run_log FOR EACH STATEMENT EXECUTE FUNCTION etl_craft_notify_execution();
+CREATE TRIGGER trg_notify_aud_pipelines_run_log AFTER INSERT OR UPDATE OR DELETE ON aud_pipelines_run_log FOR EACH ROW EXECUTE FUNCTION etl_craft_notify_execution();
 
 CREATE TRIGGER trg_run_definition_immutable BEFORE UPDATE ON AUD_PIPELINES_RUN_LOG FOR EACH ROW EXECUTE FUNCTION etl_craft_guard_run_definition();
 
@@ -2597,7 +2597,7 @@ CREATE TRIGGER trg_truncate_aud_pipeline_pauses BEFORE TRUNCATE ON AUD_PIPELINE_
 
 CREATE TRIGGER trg_attribute_aud_pipeline_pauses BEFORE INSERT OR UPDATE ON AUD_PIPELINE_PAUSES FOR EACH ROW EXECUTE FUNCTION etl_craft_attribute();
 
-CREATE TRIGGER trg_notify_aud_pipeline_pauses AFTER INSERT OR UPDATE OR DELETE ON aud_pipeline_pauses FOR EACH STATEMENT EXECUTE FUNCTION etl_craft_notify_execution();
+CREATE TRIGGER trg_notify_aud_pipeline_pauses AFTER INSERT OR UPDATE OR DELETE ON aud_pipeline_pauses FOR EACH ROW EXECUTE FUNCTION etl_craft_notify_execution();
 
 CREATE TRIGGER trg_actor_guard_aud_business_rules_run_log BEFORE INSERT OR UPDATE OR DELETE ON AUD_BUSINESS_RULES_RUN_LOG FOR EACH ROW EXECUTE FUNCTION etl_craft_guard();
 
@@ -2650,7 +2650,7 @@ CREATE TRIGGER trg_truncate_aud_task_attempts BEFORE TRUNCATE ON AUD_TASK_ATTEMP
 
 CREATE TRIGGER trg_attribute_aud_task_attempts BEFORE INSERT OR UPDATE ON AUD_TASK_ATTEMPTS FOR EACH ROW EXECUTE FUNCTION etl_craft_attribute();
 
-CREATE TRIGGER trg_notify_aud_task_attempts AFTER INSERT OR UPDATE OR DELETE ON aud_task_attempts FOR EACH STATEMENT EXECUTE FUNCTION etl_craft_notify_execution();
+CREATE TRIGGER trg_notify_aud_task_attempts AFTER INSERT OR UPDATE OR DELETE ON aud_task_attempts FOR EACH ROW EXECUTE FUNCTION etl_craft_notify_execution();
 
 CREATE TRIGGER trg_actor_guard_aud_gate_decisions BEFORE INSERT OR UPDATE OR DELETE ON AUD_GATE_DECISIONS FOR EACH ROW EXECUTE FUNCTION etl_craft_guard();
 

@@ -57,7 +57,7 @@ def test_installed_registry_names_known_release_and_accepts_supported_input():
 def test_every_accepted_input_has_an_introduction_release():
     import argparse
 
-    from etl_craft.cli import build_parser
+    from etl_craft.cli.app import build_parser
     from etl_craft.config.loader import SECTIONS, settings_by_section
     from etl_craft.core.compatibility import INTRODUCED, InputKind
     from etl_craft.core.enums import Handler
@@ -109,7 +109,7 @@ def test_unknown_builtin_parameter_refused_before_execution():
 
 @pytest.mark.parametrize("option", ["--future-option", "-z"])
 def test_unknown_cli_option_names_binary_and_upgrade(capsys, option):
-    from etl_craft.cli import build_parser
+    from etl_craft.cli.app import build_parser
 
     with pytest.raises(SystemExit):
         build_parser().parse_args([option])

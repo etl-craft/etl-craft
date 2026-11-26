@@ -26,7 +26,7 @@ export function RunsPanel({ code, pipeline, status, codes, filters = {}, highlig
           </div>
         </Card>
       ) : null}
-      {toolbar ? <div className="flex flex-wrap items-end gap-3">{toolbar}</div> : null}
+      {toolbar ? <div className="flex flex-wrap items-center gap-3">{toolbar}</div> : null}
       <RunsTable code={code} pipeline={pipeline} status={status} codes={codes} filters={filters} highlight={highlight} />
     </>
   );

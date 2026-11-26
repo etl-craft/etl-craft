@@ -22,6 +22,7 @@ from etl_craft.agent.renewal import renewal_marker
 from etl_craft.agent.task_store import RemoteTaskStore
 from etl_craft.config import ConnectorConfig
 from etl_craft.config.project import project_config
+from etl_craft.core import log
 from etl_craft.core.agent_resources import NO_DECLARATION, DeclaredCapacity, report
 from etl_craft.core.enums import (
     ActionName,
@@ -306,6 +307,16 @@ class AgentLoop:
         )
         task.trigger = work.task["handler"] == Handler.RUN_PIPELINE
         task.lease(task.deadline)
+        (folder / "output").write_text(
+            log.text_line(
+                logger.name,
+                f"attempt {attempt_id} try {work.task['attempt']} of "
+                f"{work.task['pipeline_code']}.{work.task['task_code']}: claimed by agent "
+                f"{self.owner} on {self.resources.host} (pool {self.options.pool}, {kind} slot); "
+                "starting the task process",
+            ),
+            encoding="utf-8",
+        )
         (folder / "work").write_text(
             json.dumps(
                 {

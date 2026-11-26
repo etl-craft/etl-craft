@@ -160,7 +160,7 @@ export function ProjectDashboard() {
         title="Home"
         subtitle={d ? <>Runs started <When iso={d.window_start} /> to <When iso={d.window_end} /></> : undefined}
         actions={
-          <div className="flex flex-wrap items-end justify-end gap-2">
+          <div className="flex flex-wrap items-center justify-end gap-2">
             <Segmented label="Time range" value={activePreset ?? null} options={RANGES.map((r) => ({ id: r.id, label: r.label }))} onSelect={(id) => preset(RANGES.find((r) => r.id === id)!.days)} />
             <Disclosure className="relative">
               <DisclosureSummary className="flex h-control cursor-pointer list-none items-center rounded-md bg-surface px-3 text-[13px] font-medium shadow-raised hover:bg-surface-2">
