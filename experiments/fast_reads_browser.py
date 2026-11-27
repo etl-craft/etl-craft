@@ -17,7 +17,7 @@ from browser.test_react_ui import open_page, sign_in
 from fixtures.catalog_scale import seed_catalog
 from etl_craft.core.actor import SYSTEM_ACTOR, acting_as
 from etl_craft.services.catalog.collect import collect_catalog
-from etl_craft.services.operations.documents import docs_folder
+from etl_craft.services.operations import catalog_pages
 from fast_reads import encode, index_triggers
 
 measurement = ContextVar("measurement", default=None)
@@ -80,6 +80,8 @@ def run(size, demo):
         init = conftest.init_db
         if not size or seed_database:
             conftest.init_db = lambda engine: None
+        original_folder = catalog_pages._folder
+        catalog_pages._folder = lambda ctx: root / "catalog"
         fixture = conftest.site.__wrapped__(root, SimpleNamespace())
         try:
             ctx, base = next(fixture)
@@ -97,7 +99,7 @@ def run(size, demo):
                         benchmark(ctx.engine)
                     if size < 5000 or os.environ.get("FAST_READS_LARGE_CATALOG"):
                         catalog = collect_catalog(ctx.engine, ctx.config, record_lineage=False)
-                        output = docs_folder(ctx.config)
+                        output = root / "catalog"
                         output.mkdir(parents=True, exist_ok=True)
                         (output / ".etl-craft-catalog").write_text('{"project":"default"}')
                         (output / "catalog.json").write_bytes(encode(index_triggers(catalog)))
@@ -114,7 +116,14 @@ def run(size, demo):
                     ("home", ""), ("history", "/runs"), ("grid", f"/pipelines/{pipeline}"),
                     ("graph", f"/pipelines/{pipeline}"), ("run", f"/runs/{pipeline}/{run_id}"),
                     ("task", f"/pipelines/{pipeline}?run={run_id}"), ("catalog", "/catalog"),
+                    ("lineage", "/catalog/tables/scale.scale_t_0?tab=lineage" if size else "/catalog"),
                 ):
+                    if os.environ.get("FAST_READS_CATALOG_ONLY") and name not in {"catalog", "lineage"}:
+                        continue
+                    if size == 5000 and not os.environ.get("FAST_READS_LARGE_CATALOG") and name in {"catalog", "lineage"}:
+                        continue
+                    if not size and name == "lineage":
+                        continue
                     browser, page, _ = open_page(pw, viewport={"width": 1440, "height": 950})
                     try:
                         sign_in(page, base, "/ui/agents")
@@ -142,8 +151,8 @@ def run(size, demo):
                                     page.get_by_role("region", name=f"Task {task_code}").wait_for(timeout=10000)
                                 elif name == "home":
                                     page.get_by_role("heading", name="Home", exact=True).wait_for(timeout=10000)
-                                elif name == "catalog":
-                                    page.get_by_role("button", name="Collapse catalog sidebar").wait_for(timeout=10000)
+                                elif name in {"catalog", "lineage"}:
+                                    page.get_by_role("tree", name="Catalog objects").wait_for(timeout=10000)
                                 elif name == "run":
                                     page.get_by_role("heading", name=f"Run #{run_id}", exact=True).wait_for(timeout=10000)
                                 else:
@@ -161,6 +170,7 @@ def run(size, demo):
                         browser.close()
         finally:
             fixture.close()
+            catalog_pages._folder = original_folder
 
 
 if __name__ == "__main__":
