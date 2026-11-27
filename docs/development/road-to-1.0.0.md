@@ -10345,7 +10345,8 @@ per pipeline run to that page and record before/after measurements in its PR.
 
 **Slices.**
 
-1. **S7.BB.1 Design and owner review.** Agree on screens, data, query budgets and public surface.
+1. **S7.BB.1 Design and owner review.** Run the fixture-only prototype locally. Review each
+   screen/tab with the owner and record approved 1440/390 light/dark captures.
 2. **S7.BB.2 Attempt evidence.** Store typed first/last attempt anchors with archive-aware resolution
    and capture isolated `getrusage(RUSAGE_CHILDREN)` evidence at exit, with unsupported values NULL.
 3. **S7.BB.3 Run/task views.** Add inline attempt triage and run Statistics. Use the last 20 successful
@@ -10354,12 +10355,13 @@ per pipeline run to that page and record before/after measurements in its PR.
 5. **S7.BB.5 Waiting and agents.** Explain recorded blockers and show current attempts
    with Linux-only live samples, sample age and free eligible slots; macOS shows “Not sampled.”
 6. **S7.BB.6 Monitor and Home.** Page active and recent evidence within the read budget.
-   Include overdue SLAs, recorded breaches and schedule ticks older than grace without a
-   started run. Omit paused/holiday/pre-definition ticks and reconcile catch-up by exact key.
+   Include overdue SLAs, recorded breaches and unstarted schedule ticks past a fixed grace
+   of the lesser of five minutes and the schedule interval. Omit paused/holiday/pre-definition ticks and reconcile catch-up by exact key. Each backlog
+   occurrence leaves Late when its run starts.
 
 **Done when.**
 
-- [ ] The owner approves the design and public surface before implementation.
+- [ ] The owner personally approves every screen and tab before approving this plan.
 - [ ] Selected tasks show failure, counts and resource evidence in one feed and preserve
       missing/zero distinctions and exact attempt links.
 - [ ] Log events, waits and capacity show recorded evidence, including missing or stale data.
@@ -10378,7 +10380,10 @@ status and recovery evidence across screens and CLI commands.
 Add a redacted incident handoff, improve the standard alert payload and explain exact
 run selection and recovery in the Quick Start. Prefix alert subjects with environment
 (PROD first). Include redacted identifiers, class, error code and deadline. Build the run
-link from trusted server configuration only; omit it when unset and report that in doctor.
+link from the existing server-configured public base when valid; omit it otherwise and
+report that in doctor. Document external uptime monitoring of the controller's
+`GET /health`, and have doctor report missing recent controller leadership. Add no new
+URL setting or paging channel.
 
 **Not in this item.** New recovery mutations, a support bundle command, log attachments,
 delivery escalation and audit export.
@@ -10391,6 +10396,7 @@ after the owner approves the disclosure contract.
 - [ ] The handoff opens the exact authorized run and the existing recovery and audit views.
 - [ ] Alerts retain delivery deduplication and omit row data, SQL, parameter values and
       secrets. Spoofed Host or forwarding headers cannot affect the link.
+- [ ] Doctor distinguishes missing recent leadership from an unavailable Engine DB.
 - [ ] The Quick Start walks through a deliberate failure and explicit run selection.
 
 ### S7.BD Bounded catalog lineage lookup
