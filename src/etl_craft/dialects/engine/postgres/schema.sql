@@ -2089,6 +2089,7 @@ BEGIN
                     (OLD.LOG_PATH IS NULL AND NEW.LOG_PATH IS NOT NULL
                      AND to_jsonb(NEW) - 'log_path' = to_jsonb(OLD) - 'log_path')
                     OR (OLD.PEAK_RSS_BYTES IS NULL AND OLD.CPU_SECONDS IS NULL
+                        AND (NEW.PEAK_RSS_BYTES IS NOT NULL OR NEW.CPU_SECONDS IS NOT NULL)
                         AND to_jsonb(NEW) - ARRAY['peak_rss_bytes','cpu_seconds']
                           = to_jsonb(OLD) - ARRAY['peak_rss_bytes','cpu_seconds'])
                 )

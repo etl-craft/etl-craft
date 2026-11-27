@@ -143,6 +143,8 @@ VALUES = {
     "backfill": "N",
     "full_refresh": "N",
     "full_refresh_plan": None,
+    "peak_rss_bytes": 1024,
+    "cpu_seconds": 0.25,
     "exclusive": "Y",
     "kind": "SYSTEM",
     "actor_kind": "SYSTEM",

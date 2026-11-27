@@ -3,12 +3,23 @@ import signal
 import sys
 import threading
 import time
+from types import SimpleNamespace
 
 import pytest
 
+from etl_craft.execution import processes
 from etl_craft.execution.processes import ChildResult, ChildSpec, run_child
 
 pytestmark = pytest.mark.unit
+
+
+@pytest.mark.parametrize(
+    ("platform", "reported", "expected"),
+    [("linux", 2, 2048), ("darwin", 2, 2), ("linux", 0, 0), ("linux", -1, None)],
+)
+def test_peak_rss_units(monkeypatch, platform, reported, expected):
+    monkeypatch.setattr(processes, "sys", SimpleNamespace(platform=platform))
+    assert processes._rss_bytes(SimpleNamespace(ru_maxrss=reported)) == expected
 
 
 def python(code: str, **kwargs) -> ChildSpec:
@@ -79,6 +90,7 @@ def test_a_child_past_its_time_limit_is_stopped():
     assert not result.succeeded
     assert result.describe() == "timed out after 0.5s and was killed"
     assert result.output_tail == "started\n"
+    assert result.peak_rss_bytes is not None and result.cpu_seconds is not None
 
 
 def test_a_child_that_ignores_sigterm_is_killed_after_the_grace_period():
@@ -181,6 +193,7 @@ def test_a_cancelled_child_is_stopped():
         cancel=cancel,
     )
     assert result.cancelled and not result.timed_out
+    assert result.peak_rss_bytes is not None and result.cpu_seconds is not None
     assert result.describe() == "was interrupted and stopped by its supervisor"
     assert time.monotonic() - started < 10
 

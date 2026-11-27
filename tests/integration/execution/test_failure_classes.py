@@ -7,11 +7,13 @@ from sqlalchemy import text
 
 from etl_craft.core.actor import current_actor
 from etl_craft.core.enums import ActionName, ApiRole, FailureClass, RetryOn, RunStatus
+from etl_craft.engine.attempt_resources import AttemptResources, record_resources
 from etl_craft.engine.repository.catalog import fetch_task_runs
 from etl_craft.engine.repository.pipelines import selected_project
 from etl_craft.execution.attempt_types import TaskRun
 from etl_craft.execution.pipeline import run_pipeline
 from etl_craft.services.operations.context import OperationContext
+from etl_craft.services.operations.snapshots import success_cohort
 from fixtures.actions import act
 from fixtures.metadata import add_pipeline, add_task
 from integration.execution.test_pipeline import config as config
@@ -85,6 +87,16 @@ def test_script_failure_policy_and_historical_explanation(
     for attempt in explanation.task.attempts:
         assert attempt.peak_rss_bytes is not None and attempt.peak_rss_bytes > 0
         assert attempt.cpu_seconds is not None and attempt.cpu_seconds >= 0
+        assert attempt.owner_id is not None
+        record_resources(engine, attempt.attempt_id, attempt.owner_id, AttemptResources(0, 0))
+    refreshed = act(ctx, ActionName.EXPLAIN, pipeline_code="P", task_code="load", run_id=run_id)
+    assert refreshed.task.attempts == explanation.task.attempts
+    with engine.connect() as conn:
+        cohort = success_cohort(conn, task_id)
+    assert cohort.run_count == int(status == RunStatus.SUCCESS)
+    assert cohort.metrics["duration_seconds"].sample_size == cohort.run_count
+    assert cohort.metrics["reject_count"].sample_size == 0
+    assert cohort.metrics["reject_count"].median is None
     reason = explanation.task.attempts[0].retry_reason
     assert f"{kind}: {exception}" in reason
     assert f"RETRY_ON={policy}" in reason
