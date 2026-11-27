@@ -213,7 +213,9 @@ item's text, or work done early under another item.
 | S7.AY ROW_IDs derived from the task run | Done | #470 | `ROW_ID = TASK_RUN_ID × 2^32 + n` on every warehouse; `AUD_TARGET_ROW_IDS`, the reservation report and ROW_ID generators are gone |
 | S7.AZ Re-parse, not refresh | Done | #472 | `pipelines re-parse`, `lineage --re-parse`, re-parse routes, actions, UI labels, Engine DB names and docs; "refresh" means data only |
 | S7.BA Run conditions on task and pipeline rows | In progress | [#474](https://github.com/etl-craft/etl-craft/pull/474), [#475](https://github.com/etl-craft/etl-craft/pull/475) | S7.BA.2 and S7.BA.3 done. Tasks declare run conditions and pipelines declare start conditions. Support Insights remains a follow-up. |
-| S7.BB Run monitoring | Planned | | Task statistics, failure information, log events, per-task resources and an agent monitor in the S7.AX views |
+| S7.BB Run monitoring | Planned | | Attempt evidence, agent capacity, Home counts, and Monitor with missed starts and SLA |
+| S7.BC Incident handoff | Planned | | Recovery guidance, alert identity and existing support evidence from the run |
+| S7.BD Bounded catalog lineage lookup | Planned | | Bounded definition and history reads at 5,000 pipelines and 50,000 tasks per project |
 | S7.O Package and demo repositories | Done | #317, #318 | Small package demo, public demo seed and pinned candidate evidence validation |
 | S7.P Obvious failures do not stop 1.0.0 | In progress | #173, #178 | Audit done (#173); the log-folder and port checks close their catalog rows (#178); item 4 keeps the catalog current |
 | S7.Q A generic ANSI SQL warehouse | Moved after 0.9.0 | | A `generic` dialect over SQLAlchemy for rare databases: ANSI SQL only, NULL-safe column comparison for merges, refusals for anything without an ANSI form |
@@ -10325,47 +10327,139 @@ them) and user-defined workflow variables (passing values between tasks).
 
 ### S7.BB Run monitoring
 
-Owner, 2026-11-26, from the PowerCenter 10.5.1 Workflow Monitor chapters (behaviour reference
-only): the run, task and agent views show what PowerCenter's Workflow Monitor shows. PowerCenter
-is the more intuitive monitor and Airflow the more familiar layout; these views add
-PowerCenter's information to the approved S7.AX layout without changing its navigation.
+**Problem.** Operators need an exact attempt diagnosis during a failure and a cross-project
+view of late and waiting loads at shift handoff. The current run and project views expose
+part of the evidence across several requests and screens.
 
-**Change.**
+**Change.** Follow [Monitoring and operability for 0.9.0](monitoring-and-operability.md).
+Preserve the pipeline and run workspaces, add bounded statistics and structured evidence,
+extend Agents, and add a separate read-only Operations Monitor across authorized projects.
+Keep Home and add a compact linked failing/running/late/waiting strip. Use S7.AN badges
+on each Monitor row. Derive missing schedule occurrences and SLA breaches from existing
+evidence, without an occurrence table.
 
-1. **Task statistics.** For a task instance: source rows read and failed, target rows applied
-   and affected, inserted, updated, deleted, rejected and duplicates, throughput (rows a second)
-   and duration, each beside the median of the task's recent successful runs. Only counts its
-   handler produces are shown.
-2. **Run statistics.** The run page lists every task's rows, throughput and duration in one
-   sortable table.
-3. **Failure information.** First and last error, the failure class, a stable error code (the
-   error class's exit code name), the failing step and a link to its log line.
-4. **Log events.** The Logs tab filters by severity and step, jumps to the first error, and
-   shows condition evaluations (S7.BA) as events beside the S7.AX.4 context and outcome blocks.
-5. **Resources.** Agents sample each task process: peak CPU and peak memory are recorded on the
-   attempt and shown in its statistics. An agent monitor lists every agent's running attempts
-   with process id, CPU, memory, swap, pool and free slots.
-6. **Waiting.** A task waiting for a slot shows that state and its wait reason in the grid and
-   the run.
+**Not in this item.** Cross-run log search, suspend on error, trends, run comparison and changed retention
+defaults. Summary storage is deferred unless large-model measurements show a page exceeds
+its budget after bounded and indexed reads. In that case, scope one run-end summary row
+per pipeline run to that page and record before/after measurements in its PR.
 
-**Slices.** Each is one pull request, in this order.
+**Slices.**
 
-1. **S7.BB.1 Layout:** a design of where each panel goes at 1440 and 390 px, light and dark,
-   built on the S7.AX views; the owner approves it before any code.
-2. **S7.BB.2 Data:** attempt resource samples, error codes and the statistics in one request
-   per page, with statement budgets.
-3. **S7.BB.3 Task and run statistics and failure information.**
-4. **S7.BB.4 Log events.**
-5. **S7.BB.5 Agent monitor and waiting state.**
+1. **S7.BB.1 Design and owner review.** The owner approves each screen on the PR that builds it:
+   the real pages with seeded data at 1440 and 390 px, light and dark. Screenshots are attached
+   to the PR and not committed.
+2. **S7.BB.2 Attempt evidence.** Store typed first/last attempt anchors with archive-aware resolution
+   and capture the exact child’s `wait4(pid, ...)` resource result at exit. Preserve timeout and
+   cancel polling with `WNOHANG`, normalize Linux KiB versus macOS byte RSS, and store unsupported
+   values as NULL; do not assume a supervisor runs only one child.
+3. **S7.BB.3 Run/task views.** Add inline attempt triage and run Statistics. Use the last 20 successful
+   runs for medians and amber ▲/▼ for values beyond 3× or below ⅓. Show the warehouse’s native
+   SQLSTATE or vendor code when the driver provides one. Add an “Open in catalog” link to the
+   existing task mapping page.
+4. **S7.BB.4 Selected-stream log events.** Filter and jump to the first recorded error.
+5. **S7.BB.5 Waiting and agents.** Explain recorded blockers and show current attempts
+   with Linux-only live samples, sample age and free eligible slots; macOS shows “Not sampled.”
+6. **S7.BB.6 Monitor and Home.** Page active and recent evidence within the read budget.
+   Include overdue SLAs, recorded breaches and unstarted schedule ticks past a fixed grace
+   of the lesser of five minutes and the schedule interval. Omit paused/holiday/pre-definition ticks and reconcile catch-up by exact key. Each backlog
+   occurrence leaves Late when its run starts.
 
 **Done when.**
 
-- [ ] The owner approved the layout before S7.BB.2.
-- [ ] Clicking a task shows its statistics, failure information and resources in the first
-      screen from one request, with a recorded statement budget.
-- [ ] The log filters by severity and step and jumps to the first error.
-- [ ] The agent monitor shows each agent's running tasks with CPU and memory.
-- [ ] Browser tests cover each panel at 1440 and 390 px, light and dark.
+- [ ] The owner approves each screen on the PR that builds it: the real pages with seeded data at
+      1440 and 390 px, light and dark. Screenshots are attached to the PR and not committed.
+- [ ] Selected tasks show failure, counts and resource evidence in one feed and preserve
+      missing/zero distinctions and exact attempt links.
+- [ ] Log events, waits and capacity show recorded evidence, including missing or stale data.
+- [ ] Monitor and Home counts use the same visibility filter and reveal no hidden totals.
+- [ ] Match a missed tick once through catch-up until its run starts, even when a delayed
+      run was queued first. Test holidays, pause, definition start and schedule edits.
+- [ ] Monitor shows environment badges and stays within the measured read budgets.
+- [ ] Browser checks cover the proposed panels at 1440 and 390 px in light and dark.
+
+### S7.BC Incident handoff
+
+**Problem.** During a failure the operator has to assemble the exact run identity, delivery
+status and recovery evidence across screens and CLI commands.
+
+**Change.** Use the existing run, audit, recovery preview, download and doctor paths.
+Add a redacted incident handoff, improve the standard alert payload and explain exact
+run selection and recovery in the Quick Start. Prefix alert subjects with environment
+(PROD first). Include redacted identifiers, class, error code and deadline. Build the run
+link from the existing server-configured public base when valid; omit it otherwise and
+report that in doctor. Document external uptime monitoring of the controller's
+`GET /health`, and have doctor report missing recent controller leadership. Add no new
+URL setting or paging channel.
+
+**Not in this item.** New recovery mutations, a support bundle command, log attachments,
+delivery escalation and audit export.
+
+**Slices.** S7.BC.1 ships the run handoff, alert payload and guided CLI recovery together
+after the owner approves the disclosure contract.
+
+**Done when.**
+
+- [ ] The handoff opens the exact authorized run and the existing recovery and audit views.
+- [ ] Alerts retain delivery deduplication and omit row data, SQL, parameter values and
+      secrets. Spoofed Host or forwarding headers cannot affect the link.
+- [ ] Doctor distinguishes missing recent leadership from an unavailable Engine DB.
+- [ ] The Quick Start walks through a deliberate failure and explicit run selection.
+
+### S7.BD Bounded catalog lineage lookup
+
+**Problem.** A seeded SQLite project with 50,000 SQL tasks cannot build a catalog because
+the lineage lookup exceeds the database bind limit. Other project-wide lookups can hit
+the same limit even when per-pipeline result counts are bounded.
+
+**Change.** Bound every data-dependent name or ID list in the catalog, lineage, deploy,
+re-parse and validate paths. Use bounded chunks or a typed/joined set. Preserve exclusion
+semantics over the full input, project scope, ordering and atomic publication.
+
+**Query inventory from `git grep`.**
+
+- `lineage_cache_edges.sql` from `engine/repository/lineage.py` expands both
+  `confirmed_keys` (task ID/hash pairs) and `failed_tasks` across catalog/lineage publication.
+  Bound both; a failed sibling must still suppress its target across chunk boundaries.
+- `trigger_links.sql` from `engine/repository/triggers.py` expands the same list of run
+  IDs in both parent and child predicates. `services/catalog/collect.py` passes up to 30
+  runs per pipeline across the project. Join the project-scoped recent run set or bound the
+  combined bind count. Deduplicate links spanning batches.
+- `existing_tables.sql` in both dialects, called by `dialects/engine/base.py`, expands
+  table names. The deploy/validation preflight `services/config_files.py::require_tables`
+  passes a fixed package table registry. Keep that caller bounded and cap the shared query
+  so wider callers cannot expand it unboundedly.
+- The SQLite schema guard inventory in `dialects/engine/sqlite/__init__.py` expands
+  `tables` and `core_objects` from the installed schema and guard definitions. Keep these
+  fixed inventories bounded and verify the guard check still detects missing objects.
+  `engine/repository/config_rows.py` binds fixed row columns, independent of project size.
+- Re-parse and validate showed no additional data-dependent name expansion in their
+  direct reads. The release check exercises their shared definition/lineage paths too.
+
+**Not in this item.** A new definition document or API, browser caching and changes to
+historical definitions or retention.
+
+**Slices.** S7.BD.1 fixes the listed reads and adds release-gate evidence. The slow gate
+seeds 5,000 pipelines and 50,000 tasks in one project on each of SQLite and PostgreSQL.
+It performs catalog build, lineage, deploy, re-parse and validate, including warm and
+incremental reads and a populated history that stresses trigger links.
+
+The gate also measures a cold catalog build separately from warm reads. A cold build must
+have a fixed statement count per query kind plus one statement per 400-name batch, proven at
+500 and 5,000 pipelines. At 5,000 pipelines and 50,000 tasks, the release evidence must show
+cold build ≤5 minutes, warm rebuild ≤60 seconds and one-pipeline re-parse ≤10 seconds on both
+Engine DBs. A gate that merely finishes is not a pass.
+
+**Done when.**
+
+- [ ] The slow release gate passes the one-project size target on both Engine DBs.
+- [ ] Results preserve hash matching, project scope, full failure exclusions, trigger-link
+      uniqueness and stable ordering across batch boundaries.
+- [ ] Record query sizes and elapsed costs in release evidence. Per-PR CI uses small
+      checks only, including a reduced SQLite bind-limit fixture.
+- [ ] Statement count does not grow with pipeline count: a fixed number per query kind plus one
+      per 400-name batch, proven at 500 and 5,000 pipelines. At 5,000 pipelines and 50,000 tasks,
+      SQLite and PostgreSQL cold build ≤5 minutes, warm rebuild ≤60 seconds and one-pipeline
+      re-parse ≤10 seconds, recorded in release evidence.
 
 ### S7.AX Pipeline, run and task views
 
@@ -11163,6 +11257,13 @@ pipelines stay code. These come after 1.0.0, each designed when it is taken up:
 - **Masking on clone:** mask declared sensitive columns when cloning to non-production.
 - **Schedule end options:** end after N runs or on a date.
 - **Team metadata fields** on objects beyond tags.
+- **Operational follow-ups:** scoped cross-run event search, per-task drift, delivery escalation,
+  audit export and reject drilldown.
+- **Definition and history scale follow-ups:** private conditional definition reads and terminal
+  summaries only with measured wins, subject to the S7.BB budget exception. Preserve pinned
+  historical definitions and retention holds.
+- **Reusable parameter files and definition comparison:** local typed overrides through the
+  existing admission path, and a semantic comparison of retained versions.
 
 ## After 1.0.0: provider integration follow-ups
 
