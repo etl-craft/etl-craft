@@ -102,7 +102,7 @@ that damages the package is not helpful; saying so, with a better option, is.
 - Retries resume: tasks already `SUCCESS` or `SKIPPED` under the run are not re-run.
 - Cross-pipeline consumption uses recorded admission decisions, never a new judgement at
   completion. A repaired run publishes one new output revision only when it ends SUCCESS; the
-  dependency's `CONSUME_REPAIRS` flag decides whether the same run's newer revision is fresh.
+  consuming pipeline's `CONSUME_REPAIRS` flag decides whether the same run's newer revision is fresh.
 - Successful attempt endings commit the outcome, task summary, returned script offset and
   recorded task-dependency consumption together. Pipeline endings commit status, SLA and
   recorded pipeline-dependency consumption together; finalization hooks run after commit.

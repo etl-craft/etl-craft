@@ -10,6 +10,7 @@ from etl_craft.core.enums import RunStatus, SlaStatus, YesNo
 from etl_craft.core.errors import EtlCraftError
 from etl_craft.core.time import as_utc
 from etl_craft.engine.queries import statement
+from etl_craft.engine.repository.validation import fetch_pipeline_edges
 from etl_craft.engine.schedule_ticks import cursor, schedule
 from etl_craft.services.operations.models import PipelineView, RecentRun
 
@@ -27,9 +28,9 @@ def summarize(
     for row in conn.execute(statement(conn, "pipeline_recent_runs")):
         recent.setdefault(row.pipeline_id, []).append(_recent_run(row._mapping))
     dependencies: dict[str, list[tuple[str, str]]] = {}
-    for row in conn.execute(statement(conn, "active_pipeline_dependency_edges")):
-        dependencies.setdefault(row.pipeline_code, []).append(
-            (row.depends_on_pipeline_code, row.dependency_type)
+    for edge in fetch_pipeline_edges(conn):
+        dependencies.setdefault(edge.pipeline_code, []).append(
+            (edge.depends_on_pipeline_code, edge.kind)
         )
     ticks = _next_runs(
         conn, {v.pipeline_id for v in views if v.paused is None}, now, reparse_required

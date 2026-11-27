@@ -166,6 +166,9 @@ def test_three_pipeline_callers_waiting_on_a_repair_admit_one_supervisor(cli_pro
         run, _ = upstream_run(conn, upstream, {})
         tr.reopen_run(conn, run, current_actor(), reason="repair while consumers wait")
         add_pipeline_dependency(conn, project.pipeline_id, upstream)
+    code, output = project.run("deploy")
+    assert code == 0, output
+    with project.engine.begin() as conn:
         downstream_run = tr.create_run(conn, project.pipeline_id, current_actor(), status="QUEUED")
     waiting = Barrier(4, timeout=30)
 

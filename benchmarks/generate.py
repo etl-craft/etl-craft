@@ -96,19 +96,10 @@ def project_rows(index: int, scale: Scale) -> dict[str, list[dict]]:
                 "RUN_SCHEDULE": f"{minute % 60} {minute // 60} * * *",
                 "SCHEDULE_TIMEZONE": "UTC",
                 "OVERLAP_POLICY": "QUEUE",
+                "START_CONDITION": f"P_{pipeline - 2:03d}.SUCCESS" if pipeline >= 2 else None,
                 "ACTIVE_FLAG": "Y",
             }
         )
-        if pipeline >= 2:
-            rows["pipeline_dependencies.csv"].append(
-                {
-                    "PIPELINE_CODE": code,
-                    "DEPENDS_ON_PIPELINE_CODE": f"P_{pipeline - 2:03d}",
-                    "DEPENDENCY_TYPE": "SUCCESS",
-                    "ACTIVE_FLAG": "Y",
-                    "CONSUME_REPAIRS": "Y",
-                }
-            )
         for task in range(scale.tasks):
             task_code = f"T_{task:02d}"
             identity = {"PIPELINE_CODE": code, "TASK_CODE": task_code, "ACTIVE_FLAG": "Y"}

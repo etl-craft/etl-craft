@@ -122,7 +122,6 @@ def test_apply_inserts_updates_and_preserves_absent_keys(exported):
         "pipelines.csv",
         "tasks.csv",
         "task_parameters.csv",
-        "pipeline_dependencies.csv",
         "business_rules.csv",
     ):
         edit(folder / name, without("SALES_DAILY_EU"))
@@ -232,7 +231,6 @@ def test_plan_reports_what_apply_would_do_and_changes_nothing(exported):
     for name in (
         "tasks.csv",
         "task_parameters.csv",
-        "pipeline_dependencies.csv",
         "business_rules.csv",
     ):
         edit(exported.config_dir / name, without("SALES_DAILY_EU", "SALES_MART"))

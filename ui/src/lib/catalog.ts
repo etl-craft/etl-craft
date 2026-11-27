@@ -28,6 +28,7 @@ export interface CatalogPipeline {
   name: string;
   description: string | null;
   schedule: string | null;
+  start_condition?: string | null;
   triggers: { task: string; pipeline: string; mode: string | null; timeout_minutes: string | null }[];
   auto_restart_condition: string;
   refresh_type: string;
@@ -203,7 +204,7 @@ export function pipelineGraph(doc: CatalogDoc, pipeline: CatalogPipeline): Graph
   const byLabel = new Map(doc.tasks.filter((t) => t.pipeline === pipeline.code).map((t) => [t.label, t]));
   const dependsOn: Record<string, [string, string][]> = {};
   for (const task of byLabel.values()) {
-    const inside = doc.definition_edges.filter(e => e.kind === "task" && e.target === task.label && byLabel.has(e.source)).map(e => [byLabel.get(e.source)!.code, e.dependency_type] as [string, string]);
+    const inside = doc.definition_edges.filter(e => e.kind === "task" && e.target === task.label && byLabel.has(e.source)).map(e => [byLabel.get(e.source)!.code, e.edge_kind] as [string, string]);
     if (inside.length) dependsOn[task.code] = inside;
   }
   return { waves: dependencyWaves([...byLabel.values()].map((t) => t.code), dependsOn), conditional: [], depends_on: dependsOn };
@@ -247,4 +248,4 @@ export function gapRemedy(gap: CatalogGap): string {
   return "Align the declared metadata and warehouse schema using config files or project migrations, then rebuild the catalog.";
 }
 
-export interface DefinitionEdge { kind: "task" | "pipeline"; target: string; source: string; dependency_type: string; consume_repairs: string }
+export interface DefinitionEdge { kind: "task" | "pipeline"; target: string; source: string; edge_kind: string; consume_repairs: string; condition?: string | null }

@@ -211,12 +211,15 @@ def _derive_conditions(conn: Connection, project_id: int) -> ReparseFinding | No
     try:
         derive_edges(conn, project_id)
     except ConditionError as error:
+        pipeline = "START_CONDITION" in str(error)
+        column = "START_CONDITION" if pipeline else "RUN_CONDITION"
+        filename = "pipelines.csv" if pipeline else "tasks.csv"
         return ReparseFinding(
-            "Engine DB (tasks.csv)",
+            f"Engine DB ({filename})",
             None,
             str(error),
             str(error),
-            "Correct RUN_CONDITION and deploy or re-parse again.",
+            f"Correct {column} and deploy or re-parse again.",
         )
     return None
 

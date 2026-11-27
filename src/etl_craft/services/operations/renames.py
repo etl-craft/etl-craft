@@ -7,6 +7,7 @@ from typing import ClassVar
 from sqlalchemy.engine import Connection
 
 from etl_craft.core.actor import migration
+from etl_craft.core.conditions import rename_start_reference
 from etl_craft.core.enums import ActionName
 from etl_craft.core.enums_access import Permission
 from etl_craft.core.errors import ResourceNotFoundError, RunRefusedError, SqlGuardError, UsageError
@@ -169,6 +170,7 @@ def _change(
             )
     else:
         affected.update(_parameters(conn, ctx, request))
+        _rewrite_start_conditions(conn, ctx.project, pipeline_id, request)
         conn.execute(
             statement(conn, "rename_grants"),
             params
@@ -187,6 +189,23 @@ def _change(
         },
     )
     return (None if task_id is None else int(task_id)), frozenset(affected)
+
+
+def _rewrite_start_conditions(
+    conn: Connection, project: str, pipeline_id: int, request: RenameInput
+) -> None:
+    rows = conn.execute(
+        statement(conn, "rename_start_conditions"), {"pipeline_id": pipeline_id}
+    ).all()
+    for row in rows:
+        rule = rename_start_reference(
+            row.start_condition, project, request.pipeline_code, request.to
+        )
+        if rule != row.start_condition:
+            conn.execute(
+                statement(conn, "rename_start_condition_update"),
+                {"pipeline_id": row.pipeline_id, "rule": rule},
+            )
 
 
 def _parameters(

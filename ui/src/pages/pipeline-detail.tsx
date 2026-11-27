@@ -270,6 +270,7 @@ export function PipelineDetail() {
       >
         {p ? (
           <FactList inline>
+            {p.start_condition ? <Fact inline label="Starts when"><code className="break-all" translate="no">{p.start_condition}</code></Fact> : null}
             <Fact inline label="Schedule">{p.run_schedule ? <span title={p.run_schedule}>{describeCron(p.run_schedule) ?? <code className="font-mono">{p.run_schedule}</code>}</span> : "Not scheduled"}</Fact>
             <Fact inline label="Latest run">
               {p.latest_whole_run ? (

@@ -85,6 +85,7 @@ def config(engine_db, tmp_path):
     raw = {
         "Secrets": {"Source_type": "ENVIRONMENT"},
         "Orchestration": {
+            "Gate_wait_minutes": 0,
             "Project": "default",
             "Task_timeout_seconds": 60,
             "Local_warehouse_slots": 2,
@@ -588,10 +589,11 @@ def test_relaxed_gates_let_a_run_through_and_record_it(config, downstream, polic
     reason = changes[0][7]
     if policy == "WARN":
         assert reason == (
-            "Dependency_gates is WARN: upstream pipeline UP (SUCCESS) has no finished run"
+            "Dependency_gates is WARN: start condition [UP.SUCCESS]: UP.SUCCESS=unknown; "
+            "UP has no finished run"
         )
     else:
-        assert reason == "Dependency_gates is OFF: upstream pipeline UP (SUCCESS) not checked"
+        assert reason == "Dependency_gates is OFF: upstream pipeline UP not checked"
     assert changes[1][7] == (
         f"Dependency_gates is {policy}: upstream task UP.publish "
         + ("has no finished run" if policy == "WARN" else "not checked")
@@ -774,7 +776,7 @@ def test_a_run_skipped_on_purpose_is_recorded_and_seen_downstream(config, pipeli
     )
     downstream = run_pipeline(engine, config, "DOWN", child=CHILD, clock=NO_WAIT)
     assert downstream.status == RunStatus.SKIPPED
-    assert "upstream pipeline P (SUCCESS)" in downstream.message
+    assert "start condition [P.SUCCESS]" in downstream.message
 
 
 def test_the_pause_and_skip_commands(config, pipeline, capsys, monkeypatch, engine_db):
@@ -867,7 +869,7 @@ def test_a_backfill_runs_once_per_date_as_of_that_date(config, pipeline, downstr
     assert "as of 2026-09-01 (backfill)" in log
     reasons = [row[7] for row in interventions(engine) if row[2] == "GATE_BYPASS"]
     assert reasons[0] == (
-        "backfill for 2026-09-01: reload Sept; dependencies on other pipelines are not checked, "
+        "backfill for 2026-09-01: reload Sept; upstream facts assume delivery, "
         "and nothing is consumed"
     )
     with engine.connect() as conn:
@@ -1262,7 +1264,7 @@ def test_a_run_whose_tasks_were_all_skipped_ends_skipped(config, pipeline):
     assert run_status(engine, skipped.pipeline_run_id) == "SKIPPED"
     after = run_pipeline(engine, config, "R", child=CHILD, clock=NO_WAIT)
     assert after.status == RunStatus.SKIPPED
-    assert "upstream pipeline Q (SUCCESS)" in after.message
+    assert "start condition [Q.SUCCESS]" in after.message
 
 
 def test_a_met_sla_stays_met_when_the_run_is_ended_again_later(config, engine_db):

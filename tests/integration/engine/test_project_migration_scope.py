@@ -252,3 +252,21 @@ def test_project_migration_cannot_write_a_derived_task_edge(engine_db, projects,
             conn.execute(text("SELECT count(*) AS count FROM CFG_TASK_DEPENDENCY")).scalar_one()
             == 0
         )
+
+
+def test_project_migration_cannot_write_a_derived_pipeline_edge(engine_db, projects, tmp_path):
+    east = projects["east"]
+    with acting_as(OWNER), engine_db.engine.begin() as conn:
+        source = conn.execute(
+            text("SELECT PIPELINE_ID AS id FROM CFG_PIPELINES WHERE PROJECT_ID=:project"),
+            {"project": east},
+        ).scalar_one()
+        consumer = add_pipeline(conn, "CONSUMER", project_id=east)
+    sql = (
+        "INSERT INTO CFG_PIPELINE_DEPENDENCY (PIPELINE_ID,DEPENDS_ON_PIPELINE_ID) "
+        f"VALUES ({consumer},{source});"
+    )
+    with pytest.raises(MigrationError, match=r"is derived.*change CFG_PIPELINES.START_CONDITION"):
+        migrate(engine_db, tmp_path, east, "0001_direct_edge.sql", sql)
+    with engine_db.engine.connect() as conn:
+        assert conn.execute(text("SELECT COUNT(*) FROM CFG_PIPELINE_DEPENDENCY")).scalar_one() == 0

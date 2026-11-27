@@ -19,19 +19,8 @@ VALUES
     ((SELECT PROJECT_ID FROM ETL_CRAFT_PROJECT), 'SALES_MART', 'Sales mart', 'Daily, regional and customer totals of the checked orders.',
      'FULL', '30 6 * * *', 'Europe/London');
 
--- Pipeline dependencies: the pipeline, the pipeline it waits on, DEPENDENCY_TYPE, and
--- CONSUME_REPAIRS: 'Y' (the default) takes a repaired upstream run as new output, 'N' only a new
--- upstream run.
-INSERT INTO CFG_PIPELINE_DEPENDENCY (PIPELINE_ID, DEPENDS_ON_PIPELINE_ID, DEPENDENCY_TYPE,
-                                     CONSUME_REPAIRS)
-SELECT p.PIPELINE_ID, u.PIPELINE_ID, v.column3, v.column4
-FROM (VALUES
-    ('SALES_MART', 'SALES_DAILY', 'SUCCESS', 'Y')
-) v
-LEFT JOIN CFG_PIPELINES p ON p.PROJECT_ID = (SELECT PROJECT_ID FROM ETL_CRAFT_PROJECT)
-    AND p.PIPELINE_CODE = v.column1 AND p.ACTIVE_FLAG = 'Y'
-LEFT JOIN CFG_PIPELINES u ON u.PROJECT_ID = (SELECT PROJECT_ID FROM ETL_CRAFT_PROJECT)
-    AND u.PIPELINE_CODE = v.column2 AND u.ACTIVE_FLAG = 'Y';
+UPDATE CFG_PIPELINES SET START_CONDITION='SALES_DAILY.SUCCESS'
+WHERE PROJECT_ID=(SELECT PROJECT_ID FROM ETL_CRAFT_PROJECT) AND PIPELINE_CODE='SALES_MART';
 
 -- publish runs once 2 of the 3 totals are built.
 INSERT INTO CFG_TASKS (PIPELINE_ID, TASK_CODE, TASK_TYPE, HANDLER, RUN_CONDITION)

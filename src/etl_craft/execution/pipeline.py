@@ -147,7 +147,7 @@ def pipeline_steps(
         pipeline_id,
         clock,
         StartOptions(
-            check_gate=not force and backfill is None,
+            check_gate=not force,
             run_date=run_date,
             backfill=backfill,
             selector=selector,

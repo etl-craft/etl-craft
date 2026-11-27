@@ -395,9 +395,8 @@ def test_preexisting_run_applies_outcome_to_unstarted_task_without_executing_it(
 
 
 def test_supplied_success_has_no_data_and_no_fresh_cross_pipeline_output(cli_project):
-    from etl_craft.core.enums import DependencyType
     from etl_craft.engine.repository import trackers
-    from etl_craft.execution.gates import judge
+    from etl_craft.execution.gates import fresh
 
     project = cli_project
     (project.config.python_scripts_dir / "load.py").write_text(
@@ -437,8 +436,7 @@ def test_supplied_success_has_no_data_and_no_fresh_cross_pipeline_output(cli_pro
     assert pipeline is not None and not pipeline.has_data and pipeline.revision == 0
     assert task is not None and not task.has_data and task.revision == 0
     for upstream in (pipeline, task):
-        assert judge(DependencyType.SUCCESS, upstream, None)[0] is None
-        assert judge(DependencyType.HAS_DATA, upstream, None)[0] is None
+        assert fresh(upstream, None)[0] is None
 
 
 @pytest.mark.parametrize("override", ["--rerun", "--ignore-dependencies"])

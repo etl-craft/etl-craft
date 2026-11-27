@@ -212,7 +212,7 @@ item's text, or work done early under another item.
 | S7.W Docs toolchain after MkDocs 1.x | Planned | | Evaluate Zensical against the API pages, navigation and published versions; migrate only when every requirement works |
 | S7.AY ROW_IDs derived from the task run | Done | #470 | `ROW_ID = TASK_RUN_ID × 2^32 + n` on every warehouse; `AUD_TARGET_ROW_IDS`, the reservation report and ROW_ID generators are gone |
 | S7.AZ Re-parse, not refresh | Done | #472 | `pipelines re-parse`, `lineage --re-parse`, re-parse routes, actions, UI labels, Engine DB names and docs; "refresh" means data only |
-| S7.BA Run conditions on task and pipeline rows | In progress | [#474](https://github.com/etl-craft/etl-craft/pull/474) | S7.BA.2 done. Tasks declare run conditions and decide pipeline failure. |
+| S7.BA Run conditions on task and pipeline rows | In progress | [#474](https://github.com/etl-craft/etl-craft/pull/474), [#475](https://github.com/etl-craft/etl-craft/pull/475) | S7.BA.2 and S7.BA.3 done. Tasks declare run conditions and pipelines declare start conditions. Support Insights remains a follow-up. |
 | S7.BB Run monitoring | Planned | | Task statistics, failure information, log events, per-task resources and an agent monitor in the S7.AX views |
 | S7.O Package and demo repositories | Done | #317, #318 | Small package demo, public demo seed and pinned candidate evidence validation |
 | S7.P Obvious failures do not stop 1.0.0 | In progress | #173, #178 | Audit done (#173); the log-folder and port checks close their catalog rows (#178); item 4 keeps the catalog current |
@@ -248,6 +248,18 @@ item's text, or work done early under another item.
   - **Acceptance availability.** SQLite and PostgreSQL, installed-wheel demos, and UI checks
     ran locally. Chromium intermittently failed to load the bundled font on both branches.
     Cloud suites were outside the scope of the Engine DB and execution changes.
+- **S7.BA.3 Choices that differ from the item text.**
+  - Keep `CFG_PIPELINE_DEPENDENCY` as the derived pipeline-edge table. Deactivating and
+    reactivating edges preserves their IDs and consumption history.
+  - Backfills read delivered facts for every referenced pipeline. A condition needing an
+    unavailable fact is unmet.
+  - `DependencyView.kind` replaces the old edge label field for task and pipeline dependencies.
+    Catalog definition edges use `edge_kind` because `kind` identifies the definition scope.
+  - The old names stay in the historical planning documents and released changelog entries.
+    The Support Insights repository stays in its follow-up.
+  - **Acceptance availability.** Local SQLite and PostgreSQL, browser, and installed-wheel
+    checks ran. The Chromium font cases and the SQLite/Trino demo passed on retry. Cloud warehouse
+    suites are outside the scope of the Engine DB and execution changes.
 - **S8.J Choices that differ from the item text.** The twelve tasks set
   `PIPELINE_RUN_ID_SUBSTITUTION=false` beside `PIPELINE_RUN_ID_FILTER=true` rather than dropping
   the old row: `deploy` never retires a missing row, and refuses `ACTIVE_FLAG=N` for a key a fresh

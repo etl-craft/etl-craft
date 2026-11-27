@@ -224,29 +224,36 @@ def _labelled(revision: str) -> Iterator[None]:
 
 
 def condition_location(directory: Path, issue: str) -> str:
-    """Locate the task in its config file when it has a row there."""
-    path = directory / "tasks.csv"
-    label = issue.partition(" RUN_CONDITION ")[0]
+    """Locate the pipeline or task in its config file when it has a row there."""
+    filename, _, key = _condition_context(issue)
+    path = directory / filename
     try:
         with path.open(encoding="utf-8-sig", newline="") as stream:
             rows = csv.DictReader(stream)
             for row in rows:
-                if f"{row.get('PIPELINE_CODE')}.{row.get('TASK_CODE')}" == label:
+                codes = (row.get("PIPELINE_CODE"), row.get("TASK_CODE"))[: len(key)]
+                if codes == key:
                     return f"{path} line {rows.line_num}"
     except FileNotFoundError:
-        return "Engine DB (tasks.csv)"
+        return f"Engine DB ({filename})"
     return str(path)
+
+
+def _condition_context(issue: str) -> tuple[str, str, tuple[str, ...]]:
+    if " START_CONDITION " in issue or issue.startswith("START_CONDITION:"):
+        return "pipelines.csv", "START_CONDITION", (issue.partition(" START_CONDITION ")[0],)
+    return "tasks.csv", "RUN_CONDITION", tuple(issue.partition(" RUN_CONDITION ")[0].split(".", 1))
 
 
 def _derive_config_edges(conn: Connection, files: ConfigFiles, project_id: int) -> None:
     try:
         derive_edges(conn, project_id)
     except ConditionError as error:
-        label = str(error).partition(" RUN_CONDITION ")[0]
-        row = files.rows.get("tasks.csv", {}).get(tuple(label.split(".", 1)))
-        where = files.directory / "tasks.csv"
+        filename, column, key = _condition_context(str(error))
+        row = files.rows.get(filename, {}).get(key)
+        where = files.directory / filename
         location = str(where) if row is None else f"{where} line {row.line}"
-        raise ConditionError(f"{location}, column RUN_CONDITION: {error}") from error
+        raise ConditionError(f"{location}, column {column}: {error}") from error
 
 
 def sync_config(

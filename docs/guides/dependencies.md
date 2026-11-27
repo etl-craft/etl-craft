@@ -45,14 +45,44 @@ A reference to another pipeline reads the latest finished output. The gate can
 wait for an upstream run still in progress and checks that the output was not
 already consumed. A successful task consumes the output recorded at admission.
 Set `CONSUME_REPAIRS=N` on the consuming pipeline to accept only a new run
-identity for task conditions. Pipeline-level dependencies still use `pipeline_dependencies.csv` and its
-`DEPENDENCY_TYPE`: `SUCCESS`, `FAILURE`, `ALWAYS`, or `HAS_DATA`. They are
-checked before admitting a pipeline run. An unmet pipeline gate produces a
-skipped pipeline run. Each pipeline dependency has its own `CONSUME_REPAIRS`.
+identity for both task conditions and the start condition.
 
 Backfills assume cross-pipeline tasks delivered. They read `SUCCESS`, `FINISHED`
 and `HAS_DATA` as true, `FAILED` and `SKIPPED` as false, and `STATUS` as
 `SUCCESS`. Other cross-pipeline facts are unknown.
+
+## Start conditions
+
+Set `START_CONDITION` in `pipelines.csv` to gate admission on another pipeline's output.
+For example, `SALES_DAILY.SUCCESS AND finance.LEDGER.REJECTED = 0` reads a pipeline
+in the same project and a pipeline in the finance project. Leave the cell empty
+to start without an upstream gate. Deploy and re-parse derive the edges.
+
+Pipeline conditions use the same operators and facts as task conditions, except
+`ATTEMPTS` and `ERROR_CLASS` are unavailable. Status and duration come from the
+bound run. Counts are summed over its task runs. Skipped tasks contribute zero,
+and a count with no reported values stays unknown. `HAS_DATA` reads whether
+a successful run wrote rows.
+
+Each name binds to the latest finished run outside backfills, provided its output
+is fresh for this consumer. The pipeline's `CONSUME_REPAIRS` defaults to `Y`,
+so a newer revision of an already consumed run is fresh. Set it to `N` to
+require a new run ID. A successful consumer records the bound outputs once.
+A successful upstream with tolerated task failures still publishes fresh output.
+
+True starts the run. False skips it. An unknown condition waits up to
+`Orchestration.Gate_wait_minutes`, then skips if it is still unknown. The gate
+records the condition and the values read. `Dependency_gates: WARN` allows an
+unmet condition to run and records the bypass. `OFF` bypasses every edge without
+evaluating the condition.
+
+Backfills use the delivered facts above for every referenced pipeline. If those
+facts leave the expression unknown, the condition is unmet. Backfills consume
+no upstream output.
+
+Use `pipeline.FACT` or `project.pipeline.FACT` and reference active pipelines
+in projects you can view. Deploy and re-parse refuse unavailable facts,
+self-references and cycles through start conditions, including across projects.
 
 ## Refusals
 

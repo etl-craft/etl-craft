@@ -3,6 +3,7 @@
 import json
 
 import pytest
+import yaml
 from sqlalchemy import text
 
 from etl_craft.core.actor import current_actor
@@ -19,29 +20,24 @@ from fixtures.metadata import (
 
 
 def upstream(project, *, task_edge=False, pipeline_edge=True, repairs="Y"):
+    path = project.config.config_path
+    raw = yaml.safe_load(path.read_text())
+    raw["Orchestration"]["Gate_wait_minutes"] = 0
+    path.write_text(yaml.safe_dump(raw, sort_keys=False))
     with project.engine.begin() as conn:
         pipeline = add_pipeline(conn, "UP")
         task = add_task(conn, pipeline, "publish")
         run, rows = upstream_run(conn, pipeline, {task: ("SUCCESS", 5)})
         if pipeline_edge:
-            edge = add_pipeline_dependency(conn, project.pipeline_id, pipeline)
-            conn.execute(
-                text(
-                    "UPDATE CFG_PIPELINE_DEPENDENCY SET CONSUME_REPAIRS=:repairs "
-                    "WHERE PIPELINE_DEPENDENCY_ID=:edge"
-                ),
-                {"repairs": repairs, "edge": edge},
-            )
+            add_pipeline_dependency(conn, project.pipeline_id, pipeline)
         if task_edge:
-            edge = add_dependency(
+            add_dependency(
                 conn, project.pipeline_id, project.task_id, task, upstream_pipeline=pipeline
             )
-            conn.execute(
-                text(
-                    "UPDATE CFG_PIPELINES SET CONSUME_REPAIRS=:repairs WHERE PIPELINE_ID=:pipeline"
-                ),
-                {"repairs": repairs, "pipeline": project.pipeline_id},
-            )
+        conn.execute(
+            text("UPDATE CFG_PIPELINES SET CONSUME_REPAIRS=:repairs WHERE PIPELINE_ID=:pipeline"),
+            {"repairs": repairs, "pipeline": project.pipeline_id},
+        )
     code, output = project.run(
         "project",
         "set",
@@ -77,7 +73,10 @@ def test_pipeline_consumes_the_admitted_revision_after_upstream_reopens(cli_proj
     with project.engine.connect() as conn:
         assert tuple(
             conn.execute(
-                text("SELECT SELECTED_PIPELINE_RUN_ID, SELECTED_REVISION FROM AUD_GATE_DECISIONS")
+                text(
+                    "SELECT SELECTED_PIPELINE_RUN_ID, SELECTED_REVISION FROM AUD_GATE_DECISIONS "
+                    "WHERE PIPELINE_DEPENDENCY_ID IS NOT NULL"
+                )
             ).one()
         ) == (run, 1)
         assert tuple(
@@ -281,8 +280,6 @@ def test_attempt_decisions_roll_back_with_claim(cli_project, monkeypatch):
 
 @pytest.mark.parametrize("policy", ["WARN", "OFF"])
 def test_bypassed_pipeline_decisions_never_consume_an_upstream(cli_project, policy):
-    import yaml
-
     project = cli_project
     run, _ = upstream(project)
     with project.engine.begin() as conn:
@@ -296,9 +293,14 @@ def test_bypassed_pipeline_decisions_never_consume_an_upstream(cli_project, poli
     code, output = project.run("run", "--reason", "test requested run", "--pipeline-code", "P")
     assert code == 0, output
     with project.engine.connect() as conn:
-        assert (
-            conn.execute(text("SELECT RESULT FROM AUD_GATE_DECISIONS")).scalar_one() == "BYPASSED"
+        rows = conn.execute(
+            text("SELECT RESULT AS result, CONDITION_TEXT AS rule FROM AUD_GATE_DECISIONS")
+        ).all()
+        assert all(row.result == "BYPASSED" for row in rows)
+        assert [row.rule for row in rows if row.rule is not None] == (
+            ["UP.SUCCESS"] if policy == "WARN" else []
         )
+        assert len(rows) == (2 if policy == "WARN" else 1)
         assert (
             conn.execute(text("SELECT COUNT(*) FROM AUD_DEPENDENCY_CONSUMPTION")).scalar_one() == 0
         )

@@ -75,7 +75,6 @@
     },
     "function-lines": {
       "src/etl_craft/core/text.py": 3,
-      "src/etl_craft/execution/gates.py": 5,
       "src/etl_craft/execution/pipeline.py": 2,
       "src/etl_craft/execution/scheduler.py": 26,
       "src/etl_craft/services/catalog/collect.py": 25

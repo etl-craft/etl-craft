@@ -6,9 +6,9 @@ import {dependencyStyle,dependencyBadge,runCondition} from "@/lib/catalog-flow";
 import {taskSymbol,kindColor,kindLabels} from "@/components/task-symbol";
 import type {CatalogTask} from "@/lib/catalog";
 
-export function dependencyEntries(edges:{dependency_type:string;consume_repairs?:string}[]):LegendEntry[] {
- const rows=[...new Set(edges.map(edge=>edge.dependency_type))].map(kind=>({id:`dependency:${kind}`,group:"Dependencies",name:dependencyBadge(kind)||"Succeeded",meaning:kind==="HAS_DATA"?"Requires success and written rows":kind==="FAILURE"?"Runs after failure":kind==="ALWAYS"?"Runs after any outcome":kind==="CONDITION"?"Reads facts in the run condition":"Requires success",sample:<span className="inline-grid gap-1"><svg width="32" height="12"><path d="M 0 6 H 32" style={dependencyStyle(kind)}/></svg><DependencyBadge edge={{dependency_type:kind,consume_repairs:"Y"}}/></span>}));
- if(edges.some(edge=>edge.consume_repairs==="N"))rows.push({id:"no-repairs",group:"Dependencies",name:"No repairs",meaning:"A repaired revision is not consumed",sample:<DependencyBadge edge={{dependency_type:"SUCCESS",consume_repairs:"N"}}/>});
+export function dependencyEntries(edges:{edge_kind:string;consume_repairs?:string}[]):LegendEntry[] {
+ const rows=[...new Set(edges.map(edge=>edge.edge_kind))].map(kind=>({id:`dependency:${kind}`,group:"Dependencies",name:dependencyBadge(kind)||"Succeeded",meaning:kind==="HAS_DATA"?"Requires success and written rows":kind==="FAILURE"?"Runs after failure":kind==="ALWAYS"?"Runs after any outcome":kind==="CONDITION"?"Reads facts in the run condition":"Requires success",sample:<span className="inline-grid gap-1"><svg width="32" height="12"><path d="M 0 6 H 32" style={dependencyStyle(kind)}/></svg><DependencyBadge edge={{edge_kind:kind,consume_repairs:"Y"}}/></span>}));
+ if(edges.some(edge=>edge.consume_repairs==="N"))rows.push({id:"no-repairs",group:"Dependencies",name:"No repairs",meaning:"A repaired revision is not consumed",sample:<DependencyBadge edge={{edge_kind:"SUCCESS",consume_repairs:"N"}}/>});
  return rows;
 }
 export function taskEntries(tasks:CatalogTask[]):LegendEntry[] {

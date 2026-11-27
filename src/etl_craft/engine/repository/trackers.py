@@ -8,7 +8,9 @@ from datetime import UTC, datetime
 from sqlalchemy import Boolean
 from sqlalchemy.engine import Connection
 
+from etl_craft.core.conditions import COUNTS, Facts, Scope
 from etl_craft.core.enums import GateOutcome
+from etl_craft.core.time import elapsed_seconds
 from etl_craft.engine.queries import statement
 
 
@@ -38,6 +40,21 @@ def fetch_latest_pipeline_run(conn: Connection, pipeline_id: int) -> LatestRun |
         statement(conn, "latest_scheduled_pipeline_run"), {"pipeline_id": pipeline_id}
     ).one_or_none()
     return None if row is None else LatestRun(**row._mapping)
+
+
+def fetch_pipeline_run_facts(conn: Connection, run_id: int) -> Facts:
+    """Read condition facts from a finished pipeline run and its task runs."""
+    row = conn.execute(statement(conn, "pipeline_run_facts"), {"run_id": run_id}).one()
+    duration = elapsed_seconds(row.start_date, row.end_date)
+    return Facts(
+        row.status,
+        {
+            fact: None if (value := row._mapping[fact.lower()]) is None else int(value)
+            for fact in COUNTS
+        },
+        duration_seconds=None if duration is None else int(duration),
+        scope=Scope.PIPELINE,
+    )
 
 
 def fetch_latest_task_run(conn: Connection, task_id: int) -> LatestRun | None:
@@ -127,11 +144,18 @@ class GateDecision:
 
     @classmethod
     def evaluated(
-        cls, task_id: int, condition: str, values: str, result: GateOutcome, reason: str
+        cls, task_id: int | None, condition: str, values: str, result: GateOutcome, reason: str
     ) -> GateDecision:
-        """Record one evaluation of a task's run condition, with the values it read."""
+        """Record one evaluation of a condition, with the values it read."""
         return cls(
-            None, True, None, result, reason, task_id=task_id, condition=condition, values=values
+            None,
+            task_id is not None,
+            None,
+            result,
+            reason,
+            task_id=task_id,
+            condition=condition,
+            values=values,
         )
 
 

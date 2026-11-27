@@ -24,7 +24,7 @@ import html
 from collections.abc import Callable
 from dataclasses import dataclass, field
 
-from etl_craft.core.enums import DependencyType, GapState, YesNo
+from etl_craft.core.enums import EdgeKind, GapState, YesNo
 from etl_craft.services.catalog.collect import Catalog, TableAsset
 from etl_craft.services.catalog.gaps import lineage_records, table_records
 from etl_craft.services.catalog.html import escape, render_table
@@ -414,10 +414,10 @@ ROW_MARKS = {"writes": "→", "reads": "←", "checks": "✓"}
 """How a DAG box marks the tables its task writes, reads and checks with business rules."""
 
 DEPENDENCY_STYLES: dict[str, str] = {
-    DependencyType.SUCCESS: "success",
-    DependencyType.FAILURE: "failure",
-    DependencyType.ALWAYS: "always",
-    DependencyType.HAS_DATA: "has-data",
+    EdgeKind.SUCCESS: "success",
+    EdgeKind.FAILURE: "failure",
+    EdgeKind.ALWAYS: "always",
+    EdgeKind.HAS_DATA: "has-data",
 }
 """The line each dependency type is drawn with; ``HAS_DATA`` is ``has-data``."""
 

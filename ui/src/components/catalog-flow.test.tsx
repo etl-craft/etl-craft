@@ -35,7 +35,7 @@ describe("definition dependencies", () => {
   it("explains data and repair consumption in words", () => {
     expect(dependencySentence("Schedule: manual", "LOAD", "SUCCESS")).toContain("pipeline is admitted");
     expect(dependencySentence("EXTRACT", "LOAD", "HAS_DATA")).toBe("LOAD runs only if EXTRACT succeeded and wrote rows");
-    expect(definitionLabel({kind:"task", source:"a",target:"b",dependency_type:"SUCCESS",consume_repairs:"N"})).toContain("No repairs");
+    expect(definitionLabel({kind:"task", source:"a",target:"b",edge_kind:"SUCCESS",consume_repairs:"N"})).toContain("No repairs");
   });
   it.each(["A.SUCCESS AND B.SUCCESS", "A.SUCCESS OR B.SUCCESS", "AT_LEAST(2, A.SUCCESS, B.SUCCESS, C.SUCCESS)"])("explains %s", (condition) => {
     const task = { label:"P.LOAD", pipeline:"P", handler:"SQL", documentation:null, documentation_version:null, target:null, sources:[], script:null, lineage:{state:"derived",reason:null}, mapping:{steps:[],edges:[],source:null,write:{action:null,managed_columns:[],keys:{}}}, script_kind:null, active_flag:"Y", target_active_flag:"Y", secrets:[], downstream:[], rules:[], runs:[], code:"LOAD", run_condition:condition,upstream:[["A","SUCCESS","Y"],["B","SUCCESS","Y"],["C","SUCCESS","Y"]], retries:3,retry_on:"TRANSIENT",timeout_seconds:1800 } as CatalogTask;
@@ -78,14 +78,14 @@ it("keeps a mapping diagram on phones and removes its duplicate table control", 
 
 it("renders dependency icons, neutral badges and the no-repairs marker", async () => {
   const { DependencyBadge } = await import("@/components/dependency-mark");
-  const {container,rerender} = render(<DependencyBadge edge={{dependency_type:"HAS_DATA",consume_repairs:"Y"}} />);
+  const {container,rerender} = render(<DependencyBadge edge={{edge_kind:"HAS_DATA",consume_repairs:"Y"}} />);
   expect(container.querySelector(".lucide-database")).not.toBeNull();
   expect(screen.getByText("Has data")).toBeVisible();
-  rerender(<DependencyBadge edge={{dependency_type:"FAILURE",consume_repairs:"N"}} />);
+  rerender(<DependencyBadge edge={{edge_kind:"FAILURE",consume_repairs:"N"}} />);
   expect(container.querySelector(".lucide-x")).not.toBeNull();
   expect(screen.getByText(/On failure.*No repairs/)).toBeVisible();
   expect(container.innerHTML).not.toMatch(/--(?:bad|ok|warn|run)/);
-  rerender(<DependencyBadge edge={{dependency_type:"SUCCESS",consume_repairs:"Y"}} />);
+  rerender(<DependencyBadge edge={{edge_kind:"SUCCESS",consume_repairs:"Y"}} />);
   expect(container).toBeEmptyDOMElement();
 });
 it("shows the exact task condition with mixed facts", () => {
@@ -335,7 +335,7 @@ it("distinguishes row logic from lineage selection and explains source aliases",
 it("preserves selected lineage colour on definition edges and their arrows",()=>{
  const first={...taskForMapping("derived"),code:"a",label:"P.a"};
  const second={...taskForMapping("derived"),code:"b",label:"P.b"};
- render(<RunGraph graph={{waves:[["a"],["b"]],conditional:[],depends_on:{b:[["a","SUCCESS"]]}}} statuses={{}} focused="b" onFocus={()=>undefined} onOpen={()=>undefined} plain definition={{tasks:[first,second],edges:[{kind:"task",source:"P.a",target:"P.b",dependency_type:"SUCCESS",consume_repairs:"Y"}]}}/>);
+ render(<RunGraph graph={{waves:[["a"],["b"]],conditional:[],depends_on:{b:[["a","SUCCESS"]]}}} statuses={{}} focused="b" onFocus={()=>undefined} onOpen={()=>undefined} plain definition={{tasks:[first,second],edges:[{kind:"task",source:"P.a",target:"P.b",edge_kind:"SUCCESS",consume_repairs:"Y"}]}}/>);
  expect(captured.edges[0]!.style?.stroke).toBe("var(--accent)");
  expect(captured.edges[0]!.markerEnd).toMatchObject({color:"var(--accent)"});
 });

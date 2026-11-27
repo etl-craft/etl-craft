@@ -1,6 +1,6 @@
 -- Every active dependency of an active pipeline on another, and whether the upstream is active.
 SELECT CASE WHEN p.PROJECT_ID=:project_id THEN p.PIPELINE_CODE ELSE project.PROJECT_CODE || '.' || p.PIPELINE_CODE END AS pipeline_code, CASE WHEN u.PROJECT_ID=:project_id THEN u.PIPELINE_CODE ELSE upstream.PROJECT_CODE || '.' || u.PIPELINE_CODE END AS depends_on_pipeline_code,
-       d.DEPENDENCY_TYPE AS dependency_type, (u.ACTIVE_FLAG = 'Y') AS depends_on_pipeline_active
+       p.START_CONDITION AS start_condition,  (u.ACTIVE_FLAG = 'Y') AS depends_on_pipeline_active, upstream.PROJECT_CODE || '.' || u.PIPELINE_CODE AS qualified_name
 FROM CFG_PIPELINE_DEPENDENCY d
 JOIN CFG_PIPELINES p ON p.PIPELINE_ID = d.PIPELINE_ID
 JOIN CFG_PIPELINES u ON u.PIPELINE_ID = d.DEPENDS_ON_PIPELINE_ID

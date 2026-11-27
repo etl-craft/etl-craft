@@ -37,8 +37,8 @@ def test_generator_writes_complete_config_with_acyclic_edges_and_daily_spread(tm
         assert len(pipelines) == 5 and len(rows("tasks.csv")) == 15
         for row in pipelines:
             times.add(row["RUN_SCHEDULE"])
-        for row in rows("pipeline_dependencies.csv"):
-            assert row["DEPENDS_ON_PIPELINE_CODE"] < row["PIPELINE_CODE"]
+            if row["START_CONDITION"]:
+                assert row["START_CONDITION"].removesuffix(".SUCCESS") < row["PIPELINE_CODE"]
         for row in rows("tasks.csv"):
             if row["RUN_CONDITION"]:
                 assert row["RUN_CONDITION"].removesuffix(".SUCCESS") < row["TASK_CODE"]

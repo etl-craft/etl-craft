@@ -62,10 +62,12 @@ def _render(args: argparse.Namespace, out: Output, done: Explanation) -> int:
         _task_details(out, done.task)
         if done.pipeline.paused is not None:
             out.line(done.pipeline.paused.describe())
+        if done.pipeline.start_condition:
+            out.line(f"start_condition={done.pipeline.start_condition}")
         out.line(f"run_condition={done.run_condition or 'none'} met={done.condition_met}")
         for dependency in (*done.pipeline_dependencies, *done.dependencies):
             out.line(
-                f"{dependency.upstream}: {dependency.dependency_type} "
+                f"{dependency.upstream}: {dependency.kind} "
                 f"status={dependency.status or 'NOT RUN'} met={dependency.met}; {dependency.reason}"
             )
         for wait in done.gate_waits:

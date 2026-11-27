@@ -10,7 +10,7 @@ The root retains `generated_at`, `compared_at`, `project`, `environment`, `datab
 `sql_dialect`, `warehouse`, `contract_version`, and the asset collections `pipelines`,
 `tasks`, `tables`, `rules`, `scripts`, `table_edges`, `column_edges`, `triggers` and `gaps`.
 `definition_edges` contains `kind` (`task` or `pipeline`), `source`, `target`,
-`dependency_type` and `consume_repairs`. `gate_wait_minutes` records the deployment's budget.
+`edge_kind`, `condition` and `consume_repairs`. `gate_wait_minutes` records the deployment's budget.
 
 Each pipeline includes its schedule, auto-restart condition, refresh type, SLA, tags, paused
 state, tasks and recent runs. `upstream`, `downstream` and `gates` carry typed pipeline edges;

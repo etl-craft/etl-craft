@@ -18,7 +18,6 @@ from fixtures.auth import service_token
 from fixtures.metadata import (
     add_dependency,
     add_pipeline,
-    add_pipeline_dependency,
     add_table,
     add_task,
 )
@@ -322,10 +321,7 @@ def test_dependencies_and_pipeline_settings(project):
         add_dependency(conn, down, rules_data, rules, "HAS_DATA", upstream_pipeline=good)
         add_dependency(conn, down, alert, waits, "SUCCESS")
         conn.execute(text("UPDATE CFG_TASKS SET ACTIVE_FLAG = 'N' WHERE TASK_ID = :t"), {"t": off})
-        add_pipeline_dependency(conn, down, good)
-        add_pipeline_dependency(conn, good, down)
         gone = add_pipeline(conn, "GONE")
-        add_pipeline_dependency(conn, down, gone)
         conn.execute(
             text("UPDATE CFG_PIPELINES SET ACTIVE_FLAG = 'N' WHERE PIPELINE_ID = :p"), {"p": gone}
         )
@@ -362,18 +358,11 @@ def test_dependencies_and_pipeline_settings(project):
     ) in got
     # Alerts start from events, so their dependencies are never judged as reporting order.
     assert [g for g in got if g[0] == "DOWN.alert"] == []
-    assert (
-        "DOWN",
-        fail,
-        "pipeline dependencies form a cycle (DOWN -> GOOD -> DOWN), so none of these pipelines "
-        "can start",
-    ) in got
     for key in ("RETRIES", "TAG"):
         assert any(
             where == "DOWN" and status is fail and key in message and "TAGS" in message
             for where, status, message in got
         )
-    assert any(w == "DOWN" and "GONE, which is inactive" in m for w, _, m in got)
     assert any(
         w == "bad code" and m.startswith("PIPELINE_CODE='bad code' must start") for w, _, m in got
     )
@@ -1009,3 +998,38 @@ def test_required_uploads_refuses_a_pipeline_that_cannot_receive_files(project):
         for f in report.findings
         if f.where == "UPLOAD_REQUIRED.validate_file" and f.status == Status.FAIL
     ]
+
+
+@pytest.mark.parametrize(
+    ("rule", "expected"),
+    [
+        ("GOO.SUCCESS", "did you mean GOOD"),
+        ("GONE.SUCCESS", "expected an active project and pipeline"),
+        ("GOOD.ATTEMPTS = 0", "ATTEMPTS is not available"),
+    ],
+)
+def test_validate_names_pipeline_start_condition_location(project, rule, expected):
+    engine, config, root = project
+    folder = root / "config"
+    folder.mkdir(exist_ok=True)
+    (folder / "pipelines.csv").write_text(f"PIPELINE_CODE,START_CONDITION\nDOWN,{rule}\n")
+    with engine.begin() as conn:
+        good_pipeline(conn, "GOOD")
+        downstream = good_pipeline(conn, "DOWN")
+        gone = add_pipeline(conn, "GONE")
+        conn.execute(
+            text("UPDATE CFG_PIPELINES SET ACTIVE_FLAG='N' WHERE PIPELINE_ID=:id"), {"id": gone}
+        )
+        conn.execute(
+            text("UPDATE CFG_PIPELINES SET START_CONDITION=:rule WHERE PIPELINE_ID=:id"),
+            {"id": downstream, "rule": rule},
+        )
+    failure = [
+        (where, message)
+        for where, status, message in found(validate(engine, config))
+        if status == Status.FAIL and "START_CONDITION" in message
+    ]
+    ((where, message),) = failure
+    assert where.endswith("pipelines.csv line 2")
+    for part in ("DOWN", "START_CONDITION", "position 1", expected, "correct"):
+        assert part.lower() in message.lower()

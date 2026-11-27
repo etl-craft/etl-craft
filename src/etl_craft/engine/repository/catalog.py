@@ -52,6 +52,7 @@ class PipelineRow:
     last_run_id: int | None = None
     tags: tuple[str, ...] = ()
     auto_restart_condition: str = "SCHEDULE"
+    start_condition: str | None = None
 
 
 @dataclass(frozen=True)
@@ -111,6 +112,7 @@ def fetch_catalog_pipelines(conn: Connection) -> list[PipelineRow]:
             None if r.pipeline_run_id is None else int(r.pipeline_run_id),
             read_tags(r.pipeline_parameters, r.pipeline_code),
             r.auto_restart_condition,
+            r.start_condition,
         )
         for r in conn.execute(statement(conn, "catalog_pipelines"))
     ]

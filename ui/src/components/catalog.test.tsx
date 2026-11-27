@@ -14,7 +14,7 @@ const table = (name: string, over: object = {}) => {
   return { name, database: "w", schema, table: short, external: false, label: name, declared_kind: null, warehouse_kind: "TABLE", in_warehouse: true, warehouse_checked: true, findings: [], writers: [], readers: [], rules: [], columns: [column("id")], ...over };
 };
 const doc = {
-  schema: "etl-craft/catalog/2", gate_wait_minutes: 60, definition_edges: [{kind:"task",source:"LOAD.a",target:"LOAD.b",dependency_type:"SUCCESS",consume_repairs:"Y"}], generated_at: "2026-11-07T10:00:00+00:00", compared_at: null, project: "demo", environment: "TEST", database: null, warehouse: "trino", sql_dialect: null,
+  schema: "etl-craft/catalog/2", gate_wait_minutes: 60, definition_edges: [{kind:"task",source:"LOAD.a",target:"LOAD.b",edge_kind:"SUCCESS",consume_repairs:"Y"}], generated_at: "2026-11-07T10:00:00+00:00", compared_at: null, project: "demo", environment: "TEST", database: null, warehouse: "trino", sql_dialect: null,
   pipelines: [{ code: "LOAD", name: "LOAD", description: "Loads orders.", schedule: null, triggers: [], auto_restart_condition: "SCHEDULE", refresh_type: "FULL", sla_in_hours: null, tags: [], paused: null, tasks: ["LOAD.a", "LOAD.b"], depends_on: [], depended_on_by: [], runs: [] }],
   tasks: [task("LOAD", "a", { target: "stg.orders" }), task("LOAD", "b", { target: "ods.orders", sources: ["stg.orders"], upstream: [["LOAD.a", "SUCCESS"]] })],
   tables: [table("stg.orders", { writers: ["LOAD.a"], readers: ["LOAD.b"], columns: [column("id"), column("amount", { comment: "In cents" })] }), table("ods.orders", { writers: ["LOAD.b"] })],

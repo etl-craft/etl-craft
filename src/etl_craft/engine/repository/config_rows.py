@@ -28,7 +28,6 @@ from sqlalchemy.types import TypeEngine
 from etl_craft.config.model import DEFAULT_MAX_PARALLEL_TASKS
 from etl_craft.core.enums import (
     BusinessRuleLevel,
-    DependencyType,
     Handler,
     NonBusinessDay,
     RefreshType,
@@ -42,7 +41,6 @@ Value = str | int | float | date | dict[str, object] | None
 Key = tuple[Value, ...]
 
 YES_NO = ("Y", "N")
-DEPENDENCY_TYPES = tuple(kind.value for kind in DependencyType)
 
 _BIND_TYPES: dict[Kind, TypeEngine[Any]] = {
     "code": String(),
@@ -205,6 +203,7 @@ PIPELINES = ConfigTable(
         Column("MAX_PARALLEL_TASKS", "int", default=DEFAULT_MAX_PARALLEL_TASKS, minimum=1),
         Column("PRIORITY", "int", default=0),
         Column("BLOCK_ON_REPARSE_ERROR", "choice", default="N", choices=YES_NO),
+        Column("START_CONDITION"),
         Column("CONSUME_REPAIRS", "choice", default="Y", choices=YES_NO),
         Column("SLA_IN_HOURS", "float"),
         Column("PIPELINE_PARAMETERS", "json"),
@@ -233,6 +232,7 @@ PIPELINES = ConfigTable(
         "MAX_PARALLEL_TASKS",
         "PRIORITY",
         "BLOCK_ON_REPARSE_ERROR",
+        "START_CONDITION",
         "CONSUME_REPAIRS",
         "SLA_IN_HOURS",
         "PIPELINE_PARAMETERS",
@@ -291,26 +291,6 @@ TASK_PARAMETERS = ConfigTable(
     links=("TASK_ID",),
     label_format="{PIPELINE_CODE}.{TASK_CODE} {PARAMETER_NAME}",
     read_query="config_rows_task_parameters",
-)
-
-PIPELINE_DEPENDENCIES = ConfigTable(
-    file="pipeline_dependencies.csv",
-    table="CFG_PIPELINE_DEPENDENCY",
-    id_column="PIPELINE_DEPENDENCY_ID",
-    key=("PIPELINE_CODE", "DEPENDS_ON_PROJECT_CODE", "DEPENDS_ON_PIPELINE_CODE", "DEPENDENCY_TYPE"),
-    columns=(
-        Column("PIPELINE_CODE", "code", required=True),
-        Column("DEPENDS_ON_PROJECT_CODE", "code"),
-        Column("DEPENDS_ON_PIPELINE_CODE", "code", required=True),
-        Column("DEPENDENCY_TYPE", "choice", required=True, choices=DEPENDENCY_TYPES),
-        Column("CONSUME_REPAIRS", "choice", default="Y", choices=YES_NO),
-        ACTIVE_FLAG,
-    ),
-    stored=("DEPENDENCY_TYPE", "CONSUME_REPAIRS"),
-    parents=(("pipeline_id", "pipelines.csv"), ("depends_on_pipeline_id", "pipelines.csv")),
-    links=("PIPELINE_ID", "DEPENDS_ON_PIPELINE_ID"),
-    label_format="{PIPELINE_CODE} on {DEPENDS_ON_PIPELINE_CODE} {DEPENDENCY_TYPE}",
-    read_query="config_rows_pipeline_dependency",
 )
 
 BUSINESS_RULES = ConfigTable(
@@ -416,7 +396,6 @@ TABLES = (
     OBJECT_TABLES,
     TASKS,
     TASK_PARAMETERS,
-    PIPELINE_DEPENDENCIES,
     BUSINESS_RULES,
     SOURCE_COLUMNS,
 )

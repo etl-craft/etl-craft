@@ -1,5 +1,5 @@
 -- Every active pipeline, by code.
-SELECT PIPELINE_ID AS pipeline_id, PIPELINE_CODE AS pipeline_code, PIPELINE_NAME AS pipeline_name, DESCRIPTION AS description,
+SELECT PIPELINE_ID AS pipeline_id, PIPELINE_CODE AS pipeline_code, PIPELINE_NAME AS pipeline_name, DESCRIPTION AS description, START_CONDITION AS start_condition,
        STEWARDABLE_FLAG AS stewardable_flag, ACTIVE_FLAG AS active_flag,
        REFRESH_TYPE AS refresh_type, RUN_SCHEDULE AS run_schedule, AUTO_RESTART_CONDITION AS auto_restart_condition, SLA_IN_HOURS AS sla_in_hours, PIPELINE_PARAMETERS AS pipeline_parameters
 FROM CFG_PIPELINES

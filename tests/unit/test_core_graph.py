@@ -4,7 +4,7 @@ from dataclasses import replace
 import pytest
 
 from etl_craft.core.conditions import Facts, Scope, parse
-from etl_craft.core.enums import DependencyType, RunStatus
+from etl_craft.core.enums import EdgeKind, RunStatus
 from etl_craft.core.errors import ConditionError, ExitCode, GraphError
 from etl_craft.core.graph import (
     CycleError,
@@ -28,8 +28,8 @@ def nodes(*ids: int) -> list[TaskNode]:
 FACTS = {"SUCCESS": "SUCCESS", "FAILURE": "FAILED", "ALWAYS": "FINISHED", "HAS_DATA": "HAS_DATA"}
 
 
-def edge(task_id, depends_on_task_id, dependency_type="SUCCESS"):
-    return TaskEdge(task_id, depends_on_task_id), FACTS[dependency_type]
+def edge(task_id, depends_on_task_id, kind="SUCCESS"):
+    return TaskEdge(task_id, depends_on_task_id), FACTS[kind]
 
 
 def build_graph(tasks, edges):
@@ -122,24 +122,24 @@ def test_ready_success_edge_blocks_until_upstream_succeeds():
 
 
 def test_ready_failure_edge_only_satisfied_by_failed_upstream():
-    graph = build_graph(nodes(1, 2), [edge(2, 1, dependency_type="FAILURE")])
+    graph = build_graph(nodes(1, 2), [edge(2, 1, kind="FAILURE")])
     assert 2 not in graph.ready({1: TaskRunState(status="SUCCESS")})
     assert 2 in graph.ready({1: TaskRunState(status="FAILED")}, failures_final=True)
 
 
 @pytest.mark.parametrize("upstream_status", ["SUCCESS", "FAILED", "SKIPPED"])
 def test_ready_always_edge_satisfied_by_any_terminal_status(upstream_status):
-    graph = build_graph(nodes(1, 2), [edge(2, 1, dependency_type="ALWAYS")])
+    graph = build_graph(nodes(1, 2), [edge(2, 1, kind="ALWAYS")])
     assert 2 in graph.ready({1: TaskRunState(status=upstream_status)}, failures_final=True)
 
 
 def test_ready_always_edge_not_satisfied_while_upstream_in_progress():
-    graph = build_graph(nodes(1, 2), [edge(2, 1, dependency_type="ALWAYS")])
+    graph = build_graph(nodes(1, 2), [edge(2, 1, kind="ALWAYS")])
     assert 2 not in graph.ready({1: TaskRunState(status="IN-PROGRESS")})
 
 
 def test_ready_has_data_edge_requires_success_and_positive_target_count():
-    graph = build_graph(nodes(1, 2), [edge(2, 1, dependency_type="HAS_DATA")])
+    graph = build_graph(nodes(1, 2), [edge(2, 1, kind="HAS_DATA")])
     assert 2 not in graph.ready({1: TaskRunState(status="SUCCESS", target_count=0)})
     assert 2 not in graph.ready({1: TaskRunState(status="SUCCESS", target_count=None)})
     assert graph.ready({1: TaskRunState(status="SUCCESS", target_count=5)}) == [2]
@@ -147,7 +147,7 @@ def test_ready_has_data_edge_requires_success_and_positive_target_count():
 
 
 def test_has_data_reads_the_rows_written_before_the_target_count():
-    graph = build_graph(nodes(1, 2), [edge(2, 1, dependency_type="HAS_DATA")])
+    graph = build_graph(nodes(1, 2), [edge(2, 1, kind="HAS_DATA")])
     full_but_unchanged = TaskRunState(status="SUCCESS", target_count=5, rows_written=0)
     assert 2 not in graph.ready({1: full_but_unchanged})
     assert graph.ready({1: TaskRunState("SUCCESS", target_count=0, rows_written=3)}) == [2]
@@ -251,7 +251,7 @@ def test_cross_pipeline_conditions_use_bound_facts(operator):
 
 def test_unsatisfiable_flags_a_failure_edge_whose_upstream_succeeded():
     # A failure watcher, on a run where nothing failed.
-    graph = build_graph(nodes(1, 2), [edge(2, 1, dependency_type="FAILURE")])
+    graph = build_graph(nodes(1, 2), [edge(2, 1, kind="FAILURE")])
     assert graph.unsatisfiable({1: TaskRunState(status="SUCCESS")}) == [2]
 
 
@@ -281,7 +281,7 @@ def test_unsatisfiable_ignores_an_upstream_still_in_progress():
 
 
 def test_unsatisfiable_flags_a_has_data_edge_whose_upstream_wrote_nothing():
-    graph = build_graph(nodes(1, 2), [edge(2, 1, dependency_type="HAS_DATA")])
+    graph = build_graph(nodes(1, 2), [edge(2, 1, kind="HAS_DATA")])
     state = {1: TaskRunState(status="SUCCESS", target_count=0)}
     assert graph.unsatisfiable(state) == [2]
 
@@ -289,7 +289,7 @@ def test_unsatisfiable_flags_a_has_data_edge_whose_upstream_wrote_nothing():
 def test_unsatisfiable_cascades_to_a_fixpoint():
     # 1 SUCCESS -> 2 (FAILURE) can never run -> 3 (SUCCESS on 2) can never
     # run either, once 2 is settled SKIPPED. One pass would only find 2.
-    graph = build_graph(nodes(1, 2, 3), [edge(2, 1, dependency_type="FAILURE"), edge(3, 2)])
+    graph = build_graph(nodes(1, 2, 3), [edge(2, 1, kind="FAILURE"), edge(3, 2)])
     assert graph.unsatisfiable({1: TaskRunState(status="SUCCESS")}) == [2, 3]
 
 
@@ -298,7 +298,7 @@ def test_unsatisfiable_does_not_cascade_through_an_always_edge():
     # is genuinely still runnable — the cascade must not over-reach.
     graph = build_graph(
         nodes(1, 2, 3),
-        [edge(2, 1, dependency_type="FAILURE"), edge(3, 2, dependency_type="ALWAYS")],
+        [edge(2, 1, kind="FAILURE"), edge(3, 2, kind="ALWAYS")],
     )
     assert graph.unsatisfiable({1: TaskRunState(status="SUCCESS")}) == [2]
 
@@ -307,7 +307,7 @@ def test_unsatisfiable_under_any_needs_every_edge_to_be_hopeless():
     tasks = [TaskNode(task_id=1), TaskNode(task_id=2), conditional(3, "t1.FAILED OR t2.FAILED")]
     graph = build_graph(
         tasks,
-        [edge(3, 1, dependency_type="FAILURE"), edge(3, 2, dependency_type="FAILURE")],
+        [edge(3, 1, kind="FAILURE"), edge(3, 2, kind="FAILURE")],
     )
     # One upstream succeeded (that edge is hopeless), the other hasn't run.
     assert graph.unsatisfiable({1: TaskRunState(status="SUCCESS")}) == []
@@ -319,7 +319,7 @@ def test_unsatisfiable_under_any_needs_every_edge_to_be_hopeless():
 def test_unsatisfiable_leaves_tasks_that_already_have_a_row_alone():
     # Only never-run tasks are reported. A task that already ran owns its own
     # status, whatever it is.
-    graph = build_graph(nodes(1, 2), [edge(2, 1, dependency_type="FAILURE")])
+    graph = build_graph(nodes(1, 2), [edge(2, 1, kind="FAILURE")])
     state = {1: TaskRunState(status="SUCCESS"), 2: TaskRunState(status="FAILED")}
     assert graph.unsatisfiable(state) == []
 
@@ -371,7 +371,7 @@ def test_a_cycle_error_names_the_cycle():
 
 def test_enum_members_and_raw_strings_are_interchangeable():
     tasks = [TaskNode(task_id=1), conditional(2, "t1.HAS_DATA")]
-    edges = [edge(2, 1, dependency_type=DependencyType.HAS_DATA)]
+    edges = [edge(2, 1, kind=EdgeKind.HAS_DATA)]
     graph = build_graph(tasks, edges)
     assert graph.ready({1: TaskRunState(status=RunStatus.SUCCESS, target_count=1)}) == [2]
     assert graph.ready({1: TaskRunState(status="SUCCESS", target_count=1)}) == [2]

@@ -15,7 +15,6 @@ from etl_craft.engine.repository.config_rows import (
     CALENDAR_HOLIDAYS,
     CALENDARS,
     OBJECT_TABLES,
-    PIPELINE_DEPENDENCIES,
     PIPELINES,
     SOURCE_COLUMNS,
     TABLES,
@@ -59,15 +58,6 @@ def _ends(table: ConfigTable, values: Mapping[str, Value]) -> list[tuple[str, Ke
             if values["TARGET_TABLE_NAME"] is not None
             else []
         )
-    if table is PIPELINE_DEPENDENCIES:
-        return [
-            ("pipeline", (values["PIPELINE_CODE"],)),
-            *(
-                []
-                if values["DEPENDS_ON_PROJECT_CODE"]
-                else [("pipeline", (values["DEPENDS_ON_PIPELINE_CODE"],))]
-            ),
-        ]
     ends: list[tuple[str, Key]] = [("task", (values["PIPELINE_CODE"], values["TASK_CODE"]))]
     if table is BUSINESS_RULES:
         ends.append(("table", tuple(values[name] for name in OBJECT_TABLES.key)))
@@ -87,10 +77,7 @@ def current_rows(
     for row in rows:
         if any(
             parent is not None and parent not in current_ids[file]
-            for index, (parent, (_, file)) in enumerate(
-                zip(row.parents, table.parents, strict=True)
-            )
-            if index != 1 or not row.values.get("DEPENDS_ON_PROJECT_CODE")
+            for parent, (_, file) in zip(row.parents, table.parents, strict=True)
         ):
             continue
         if not row.well_formed:
@@ -105,7 +92,6 @@ def current_rows(
 
 
 def _links(
-    conn: Connection,
     table: ConfigTable,
     file_row: FileRow,
     current: Mapping[str, Mapping[Key, StoredRow]],
@@ -123,8 +109,6 @@ def _links(
                 f"set the {kind}'s ACTIVE_FLAG to Y, or this row's to N"
             )
         found.append(parent)
-    if table is PIPELINE_DEPENDENCIES and file_row.values["DEPENDS_ON_PROJECT_CODE"]:
-        found.append(external_dependency(conn, table, file_row))
     if table is PIPELINES:
         calendar = int(found[0].row_id) if found else None
         return {"PROJECT_ID": current_project_id(), "CALENDAR_ID": calendar}
@@ -141,39 +125,11 @@ def _links(
         }
     if table is TASK_PARAMETERS:
         return {"TASK_ID": int(found[0].row_id)}
-    if table is PIPELINE_DEPENDENCIES:
-        return {"PIPELINE_ID": int(found[0].row_id), "DEPENDS_ON_PIPELINE_ID": int(found[1].row_id)}
     return {
         "PIPELINE_ID": found[0].parents[0],
         "TASK_ID": int(found[0].row_id),
         "TARGET_TABLE_ID": int(found[1].row_id),
     }
-
-
-def external_dependency(conn: Connection, table: ConfigTable, file_row: FileRow) -> StoredRow:
-    """Resolve a named upstream project without consulting local file keys."""
-    upstream = conn.execute(
-        statement(conn, "config_dependency_target"),
-        {
-            "project_code": file_row.values["DEPENDS_ON_PROJECT_CODE"],
-            "pipeline_code": file_row.values["DEPENDS_ON_PIPELINE_CODE"],
-            "task_code": file_row.values.get("DEPENDS_ON_TASK_CODE"),
-        },
-    ).one_or_none()
-    if upstream is None:
-        raise MetadataFileError(
-            f"{table.file} line {file_row.line}: upstream project/pipeline/task "
-            f"{file_row.values['DEPENDS_ON_PROJECT_CODE']}."
-            f"{file_row.values['DEPENDS_ON_PIPELINE_CODE']} is missing or inactive; "
-            "apply the upstream project's active definitions first"
-        )
-    return StoredRow(
-        int(upstream.pipeline_id),
-        True,
-        (int(upstream.pipeline_id),),
-        True,
-        {},
-    )
 
 
 def row_changes(
@@ -216,7 +172,6 @@ def resolved_files(
         SOURCE_COLUMNS,
         BUSINESS_RULES,
         TASKS,
-        PIPELINE_DEPENDENCIES,
     ):
         if table.file not in resolved:
             continue
@@ -228,12 +183,7 @@ def resolved_files(
                 else OBJECT_TABLES.key
             )
             values = row.values
-            if table is PIPELINE_DEPENDENCIES:
-                upstream = values["DEPENDS_ON_PROJECT_CODE"]
-                values = values | {
-                    "DEPENDS_ON_PROJECT_CODE": None if upstream == config.project else upstream
-                }
-            elif keys_only and table in (TASKS, BUSINESS_RULES):
+            if keys_only and table in (TASKS, BUSINESS_RULES):
                 pass
             elif table is not TASKS or values["TARGET_TABLE_NAME"] is not None:
                 identity = resolve_source_identity(
@@ -490,7 +440,7 @@ def upsert_table(
         label = table.label(desired.values)
         if existing is not None and existing.active and not row_changes(table, existing, desired):
             continue
-        links = _links(conn, table, desired, current)
+        links = _links(table, desired, current)
         if existing is None:
             insert_row(conn, table, desired.values, links)
             changes.append(Change(table.file, table.table, "insert", label))

@@ -34,7 +34,8 @@ from etl_craft.config import ConnectorConfig
 from etl_craft.config.project import python_script
 from etl_craft.config.targets import active_catalog
 from etl_craft.core.business_rules import RuleObservation
-from etl_craft.core.enums import GapState, Handler, ScriptKind, SqlAction, YesNo
+from etl_craft.core.conditions import pipeline_edge_kind
+from etl_craft.core.enums import EdgeKind, GapState, Handler, ScriptKind, SqlAction, YesNo
 from etl_craft.core.enums_lineage import DefinitionKind, LineageState
 from etl_craft.core.errors import EtlCraftError, MetadataError
 from etl_craft.core.redaction import public_parameters
@@ -397,7 +398,7 @@ def collect_catalog(
     for edge in pipeline_edges:
         if edge.pipeline_code in catalog.pipelines:
             catalog.pipelines[edge.pipeline_code].depends_on.append(
-                (edge.depends_on_pipeline_code, edge.dependency_type)
+                (edge.depends_on_pipeline_code, edge.kind)
             )
         if edge.depends_on_pipeline_code in catalog.pipelines:
             catalog.pipelines[edge.depends_on_pipeline_code].depended_on_by.append(
@@ -438,12 +439,13 @@ def _finish(
                 "kind": row.kind,
                 "target": row.target,
                 "source": row.source,
-                "dependency_type": (
-                    kinds.get((row.target, row.source), "CONDITION")
+                "edge_kind": (
+                    kinds.get((row.target, row.source), EdgeKind.CONDITION)
                     if row.kind == DefinitionKind.TASK
-                    else row.rule
+                    else pipeline_edge_kind(row.rule, row.source, row.qualified_name)
                 ),
                 "consume_repairs": row.consume_repairs,
+                "condition": row.rule,
             }
             for row in conn.execute(statement(conn, "catalog_definition_dependencies"))
         ]

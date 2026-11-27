@@ -262,7 +262,7 @@ def test_scheduler_checks_events_with_no_available_worker_and_resumes(world):
 
 
 @pytest.mark.parametrize("policy,expected", [("FAIL", "FAILED"), ("SKIP", "SKIPPED")])
-def test_timeout_dependents_follow_normal_dependency_types(world, policy, expected):
+def test_timeout_dependents_follow_normal_conditions(world, policy, expected):
     from etl_craft.engine import runlog
     from etl_craft.execution.pools import Capacity
 

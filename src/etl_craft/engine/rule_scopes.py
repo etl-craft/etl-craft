@@ -2,7 +2,7 @@
 
 from sqlalchemy.engine import Connection
 
-from etl_craft.core.enums import BusinessRuleLevel, DependencyType, Handler, RunStatus
+from etl_craft.core.enums import BusinessRuleLevel, EdgeKind, Handler, RunStatus
 from etl_craft.core.errors import SqlGuardError
 from etl_craft.core.rule_flags import KEY_CAP, RuleScope
 from etl_craft.core.text import split_object_ref
@@ -22,7 +22,7 @@ def rules(conn: Connection, task_id: int, scope: RuleScope) -> tuple[int, list[B
         if e.label == f"{task.pipeline_code}.{task.task_code}"
         and e.depends_on_task_code == scope.task
         and e.depends_on_pipeline_id == task.pipeline_id
-        and e.kind == DependencyType.SUCCESS
+        and e.kind == EdgeKind.SUCCESS
         and e.depends_on_handler == Handler.BUSINESS_RULES
         and e.depends_on_task_active
     ]

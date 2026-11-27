@@ -123,17 +123,7 @@ def test_config_apply_keeps_other_projects_and_links_same_code_upstream(engine_d
     folder = tmp_path / "config"
     export_config(engine_db.engine, folder)
     for name, changes in (
-        (
-            "pipeline_dependencies.csv",
-            {
-                "PIPELINE_CODE": "SHARED",
-                "DEPENDS_ON_PROJECT_CODE": "default",
-                "DEPENDS_ON_PIPELINE_CODE": "SHARED",
-                "DEPENDENCY_TYPE": "SUCCESS",
-                "CONSUME_REPAIRS": "Y",
-                "ACTIVE_FLAG": "Y",
-            },
-        ),
+        ("pipelines.csv", {"START_CONDITION": "default.SHARED.SUCCESS"}),
         (
             "tasks.csv",
             {"RUN_CONDITION": "default.SHARED.T.SUCCESS"},

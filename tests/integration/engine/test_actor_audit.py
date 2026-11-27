@@ -229,7 +229,6 @@ def seeded_tables(db):
             "pipeline_dependency_id": dependency,
             "consumed_pipeline_run_id": r2,
             "selected_pipeline_run_id": r2,
-            "dependency_type": "SUCCESS",
             "status": "SUCCESS",
             "action": "MARK",
             "requested_by": "alice",
@@ -433,6 +432,12 @@ def test_plain_connections_cannot_mutate_any_protected_table(engine_db):
                 with pytest.raises(error, match=refusal):
                     plain.execute(sql)
                 plain.rollback()
+        if engine_db.engine.dialect.name == "postgresql":
+            with engine_db.engine.begin() as conn:
+                conn.execute(text("UPDATE CFG_PROJECTS SET GOVERNANCE='RELAXED'"))
+            with pytest.raises(error, match=r"is derived.*change CFG_PIPELINES.START_CONDITION"):
+                plain.execute("UPDATE CFG_PIPELINE_DEPENDENCY SET ACTIVE_FLAG='N'")
+            plain.rollback()
     finally:
         plain.close()
 

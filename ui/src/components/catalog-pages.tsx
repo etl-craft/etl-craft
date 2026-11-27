@@ -230,6 +230,7 @@ export function PipelineObject({ code, doc, name, tab, onTab }: { code: string; 
                   </span>
                 </Fact>
               ) : null}
+              {pipeline.start_condition ? <Fact label="Starts when"><code className="break-all" translate="no">{pipeline.start_condition}</code></Fact> : null}
               <Fact label="Schedule">{pipeline.schedule ? <span title={pipeline.schedule}>{describeCron(pipeline.schedule) ?? <code className="font-mono">{pipeline.schedule}</code>}</span> : "Not scheduled"}</Fact>
               <Fact label="Refresh">{pipeline.refresh_type.toLowerCase()}</Fact>
               {pipeline.sla_in_hours ? <Fact label="SLA">{pipeline.sla_in_hours} h</Fact> : null}

@@ -877,3 +877,42 @@ def test_rename_refuses_active_code_reference(rename_project, parameter):
             ).scalar_one()
             == "P"
         )
+
+
+def test_renaming_an_upstream_rewrites_start_condition_and_retains_edge(rename_project):
+    from fixtures.metadata import add_pipeline_dependency
+
+    ctx, pipeline, _, _ = rename_project
+    with ctx.engine.begin() as conn:
+        consumer = add_pipeline(conn, "CONSUMER")
+        edge = add_pipeline_dependency(conn, consumer, pipeline)
+        conn.execute(
+            text(
+                "UPDATE CFG_PIPELINES SET START_CONDITION='default . P . SUCCESS OR P.FINISHED' "
+                "WHERE PIPELINE_ID=:id"
+            ),
+            {"id": consumer},
+        )
+        add_task(
+            conn, consumer, "load", "PYTHON", SCRIPT_FILE="python_scripts/sales/fetch_orders.py"
+        )
+    result = rename(ctx)
+    assert {item.pipeline_code for item in result.reparses} == {"NEW", "CONSUMER"}
+    with ctx.engine.connect() as conn:
+        assert (
+            conn.execute(
+                text("SELECT START_CONDITION FROM CFG_PIPELINES WHERE PIPELINE_ID=:id"),
+                {"id": consumer},
+            ).scalar_one()
+            == "default . NEW . SUCCESS OR NEW.FINISHED"
+        )
+        assert (
+            conn.execute(
+                text(
+                    "SELECT ACTIVE_FLAG FROM CFG_PIPELINE_DEPENDENCY "
+                    "WHERE PIPELINE_DEPENDENCY_ID=:edge AND DEPENDS_ON_PIPELINE_ID=:upstream"
+                ),
+                {"edge": edge, "upstream": pipeline},
+            ).scalar_one()
+            == "Y"
+        )

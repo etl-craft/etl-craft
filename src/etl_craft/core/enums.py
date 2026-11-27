@@ -408,13 +408,24 @@ class RefreshType(StrEnum):
     INCREMENTAL = "INCREMENTAL"
 
 
-class DependencyType(StrEnum):
-    """The upstream outcome a task or pipeline dependency waits for."""
+class AlertTrigger(StrEnum):
+    """Recorded source event categories."""
+
+    FAILURE = "FAILURE"
+    SUCCESS = RunStatus.SUCCESS
+    COMPLETED_WITH_ERRORS = "COMPLETED_WITH_ERRORS"
+    SLA_BREACH = "SLA_BREACH"
+    LOST = "LOST"
+
+
+class EdgeKind(StrEnum):
+    """How a condition refers to an upstream in a graph."""
 
     SUCCESS = "SUCCESS"
     FAILURE = "FAILURE"
     ALWAYS = "ALWAYS"
     HAS_DATA = "HAS_DATA"
+    CONDITION = "CONDITION"
 
 
 class Handler(StrEnum):

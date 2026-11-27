@@ -70,7 +70,9 @@ def test_gate_decision_dependency_and_result_constraints(engine_db):
         dep = add_pipeline_dependency(conn, p, up)
         r = start_run(conn, p)
         assert (
-            conn.execute(text("SELECT CONSUME_REPAIRS FROM CFG_PIPELINE_DEPENDENCY")).scalar_one()
+            conn.execute(
+                text("SELECT CONSUME_REPAIRS FROM CFG_PIPELINES WHERE PIPELINE_CODE='DOWN'")
+            ).scalar_one()
             == "Y"
         )
     insert = text(
@@ -84,7 +86,7 @@ def test_gate_decision_dependency_and_result_constraints(engine_db):
         for result in ("SATISFIED", "UNSATISFIED", "BYPASSED"):
             conn.execute(insert, {"r": r, "d": dep, "s": result})
     with pytest.raises(IntegrityError), engine_db.engine.begin() as conn:
-        conn.execute(text("UPDATE CFG_PIPELINE_DEPENDENCY SET CONSUME_REPAIRS='X'"))
+        conn.execute(text("UPDATE CFG_PIPELINES SET CONSUME_REPAIRS='X'"))
 
 
 @pytest.mark.parametrize("trigger_kind,prefix", [("MANUAL", "manual:"), ("STAND_IN", "stand-in:")])

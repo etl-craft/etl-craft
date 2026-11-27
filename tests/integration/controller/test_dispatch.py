@@ -158,21 +158,29 @@ def test_one_hundred_waiting_tasks_create_no_worker_jobs_and_resume_the_same_bud
     )
 
 
-def test_pipeline_gate_wait_is_persisted_before_admission_and_resumes_after_restart(cli_project):
-    p = cli_project
-    with p.engine.begin() as conn:
+def queue_behind_running_upstream(project):
+    with project.engine.begin() as conn:
         upstream = add_pipeline(conn, "UP")
         start_run(conn, upstream)
-        add_pipeline_dependency(conn, p.pipeline_id, upstream)
-        # Keep the upstream running without the local server trying to finalize it.
+        add_pipeline_dependency(conn, project.pipeline_id, upstream)
+    code, output = project.run("deploy")
+    assert code == 0, output
+    with project.engine.begin() as conn:
+        # The pinned start condition stays valid while the live upstream is held.
         conn.execute(
             text("UPDATE CFG_PIPELINES SET ACTIVE_FLAG='N' WHERE PIPELINE_ID=:id"), {"id": upstream}
         )
-        queued = start_run(conn, p.pipeline_id)
+        queued = start_run(conn, project.pipeline_id)
         conn.execute(
             text("UPDATE AUD_PIPELINES_RUN_LOG SET STATUS='QUEUED' WHERE PIPELINE_RUN_ID=:id"),
             {"id": queued},
         )
+    return queued
+
+
+def test_pipeline_gate_wait_is_persisted_before_admission_and_resumes_after_restart(cli_project):
+    p = cli_project
+    queue_behind_running_upstream(p)
     server = p.start("controller")
     p.wait_for("SELECT COUNT(*) FROM AUD_GATE_WAITS WHERE TASK_ID IS NULL", expected=1)
     server.signal(signal.SIGTERM)
@@ -205,8 +213,8 @@ def test_persisted_gate_looks_follow_the_average_and_stop_at_the_shared_budget(
         upstream = add_pipeline(conn, "UP")
         start_run(conn, upstream)
         down = add_pipeline(conn, "DOWN")
-        run_id = start_run(conn, down)
         add_pipeline_dependency(conn, down, upstream)
+        run_id = start_run(conn, down)
         latest = fetch_latest_pipeline_run(conn, upstream)
     start = as_utc(latest.start_date)
     now = start + timedelta(seconds=10)
@@ -237,18 +245,7 @@ def test_persisted_gate_looks_follow_the_average_and_stop_at_the_shared_budget(
 
 def test_cancelled_pipeline_admission_stops_waiting_without_starting_a_worker(cli_project):
     p = cli_project
-    with p.engine.begin() as conn:
-        upstream = add_pipeline(conn, "UP")
-        start_run(conn, upstream)
-        add_pipeline_dependency(conn, p.pipeline_id, upstream)
-        conn.execute(
-            text("UPDATE CFG_PIPELINES SET ACTIVE_FLAG='N' WHERE PIPELINE_ID=:id"), {"id": upstream}
-        )
-        run_id = start_run(conn, p.pipeline_id)
-        conn.execute(
-            text("UPDATE AUD_PIPELINES_RUN_LOG SET STATUS='QUEUED' WHERE PIPELINE_RUN_ID=:id"),
-            {"id": run_id},
-        )
+    run_id = queue_behind_running_upstream(p)
     server = p.start("controller")
     p.wait_for("SELECT COUNT(*) FROM AUD_GATE_WAITS WHERE TASK_ID IS NULL", expected=1)
     code, output = p.run(
@@ -285,8 +282,8 @@ def test_later_queued_or_skipped_ticks_do_not_hide_the_upstreams_active_run(engi
         for status in ("QUEUED", "SKIPPED"):
             transitions.create_run(conn, up, SYSTEM_ACTOR, trigger_kind="SCHEDULE", status=status)
         down = add_pipeline(conn, "DOWN")
-        run_id = start_run(conn, down)
         add_pipeline_dependency(conn, down, up)
+        run_id = start_run(conn, down)
     with selected_project(1):
         result = check_gate(db.engine, run_id, down)
     assert result.state == "WAIT"

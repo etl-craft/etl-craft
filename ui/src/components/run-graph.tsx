@@ -239,10 +239,10 @@ export function RunGraph({
     }
     definitionHeight=Math.max(280,...nodes.map(node=>node.position.y+HEIGHT+32));
     edges.forEach(edge => {
-      const item = definition.edges.find(item => (item.source.endsWith(`.${edge.source}`) && item.target.endsWith(`.${edge.target}`)) || (item.kind === "task" && edge.source.startsWith(`Task gate: ${item.source} ·`) && item.target.endsWith(`.${edge.target}`)) || (item.kind === "pipeline" && ((item.target === definition.tasks[0]?.pipeline && edge.source.startsWith(`Upstream: ${item.source} ·`)) || (item.source === definition.tasks[0]?.pipeline && edge.target === `Downstream: ${item.target}`)))) ?? { kind: "task" as const, source: edge.source, target: edge.target, dependency_type: graph.depends_on[edge.target]?.find(([source]) => source === edge.source)?.[1] ?? "SUCCESS", consume_repairs: "Y" };
+      const item = definition.edges.find(item => (item.source.endsWith(`.${edge.source}`) && item.target.endsWith(`.${edge.target}`)) || (item.kind === "task" && edge.source.startsWith(`Task gate: ${item.source} ·`) && item.target.endsWith(`.${edge.target}`)) || (item.kind === "pipeline" && ((item.target === definition.tasks[0]?.pipeline && edge.source.startsWith(`Upstream: ${item.source} ·`)) || (item.source === definition.tasks[0]?.pipeline && edge.target === `Downstream: ${item.target}`)))) ?? { kind: "task" as const, source: edge.source, target: edge.target, edge_kind: graph.depends_on[edge.target]?.find(([source]) => source === edge.source)?.[1] ?? "SUCCESS", consume_repairs: "Y" };
       edge.type = "definition";
-      edge.data = { definition:item, sentence: dependencySentence(item.source, item.target, item.dependency_type) };
-      edge.style = { ...edge.style, ...dependencyStyle(item.dependency_type), stroke: edge.style?.stroke };
+      edge.data = { definition:item, sentence: dependencySentence(item.source, item.target, item.edge_kind) };
+      edge.style = { ...edge.style, ...dependencyStyle(item.edge_kind), stroke: edge.style?.stroke };
       edge.label = definitionLabel(item) ? <DependencyBadge edge={item} /> : undefined;
       edge.markerEnd = { type: MarkerType.ArrowClosed, color: edge.style?.stroke ?? "var(--muted)",width:10,height:10,markerUnits:"userSpaceOnUse" };
     });
@@ -252,7 +252,7 @@ export function RunGraph({
     Object.assign(edge,connectionAction(edge,()=>{const next=active?null:edge.target;setWireFocus(next);onFocus(next);},active,String(edge.data?.sentence??`${edge.source} → ${edge.target}`)));
   });
   const measureNodes=useNodeMeasurements(nodes);
-  const key=useLegend([...dependencyEntries(plain&&!definition?[]:definition ? edges.map(edge=>edge.data?.definition as DefinitionEdge) : Object.values(graph.depends_on).flatMap(deps=>deps.map(([,kind])=>({dependency_type:kind})))),...(definition?taskEntries(definition.tasks):[]),...(!plain?statusEntries(Object.values(statuses)):[]),...(plain&&!definition?[{id:"lineage",group:"Lineage",name:"Table dependency",meaning:"The source table feeds the target table",sample:<svg width="36" height="12"><path d="M 0 6 H 36" stroke="var(--muted)"/></svg>}]:[]),...(edges.some(isHighlightedConnection)?[highlightedEntry]:[])]);
+  const key=useLegend([...dependencyEntries(plain&&!definition?[]:definition ? edges.map(edge=>edge.data?.definition as DefinitionEdge) : Object.values(graph.depends_on).flatMap(deps=>deps.map(([,kind])=>({edge_kind:kind})))),...(definition?taskEntries(definition.tasks):[]),...(!plain?statusEntries(Object.values(statuses)):[]),...(plain&&!definition?[{id:"lineage",group:"Lineage",name:"Table dependency",meaning:"The source table feeds the target table",sample:<svg width="36" height="12"><path d="M 0 6 H 36" stroke="var(--muted)"/></svg>}]:[]),...(edges.some(isHighlightedConnection)?[highlightedEntry]:[])]);
   // Bring a focused task into view when it is off-screen; leave the view alone when it is visible.
   React.useEffect(() => {
     if(wireFocus===focused)return;

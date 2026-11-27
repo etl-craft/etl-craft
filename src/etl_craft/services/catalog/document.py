@@ -56,6 +56,7 @@ def _pipeline(catalog: Catalog, asset: PipelineAsset) -> dict[str, Any]:
         "name": row.pipeline_name,
         "description": row.description,
         "schedule": row.run_schedule,
+        "start_condition": row.start_condition,
         "auto_restart_condition": row.auto_restart_condition,
         "refresh_type": row.refresh_type,
         "sla_in_hours": row.sla_in_hours,
@@ -96,12 +97,12 @@ def _task(catalog: Catalog, label: str, asset: TaskAsset) -> dict[str, Any]:
         **asset.execution,
         "secrets": list(declared(asset.params, label)) if row.handler == Handler.PYTHON else [],
         "upstream": [
-            [edge["source"], edge["dependency_type"], edge["consume_repairs"]]
+            [edge["source"], edge["edge_kind"], edge["consume_repairs"]]
             for edge in catalog.definition_edges
             if edge["kind"] == DefinitionKind.TASK and edge["target"] == label
         ],
         "downstream": [
-            [edge["target"], edge["dependency_type"], edge["consume_repairs"]]
+            [edge["target"], edge["edge_kind"], edge["consume_repairs"]]
             for edge in catalog.definition_edges
             if edge["kind"] == DefinitionKind.TASK and edge["source"] == label
         ],

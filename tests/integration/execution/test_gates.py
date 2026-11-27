@@ -1,5 +1,6 @@
 """The cross-pipeline gates and their trackers against a real Engine DB, both dialects."""
 
+import json
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -172,13 +173,15 @@ def test_a_pipeline_gate_and_what_its_successful_run_consumes(world):
     with engine.begin() as conn:
         edge = add_pipeline_dependency(conn, ids["down"], ids["up"], "SUCCESS")
 
-    refused = check_pipeline_dependencies(engine, ids["down"], NO_WAIT)
+    refused = check_pipeline_dependencies(engine, ids["down"], NO_WAIT, wait_seconds=0)
     assert not refused.satisfied
-    assert refused.reasons == ("upstream pipeline UP (SUCCESS) has no finished run",)
+    assert refused.reasons == (
+        "start condition [UP.SUCCESS]: UP.SUCCESS=unknown; UP has no finished run",
+    )
 
     with engine.begin() as conn:
         first, _ = upstream_run(conn, ids["up"], {})
-    passed = check_pipeline_dependencies(engine, ids["down"], NO_WAIT)
+    passed = check_pipeline_dependencies(engine, ids["down"], NO_WAIT, wait_seconds=0)
     assert passed.satisfied and passed.consumed == {edge: first}
 
     # UP finishes another run while DOWN runs: DOWN consumed the one it started with.
@@ -211,7 +214,9 @@ def test_a_pipeline_gate_and_what_its_successful_run_consumes(world):
         ).one()
     assert (consumed.run_id, consumed.consumed) == (down_run, first)
     # The newer run is left for DOWN's next run.
-    assert check_pipeline_dependencies(engine, ids["down"], NO_WAIT).consumed == {edge: second}
+    assert check_pipeline_dependencies(engine, ids["down"], NO_WAIT, wait_seconds=0).consumed == {
+        edge: second
+    }
 
 
 def backfill_run(conn, pipeline_id, task_statuses, status="SUCCESS"):
@@ -234,7 +239,7 @@ def test_a_finished_backfill_run_never_satisfies_a_gate(world):
     with engine.begin() as conn:
         add_pipeline_dependency(conn, ids["down"], ids["up"], "SUCCESS")
         backfill_run(conn, ids["up"], {ids["publish"]: "SUCCESS"})
-    assert not check_pipeline_dependencies(engine, ids["down"], NO_WAIT).satisfied
+    assert not check_pipeline_dependencies(engine, ids["down"], NO_WAIT, wait_seconds=0).satisfied
     task_gate = TrackedGate(NO_WAIT).check(engine, ids["load"])
     assert task_gate.facts[edge] is None and edge not in task_gate.consumed
 
@@ -246,7 +251,7 @@ def test_a_failed_backfill_run_never_blocks_a_gate(world):
         pipeline_edge = add_pipeline_dependency(conn, ids["down"], ids["up"], "SUCCESS")
         scheduled, rows = upstream_run(conn, ids["up"], {ids["publish"]: ("SUCCESS",)})
         backfill_run(conn, ids["up"], {ids["publish"]: "FAILED"}, status="FAILED")
-    passed = check_pipeline_dependencies(engine, ids["down"], NO_WAIT)
+    passed = check_pipeline_dependencies(engine, ids["down"], NO_WAIT, wait_seconds=0)
     assert passed.satisfied and passed.consumed == {pipeline_edge: scheduled}
     task_gate = TrackedGate(NO_WAIT).check(engine, ids["load"])
     assert task_gate.consumed == {edge: rows[ids["publish"]]}
@@ -264,3 +269,102 @@ def test_a_running_backfill_run_is_never_waited_for(world):
     check = TrackedGate(clock).check(engine, ids["load"])
     assert len(check.consumed) == 1
     assert all(fact.value("SUCCESS") is True for fact in check.facts.values())
+
+
+def test_start_condition_records_summed_facts_and_unknown_counts(world):
+    from etl_craft.engine.condition_edges import derive_edges
+
+    engine, ids = world
+    rule = (
+        "UP.SUCCESS AND UP.STATUS = SUCCESS AND UP.FINISHED AND NOT UP.FAILED AND "
+        "NOT UP.SKIPPED AND UP.HAS_DATA AND UP.ROWS_WRITTEN = 7 AND UP.REJECTED = 0"
+    )
+    with engine.begin() as conn:
+        second = add_task(conn, ids["up"], "second")
+        skipped = add_task(conn, ids["up"], "skipped")
+        run = start_run(conn, ids["up"])
+        task_run(conn, ids["publish"], run, "SUCCESS", rows_written=4)
+        task_run(conn, second, run, "SUCCESS", rows_written=3)
+        task_run(conn, skipped, run, "SKIPPED")
+        finish_run(conn, run)
+        conn.execute(
+            text("UPDATE CFG_PIPELINES SET START_CONDITION=:rule WHERE PIPELINE_ID=:pipeline"),
+            {"rule": rule, "pipeline": ids["down"]},
+        )
+        derive_edges(conn, 1)
+        down = start_run(conn, ids["down"])
+    result = check_pipeline_dependencies(engine, ids["down"], wait_seconds=0)
+    assert result.satisfied
+    with engine.begin() as conn:
+        assert trackers.fetch_pipeline_run_facts(conn, run).value("DURATION_SECONDS") >= 0
+        trackers.record_decisions(conn, down, result.decisions)
+        row = conn.execute(
+            text(
+                "SELECT TASK_ID AS task_id, CONDITION_TEXT AS rule, CONDITION_VALUES AS facts "
+                "FROM AUD_GATE_DECISIONS WHERE PIPELINE_RUN_ID=:run AND CONDITION_TEXT IS NOT NULL"
+            ),
+            {"run": down},
+        ).one()
+        assert row.task_id is None
+        assert row.rule == rule
+        facts = json.loads(row.facts) if isinstance(row.facts, str) else row.facts
+        assert facts == {
+            "UP.SUCCESS": True,
+            "UP.STATUS": "SUCCESS",
+            "UP.FINISHED": True,
+            "UP.FAILED": False,
+            "UP.SKIPPED": False,
+            "UP.HAS_DATA": True,
+            "UP.ROWS_WRITTEN": 7,
+            "UP.REJECTED": 0,
+        }
+        upstream_run(conn, ids["up"], {ids["publish"]: ("SUCCESS", 4, 7)})
+    unknown = check_pipeline_dependencies(engine, ids["down"], wait_seconds=0)
+    assert not unknown.satisfied and "UP.REJECTED=unknown" in unknown.reasons[0]
+
+
+@pytest.mark.parametrize("policy,expected", [("ENFORCE", "UNSATISFIED"), ("WARN", "BYPASSED")])
+def test_backfill_reads_delivered_facts_and_leaves_counts_unknown(world, policy, expected):
+    from etl_craft.engine.condition_edges import derive_edges
+
+    engine, ids = world
+    with engine.begin() as conn:
+        add_pipeline_dependency(conn, ids["down"], ids["up"], "HAS_DATA")
+    delivered = check_pipeline_dependencies(engine, ids["down"], backfill=True)
+    assert delivered.satisfied and delivered.consumed == {}
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "UPDATE CFG_PIPELINES SET START_CONDITION='UP.HAS_DATA AND UP.INSERTED = 1' "
+                "WHERE PIPELINE_ID=:pipeline"
+            ),
+            {"pipeline": ids["down"]},
+        )
+        derive_edges(conn, 1)
+    result = check_pipeline_dependencies(engine, ids["down"], policy=policy, backfill=True)
+    condition = next(decision for decision in result.decisions if decision.condition)
+    assert condition.result == expected
+    assert "UP.HAS_DATA=true" in condition.reason and "UP.INSERTED=unknown" in condition.reason
+    assert result.consumed == {}
+
+
+def test_a_true_start_condition_does_not_wait_for_another_running_upstream(world):
+    from etl_craft.engine.condition_edges import derive_edges
+
+    engine, ids = world
+    with engine.begin() as conn:
+        other = add_pipeline(conn, "OTHER")
+        start_run(conn, other)
+        complete, _ = upstream_run(conn, ids["up"], {})
+        conn.execute(
+            text(
+                "UPDATE CFG_PIPELINES SET START_CONDITION='UP.SUCCESS OR OTHER.HAS_DATA' "
+                "WHERE PIPELINE_ID=:pipeline"
+            ),
+            {"pipeline": ids["down"]},
+        )
+        derive_edges(conn, 1)
+    result = check_pipeline_dependencies(engine, ids["down"], Clock(sleep=never_sleep))
+    assert result.satisfied and tuple(result.consumed.values()) == (complete,)
+    condition = next(decision for decision in result.decisions if decision.condition)
+    assert json.loads(condition.values) == {"UP.SUCCESS": True, "OTHER.HAS_DATA": None}

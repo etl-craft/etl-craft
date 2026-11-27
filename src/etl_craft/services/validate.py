@@ -28,14 +28,14 @@ from etl_craft.core.compatibility import input_refusal
 from etl_craft.core.cron import parse, timezone
 from etl_craft.core.enums import (
     BusinessRuleLevel,
-    DependencyType,
+    EdgeKind,
     Handler,
     InputKind,
     SqlAction,
     YesNo,
 )
 from etl_craft.core.errors import ConditionError, EtlCraftError
-from etl_craft.core.graph import build_graph, cycles
+from etl_craft.core.graph import build_graph
 from etl_craft.core.placement import ResourceRequest, resource_request
 from etl_craft.core.script_kinds import script_kind
 from etl_craft.core.text import is_metadata_code, qualify
@@ -57,9 +57,7 @@ from etl_craft.engine.repository.tasks import fetch_target_tasks, fetch_task_par
 from etl_craft.engine.repository.validation import (
     ActiveTask,
     DependencyEdge,
-    PipelineEdge,
     fetch_active_tasks,
-    fetch_pipeline_edges,
     fetch_pipeline_parameters,
     fetch_task_dependency_edges,
 )
@@ -147,7 +145,6 @@ class _Metadata:
     tasks: list[ActiveTask]
     params: dict[int, dict[str, str]]
     edges: list[DependencyEdge]
-    pipeline_edges: list[PipelineEdge]
     pipeline_parameters: list[tuple[str, object]]
     pipeline_codes: list[str]
     placement: Placement
@@ -237,7 +234,6 @@ def validate_on(
         placement=placement(conn, config) if tasks else Placement({}, {}, None),
         params={task.task_id: fetch_task_parameters(conn, task.task_id) for task in tasks},
         edges=fetch_task_dependency_edges(conn),
-        pipeline_edges=fetch_pipeline_edges(conn),
         pipeline_parameters=pipeline_parameters,
         pipeline_codes=[code for code, _ in pipeline_parameters],
     )
@@ -272,7 +268,8 @@ def validate_on(
         from etl_craft.services.config_files import condition_location, config_directory
 
         where = condition_location(config_directory(config), issue)
-        report.fail(where, f"column RUN_CONDITION: {issue}")
+        column = "START_CONDITION" if "START_CONDITION" in issue else "RUN_CONDITION"
+        report.fail(where, f"column {column}: {issue}")
     report.pipelines = sum(1 for code in data.pipeline_codes if mine(code))
     report.tasks = sum(1 for task in data.tasks if mine(task.label))
     return report
@@ -342,29 +339,6 @@ def _pipelines(
         except EtlCraftError as error:
             report.fail(code, str(error))
             continue
-    for edge in data.pipeline_edges:
-        if edge.pipeline_code in data.pipeline_codes and not edge.depends_on_pipeline_active:
-            report.fail(
-                edge.pipeline_code,
-                f"depends on pipeline {edge.depends_on_pipeline_code}, which is inactive and "
-                "no longer runs, so once its last run is consumed the dependency is never "
-                "satisfied again; deactivate the dependency too, or reactivate the pipeline",
-            )
-    for cycle in cycles(
-        {
-            (edge.pipeline_code, edge.depends_on_pipeline_code)
-            for edge in data.pipeline_edges
-            if edge.depends_on_pipeline_active
-        }
-    ):
-        if not any(code in data.pipeline_codes for code in cycle):
-            continue
-        report.fail(
-            next(code for code in cycle if code in data.pipeline_codes),
-            f"pipeline dependencies form a cycle ({' -> '.join([*cycle, cycle[0]])}), so none "
-            "of these pipelines can start",
-        )
-
     for code, problem in trigger_graph_problems(conn):
         report.fail(code, problem)
 
@@ -398,7 +372,7 @@ def _dependencies(data: _Metadata, report: Report) -> None:
         except ConditionError as error:
             report.fail(edge.label, f"RUN_CONDITION {error}; correct the condition and deploy")
             continue
-        if kind == DependencyType.HAS_DATA:
+        if kind == EdgeKind.HAS_DATA:
             reason = _no_rows_reason(upstream, data.params[upstream.task_id])
             if reason:
                 report.fail(

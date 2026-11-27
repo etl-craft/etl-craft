@@ -20,7 +20,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import StrEnum
 
-from etl_craft.core.enums import DependencyType, RunStatus
+from etl_craft.core.enums import EdgeKind, RunStatus
 from etl_craft.core.errors import ConditionError
 from etl_craft.core.text import suggest
 
@@ -61,7 +61,7 @@ FACTS: dict[str, tuple[Kind, frozenset[Scope]]] = {
         f: (Kind.BOOLEAN, frozenset(Scope))
         for f in (RunStatus.SUCCESS, RunStatus.FAILED, RunStatus.SKIPPED, "FINISHED")
     },
-    DependencyType.HAS_DATA: (Kind.BOOLEAN, frozenset(Scope)),
+    EdgeKind.HAS_DATA: (Kind.BOOLEAN, frozenset(Scope)),
     "STATUS": (Kind.STATUS, frozenset(Scope)),
     **{f: (Kind.INTEGER, frozenset(Scope)) for f in COUNTS},
     "DURATION_SECONDS": (Kind.INTEGER, frozenset(Scope)),
@@ -88,6 +88,7 @@ class Facts:
     duration_seconds: int | None = None
     error_class: str | None = None
     assumed: bool = False
+    scope: Scope = Scope.TASK
 
     @classmethod
     def delivered(cls) -> Facts:
@@ -106,7 +107,7 @@ class Facts:
             "FINISHED",
             "STATUS",
         ):
-            return True if fact == DependencyType.HAS_DATA else None
+            return True if fact == EdgeKind.HAS_DATA else None
         terminal = self.status in TERMINAL
         if fact == RunStatus.SUCCESS:
             return self.status == RunStatus.SUCCESS
@@ -116,13 +117,10 @@ class Facts:
             return terminal
         if fact == "STATUS":
             return self.status
-        if fact == DependencyType.HAS_DATA:
-            written = self.counts.get("ROWS_WRITTEN")
-            if written is None:
-                written = self.counts.get("TARGET_ROWS")
-            return self.status == RunStatus.SUCCESS and bool(written and written > 0)
+        if fact == EdgeKind.HAS_DATA:
+            return self._has_data()
         if fact in COUNTS:
-            if self.status in (RunStatus.SKIPPED, RunStatus.CANCELLED):
+            if self.scope == Scope.TASK and self.status in (RunStatus.SKIPPED, RunStatus.CANCELLED):
                 return 0
             return self.counts.get(fact)
         if fact == "ATTEMPTS":
@@ -132,6 +130,16 @@ class Facts:
         if fact == "ERROR_CLASS":
             return (self.error_class or "UNKNOWN") if self.status == RunStatus.FAILED else "NONE"
         raise ConditionError(f"unknown fact {fact}")
+
+    def _has_data(self) -> bool | None:
+        if self.status != RunStatus.SUCCESS:
+            return False
+        written = self.counts.get("ROWS_WRITTEN")
+        if written is None:
+            if self.scope == Scope.PIPELINE:
+                return None
+            written = self.counts.get("TARGET_ROWS")
+        return bool(written and written > 0)
 
 
 # The tree
@@ -429,6 +437,20 @@ def parse(text: str, scope: Scope) -> Condition:
     return _Parser(text, scope).parse()
 
 
+def rename_start_reference(rule: str, project: str, old: str, new: str) -> str:
+    """Replace one pipeline code in a start condition while preserving its formatting."""
+    names = {(old,), (project, old)}
+    tokens = _tokens(rule)
+    index = {token.position: offset for offset, token in enumerate(tokens)}
+    renamed = rule
+    for ref in reversed(parse(rule, Scope.PIPELINE).refs):
+        if ref.parts in names:
+            offset = index[ref.position] + 2 * (len(ref.parts) - 1)
+            start = tokens[offset].position - 1
+            renamed = renamed[:start] + new + renamed[start + len(old) :]
+    return renamed
+
+
 # Evaluation
 
 Lookup = Callable[[Ref], Facts | None]
@@ -504,11 +526,11 @@ def _atoms(node: Node) -> list[Flag | Compare]:
     return [atom for term in node.terms for atom in _atoms(term)]
 
 
-LEGACY_KINDS = {
-    RunStatus.SUCCESS: DependencyType.SUCCESS,
-    RunStatus.FAILED: DependencyType.FAILURE,
-    "FINISHED": DependencyType.ALWAYS,
-    DependencyType.HAS_DATA: DependencyType.HAS_DATA,
+FLAG_KINDS = {
+    RunStatus.SUCCESS: EdgeKind.SUCCESS,
+    RunStatus.FAILED: EdgeKind.FAILURE,
+    "FINISHED": EdgeKind.ALWAYS,
+    EdgeKind.HAS_DATA: EdgeKind.HAS_DATA,
 }
 
 
@@ -532,16 +554,31 @@ def edge_kind(condition: Condition, name: tuple[str, ...]) -> str:
         is_plain(condition)
         and len(atoms) == 1
         and isinstance(atoms[0], Flag)
-        and facts <= LEGACY_KINDS.keys()
+        and facts <= FLAG_KINDS.keys()
     ):
-        return LEGACY_KINDS[facts.pop()]
-    return "CONDITION"
+        return FLAG_KINDS[facts.pop()]
+    return EdgeKind.CONDITION
 
 
-def holds_for(condition: Condition, name: tuple[str, ...], lookup: Lookup) -> Truth:
+def pipeline_edge_kind(rule: str | None, name: str, qualified_name: str) -> str:
+    """Classify a pipeline edge using both spellings allowed for its upstream."""
+    if not rule or not rule.strip():
+        return EdgeKind.CONDITION
+    condition = parse(rule, Scope.PIPELINE)
+    names = {tuple(name.split(".")), tuple(qualified_name.split("."))}
+    matches = {ref.parts for ref in condition.refs if ref.parts in names}
+    if len(matches) != 1:
+        return EdgeKind.CONDITION
+    return edge_kind(condition, matches.pop())
+
+
+def holds_for(
+    condition: Condition, name: tuple[str, ...], lookup: Lookup, reading: Reading | None = None
+) -> Truth:
     """Whether every test the condition makes of one upstream holds on its own."""
+    reading = Reading() if reading is None else reading
     values = [
-        _node(atom, lookup, Reading()) for atom in _atoms(condition.root) if atom.ref.parts == name
+        _node(atom, lookup, reading) for atom in _atoms(condition.root) if atom.ref.parts == name
     ]
     if not values:
         return True

@@ -153,8 +153,8 @@ guide lists its parameters.
 
 ### A pipeline that waits on another
 
-A `CFG_PIPELINE_DEPENDENCY` row makes a whole pipeline wait on another. A task can
-refer to another pipeline's task in its `RUN_CONDITION`. Each project migration derives
+Set `CFG_PIPELINES.START_CONDITION` to make a pipeline wait for another pipeline's output.
+A task can refer to another pipeline's task in its `RUN_CONDITION`. Each project migration derives
 these edges in the same transaction, after its SQL runs. See [Run conditions](dependencies.md).
 
 ```sql

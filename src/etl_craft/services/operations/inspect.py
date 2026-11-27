@@ -9,8 +9,8 @@ from datetime import UTC, datetime
 from sqlalchemy import Boolean, bindparam
 from sqlalchemy.engine import Connection
 
-from etl_craft.core.conditions import edge_kind, is_plain
-from etl_craft.core.enums import ActionName, ApiRole, RunStatus
+from etl_craft.core.conditions import edge_kind, is_plain, pipeline_edge_kind
+from etl_craft.core.enums import ActionName, ApiRole, EdgeKind, RunStatus
 from etl_craft.core.errors import ConfigurationError, ResourceNotFoundError
 from etl_craft.core.file_bytes import open_regular
 from etl_craft.core.graph import TaskNode, build_graph
@@ -114,6 +114,7 @@ def list_pipelines(ctx: OperationContext, request: TagFilter) -> PipelineListVie
                     auto_restart_condition=row.auto_restart_condition,
                     restart_note=restart_note(row.auto_restart_condition),
                     description=row.description,
+                    start_condition=row.start_condition,
                 )
             )
         return PipelineListView(summarize(conn, views, datetime.now(UTC), _pinned(ctx)))
@@ -141,6 +142,8 @@ def pipeline_graph(ctx: OperationContext, request: PipelineInput) -> GraphView:
             for cross in fetch_cross_pipeline_task_edges(conn, task_id):
                 name = next(n for n, d in node.cross.items() if d == cross.task_dependency_id)
                 depends_on[codes[task_id]].append((cross.depends_on_label, _kind(node, name)))
+        view = pipeline_view(conn, pipeline_id)
+        start_condition = view.start_condition
         return GraphView(
             pipeline_id,
             pipeline_code,
@@ -154,15 +157,22 @@ def pipeline_graph(ctx: OperationContext, request: PipelineInput) -> GraphView:
             ),
             {code: tuple(sorted(edges)) for code, edges in sorted(depends_on.items())},
             tuple(
-                (edge.depends_on_pipeline_code, edge.dependency_type)
+                (
+                    edge.depends_on_pipeline_code,
+                    pipeline_edge_kind(
+                        start_condition,
+                        edge.depends_on_pipeline_code,
+                        ".".join(edge.qualified_name),
+                    ),
+                )
                 for edge in fetch_pipeline_dependency_edges(conn, pipeline_id)
             ),
-            pipeline_view(conn, pipeline_id).task_pauses,
+            view.task_pauses,
         )
 
 
 def _kind(node: TaskNode, name: tuple[str, ...]) -> str:
-    return "CONDITION" if node.condition is None else edge_kind(node.condition, name)
+    return EdgeKind.CONDITION if node.condition is None else edge_kind(node.condition, name)
 
 
 def pipeline_steps(ctx: OperationContext, request: StepsInput) -> StepsView:
