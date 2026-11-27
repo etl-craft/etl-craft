@@ -1,6 +1,5 @@
 import os
 import signal
-import subprocess
 import sys
 import threading
 import time
@@ -42,6 +41,8 @@ def test_a_successful_child():
     assert result.output_tail == "hello\n"
     assert result.describe() == "exited with code 0"
     assert result.elapsed_seconds >= 0
+    assert result.peak_rss_bytes is not None and result.peak_rss_bytes > 0
+    assert result.cpu_seconds is not None and result.cpu_seconds >= 0
 
 
 def test_a_failing_child_keeps_its_exit_code_and_stderr():
@@ -151,18 +152,18 @@ def test_the_child_leads_its_own_session():
 
 def test_an_interrupted_wait_stops_the_child_and_propagates(monkeypatch, tmp_path):
     pid_file = tmp_path / "child.pid"
-    real_wait = subprocess.Popen.wait
+    real_wait4 = os.wait4
     calls = []
 
-    def interrupted_wait(self, timeout=None):
+    def interrupted_wait(pid, options):
         if not calls:
-            calls.append(self.pid)
+            calls.append(pid)
             while not pid_file.exists():
                 time.sleep(0.01)
             raise KeyboardInterrupt
-        return real_wait(self, timeout=timeout)
+        return real_wait4(pid, options)
 
-    monkeypatch.setattr(subprocess.Popen, "wait", interrupted_wait)
+    monkeypatch.setattr(os, "wait4", interrupted_wait)
     code = f"import os, time; open({str(pid_file)!r}, 'w').write('x'); time.sleep(60)"
     with pytest.raises(KeyboardInterrupt):
         run_child(python(code), kill_grace_seconds=5)

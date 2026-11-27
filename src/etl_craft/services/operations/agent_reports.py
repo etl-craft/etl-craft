@@ -424,6 +424,8 @@ def _commit_end(ctx: OperationContext, request: AgentTask) -> AgentReply:
             )
             or None,
             exit_code=request.exit_code,
+            peak_rss_bytes=request.peak_rss_bytes,
+            cpu_seconds=request.cpu_seconds,
             offset=request.offset,
         )
         log_storage.ensure_source(conn, request.attempt_id)

@@ -152,6 +152,8 @@ def finish_task_run(
     owner: str | None = None,
     offset: StoredOffset | None = None,
     retryable: bool = True,
+    peak_rss_bytes: int | None = None,
+    cpu_seconds: float | None = None,
 ) -> None:
     """Record the current attempt's outcome on its row; each attempt writes only its own counts."""
     if attempt_id is not None:
@@ -168,6 +170,8 @@ def finish_task_run(
             error_message=error_message,
             task_log=task_log,
             retryable=retryable,
+            peak_rss_bytes=peak_rss_bytes,
+            cpu_seconds=cpu_seconds,
             offset=offset,
         )
         return
@@ -516,6 +520,8 @@ def _end_attempt(
     task_log: str | None = None,
     exit_code: int | None = None,
     retryable: bool = True,
+    peak_rss_bytes: int | None = None,
+    cpu_seconds: float | None = None,
 ) -> None:
     with conn.begin_nested():
         params = {
@@ -528,6 +534,8 @@ def _end_attempt(
             "task_log": task_log,
             "exit_code": exit_code,
             "retryable": retryable,
+            "peak_rss_bytes": peak_rss_bytes,
+            "cpu_seconds": cpu_seconds,
         }
         record_attempt_ending(conn, attempt_id, status, retryable)
         row = conn.execute(statement(conn, f"transition_{query}"), params).one_or_none()
@@ -552,6 +560,8 @@ def finish_attempt(
     exit_code: int | None = None,
     offset: StoredOffset | None = None,
     retryable: bool = True,
+    peak_rss_bytes: int | None = None,
+    cpu_seconds: float | None = None,
 ) -> None:
     """Record the owned outcome, summary, offset and admitted consumption atomically."""
     if status not in {
@@ -576,6 +586,8 @@ def finish_attempt(
             task_log=task_log,
             exit_code=exit_code,
             retryable=retryable,
+            peak_rss_bytes=peak_rss_bytes,
+            cpu_seconds=cpu_seconds,
         )
         if status == AttemptStatus.SUCCESS:
             fault_point("attempt.after_status")
@@ -600,6 +612,8 @@ def time_out_attempt(
     owner: str,
     error_message: str,
     task_log: str | None = None,
+    peak_rss_bytes: int | None = None,
+    cpu_seconds: float | None = None,
 ) -> None:
     """End an owned running attempt that exceeded its time limit."""
     _end_attempt(
@@ -612,6 +626,8 @@ def time_out_attempt(
         AttemptStatus.TIMED_OUT,
         error_message=error_message,
         task_log=task_log,
+        peak_rss_bytes=peak_rss_bytes,
+        cpu_seconds=cpu_seconds,
     )
 
 
@@ -622,6 +638,8 @@ def cancel_attempt(
     *,
     error_message: str,
     task_log: str | None = None,
+    peak_rss_bytes: int | None = None,
+    cpu_seconds: float | None = None,
 ) -> None:
     """Cancel a nonterminal attempt on behalf of an operator or controller."""
     _end_attempt(
@@ -634,6 +652,8 @@ def cancel_attempt(
         AttemptStatus.CANCELLED,
         error_message=error_message,
         task_log=task_log,
+        peak_rss_bytes=peak_rss_bytes,
+        cpu_seconds=cpu_seconds,
     )
 
 

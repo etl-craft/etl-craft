@@ -9,9 +9,11 @@ from __future__ import annotations
 
 import logging
 import os
+import resource
 import shutil
 import signal
 import subprocess
+import sys
 import tempfile
 import threading
 import time
@@ -77,6 +79,8 @@ class ChildResult:
     queries_ended: bool = False
     pid: int | None = None
     process_start: str | None = None
+    peak_rss_bytes: int | None = None
+    cpu_seconds: float | None = None
 
     @property
     def succeeded(self) -> bool:
@@ -116,35 +120,39 @@ def run_child(
         birth = process_start(process.pid)
         logger.debug("started pid %s: %s", process.pid, " ".join(spec.argv))
         timed_out = cancelled = False
+        status = None
+        peak_rss = cpu_seconds = None
         with _task_pipes(process, spec, output, cancel) as task_cancel:
             try:
                 if on_started is not None:
                     on_started(process.pid)
                 fault_point("supervisor.after_popen")
-                cancelled = _wait(process, spec.timeout_seconds or None, task_cancel)
+                status, peak_rss, cpu_seconds, cancelled, timed_out = _reap_child(
+                    process,
+                    birth,
+                    spec.timeout_seconds or None,
+                    task_cancel,
+                    kill_grace_seconds,
+                )
                 if cancelled:
                     logger.warning("stopping pid %s: cancellation was requested", process.pid)
-                    _stop_group(process, birth, min(kill_grace_seconds, 1))
-            except subprocess.TimeoutExpired:
-                timed_out = True
-                logger.warning(
-                    "pid %s exceeded its %gs limit; stopping it", process.pid, spec.timeout_seconds
-                )
-                _stop_group(process, birth, kill_grace_seconds)
             except BaseException:
                 _stop_group(process, birth, kill_grace_seconds)
+                status, peak_rss, cpu_seconds = _reap_after_stop(process)
                 raise
         elapsed = time.monotonic() - started
         tail = _read_tail(output, start_offset, tail_bytes)
     result = ChildResult(
         spec=spec,
-        returncode=process.returncode,
+        returncode=_returncode(status),
         timed_out=timed_out,
         elapsed_seconds=elapsed,
         output_tail=tail,
         cancelled=cancelled,
         pid=process.pid,
         process_start=birth,
+        peak_rss_bytes=peak_rss,
+        cpu_seconds=cpu_seconds,
     )
     logger.debug("pid %s %s after %.1fs", process.pid, result.describe(), elapsed)
     return result
@@ -211,32 +219,67 @@ def _launch(spec: ChildSpec, output: IO[bytes]) -> subprocess.Popen[bytes]:
     )
 
 
-def _wait(
-    process: subprocess.Popen[bytes], timeout: float | None, cancel: threading.Event | None
-) -> bool:
-    """Wait for ``process``; return true when ``cancel`` was set first.
-
-    Raises ``subprocess.TimeoutExpired`` when ``timeout`` passes first.
-    """
-    if cancel is None:
-        with interrupts.interruptible():
-            process.wait(timeout=timeout)
-        return False
+def _reap_child(
+    process: subprocess.Popen[bytes],
+    birth: str | None,
+    timeout: float | None,
+    cancel: threading.Event | None,
+    grace_seconds: float,
+) -> tuple[int | None, int | None, float | None, bool, bool]:
+    """Observe, stop when needed, and reap the child exactly once with ``wait4``."""
     deadline = None if timeout is None else time.monotonic() + timeout
-    while not cancel.is_set():
-        step = CANCEL_POLL_SECONDS
-        if deadline is not None:
-            remaining = deadline - time.monotonic()
-            if remaining <= 0:
-                raise subprocess.TimeoutExpired(process.args, timeout or 0)
-            step = min(step, remaining)
+    cancelled = timed_out = False
+    stopped = False
+    while True:
         try:
-            with interrupts.interruptible():
-                process.wait(timeout=step)
-            return False
-        except subprocess.TimeoutExpired:
-            continue
-    return process.poll() is None
+            pid, status, usage = os.wait4(process.pid, os.WNOHANG)
+        except ChildProcessError:
+            logger.error(
+                "pid %s could not be reaped; resource evidence is unavailable", process.pid
+            )
+            return None, None, None, cancelled, timed_out
+        if pid == process.pid:
+            process.returncode = _returncode(status)
+            return status, _rss_bytes(usage), usage.ru_utime + usage.ru_stime, cancelled, timed_out
+        if not stopped and cancel is not None and cancel.is_set():
+            cancelled, stopped = True, True
+            _stop_group(process, birth, min(grace_seconds, 1))
+        if not stopped and deadline is not None and time.monotonic() >= deadline:
+            timed_out, stopped = True, True
+            logger.warning("pid %s exceeded its %gs limit; stopping it", process.pid, timeout)
+            _stop_group(process, birth, grace_seconds)
+        time.sleep(CANCEL_POLL_SECONDS)
+
+
+def _reap_after_stop(
+    process: subprocess.Popen[bytes],
+) -> tuple[int | None, int | None, float | None]:
+    """Reap after an interrupted supervisor without touching ``Popen.wait``."""
+    try:
+        _, status, usage = os.wait4(process.pid, 0)
+    except ChildProcessError:
+        logger.error("pid %s could not be reaped after supervisor failure", process.pid)
+        return None, None, None
+    process.returncode = _returncode(status)
+    return status, _rss_bytes(usage), usage.ru_utime + usage.ru_stime
+
+
+def _rss_bytes(usage: resource.struct_rusage) -> int | None:
+    """Normalize wait4's peak RSS units, returning NULL for unsupported values."""
+    value = usage.ru_maxrss
+    if value is None or value < 0:
+        return None
+    return int(value * 1024) if sys.platform.startswith("linux") else int(value)
+
+
+def _returncode(status: int | None) -> int:
+    if status is None:
+        return -1
+    if os.WIFEXITED(status):
+        return os.WEXITSTATUS(status)
+    if os.WIFSIGNALED(status):
+        return -os.WTERMSIG(status)
+    return -1
 
 
 @contextmanager
@@ -294,11 +337,10 @@ def _signal_name(number: int) -> str:
 
 def _stop_group(process: subprocess.Popen[bytes], birth: str | None, grace_seconds: float) -> None:
     """Stop only the recorded process birth and its observed descendants, then reap it."""
-    if birth is None and process.poll() is None:
+    if birth is None:
         raise RunStateError(
             f"pid={process.pid}: process birth could not be verified; no signal sent. "
             "Inspect the host process before retrying or acknowledging cancellation."
         )
     if birth is not None:
         stop_process(process.pid, birth, grace_seconds=grace_seconds)
-    process.wait()

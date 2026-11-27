@@ -213,7 +213,7 @@ item's text, or work done early under another item.
 | S7.AY ROW_IDs derived from the task run | Done | #470 | `ROW_ID = TASK_RUN_ID × 2^32 + n` on every warehouse; `AUD_TARGET_ROW_IDS`, the reservation report and ROW_ID generators are gone |
 | S7.AZ Re-parse, not refresh | Done | #472 | `pipelines re-parse`, `lineage --re-parse`, re-parse routes, actions, UI labels, Engine DB names and docs; "refresh" means data only |
 | S7.BA Run conditions on task and pipeline rows | In progress | [#474](https://github.com/etl-craft/etl-craft/pull/474), [#475](https://github.com/etl-craft/etl-craft/pull/475) | S7.BA.2 and S7.BA.3 done. Tasks declare run conditions and pipelines declare start conditions. Support Insights remains a follow-up. |
-| S7.BB Run monitoring | Planned | | Attempt evidence, agent capacity, Home counts, and Monitor with missed starts and SLA |
+| S7.BB Run monitoring | In progress | #480 | S7.BB.2 attempt evidence is implemented; later monitoring slices remain |
 | S7.BC Incident handoff | Planned | | Recovery guidance, alert identity and existing support evidence from the run |
 | S7.BD Bounded catalog lineage lookup | Planned | | Bounded definition and history reads at 5,000 pipelines and 50,000 tasks per project |
 | S7.BE Cross-project condition safety | Done | #478 | Refuse definition changes that would break another project's conditions |

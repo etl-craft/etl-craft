@@ -225,7 +225,14 @@ def record_attempt(
             message = f"an abort was requested, so the task process {result.describe()}"
             if result.queries_ended:
                 attempt_cancellation.acknowledge_cancellation(conn, attempt_id, owner)
-            transitions.cancel_attempt(conn, attempt_id, current_actor(), error_message=message)
+            transitions.cancel_attempt(
+                conn,
+                attempt_id,
+                current_actor(),
+                error_message=message,
+                peak_rss_bytes=result.peak_rss_bytes,
+                cpu_seconds=result.cpu_seconds,
+            )
         elif status == RunStatus.IN_PROGRESS:
             status = RunStatus.FAILED
             message = f"the task process {result.describe()} before recording an outcome"
@@ -242,6 +249,8 @@ def record_attempt(
                     owner=owner,
                     error_message=message,
                     task_log=result.output_tail,
+                    peak_rss_bytes=result.peak_rss_bytes,
+                    cpu_seconds=result.cpu_seconds,
                 )
             else:
                 transitions.finish_attempt(
@@ -253,6 +262,8 @@ def record_attempt(
                     error_message=message,
                     task_log=result.output_tail,
                     exit_code=result.returncode,
+                    peak_rss_bytes=result.peak_rss_bytes,
+                    cpu_seconds=result.cpu_seconds,
                 )
             logger.error("%s: %s; see %s", task_code, message, log_path)
         controls.observe_exit(conn, attempt_id, queries_ended=result.queries_ended)
