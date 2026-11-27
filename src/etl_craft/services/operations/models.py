@@ -154,6 +154,22 @@ class AttemptView:
 
 
 @dataclass(frozen=True)
+class MetricMedian:
+    """A cohort metric and the number of recorded observations used for it."""
+
+    median: float | None
+    sample_size: int
+
+
+@dataclass(frozen=True)
+class TaskSuccessCohort:
+    """Statistics over the most recent successful runs of one task."""
+
+    run_count: int
+    metrics: dict[str, MetricMedian]
+
+
+@dataclass(frozen=True)
 class TaskRunView:
     """A stored task summary and its ordered attempts; a skipped task may have none."""
 
@@ -189,6 +205,7 @@ class TaskRunView:
 
     run_label: str = ""
     child_run_labels: tuple[str, ...] = ()
+    success_cohort: TaskSuccessCohort | None = None
 
 
 @dataclass(frozen=True)

@@ -26,6 +26,7 @@ from typing import IO
 from etl_craft.core import interrupts
 from etl_craft.core.errors import ConfigurationError, RunStateError
 from etl_craft.core.faults import fault_point
+from etl_craft.engine.attempt_resources import AttemptResources
 from etl_craft.execution.leases import process_start
 from etl_craft.execution.reconcile import stop_process
 
@@ -81,6 +82,11 @@ class ChildResult:
     process_start: str | None = None
     peak_rss_bytes: int | None = None
     cpu_seconds: float | None = None
+
+    @property
+    def resources(self) -> AttemptResources:
+        """Return the resource observation for persistence."""
+        return AttemptResources(self.peak_rss_bytes, self.cpu_seconds)
 
     @property
     def succeeded(self) -> bool:

@@ -82,6 +82,9 @@ def test_script_failure_policy_and_historical_explanation(
     )
     run_id = outcome.pipeline_run_id
     explanation = act(ctx, ActionName.EXPLAIN, pipeline_code="P", task_code="load", run_id=run_id)
+    for attempt in explanation.task.attempts:
+        assert attempt.peak_rss_bytes is not None and attempt.peak_rss_bytes > 0
+        assert attempt.cpu_seconds is not None and attempt.cpu_seconds >= 0
     reason = explanation.task.attempts[0].retry_reason
     assert f"{kind}: {exception}" in reason
     assert f"RETRY_ON={policy}" in reason

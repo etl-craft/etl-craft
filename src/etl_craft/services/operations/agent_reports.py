@@ -44,6 +44,7 @@ from etl_craft.engine import (
     transitions,
 )
 from etl_craft.engine.agent_state import fence
+from etl_craft.engine.attempt_resources import AttemptResources, record_resources
 from etl_craft.engine.audit import ActionRequest
 from etl_craft.engine.notifications import notification_hub
 from etl_craft.engine.queries import statement
@@ -369,6 +370,8 @@ def _start(ctx: OperationContext, task: TaskContext, request: AgentTask) -> Agen
 def _end(ctx: OperationContext, request: AgentTask) -> AgentReply:
     """Commit the independent task result before trying external log publication."""
     _commit_end(ctx, request)
+    resources = AttemptResources(request.peak_rss_bytes, request.cpu_seconds)
+    record_resources(ctx.engine, request.attempt_id, str(ctx.credential_token_id), resources)
     fault_point("logs.after_outcome")
     log_storage.publish(ctx, request.attempt_id)
     return AgentReply()
@@ -424,8 +427,6 @@ def _commit_end(ctx: OperationContext, request: AgentTask) -> AgentReply:
             )
             or None,
             exit_code=request.exit_code,
-            peak_rss_bytes=request.peak_rss_bytes,
-            cpu_seconds=request.cpu_seconds,
             offset=request.offset,
         )
         log_storage.ensure_source(conn, request.attempt_id)

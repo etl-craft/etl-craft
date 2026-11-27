@@ -211,16 +211,7 @@ def record_attempt(
         values = conn.execute(
             statement(conn, "task_run_log"), {"task_run_id": task_run_id}
         ).scalar_one_or_none()
-        row = conn.execute(
-            statement(conn, "control_task_context"), {"task_run_id": task_run_id}
-        ).one()
-        fences = controls.blocked(conn, pipeline_run_id)
-        aborted = any(fences.get(key) in STOP_ACTIONS for key in (None, row.task_id))
-        cancelled = (
-            aborted
-            or runlog.fetch_pipeline_run_status(conn, pipeline_run_id) == RunStatus.CANCELLED
-        )
-        if status == RunStatus.IN_PROGRESS and cancelled:
+        if status == RunStatus.IN_PROGRESS and _abort_requested(conn, task_run_id, pipeline_run_id):
             status = RunStatus.CANCELLED
             message = f"an abort was requested, so the task process {result.describe()}"
             if result.queries_ended:
@@ -230,8 +221,6 @@ def record_attempt(
                 attempt_id,
                 current_actor(),
                 error_message=message,
-                peak_rss_bytes=result.peak_rss_bytes,
-                cpu_seconds=result.cpu_seconds,
             )
         elif status == RunStatus.IN_PROGRESS:
             status = RunStatus.FAILED
@@ -249,8 +238,6 @@ def record_attempt(
                     owner=owner,
                     error_message=message,
                     task_log=result.output_tail,
-                    peak_rss_bytes=result.peak_rss_bytes,
-                    cpu_seconds=result.cpu_seconds,
                 )
             else:
                 transitions.finish_attempt(
@@ -262,8 +249,6 @@ def record_attempt(
                     error_message=message,
                     task_log=result.output_tail,
                     exit_code=result.returncode,
-                    peak_rss_bytes=result.peak_rss_bytes,
-                    cpu_seconds=result.cpu_seconds,
                 )
             logger.error("%s: %s; see %s", task_code, message, log_path)
         controls.observe_exit(conn, attempt_id, queries_ended=result.queries_ended)
@@ -276,6 +261,15 @@ def record_attempt(
         return TaskOutcome(status, f"{task_code}: SUCCESS", task_run_id)
     logger.error("%s: %s — %s (log: %s)", task_code, status, message, log_path)
     return TaskOutcome(status, f"{task_code}: {status} — {message}", task_run_id)
+
+
+def _abort_requested(conn: Connection, task_run_id: int, pipeline_run_id: int) -> bool:
+    row = conn.execute(statement(conn, "control_task_context"), {"task_run_id": task_run_id}).one()
+    fences = controls.blocked(conn, pipeline_run_id)
+    return (
+        any(fences.get(key) in STOP_ACTIONS for key in (None, row.task_id))
+        or runlog.fetch_pipeline_run_status(conn, pipeline_run_id) == RunStatus.CANCELLED
+    )
 
 
 def _task_log(values: str | None, output_tail: str) -> str | None:
