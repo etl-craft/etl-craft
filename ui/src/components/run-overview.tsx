@@ -1,3 +1,4 @@
+import { OptionalTask } from "@/components/dependency-mark";
 import { TaskDefinitionPanel } from "@/components/task-definition-panel";
 import { copyRunLabel } from "@/components/run-label";
 import * as React from "react";
@@ -17,7 +18,7 @@ import { unavailableAction, useActionAvailability } from "@/hooks";
 import { getJson, getText, project } from "@/lib/api";
 import { formatDuration } from "@/lib/format";
 import { Tabs } from "@/components/tabs";
-import { handlerLabel, runConditionLabel, words } from "@/lib/labels";
+import { handlerLabel, words } from "@/lib/labels";
 import { When, useNow } from "@/components/when";
 import { itemsPath, runPath } from "@/lib/routes";
 import type { Capabilities, ControlView, Explanation, GridCell, RunView, Steps, TaskHistory } from "@/lib/types";
@@ -28,12 +29,12 @@ function Why({ code, pipeline, runId, task }: { code: string; pipeline: string; 
     queryFn: () => getJson<Explanation>(`${project(code)}/explanations`, { pipeline_code: pipeline, run_id: runId, task_code: task }),
   });
   if (!why.data) return why.isError ? <Notice>{(why.error as Error).message}</Notice> : null;
-  const { dependencies, run_condition: condition, required_count: required, retry_at: retry } = why.data;
+  const { dependencies, run_condition: condition, retry_at: retry } = why.data;
   return (
     <section className="grid gap-2" aria-label="Why this task is in this state">
       <h3 className="m-0 text-sm font-semibold">Dependencies</h3>
       <p className="m-0 text-[13px] text-muted">
-        Runs when {runConditionLabel(condition, required)}.{retry ? <> Retry at <When iso={retry} />.</> : ""}
+        Runs when {condition || "the pipeline is admitted"}.{retry ? <> Retry at <When iso={retry} />.</> : ""}
       </p>
       <ul className="m-0 grid list-none gap-1 p-0 text-[13px]">
         {dependencies.map((d) => (
@@ -303,6 +304,7 @@ export function RunOverview({ code, pipeline, runId, task, taskOrder, cells, tab
   if (!r) return <Loading what="run" />;
   if (r.pipeline_code !== pipeline) return <Notice>Run #{runId} belongs to {r.pipeline_code}.</Notice>;
   const byTask = new Map(steps.data?.steps.map(step => [step.task_code, step]));
+  const tolerated = steps.data?.steps.filter(step => step.status === "FAILED" && step.parameters?.FAIL_PIPELINE_IF_FAILED?.toUpperCase() === "N") ?? [];
   const byCell = new Map(cells.filter(cell => cell.pipeline_run_id === runId).map(cell => [cell.task_code, cell]));
   if (task) return <TaskDetails key={`${runId}:${task}`} code={code} pipeline={pipeline} run={r} task={task} handler={byTask.get(task)?.handler}
     cell={byCell.get(task)} tab={tab} tryNumber={tryNumber} onTab={onTab} onTry={onTry} />;
@@ -319,6 +321,7 @@ export function RunOverview({ code, pipeline, runId, task, taskOrder, cells, tab
       {r.run_label ? <Button size="icon" variant="ghost" aria-label="Copy the run identifier" onClick={() => void navigator.clipboard.writeText(copyRunLabel(r.run_label ?? "")).then(() => toast("Run identifier copied."))}><Copy className="size-4" aria-hidden /></Button> : null}
     </div>
     <RunFacts run={r} />
+    {r.status === "SUCCESS" && tolerated.length ? <Notice warn>Tolerated failures: {tolerated.map(step => step.task_code).join(", ")}</Notice> : null}
     <Tabs tabs={runTabs} value={active} onChange={onTab} panelId="run-instance-tab" />
     <div role="tabpanel" id="run-instance-tab" aria-labelledby={`tab-${active}`} className="grid gap-3">
     {active === "details" ? <>
@@ -333,11 +336,11 @@ export function RunOverview({ code, pipeline, runId, task, taskOrder, cells, tab
           const cell = byCell.get(name);
           const status = taskStatus(step?.status ?? cell?.status ?? null, r);
           return <tr key={name}>
-            <Td><button type="button" className="break-all text-left font-medium text-accent hover:underline" onClick={() => onTask(name)}>{name}</button></Td>
+            <Td><button type="button" className="break-all text-left font-medium text-accent hover:underline" onClick={() => onTask(name)}>{name}</button>{step?.parameters?.FAIL_PIPELINE_IF_FAILED?.toUpperCase() === "N" ? <> <OptionalTask /></> : null}</Td>
             <Td data-label="Status"><StatusBadge quiet status={status} />{step?.status === "SKIPPED" ? <SkipReason code={code} pipeline={pipeline} runId={runId} task={name} /> : null}</Td>
             <Td data-label="Try">{cell?.attempt_count || ""}</Td><Td data-label="Started">{cell?.start_date ? <When iso={cell.start_date} /> : null}</Td>
             <Td data-label="Duration">{cell?.start_date ? <><span className="num">{formatDuration(cell.start_date, cell.end_date, now)}</span><span aria-hidden className={`block h-1 rounded ${solidClass(status)}`} style={{ width: `${Math.max(4, duration(cell) / max * 100)}%` }} /></> : null}</Td>
-            <Td data-label="Runs when">{step?.handler === "ALERT" ? alertCondition(step.parameters?.ALERT_ON) : step ? runConditionLabel(step.run_condition, step.run_condition_count) : null}</Td>
+            <Td data-label="Runs when">{step?.run_condition || (step?.handler === "ALERT" ? alertCondition(step.parameters?.ALERT_ON) : step ? "Pipeline is admitted" : null)}</Td>
           </tr>;
         })}</tbody>
       </Table>

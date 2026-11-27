@@ -74,7 +74,7 @@ def test_a_failed_task_explains_itself_and_leads_to_its_attempt_and_history(scen
         panel.get_by_role("tab", name="Details").click()
         expect(panel.get_by_text(ERROR).first).to_be_visible()
         expect(panel.get_by_text("Dependencies")).to_be_visible()
-        expect(panel.get_by_text("EXTRACT")).to_be_visible()
+        expect(panel.get_by_text("EXTRACT", exact=True)).to_be_visible()
         expect(panel.get_by_role("button", name="Mark as")).to_be_visible()
         panel.get_by_text("Process details").click()
         expect(panel.get_by_text("Attempt id", exact=True)).to_be_visible()

@@ -1,0 +1,2 @@
+UPDATE CFG_TASK_DEPENDENCY SET ACTIVE_FLAG = :active_flag
+WHERE TASK_DEPENDENCY_ID = :task_dependency_id AND ACTIVE_FLAG <> :active_flag

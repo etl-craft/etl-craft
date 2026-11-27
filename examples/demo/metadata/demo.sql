@@ -90,15 +90,6 @@ FROM (VALUES
 ) v
 JOIN CFG_PIPELINES p ON p.PIPELINE_CODE = v.column1;
 
--- area_summary runs once ANY of its dependencies has succeeded (either means the fact is there);
--- source_counts once 2 of its 3 have (any two mean the interactions are there).
-UPDATE CFG_TASKS SET RUN_CONDITION = 'ANY'
-WHERE TASK_CODE = 'area_summary'
-  AND PIPELINE_ID = (SELECT PIPELINE_ID FROM CFG_PIPELINES WHERE PIPELINE_CODE = 'DEMO');
-UPDATE CFG_TASKS SET RUN_CONDITION = 'N', RUN_CONDITION_COUNT = 2
-WHERE TASK_CODE = 'source_counts'
-  AND PIPELINE_ID = (SELECT PIPELINE_ID FROM CFG_PIPELINES WHERE PIPELINE_CODE = 'DEMO');
-
 CREATE TEMP TABLE target_bindings (TASK_ID BIGINT NOT NULL,TABLE_ID BIGINT NOT NULL);
 INSERT INTO target_bindings (TASK_ID,TABLE_ID)
 SELECT t.TASK_ID,o.TABLE_ID FROM task_targets v
@@ -144,6 +135,7 @@ FROM (VALUES
     ('DEMO', 'flaky_feed', 'SCRIPT_KIND', 'INGESTION'),
     ('DEMO', 'flaky_feed', 'SCRIPT_FILE', 'python_scripts/flaky.py'),
     ('DEMO', 'flaky_feed', 'DOCUMENTATION', 'A feed that is not ready the first time it is read.'),
+    ('DEMO', 'on_failure', 'FAIL_PIPELINE_IF_FAILED', 'N'),
     ('DEMO', 'on_failure', 'ALERT_CHANNEL', 'oncall'),
     ('DEMO', 'on_failure', 'ALERT_ON', 'FAILURE'),
     ('DEMO', 'on_failure', 'ALERT_SUBJECT', '$$pipeline_code: a feed failed'),
@@ -176,11 +168,13 @@ FROM (VALUES
     ('DEMO', 'source_counts', 'SQL_ACTION', 'CREATE_TABLE'),
     ('DEMO', 'source_counts', 'SELECT_QUERY', 'SELECT source_system, COUNT(*) AS interactions FROM pre_dm.interactions GROUP BY source_system'),
     ('DEMO', 'drop_source_counts', 'SQL_ACTION', 'DROP_TABLE'),
+    ('DEMO', 'alert', 'FAIL_PIPELINE_IF_FAILED', 'N'),
     ('DEMO', 'alert', 'ALERT_CHANNEL', 'leads'),
     ('DEMO', 'alert', 'ALERT_ON', 'FAILURE|SUCCESS|COMPLETED_WITH_ERRORS'),
     ('DEMO', 'alert', 'ALERT_SUBJECT', '$$pipeline_code: $$trigger'),
     ('DEMO', 'alert', 'ALERT_BODY', 'Run $$pipeline_run_id of $$pipeline_code ended $$status.'),
     ('DEMO', 'alert', 'EMAIL_PIPELINES', 'SOURCE_A|SOURCE_B|DEMO'),
+    ('EXPORT', 'sla_alert', 'FAIL_PIPELINE_IF_FAILED', 'N'),
     ('EXPORT', 'sla_alert', 'ALERT_CHANNEL', 'leads'),
     ('EXPORT', 'sla_alert', 'ALERT_ON', 'SLA_BREACH'),
     ('EXPORT', 'sla_alert', 'ALERT_SUBJECT', '$$pipeline_code: SLA missed'),
@@ -198,39 +192,58 @@ FROM (VALUES
 JOIN CFG_PIPELINES p ON p.PIPELINE_CODE = v.column1
 JOIN CFG_TASKS t ON t.PIPELINE_ID = p.PIPELINE_ID AND t.TASK_CODE = v.column2;
 
-INSERT INTO CFG_TASK_DEPENDENCY (PIPELINE_ID, TASK_ID, DEPENDS_ON_PIPELINE_ID, DEPENDS_ON_TASK_ID,
-                                 DEPENDENCY_TYPE)
-SELECT t.PIPELINE_ID, t.TASK_ID, u.PIPELINE_ID, u.TASK_ID, v.column5
-FROM (VALUES
-    ('SOURCE_A', 'setup_prs', 'SOURCE_A', 'land', 'SUCCESS'),
-    ('SOURCE_A', 'parse', 'SOURCE_A', 'setup_prs', 'SUCCESS'),
-    ('SOURCE_A', 'parse', 'SOURCE_A', 'land', 'HAS_DATA'),
-    ('SOURCE_A', 'purge_test_calls', 'SOURCE_A', 'parse', 'SUCCESS'),
-    ('SOURCE_B', 'setup_prs', 'SOURCE_B', 'land', 'SUCCESS'),
-    ('SOURCE_B', 'parse', 'SOURCE_B', 'setup_prs', 'SUCCESS'),
-    ('DEMO', 'agents', 'DEMO', 'land_agents', 'SUCCESS'),
-    ('DEMO', 'retire_agents', 'DEMO', 'agents', 'SUCCESS'),
-    ('DEMO', 'setup_agent_history', 'DEMO', 'land_agents', 'SUCCESS'),
-    ('DEMO', 'agent_history', 'DEMO', 'setup_agent_history', 'SUCCESS'),
-    ('DEMO', 'interactions', 'DEMO', 'flaky_feed', 'SUCCESS'),
-    ('DEMO', 'interactions', 'SOURCE_A', 'purge_test_calls', 'SUCCESS'),
-    ('DEMO', 'interactions', 'SOURCE_B', 'parse', 'SUCCESS'),
-    ('DEMO', 'setup_fact', 'DEMO', 'interactions', 'HAS_DATA'),
-    ('DEMO', 'setup_fact', 'DEMO', 'retire_agents', 'SUCCESS'),
-    ('DEMO', 'fact', 'DEMO', 'setup_fact', 'SUCCESS'),
-    ('DEMO', 'quality', 'DEMO', 'fact', 'SUCCESS'),
-    ('DEMO', 'area_summary', 'DEMO', 'fact', 'SUCCESS'),
-    ('DEMO', 'area_summary', 'DEMO', 'quality', 'SUCCESS'),
-    ('DEMO', 'source_counts', 'DEMO', 'interactions', 'SUCCESS'),
-    ('DEMO', 'source_counts', 'DEMO', 'setup_fact', 'SUCCESS'),
-    ('DEMO', 'source_counts', 'DEMO', 'fact', 'SUCCESS'),
-    ('DEMO', 'drop_source_counts', 'DEMO', 'source_counts', 'SUCCESS'),
-    ('BACKFILL', 'backfill', 'BACKFILL', 'prepare', 'SUCCESS')
-) v
-JOIN CFG_PIPELINES p ON p.PIPELINE_CODE = v.column1
-JOIN CFG_TASKS t ON t.PIPELINE_ID = p.PIPELINE_ID AND t.TASK_CODE = v.column2
-JOIN CFG_PIPELINES up ON up.PIPELINE_CODE = v.column3
-JOIN CFG_TASKS u ON u.PIPELINE_ID = up.PIPELINE_ID AND u.TASK_CODE = v.column4;
+-- Deploy derives the dependency edges from these conditions.
+UPDATE CFG_TASKS SET RUN_CONDITION = 'land.SUCCESS'
+WHERE TASK_CODE = 'setup_prs' AND PIPELINE_ID =
+    (SELECT PIPELINE_ID FROM CFG_PIPELINES WHERE PIPELINE_CODE = 'SOURCE_A');
+UPDATE CFG_TASKS SET RUN_CONDITION = 'setup_prs.SUCCESS AND land.HAS_DATA'
+WHERE TASK_CODE = 'parse' AND PIPELINE_ID =
+    (SELECT PIPELINE_ID FROM CFG_PIPELINES WHERE PIPELINE_CODE = 'SOURCE_A');
+UPDATE CFG_TASKS SET RUN_CONDITION = 'parse.SUCCESS'
+WHERE TASK_CODE = 'purge_test_calls' AND PIPELINE_ID =
+    (SELECT PIPELINE_ID FROM CFG_PIPELINES WHERE PIPELINE_CODE = 'SOURCE_A');
+UPDATE CFG_TASKS SET RUN_CONDITION = 'land.SUCCESS'
+WHERE TASK_CODE = 'setup_prs' AND PIPELINE_ID =
+    (SELECT PIPELINE_ID FROM CFG_PIPELINES WHERE PIPELINE_CODE = 'SOURCE_B');
+UPDATE CFG_TASKS SET RUN_CONDITION = 'setup_prs.SUCCESS'
+WHERE TASK_CODE = 'parse' AND PIPELINE_ID =
+    (SELECT PIPELINE_ID FROM CFG_PIPELINES WHERE PIPELINE_CODE = 'SOURCE_B');
+UPDATE CFG_TASKS SET RUN_CONDITION = 'land_agents.SUCCESS'
+WHERE TASK_CODE = 'agents' AND PIPELINE_ID =
+    (SELECT PIPELINE_ID FROM CFG_PIPELINES WHERE PIPELINE_CODE = 'DEMO');
+UPDATE CFG_TASKS SET RUN_CONDITION = 'agents.SUCCESS'
+WHERE TASK_CODE = 'retire_agents' AND PIPELINE_ID =
+    (SELECT PIPELINE_ID FROM CFG_PIPELINES WHERE PIPELINE_CODE = 'DEMO');
+UPDATE CFG_TASKS SET RUN_CONDITION = 'land_agents.SUCCESS'
+WHERE TASK_CODE = 'setup_agent_history' AND PIPELINE_ID =
+    (SELECT PIPELINE_ID FROM CFG_PIPELINES WHERE PIPELINE_CODE = 'DEMO');
+UPDATE CFG_TASKS SET RUN_CONDITION = 'setup_agent_history.SUCCESS'
+WHERE TASK_CODE = 'agent_history' AND PIPELINE_ID =
+    (SELECT PIPELINE_ID FROM CFG_PIPELINES WHERE PIPELINE_CODE = 'DEMO');
+UPDATE CFG_TASKS SET RUN_CONDITION = 'flaky_feed.SUCCESS AND SOURCE_A.purge_test_calls.SUCCESS AND SOURCE_B.parse.SUCCESS'
+WHERE TASK_CODE = 'interactions' AND PIPELINE_ID =
+    (SELECT PIPELINE_ID FROM CFG_PIPELINES WHERE PIPELINE_CODE = 'DEMO');
+UPDATE CFG_TASKS SET RUN_CONDITION = 'interactions.SUCCESS AND interactions.ROWS_WRITTEN > 0 AND retire_agents.SUCCESS'
+WHERE TASK_CODE = 'setup_fact' AND PIPELINE_ID =
+    (SELECT PIPELINE_ID FROM CFG_PIPELINES WHERE PIPELINE_CODE = 'DEMO');
+UPDATE CFG_TASKS SET RUN_CONDITION = 'setup_fact.SUCCESS'
+WHERE TASK_CODE = 'fact' AND PIPELINE_ID =
+    (SELECT PIPELINE_ID FROM CFG_PIPELINES WHERE PIPELINE_CODE = 'DEMO');
+UPDATE CFG_TASKS SET RUN_CONDITION = 'fact.SUCCESS'
+WHERE TASK_CODE = 'quality' AND PIPELINE_ID =
+    (SELECT PIPELINE_ID FROM CFG_PIPELINES WHERE PIPELINE_CODE = 'DEMO');
+UPDATE CFG_TASKS SET RUN_CONDITION = 'fact.SUCCESS OR quality.SUCCESS'
+WHERE TASK_CODE = 'area_summary' AND PIPELINE_ID =
+    (SELECT PIPELINE_ID FROM CFG_PIPELINES WHERE PIPELINE_CODE = 'DEMO');
+UPDATE CFG_TASKS SET RUN_CONDITION = 'AT_LEAST(2, interactions.SUCCESS, setup_fact.SUCCESS, fact.SUCCESS)'
+WHERE TASK_CODE = 'source_counts' AND PIPELINE_ID =
+    (SELECT PIPELINE_ID FROM CFG_PIPELINES WHERE PIPELINE_CODE = 'DEMO');
+UPDATE CFG_TASKS SET RUN_CONDITION = 'source_counts.SUCCESS'
+WHERE TASK_CODE = 'drop_source_counts' AND PIPELINE_ID =
+    (SELECT PIPELINE_ID FROM CFG_PIPELINES WHERE PIPELINE_CODE = 'DEMO');
+UPDATE CFG_TASKS SET RUN_CONDITION = 'prepare.SUCCESS'
+WHERE TASK_CODE = 'backfill' AND PIPELINE_ID =
+    (SELECT PIPELINE_ID FROM CFG_PIPELINES WHERE PIPELINE_CODE = 'BACKFILL');
 
 -- DEMO builds on both clients' pipelines: a run starts only after each has succeeded again.
 INSERT INTO CFG_PIPELINE_DEPENDENCY (PIPELINE_ID, DEPENDS_ON_PIPELINE_ID, DEPENDENCY_TYPE)

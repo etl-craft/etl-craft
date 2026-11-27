@@ -203,6 +203,16 @@ VALUES = {
 
 def bindings(sql, name=""):
     overrides = {
+        "condition_edge_activate": {"task_dependency_id": 2, "active_flag": "N"},
+        "condition_edge_insert": {
+            "pipeline_id": 1,
+            "task_id": 3,
+            "depends_on_pipeline_id": 1,
+            "depends_on_task_id": 1,
+        },
+        "condition_skips": {"run_id": 1, "result": "UNSATISFIED"},
+        "condition_task_label": {"task_id": 1},
+        "task_run_facts": {"task_run_id": 1},
         "access_allowed": {"action": "run"},
         "access_list": {"project": "default"},
         "alert_channel_add": {"kind": "WEBHOOK"},
@@ -321,6 +331,12 @@ def full_scans(plan, partial_indexes=frozenset(), limited=False):
 
 REGISTRY = "Reads the agent registry: one row per agent token, bounded by the tokens issued."
 FULL_READS = {
+    ("condition_tasks", "cfg_pipelines"): "Parses every task condition in the selected project.",
+    ("condition_edges", "cfg_pipelines"): "Compares all existing edges of the selected project.",
+    (
+        "condition_edges_elsewhere",
+        "cfg_pipelines",
+    ): "Detects cycles that traverse definitions of other projects.",
     ("rehash_tasks", "cfg_pipelines"): "Finds every active merge target in the selected project.",
     (
         "permission_effective",

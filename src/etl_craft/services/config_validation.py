@@ -7,8 +7,8 @@ from datetime import date
 from decimal import Decimal, InvalidOperation
 
 from etl_craft.core.business_rules import rule_shape_problem
-from etl_craft.core.enums import RunCondition
-from etl_craft.core.errors import MetadataFileError
+from etl_craft.core.conditions import Scope, parse
+from etl_craft.core.errors import ConditionError, MetadataFileError
 from etl_craft.core.restart import parse_auto_restart
 from etl_craft.core.text import is_metadata_code, is_safe_identifier
 from etl_craft.engine.repository.config_rows import (
@@ -16,7 +16,6 @@ from etl_craft.engine.repository.config_rows import (
     OBJECT_TABLES,
     PIPELINE_DEPENDENCIES,
     SOURCE_COLUMNS,
-    TASK_DEPENDENCIES,
     TASK_PARAMETERS,
     TASKS,
     Column,
@@ -65,24 +64,15 @@ def row_problem(
                 "a target needs both TARGET_SCHEMA_NAME and TARGET_TABLE_NAME; leave "
                 "all target components empty for a task without one"
             )
-        condition, count = values["RUN_CONDITION"], values["RUN_CONDITION_COUNT"]
-        conditions_given = provided is None or all(
-            key in provided for key in ("RUN_CONDITION", "RUN_CONDITION_COUNT")
-        )
-        if conditions_given and condition == RunCondition.N and count is None:
-            return "RUN_CONDITION N needs a RUN_CONDITION_COUNT"
-        if conditions_given and condition != RunCondition.N and count is not None:
-            return "RUN_CONDITION_COUNT goes with RUN_CONDITION N only; leave it empty"
-    if (
-        table is TASK_DEPENDENCIES
-        and not values["DEPENDS_ON_PROJECT_CODE"]
-        and (values["PIPELINE_CODE"], values["TASK_CODE"])
-        == (
-            values["DEPENDS_ON_PIPELINE_CODE"],
-            values["DEPENDS_ON_TASK_CODE"],
-        )
-    ):
-        return f"{values['PIPELINE_CODE']}.{values['TASK_CODE']} depends on itself"
+        condition = values["RUN_CONDITION"]
+        if condition is not None and (provided is None or "RUN_CONDITION" in provided):
+            try:
+                parse(str(condition), Scope.TASK)
+            except ConditionError as error:
+                return (
+                    f"column RUN_CONDITION: {values['PIPELINE_CODE']}.{values['TASK_CODE']} "
+                    f"{error}; correct the condition and deploy"
+                )
     if (
         table is PIPELINE_DEPENDENCIES
         and not values["DEPENDS_ON_PROJECT_CODE"]

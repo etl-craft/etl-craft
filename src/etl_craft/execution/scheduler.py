@@ -163,9 +163,11 @@ class Scheduler:
             if t not in self.attempted
             and (self.force or state.get(t, TaskRunState()).status not in SETTLED_STATUSES)
         ]
-        ready = self._ready(state, pending, retries)
-        ready = [task_id for task_id in ready if task_id not in fences]
+        ready = [
+            task_id for task_id in self._ready(state, pending, retries) if task_id not in fences
+        ]
         ready, waiting = self._standing(ready, self._waiting(retries))
+        failures_final = self.failures_final
         for task_id in ready:
             if task_id in retries and retries[task_id] > self.clock.now():
                 continue
@@ -174,19 +176,19 @@ class Scheduler:
                 and self.pool.capacity().free[slot_kind(self._handler(task_id))] == 0
             ):
                 continue
-            admission = CrossPipelineCheck(0) if not self.force else None
+            admission = CrossPipelineCheck() if not self.force else None
             decisions: tuple[trackers.GateDecision, ...] = ()
             if not self.force:
-                needed = self.graph.required_edge_count(task_id) - self.graph.satisfied_edge_count(
-                    task_id, state, 0
-                )
-                if needed > 0 and not backfill:
+                if (
+                    self.graph.evaluate(task_id, state, failures_final=failures_final) is None
+                    and self.graph.node(task_id).cross
+                    and not backfill
+                ):
                     result = check_gate(
                         self.engine,
                         self.pipeline_run_id,
                         self.pipeline_id,
                         task_id=task_id,
-                        needed=needed,
                         clock=self.clock,
                         policy=self.config.dependency_gates,
                         wait_seconds=self.config.limits.gate_wait_minutes * 60,
@@ -200,10 +202,9 @@ class Scheduler:
                     self.engine,
                     self.gate,
                     self.pipeline_id,
-                    task_id,
-                    self.task_codes[task_id],
-                    self.pipeline_run_id,
+                    self._task_run(task_id),
                     admission,
+                    failures_final=failures_final,
                 )
                 if blocked is not None:
                     self.attempted.add(task_id)
@@ -216,7 +217,7 @@ class Scheduler:
                         self.pipeline_id,
                         self.pipeline_run_id,
                         self.config.dependency_gates,
-                        cross.bypassed,
+                        cross.reasons,
                         task_id=task_id,
                     )
             if self._handler(task_id) == Handler.EVENT_WAIT:
@@ -232,16 +233,22 @@ class Scheduler:
             logger.info("%s: dispatch %s", self.pipeline_code, self.task_codes[task_id])
             self._dispatch(task_id, decisions)
         self.next_check_at = min(waiting) if waiting else None
+        return self._settled(pending, waiting, bool(fences), bool(skipped or ready))
+
+    def _settled(
+        self, pending: list[int], waiting: list[datetime], fenced: bool, made_progress: bool
+    ) -> bool:
+        """Finish only after a final pass through conditions that read failed tasks."""
         if self.jobs or waiting:
             return False
         if not pending:
             return True
-        if fences:
+        if fenced:
             return True
         if not self.failures_final:
             self.failures_final = True
             return False
-        if skipped or ready:
+        if made_progress:
             return False
         self.never_ready = pending
         return True
@@ -318,7 +325,10 @@ class Scheduler:
             if self.force
             else [
                 t
-                for t in self.graph.ready({**state, **{t: TaskRunState() for t in retries}})
+                for t in self.graph.ready(
+                    {**state, **{t: TaskRunState() for t in retries}},
+                    failures_final=self.failures_final,
+                )
                 if t in pending
             ]
         )
@@ -385,6 +395,11 @@ class Scheduler:
             with self.engine.connect() as conn:
                 self.handlers[task_id] = fetch_task_execution_detail(conn, task_id).handler
         return self.handlers[task_id]
+
+    def _task_run(self, task_id: int) -> TaskRun:
+        return TaskRun(
+            self.pipeline_code, self.task_codes[task_id], task_id, self.pipeline_run_id, self.force
+        )
 
     def _dispatch(self, task_id: int, decisions: tuple[trackers.GateDecision, ...]) -> None:
         """Admit the task's attempt and submit it; a task that cannot be admitted is logged."""

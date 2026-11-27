@@ -1,7 +1,7 @@
 # SQL scripts
 
 `HANDLER=SQL_SCRIPT` runs arbitrary warehouse SQL from `sql_scripts/`, including procedures,
-grants, maintenance and custom DML. It is an ordinary task: use `CFG_TASK_DEPENDENCY` to place
+grants, maintenance and custom DML. It is an ordinary task: use `RUN_CONDITION` to place
 it before or after managed SQL or [Python tasks](python-scripts.md). There are no pre/post
 parameters on other handlers. Run it with the existing `etl-craft run` command.
 

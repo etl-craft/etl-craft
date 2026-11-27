@@ -7,6 +7,7 @@ from etl_craft.core.compatibility import input_refusal
 from etl_craft.core.enums import Handler, InputKind
 from etl_craft.core.errors import MetadataError
 from etl_craft.handlers.registry import COMMON_PARAMETERS, HANDLERS
+from etl_craft.handlers.sql.spec import parse_flag
 
 
 def known_parameters(handler: str) -> frozenset[str] | None:
@@ -52,3 +53,11 @@ def require_task_parameters(handler: str, params: Mapping[str, str]) -> None:
     problems = parameter_problems(handler, params)
     if problems:
         raise MetadataError(f"{handler} task parameters: " + "; ".join(problems))
+
+
+def pipeline_fail_options(params: Mapping[str, str]) -> tuple[bool, bool]:
+    """Whether a failure or condition skip should fail the containing pipeline."""
+    return (
+        parse_flag(params, "FAIL_PIPELINE_IF_FAILED", yes_no=True, default=True),
+        parse_flag(params, "FAIL_PIPELINE_IF_NOT_RUN", yes_no=True),
+    )

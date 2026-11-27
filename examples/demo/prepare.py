@@ -5,7 +5,7 @@
 
 The team creates warehouse schemas and authors CFG_ rows as project migrations. This script
 prepares both from warehouse_schemas.sql and metadata/demo.sql, sets the two email alert
-channels the alert tasks name, then runs migrate.
+channels the alert tasks name, then runs migrate and deploy to derive task edges.
 """
 
 from __future__ import annotations

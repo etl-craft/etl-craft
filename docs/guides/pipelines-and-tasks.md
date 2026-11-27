@@ -70,7 +70,7 @@ See [tag filters](inspecting.md#filter-by-tags) and [group controls](run-control
 | `TASK_CODE` | the task's code, unique in its pipeline: one ASCII letter followed by letters, digits or `_`, at most 128 characters |
 | `TASK_TYPE` | `INGESTION` (it brings data in) or `ETL` (it works on data already in); shown by `steps` and the catalog |
 | `HANDLER` | what runs the task (below) |
-| `RUN_CONDITION`, `RUN_CONDITION_COUNT` | how many of its dependencies must be satisfied: `ALL` (the default, when `NULL`), `ANY`, or `N` with a count; see [Dependencies and run conditions](dependencies.md) |
+| `RUN_CONDITION` | Expression that makes this task ready. A blank condition makes it ready when its run starts. See [Run conditions](dependencies.md). |
 
 | `HANDLER` | Runs | Guide |
 |---|---|---|
@@ -105,13 +105,11 @@ Python tasks also require `SCRIPT_KIND=INGESTION` or `UTILITY`; see [Python scri
 A parameter no handler reads is a `validate` warning, with the nearest names, except on `PYTHON`
 tasks, whose scripts may read any.
 
-## `CFG_TASK_DEPENDENCY` and `CFG_PIPELINE_DEPENDENCY`
+## Ordering tasks and pipelines
 
-The order of the work comes from these rows, never from code. A `CFG_TASK_DEPENDENCY` row makes
-`TASK_ID` wait on `DEPENDS_ON_TASK_ID`, in its own pipeline or, with `DEPENDS_ON_PIPELINE_ID`,
-in another; a `CFG_PIPELINE_DEPENDENCY` row makes a pipeline wait on another. Each has a
-`DEPENDENCY_TYPE`: `SUCCESS`, `FAILURE`, `ALWAYS` or `HAS_DATA`. See
-[Dependencies and run conditions](dependencies.md).
+Task order comes from `CFG_TASKS.RUN_CONDITION`. Deploy derives the task
+dependency edges from those expressions. Pipeline-level ordering still comes
+from `CFG_PIPELINE_DEPENDENCY`. See [Run conditions](dependencies.md).
 
 ## An example
 
@@ -142,16 +140,13 @@ JOIN CFG_PIPELINES p ON p.PIPELINE_CODE = 'SALES_DAILY' AND p.ACTIVE_FLAG = 'Y'
 JOIN CFG_TASKS t ON t.PIPELINE_ID = p.PIPELINE_ID AND t.TASK_CODE = 'load_orders'
                 AND t.ACTIVE_FLAG = 'Y';
 
-INSERT INTO CFG_TASK_DEPENDENCY (PIPELINE_ID, TASK_ID, DEPENDS_ON_TASK_ID, DEPENDENCY_TYPE)
-SELECT c.PIPELINE_ID, c.TASK_ID, l.TASK_ID, 'SUCCESS'
-FROM CFG_PIPELINES p
-JOIN CFG_TASKS c ON c.PIPELINE_ID = p.PIPELINE_ID AND c.TASK_CODE = 'check_orders'
-JOIN CFG_TASKS l ON l.PIPELINE_ID = p.PIPELINE_ID AND l.TASK_CODE = 'load_orders'
-WHERE p.PIPELINE_CODE = 'SALES_DAILY'
-  AND p.ACTIVE_FLAG = 'Y' AND c.ACTIVE_FLAG = 'Y' AND l.ACTIVE_FLAG = 'Y';
+UPDATE CFG_TASKS SET RUN_CONDITION = 'load_orders.SUCCESS'
+WHERE TASK_CODE = 'check_orders' AND PIPELINE_ID = (
+    SELECT PIPELINE_ID FROM CFG_PIPELINES WHERE PIPELINE_CODE = 'SALES_DAILY'
+);
 ```
 
-`etl-craft graph --pipeline-code SALES_DAILY` shows its order. `etl-craft validate
+After `etl-craft deploy` derives the edges, `etl-craft graph --pipeline-code SALES_DAILY` shows its order. `etl-craft validate
 --pipeline-code SALES_DAILY` says what is still missing before it can run:
 
 ```text
@@ -178,3 +173,6 @@ handler kind's measured-sizing estimate: Python 1 CPU / 512 MB; warehouse 0.25 C
 One agent must fit the whole request. Local execution checks the measured local allocation.
 The [agent guide](../deploying/agents.md#pools-limits-and-resource-placement) describes limits,
 priority, reservations and queue reasons. EVENT_WAIT probes hold no agent slot.
+
+Every task accepts `FAIL_PIPELINE_IF_FAILED` and `FAIL_PIPELINE_IF_NOT_RUN`. See
+[How a pipeline run ends](dependencies.md#how-a-pipeline-run-ends).

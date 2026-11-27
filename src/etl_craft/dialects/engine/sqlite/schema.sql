@@ -106,6 +106,7 @@ CREATE TABLE CFG_PIPELINES (
     PRIORITY               INTEGER NOT NULL DEFAULT 0,
     PROJECT_ID             BIGINT NOT NULL DEFAULT 1 REFERENCES CFG_PROJECTS(PROJECT_ID),
     BLOCK_ON_REPARSE_ERROR VARCHAR(1) NOT NULL DEFAULT 'N' CONSTRAINT ck_pipeline_block_reparse CHECK (BLOCK_ON_REPARSE_ERROR IN ('Y','N')),
+    CONSUME_REPAIRS        VARCHAR(1) NOT NULL DEFAULT 'Y' CONSTRAINT ck_pipelines_consume_repairs CHECK (CONSUME_REPAIRS IN ('Y','N')),
     CALENDAR_ID            BIGINT REFERENCES CFG_CALENDARS(CALENDAR_ID),
     NON_BUSINESS_DAY       VARCHAR(17) NOT NULL DEFAULT 'SKIP' CHECK (NON_BUSINESS_DAY IN ('SKIP','NEXT_BUSINESS_DAY')),
     STEWARDABLE_FLAG       VARCHAR(1) NOT NULL DEFAULT 'N' CHECK (STEWARDABLE_FLAG IN ('Y','N')),
@@ -170,7 +171,7 @@ CREATE UNIQUE INDEX ux_tables_catalog_identity ON CFG_TABLES (PROJECT_ID,CATALOG
 CREATE UNIQUE INDEX ux_tables_no_catalog_identity ON CFG_TABLES (PROJECT_ID,SCHEMA_NAME,TABLE_NAME) WHERE CATALOG_NAME IS NULL;
 CREATE INDEX ix_cfg_tables_warehouse_object ON CFG_TABLES(lower(SCHEMA_NAME),lower(TABLE_NAME),lower(CATALOG_NAME));
 
--- One row per task: its pipeline, handler and run condition.
+-- One row per task: its pipeline, handler and run condition (a condition over the tasks it names).
 CREATE TABLE CFG_TASKS (
     TASK_ID             INTEGER PRIMARY KEY AUTOINCREMENT,
     TASK_CODE           VARCHAR NOT NULL,
@@ -178,7 +179,6 @@ CREATE TABLE CFG_TASKS (
     PIPELINE_ID         BIGINT NOT NULL REFERENCES CFG_PIPELINES(PIPELINE_ID),
     HANDLER             VARCHAR NOT NULL,
     RUN_CONDITION       VARCHAR,
-    RUN_CONDITION_COUNT INT,
     ACTIVE_FLAG         VARCHAR NOT NULL DEFAULT 'Y',
     CREATED_BY          VARCHAR NOT NULL DEFAULT 'etl-craft',
     CREATE_DATE         TIMESTAMP NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now') || '000+00:00'),
@@ -189,34 +189,29 @@ CREATE TABLE CFG_TASKS (
     CONSTRAINT ck_tasks_code CHECK (TASK_CODE GLOB '[A-Za-z]*' AND TASK_CODE NOT GLOB '*[^A-Za-z0-9_]*' AND length(TASK_CODE) <= 128 AND instr(TASK_CODE, char(0)) = 0),
     CONSTRAINT ck_tasks_task_type CHECK (TASK_TYPE IN ('INGESTION','ETL')),
     CONSTRAINT ck_tasks_handler CHECK (HANDLER IN ('PYTHON','SQL','SQL_SCRIPT','BUSINESS_RULES','ALERT','EVENT_WAIT','RUN_PIPELINE','FILE_VALIDATION')),
-    CONSTRAINT ck_tasks_active_flag CHECK (ACTIVE_FLAG IN ('Y','N')),
-    CONSTRAINT ck_tasks_run_condition CHECK (RUN_CONDITION IS NULL OR RUN_CONDITION IN ('ALL','ANY','N')),
-    CONSTRAINT ck_tasks_run_condition_count CHECK ( (COALESCE(RUN_CONDITION, '') = 'N' AND RUN_CONDITION_COUNT IS NOT NULL AND RUN_CONDITION_COUNT >= 1) OR (RUN_CONDITION IS NOT 'N' AND RUN_CONDITION_COUNT IS NULL) )
+    CONSTRAINT ck_tasks_active_flag CHECK (ACTIVE_FLAG IN ('Y','N'))
 );
 
 CREATE INDEX ix_tasks_target ON CFG_TASKS (TARGET_TABLE_ID) WHERE TARGET_TABLE_ID IS NOT NULL;
 CREATE UNIQUE INDEX ux_tasks_code_identity ON CFG_TASKS (PIPELINE_ID, TASK_CODE);
 
--- A task waiting on another, in its own pipeline or, with DEPENDS_ON_PIPELINE_ID, in another.
+-- The tasks each task's RUN_CONDITION names, derived by deploy and re-parse; teams do not write it.
 CREATE TABLE CFG_TASK_DEPENDENCY (
     TASK_DEPENDENCY_ID     INTEGER PRIMARY KEY AUTOINCREMENT,
     PIPELINE_ID            BIGINT NOT NULL REFERENCES CFG_PIPELINES(PIPELINE_ID),
     TASK_ID                BIGINT NOT NULL REFERENCES CFG_TASKS(TASK_ID),
     DEPENDS_ON_PIPELINE_ID BIGINT REFERENCES CFG_PIPELINES(PIPELINE_ID),
     DEPENDS_ON_TASK_ID     BIGINT NOT NULL REFERENCES CFG_TASKS(TASK_ID),
-    DEPENDENCY_TYPE        VARCHAR NOT NULL,
     ACTIVE_FLAG            VARCHAR NOT NULL DEFAULT 'Y',
     CREATED_BY             VARCHAR NOT NULL DEFAULT 'etl-craft',
     CREATE_DATE            TIMESTAMP NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now') || '000+00:00'),
     UPDATED_BY             VARCHAR NOT NULL DEFAULT 'etl-craft',
     UPDATED_DATE           TIMESTAMP NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now') || '000+00:00'),
-    CONSUME_REPAIRS        VARCHAR(1) NOT NULL DEFAULT 'Y' CONSTRAINT ck_taskdep_consume_repairs CHECK (CONSUME_REPAIRS IN ('Y','N')),
-    CONSTRAINT ck_taskdep_type CHECK (DEPENDENCY_TYPE IN ('SUCCESS','FAILURE','ALWAYS','HAS_DATA')),
     CONSTRAINT ck_taskdep_active_flag CHECK (ACTIVE_FLAG IN ('Y','N')),
     CONSTRAINT ck_taskdep_no_self_dep CHECK (NOT (TASK_ID = DEPENDS_ON_TASK_ID AND PIPELINE_ID = DEPENDS_ON_PIPELINE_ID))
 );
 
-CREATE UNIQUE INDEX ux_taskdep_edge_identity ON CFG_TASK_DEPENDENCY (TASK_ID, DEPENDS_ON_TASK_ID, DEPENDENCY_TYPE);
+CREATE UNIQUE INDEX ux_taskdep_edge_identity ON CFG_TASK_DEPENDENCY (TASK_ID, DEPENDS_ON_TASK_ID);
 CREATE INDEX ix_taskdep_depends_on ON CFG_TASK_DEPENDENCY (DEPENDS_ON_TASK_ID);
 
 -- A task's settings, as name and value rows; each handler reads its own names.
@@ -674,13 +669,16 @@ CREATE TABLE AUD_GATE_DECISIONS (
     ATTEMPT_ID               BIGINT REFERENCES AUD_TASK_ATTEMPTS(ATTEMPT_ID),
     PIPELINE_DEPENDENCY_ID   BIGINT REFERENCES CFG_PIPELINE_DEPENDENCY(PIPELINE_DEPENDENCY_ID),
     TASK_DEPENDENCY_ID       BIGINT REFERENCES CFG_TASK_DEPENDENCY(TASK_DEPENDENCY_ID),
+    TASK_ID                  BIGINT REFERENCES CFG_TASKS(TASK_ID),
+    CONDITION_TEXT           TEXT,
+    CONDITION_VALUES         TEXT,
     SELECTED_PIPELINE_RUN_ID BIGINT REFERENCES AUD_PIPELINES_RUN_LOG(PIPELINE_RUN_ID),
     SELECTED_TASK_RUN_ID     BIGINT REFERENCES AUD_TASK_RUN_LOG(TASK_RUN_ID),
     SELECTED_REVISION        INT,
     RESULT                   VARCHAR NOT NULL,
     REASON                   VARCHAR NOT NULL,
     DECIDED_AT               TIMESTAMP NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now') || '000+00:00'),
-    CONSTRAINT ck_gate_one_dependency CHECK ( (PIPELINE_DEPENDENCY_ID IS NOT NULL AND TASK_DEPENDENCY_ID IS NULL) OR (PIPELINE_DEPENDENCY_ID IS NULL AND TASK_DEPENDENCY_ID IS NOT NULL) ),
+    CONSTRAINT ck_gate_one_dependency CHECK ( (PIPELINE_DEPENDENCY_ID IS NOT NULL AND TASK_DEPENDENCY_ID IS NULL AND CONDITION_TEXT IS NULL) OR (PIPELINE_DEPENDENCY_ID IS NULL AND TASK_DEPENDENCY_ID IS NOT NULL AND CONDITION_TEXT IS NULL) OR (PIPELINE_DEPENDENCY_ID IS NULL AND TASK_DEPENDENCY_ID IS NULL AND CONDITION_TEXT IS NOT NULL AND TASK_ID IS NOT NULL) ),
     CONSTRAINT ck_gate_result CHECK (RESULT IN ('SATISFIED','UNSATISFIED','BYPASSED'))
 );
 
@@ -750,6 +748,7 @@ CREATE TABLE AUD_CFG_PIPELINES_HISTORY (
     PROJECT_ID             BIGINT DEFAULT 1,
     UPDATED_AT             TIMESTAMP NOT NULL DEFAULT '1970-01-01 00:00:00.000000+00:00',
     BLOCK_ON_REPARSE_ERROR VARCHAR(1) DEFAULT 'N',
+    CONSUME_REPAIRS        VARCHAR(1),
     CALENDAR_ID            BIGINT,
     NON_BUSINESS_DAY       VARCHAR(17),
     STEWARDABLE_FLAG       VARCHAR(1) DEFAULT 'N',
@@ -812,7 +811,6 @@ CREATE TABLE AUD_CFG_TASKS_HISTORY (
     PIPELINE_ID         BIGINT,
     HANDLER             VARCHAR,
     RUN_CONDITION       VARCHAR,
-    RUN_CONDITION_COUNT INT,
     ACTIVE_FLAG         VARCHAR,
     CREATED_BY          VARCHAR,
     CREATE_DATE         TIMESTAMP,
@@ -847,13 +845,11 @@ CREATE TABLE AUD_CFG_TASK_DEPENDENCY_HISTORY (
     TASK_ID                BIGINT,
     DEPENDS_ON_PIPELINE_ID BIGINT,
     DEPENDS_ON_TASK_ID     BIGINT,
-    DEPENDENCY_TYPE        VARCHAR,
     ACTIVE_FLAG            VARCHAR,
     CREATED_BY             VARCHAR,
     CREATE_DATE            TIMESTAMP,
     UPDATED_BY             VARCHAR,
     UPDATED_DATE           TIMESTAMP,
-    CONSUME_REPAIRS        VARCHAR(1),
     UPDATED_AT             TIMESTAMP NOT NULL DEFAULT '1970-01-01 00:00:00.000000+00:00',
     CONSTRAINT ck_aud_cfg_task_dependency_history_operation CHECK (OPERATION IN ('INSERT','UPDATE','DELETE')),
     CONSTRAINT ck_aud_cfg_task_dependency_history_current CHECK (CURRENT_FLAG IN ('Y','N'))
@@ -2240,36 +2236,36 @@ END;
 
 CREATE TRIGGER trg_actor_guard_cfg_task_dependency_insert BEFORE INSERT ON CFG_TASK_DEPENDENCY
 BEGIN
-    SELECT CASE WHEN etl_craft_actor() IS NULL THEN RAISE(ABORT, 'CFG_TASK_DEPENDENCY is written only by etl-craft; use etl-craft mark, cancel or run, or a project migration (etl-craft migrate)') END;
+    SELECT CASE WHEN etl_craft_actor() IS NULL THEN RAISE(ABORT, 'CFG_TASK_DEPENDENCY is derived and written only by etl-craft; change CFG_TASKS.RUN_CONDITION and deploy') END;
     SELECT etl_craft_enter_insert('CFG_TASK_DEPENDENCY');
 END;
 
 CREATE TRIGGER trg_actor_guard_cfg_task_dependency_update BEFORE UPDATE ON CFG_TASK_DEPENDENCY
 BEGIN
-    SELECT CASE WHEN etl_craft_actor() IS NULL THEN RAISE(ABORT, 'CFG_TASK_DEPENDENCY is written only by etl-craft; use etl-craft mark, cancel or run, or a project migration (etl-craft migrate)') END;
+    SELECT CASE WHEN etl_craft_actor() IS NULL THEN RAISE(ABORT, 'CFG_TASK_DEPENDENCY is derived and written only by etl-craft; change CFG_TASKS.RUN_CONDITION and deploy') END;
 END;
 
 CREATE TRIGGER trg_actor_guard_cfg_task_dependency_delete BEFORE DELETE ON CFG_TASK_DEPENDENCY
 BEGIN
-    SELECT CASE WHEN etl_craft_actor() IS NULL THEN RAISE(ABORT, 'CFG_TASK_DEPENDENCY is written only by etl-craft; use etl-craft mark, cancel or run, or a project migration (etl-craft migrate)') END;
+    SELECT CASE WHEN etl_craft_actor() IS NULL THEN RAISE(ABORT, 'CFG_TASK_DEPENDENCY is derived and written only by etl-craft; change CFG_TASKS.RUN_CONDITION and deploy') END;
 END;
 
 CREATE TRIGGER trg_project_scope_cfg_task_dependency_insert BEFORE INSERT ON CFG_TASK_DEPENDENCY
-WHEN etl_craft_migration_project() IS NOT NULL AND ((SELECT p.PROJECT_ID FROM CFG_PIPELINES p WHERE p.PIPELINE_ID=NEW.PIPELINE_ID) IS NOT etl_craft_migration_project())
+WHEN etl_craft_migration_project() IS NOT NULL
 BEGIN
- SELECT RAISE(ABORT, 'CFG_TASK_DEPENDENCY: a project migration writes only its own project''s rows; filter on (SELECT PROJECT_ID FROM ETL_CRAFT_PROJECT)');
+ SELECT RAISE(ABORT, 'CFG_TASK_DEPENDENCY is derived and written only by etl-craft; change CFG_TASKS.RUN_CONDITION and deploy');
 END;
 
 CREATE TRIGGER trg_project_scope_cfg_task_dependency_update BEFORE UPDATE ON CFG_TASK_DEPENDENCY
-WHEN etl_craft_migration_project() IS NOT NULL AND ((SELECT p.PROJECT_ID FROM CFG_PIPELINES p WHERE p.PIPELINE_ID=NEW.PIPELINE_ID) IS NOT etl_craft_migration_project() OR (SELECT p.PROJECT_ID FROM CFG_PIPELINES p WHERE p.PIPELINE_ID=OLD.PIPELINE_ID) IS NOT etl_craft_migration_project())
+WHEN etl_craft_migration_project() IS NOT NULL
 BEGIN
- SELECT RAISE(ABORT, 'CFG_TASK_DEPENDENCY: a project migration writes only its own project''s rows; filter on (SELECT PROJECT_ID FROM ETL_CRAFT_PROJECT)');
+ SELECT RAISE(ABORT, 'CFG_TASK_DEPENDENCY is derived and written only by etl-craft; change CFG_TASKS.RUN_CONDITION and deploy');
 END;
 
 CREATE TRIGGER trg_project_scope_cfg_task_dependency_delete BEFORE DELETE ON CFG_TASK_DEPENDENCY
-WHEN etl_craft_migration_project() IS NOT NULL AND ((SELECT p.PROJECT_ID FROM CFG_PIPELINES p WHERE p.PIPELINE_ID=OLD.PIPELINE_ID) IS NOT etl_craft_migration_project())
+WHEN etl_craft_migration_project() IS NOT NULL
 BEGIN
- SELECT RAISE(ABORT, 'CFG_TASK_DEPENDENCY: a project migration writes only its own project''s rows; filter on (SELECT PROJECT_ID FROM ETL_CRAFT_PROJECT)');
+ SELECT RAISE(ABORT, 'CFG_TASK_DEPENDENCY is derived and written only by etl-craft; change CFG_TASKS.RUN_CONDITION and deploy');
 END;
 
 CREATE TRIGGER trg_actor_guard_cfg_task_parameters_insert BEFORE INSERT ON CFG_TASK_PARAMETERS

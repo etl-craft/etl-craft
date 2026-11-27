@@ -298,7 +298,6 @@ class StepView:
     task_type: str
     handler: str
     run_condition: str | None
-    run_condition_count: int | None
     parameters: Mapping[str, str]
     status: RunStatus | None
 

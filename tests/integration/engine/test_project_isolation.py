@@ -592,7 +592,10 @@ def test_local_task_dependency_explanations_remain_visible(isolation):
         run_id=run,
     )
     assert explanation.dependencies[0].upstream == "LOAD"
-    assert explanation.dependencies[0].reason == "Upstream does not satisfy this dependency."
+    assert (
+        explanation.dependencies[0].reason == "The condition's tests of this task do not hold yet."
+    )
+    assert explanation.run_condition == "LOAD.SUCCESS"
 
 
 def test_developer_lineage_refresh_keeps_deployment_role_and_visibility(isolation, monkeypatch):
@@ -703,3 +706,48 @@ def test_run_label_cannot_select_another_projects_run(isolation):
         act(finance, ActionName.RUN_DETAIL, run_id=label).pipeline_run_id
         == created.run.pipeline_run_id
     )
+
+
+def test_config_plan_refuses_a_condition_in_an_unseen_project(isolation, tmp_path):
+    admin, _ = isolation
+    folder = tmp_path / "condition"
+    folder.mkdir()
+    (folder / "tasks.csv").write_text(
+        "PIPELINE_CODE,TASK_CODE,TASK_TYPE,HANDLER,RUN_CONDITION\n"
+        "OPEN,load,ETL,PYTHON,finance.OPEN.publish.SUCCESS\n"
+    )
+    manager = caller(admin, "manager")
+    with pytest.raises(ResourceNotFoundError) as caught:
+        act(manager, ActionName.CONFIG_PLAN, config_dir=folder)
+    for part in ("tasks.csv line 2", "finance", "CAN_VIEW", "project manager"):
+        assert part in str(caught.value)
+    with admin.engine.connect() as conn:
+        assert conn.execute(text("SELECT count(*) AS count FROM CFG_TASKS")).scalar_one() == 0
+
+
+def test_viewer_cannot_read_the_task_name_inside_a_restricted_condition(isolation):
+    from fixtures.metadata import add_dependency, add_task, start_run
+
+    admin, _ = isolation
+    with acting_as(OWNER), admin.engine.begin() as conn:
+        ids = dict(
+            conn.execute(
+                text(
+                    "SELECT PIPELINE_CODE AS code, PIPELINE_ID AS id FROM CFG_PIPELINES "
+                    "WHERE PROJECT_ID=(SELECT PROJECT_ID FROM CFG_PROJECTS "
+                    "WHERE PROJECT_CODE='sales')"
+                )
+            ).all()
+        )
+        hidden = add_task(conn, ids["PRIVATE"], "HIDDEN_SOURCE")
+        child = add_task(conn, ids["OPEN"], "visible_load")
+        add_dependency(conn, ids["OPEN"], child, hidden, upstream_pipeline=ids["PRIVATE"])
+        run_id = start_run(conn, ids["OPEN"])
+    operator = caller(admin, "operator", ApiRole.OPERATOR)
+    details = act(
+        operator, ActionName.EXPLAIN, pipeline_code="OPEN", task_code="visible_load", run_id=run_id
+    )
+    assert "HIDDEN_SOURCE" not in details.run_condition
+    assert "CAN_VIEW" in details.run_condition
+    steps = act(operator, ActionName.STEPS, pipeline_code="OPEN", run_id=run_id)
+    assert "HIDDEN_SOURCE" not in steps.steps[0].run_condition

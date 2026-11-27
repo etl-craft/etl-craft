@@ -273,9 +273,20 @@ def read_action(params: Mapping[str, str]) -> SqlAction:
     )
 
 
-def parse_flag(params: Mapping[str, str], name: str) -> bool:
-    """Read a yes/no parameter: ``true`` or ``false`` in any case; absent means false."""
+def parse_flag(
+    params: Mapping[str, str], name: str, *, yes_no: bool = False, default: bool = False
+) -> bool:
+    """Read a boolean parameter in its declared spelling, with an optional Y/N default."""
     value = params.get(name)
+    if yes_no:
+        if value is None:
+            return default
+        if value.strip().upper() not in {"Y", "N"}:
+            raise SqlGuardError(
+                f"{name}={value!r}; expected Y or N; correct the task parameter in "
+                "task_parameters.csv and deploy"
+            )
+        return value.strip().upper() == "Y"
     if value is None or not value.strip():
         return False
     lowered = value.strip().lower()

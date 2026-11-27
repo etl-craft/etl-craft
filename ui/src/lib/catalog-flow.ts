@@ -2,13 +2,10 @@ import { describeCron } from "@/lib/format";
 import type { CatalogTask, DefinitionEdge } from "@/lib/catalog";
 
 export function runCondition(task: CatalogTask): string {
-  return task.run_condition === "N" ? `${task.run_condition_count} of ${task.upstream.length}` : task.run_condition === "ANY" ? "Any" : "All";
+  return task.run_condition || "Pipeline is admitted";
 }
 export function runsWhen(task: CatalogTask): string {
-  const names = task.upstream.map(([name]) => name).join(", ");
-  const condition = task.run_condition === "N" ? `any ${task.run_condition_count} of` : task.run_condition === "ANY" ? "any of" : "all of";
-  const clauses = task.upstream.map(([name,kind]) => kind === "FAILURE" ? `${name} fails` : kind === "ALWAYS" ? `${name} finishes, whatever its outcome` : kind === "HAS_DATA" ? `${name} succeeds and writes rows` : `${name} succeeds`);
-  const when = !names ? "its pipeline is admitted" : task.upstream.every(([,kind]) => kind === "SUCCESS") ? `${condition} ${names} succeed` : `${condition} these conditions hold: ${clauses.join("; ")}`;
+  const when = task.run_condition || "its pipeline is admitted";
   const retry = task.retry_on === "NONE" ? "automatic retries are disabled" : `retries ${task.retries ?? "the configured number of"} times on ${(task.retry_on ?? "the configured policy").toLowerCase().replaceAll("_", " ")} errors`;
   const timeout = task.timeout_seconds ? `times out after ${task.timeout_seconds / 60} minutes` : "has no time limit";
   return `${task.code} runs when ${when}, ${retry}, ${timeout}.`;
@@ -18,11 +15,12 @@ export function dependencyStyle(kind: string): { stroke: string; strokeDasharray
   return { stroke: "var(--muted)", strokeDasharray: kind === "FAILURE" ? "7 4" : kind === "ALWAYS" ? "2 4" : undefined };
 }
 export function dependencyBadge(kind: string): string {
-  return kind === "HAS_DATA" ? "Has data" : kind === "FAILURE" ? "On failure" : kind === "ALWAYS" ? "Always" : "";
+  return kind === "HAS_DATA" ? "Has data" : kind === "FAILURE" ? "On failure" : kind === "ALWAYS" ? "Always" : kind === "CONDITION" ? "Condition" : "";
 }
 export function definitionLabel(edge: DefinitionEdge): string { return [dependencyBadge(edge.dependency_type), edge.consume_repairs === "N" ? "No repairs" : ""].filter(Boolean).join(" · "); }
 export function dependencySentence(source: string, target: string, kind: string): string {
   if (source.startsWith("Schedule: ")) return `${target} becomes ready after its pipeline is admitted by the schedule or an explicit request`;
+  if (kind === "CONDITION") return `${target} reads facts from ${source} in its run condition`;
   return `${target} runs ${kind === "ALWAYS" ? `after ${source} finishes, whatever its outcome` : kind === "FAILURE" ? `only if ${source} failed` : kind === "HAS_DATA" ? `only if ${source} succeeded and wrote rows` : `only if ${source} succeeded`}`;
 }
 

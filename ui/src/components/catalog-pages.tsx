@@ -322,7 +322,9 @@ export function TaskObject({ code, doc, name, tab, onTab }: { code: string; doc:
             <FactList className="grid-cols-1 sm:grid-cols-1 lg:grid-cols-1">
               <Fact label="Pipeline">{task.pipeline}</Fact>
               <Fact label="Handler">{handlerLabel(task.handler)}</Fact>
-              <Fact label="Runs when">{task.run_condition ? task.run_condition.toLowerCase() : "all upstream succeed"}</Fact>
+              <Fact label="Runs when">{task.run_condition || "Pipeline is admitted"}</Fact>
+              <Fact label="Fail pipeline if failed">{task.fail_pipeline_if_failed ?? "Y"}</Fact>
+              <Fact label="Fail pipeline if not run">{task.fail_pipeline_if_not_run ?? "N"}</Fact>
               <Fact label="Script">{task.script ?? "None"}</Fact>
               <Fact label="Documentation">{task.documentation_version ? `version ${task.documentation_version}` : "Not versioned"}</Fact>
             </FactList>

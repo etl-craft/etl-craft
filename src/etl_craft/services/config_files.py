@@ -33,10 +33,11 @@ from etl_craft.config import ConnectorConfig
 from etl_craft.core.actor import migration as current_migration
 from etl_craft.core.compatibility import input_refusal
 from etl_craft.core.enums import InputKind, YesNo
-from etl_craft.core.errors import EngineDbError, MetadataFileError
+from etl_craft.core.errors import ConditionError, EngineDbError, MetadataFileError
 from etl_craft.core.text import suggest
 from etl_craft.dialects.engine import for_engine
 from etl_craft.engine import locks
+from etl_craft.engine.condition_edges import derive_edges
 from etl_craft.engine.queries import statement
 from etl_craft.engine.repository.config_rows import (
     TABLES,
@@ -222,6 +223,32 @@ def _labelled(revision: str) -> Iterator[None]:
         current_migration.reset(token)
 
 
+def condition_location(directory: Path, issue: str) -> str:
+    """Locate the task in its config file when it has a row there."""
+    path = directory / "tasks.csv"
+    label = issue.partition(" RUN_CONDITION ")[0]
+    try:
+        with path.open(encoding="utf-8-sig", newline="") as stream:
+            rows = csv.DictReader(stream)
+            for row in rows:
+                if f"{row.get('PIPELINE_CODE')}.{row.get('TASK_CODE')}" == label:
+                    return f"{path} line {rows.line_num}"
+    except FileNotFoundError:
+        return "Engine DB (tasks.csv)"
+    return str(path)
+
+
+def _derive_config_edges(conn: Connection, files: ConfigFiles, project_id: int) -> None:
+    try:
+        derive_edges(conn, project_id)
+    except ConditionError as error:
+        label = str(error).partition(" RUN_CONDITION ")[0]
+        row = files.rows.get("tasks.csv", {}).get(tuple(label.split(".", 1)))
+        where = files.directory / "tasks.csv"
+        location = str(where) if row is None else f"{where} line {row.line}"
+        raise ConditionError(f"{location}, column RUN_CONDITION: {error}") from error
+
+
 def sync_config(
     engine: Engine,
     config: ConnectorConfig,
@@ -254,6 +281,7 @@ def sync_config(
                 with selected_project(int(project.project_id)):
                     merged, warnings = merge_rows(conn, files, config, authorize)
                     changes.extend(merged)
+                    _derive_config_edges(conn, files, int(project.project_id))
                     findings = (*warnings, *validate_on(conn, config).findings)
                 if not apply or any(f.status is Status.FAIL for f in findings):
                     raise _RollBackError

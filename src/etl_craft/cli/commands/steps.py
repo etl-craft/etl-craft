@@ -12,7 +12,7 @@ from etl_craft.cli.commands.common import (
     request_from,
 )
 from etl_craft.cli.output import Output
-from etl_craft.core.enums import ActionName, RunCondition
+from etl_craft.core.enums import ActionName
 from etl_craft.core.errors import ExitCode
 from etl_craft.services.operations.models import StepsView
 from etl_craft.services.operations.requests import RunSelection
@@ -42,9 +42,7 @@ def _run(args: argparse.Namespace, out: Output) -> int:
                         s.status or "NOT-RUN",
                         s.handler,
                         s.task_type,
-                        f"N={s.run_condition_count}"
-                        if s.run_condition == RunCondition.N
-                        else s.run_condition or "ALL",
+                        s.run_condition or "",
                         ", ".join(f"{name}={value}" for name, value in s.parameters.items()),
                     )
                     for s in steps

@@ -68,14 +68,15 @@ def test_a_task_dependency_is_judged_on_the_upstreams_last_run_and_consumed_once
     edge = depend(engine, ids, "SUCCESS")
     gate = TrackedGate(NO_WAIT)
 
-    never = gate.check(engine, ids["load"], 1)
-    assert never.satisfied_count == 0 and never.definitive
-    assert never.reasons == ("upstream task UP.publish (SUCCESS) has no finished run",)
+    never = gate.check(engine, ids["load"])
+    assert never.facts == {edge: None} and never.definitive
+    assert never.reasons == ("upstream task UP.publish has no finished run",)
 
     with engine.begin() as conn:
         _, rows = upstream_run(conn, ids["up"], {ids["publish"]: ("SUCCESS",)})
-    first = gate.check(engine, ids["load"], 1)
-    assert (first.satisfied_count, first.consumed) == (1, {edge: rows[ids["publish"]]})
+    first = gate.check(engine, ids["load"])
+    assert first.facts[edge].value("SUCCESS") is True
+    assert first.consumed == {edge: rows[ids["publish"]]}
 
     with engine.begin() as conn:
         down_run = start_run(conn, ids["down"])
@@ -91,38 +92,35 @@ def test_a_task_dependency_is_judged_on_the_upstreams_last_run_and_consumed_once
         trackers.record_decisions(conn, down_run, first.decisions, attempt_id=attempt)
         transitions.finish_attempt(conn, attempt, "SUCCESS", current_actor(), owner="gate-test")
     assert consumed_task_runs(engine, edge) == [(down_run, rows[ids["publish"]])]
-    again = gate.check(engine, ids["load"], 1)
-    assert again.satisfied_count == 0
+    again = gate.check(engine, ids["load"])
+    assert again.facts == {edge: None}
     assert "which was already consumed" in again.reasons[0]
 
 
 def test_an_older_satisfying_run_does_not_count_once_a_newer_one_fails(world):
     engine, ids = world
-    depend(engine, ids, "SUCCESS")
+    edge = depend(engine, ids, "SUCCESS")
     with engine.begin() as conn:
         upstream_run(conn, ids["up"], {ids["publish"]: ("SUCCESS",)})
         _, rows = upstream_run(conn, ids["up"], {ids["publish"]: ("FAILED",)}, status="FAILED")
-    check = TrackedGate(NO_WAIT).check(engine, ids["load"], 1)
-    assert check.satisfied_count == 0
-    assert check.reasons == (
-        f"upstream task UP.publish (SUCCESS) last finished run {rows[ids['publish']]} ended "
-        "FAILED, which does not satisfy a SUCCESS dependency",
-    )
+    check = TrackedGate(NO_WAIT).check(engine, ids["load"])
+    assert check.consumed == {edge: rows[ids["publish"]]}
+    assert check.facts[edge].value("SUCCESS") is False
+    assert check.facts[edge].value("FAILED") is True
 
 
 def test_has_data_needs_rows_written(world):
     engine, ids = world
-    depend(engine, ids, "HAS_DATA")
-    with engine.begin() as conn:
-        upstream_run(conn, ids["up"], {ids["publish"]: ("SUCCESS", 0)})
-    assert TrackedGate(NO_WAIT).check(engine, ids["load"], 1).satisfied_count == 0
-    with engine.begin() as conn:
-        upstream_run(conn, ids["up"], {ids["publish"]: ("SUCCESS", 4)})
-    assert TrackedGate(NO_WAIT).check(engine, ids["load"], 1).satisfied_count == 1
-    # A run that changed nothing in a full table wrote no rows.
-    with engine.begin() as conn:
-        upstream_run(conn, ids["up"], {ids["publish"]: ("SUCCESS", 4, 0)})
-    assert TrackedGate(NO_WAIT).check(engine, ids["load"], 1).satisfied_count == 0
+    edge = depend(engine, ids, "HAS_DATA")
+    for values, expected in (
+        (("SUCCESS", 0), False),
+        (("SUCCESS", 4), True),
+        (("SUCCESS", 4, 0), False),
+    ):
+        with engine.begin() as conn:
+            upstream_run(conn, ids["up"], {ids["publish"]: values})
+        check = TrackedGate(NO_WAIT).check(engine, ids["load"])
+        assert check.facts[edge].value("HAS_DATA") is expected
 
 
 def test_a_running_upstream_is_waited_for(world):
@@ -144,9 +142,10 @@ def test_a_running_upstream_is_waited_for(world):
                 {"id": row},
             )
 
-    check = TrackedGate(Clock(sleep=upstream_finishes)).check(engine, ids["load"], 1)
+    check = TrackedGate(Clock(sleep=upstream_finishes)).check(engine, ids["load"])
     assert len(waits) == 1
-    assert (check.satisfied_count, list(check.consumed.values())) == (1, [row])
+    assert list(check.consumed.values()) == [row]
+    assert all(fact.value("SUCCESS") is True for fact in check.facts.values())
 
 
 def test_a_gate_told_not_to_wait_judges_a_running_upstream_at_once(world):
@@ -157,16 +156,15 @@ def test_a_gate_told_not_to_wait_judges_a_running_upstream_at_once(world):
         task_run(conn, ids["publish"], run_id, "IN-PROGRESS")
     waits = []
     gate = TrackedGate(Clock(sleep=waits.append), wait_seconds=0)
-    check = gate.check(engine, ids["load"], 1)
+    check = gate.check(engine, ids["load"])
     assert waits == []
-    assert check.satisfied_count == 0
-    assert check.reasons == ("upstream task UP.publish (SUCCESS) has no finished run",)
+    assert list(check.facts.values()) == [None]
+    assert check.reasons == ("upstream task UP.publish has no finished run",)
 
 
-def test_only_the_needed_dependencies_are_checked(world):
+def test_no_cross_pipeline_names_need_no_binding(world):
     engine, ids = world
-    depend(engine, ids, "SUCCESS")
-    assert TrackedGate(NO_WAIT).check(engine, ids["load"], 0).reasons == ()
+    assert TrackedGate(NO_WAIT).check(engine, ids["load"]).facts == {}
 
 
 def test_a_pipeline_gate_and_what_its_successful_run_consumes(world):
@@ -237,8 +235,8 @@ def test_a_finished_backfill_run_never_satisfies_a_gate(world):
         add_pipeline_dependency(conn, ids["down"], ids["up"], "SUCCESS")
         backfill_run(conn, ids["up"], {ids["publish"]: "SUCCESS"})
     assert not check_pipeline_dependencies(engine, ids["down"], NO_WAIT).satisfied
-    task_gate = TrackedGate(NO_WAIT).check(engine, ids["load"], 1)
-    assert task_gate.satisfied_count == 0 and edge not in task_gate.consumed
+    task_gate = TrackedGate(NO_WAIT).check(engine, ids["load"])
+    assert task_gate.facts[edge] is None and edge not in task_gate.consumed
 
 
 def test_a_failed_backfill_run_never_blocks_a_gate(world):
@@ -250,7 +248,7 @@ def test_a_failed_backfill_run_never_blocks_a_gate(world):
         backfill_run(conn, ids["up"], {ids["publish"]: "FAILED"}, status="FAILED")
     passed = check_pipeline_dependencies(engine, ids["down"], NO_WAIT)
     assert passed.satisfied and passed.consumed == {pipeline_edge: scheduled}
-    task_gate = TrackedGate(NO_WAIT).check(engine, ids["load"], 1)
+    task_gate = TrackedGate(NO_WAIT).check(engine, ids["load"])
     assert task_gate.consumed == {edge: rows[ids["publish"]]}
 
 
@@ -263,4 +261,6 @@ def test_a_running_backfill_run_is_never_waited_for(world):
         backfill_run(conn, ids["up"], {ids["publish"]: "IN-PROGRESS"}, status="IN-PROGRESS")
     clock = Clock(sleep=never_sleep)
     assert check_pipeline_dependencies(engine, ids["down"], clock).satisfied
-    assert TrackedGate(clock).check(engine, ids["load"], 1).satisfied_count == 1
+    check = TrackedGate(clock).check(engine, ids["load"])
+    assert len(check.consumed) == 1
+    assert all(fact.value("SUCCESS") is True for fact in check.facts.values())

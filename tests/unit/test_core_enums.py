@@ -154,7 +154,6 @@ EXPECTED = {
         "EVENT_WAIT",
         "RUN_PIPELINE",
     },
-    enums.RunCondition: {"ALL", "ANY", "N"},
     enums.OffsetType: {"NUMBER", "PARTITIONS", "TEXT", "TIMESTAMP"},
     enums.SqlAction: {
         "CREATE_TABLE",

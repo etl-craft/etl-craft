@@ -34,15 +34,14 @@ LEFT JOIN CFG_PIPELINES u ON u.PROJECT_ID = (SELECT PROJECT_ID FROM ETL_CRAFT_PR
     AND u.PIPELINE_CODE = v.column2 AND u.ACTIVE_FLAG = 'Y';
 
 -- publish runs once 2 of the 3 totals are built.
-INSERT INTO CFG_TASKS (PIPELINE_ID, TASK_CODE, TASK_TYPE, HANDLER, RUN_CONDITION,
-                       RUN_CONDITION_COUNT)
-SELECT p.PIPELINE_ID, v.column2, v.column3, v.column4, v.column5, CAST(v.column6 AS INTEGER)
+INSERT INTO CFG_TASKS (PIPELINE_ID, TASK_CODE, TASK_TYPE, HANDLER, RUN_CONDITION)
+SELECT p.PIPELINE_ID, v.column2, v.column3, v.column4, v.column5
 FROM (VALUES
-    ('SALES_MART', 'daily_totals', 'ETL', 'SQL', NULL, NULL),
-    ('SALES_MART', 'region_totals', 'ETL', 'SQL', NULL, NULL),
-    ('SALES_MART', 'customer_totals', 'ETL', 'SQL', NULL, NULL),
-    ('SALES_MART', 'publish', 'ETL', 'PYTHON', 'N', 2),
-    ('SALES_MART', 'alert', 'ETL', 'ALERT', NULL, NULL)
+    ('SALES_MART', 'daily_totals', 'ETL', 'SQL', NULL),
+    ('SALES_MART', 'region_totals', 'ETL', 'SQL', NULL),
+    ('SALES_MART', 'customer_totals', 'ETL', 'SQL', 'SALES_DAILY.load_orders.HAS_DATA'),
+    ('SALES_MART', 'publish', 'ETL', 'PYTHON', 'AT_LEAST(2, daily_totals.SUCCESS, region_totals.SUCCESS, customer_totals.SUCCESS)'),
+    ('SALES_MART', 'alert', 'ETL', 'ALERT', NULL)
 ) v
 LEFT JOIN CFG_PIPELINES p ON p.PROJECT_ID = (SELECT PROJECT_ID FROM ETL_CRAFT_PROJECT)
     AND p.PIPELINE_CODE = v.column1 AND p.ACTIVE_FLAG = 'Y';
@@ -85,22 +84,3 @@ LEFT JOIN CFG_PIPELINES p ON p.PROJECT_ID = (SELECT PROJECT_ID FROM ETL_CRAFT_PR
     AND p.PIPELINE_CODE = v.column1 AND p.ACTIVE_FLAG = 'Y'
 LEFT JOIN CFG_TASKS t ON t.PIPELINE_ID = p.PIPELINE_ID AND t.TASK_CODE = v.column2
                      AND t.ACTIVE_FLAG = 'Y';
-
--- customer_totals waits on a task in another pipeline: the upstream's pipeline code names it.
-INSERT INTO CFG_TASK_DEPENDENCY (PIPELINE_ID, TASK_ID, DEPENDS_ON_PIPELINE_ID, DEPENDS_ON_TASK_ID,
-                                 DEPENDENCY_TYPE)
-SELECT t.PIPELINE_ID, t.TASK_ID, u.PIPELINE_ID, u.TASK_ID, v.column5
-FROM (VALUES
-    ('SALES_MART', 'customer_totals', 'SALES_DAILY', 'load_orders', 'HAS_DATA'),
-    ('SALES_MART', 'publish', 'SALES_MART', 'daily_totals', 'SUCCESS'),
-    ('SALES_MART', 'publish', 'SALES_MART', 'region_totals', 'SUCCESS'),
-    ('SALES_MART', 'publish', 'SALES_MART', 'customer_totals', 'SUCCESS')
-) v
-LEFT JOIN CFG_PIPELINES p ON p.PROJECT_ID = (SELECT PROJECT_ID FROM ETL_CRAFT_PROJECT)
-    AND p.PIPELINE_CODE = v.column1 AND p.ACTIVE_FLAG = 'Y'
-LEFT JOIN CFG_TASKS t ON t.PIPELINE_ID = p.PIPELINE_ID AND t.TASK_CODE = v.column2
-                     AND t.ACTIVE_FLAG = 'Y'
-LEFT JOIN CFG_PIPELINES up ON up.PROJECT_ID = (SELECT PROJECT_ID FROM ETL_CRAFT_PROJECT)
-    AND up.PIPELINE_CODE = v.column3 AND up.ACTIVE_FLAG = 'Y'
-LEFT JOIN CFG_TASKS u ON u.PIPELINE_ID = up.PIPELINE_ID AND u.TASK_CODE = v.column4
-                     AND u.ACTIVE_FLAG = 'Y';

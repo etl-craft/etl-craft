@@ -180,6 +180,7 @@ def test_a_viewer_sees_why_administration_actions_are_unavailable(scene):
         page.get_by_role("tab", name="Projects").click()
         add_project = page.get_by_role("button", name="Add project")
         expect(add_project).to_be_disabled()
+        expect(add_project).to_have_accessible_description(re.compile("admin role is required"))
         add_project.hover()
         expect(page.get_by_role("tooltip")).to_contain_text("admin role is required")
         expect(page.get_by_role("link", name="Administration")).to_be_visible()

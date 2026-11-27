@@ -99,7 +99,6 @@ export interface StepView {
   task_type: string;
   handler: string;
   run_condition: string | null;
-  run_condition_count?: number | null;
   status?: RunStatus;
   task_run_label?: string;
 }
@@ -211,7 +210,7 @@ export interface Dependency {
 
 export interface Explanation {
   run_condition: string;
-  required_count: number;
+  condition_met: boolean | null;
   dependencies: Dependency[];
   retry_at: string | null;
 }

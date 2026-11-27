@@ -3,15 +3,8 @@
 from dataclasses import dataclass
 from typing import ClassVar
 
-from etl_craft.core.enums import NOT_RETRYABLE_STATUSES, DependencyType, RunStatus
+from etl_craft.core.enums import NOT_RETRYABLE_STATUSES, RunStatus
 from etl_craft.core.graph import DependencyGraph, RunState, TaskRunState
-
-_EDGE_REASON = {
-    DependencyType.SUCCESS: "succeeds",
-    DependencyType.FAILURE: "fails",
-    DependencyType.ALWAYS: "finishes",
-    DependencyType.HAS_DATA: "succeeds and writes rows",
-}
 
 
 @dataclass(frozen=True)
@@ -65,15 +58,14 @@ def plan_tasks(
         elif selected is None and status in NOT_RETRYABLE_STATUSES:
             skip.append(PlannedTask(name, f"Retains its recorded {status} state."))
         else:
-            least, most, required, reason = graph.admission_range(
-                task_id, outcomes, changing, selected
-            )
-            if most < required:
-                skip.append(PlannedTask(name, f"Its dependencies cannot be met. {reason}"))
+            value = graph.admission(task_id, outcomes, changing)
+            reason = f"Condition: {graph.node(task_id).rule}."
+            if value is False:
+                skip.append(PlannedTask(name, f"Its condition cannot be met. {reason}"))
                 if status is None and selected is None:
                     outcomes[task_id] = TaskRunState(status=RunStatus.SKIPPED)
-            elif least >= required and selected is None and task_id in ready:
-                run.append(PlannedTask(name, "Its recorded dependencies are satisfied."))
+            elif value is True and selected is None and task_id in ready:
+                run.append(PlannedTask(name, "Its recorded condition is met."))
                 changing.add(task_id)
             else:
                 detail = _conditions(graph, codes, task_id, changing, selected)
@@ -89,14 +81,13 @@ def _conditions(
     changing: set[int],
     selected: int | None,
 ) -> str:
-    edges = graph.dependencies_of(task_id)
     conditions = [
-        f"{codes[edge.depends_on_task_id]} {_EDGE_REASON[DependencyType(edge.dependency_type)]}"
-        for edge in edges
+        f"it depends on how {codes[edge.depends_on_task_id]} ends"
+        for edge in graph.dependencies_of(task_id)
         if edge.depends_on_task_id in changing
     ]
     if selected is not None:
-        conditions.insert(0, f"{codes[selected]} succeeds")
-    if graph.total_edge_count(task_id) > len(edges):
-        conditions.append("the cross-pipeline gate admits the task")
+        conditions.insert(0, f"{codes[selected]} runs again first")
+    if graph.node(task_id).cross:
+        conditions.append("the cross-pipeline gate binds its other pipelines")
     return "; ".join(dict.fromkeys(conditions))

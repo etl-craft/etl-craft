@@ -65,10 +65,6 @@ def project(engine_db, tmp_path, monkeypatch):
             conn, ids["SALES"], "load", SQL_ACTION="SCD1_MERGE", TARGET_OBJECT="s.orders"
         )
         ids["alert"] = add_task(conn, ids["SALES"], "alert", "ALERT")
-        conn.execute(
-            text("UPDATE CFG_TASKS SET RUN_CONDITION = 'ANY' WHERE TASK_ID = :t"),
-            {"t": ids["alert"]},
-        )
         add_dependency(conn, ids["SALES"], ids["load"], ids["extract"])
         add_dependency(conn, ids["SALES"], ids["load"], ids["publish"], upstream_pipeline=ids["UP"])
         add_dependency(conn, ids["SALES"], ids["alert"], ids["load"], "FAILURE")
@@ -132,7 +128,6 @@ def test_graph(project, capsys):
         "  1: extract",
         "  2: load",
         "  3: alert",
-        "May start before their wave (an ANY or N run condition): alert",
         "Task dependencies:",
         "  alert <- load (FAILURE)",
         "  load <- UP.publish (SUCCESS)",
@@ -147,9 +142,10 @@ def test_steps(project, capsys):
     assert code == ExitCode.SUCCESS
     assert out.splitlines() == [
         "TASK_CODE\tSTATUS\tHANDLER\tTASK_TYPE\tRUN_CONDITION\tPARAMETERS",
-        "alert\tNOT-RUN\tALERT\tETL\tANY\t",
-        "extract\tFAILED\tPYTHON\tETL\tALL\tSCRIPT_FILE=python_scripts/x.py, SCRIPT_KIND=INGESTION",
-        "load\tNOT-RUN\tSQL\tETL\tALL\tSQL_ACTION=SCD1_MERGE, TARGET_OBJECT=s.orders",
+        "alert\tNOT-RUN\tALERT\tETL\tload.FAILED\t",
+        "extract\tFAILED\tPYTHON\tETL\t\tSCRIPT_FILE=python_scripts/x.py, SCRIPT_KIND=INGESTION",
+        "load\tNOT-RUN\tSQL\tETL\textract.SUCCESS AND UP.publish.SUCCESS\t"
+        "SQL_ACTION=SCD1_MERGE, TARGET_OBJECT=s.orders",
     ]
 
 

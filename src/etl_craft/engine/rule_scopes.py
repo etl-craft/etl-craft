@@ -22,14 +22,14 @@ def rules(conn: Connection, task_id: int, scope: RuleScope) -> tuple[int, list[B
         if e.label == f"{task.pipeline_code}.{task.task_code}"
         and e.depends_on_task_code == scope.task
         and e.depends_on_pipeline_id == task.pipeline_id
-        and e.dependency_type == DependencyType.SUCCESS
+        and e.kind == DependencyType.SUCCESS
         and e.depends_on_handler == Handler.BUSINESS_RULES
         and e.depends_on_task_active
     ]
     if len(edges) != 1:
         raise SqlGuardError(
             f"{label}: expected one same-pipeline active BUSINESS_RULES SUCCESS dependency; "
-            "remedy: add that CFG_TASK_DEPENDENCY edge before using the token"
+            "remedy: name it in RUN_CONDITION as `<task>.SUCCESS` before using the token"
         )
     upstream = edges[0].depends_on_task_id
     selected = [

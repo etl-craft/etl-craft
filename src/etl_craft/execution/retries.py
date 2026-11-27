@@ -20,6 +20,7 @@ from etl_craft.engine import standing_pauses, transitions
 from etl_craft.engine.queries import statement
 from etl_craft.engine.repository.tasks import fetch_task_execution_detail, fetch_task_parameters
 from etl_craft.engine.run_definitions import for_run
+from etl_craft.handlers.parameters import pipeline_fail_options
 
 
 @dataclass(frozen=True)
@@ -116,19 +117,23 @@ def refresh_retries(
                 ):
                     exhausted.add(row.task_id)
                     continue
-                if row.status not in {
+                if row.task_status != RunStatus.FAILED or row.status not in {
+                    None,
                     AttemptStatus.FAILED,
                     AttemptStatus.TIMED_OUT,
                     AttemptStatus.LOST,
                     AttemptStatus.HANDED_OFF,
                 }:
                     continue
+                params = fetch_task_parameters(conn, row.task_id)
                 policy = task_retry_policy(
-                    fetch_task_parameters(conn, row.task_id),
+                    params,
                     config,
                     fetch_task_execution_detail(conn, row.task_id).handler,
                 )
-                if not policy.retries:
+                if row.status is None or not policy.retries:
+                    if not pipeline_fail_options(params)[0]:
+                        exhausted.add(row.task_id)
                     continue
                 if not row.retryable or row.attempt_number > policy.retries:
                     exhausted.add(row.task_id)

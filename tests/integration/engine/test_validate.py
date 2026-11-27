@@ -350,14 +350,14 @@ def test_dependencies_and_pipeline_settings(project):
         "DOWN.waits",
         fail,
         "depends on UP.off, whose task is inactive and no longer runs, so once its last run is "
-        "consumed the dependency is never satisfied again; deactivate the dependency too, or "
-        "reactivate it",
+        "consumed the dependency is never satisfied again; change RUN_CONDITION to remove "
+        "the reference, or reactivate it",
     ) in got
     assert (
         "DOWN.after_rules",
         fail,
-        "has a HAS_DATA dependency on GOOD.rules, which is a BUSINESS_RULES task and reports no "
-        "target rows, so the dependency is never satisfied and the task is always skipped; use "
+        "RUN_CONDITION reads GOOD.rules.HAS_DATA, which is a BUSINESS_RULES task and reports no "
+        "target rows, so the condition is never met and the task is always skipped; use "
         "SUCCESS",
     ) in got
     # Alerts start from events, so their dependencies are never judged as reporting order.
@@ -389,9 +389,18 @@ def test_a_cycle_inside_a_pipeline(project):
         a = add_task(conn, p, "a", "PYTHON", SCRIPT_FILE="python_scripts/load.py")
         b = add_task(conn, p, "b", "PYTHON", SCRIPT_FILE="python_scripts/load.py")
         add_dependency(conn, p, a, b)
-        add_dependency(conn, p, b, a)
+        conn.execute(
+            text("UPDATE CFG_TASKS SET RUN_CONDITION = 'a.SUCCESS' WHERE TASK_ID = :task"),
+            {"task": b},
+        )
     (finding,) = validate(engine, config).findings
-    assert finding.where == "LOOP" and "cycle" in finding.message
+    assert finding.where == "Engine DB (tasks.csv)"
+    assert finding.status == Status.FAIL
+    assert finding.message == (
+        "column RUN_CONDITION: LOOP.a RUN_CONDITION position 1: names form a cycle: "
+        "value default.LOOP.a -> default.LOOP.b -> default.LOOP.a; expected each task to "
+        "wait only on tasks that do not wait on it; remove one of these names"
+    )
 
 
 def test_the_command(project, capsys):
@@ -798,7 +807,8 @@ def test_a_success_dependency_on_file_validation_is_refused_with_the_remedy(proj
         _validated_upload_pipeline(conn, root, kind="SUCCESS")
     messages = [message for _, _, message in found(validate(engine, config))]
     assert any(
-        "depends on FILE_VALIDATION task check0 with SUCCESS" in m and "HAS_DATA" in m
+        "RUN_CONDITION reads FILE_VALIDATION task check0 as check0.SUCCESS" in m
+        and "change the condition to HAS_DATA" in m
         for m in messages
     ), messages
 

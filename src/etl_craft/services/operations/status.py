@@ -9,17 +9,25 @@ from typing import ClassVar
 
 from sqlalchemy.engine import Connection, RowMapping
 
+from etl_craft.core.conditions import Facts, edge_kind, holds_for
 from etl_craft.core.enums import (
     ADMITTED_OUTCOMES,
+    TERMINAL_STATUSES,
     ActiveRuns,
     AttemptStatus,
     DeploymentProfile,
     GatePolicy,
-    RunCondition,
     RunStatus,
     WaitKind,
 )
-from etl_craft.core.graph import DependencyGraph, RunState, TaskRunState, build_graph
+from etl_craft.core.graph import (
+    CrossFacts,
+    DependencyGraph,
+    RunState,
+    TaskNode,
+    TaskRunState,
+    build_graph,
+)
 from etl_craft.core.time import as_utc, elapsed_seconds
 from etl_craft.engine import controls, runlog, standing_pauses
 from etl_craft.engine.connection import read_snapshot
@@ -33,8 +41,7 @@ from etl_craft.engine.repository.dependencies import (
 from etl_craft.engine.repository.pipelines import resolve_pipeline_id, tagged_pipelines
 from etl_craft.engine.repository.tasks import resolve_task_id
 from etl_craft.engine.standing_pauses import TaskPause
-from etl_craft.execution.gates import judge, satisfies
-from etl_craft.execution.readiness import BACKFILL_ASSUMED
+from etl_craft.execution.gates import fresh, judge
 from etl_craft.services.operations.agents import AgentsView, list_agents
 from etl_craft.services.operations.context import OperationContext
 from etl_craft.services.operations.models import PipelineView, RunView, TaskRunView
@@ -90,7 +97,7 @@ class TaskSnapshot:
     task_code: str
     task: TaskRunView | None
     run_condition: str
-    required_count: int
+    condition_met: bool | None
     dependencies: tuple[DependencyView, ...]
     pipeline_dependencies: tuple[DependencyView, ...]
     gate_waits: tuple[GateWaitView, ...]
@@ -112,7 +119,7 @@ class Explanation:
     task_code: str
     task: TaskRunView | None
     run_condition: str
-    required_count: int
+    condition_met: bool | None
     dependencies: tuple[DependencyView, ...]
     pipeline_dependencies: tuple[DependencyView, ...]
     gate_waits: tuple[GateWaitView, ...]
@@ -149,7 +156,6 @@ def explain(snapshot: TaskSnapshot) -> Explanation:
     last = task.attempts[-1] if task is not None and task.attempts else None
     retry_at = last.not_before if last is not None and last.status == AttemptStatus.QUEUED else None
     unmet = [d for d in snapshot.dependencies if not d.met]
-    met = len(snapshot.dependencies) - len(unmet)
     if task is not None and task.status in {RunStatus.SUCCESS, RunStatus.SKIPPED}:
         state, action = task.status.lower(), "No work is needed; this task is already settled."
     elif pause_action := _pause_action(snapshot):
@@ -168,7 +174,7 @@ def explain(snapshot: TaskSnapshot) -> Explanation:
             "Repair the upstream outcome or dependency before rerunning.",
         )
     elif snapshot.blocked_by_failure or (
-        met < snapshot.required_count and any(d.status == RunStatus.FAILED for d in unmet)
+        snapshot.condition_met is not True and any(d.status == RunStatus.FAILED for d in unmet)
     ):
         state, action = (
             "blocked by failure",
@@ -177,7 +183,7 @@ def explain(snapshot: TaskSnapshot) -> Explanation:
     elif any(w.wait_kind == WaitKind.EVENT and w.next_check_at for w in snapshot.gate_waits):
         state, action = "waiting on an event", "Wait for the configured file or warehouse row."
     elif (
-        met < snapshot.required_count
+        snapshot.condition_met is not True
         or any(w.next_check_at for w in snapshot.gate_waits)
         or any(not d.met for d in snapshot.pipeline_dependencies)
     ):
@@ -199,7 +205,7 @@ def explain(snapshot: TaskSnapshot) -> Explanation:
         snapshot.task_code,
         task,
         snapshot.run_condition,
-        snapshot.required_count,
+        snapshot.condition_met,
         snapshot.dependencies,
         snapshot.pipeline_dependencies,
         snapshot.gate_waits,
@@ -276,6 +282,31 @@ def _snapshots(
         return _admitted_snapshots(conn, pipeline_id, selected.pipeline_run_id, policy, task_code)
 
 
+def _gate_decisions(conn: Connection, run_id: int) -> Sequence[RowMapping]:
+    return (
+        conn.execute(
+            statement(conn, "inspection_gate_decisions"),
+            {"pipeline_run_id": run_id},
+        )
+        .mappings()
+        .all()
+    )
+
+
+def _gate_waits(conn: Connection, run_id: int) -> tuple[GateWaitView, ...]:
+    return tuple(
+        GateWaitView(
+            r.task_id,
+            as_utc(r.first_check_at),
+            timestamp(r.next_check_at),
+            r.looks,
+            timestamp(r.wait_until),
+            WaitKind(r.wait_kind),
+        )
+        for r in conn.execute(statement(conn, "inspection_gate_waits"), {"pipeline_run_id": run_id})
+    )
+
+
 def _admitted_snapshots(
     conn: Connection,
     pipeline_id: int,
@@ -298,27 +329,13 @@ def _admitted_snapshots(
         {"pipeline_id": pipeline_id, "run_id": run.pipeline_run_id},
     ).all()
     codes = {r.task_id: r.task_code for r in definitions}
-    decisions = (
-        conn.execute(
-            statement(conn, "inspection_gate_decisions"),
-            {"pipeline_run_id": run.pipeline_run_id},
-        )
-        .mappings()
-        .all()
-    )
-    waits = tuple(
-        GateWaitView(
-            r.task_id,
-            as_utc(r.first_check_at),
-            timestamp(r.next_check_at),
-            r.looks,
-            timestamp(r.wait_until),
-            WaitKind(r.wait_kind),
-        )
-        for r in conn.execute(
-            statement(conn, "inspection_gate_waits"), {"pipeline_run_id": run.pipeline_run_id}
-        )
-    )
+    decisions = _gate_decisions(conn, run.pipeline_run_id)
+    recorded_conditions = {
+        row["task_id"]: row["result"] in ADMITTED_OUTCOMES
+        for row in decisions
+        if row["condition_text"] is not None
+    }
+    waits = _gate_waits(conn, run.pipeline_run_id)
     now = datetime.now(UTC)
     pipeline_dependencies = _pipeline_dependencies(conn, pipeline_id, run, policy, decisions, now)
     snapshots = []
@@ -330,7 +347,7 @@ def _admitted_snapshots(
         task = task_run_view(
             conn, pipeline_id, pipeline_run_id=run.pipeline_run_id, task_id=definition.task_id
         )
-        dependencies = _dependencies(
+        dependencies, cross_facts = _dependencies(
             conn, graph, state, codes, definition.task_id, task, decisions, policy, run.backfill
         )
         snapshots.append(
@@ -340,8 +357,17 @@ def _admitted_snapshots(
                 definition.task_id,
                 definition.task_code,
                 task,
-                definition.run_condition or RunCondition.ALL,
-                graph.required_edge_count(definition.task_id),
+                definition.run_condition or "",
+                recorded_conditions[definition.task_id]
+                if definition.task_id in recorded_conditions
+                else _condition_met(
+                    graph,
+                    definition.task_id,
+                    state,
+                    cross_facts,
+                    GatePolicy.ENFORCE if run.backfill else policy,
+                    dependencies,
+                ),
                 dependencies,
                 tuple(pipeline_dependencies),
                 tuple(w for w in waits if w.task_id in (None, definition.task_id)),
@@ -425,6 +451,26 @@ def _pipeline_dependencies(
     return pipeline_dependencies
 
 
+def _condition_met(
+    graph: DependencyGraph,
+    task_id: int,
+    state: RunState,
+    cross: CrossFacts,
+    policy: GatePolicy,
+    dependencies: tuple[DependencyView, ...],
+) -> bool | None:
+    local = graph.evaluate(task_id, state)
+    if local is False:
+        return False
+    if (
+        policy != GatePolicy.ENFORCE
+        and graph.node(task_id).cross
+        and all(edge.met for edge in dependencies if edge.task_dependency_id is not None)
+    ):
+        return True
+    return graph.evaluate(task_id, state, cross)
+
+
 def _dependencies(
     conn: Connection,
     graph: DependencyGraph,
@@ -435,25 +481,45 @@ def _dependencies(
     decisions: Sequence[RowMapping],
     policy: GatePolicy,
     backfill: bool,
-) -> tuple[DependencyView, ...]:
+) -> tuple[tuple[DependencyView, ...], CrossFacts]:
+    node = graph.node(task_id)
     found = []
     for edge in graph.dependencies_of(task_id):
         upstream = state.get(edge.depends_on_task_id, TaskRunState())
-        met = satisfies(
-            edge.dependency_type,
-            trackers.FinishedRun(0, upstream.status or "NOT RUN", upstream.wrote_rows),
+        name = next(n for n, t in node.upstream.items() if t == edge.depends_on_task_id)
+        settled = upstream.status in TERMINAL_STATUSES
+        met = (
+            node.condition is not None and settled and condition_holds(node, name, upstream.facts())
         )
         found.append(
             DependencyView(
                 codes[edge.depends_on_task_id],
-                edge.dependency_type,
+                _kind(node, name),
                 upstream.status,
                 met,
-                "Dependency is satisfied." if met else "Upstream does not satisfy this dependency.",
+                "The condition's tests of this task hold."
+                if met
+                else "The condition's tests of this task do not hold yet.",
             )
         )
     last_id = task.attempts[-1].attempt_id if task is not None and task.attempts else None
-    for cross in fetch_cross_pipeline_task_edges(conn, task_id):
+    cross, facts = _cross_dependencies(conn, node, decisions, policy, backfill, last_id)
+    return (*found, *cross), facts
+
+
+def _cross_dependencies(
+    conn: Connection,
+    node: TaskNode,
+    decisions: Sequence[RowMapping],
+    policy: GatePolicy,
+    backfill: bool,
+    last_id: int | None,
+) -> tuple[tuple[DependencyView, ...], CrossFacts]:
+    found = []
+    facts: dict[int, Facts | None] = {}
+    for cross in fetch_cross_pipeline_task_edges(conn, node.task_id):
+        name = next(n for n, d in node.cross.items() if d == cross.task_dependency_id)
+        kind = _kind(node, name)
         recorded = [
             d
             for d in decisions
@@ -464,7 +530,7 @@ def _dependencies(
             found.append(
                 DependencyView(
                     cross.depends_on_label,
-                    cross.dependency_type,
+                    kind,
                     d["upstream_status"],
                     d["result"] in ADMITTED_OUTCOMES,
                     d["reason"],
@@ -475,44 +541,58 @@ def _dependencies(
                     True,
                 )
             )
-        else:
-            upstream_run = trackers.fetch_latest_finished_task_run(conn, cross.depends_on_task_id)
-            consumed = trackers.fetch_task_last_consumed(conn, cross.task_dependency_id)
-            admitted, reason = judge(
-                cross.dependency_type, upstream_run, consumed, consume_repairs=cross.consume_repairs
+            continue
+        upstream_run = trackers.fetch_latest_finished_task_run(conn, cross.depends_on_task_id)
+        consumed = trackers.fetch_task_last_consumed(conn, cross.task_dependency_id)
+        admitted, reason = fresh(upstream_run, consumed, consume_repairs=cross.consume_repairs)
+        latest = trackers.fetch_latest_task_run(conn, cross.depends_on_task_id)
+        bound = None if admitted is None else runlog.fetch_task_run_facts(conn, admitted)
+        bound_facts = None if bound is None else bound.facts()
+        met = bound_facts is not None and condition_holds(node, name, bound_facts)
+        status = upstream_run.status if upstream_run is not None else None
+        if backfill:
+            bound_facts = Facts.delivered()
+            met = condition_holds(node, name, bound_facts)
+            reason = (
+                "A backfill assumes this upstream delivered."
+                if met
+                else "A backfill assumes delivery only; this test needs more."
             )
-            latest = trackers.fetch_latest_task_run(conn, cross.depends_on_task_id)
-            met = admitted is not None
-            status = upstream_run.status if upstream_run is not None else None
-            if backfill:
-                met = cross.dependency_type in BACKFILL_ASSUMED
-                reason = (
-                    "Cross-pipeline dependencies are assumed in backfills."
-                    if met
-                    else "A backfill does not assume an upstream failure."
-                )
-                upstream_run, status = None, None
-            elif policy == GatePolicy.OFF:
-                met, reason = True, "Dependency gates are off."
-            elif latest is not None and latest.status == RunStatus.IN_PROGRESS:
-                met, status, upstream_run = False, latest.status, None
-                reason = "Wait for the running upstream task to finish."
-            elif not met and policy == GatePolicy.WARN:
-                met, reason = True, f"Dependency is bypassed under warn policy: {reason}"
-            found.append(
-                DependencyView(
-                    cross.depends_on_label,
-                    cross.dependency_type,
-                    status,
-                    met,
-                    reason,
-                    cross.task_dependency_id,
-                    upstream_run.pipeline_run_id if upstream_run is not None else None,
-                    upstream_run.run_id if upstream_run is not None else None,
-                    upstream_run.revision if upstream_run is not None else None,
-                )
+            upstream_run, status = None, None
+        elif policy == GatePolicy.OFF:
+            bound_facts = None
+            met, reason = True, "Dependency gates are off."
+        elif latest is not None and latest.status == RunStatus.IN_PROGRESS:
+            bound_facts = None
+            met, status, upstream_run = False, latest.status, None
+            reason = "Wait for the running upstream task to finish."
+        elif not met and policy == GatePolicy.WARN:
+            met, reason = True, f"Dependency is bypassed under warn policy: {reason}"
+        facts[cross.task_dependency_id] = bound_facts
+        found.append(
+            DependencyView(
+                cross.depends_on_label,
+                kind,
+                status,
+                met,
+                reason,
+                cross.task_dependency_id,
+                upstream_run.pipeline_run_id if upstream_run is not None else None,
+                upstream_run.run_id if upstream_run is not None else None,
+                upstream_run.revision if upstream_run is not None else None,
             )
-    return tuple(found)
+        )
+    return tuple(found), facts
+
+
+def _kind(node: TaskNode, name: tuple[str, ...]) -> str:
+    return "CONDITION" if node.condition is None else edge_kind(node.condition, name)
+
+
+def condition_holds(node: TaskNode, name: tuple[str, ...], facts: Facts) -> bool:
+    """Whether every test ``node``'s condition makes of one upstream holds on ``facts``."""
+    assert node.condition is not None
+    return holds_for(node.condition, name, lambda _ref: facts) is True
 
 
 @dataclass(frozen=True)

@@ -1,6 +1,7 @@
 -- Recorded admission decisions, in immutable audit order.
 SELECT d.DECISION_ID AS decision_id, d.ATTEMPT_ID AS attempt_id,
        d.TASK_DEPENDENCY_ID AS task_dependency_id,
+       d.TASK_ID AS task_id, d.CONDITION_TEXT AS condition_text,
        d.PIPELINE_DEPENDENCY_ID AS pipeline_dependency_id,
        d.SELECTED_PIPELINE_RUN_ID AS selected_pipeline_run_id,
        d.SELECTED_TASK_RUN_ID AS selected_task_run_id, d.SELECTED_REVISION AS selected_revision,

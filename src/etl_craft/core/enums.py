@@ -451,14 +451,6 @@ class WaitKind(StrEnum):
     PIPELINE_RUN = "PIPELINE_RUN"
 
 
-class RunCondition(StrEnum):
-    """How many of a task's dependencies must be satisfied; a NULL condition means ``ALL``."""
-
-    ALL = "ALL"
-    ANY = "ANY"
-    N = "N"
-
-
 class OffsetType(StrEnum):
     """The type of an incremental load's offset value."""
 

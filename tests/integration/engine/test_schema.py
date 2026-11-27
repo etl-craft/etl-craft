@@ -149,31 +149,20 @@ def test_every_handler_is_accepted(seeded):
         )
 
 
-@pytest.mark.parametrize(
-    ("condition", "count", "accepted"),
-    [
-        (None, None, True),
-        ("ALL", None, True),
-        ("ANY", None, True),
-        ("N", 2, True),
-        ("MOST", None, False),
-        ("N", None, False),
-        ("ANY", 2, False),
-        ("N", 0, False),
-        (None, 2, False),
-    ],
-)
-def test_run_condition_and_count(seeded, condition, count, accepted):
+@pytest.mark.parametrize("condition", [None, "extract.SUCCESS", "extract.REJECTED = 0"])
+def test_schema_stores_task_condition_text(seeded, condition):
     db, ids = seeded
-    statement = (
-        "INSERT INTO CFG_TASKS (TASK_CODE, TASK_TYPE, PIPELINE_ID, HANDLER, RUN_CONDITION, "
-        "RUN_CONDITION_COUNT) VALUES ('rc', 'ETL', :p, 'SQL', :condition, :count)"
+    task_id = insert_id(
+        db,
+        "INSERT INTO CFG_TASKS (TASK_CODE,TASK_TYPE,PIPELINE_ID,HANDLER,RUN_CONDITION) "
+        "VALUES ('rc','ETL',:p,'SQL',:condition)",
+        "TASK_ID",
+        p=ids["a"],
+        condition=condition,
     )
-    params = {"p": ids["a"], "condition": condition, "count": count}
-    if accepted:
-        run(db, statement, **params)
-    else:
-        refused(db, statement, **params)
+    assert (
+        scalar(db, "SELECT RUN_CONDITION FROM CFG_TASKS WHERE TASK_ID=:t", t=task_id) == condition
+    )
 
 
 def test_a_retired_identity_is_reactivated_in_place(seeded):
@@ -200,8 +189,8 @@ def test_a_same_pipeline_dependency_fills_in_its_pipeline(seeded):
     db, ids = seeded
     dependency = insert_id(
         db,
-        "INSERT INTO CFG_TASK_DEPENDENCY (PIPELINE_ID, TASK_ID, DEPENDS_ON_TASK_ID, "
-        "DEPENDENCY_TYPE) VALUES (:p, :load, :extract, 'SUCCESS')",
+        "INSERT INTO CFG_TASK_DEPENDENCY (PIPELINE_ID, TASK_ID, DEPENDS_ON_TASK_ID) "
+        "VALUES (:p, :load, :extract)",
         "TASK_DEPENDENCY_ID",
         p=ids["a"],
         load=ids["load"],
@@ -222,8 +211,8 @@ def test_self_dependencies_are_refused(seeded):
     db, ids = seeded
     refused(
         db,
-        "INSERT INTO CFG_TASK_DEPENDENCY (PIPELINE_ID, TASK_ID, DEPENDS_ON_TASK_ID, "
-        "DEPENDENCY_TYPE) VALUES (:p, :t, :t, 'SUCCESS')",
+        "INSERT INTO CFG_TASK_DEPENDENCY (PIPELINE_ID, TASK_ID, DEPENDS_ON_TASK_ID) "
+        "VALUES (:p, :t, :t)",
         p=ids["a"],
         t=ids["extract"],
     )

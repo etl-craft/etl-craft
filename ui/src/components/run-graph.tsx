@@ -1,7 +1,8 @@
+import { OptionalTask } from "@/components/dependency-mark";
 import { ScrollWindow } from "@/components/scrollbar";
 import {DiagramFrame,useNodeMeasurements} from "@/components/diagram-frame";
 import {useLegend,statusEntries} from "@/components/legend";
-import {dependencyEntries,taskEntries,highlightedEntry,RunConditionMark} from "@/components/diagram-key";
+import {dependencyEntries,taskEntries,highlightedEntry,ConditionMark} from "@/components/diagram-key";
 import {DependencyBadge} from "@/components/dependency-mark";
 import {Switch} from "@/components/switch";
 import {useDiagramViewport} from "@/lib/diagram-viewport";
@@ -39,6 +40,7 @@ interface TaskData extends Record<string, unknown> {
   status: string;
   focus: Focus;
   blocked?: boolean;
+  optional?: boolean;
   onOpen: (task: string) => void;
 }
 type TaskNode = Node<TaskData, "task">;
@@ -70,11 +72,12 @@ function Task({ data }: NodeProps<TaskNode>) {
   const task = data.definition;
   const symbol = task ? taskSymbol(task) : data.symbol ?? {icon:Box,label:"Task"};
   const status = plain ? null : <StatusBadge status={data.status} quiet/>;
-  const summary = <>{task?.active_flag==="N" ? <DiagramChip>Inactive</DiagramChip> : null}{task||data.symbol ? <span className="flex min-w-0 items-center justify-center gap-1"><span className="truncate" title={symbol.label}>{symbol.label}</span>{task ? <RunConditionMark task={task}/> : null}</span> : null}{status}{data.blocked ? <DiagramChip>Blocked by failure</DiagramChip> : null}</>;
+  const optional = data.optional || task?.fail_pipeline_if_failed?.toUpperCase() === "N";
+  const summary = <>{task?.active_flag==="N" ? <DiagramChip>Inactive</DiagramChip> : null}{task||data.symbol ? <span className="flex min-w-0 items-center justify-center gap-1"><span className="truncate" title={symbol.label}>{symbol.label}</span></span> : null}{optional ? <OptionalTask /> : null}{status}{data.blocked ? <DiagramChip>Blocked by failure</DiagramChip> : null}</>;
   return <div data-focus={data.focus} className="relative" style={task?.active_flag === "N" ? {opacity:0.4} : undefined}>
     <Handle type="target" position={data.vertical ? Position.Top : Position.Left} className="!size-1.5 !border-0 !bg-border-strong"/>
-    <DiagramNode bodyClassName="flex h-26 min-h-0 flex-col" tile={!data.symbol} title={shownTitle(data.label,Boolean(task)||!data.symbol)} tooltip={data.tooltip ?? data.label} width={data.width??WIDTH} color={task?kindColor(task.script_kind??task.handler):plain?"var(--muted)":`var(--${statusMeta(data.status).tone}-solid)`} icon={symbol.icon} collapsedDescription={summary} expanded={data.expanded ?? false} onExpanded={() => data.onExpanded?.()} details={data.catalogDetails ? {to:data.catalogDetails}:undefined} onInspect={data.inspectable ? ()=>data.onOpen(data.label) : undefined} description={<>{task?.active_flag==="N" ? <DiagramChip>Inactive</DiagramChip> : null}{task||data.symbol ? symbol.label : null}{status}</>} className={cn(NODE_TONE[data.focus], data.blocked && "border-bad", plain ? "border-l-border-strong" : edgeClass(data.status))}>
-      <ScrollWindow className="min-h-0 flex-1"><div className="grid min-w-max gap-1 px-2 pb-2 text-xs">{task ? <><span className="whitespace-nowrap" title={task.target ?? undefined}>{task.target ?? "No target"}</span><span>Runs when: <RunConditionMark task={task}/></span></> : data.symbol ? <span>{data.label.startsWith("Schedule:") ? "Schedules and triggers admit this pipeline." : data.label.startsWith("Downstream:") ? "Open the downstream pipeline to inspect its tasks." : "This gate waits for its upstream dependency."}</span> : <span>Upstream tasks: {data.upstreamCount??0}</span>}</div></ScrollWindow>
+    <DiagramNode bodyClassName="flex h-26 min-h-0 flex-col" tile={!data.symbol} title={shownTitle(data.label,Boolean(task)||!data.symbol)} tooltip={data.tooltip ?? data.label} width={data.width??WIDTH} color={task?kindColor(task.script_kind??task.handler):plain?"var(--muted)":`var(--${statusMeta(data.status).tone}-solid)`} icon={symbol.icon} collapsedDescription={summary} expanded={data.expanded ?? false} onExpanded={() => data.onExpanded?.()} details={data.catalogDetails ? {to:data.catalogDetails}:undefined} onInspect={data.inspectable ? ()=>data.onOpen(data.label) : undefined} description={<>{task?.active_flag==="N" ? <DiagramChip>Inactive</DiagramChip> : null}{task||data.symbol ? symbol.label : null}{optional ? <OptionalTask /> : null}{status}</>} className={cn(NODE_TONE[data.focus], data.blocked && "border-bad", plain ? "border-l-border-strong" : edgeClass(data.status))}>
+      <ScrollWindow className="min-h-0 flex-1"><div className="grid min-w-max gap-1 px-2 pb-2 text-xs">{task ? <><span className="whitespace-nowrap" title={task.target ?? undefined}>{task.target ?? "No target"}</span><span>Runs when: <ConditionMark task={task}/></span></> : data.symbol ? <span>{data.label.startsWith("Schedule:") ? "Schedules and triggers admit this pipeline." : data.label.startsWith("Downstream:") ? "Open the downstream pipeline to inspect its tasks." : "This gate waits for its upstream dependency."}</span> : <span>Upstream tasks: {data.upstreamCount??0}</span>}</div></ScrollWindow>
     </DiagramNode>
     <Handle type="source" position={data.vertical ? Position.Bottom : Position.Right} className="!size-1.5 !border-0 !bg-border-strong"/>
   </div>;
@@ -179,8 +182,10 @@ export function RunGraph({
   definition,
   catalogDetails,
   blocked,
+  optional,
 }: {
   blocked?: string[];
+  optional?: string[];
   catalogDetails?: (node:string)=>string|null;
   definition?: { tasks: CatalogTask[]; edges: DefinitionEdge[]; overlay?:boolean; onOverlay?:()=>void; schedule?:string|null };
   graph: Graph;
@@ -215,7 +220,8 @@ export function RunGraph({
   const shown: Direction = direction ?? (definition ? "LR" : fill && frameHeight > width ? "TB" : "LR");
   const { nodes, edges, height } = layout(graph, statuses, focused, onOpen, plain, shown);
   const blockedTasks = new Set(blocked);
-  nodes.forEach((node) => { node.data.blocked = blockedTasks.has(node.id); });
+  const optionalTasks = new Set(optional);
+  nodes.forEach((node) => { node.data.blocked = blockedTasks.has(node.id); node.data.optional = optionalTasks.has(node.id); });
   nodes.forEach(node=>{node.data.upstreamCount=(graph.depends_on[node.id]??[]).length;node.data.inspectable=!definition;node.data.catalogDetails=catalogDetails?.(node.id)??undefined;node.data.expanded=expansion.isExpanded(node.id);node.data.onExpanded=()=>expansion.toggle(node.id);});
   let definitionHeight=280;
   if (definition) {
@@ -261,7 +267,7 @@ export function RunGraph({
   }, [focused,wireFocus]);
   React.useEffect(scheduleFit,[scheduleFit,shown]);
   return (
-    <div style={definition ? {height:`min(70vh, ${definitionHeight+(chromeHeight||(width<480?204:124))}px)`} : fill ? undefined : { height }} role="group" aria-label="Task graph" tabIndex={0} onKeyDown={key.onKeyDown} className={cn("flex w-full flex-col", fill && "h-full min-h-0",fill && definition && "@3xl:!h-full")}>
+    <div style={definition ? {height:`min(70vh, ${definitionHeight+(chromeHeight||(width<480?204:124))}px)`} : fill ? undefined : { height }} role="group" aria-label="Task graph" tabIndex={0} onKeyDown={key.onKeyDown} className={cn("flex w-full flex-col", !definition && !fill && "max-sm:min-h-[312px]", fill && "h-full min-h-0",fill && definition && "@3xl:!h-full")}>
       {/* The hint sits above the canvas, so a graph shown at a readable size never runs under it. */}
       <p className="m-0 shrink-0 px-3 py-1.5 text-xs text-muted">
         {edges.length === 0 ? "No dependencies between these tasks: they can run at the same time." : focused ? `Showing everything upstream and downstream of ${focused}. Click the background to clear.` : "Click an icon to expand; select a wire to highlight its path."}

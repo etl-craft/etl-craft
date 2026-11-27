@@ -417,6 +417,7 @@ DEPENDENCY_STYLES: dict[str, str] = {
     DependencyType.SUCCESS: "success",
     DependencyType.FAILURE: "failure",
     DependencyType.ALWAYS: "always",
+    DependencyType.HAS_DATA: "has-data",
 }
 """The line each dependency type is drawn with; ``HAS_DATA`` is ``has-data``."""
 
@@ -495,7 +496,7 @@ def render_dag_svg(
     nodes = drawing.nodes
     for upstream, downstream, kind in drawing.edges:
         a, b = nodes[upstream], nodes[downstream]
-        style = DEPENDENCY_STYLES.get(kind, "has-data")
+        style = DEPENDENCY_STYLES.get(kind, "condition")
         path = _curve(a.x + NODE_WIDTH, a.y + HEADER / 2, b.x, b.y + HEADER / 2)
         parts.append(
             f'<path class="edge dep {style}" d="{path}" {ARROW}>'

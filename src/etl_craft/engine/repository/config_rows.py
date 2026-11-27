@@ -32,7 +32,6 @@ from etl_craft.core.enums import (
     Handler,
     NonBusinessDay,
     RefreshType,
-    RunCondition,
     YesNo,
 )
 from etl_craft.core.errors import MetadataFileError
@@ -206,6 +205,7 @@ PIPELINES = ConfigTable(
         Column("MAX_PARALLEL_TASKS", "int", default=DEFAULT_MAX_PARALLEL_TASKS, minimum=1),
         Column("PRIORITY", "int", default=0),
         Column("BLOCK_ON_REPARSE_ERROR", "choice", default="N", choices=YES_NO),
+        Column("CONSUME_REPAIRS", "choice", default="Y", choices=YES_NO),
         Column("SLA_IN_HOURS", "float"),
         Column("PIPELINE_PARAMETERS", "json"),
         Column("CALENDAR_CODE", "code"),
@@ -233,6 +233,7 @@ PIPELINES = ConfigTable(
         "MAX_PARALLEL_TASKS",
         "PRIORITY",
         "BLOCK_ON_REPARSE_ERROR",
+        "CONSUME_REPAIRS",
         "SLA_IN_HOURS",
         "PIPELINE_PARAMETERS",
         "NON_BUSINESS_DAY",
@@ -253,8 +254,7 @@ TASKS = ConfigTable(
         Column("TASK_CODE", "code", required=True),
         Column("TASK_TYPE", "choice", required=True, choices=("INGESTION", "ETL")),
         Column("HANDLER", "choice", required=True, choices=tuple(kind.value for kind in Handler)),
-        Column("RUN_CONDITION", "choice", choices=tuple(kind.value for kind in RunCondition)),
-        Column("RUN_CONDITION_COUNT", "int", minimum=1),
+        Column("RUN_CONDITION"),
         Column("TARGET_CATALOG_NAME"),
         Column("TARGET_SCHEMA_NAME"),
         Column("TARGET_TABLE_NAME"),
@@ -266,7 +266,6 @@ TASKS = ConfigTable(
         "TASK_TYPE",
         "HANDLER",
         "RUN_CONDITION",
-        "RUN_CONDITION_COUNT",
         "TARGET_ACTIVE_FLAG",
     ),
     parents=(("pipeline_id", "pipelines.csv"), ("target_table_id", "tables.csv")),
@@ -292,38 +291,6 @@ TASK_PARAMETERS = ConfigTable(
     links=("TASK_ID",),
     label_format="{PIPELINE_CODE}.{TASK_CODE} {PARAMETER_NAME}",
     read_query="config_rows_task_parameters",
-)
-
-TASK_DEPENDENCIES = ConfigTable(
-    file="task_dependencies.csv",
-    table="CFG_TASK_DEPENDENCY",
-    id_column="TASK_DEPENDENCY_ID",
-    key=(
-        "PIPELINE_CODE",
-        "TASK_CODE",
-        "DEPENDS_ON_PROJECT_CODE",
-        "DEPENDS_ON_PIPELINE_CODE",
-        "DEPENDS_ON_TASK_CODE",
-        "DEPENDENCY_TYPE",
-    ),
-    columns=(
-        Column("PIPELINE_CODE", "code", required=True),
-        Column("TASK_CODE", "code", required=True),
-        Column("DEPENDS_ON_PROJECT_CODE", "code"),
-        Column("DEPENDS_ON_PIPELINE_CODE", "code", required=True),
-        Column("DEPENDS_ON_TASK_CODE", "code", required=True),
-        Column("DEPENDENCY_TYPE", "choice", required=True, choices=DEPENDENCY_TYPES),
-        Column("CONSUME_REPAIRS", "choice", default="Y", choices=YES_NO),
-        ACTIVE_FLAG,
-    ),
-    stored=("DEPENDENCY_TYPE", "CONSUME_REPAIRS"),
-    parents=(("task_id", "tasks.csv"), ("depends_on_task_id", "tasks.csv")),
-    links=("PIPELINE_ID", "TASK_ID", "DEPENDS_ON_PIPELINE_ID", "DEPENDS_ON_TASK_ID"),
-    label_format=(
-        "{PIPELINE_CODE}.{TASK_CODE} on {DEPENDS_ON_PIPELINE_CODE}.{DEPENDS_ON_TASK_CODE} "
-        "{DEPENDENCY_TYPE}"
-    ),
-    read_query="config_rows_task_dependency",
 )
 
 PIPELINE_DEPENDENCIES = ConfigTable(
@@ -449,7 +416,6 @@ TABLES = (
     OBJECT_TABLES,
     TASKS,
     TASK_PARAMETERS,
-    TASK_DEPENDENCIES,
     PIPELINE_DEPENDENCIES,
     BUSINESS_RULES,
     SOURCE_COLUMNS,

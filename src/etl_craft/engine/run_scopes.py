@@ -131,7 +131,7 @@ def selected_graph(data: PipelineGraphData, scope: TaskSelection) -> PipelineGra
         )
     return PipelineGraphData(
         [
-            replace(task, run_condition=None, run_condition_count=None, cross_pipeline_edge_count=0)
+            replace(task, condition=None, upstream={}, cross={})
             if scope.ignore_dependencies
             else task
             for task in data.tasks

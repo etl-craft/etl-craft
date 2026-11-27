@@ -2,14 +2,15 @@
 
 from __future__ import annotations
 
-from collections import Counter
 from dataclasses import dataclass
+from typing import Any
 
 from sqlalchemy import Boolean
-from sqlalchemy.engine import Connection
+from sqlalchemy.engine import Connection, Row
 
+from etl_craft.core.conditions import Scope, parse
 from etl_craft.core.enums import Handler, YesNo
-from etl_craft.core.errors import MetadataError
+from etl_craft.core.errors import ConditionError, MetadataError
 from etl_craft.core.graph import TaskEdge, TaskNode
 from etl_craft.engine.queries import statement
 
@@ -18,8 +19,8 @@ from etl_craft.engine.queries import statement
 class PipelineGraphData:
     """A pipeline's active tasks and same-pipeline edges, as ``build_graph`` takes them.
 
-    Edges on tasks in other pipelines are not part of the graph; each task counts them, and
-    ``cross_pipeline_task_ids`` names the tasks that have any.
+    Edges on tasks in other pipelines are not part of the order; each task maps its names in
+    other pipelines to their edges, and ``cross_pipeline_task_ids`` names the tasks that have any.
     """
 
     tasks: list[TaskNode]
@@ -29,11 +30,11 @@ class PipelineGraphData:
 
 
 def fetch_pipeline_graph(conn: Connection, pipeline_id: int) -> PipelineGraphData:
-    """Return the tasks and dependencies of ``pipeline_id`` for its dependency graph.
+    """Return the tasks, their parsed conditions and the edges of ``pipeline_id``.
 
-    The dependencies of an inactive task are left out: it does not run. An active task that
-    depends on an inactive one in the same pipeline could never run, so it is a
-    ``MetadataError``.
+    The edges of an inactive task are left out: it does not run. An active task that names an
+    inactive one in the same pipeline could never run, so it is a ``MetadataError``; so is a
+    condition whose names have no derived edge, which ``deploy`` or re-parse writes.
     """
     edges = conn.execute(
         statement(conn, "pipeline_task_dependencies"), {"pipeline_id": pipeline_id}
@@ -45,33 +46,64 @@ def fetch_pipeline_graph(conn: Connection, pipeline_id: int) -> PipelineGraphDat
     ]
     if on_inactive:
         raise MetadataError(
-            f"active tasks depend on inactive ones ({'; '.join(on_inactive)}); set the "
-            "dependency's ACTIVE_FLAG to 'N' too, or reactivate the task"
+            f"active tasks depend on inactive ones ({'; '.join(on_inactive)}); remove them from "
+            "the RUN_CONDITION, or reactivate the task"
         )
-    same = [
-        TaskEdge(row.task_id, row.depends_on_task_id, row.dependency_type)
-        for row in edges
-        if row.depends_on_pipeline_id == pipeline_id
-    ]
-    cross = Counter(row.task_id for row in edges if row.depends_on_pipeline_id != pipeline_id)
     rows = tuple(
         conn.execute(statement(conn, "pipeline_graph_tasks"), {"pipeline_id": pipeline_id})
     )
-    tasks = [
-        TaskNode(
-            task_id=row.task_id,
-            run_condition=row.run_condition,
-            run_condition_count=row.run_condition_count,
-            cross_pipeline_edge_count=cross.get(row.task_id, 0),
-            task_code=row.task_code,
-        )
-        for row in rows
+    by_task: dict[int, list[Row[Any]]] = {}
+    for row in edges:
+        by_task.setdefault(row.task_id, []).append(row)
+    tasks = [_node(row, by_task.get(row.task_id, []), pipeline_id) for row in rows]
+    same = [
+        TaskEdge(row.task_id, row.depends_on_task_id)
+        for row in edges
+        if row.depends_on_pipeline_id == pipeline_id
     ]
-    dependent = {edge.task_id for edge in same} | cross.keys()
+    cross = frozenset(task.task_id for task in tasks if task.cross)
+    dependent = {edge.task_id for edge in same} | cross
     alerts = frozenset(
         row.task_id for row in rows if row.handler == Handler.ALERT and row.task_id not in dependent
     )
-    return PipelineGraphData(tasks, same, frozenset(cross), alerts)
+    return PipelineGraphData(tasks, same, cross, alerts)
+
+
+def _node(row: Row[Any], edges: list[Row[Any]], pipeline_id: int) -> TaskNode:
+    """Parse a task's condition and map each name it reads to its edge."""
+    label = f"{row.pipeline_code}.{row.task_code}"
+    text = (row.run_condition or "").strip()
+    try:
+        condition = parse(text, Scope.TASK) if text else None
+    except ConditionError as error:
+        raise ConditionError(f"{label} RUN_CONDITION {error}") from error
+    names: dict[tuple[str, ...], tuple[bool, int]] = {}
+    for edge in edges:
+        same = edge.depends_on_pipeline_id == pipeline_id
+        full = (
+            edge.depends_on_project_code,
+            edge.depends_on_pipeline_code,
+            edge.depends_on_task_code,
+        )
+        keys: list[tuple[str, ...]] = [full]
+        if edge.depends_on_project_code == row.project_code:
+            keys.append(full[1:])
+        if same:
+            keys.append(full[2:])
+        target = edge.depends_on_task_id if same else edge.task_dependency_id
+        for key in keys:
+            names[key] = (same, int(target))
+    upstream: dict[tuple[str, ...], int] = {}
+    cross: dict[tuple[str, ...], int] = {}
+    for name in condition.names() if condition else ():
+        if name not in names:
+            raise MetadataError(
+                f"{label} RUN_CONDITION names {'.'.join(name)}, which has no derived edge; "
+                "run `etl-craft deploy` or `etl-craft pipelines re-parse` to derive it"
+            )
+        same, target = names[name]
+        (upstream if same else cross)[name] = target
+    return TaskNode(int(row.task_id), row.task_code, condition, upstream, cross)
 
 
 @dataclass(frozen=True)
@@ -107,15 +139,18 @@ class CrossPipelineTaskEdge:
     pipeline_id: int
     depends_on_pipeline_id: int
     depends_on_task_id: int
-    dependency_type: str
     depends_on_label: str
+    depends_on_project_code: str
+    depends_on_pipeline_code: str
+    depends_on_task_code: str
+    same_project: bool
     consume_repairs: bool = True
 
 
 def fetch_cross_pipeline_task_edges(conn: Connection, task_id: int) -> list[CrossPipelineTaskEdge]:
     """Return the active dependencies of ``task_id`` on tasks in other pipelines."""
     rows = conn.execute(
-        statement(conn, "task_gate_edges").columns(consume_repairs=Boolean),
+        statement(conn, "task_gate_edges").columns(consume_repairs=Boolean, same_project=Boolean),
         {"task_id": task_id},
     )
     return [CrossPipelineTaskEdge(**row._mapping) for row in rows]

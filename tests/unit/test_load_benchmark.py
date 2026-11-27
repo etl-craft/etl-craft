@@ -39,8 +39,9 @@ def test_generator_writes_complete_config_with_acyclic_edges_and_daily_spread(tm
             times.add(row["RUN_SCHEDULE"])
         for row in rows("pipeline_dependencies.csv"):
             assert row["DEPENDS_ON_PIPELINE_CODE"] < row["PIPELINE_CODE"]
-        for row in rows("task_dependencies.csv"):
-            assert row["DEPENDS_ON_TASK_CODE"] < row["TASK_CODE"]
+        for row in rows("tasks.csv"):
+            if row["RUN_CONDITION"]:
+                assert row["RUN_CONDITION"].removesuffix(".SUCCESS") < row["TASK_CODE"]
         kinds = [r for r in rows("task_parameters.csv") if r["PARAMETER_NAME"] == "SCRIPT_KIND"]
         assert len(kinds) == 15 and all(r["PARAMETER_VALUE"] == "INGESTION" for r in kinds)
         assert (folder / "python_scripts/work.py").exists()

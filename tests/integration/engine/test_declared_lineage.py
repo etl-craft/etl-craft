@@ -89,30 +89,25 @@ def test_catalog_definition_edges_keep_kinds_repairs_inactive_tasks_and_gates(en
         add_pipeline_dependency(conn, pipeline, before, "HAS_DATA")
         add_pipeline_dependency(conn, after, pipeline, "ALWAYS")
         target = add_task(conn, pipeline, "load", "PYTHON", SCRIPT_FILE="load.py")
-        for kind in ("SUCCESS", "FAILURE", "ALWAYS", "HAS_DATA"):
-            upstream = add_task(conn, pipeline, kind, "PYTHON", SCRIPT_FILE="load.py")
-            edge = add_dependency(conn, pipeline, target, upstream, kind)
-            conn.execute(
-                text(
-                    "UPDATE CFG_TASK_DEPENDENCY SET CONSUME_REPAIRS='N' "
-                    "WHERE TASK_DEPENDENCY_ID=:edge"
-                ),
-                {"edge": edge},
-            )
         conn.execute(
-            text(
-                "UPDATE CFG_TASKS SET RUN_CONDITION='N', RUN_CONDITION_COUNT=2 WHERE TASK_ID=:task"
-            ),
-            {"task": target},
+            text("UPDATE CFG_PIPELINES SET CONSUME_REPAIRS='N' WHERE PIPELINE_ID=:pipeline"),
+            {"pipeline": pipeline},
         )
-        conn.execute(text("UPDATE CFG_TASKS SET ACTIVE_FLAG='N' WHERE TASK_CODE='ALWAYS'"))
+        for kind in ("SUCCESS", "FAILURE", "ALWAYS", "HAS_DATA"):
+            upstream = add_task(conn, pipeline, f"source_{kind}", "PYTHON", SCRIPT_FILE="load.py")
+            add_dependency(conn, pipeline, target, upstream, kind)
+        add_task(conn, pipeline, "inactive", "PYTHON", SCRIPT_FILE="load.py")
+        conn.execute(text("UPDATE CFG_TASKS SET ACTIVE_FLAG='N' WHERE TASK_CODE='inactive'"))
     doc = catalog_document(build_catalog(engine_db.engine, engine_db.config))
     task = next(task for task in doc["tasks"] if task["label"] == "FLOW.load")
     assert {tuple(edge[1:]) for edge in task["upstream"]} == {
         (kind, "N") for kind in ("SUCCESS", "FAILURE", "ALWAYS", "HAS_DATA")
     }
-    assert task["run_condition_count"] == 2
-    inactive = next(task for task in doc["tasks"] if task["label"] == "FLOW.ALWAYS")
+    assert task["run_condition"] == (
+        "source_SUCCESS.SUCCESS AND source_FAILURE.FAILED AND "
+        "source_ALWAYS.FINISHED AND source_HAS_DATA.HAS_DATA"
+    )
+    inactive = next(task for task in doc["tasks"] if task["label"] == "FLOW.inactive")
     assert inactive["active_flag"] == "N"
     pipeline = next(p for p in doc["pipelines"] if p["code"] == "FLOW")
     assert pipeline["upstream"][0]["dependency_type"] == "HAS_DATA"

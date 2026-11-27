@@ -112,7 +112,14 @@ def project_rows(index: int, scale: Scale) -> dict[str, list[dict]]:
         for task in range(scale.tasks):
             task_code = f"T_{task:02d}"
             identity = {"PIPELINE_CODE": code, "TASK_CODE": task_code, "ACTIVE_FLAG": "Y"}
-            rows["tasks.csv"].append({**identity, "TASK_TYPE": "ETL", "HANDLER": "PYTHON"})
+            rows["tasks.csv"].append(
+                {
+                    **identity,
+                    "TASK_TYPE": "ETL",
+                    "HANDLER": "PYTHON",
+                    "RUN_CONDITION": f"T_{task - 1:02d}.SUCCESS" if task else "",
+                }
+            )
             for name, value in {
                 "SCRIPT_FILE": "python_scripts/work.py",
                 "SCRIPT_KIND": "INGESTION",
@@ -125,16 +132,6 @@ def project_rows(index: int, scale: Scale) -> dict[str, list[dict]]:
                         **identity,
                         "PARAMETER_NAME": name,
                         "PARAMETER_VALUE": value,
-                    }
-                )
-            if task:
-                rows["task_dependencies.csv"].append(
-                    {
-                        **identity,
-                        "DEPENDS_ON_PIPELINE_CODE": code,
-                        "DEPENDS_ON_TASK_CODE": f"T_{task - 1:02d}",
-                        "DEPENDENCY_TYPE": "SUCCESS",
-                        "CONSUME_REPAIRS": "Y",
                     }
                 )
     return rows

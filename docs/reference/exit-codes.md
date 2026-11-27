@@ -41,6 +41,7 @@ error class has its own status; every error etl-craft raises on purpose belongs 
 | `31` | `CONFIRMATION_REQUIRED` | A request would empty data and needs those exact targets confirmed first (`ConfirmationRequiredError`). Review the listed targets, then repeat the request confirming them: `--yes` unattended, or answer the prompt. |
 | `32` | `PROJECT_NOT_SELECTED` | A project-owned operation has no selected project (`ProjectNotSelectedError`). Pass `--project`, set `Orchestration.Project`, or have the entry point select the run's project. |
 | `33` | `API_READ_TIMEOUT` | The API request was sent, but the server did not finish responding before the read deadline (`ApiReadTimeoutError`). Check the action’s recorded outcome before retrying. |
+| `34` | `CONDITION` | A task run condition has invalid syntax, an unknown reference, or a cycle. Correct the named condition and deploy again. |
 
 Task pause without `--outcome SUCCESS|SKIPPED|FAILED`, or task pause with `--active-runs`, is
 `UsageError` (exit 2). A DRAIN dispatch refusal is `RunRefusedError` (exit 10).

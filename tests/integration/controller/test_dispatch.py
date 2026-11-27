@@ -139,7 +139,6 @@ def test_one_hundred_waiting_tasks_create_no_worker_jobs_and_resume_the_same_bud
             run_id,
             pipeline,
             task_id=rows[0].task_id,
-            needed=1,
             clock=Clock(now=lambda: now + timedelta(seconds=1)),
             wait_seconds=9999,
         )

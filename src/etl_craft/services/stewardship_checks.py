@@ -28,14 +28,14 @@ def graph_problems(
     problems = [
         (
             f"{edge.pipeline_code}.{edge.task_code}",
-            f"depends on FILE_VALIDATION task {edge.depends_on_task_code} with "
-            f"{edge.dependency_type}; expected HAS_DATA, so a run with no accepted files skips "
-            "it; change the dependency to HAS_DATA",
+            f"RUN_CONDITION reads FILE_VALIDATION task {edge.depends_on_task_code} as "
+            f"{edge.depends_on_task_code}.SUCCESS; expected {edge.depends_on_task_code}.HAS_DATA, "
+            "so a run with no accepted files skips it; change the condition to HAS_DATA",
         )
         for edge in edges
         if edge.depends_on_pipeline_id == pipeline_id
         and edge.depends_on_handler == Handler.FILE_VALIDATION
-        and edge.dependency_type == DependencyType.SUCCESS
+        and edge.kind == DependencyType.SUCCESS
     ]
     row = conn.execute(statement(conn, "stewardship_pipeline"), {"pipeline_id": pipeline_id}).one()
     if row.stewardable_flag == YesNo.YES and len(validators) != 1:

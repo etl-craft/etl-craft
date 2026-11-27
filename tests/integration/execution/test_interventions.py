@@ -215,7 +215,7 @@ def test_a_failed_task_marked_success_lets_its_dependents_run(config, pipeline):
             "SKIPPED",
             None,
             None,
-            f"its dependencies can never be met under pipeline_run_id={run_id}",
+            "condition [broken.SUCCESS] is not met: broken.SUCCESS=false",
             "loaded by hand",
             WHO,
         ),
@@ -226,7 +226,7 @@ def test_a_failed_task_marked_success_lets_its_dependents_run(config, pipeline):
             "SKIPPED",
             None,
             None,
-            f"its dependencies can never be met under pipeline_run_id={run_id}",
+            "condition [extract.FAILED] is not met: extract.FAILED=false",
             "loaded by hand",
             WHO,
         ),
@@ -255,7 +255,7 @@ def test_a_marked_success_satisfies_has_data_only_with_a_row_count(config, pipel
     engine, ids = pipeline
     with engine.begin() as conn:
         conn.execute(
-            text("UPDATE CFG_TASK_DEPENDENCY SET DEPENDENCY_TYPE = 'HAS_DATA' WHERE TASK_ID = :t"),
+            text("UPDATE CFG_TASKS SET RUN_CONDITION = 'broken.HAS_DATA' WHERE TASK_ID = :t"),
             {"t": ids["after_broken"]},
         )
     run_id = run_pipeline(engine, config, "P", child=CHILD).pipeline_run_id
@@ -592,8 +592,8 @@ def test_relaxed_gates_let_a_run_through_and_record_it(config, downstream, polic
         )
     else:
         assert reason == "Dependency_gates is OFF: upstream pipeline UP (SUCCESS) not checked"
-    assert changes[1][7].endswith(
-        "upstream task UP.publish (SUCCESS) "
+    assert changes[1][7] == (
+        f"Dependency_gates is {policy}: upstream task UP.publish "
         + ("has no finished run" if policy == "WARN" else "not checked")
     )
     # Nothing satisfied the dependencies, so nothing was consumed.
@@ -947,7 +947,7 @@ def test_a_backfill_never_meets_a_failure_dependency_on_another_pipeline(config,
         reason = conn.execute(
             text("SELECT ERROR_MESSAGE FROM AUD_TASK_RUN_LOG WHERE TASK_ID = :t"), {"t": alert}
         ).first()[0]
-    assert "(FAILURE) is not evaluated in a backfill" in reason
+    assert reason == "condition [UP.publish.FAILED] is not met: UP.publish.FAILED=false"
 
 
 def test_a_backfill_stops_at_the_first_run_that_fails(config, pipeline):

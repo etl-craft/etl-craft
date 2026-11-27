@@ -6,6 +6,11 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+- Task run conditions now live in `tasks.csv`. Deploy derives the task edges from
+  those conditions. A failed task, including an ALERT task, now fails its pipeline
+  unless `FAIL_PIPELINE_IF_FAILED=N`. Set `FAIL_PIPELINE_IF_NOT_RUN=Y` to fail the
+  pipeline when a task is skipped by its condition.
+
 - Changed: re-reading pipeline definitions is called **re-parse**, and "refresh" now means
   reloading data only (`REFRESH_TYPE`, `run --full-refresh`). `etl-craft pipelines refresh` is now
   `etl-craft pipelines re-parse`, and `lineage --refresh` is now `lineage --re-parse`; the old

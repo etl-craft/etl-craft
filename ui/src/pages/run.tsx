@@ -6,6 +6,7 @@ import { copyRunLabel } from "@/components/run-label";
 import { controlAnswers } from "@/components/scope-controls";
 import { useToast } from "@/components/toast";
 import { Breadcrumbs, Loading, Notice, PageHeader, SelectField } from "@/components/common";
+import { OptionalTask } from "@/components/dependency-mark";
 import { columnsOf, DataTable } from "@/components/data-table";
 import { RunGraph } from "@/components/lazy-run-graph";
 import { RunRecovery } from "@/components/run-recovery";
@@ -44,7 +45,7 @@ type RunStatusView = {
     status: string | null;
     explanation: {
       task: TaskRunView | null;
-      required_count: number;
+      condition_met: boolean | null;
       run_condition: string;
       dependencies: { upstream: string; dependency_type: string; status: string | null; met: boolean }[];
     };
@@ -112,6 +113,9 @@ export function RunPage() {
   const order = [...waves.filter((name) => !alerts.includes(name)), ...alerts.sort()];
   const statuses = Object.fromEntries(status.data?.tasks.map((item) => [item.task_code, taskStatus(item.status, data)]) ?? []);
   const failures = [...byTask.values()].filter((item): item is TaskRunView => item != null && isFailure(item.status));
+  const tolerated = data.status === "SUCCESS";
+  const failureTitle = tolerated ? "Tolerated failures" : "Failed tasks";
+  const optional = steps.data?.steps.filter(step => step.parameters?.FAIL_PIPELINE_IF_FAILED?.toUpperCase() === "N").map(step => step.task_code);
   const blocked = blockedTasks(status.data, order);
   const error = steps.error ?? status.error;
   return <div className="grid min-w-0 content-start gap-4">
@@ -129,8 +133,8 @@ export function RunPage() {
       </div>}>
       <RunFacts run={data} />
     </PageHeader>
-    {failures.length ? <section aria-label="Failed tasks" className="grid gap-2 rounded-md border border-bad bg-surface p-3">
-      <h2 className="text-sm font-semibold text-bad">Failed tasks</h2>
+    {failures.length ? <section aria-label={failureTitle} className={`grid gap-2 rounded-md border p-3 ${tolerated ? "border-warn bg-warn-bg" : "border-bad bg-surface"}`}>
+      <h2 className={`text-sm font-semibold ${tolerated ? "text-warn" : "text-bad"}`}>{failureTitle}</h2>
       <ul className="grid gap-2">
         {failures.map((item) => {
           const failed = item.attempts.findLast((attempt) => isFailure(attempt.status));
@@ -149,10 +153,11 @@ export function RunPage() {
         <div id="run-view" role="tabpanel" aria-labelledby={`tab-${view}`} className="grid min-w-0 gap-3">
           {error ? <Notice>{error.message}</Notice> : null}
           {view !== "events" && !error && (!graph || !steps.data) ? <Loading what="run tasks" /> : null}
-          {view === "graph" && graph ? <RunGraph graph={graph} statuses={statuses} blocked={blocked} focused={task} onFocus={selectTask} onOpen={selectTask} /> : null}
+          {view === "graph" && graph ? <RunGraph graph={graph} statuses={statuses} blocked={blocked} optional={optional} focused={task} onFocus={selectTask} onOpen={selectTask} /> : null}
           {view === "list" && graph && status.data && steps.data ? <TaskList rows={order.map((name) => ({
             name, status: statuses[name] ?? "NOT_STARTED", handler: byStep.get(name)?.handler,
-            task: byTask.get(name), dependencies: graph?.depends_on[name]?.map(([upstream]) => upstream).join(", ") ?? "",
+            task: byTask.get(name), condition: byStep.get(name)?.run_condition || "Pipeline is admitted",
+            optional: optional?.includes(name) ?? false,
           }))} select={selectTask} selected={task} /> : null}
           {view === "gantt" ? <>
             <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={critical} onChange={(event) => setCritical(event.target.checked)} /> Critical path</label>
@@ -182,7 +187,7 @@ function runGraph(status: RunStatusView): Graph {
   ]));
   return {
     waves: dependencyWaves(names, internal),
-    conditional: status.tasks.filter((task) => task.explanation.run_condition !== "ALL").map((task) => task.task_code),
+    conditional: status.tasks.filter((task) => Boolean(task.explanation.run_condition)).map((task) => task.task_code),
     depends_on: dependencies,
   };
 }
@@ -194,8 +199,8 @@ function blockedTasks(status: RunStatusView | undefined, order: string[]): strin
   for (const name of order) {
     const row = byTask.get(name);
     if (row?.status !== "SKIPPED" || row.explanation.task?.attempt_count) continue;
-    const { dependencies, required_count } = row.explanation;
-    if (dependencies.filter((edge) => edge.met).length >= required_count) continue;
+    const { dependencies, condition_met } = row.explanation;
+    if (condition_met === true) continue;
     if (dependencies.some((edge) => !edge.met && (isFailure(edge.status) || blocked.has(edge.upstream)))) {
       blocked.add(name);
     }
@@ -203,7 +208,7 @@ function blockedTasks(status: RunStatusView | undefined, order: string[]): strin
   return [...blocked];
 }
 
-type TaskRow = { name: string; status: string; handler?: string; task?: TaskRunView | null; dependencies: string };
+type TaskRow = { name: string; status: string; handler?: string; task?: TaskRunView | null; condition: string; optional: boolean };
 
 function TaskList({ rows, select, selected }: { rows: TaskRow[]; select: (task: string) => void; selected: string | null }) {
   const [filter, setFilter] = useState<string[]>([]);
@@ -218,7 +223,7 @@ function TaskList({ rows, select, selected }: { rows: TaskRow[]; select: (task: 
     </div>
     <DataTable label="Run tasks" data={rows.filter((row) => row.name.toLowerCase().includes(search.trim().toLowerCase()) && (!filter.length || filter.includes(row.status)))}
       highlight={(row) => row.name === selected} columns={columnsOf<TaskRow>([
-        { id: "task", header: "Task", value: (row) => row.name, cell: (row) => <button type="button" className="text-left text-accent hover:underline" onClick={() => select(row.name)}>{row.name}</button> },
+        { id: "task", header: "Task", value: (row) => row.name, cell: (row) => <><button type="button" className="text-left text-accent hover:underline" onClick={() => select(row.name)}>{row.name}</button>{row.optional ? <> <OptionalTask /></> : null}</> },
         { id: "status", header: "Status", value: (row) => row.status, cell: (row) => <StatusBadge quiet status={row.status} /> },
         { id: "handler", header: "Handler", value: (row) => row.handler ? handlerLabel(row.handler) : null },
         { id: "try", header: "Try", value: (row) => row.task?.attempt_count ?? null },
@@ -227,7 +232,7 @@ function TaskList({ rows, select, selected }: { rows: TaskRow[]; select: (task: 
         { id: "in", header: "Rows in", value: (row) => row.task?.source_count ?? null },
         { id: "written", header: "Rows written", value: (row) => row.task?.rows_written ?? null },
         { id: "rejected", header: "Rows rejected", value: (row) => row.task?.reject_count ?? null },
-        { id: "dependencies", header: "Dependencies", value: (row) => row.dependencies },
+        { id: "condition", header: "Runs when", value: (row) => row.condition },
       ])} />
   </>;
 }

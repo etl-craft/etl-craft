@@ -1,7 +1,8 @@
--- Definition edges retain dependency kinds and repair-consumption decisions.
+-- Definition edges with the rule that makes them: a task's run condition, a pipeline's
+-- dependency type, and whether repairs are consumed.
 SELECT 'task' AS kind,p.PIPELINE_CODE || '.' || t.TASK_CODE AS target,
-       CASE WHEN up.PROJECT_ID=:project_id THEN up.PIPELINE_CODE ELSE project.PROJECT_CODE || '.' || up.PIPELINE_CODE END || '.' || u.TASK_CODE AS source,d.DEPENDENCY_TYPE AS dependency_type,
-       d.CONSUME_REPAIRS AS consume_repairs
+       CASE WHEN up.PROJECT_ID=:project_id THEN up.PIPELINE_CODE ELSE project.PROJECT_CODE || '.' || up.PIPELINE_CODE END || '.' || u.TASK_CODE AS source,t.RUN_CONDITION AS rule,
+       p.CONSUME_REPAIRS AS consume_repairs
 FROM CFG_TASK_DEPENDENCY d JOIN CFG_TASKS t ON t.TASK_ID=d.TASK_ID
 JOIN CFG_PIPELINES p ON p.PIPELINE_ID=t.PIPELINE_ID
 JOIN CFG_TASKS u ON u.TASK_ID=d.DEPENDS_ON_TASK_ID
@@ -10,7 +11,7 @@ JOIN CFG_PROJECTS project ON project.PROJECT_ID=up.PROJECT_ID
 WHERE d.ACTIVE_FLAG='Y' AND p.PROJECT_ID=:project_id
 UNION ALL
 SELECT 'pipeline' AS kind,p.PIPELINE_CODE AS target,CASE WHEN u.PROJECT_ID=:project_id THEN u.PIPELINE_CODE ELSE project.PROJECT_CODE || '.' || u.PIPELINE_CODE END AS source,
-       d.DEPENDENCY_TYPE AS dependency_type,d.CONSUME_REPAIRS AS consume_repairs
+       d.DEPENDENCY_TYPE AS rule,d.CONSUME_REPAIRS AS consume_repairs
 FROM CFG_PIPELINE_DEPENDENCY d JOIN CFG_PIPELINES p ON p.PIPELINE_ID=d.PIPELINE_ID
 JOIN CFG_PIPELINES u ON u.PIPELINE_ID=d.DEPENDS_ON_PIPELINE_ID
 JOIN CFG_PROJECTS project ON project.PROJECT_ID=u.PROJECT_ID

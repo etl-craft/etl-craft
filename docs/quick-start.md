@@ -64,7 +64,7 @@ etl-craft validate
   relay, the project folders) and creates the Engine DB's tables in `engine.db`.
 - `setup` asks for your first admin name and a password of at least 12 characters.
   `login` signs that account in and stores a private, 12-hour session on this server.
-- `prepare.py metadata` loads and re-parses the pipelines, their tasks, parameters, dependencies and business
+- `prepare.py metadata` loads and re-parses the pipelines, their tasks, parameters, run conditions, pipeline dependencies and business
   rules into `engine.db`, as `CFG_` rows, by copying the seed SQL into numbered project
   migrations and running `etl-craft migrate` on the controller's host. In your own project, author these migrations
   directly and review them like code; plain SQL connections cannot edit Engine DB rows.
@@ -85,7 +85,7 @@ Each run prints its tasks in dependency waves, each in a process of its own, the
 ```text
 SOURCE_A: pipeline_run_id=1 SUCCESS
 SOURCE_B: pipeline_run_id=2 SUCCESS
-DEMO: pipeline_run_id=3 FAILED — 1 task(s) did not succeed: flaky_feed (FAILED); skipped because of the failure: interactions, setup_fact, fact, quality, area_summary, source_counts, drop_source_counts
+DEMO: pipeline_run_id=3 FAILED — 1 task(s) did not succeed: flaky_feed (FAILED) [FAIL_PIPELINE_IF_FAILED=Y]; skipped because of the failure: interactions, setup_fact, fact, quality, area_summary, source_counts, drop_source_counts
 DEMO: pipeline_run_id=4 SUCCESS
 ```
 

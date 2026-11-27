@@ -9,9 +9,10 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date, datetime
+from typing import Any
 
 from sqlalchemy import bindparam
-from sqlalchemy.engine import Connection
+from sqlalchemy.engine import Connection, Row
 
 from etl_craft.core.cron import timezone
 from etl_craft.core.enums import RunStatus, SlaStatus, YesNo
@@ -204,9 +205,34 @@ def fetch_run_state(
         return {}
     query = statement(conn, "run_state").bindparams(bindparam("task_ids", expanding=True))
     rows = conn.execute(query, {"pipeline_run_id": pipeline_run_id, "task_ids": list(task_ids)})
-    return {
-        row.task_id: TaskRunState(row.status, row.target_count, row.rows_written) for row in rows
-    }
+    return {row.task_id: task_run_state(row) for row in rows}
+
+
+def task_run_state(row: Row[Any]) -> TaskRunState:
+    """Read a ``run_state``-shaped row: status, counts, attempts, times and failure class."""
+    return TaskRunState(
+        status=row.status,
+        target_count=row.target_count,
+        rows_written=row.rows_written,
+        source_count=row.source_count,
+        insert_count=row.insert_count,
+        update_count=row.update_count,
+        delete_count=row.delete_count,
+        reject_count=row.reject_count,
+        duplicate_count=row.duplicate_count,
+        attempt_count=row.attempt_count,
+        started=None if row.start_date is None else as_utc(row.start_date),
+        ended=None if row.end_date is None else as_utc(row.end_date),
+        error_class=row.error_class,
+        attempt_status=row.attempt_status,
+    )
+
+
+def fetch_task_run_facts(conn: Connection, task_run_id: int) -> TaskRunState:
+    """Return what a run condition can read about one finished task run."""
+    return task_run_state(
+        conn.execute(statement(conn, "task_run_facts"), {"task_run_id": task_run_id}).one()
+    )
 
 
 @dataclass(frozen=True)
