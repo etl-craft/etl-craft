@@ -1,7 +1,8 @@
 # Local orchestration: etl-craft dispatches ready tasks itself.
 #
-# `etl-craft run --pipeline-code X` resolves each ready wave from
-# CFG_TASK_DEPENDENCY and runs one subprocess per task, at most
+# Each task's RUN_CONDITION and each pipeline's START_CONDITION determine execution order.
+# Deploy derives the edges from those conditions. `etl-craft run --pipeline-code X`
+# uses them to resolve ready tasks and runs one subprocess per task.
 # Local_python_slots may override the default Python memory estimate;
 # CPU, total slots and process-base memory remain bounds. Local_warehouse_slots caps SQL slots.
 #
