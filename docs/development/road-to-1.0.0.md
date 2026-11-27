@@ -10440,10 +10440,10 @@ It performs catalog build, lineage, deploy, re-parse and validate, including war
 incremental reads and a populated history that stresses trigger links.
 
 The gate also measures a cold catalog build separately from warm reads. A cold build must
-have a fixed statement ceiling and elapsed-time ceiling independent of pipeline count; the
-initial proposal is ≤50,000 statements and ≤60 seconds per 5,000-pipeline project on each
-Engine DB. If that cannot be met after bounded reads, this becomes a separate pre-0.9.0
-catalog-build item with before/after measurements. A gate that merely finishes is not a pass.
+have a fixed statement count per query kind plus one statement per 400-name batch, proven at
+500 and 5,000 pipelines. At 5,000 pipelines and 50,000 tasks, the release evidence must show
+cold build ≤5 minutes, warm rebuild ≤60 seconds and one-pipeline re-parse ≤10 seconds on both
+Engine DBs. A gate that merely finishes is not a pass.
 
 **Done when.**
 

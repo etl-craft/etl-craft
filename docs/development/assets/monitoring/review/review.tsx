@@ -23,7 +23,7 @@ const production = { type: "PROD", name: null };
 const stage = { type: "STAGE", name: null };
 const incidents = [
   { project: "finance", env: production, pipeline: "NIGHTLY_LEDGER", run: "#18422", state: "FAILED", facet: "Failing", evidence: "merge_ledger · HANDLER", time: "03:02 UTC", task: "sql" },
-  { project: "retail", env: production, pipeline: "INVENTORY_EXPORT", run: "#18424", state: "BREACHED", facet: "Late", evidence: "SLA due 03:00 UTC · still running", time: "03:00 UTC", task: "running" },
+  { project: "finance", env: production, pipeline: "INVENTORY_EXPORT", run: "#18424", state: "BREACHED", facet: "Late", evidence: "SLA due 03:00 UTC · still running", time: "03:00 UTC", task: "running" },
   { project: "finance", env: production, pipeline: "BANK_STATEMENTS", run: "", state: "BREACHED", facet: "Late", evidence: "Missed start · 5 min grace exceeded", time: "03:00 UTC", task: "" },
   { project: "finance", env: production, pipeline: "NIGHTLY_LEDGER", run: "#18422", state: "OPEN", facet: "Waiting", evidence: "rebuild_totals · pool warehouse-heavy", time: "02:58 UTC", task: "waiting" },
   { project: "retail", env: stage, pipeline: "CATALOG_LOAD", run: "#18423", state: "RUNNING", facet: "Running", evidence: "load_products · worker-east-02", time: "02:57 UTC", task: "running" },
@@ -106,7 +106,7 @@ function Review() {
   const go = (page: string, extra = {}) => set({ view: page, ...extra });
   const facets = [["Failing", "FAILED"], ["Running", "RUNNING"], ["Late", "BREACHED"], ["Waiting", "OPEN"]];
   const matches = (item: typeof incidents[number], label: string) => item.facet === label || (label === "Running" && item.run === "#18424");
-  const strip = <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">{facets.map(([label, state]) => <Link className={panel + " flex items-center justify-between gap-2 p-3"} key={label} to={url("Monitor", { facet: label })}><StatusBadge status={state} label={label}/><strong>{scoped.filter((r) => matches(r, label)).length}</strong></Link>)}</div>;
+  const strip = <><p className="mb-2 text-xs text-muted">This project's counts · finance · <Link className="text-accent underline" to={url("Monitor", { project: "finance" })}>Open in Monitor</Link></p><div className="grid grid-cols-2 gap-2 sm:grid-cols-4">{facets.map(([label, state]) => <Link className={panel + " flex items-center justify-between gap-2 p-3"} key={label} to={url("Monitor", { facet: label, project: "finance" })}><StatusBadge status={state} label={label}/><strong>{scoped.filter((r) => r.project === "finance" && matches(r, label)).length}</strong></Link>)}</div></>;
   const header = (title: string, subtitle?: string) => <PageHeader title={title} subtitle={subtitle}/>;
   let content: React.ReactNode;
   if (view === "Home") {
@@ -117,7 +117,7 @@ function Review() {
       <PageHeader compact title="Home" subtitle={<>finance <EnvironmentBadge env={production}/></>}
         actions={<Segmented label="Time range" value={range} options={[{id:"1",label:"24 h"},{id:"7",label:"7 days"},{id:"30",label:"30 days"}]} onSelect={setRange}/>}/>
       {strip}
-      <div className="-mx-4 min-w-0"><Overview code="finance" d={insight}/></div>
+      <div className="-mx-4 min-w-0"><Overview code="finance" d={insight}/><section className={panel + " mx-4 mt-3 p-3 text-sm"} aria-label="Missed starts"><strong>Needs attention</strong><p className="mt-1 text-muted">BANK_STATEMENTS · missed start · 5 minute grace exceeded</p></section></div>
     </>;
   }
   else if (view === "Monitor") content = <>{header("Monitor", "All authorized projects · active and last 24 hours")}{strip}<Tabs value={facet} onChange={(value) => go("Monitor", { facet: value })} tabs={["All", ...facets.map(([label]) => label)].map((id) => ({ id, label: id }))}/><div className="text-xs text-muted">Updated 03:06 UTC</div><Grid headings={["Project / environment", "Pipeline / run", "State", "Evidence", "Since"]} rows={scoped.filter((r) => facet === "All" || matches(r, facet)).map((r) => [<>{r.project} <EnvironmentBadge env={r.env}/></>, r.task ? <Link className="text-accent" to={url("Task", { task: r.task })}>{r.pipeline} {r.run}</Link> : r.pipeline, <StatusBadge status={r.state} label={r.facet === "Late" ? (r.run ? "SLA overdue" : "Missed start") : undefined}/>, r.evidence, r.time])}/></>;

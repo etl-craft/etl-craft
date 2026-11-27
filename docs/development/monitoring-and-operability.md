@@ -272,20 +272,15 @@ screen approved only when the owner approves it personally.
 
 ## Owner questions
 
-1. **Should failure codes become finer than the existing coarse `ExitCode` names?** Keep the
-   current closed enum (recommended: no new public surface before 0.9.0), or add a closed
-   `core/enums` classification plus warehouse error mapping (more precise alerts and filters,
-   but a new public contract and adapter work). Blocked until answered: any finer code column
-   or alert/API wording. Screens therefore show only existing names such as `HANDLER`.
+1. **Error code contract (answered).** There is no etl-craft taxonomy in 0.9.0. Show the
+   warehouse-native SQLSTATE or vendor code when the driver provides one; otherwise show the
+   existing failure class. A closed code enum is post-1.0. No new code column or taxonomy is
+   in this plan.
 
-2. **Should task mapping get a monitoring tab?** Remove it from this plan (recommended: use
-   the existing catalog separately), or specify a catalog-backed source/target/column read
-   with a bounded budget and explicit SQL/PYTHON empty states (adds a new read and UI contract).
-   Blocked until answered: any Mapping screen or screenshot.
+2. **Mapping (answered).** No monitoring tab. Use an **Open in catalog** link to the existing
+   task mapping page; the review fixture contains no Mapping screen.
 
-3. **What release-gate budget makes the 5,000-pipeline catalog usable?** Set a non-growing cold
-   statement/time budget in S7.BD (recommended), or create a separate pre-0.9.0 catalog-build
-   item. The measured 100/500 cold builds are 6,049/24,053 statements and 5.8/31.8 s, roughly
-   240,000 statements at 5,000 pipelines; warm builds are 1.1/8.6 s. Blocked until answered:
-   the exact pass threshold (proposed ceiling: 60 s and 50,000 statements per cold build,
-   with the 5,000-pipeline result reported rather than hidden).
+3. **Catalog release gate (answered).** Statement count must be fixed per query kind plus one
+   statement per 400-name batch, proven at 500 and 5,000 pipelines. At 5,000 pipelines and
+   50,000 tasks on SQLite and PostgreSQL: cold build ≤5 minutes, warm rebuild ≤60 seconds,
+   and one-pipeline re-parse ≤10 seconds, all recorded in release evidence.

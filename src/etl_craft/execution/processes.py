@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import logging
 import os
-import sys
 import shutil
 import signal
 import subprocess
@@ -78,8 +77,6 @@ class ChildResult:
     queries_ended: bool = False
     pid: int | None = None
     process_start: str | None = None
-    peak_rss_bytes: int | None = None
-    cpu_seconds: float | None = None
 
     @property
     def succeeded(self) -> bool:
@@ -128,20 +125,14 @@ def run_child(
                 if cancelled:
                     logger.warning("stopping pid %s: cancellation was requested", process.pid)
                     _stop_group(process, birth, min(kill_grace_seconds, 1))
-                    if process.returncode is None:
-                        _set_returncode_from_wait4(process)
             except subprocess.TimeoutExpired:
                 timed_out = True
                 logger.warning(
                     "pid %s exceeded its %gs limit; stopping it", process.pid, spec.timeout_seconds
                 )
                 _stop_group(process, birth, kill_grace_seconds)
-                if process.returncode is None:
-                    _set_returncode_from_wait4(process)
             except BaseException:
                 _stop_group(process, birth, kill_grace_seconds)
-                if process.returncode is None:
-                    _set_returncode_from_wait4(process)
                 raise
         elapsed = time.monotonic() - started
         tail = _read_tail(output, start_offset, tail_bytes)
@@ -154,8 +145,6 @@ def run_child(
         cancelled=cancelled,
         pid=process.pid,
         process_start=birth,
-        peak_rss_bytes=getattr(process, "_etl_peak_rss_bytes", None),
-        cpu_seconds=getattr(process, "_etl_cpu_seconds", None),
     )
     logger.debug("pid %s %s after %.1fs", process.pid, result.describe(), elapsed)
     return result
@@ -229,44 +218,25 @@ def _wait(
 
     Raises ``subprocess.TimeoutExpired`` when ``timeout`` passes first.
     """
-    if cancel is None and timeout is None:
+    if cancel is None:
         with interrupts.interruptible():
-            _set_returncode_from_wait4(process)
+            process.wait(timeout=timeout)
         return False
     deadline = None if timeout is None else time.monotonic() + timeout
-    while cancel is None or not cancel.is_set():
+    while not cancel.is_set():
         step = CANCEL_POLL_SECONDS
         if deadline is not None:
             remaining = deadline - time.monotonic()
             if remaining <= 0:
                 raise subprocess.TimeoutExpired(process.args, timeout or 0)
             step = min(step, remaining)
-        with interrupts.interruptible():
-            status = _reap(process, os.WNOHANG)
-        if status is not None:
-            process.returncode = os.waitstatus_to_exitcode(status)
+        try:
+            with interrupts.interruptible():
+                process.wait(timeout=step)
             return False
-        if cancel is None:
-            time.sleep(step)
+        except subprocess.TimeoutExpired:
+            continue
     return process.poll() is None
-
-
-def _reap(process: subprocess.Popen[bytes], options: int) -> int | None:
-    """Wait for this exact child and leave its per-child resource usage to the caller."""
-    _pid, status, usage = os.wait4(process.pid, options)
-    if _pid:
-        # Linux reports KiB, macOS reports bytes.
-        rss = int(usage.ru_maxrss) * (1024 if sys.platform.startswith("linux") else 1)
-        process._etl_peak_rss_bytes = rss
-        process._etl_cpu_seconds = float(usage.ru_utime + usage.ru_stime)
-    return status if _pid else None
-
-
-def _set_returncode_from_wait4(process: subprocess.Popen[bytes]) -> None:
-    """Reap a stopped child and synchronize Popen's public returncode."""
-    status = _reap(process, 0)
-    if status is not None:
-        process.returncode = os.waitstatus_to_exitcode(status)
 
 
 @contextmanager
