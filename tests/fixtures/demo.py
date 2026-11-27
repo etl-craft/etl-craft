@@ -151,6 +151,7 @@ class Demo:
             "Orchestration": {
                 "Project": "default",
                 "Task_timeout_seconds": 600,
+                "Gate_wait_minutes": 0,
                 "Local_warehouse_slots": 4,
                 "Enforce_sla": True,
                 "Email": {

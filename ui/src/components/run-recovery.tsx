@@ -18,7 +18,7 @@ const choices = [
 
 type Choice = (typeof choices)[number];
 type PlannedTask = { task_code: string; reason: string };
-type Preview = { will_run: PlannedTask[]; will_skip: PlannedTask[]; depends_on_upstream: PlannedTask[] };
+type Preview = { will_run: PlannedTask[]; will_skip: PlannedTask[]; depends_on_upstream: PlannedTask[]; start_condition?: string | null };
 
 export function RunRecovery({ code, run, task, tasks, onDone }: {
   code: string; run: RunView; task: string | null; tasks: string[]; onDone: () => void;
@@ -78,6 +78,7 @@ function RecoveryDialog({ code, run, initialTask, tasks, choice, onClose, onDone
       {tasks.map((name) => <option key={name} value={name}>{name}</option>)}
     </SelectField> : null}
     {plan ? <div className="grid max-h-[42dvh] gap-2 overflow-auto">
+      {plan.start_condition ? <p className="break-words text-sm">The new run starts when <code className="break-all" translate="no">{plan.start_condition}</code> is met.</p> : null}
       <PlanGroup label="Will run" tasks={plan.will_run} />
       <PlanGroup label="Will skip" tasks={plan.will_skip} />
       <PlanGroup label="Depends on upstream" tasks={plan.depends_on_upstream} />

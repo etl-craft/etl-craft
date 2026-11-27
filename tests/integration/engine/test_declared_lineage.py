@@ -110,8 +110,8 @@ def test_catalog_definition_edges_keep_kinds_repairs_inactive_tasks_and_gates(en
     inactive = next(task for task in doc["tasks"] if task["label"] == "FLOW.inactive")
     assert inactive["active_flag"] == "N"
     pipeline = next(p for p in doc["pipelines"] if p["code"] == "FLOW")
-    assert pipeline["upstream"][0]["dependency_type"] == "HAS_DATA"
-    assert pipeline["downstream"][0]["dependency_type"] == "ALWAYS"
+    assert pipeline["upstream"][0]["edge_kind"] == "HAS_DATA"
+    assert pipeline["downstream"][0]["edge_kind"] == "ALWAYS"
     assert pipeline["gates"][0]["wait_minutes"] == engine_db.config.limits.gate_wait_minutes
 
 

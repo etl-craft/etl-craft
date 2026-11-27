@@ -17,7 +17,7 @@ export function dependencyStyle(kind: string): { stroke: string; strokeDasharray
 export function dependencyBadge(kind: string): string {
   return kind === "HAS_DATA" ? "Has data" : kind === "FAILURE" ? "On failure" : kind === "ALWAYS" ? "Always" : kind === "CONDITION" ? "Condition" : "";
 }
-export function definitionLabel(edge: DefinitionEdge): string { return [dependencyBadge(edge.dependency_type), edge.consume_repairs === "N" ? "No repairs" : ""].filter(Boolean).join(" · "); }
+export function definitionLabel(edge: DefinitionEdge): string { return [dependencyBadge(edge.edge_kind), edge.consume_repairs === "N" ? "No repairs" : ""].filter(Boolean).join(" · "); }
 export function dependencySentence(source: string, target: string, kind: string): string {
   if (source.startsWith("Schedule: ")) return `${target} becomes ready after its pipeline is admitted by the schedule or an explicit request`;
   if (kind === "CONDITION") return `${target} reads facts from ${source} in its run condition`;
@@ -32,10 +32,10 @@ export function flowGraph(doc: import("@/lib/catalog").CatalogDoc, pipeline: imp
   const depends = { ...graph.depends_on };
   const roots = graph.waves[0] ?? [];
   const before = [...new Set([entry, ...upstream.map(e => `Upstream: ${e.source} · gate ${doc.gate_wait_minutes} min`), ...external.map(e => `Task gate: ${e.source} · gate ${doc.gate_wait_minutes} min`)])];
-  roots.forEach(root => { depends[root] = [[entry, "SUCCESS"], ...upstream.map(edge => [`Upstream: ${edge.source} · gate ${doc.gate_wait_minutes} min`, edge.dependency_type] as [string,string])]; });
-  external.forEach(edge => { const target = edge.target.split(".").at(-1)!; depends[target] = [...(depends[target] ?? []), [`Task gate: ${edge.source} · gate ${doc.gate_wait_minutes} min`, edge.dependency_type]]; });
+  roots.forEach(root => { depends[root] = [[entry, "SUCCESS"], ...upstream.map(edge => [`Upstream: ${edge.source} · gate ${doc.gate_wait_minutes} min`, edge.edge_kind] as [string,string])]; });
+  external.forEach(edge => { const target = edge.target.split(".").at(-1)!; depends[target] = [...(depends[target] ?? []), [`Task gate: ${edge.source} · gate ${doc.gate_wait_minutes} min`, edge.edge_kind]]; });
   const after = downstream.map(e => `Downstream: ${e.target}`);
-  after.forEach((name,index) => { depends[name] = (graph.waves.at(-1) ?? []).map(task => [task, downstream[index]!.dependency_type]); });
+  after.forEach((name,index) => { depends[name] = (graph.waves.at(-1) ?? []).map(task => [task, downstream[index]!.edge_kind]); });
   return { ...graph, depends_on: depends, waves: [before, ...graph.waves, after].filter(wave => wave.length) };
 }
 

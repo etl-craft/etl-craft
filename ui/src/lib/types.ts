@@ -202,7 +202,7 @@ export interface TaskOffset {
 
 export interface Dependency {
   upstream: string;
-  dependency_type: string;
+  kind: string;
   status: string | null;
   met: boolean;
   reason: string;
@@ -294,6 +294,7 @@ export interface Pipeline {
   pipeline_name: string;
   refresh_type: string;
   run_schedule: string | null;
+  start_condition?: string | null;
   /** What may start it on its own; absent from a server that predates the setting. */
   auto_restart_condition?: string;
   /** The condition in words when it adds to or replaces the schedule; null for the schedule alone. */

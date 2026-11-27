@@ -1,8 +1,8 @@
 -- Copies of a pipeline. SALES_DAILY_EU and SALES_DAILY_US repeat SALES_DAILY for their regions,
 -- and every pipeline that waits on SALES_DAILY waits on them too.
 --
--- A temporary table lists the copies and what differs; each statement reads it, so another copy
--- is another row. Text naming the region is rewritten with REPLACE on its exact spellings ('_uk'
+-- A temporary table lists the copies and what differs. Add a copy there and to the mart start
+-- condition below. Text naming the region is rewritten with REPLACE on its exact spellings ('_uk'
 -- and '"uk"') only, so other text containing "uk" stays as it is.
 
 CREATE TEMPORARY TABLE pipeline_copies (
@@ -21,10 +21,10 @@ VALUES
 -- The pipelines. A source code with no active row leaves REFRESH_TYPE NULL, which stops the file.
 INSERT INTO CFG_PIPELINES (PROJECT_ID, PIPELINE_CODE, PIPELINE_NAME, DESCRIPTION, REFRESH_TYPE, RUN_SCHEDULE,
                            SCHEDULE_TIMEZONE, CATCHUP, MAX_CATCHUP_RUNS, OVERLAP_POLICY,
-                           SCHEDULE_START_DATE, SLA_IN_HOURS, PIPELINE_PARAMETERS)
+                           SCHEDULE_START_DATE, SLA_IN_HOURS, PIPELINE_PARAMETERS, START_CONDITION, CONSUME_REPAIRS)
 SELECT s.PROJECT_ID, c.PIPELINE_CODE, c.PIPELINE_NAME, REPLACE(s.DESCRIPTION, ' UK ', ' ' || UPPER(c.REGION) || ' '),
        s.REFRESH_TYPE, s.RUN_SCHEDULE, c.SCHEDULE_TIMEZONE, s.CATCHUP, s.MAX_CATCHUP_RUNS,
-       s.OVERLAP_POLICY, s.SCHEDULE_START_DATE, s.SLA_IN_HOURS, s.PIPELINE_PARAMETERS
+       s.OVERLAP_POLICY, s.SCHEDULE_START_DATE, s.SLA_IN_HOURS, s.PIPELINE_PARAMETERS, s.START_CONDITION, s.CONSUME_REPAIRS
 FROM pipeline_copies c
 LEFT JOIN CFG_PIPELINES s ON s.PROJECT_ID = (SELECT PROJECT_ID FROM ETL_CRAFT_PROJECT)
     AND s.PIPELINE_CODE = c.SOURCE_CODE AND s.ACTIVE_FLAG = 'Y';
@@ -110,17 +110,9 @@ JOIN CFG_TASKS st ON st.TASK_ID = r.TASK_ID AND st.ACTIVE_FLAG = 'Y'
 JOIN CFG_TASKS nt ON nt.PIPELINE_ID = n.PIPELINE_ID AND nt.TASK_CODE = st.TASK_CODE
                  AND nt.ACTIVE_FLAG = 'Y';
 
--- Every pipeline that waits on the source waits on each copy too. Copy the pipelines the source
--- waits on the same way, from the rows whose PIPELINE_ID is the source's.
-INSERT INTO CFG_PIPELINE_DEPENDENCY (PIPELINE_ID, DEPENDS_ON_PIPELINE_ID, DEPENDENCY_TYPE,
-                                     CONSUME_REPAIRS)
-SELECT d.PIPELINE_ID, n.PIPELINE_ID, d.DEPENDENCY_TYPE, d.CONSUME_REPAIRS
-FROM pipeline_copies c
-JOIN CFG_PIPELINES s ON s.PROJECT_ID = (SELECT PROJECT_ID FROM ETL_CRAFT_PROJECT)
-    AND s.PIPELINE_CODE = c.SOURCE_CODE AND s.ACTIVE_FLAG = 'Y'
-JOIN CFG_PIPELINES n ON n.PROJECT_ID = (SELECT PROJECT_ID FROM ETL_CRAFT_PROJECT)
-    AND n.PIPELINE_CODE = c.PIPELINE_CODE AND n.ACTIVE_FLAG = 'Y'
-JOIN CFG_PIPELINE_DEPENDENCY d ON d.DEPENDS_ON_PIPELINE_ID = s.PIPELINE_ID
-                              AND d.ACTIVE_FLAG = 'Y';
+-- The mart waits for each regional load.
+UPDATE CFG_PIPELINES
+SET START_CONDITION='SALES_DAILY.SUCCESS AND SALES_DAILY_EU.SUCCESS AND SALES_DAILY_US.SUCCESS'
+WHERE PROJECT_ID=(SELECT PROJECT_ID FROM ETL_CRAFT_PROJECT) AND PIPELINE_CODE='SALES_MART';
 
 DROP TABLE pipeline_copies;

@@ -2,7 +2,8 @@
 
 from enum import StrEnum
 
-from etl_craft.core.enums import DependencyType, RunStatus
+from etl_craft.core.enums import AlertTrigger as AlertTrigger
+from etl_craft.core.enums import RunStatus
 
 
 class AlertKind(StrEnum):
@@ -21,16 +22,6 @@ class AlertStatus(StrEnum):
     SENT = "SENT"
     RETRY = "RETRY"
     FAILED = RunStatus.FAILED
-
-
-class AlertTrigger(StrEnum):
-    """Recorded source event categories."""
-
-    FAILURE = DependencyType.FAILURE
-    SUCCESS = RunStatus.SUCCESS
-    COMPLETED_WITH_ERRORS = "COMPLETED_WITH_ERRORS"
-    SLA_BREACH = "SLA_BREACH"
-    LOST = "LOST"
 
 
 class AlertErrorClass(StrEnum):

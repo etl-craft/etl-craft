@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import TYPE_CHECKING
 
 from sqlalchemy.engine import Connection
@@ -143,8 +144,11 @@ def preview_recovery(
             graph_data = fetch_pipeline_graph(conn, pipeline_id)
             if scope is not None:
                 graph_data = run_scopes.selected_graph(graph_data, scope)
-            _, graph, codes = load_pipeline(conn, pipeline_id, graph_data=graph_data)
-        return plan_tasks(graph, codes, {})
+            detail, graph, codes = load_pipeline(conn, pipeline_id, graph_data=graph_data)
+        return replace(
+            plan_tasks(graph, codes, {}),
+            start_condition=detail.start_condition if scope is None else None,
+        )
     if selected.status != RunStatus.IN_PROGRESS:
         reopen_status(conn, run_id, None)
     _, graph, codes = load_pipeline(conn, pipeline_id, run_id=run_id)

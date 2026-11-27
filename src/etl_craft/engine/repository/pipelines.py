@@ -83,6 +83,7 @@ class PipelineDetail:
     schedule_timezone: str | None = None
     schedule_start_date: date | None = None
     tags: list[str] | None = None
+    start_condition: str | None = None
 
 
 def fetch_pipeline_detail(conn: Connection, pipeline_id: int) -> PipelineDetail:

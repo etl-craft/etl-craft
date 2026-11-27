@@ -112,9 +112,20 @@ class PipelineDependencyEdge:
 
     pipeline_dependency_id: int
     depends_on_pipeline_id: int
-    dependency_type: str
-    depends_on_pipeline_code: str
+    upstream_code: str
+    upstream_project: str
+    same_project: bool
     consume_repairs: bool = True
+
+    @property
+    def depends_on_pipeline_code(self) -> str:
+        """Display the upstream relative to the consumer's project."""
+        return self.upstream_code if self.same_project else ".".join(self.qualified_name)
+
+    @property
+    def qualified_name(self) -> tuple[str, str]:
+        """The two-part condition name, including the project."""
+        return self.upstream_project, self.upstream_code
 
 
 def fetch_pipeline_dependency_edges(
@@ -122,7 +133,9 @@ def fetch_pipeline_dependency_edges(
 ) -> list[PipelineDependencyEdge]:
     """Return the active dependencies of ``pipeline_id`` on other pipelines."""
     rows = conn.execute(
-        statement(conn, "pipeline_gate_edges").columns(consume_repairs=Boolean),
+        statement(conn, "pipeline_gate_edges").columns(
+            consume_repairs=Boolean, same_project=Boolean
+        ),
         {"pipeline_id": pipeline_id},
     )
     return [PipelineDependencyEdge(**row._mapping) for row in rows]

@@ -24,6 +24,7 @@ class RecoveryPreview:
     will_run: tuple[PlannedTask, ...]
     will_skip: tuple[PlannedTask, ...]
     depends_on_upstream: tuple[PlannedTask, ...]
+    start_condition: str | None = None
 
 
 def plan_tasks(
@@ -35,7 +36,7 @@ def plan_tasks(
     downstream: bool = False,
     scope_only: int | None = None,
 ) -> RecoveryPreview:
-    """Use the graph's own edge and threshold rules against recorded and possible outcomes."""
+    """Use the graph's run conditions against recorded and possible outcomes."""
     scope = set(graph.task_ids) if selected is None else {selected}
     if selected is not None and downstream:
         scope |= graph.downstream_of(selected)
@@ -89,5 +90,5 @@ def _conditions(
     if selected is not None:
         conditions.insert(0, f"{codes[selected]} runs again first")
     if graph.node(task_id).cross:
-        conditions.append("the cross-pipeline gate binds its other pipelines")
+        conditions.append("its condition reads fresh output from other pipelines")
     return "; ".join(dict.fromkeys(conditions))

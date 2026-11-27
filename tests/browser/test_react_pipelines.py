@@ -321,6 +321,13 @@ def test_a_viewer_can_read_the_pipelines_but_not_change_them(scene):
 @pytest.mark.parametrize("width", [1280, 390])
 def test_the_pipeline_pages_render_cleanly_in_both_themes_and_on_a_phone(scene, scheme, width):
     ctx, url, _ = scene
+    with acting_as(Actor("owner", ActorKind.USER)), ctx.engine.begin() as conn:
+        pipelines = dict(
+            conn.execute(text("SELECT PIPELINE_CODE, PIPELINE_ID FROM CFG_PIPELINES"))
+            .tuples()
+            .all()
+        )
+        add_pipeline_dependency(conn, pipelines["OPS"], pipelines["SALES"], "HAS_DATA")
     act(
         ctx,
         ActionName.CONTROL,
@@ -346,6 +353,9 @@ def test_the_pipeline_pages_render_cleanly_in_both_themes_and_on_a_phone(scene, 
             expect(page.locator("main")).to_be_visible()
             overflow = page.evaluate("document.documentElement.scrollWidth - window.innerWidth")
             assert overflow <= 0, f"{name} scrolls sideways by {overflow}px at {width}px"
+            if name == "pipeline":
+                expect(page.get_by_text("Starts when", exact=True)).to_be_visible()
+                expect(page.get_by_text("SALES.HAS_DATA", exact=True)).to_be_visible()
             shoot(page, f"{name}-{scheme}-{width}")
         assert problems == []
         browser.close()

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from etl_craft.core.enums import DependencyType, RunStatus
+from etl_craft.core.enums import EdgeKind, RunStatus
 from etl_craft.core.restart import restart_note
 from etl_craft.engine.repository.catalog import Consumption, RunSummary
 from etl_craft.services.catalog.collect import (
@@ -208,6 +208,7 @@ class Pages:
                 ("Name", _e(row.pipeline_name)),
                 ("Tags", tag_chips(row.tags, "../")),
                 ("Schedule", _e(row.run_schedule)),
+                ("Starts when", _e(row.start_condition)),
                 ("Restart", _e(restart_note(row.auto_restart_condition) or "")),
                 ("Refresh", _e(row.refresh_type)),
                 ("SLA", _e(f"{row.sla_in_hours:g} hours") if row.sla_in_hours else ""),
@@ -482,10 +483,10 @@ class Pages:
             f'<span><svg width="30" height="8"><path class="dep {style}" d="M0,4 H30"/></svg> '
             f"{kind}</span>"
             for kind, style in (
-                (DependencyType.SUCCESS, "success"),
-                (DependencyType.FAILURE, "failure"),
-                (DependencyType.ALWAYS, "always"),
-                (DependencyType.HAS_DATA, "has-data"),
+                (EdgeKind.SUCCESS, "success"),
+                (EdgeKind.FAILURE, "failure"),
+                (EdgeKind.ALWAYS, "always"),
+                (EdgeKind.HAS_DATA, "has-data"),
             )
         )
         return (

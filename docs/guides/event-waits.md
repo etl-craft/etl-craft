@@ -30,8 +30,9 @@ and test, `NONE` leaves the pipeline's condition and schedule in the config, val
   [Signalling a pipeline from other systems](external-events.md) for INSERT-only cloud functions.
   etl-craft does not list buckets.
 - **Something another system finished** (a job, a webhook, a message): the same kind of row.
-- **Another pipeline's success:** not an event wait. Use `CFG_PIPELINE_DEPENDENCY` with
-  `DEPENDENCY_TYPE='SUCCESS'`, which has its own `Orchestration.Gate_wait_minutes` budget.
+- **Another pipeline's success:** set `START_CONDITION` to a reference such as
+  `upstream.SUCCESS` in `pipelines.csv`. The condition uses the
+  `Orchestration.Gate_wait_minutes` budget.
 - **A stream** (Kafka, Kinesis, Event Hubs): not an event wait either. Read it in batches: a
   frequently scheduled Python task reads from its stored offset and returns the new one, and
   downstream tasks that depend on it with `HAS_DATA` skip an empty batch. See

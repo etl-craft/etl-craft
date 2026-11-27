@@ -47,7 +47,7 @@ type RunStatusView = {
       task: TaskRunView | null;
       condition_met: boolean | null;
       run_condition: string;
-      dependencies: { upstream: string; dependency_type: string; status: string | null; met: boolean }[];
+      dependencies: { upstream: string; kind: string; status: string | null; met: boolean }[];
     };
   }[];
   blocked_by_failures: string[];
@@ -180,7 +180,7 @@ function runGraph(status: RunStatusView): Graph {
   const names = status.tasks.map((task) => task.task_code);
   const local = new Set(names);
   const dependencies: Graph["depends_on"] = Object.fromEntries(status.tasks.map((task) => [
-    task.task_code, task.explanation.dependencies.map((edge) => [edge.upstream, edge.dependency_type]),
+    task.task_code, task.explanation.dependencies.map((edge) => [edge.upstream, edge.kind]),
   ]));
   const internal = Object.fromEntries(Object.entries(dependencies).map(([name, edges]) => [
     name, edges.filter(([upstream]) => local.has(upstream)),

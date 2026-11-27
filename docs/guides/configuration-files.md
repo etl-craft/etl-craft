@@ -12,7 +12,6 @@ etl-craft/
 │   ├── pipelines.csv              CFG_PIPELINES
 │   ├── tasks.csv                  CFG_TASKS
 │   ├── task_parameters.csv        CFG_TASK_PARAMETERS
-│   ├── pipeline_dependencies.csv  CFG_PIPELINE_DEPENDENCY
 │   ├── business_rules.csv         CFG_BUSINESS_RULES
 │   ├── tables.csv                 CFG_TABLES
 │   └── columns.csv                CFG_COLUMNS
@@ -75,8 +74,8 @@ config 6da809c4700d from /srv/sales/etl-craft/config: 5 change(s)
 validate failed the result, so nothing was changed
 ```
 
-Setting the `SALES_MART on SALES_DAILY_EU` row of `pipeline_dependencies.csv` to `N` makes the
-plan pass; `apply` then makes the six changes.
+To stop `SALES_MART` waiting on `SALES_DAILY_EU`, remove that reference from
+its `START_CONDITION` in `pipelines.csv`. Deploy deactivates the derived edge.
 
 ## How the merge works
 
@@ -88,7 +87,6 @@ development, test and production.
 | `pipelines.csv` | `PIPELINE_CODE` |
 | `tasks.csv` | `PIPELINE_CODE`, `TASK_CODE` |
 | `task_parameters.csv` | `PIPELINE_CODE`, `TASK_CODE`, `PARAMETER_NAME` |
-| `pipeline_dependencies.csv` | `PIPELINE_CODE`, `DEPENDS_ON_PROJECT_CODE`, `DEPENDS_ON_PIPELINE_CODE`, `DEPENDENCY_TYPE` |
 | `business_rules.csv` | `PIPELINE_CODE`, `TASK_CODE`, `BUSINESS_RULE_NAME` |
 | `tables.csv` | `CATALOG_NAME`, `SCHEMA_NAME`, `TABLE_NAME` |
 | `columns.csv` | `CATALOG_NAME`, `SCHEMA_NAME`, `TABLE_NAME`, `COLUMN_NAME` |
@@ -140,10 +138,9 @@ and require any remaining mandatory values.
 |---|---|---|
 | `calendars.csv` | **`CALENDAR_CODE`**, `CALENDAR_NAME`, `WEEKEND_DAYS`, `ACTIVE_FLAG` | Empty `WEEKEND_DAYS` means no weekend |
 | `calendar_holidays.csv` | **`CALENDAR_CODE`**, **`HOLIDAY_DATE`**, `HOLIDAY_NAME`, `ACTIVE_FLAG` | |
-| `pipelines.csv` | **`PIPELINE_CODE`**, **`PIPELINE_NAME`**, `DESCRIPTION`, **`REFRESH_TYPE`**, `RUN_SCHEDULE`, `SCHEDULE_TIMEZONE`, `SCHEDULE_START_DATE`, `CATCHUP`, `MAX_CATCHUP_RUNS`, `OVERLAP_POLICY`, `AUTO_RESTART_CONDITION`, `SLA_IN_HOURS`, `PIPELINE_PARAMETERS`, `CALENDAR_CODE`, `NON_BUSINESS_DAY`, `CONSUME_REPAIRS`, `ACTIVE_FLAG` | `CATCHUP` `N`, `MAX_CATCHUP_RUNS` `1`, `OVERLAP_POLICY` `SKIP`, `AUTO_RESTART_CONDITION` `SCHEDULE`, `NON_BUSINESS_DAY` `SKIP`; empty `CALENDAR_CODE` means no calendar |
+| `pipelines.csv` | **`PIPELINE_CODE`**, **`PIPELINE_NAME`**, `DESCRIPTION`, **`REFRESH_TYPE`**, `RUN_SCHEDULE`, `SCHEDULE_TIMEZONE`, `SCHEDULE_START_DATE`, `CATCHUP`, `MAX_CATCHUP_RUNS`, `OVERLAP_POLICY`, `AUTO_RESTART_CONDITION`, `SLA_IN_HOURS`, `PIPELINE_PARAMETERS`, `CALENDAR_CODE`, `NON_BUSINESS_DAY`, `START_CONDITION`, `CONSUME_REPAIRS`, `ACTIVE_FLAG` | `CATCHUP` `N`, `MAX_CATCHUP_RUNS` `1`, `OVERLAP_POLICY` `SKIP`, `AUTO_RESTART_CONDITION` `SCHEDULE`, `NON_BUSINESS_DAY` `SKIP`; empty `CALENDAR_CODE` means no calendar |
 | `tasks.csv` | **`PIPELINE_CODE`**, **`TASK_CODE`**, **`TASK_TYPE`**, **`HANDLER`**, `RUN_CONDITION`, `TARGET_CATALOG_NAME`, `TARGET_SCHEMA_NAME`, `TARGET_TABLE_NAME`, `TARGET_ACTIVE_FLAG`, `ACTIVE_FLAG` | `TARGET_ACTIVE_FLAG` `Y`; empty condition starts with the run |
 | `task_parameters.csv` | **`PIPELINE_CODE`**, **`TASK_CODE`**, **`PARAMETER_NAME`**, `PARAMETER_VALUE`, `ACTIVE_FLAG` | |
-| `pipeline_dependencies.csv` | **`PIPELINE_CODE`**, **`DEPENDS_ON_PIPELINE_CODE`**, **`DEPENDENCY_TYPE`**, `CONSUME_REPAIRS`, `ACTIVE_FLAG` | `CONSUME_REPAIRS` `Y` |
 | `business_rules.csv` | **`PIPELINE_CODE`**, **`TASK_CODE`**, **`BUSINESS_RULE_NAME`**, **`SEQUENCE_NUMBER`**, **`BUSINESS_RULE_TYPE`**, `BUSINESS_RULE_LEVEL`, `BUSINESS_RULE_KEY_COLUMN`, `CATALOG_NAME`, **`SCHEMA_NAME`**, **`TABLE_NAME`**, **`BUSINESS_RULE_SQL`**, `ACTIVE_FLAG` | |
 
 | `tables.csv` | `CATALOG_NAME`, **`SCHEMA_NAME`**, **`TABLE_NAME`**, `OBJECT_KIND`, `REJECT_RETENTION_DAYS`, `SNAPSHOT_RETENTION_DAYS`, `ORPHAN_RETENTION_DAYS`, `ACTIVE_FLAG` | Empty catalog means absent; empty kind means undeclared; empty retention cells keep their category forever |

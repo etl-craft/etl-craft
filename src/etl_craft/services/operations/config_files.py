@@ -218,7 +218,7 @@ def check_dependencies(
     """Recheck deployment rights and upstream project access before publishing file changes."""
     if not allows(ctx, ActionName.DEPLOY, ConfigDirectory(), conn=conn):
         require_project(conn, ctx, Permission.CAN_MANAGE)
-    for filename, row, code in _upstream_projects(files):
+    for filename, column, row, code, position in _upstream_projects(files):
         if code == ctx.project:
             continue
         upstream = conn.execute(statement(conn, "project_by_code"), {"code": code}).one_or_none()
@@ -231,8 +231,8 @@ def check_dependencies(
         )
         if not visible:
             raise ResourceNotFoundError(
-                f"{filename} line {row.line}: project {ctx.project!r} "
-                "declares upstream project "
+                f"{filename} line {row.line}, column {column} position {position}: "
+                f"project {ctx.project!r} declares upstream project "
                 f"{code!r}, which is missing or not permitted; "
                 "expected CAN_VIEW on the upstream "
                 "project; ask its project manager or a deployment administrator for access"
@@ -241,18 +241,24 @@ def check_dependencies(
 
 def _upstream_projects(
     files: config_files.ConfigFiles,
-) -> Iterator[tuple[str, config_files.FileRow, str]]:
-    """Yield each other project an active row names: a dependency row or a condition name."""
-    for row in files.rows.get("pipeline_dependencies.csv", {}).values():
-        if row.active and row.values["DEPENDS_ON_PROJECT_CODE"]:
-            yield "pipeline_dependencies.csv", row, str(row.values["DEPENDS_ON_PROJECT_CODE"])
-    for row in files.rows.get("tasks.csv", {}).values():
-        text = str(row.values.get("RUN_CONDITION") or "").strip()
-        if not row.active or not text:
-            continue
-        try:
-            condition = parse(text, Scope.TASK)
-        except ConditionError:
-            continue  # validation reports the unparsable condition with its position
-        for code in dict.fromkeys(ref.parts[0] for ref in condition.refs if len(ref.parts) == 3):
-            yield "tasks.csv", row, code
+) -> Iterator[tuple[str, str, config_files.FileRow, str, int]]:
+    """Yield each other project a submitted condition names."""
+    for filename, column, scope, parts in (
+        ("pipelines.csv", "START_CONDITION", Scope.PIPELINE, 2),
+        ("tasks.csv", "RUN_CONDITION", Scope.TASK, 3),
+    ):
+        for row in files.rows.get(filename, {}).values():
+            text = str(row.values.get(column) or "").strip()
+            if not row.active or not text:
+                continue
+            try:
+                condition = parse(text, scope)
+            except ConditionError:
+                continue  # validation reports the unparsable condition with its position
+            projects = {
+                ref.parts[0]: ref.position
+                for ref in reversed(condition.refs)
+                if len(ref.parts) == parts
+            }
+            for code, position in projects.items():
+                yield filename, column, row, code, position

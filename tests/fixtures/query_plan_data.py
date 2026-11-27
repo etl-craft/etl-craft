@@ -81,8 +81,9 @@ SEEDS = [
     ),
     (
         "CFG_PIPELINES",
-        "PIPELINE_ID,PIPELINE_CODE,PIPELINE_NAME,REFRESH_TYPE,RUN_SCHEDULE",
-        "p,'PLAN_'||p,'Plan '||p,'FULL','0 0 * * *'",
+        "PIPELINE_ID,PIPELINE_CODE,PIPELINE_NAME,REFRESH_TYPE,RUN_SCHEDULE,START_CONDITION",
+        "p,'PLAN_'||p,'Plan '||p,'FULL','0 0 * * *',"
+        "CASE WHEN p>1 THEN 'PLAN_'||(p-1)||'.SUCCESS' END",
         "generate_series(1,:pipelines) p",
     ),
     (
@@ -133,8 +134,8 @@ SEEDS = [
     ),
     (
         "CFG_PIPELINE_DEPENDENCY",
-        "PIPELINE_DEPENDENCY_ID,PIPELINE_ID,DEPENDS_ON_PIPELINE_ID,DEPENDENCY_TYPE",
-        "p,p,p-1,'SUCCESS'",
+        "PIPELINE_DEPENDENCY_ID,PIPELINE_ID,DEPENDS_ON_PIPELINE_ID",
+        "p,p,p-1",
         "generate_series(2,:pipelines) p",
     ),
     (

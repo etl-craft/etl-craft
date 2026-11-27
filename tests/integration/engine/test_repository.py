@@ -15,7 +15,13 @@ from etl_craft.core.time import as_utc
 from etl_craft.engine import runlog, transitions
 from etl_craft.engine.condition_edges import derive_edges
 from etl_craft.engine.repository import business_rules, dependencies, pipelines, runs, tasks
-from fixtures.metadata import add_dependency, add_table, set_task_target, start_run
+from fixtures.metadata import (
+    add_dependency,
+    add_pipeline_dependency,
+    add_table,
+    set_task_target,
+    start_run,
+)
 
 pytestmark = pytest.mark.usefixtures("selected_default_project")
 
@@ -109,14 +115,7 @@ def seeded(engine_db):
         ids["cross"] = add_dependency(
             conn, a, ids["load"], ids["upstream"], "HAS_DATA", upstream_pipeline=ids["beta"]
         )
-        ids["pipeline_dependency"] = insert(
-            conn,
-            "INSERT INTO CFG_PIPELINE_DEPENDENCY (PIPELINE_ID, DEPENDS_ON_PIPELINE_ID, "
-            "DEPENDENCY_TYPE) VALUES (:a, :b, 'SUCCESS')",
-            "PIPELINE_DEPENDENCY_ID",
-            a=a,
-            b=ids["beta"],
-        )
+        ids["pipeline_dependency"] = add_pipeline_dependency(conn, a, ids["beta"])
         for sequence, name in ((2, "second"), (1, "first")):
             conn.execute(
                 text(
@@ -254,7 +253,7 @@ def test_dependency_edges_for_the_gates(seeded):
     with engine.connect() as conn:
         assert dependencies.fetch_pipeline_dependency_edges(conn, ids["alpha"]) == [
             dependencies.PipelineDependencyEdge(
-                ids["pipeline_dependency"], ids["beta"], "SUCCESS", "PL_BETA"
+                ids["pipeline_dependency"], ids["beta"], "PL_BETA", "default", True
             )
         ]
         assert dependencies.fetch_cross_pipeline_task_edges(conn, ids["load"]) == [
@@ -272,7 +271,6 @@ def test_dependency_edges_for_the_gates(seeded):
         ]
         assert dependencies.fetch_cross_pipeline_task_edges(conn, ids["rules"]) == []
     with engine.begin() as conn:
-        conn.execute(text("UPDATE CFG_PIPELINE_DEPENDENCY SET CONSUME_REPAIRS = 'N'"))
         conn.execute(text("UPDATE CFG_PIPELINES SET CONSUME_REPAIRS = 'N'"))
         assert (
             dependencies.fetch_pipeline_dependency_edges(conn, ids["alpha"])[0].consume_repairs

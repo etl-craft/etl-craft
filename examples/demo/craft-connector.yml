@@ -13,6 +13,7 @@ Orchestration:
   # Api_address: 127.0.0.1:8730  # all-in-one API; --no-ui exposes /health and /metrics
   Retry_on: TRANSIENT                 # value; retry only failures that can succeed
   Task_timeout_seconds: 600            # value
+  Gate_wait_minutes: 0                 # show a skipped run immediately for consumed output
   Enforce_sla: true                    # value — admit SLA_BREACH alerts
   Email:
     Host: localhost                    # value

@@ -6,6 +6,12 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+- Set `START_CONDITION` in `pipelines.csv` to gate a pipeline on upstream run
+  status, counts or duration. Deploy and re-parse derive the edges. The consuming
+  pipeline's `CONSUME_REPAIRS` applies to both pipeline and task conditions.
+  Backfills evaluate start conditions against assumed delivery. Dependency
+  explanations return `kind` and the catalog returns `edge_kind` for edge labels.
+
 - Task run conditions now live in `tasks.csv`. Deploy derives the task edges from
   those conditions. A failed task, including an ALERT task, now fails its pipeline
   unless `FAIL_PIPELINE_IF_FAILED=N`. Set `FAIL_PIPELINE_IF_NOT_RUN=Y` to fail the

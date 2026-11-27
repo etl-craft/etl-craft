@@ -226,6 +226,7 @@ class PipelineView:
     waits_for_events: bool = False
     alert_deliveries: tuple[AlertDelivery, ...] = ()
     depends_on: tuple[tuple[str, str], ...] = ()
+    start_condition: str | None = None
 
 
 @dataclass(frozen=True)

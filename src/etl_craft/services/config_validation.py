@@ -14,7 +14,7 @@ from etl_craft.core.text import is_metadata_code, is_safe_identifier
 from etl_craft.engine.repository.config_rows import (
     BUSINESS_RULES,
     OBJECT_TABLES,
-    PIPELINE_DEPENDENCIES,
+    PIPELINES,
     SOURCE_COLUMNS,
     TASK_PARAMETERS,
     TASKS,
@@ -64,21 +64,15 @@ def row_problem(
                 "a target needs both TARGET_SCHEMA_NAME and TARGET_TABLE_NAME; leave "
                 "all target components empty for a task without one"
             )
-        condition = values["RUN_CONDITION"]
-        if condition is not None and (provided is None or "RUN_CONDITION" in provided):
+    if table in (PIPELINES, TASKS):
+        scope = Scope.PIPELINE if table is PIPELINES else Scope.TASK
+        column = "START_CONDITION" if table is PIPELINES else "RUN_CONDITION"
+        condition = values[column]
+        if condition is not None and (provided is None or column in provided):
             try:
-                parse(str(condition), Scope.TASK)
+                parse(str(condition), scope)
             except ConditionError as error:
-                return (
-                    f"column RUN_CONDITION: {values['PIPELINE_CODE']}.{values['TASK_CODE']} "
-                    f"{error}; correct the condition and deploy"
-                )
-    if (
-        table is PIPELINE_DEPENDENCIES
-        and not values["DEPENDS_ON_PROJECT_CODE"]
-        and values["PIPELINE_CODE"] == values["DEPENDS_ON_PIPELINE_CODE"]
-    ):
-        return f"pipeline {values['PIPELINE_CODE']} depends on itself"
+                return f"column {column}: {table.label(values)} {error}; correct the condition"
     return None
 
 

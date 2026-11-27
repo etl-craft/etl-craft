@@ -9,8 +9,9 @@ This project is the installed-package contract fixture, with two small Python
 sources, offsets, all nine managed SQL actions, business rules, dependency
 consumption, alerts, timeouts and stopped-run recovery.
 
-`SOURCE_A` lands two rows per run; `SOURCE_B` lands one. `DEMO` consumes both
-sources and fails once at `flaky_feed` before succeeding. `EXPORT` deliberately
+`SOURCE_A` lands two rows per run; `SOURCE_B` lands one. `DEMO` starts when both
+succeed and `SOURCE_B` writes rows. It fails once at `flaky_feed` before succeeding.
+The demo sets `Gate_wait_minutes: 0` so a third run with consumed inputs skips immediately. `EXPORT` deliberately
 exceeds its timeout and SLA. `BACKFILL` supports stopping and resuming a run.
 `DEMO.setup_fact` waits for `interactions` to succeed and write rows and for
 `retire_agents` to succeed. The conditions live in

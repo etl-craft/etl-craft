@@ -7,7 +7,8 @@ from dataclasses import dataclass
 from sqlalchemy import Boolean
 from sqlalchemy.engine import Connection
 
-from etl_craft.core.conditions import Scope, edge_kind, parse
+from etl_craft.core.conditions import Scope, edge_kind, parse, pipeline_edge_kind
+from etl_craft.core.enums import EdgeKind
 from etl_craft.engine.queries import statement
 
 
@@ -78,7 +79,7 @@ class DependencyEdge:
         for ref in condition.refs:
             if full[-len(ref.parts) :] == ref.parts and (len(ref.parts) > 1 or same):
                 return edge_kind(condition, ref.parts)
-        return "CONDITION"
+        return EdgeKind.CONDITION
 
 
 def fetch_task_dependency_edges(conn: Connection) -> list[DependencyEdge]:
@@ -99,8 +100,16 @@ class PipelineEdge:
 
     pipeline_code: str
     depends_on_pipeline_code: str
-    dependency_type: str
+    start_condition: str | None
+    qualified_name: str
     depends_on_pipeline_active: bool
+
+    @property
+    def kind(self) -> str:
+        """Classify this edge using its source pipeline's start condition."""
+        return pipeline_edge_kind(
+            self.start_condition, self.depends_on_pipeline_code, self.qualified_name
+        )
 
 
 def fetch_pipeline_edges(conn: Connection, *, project_only: bool = False) -> list[PipelineEdge]:

@@ -107,9 +107,9 @@ tasks, whose scripts may read any.
 
 ## Ordering tasks and pipelines
 
-Task order comes from `CFG_TASKS.RUN_CONDITION`. Deploy derives the task
-dependency edges from those expressions. Pipeline-level ordering still comes
-from `CFG_PIPELINE_DEPENDENCY`. See [Run conditions](dependencies.md).
+Task order comes from `CFG_TASKS.RUN_CONDITION`. Pipeline starts are governed by
+`CFG_PIPELINES.START_CONDITION`. Deploy derives the edges from both.
+See [Run conditions](dependencies.md).
 
 ## An example
 

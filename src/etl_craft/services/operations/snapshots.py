@@ -61,6 +61,7 @@ def pipeline_view(conn: Connection, pipeline_id: int) -> PipelineView:
         auto_restart_condition=detail.auto_restart_condition,
         restart_note=restart_note(detail.auto_restart_condition),
         description=detail.description,
+        start_condition=detail.start_condition,
     )
 
 

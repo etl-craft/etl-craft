@@ -37,6 +37,7 @@ from etl_craft.execution.connections import check_run_connections
 from etl_craft.execution.gates import (
     Clock,
     PipelineGateResult,
+    check_pipeline_dependencies,
 )
 from etl_craft.execution.gates import (
     check_gate as check_gate_now,
@@ -207,9 +208,10 @@ def start_steps(
     """Return the run to use and, when the gate refused a new one, why it was ``SKIPPED``.
 
     A new run runs as of ``run_date`` (today unless given). ``backfill``, the reason for a
-    backfill, makes it a backfill run, which checks no dependency on other pipelines. A run in
+    backfill, makes it a backfill run, which assumes delivery by other pipelines. A run in
     progress is resumed, unless it runs as of another date than ``run_date``. A gate
-    ``Dependency_gates`` bypassed, or skipped by a backfill, is recorded against the new run.
+    ``Dependency_gates`` bypassed, or evaluated against assumed delivery, is recorded against the
+    new run.
     """
     reconcile(engine, pipeline_id=pipeline_id)
     selected, kind = _select_run(engine, pipeline_code, pipeline_id, options)
@@ -224,7 +226,15 @@ def start_steps(
     reason = None
     decisions: tuple[trackers.GateDecision, ...] = ()
     bypassed: tuple[str, ...] = ()
-    if options.check_gate and not _event_run(engine, queued):
+    if options.check_gate and options.backfill is not None:
+        with engine.connect() as conn, for_admission(conn, pipeline_id):
+            backfill_gate = check_pipeline_dependencies(
+                engine, pipeline_id, clock, config.dependency_gates, backfill=True
+            )
+        bypassed, decisions = backfill_gate.bypassed, backfill_gate.decisions
+        if not backfill_gate.satisfied:
+            reason = "; ".join(backfill_gate.reasons)
+    elif options.check_gate and not _event_run(engine, queued):
         if queued is None:
             with engine.begin() as conn:
                 standing_pauses.assert_admission(conn, pipeline_id)
@@ -264,17 +274,23 @@ def start_steps(
     if bypassed:
         record_gate_bypass(engine, pipeline_id, pipeline_run_id, config.dependency_gates, bypassed)
     if options.backfill is not None:
-        record_change(
-            engine,
-            pipeline_id=pipeline_id,
-            pipeline_run_id=pipeline_run_id,
-            action=InterventionAction.GATE_BYPASS,
-            reason=(
-                f"backfill for {logical_date.isoformat()}: {options.backfill}; "
-                "dependencies on other pipelines are not checked, and nothing is consumed"
-            ),
-        )
+        _record_backfill(engine, pipeline_id, pipeline_run_id, logical_date, options.backfill)
     return pipeline_run_id, reason
+
+
+def _record_backfill(
+    engine: Engine, pipeline_id: int, run_id: int, logical_date: date, reason: str
+) -> None:
+    record_change(
+        engine,
+        pipeline_id=pipeline_id,
+        pipeline_run_id=run_id,
+        action=InterventionAction.GATE_BYPASS,
+        reason=(
+            f"backfill for {logical_date.isoformat()}: {reason}; "
+            "upstream facts assume delivery, and nothing is consumed"
+        ),
+    )
 
 
 def _select_run(

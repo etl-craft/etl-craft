@@ -218,23 +218,20 @@ def test_self_dependencies_are_refused(seeded):
     )
     refused(
         db,
-        "INSERT INTO CFG_PIPELINE_DEPENDENCY (PIPELINE_ID, DEPENDS_ON_PIPELINE_ID, "
-        "DEPENDENCY_TYPE) VALUES (:p, :p, 'SUCCESS')",
+        "INSERT INTO CFG_PIPELINE_DEPENDENCY (PIPELINE_ID, DEPENDS_ON_PIPELINE_ID) VALUES (:p, :p)",
         p=ids["a"],
     )
     run(
         db,
-        "INSERT INTO CFG_PIPELINE_DEPENDENCY (PIPELINE_ID, DEPENDS_ON_PIPELINE_ID, "
-        "DEPENDENCY_TYPE) VALUES (:a, :b, 'HAS_DATA')",
+        "INSERT INTO CFG_PIPELINE_DEPENDENCY (PIPELINE_ID, DEPENDS_ON_PIPELINE_ID) VALUES (:a, :b)",
         a=ids["a"],
         b=ids["b"],
     )
     refused(
         db,
-        "INSERT INTO CFG_PIPELINE_DEPENDENCY (PIPELINE_ID, DEPENDS_ON_PIPELINE_ID, "
-        "DEPENDENCY_TYPE) VALUES (:a, :b, 'SOMETIMES')",
-        a=ids["b"],
-        b=ids["a"],
+        "INSERT INTO CFG_PIPELINE_DEPENDENCY (PIPELINE_ID, DEPENDS_ON_PIPELINE_ID) VALUES (:a, :b)",
+        a=ids["a"],
+        b=ids["b"],
     )
 
 
@@ -377,8 +374,7 @@ def test_the_consumption_log_holds_one_kind_of_dependency_per_row(seeded):
     db, ids = seeded
     dependency = insert_id(
         db,
-        "INSERT INTO CFG_PIPELINE_DEPENDENCY (PIPELINE_ID, DEPENDS_ON_PIPELINE_ID, "
-        "DEPENDENCY_TYPE) VALUES (:a, :b, 'SUCCESS')",
+        "INSERT INTO CFG_PIPELINE_DEPENDENCY (PIPELINE_ID, DEPENDS_ON_PIPELINE_ID) VALUES (:a, :b)",
         "PIPELINE_DEPENDENCY_ID",
         a=ids["a"],
         b=ids["b"],

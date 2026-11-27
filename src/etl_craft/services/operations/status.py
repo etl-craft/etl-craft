@@ -9,13 +9,23 @@ from typing import ClassVar
 
 from sqlalchemy.engine import Connection, RowMapping
 
-from etl_craft.core.conditions import Facts, edge_kind, holds_for
+from etl_craft.core.conditions import (
+    Facts,
+    Reading,
+    Scope,
+    describe,
+    edge_kind,
+    holds_for,
+    parse,
+    pipeline_edge_kind,
+)
 from etl_craft.core.enums import (
     ADMITTED_OUTCOMES,
     TERMINAL_STATUSES,
     ActiveRuns,
     AttemptStatus,
     DeploymentProfile,
+    EdgeKind,
     GatePolicy,
     RunStatus,
     WaitKind,
@@ -38,10 +48,14 @@ from etl_craft.engine.repository.dependencies import (
     fetch_pipeline_dependency_edges,
     fetch_pipeline_graph,
 )
-from etl_craft.engine.repository.pipelines import resolve_pipeline_id, tagged_pipelines
+from etl_craft.engine.repository.pipelines import (
+    fetch_pipeline_detail,
+    resolve_pipeline_id,
+    tagged_pipelines,
+)
 from etl_craft.engine.repository.tasks import resolve_task_id
 from etl_craft.engine.standing_pauses import TaskPause
-from etl_craft.execution.gates import fresh, judge
+from etl_craft.execution.gates import bind_pipeline, fresh
 from etl_craft.services.operations.agents import AgentsView, list_agents
 from etl_craft.services.operations.context import OperationContext
 from etl_craft.services.operations.models import PipelineView, RunView, TaskRunView
@@ -60,7 +74,7 @@ class DependencyView:
     """One dependency's observed state or recorded admission decision."""
 
     upstream: str
-    dependency_type: str
+    kind: str
     status: str | None
     met: bool
     reason: str
@@ -393,62 +407,72 @@ def _pipeline_dependencies(
     now: datetime,
 ) -> list[DependencyView]:
     """Explain recorded admission choices or the next eligible upstream outcome."""
-    pipeline_dependencies = []
+    views = []
+    rule = fetch_pipeline_detail(conn, pipeline_id).start_condition
+    condition = parse(rule, Scope.PIPELINE) if rule and rule.strip() else None
     for edge in fetch_pipeline_dependency_edges(conn, pipeline_id):
-        recorded = [
-            d for d in decisions if d["pipeline_dependency_id"] == edge.pipeline_dependency_id
-        ]
-        if recorded:
-            d = recorded[-1]
-            pipeline_dependencies.append(
-                DependencyView(
-                    edge.depends_on_pipeline_code,
-                    edge.dependency_type,
-                    d["upstream_status"],
-                    d["result"] in ADMITTED_OUTCOMES,
-                    d["reason"],
-                    selected_pipeline_run_id=d["selected_pipeline_run_id"],
-                    selected_revision=d["selected_revision"],
-                    recorded=True,
-                    pipeline_dependency_id=edge.pipeline_dependency_id,
-                )
+        label = edge.depends_on_pipeline_code
+        qualified = ".".join(edge.qualified_name)
+        kind = pipeline_edge_kind(rule, label, qualified)
+        recorded = next(
+            (
+                d
+                for d in reversed(decisions)
+                if d["pipeline_dependency_id"] == edge.pipeline_dependency_id
+            ),
+            None,
+        )
+        if recorded is not None:
+            view = DependencyView(
+                label,
+                kind,
+                recorded["upstream_status"],
+                recorded["result"] in ADMITTED_OUTCOMES,
+                recorded["reason"],
+                selected_pipeline_run_id=recorded["selected_pipeline_run_id"],
+                selected_revision=recorded["selected_revision"],
+                recorded=True,
             )
         else:
-            upstream = trackers.fetch_latest_finished_pipeline_run(
-                conn, edge.depends_on_pipeline_id, now
-            )
-            consumed = trackers.fetch_pipeline_last_consumed(conn, edge.pipeline_dependency_id)
-            admitted, reason = judge(
-                edge.dependency_type, upstream, consumed, consume_repairs=edge.consume_repairs
-            )
-            latest = trackers.fetch_latest_pipeline_run(conn, edge.depends_on_pipeline_id)
-            met = admitted is not None
-            status = upstream.status if upstream else None
-            if run.backfill or policy == GatePolicy.OFF:
-                met, reason = (
-                    True,
-                    "Pipeline gates are bypassed by backfills."
-                    if run.backfill
-                    else "Dependency gates are off.",
+            upstream = None
+            if policy == GatePolicy.OFF:
+                met, status, reason = True, None, "Dependency gates are off."
+            else:
+                bound: Facts | None
+                if run.backfill:
+                    bound, reason = Facts.delivered(), "Backfill assumes delivery."
+                else:
+                    upstream, bound, reason = bind_pipeline(conn, edge, now)
+                status = (
+                    upstream.status if upstream is not None else (bound.status if bound else None)
                 )
-            elif latest is not None and latest.status == RunStatus.IN_PROGRESS:
-                met, status, upstream = False, latest.status, None
-                reason = "Wait for the running upstream pipeline to finish."
-            elif not met and policy == GatePolicy.WARN:
-                met, reason = True, f"Dependency is bypassed under warn policy: {reason}"
-            pipeline_dependencies.append(
-                DependencyView(
-                    edge.depends_on_pipeline_code,
-                    edge.dependency_type,
-                    status,
-                    met,
-                    reason,
-                    selected_pipeline_run_id=upstream.pipeline_run_id if upstream else None,
-                    selected_revision=upstream.revision if upstream else None,
-                    pipeline_dependency_id=edge.pipeline_dependency_id,
+                name = tuple(label.split("."))
+                if condition is not None and name not in {ref.parts for ref in condition.refs}:
+                    name = edge.qualified_name
+                reading = Reading()
+                truth = condition is not None and holds_for(
+                    condition, name, dict.fromkeys(condition.refs, bound).get, reading
                 )
+                if reading.values:
+                    reason = f"{reason}; {describe(reading)}"
+                met = truth is True
+                if truth is False and policy == GatePolicy.WARN:
+                    met, reason = True, f"Start condition is bypassed under warn policy: {reason}"
+            view = DependencyView(
+                label,
+                kind,
+                status,
+                met,
+                reason,
+                selected_pipeline_run_id=upstream.pipeline_run_id
+                if isinstance(upstream, trackers.FinishedRun)
+                else None,
+                selected_revision=upstream.revision
+                if isinstance(upstream, trackers.FinishedRun)
+                else None,
             )
-    return pipeline_dependencies
+        views.append(replace(view, pipeline_dependency_id=edge.pipeline_dependency_id))
+    return views
 
 
 def _condition_met(
@@ -586,7 +610,7 @@ def _cross_dependencies(
 
 
 def _kind(node: TaskNode, name: tuple[str, ...]) -> str:
-    return "CONDITION" if node.condition is None else edge_kind(node.condition, name)
+    return EdgeKind.CONDITION if node.condition is None else edge_kind(node.condition, name)
 
 
 def condition_holds(node: TaskNode, name: tuple[str, ...], facts: Facts) -> bool:

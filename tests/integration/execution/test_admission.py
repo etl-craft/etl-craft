@@ -8,7 +8,7 @@ from etl_craft.core.errors import RunStateError
 from etl_craft.engine import runlog, transitions
 from etl_craft.execution import run_start
 from etl_craft.execution.run_start import init_pipeline_run
-from fixtures.metadata import add_pipeline
+from fixtures.metadata import add_pipeline, add_pipeline_dependency, upstream_run
 from fixtures.races import two_at_once
 
 
@@ -45,13 +45,11 @@ def test_a_fault_between_run_creation_and_skipping_rolls_back(cli_project):
     project = cli_project
     with project.engine.begin() as conn:
         upstream = add_pipeline(conn, "UP")
-        conn.execute(
-            text(
-                "INSERT INTO CFG_PIPELINE_DEPENDENCY (PIPELINE_ID, DEPENDS_ON_PIPELINE_ID, "
-                "DEPENDENCY_TYPE) VALUES (:pipeline, :upstream, 'SUCCESS')"
-            ),
-            {"pipeline": project.pipeline_id, "upstream": upstream},
-        )
+        add_pipeline_dependency(conn, project.pipeline_id, upstream)
+        failed, _ = upstream_run(conn, upstream, {}, status="FAILED")
+        assert failed is not None
+    code, output = project.run("deploy")
+    assert code == 0, output
     code, output = project.run(
         "run",
         "--reason",
@@ -61,13 +59,15 @@ def test_a_fault_between_run_creation_and_skipping_rolls_back(cli_project):
         fault="pipeline.after_insert",
     )
     assert code != 0, output
+    downstream_status = (
+        "SELECT r.STATUS FROM AUD_PIPELINES_RUN_LOG r JOIN CFG_PIPELINES p "
+        "ON p.PIPELINE_ID=r.PIPELINE_ID WHERE p.PIPELINE_CODE='P'"
+    )
     with project.engine.connect() as conn:
-        assert (
-            conn.execute(text("SELECT STATUS FROM AUD_PIPELINES_RUN_LOG")).scalar_one() == "QUEUED"
-        )
+        assert conn.execute(text(downstream_status)).scalar_one() == "QUEUED"
     code, output = project.run("run", "--reason", "test requested run", "--pipeline-code", "P")
     assert code == 0, output
-    project.wait_for("SELECT STATUS FROM AUD_PIPELINES_RUN_LOG", expected="SKIPPED")
+    project.wait_for(downstream_status, expected="SKIPPED")
 
 
 def test_initializer_accepts_its_exact_run_admitted_by_the_server(engine_db, monkeypatch):

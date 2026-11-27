@@ -13,9 +13,10 @@ pytestmark = pytest.mark.unit
 
 GOOD = {
     "tables.csv": "CATALOG_NAME,SCHEMA_NAME,TABLE_NAME\n,sales,orders\n",
-    "pipelines.csv": "PIPELINE_CODE,PIPELINE_NAME,REFRESH_TYPE,SLA_IN_HOURS,PIPELINE_PARAMETERS\n"
-    'SALES,Sales,FULL,1.5,"{""TAGS"": [""sales""]}"\n'
-    "MART,Mart,FULL,,\n",
+    "pipelines.csv": "PIPELINE_CODE,PIPELINE_NAME,REFRESH_TYPE,SLA_IN_HOURS,"
+    "PIPELINE_PARAMETERS,START_CONDITION\n"
+    'SALES,Sales,FULL,1.5,"{""TAGS"": [""sales""]}",\n'
+    "MART,Mart,FULL,,,SALES.SUCCESS\n",
     "tasks.csv": "PIPELINE_CODE,TASK_CODE,TASK_TYPE,HANDLER,RUN_CONDITION,"
     "ACTIVE_FLAG\n"
     "SALES,load,ETL,SQL,,Y\n"
@@ -23,8 +24,6 @@ GOOD = {
     "MART,build,ETL,SQL,,N\n",
     "task_parameters.csv": "PIPELINE_CODE,TASK_CODE,PARAMETER_NAME,PARAMETER_VALUE\n"
     'SALES,load,SELECT_QUERY,"SELECT id,\n       name FROM raw.orders"\n',
-    "pipeline_dependencies.csv": "PIPELINE_CODE,DEPENDS_ON_PIPELINE_CODE,DEPENDENCY_TYPE\n"
-    "MART,SALES,SUCCESS\n",
     "business_rules.csv": "PIPELINE_CODE,TASK_CODE,BUSINESS_RULE_NAME,SEQUENCE_NUMBER,"
     "BUSINESS_RULE_TYPE,BUSINESS_RULE_KEY_COLUMN,CATALOG_NAME,SCHEMA_NAME,TABLE_NAME,BUSINESS_RULE_SQL\n"
     "SALES,check,closed,1,REJECT,ROW_ID,,sales,orders,"
@@ -123,7 +122,9 @@ def test_a_bad_task_row_is_named_with_its_line_and_column(tmp_path, row, expecte
 )
 def test_a_bad_pipeline_value_is_named(tmp_path, cells, expected):
     header = GOOD["pipelines.csv"].splitlines()[0]
-    assert expected in problems(tmp_path, pipelines=f"{header}\n{cells}\nMART,Mart,FULL,,\n")
+    assert expected in problems(
+        tmp_path, pipelines=f"{header}\n{cells},\nMART,Mart,FULL,,,SALES.SUCCESS\n"
+    )
 
 
 def test_a_bad_date_is_named(tmp_path):
@@ -143,13 +144,13 @@ def test_duplicate_keys_self_dependencies_and_missing_references_are_named(tmp_p
         tmp_path,
         task_parameters="PIPELINE_CODE,TASK_CODE,PARAMETER_NAME,PARAMETER_VALUE\n"
         "SALES,load,RETRIES,1\nSALES,load,RETRIES,2\n",
-        pipeline_dependencies="PIPELINE_CODE,DEPENDS_ON_PIPELINE_CODE,DEPENDENCY_TYPE\n"
-        "MART,MART,SUCCESS\n",
+        pipelines="PIPELINE_CODE,START_CONDITION\nMART,MART.ATTEMPTS > 1\n",
     )
     assert (
         "task_parameters.csv lines 2 and 3 both hold SALES.load RETRIES; keep one of them" in found
     )
-    assert "pipeline_dependencies.csv line 2: pipeline MART depends on itself" in found
+    assert "pipelines.csv line 2" in found and "START_CONDITION" in found
+    assert "ATTEMPTS" in found and "position" in found
 
 
 def test_every_file_holds_its_table_with_active_flag_last():
@@ -243,3 +244,17 @@ def test_admin_files_are_refused_as_unknown_files(tmp_path, name):
         read_config_files(tmp_path)
     assert name in str(caught.value)
     assert "unknown config CSV" in str(caught.value)
+
+
+@pytest.mark.parametrize(
+    ("rule", "expected"),
+    [
+        ("UP.ATTEMPTS = 1", "ATTEMPTS is not available"),
+        ("UP.ERROR_CLASS = NONE", "ERROR_CLASS is not available"),
+        ("project.pipeline.task.SUCCESS", "at most project.pipeline"),
+    ],
+)
+def test_pipeline_config_names_the_position_of_task_only_references(tmp_path, rule, expected):
+    found = problems(tmp_path, pipelines=f"PIPELINE_CODE,START_CONDITION\nMART,{rule}\n")
+    for part in ("pipelines.csv line 2", "START_CONDITION", "position 1", expected, "correct"):
+        assert part in found

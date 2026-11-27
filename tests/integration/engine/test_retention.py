@@ -14,7 +14,7 @@ from etl_craft.execution.attempt_records import attempt_log_path
 from etl_craft.services.operations.actions import invoke
 from etl_craft.services.operations.retention import PurgeInput
 from etl_craft.services.retention import retaining
-from fixtures.metadata import add_pipeline, add_task, insert, upstream_run
+from fixtures.metadata import add_pipeline, add_pipeline_dependency, add_task, insert, upstream_run
 from fixtures.retention import FUTURE, OLD, count
 
 
@@ -180,15 +180,7 @@ def test_recorded_consumption_keeps_its_upstream_until_downstream_expires(scene)
     ctx, pipeline, _, run, task_run, _ = scene
     with ctx.engine.begin() as conn:
         other = add_pipeline(conn, "consumer")
-        dependency = insert(
-            conn,
-            "INSERT INTO CFG_PIPELINE_DEPENDENCY "
-            "(PIPELINE_ID,DEPENDS_ON_PIPELINE_ID,DEPENDENCY_TYPE) "
-            "VALUES (:other,:pipeline,'SUCCESS')",
-            "PIPELINE_DEPENDENCY_ID",
-            other=other,
-            pipeline=pipeline,
-        )
+        dependency = add_pipeline_dependency(conn, other, pipeline)
         down, _ = upstream_run(conn, other, {})
         conn.execute(
             text(

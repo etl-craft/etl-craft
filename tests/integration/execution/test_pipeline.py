@@ -79,6 +79,7 @@ def config(engine_db, tmp_path):
     raw = {
         "Secrets": {"Source_type": "ENVIRONMENT"},
         "Orchestration": {
+            "Gate_wait_minutes": 0,
             "Project": "default",
             "Task_timeout_seconds": 60,
             "Local_warehouse_slots": 2,
@@ -217,7 +218,9 @@ def test_an_unsatisfied_pipeline_dependency_skips_the_run(config, pipeline):
         hooks=RunHooks(on_finalized=finished.append),
     )
     assert outcome.status == RunStatus.SKIPPED
-    assert outcome.message.endswith("SKIPPED — upstream pipeline UP (SUCCESS) has no finished run")
+    assert outcome.message.endswith(
+        "SKIPPED — start condition [UP.SUCCESS]: UP.SUCCESS=unknown; UP has no finished run"
+    )
     assert run_row(engine, outcome.pipeline_run_id).status == "SKIPPED"
     assert statuses(engine, outcome.pipeline_run_id) == {}
     assert finished == [outcome]
@@ -261,6 +264,7 @@ def test_a_refused_gate_leaves_a_run_another_process_started_alone(config, pipel
             started_elsewhere.append(start_run(conn, ids["P"]))
             finish_run(conn, up_run, "FAILED")
 
+    config = replace(config, limits=replace(config.limits, gate_wait_minutes=60))
     with pytest.raises(RunStateError, match="another process started pipeline_run_id="):
         run_pipeline(engine, config, "P", child=CHILD, clock=Clock(sleep=another_process_meanwhile))
     assert run_row(engine, started_elsewhere[0]).status == "IN-PROGRESS"

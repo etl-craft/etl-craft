@@ -4,10 +4,10 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from etl_craft.core.errors import GraphError
+from etl_craft.core.conditions import Facts, Scope, evaluate, parse
 from etl_craft.engine.repository.trackers import ConsumedRun, FinishedRun, LatestRun
 from etl_craft.execution import gates
-from etl_craft.execution.gates import Clock, WaitBudget, judge, next_look_delay, satisfies
+from etl_craft.execution.gates import Clock, WaitBudget, fresh, next_look_delay
 
 pytestmark = pytest.mark.unit
 
@@ -25,33 +25,24 @@ pytestmark = pytest.mark.unit
         ("HAS_DATA", "FAILED", True, False),
     ],
 )
-def test_what_satisfies_each_dependency_type(kind, status, has_data, expected):
-    assert satisfies(kind, FinishedRun(1, status, has_data)) is expected
-
-
-def test_an_unknown_dependency_type():
-    with pytest.raises(GraphError, match="unknown dependency_type"):
-        satisfies("SOMETIMES", FinishedRun(1, "SUCCESS", False))
+def test_start_condition_flag(kind, status, has_data, expected):
+    fact = {"SUCCESS": "SUCCESS", "FAILURE": "FAILED", "ALWAYS": "FINISHED", "HAS_DATA": "HAS_DATA"}
+    condition = parse(f"upstream.{fact[kind]}", Scope.PIPELINE)
+    facts = Facts(status, {"ROWS_WRITTEN": int(has_data)}, scope=Scope.PIPELINE)
+    assert evaluate(condition, lambda _, facts=facts: facts) is expected
 
 
 def test_the_last_finished_run_decides():
-    assert judge("SUCCESS", None, None) == (None, "has no finished run")
-    assert judge("SUCCESS", FinishedRun(5, "SUCCESS", False), None) == (
+    assert fresh(None, None) == (None, "has no finished run")
+    assert fresh(FinishedRun(5, "SUCCESS", False), None) == (
         5,
         "last finished run 5 ended SUCCESS",
     )
-    assert judge("SUCCESS", FinishedRun(5, "SUCCESS", False), 5) == (
+    assert fresh(FinishedRun(5, "SUCCESS", False), 5) == (
         None,
         "has no run since run 5, which was already consumed",
     )
-    assert judge("SUCCESS", FinishedRun(6, "FAILED", False), 5) == (
-        None,
-        "last finished run 6 ended FAILED, which does not satisfy a SUCCESS dependency",
-    )
-    assert judge("HAS_DATA", FinishedRun(6, "SUCCESS", False), None)[1] == (
-        "last finished run 6 ended SUCCESS with no rows written, which does not satisfy a "
-        "HAS_DATA dependency"
-    )
+    assert fresh(FinishedRun(6, "FAILED", False), 5) == (6, "last finished run 6 ended FAILED")
 
 
 def test_look_delays():
@@ -128,8 +119,7 @@ def test_an_upstream_that_is_not_running_is_not_waited_for():
     ],
 )
 def test_freshness_compares_identity_and_revision(run_id, revision, repairs, accepted):
-    selected, reason = judge(
-        "SUCCESS",
+    selected, reason = fresh(
         FinishedRun(run_id, "SUCCESS", True, revision),
         ConsumedRun(5, 1),
         consume_repairs=repairs,
@@ -137,3 +127,42 @@ def test_freshness_compares_identity_and_revision(run_id, revision, repairs, acc
     assert selected == (run_id if accepted else None)
     if run_id == 5 and revision == 2 and not repairs:
         assert "CONSUME_REPAIRS='N'" in reason
+
+
+@pytest.mark.parametrize(
+    ("expression", "first", "second"),
+    [
+        ("u.SUCCESS", "SUCCESS", "FAILED"),
+        ("u.FAILED", "FAILED", "SUCCESS"),
+        ("u.SKIPPED", "SKIPPED", "SUCCESS"),
+        ("u.FINISHED", "SUCCESS", "IN-PROGRESS"),
+        ("u.HAS_DATA", "SUCCESS", "FAILED"),
+        ("u.STATUS = SUCCESS", "SUCCESS", "FAILED"),
+    ],
+)
+def test_pipeline_status_facts_have_three_valued_evaluations(expression, first, second):
+    condition = parse(expression, Scope.PIPELINE)
+    for status, expected in ((first, True), (second, False), (None, None)):
+        facts = Facts(status, {"ROWS_WRITTEN": 1}, scope=Scope.PIPELINE) if status else None
+        assert evaluate(condition, lambda _, facts=facts: facts) is expected
+
+
+@pytest.mark.parametrize(
+    "fact",
+    [
+        "SOURCE_ROWS",
+        "TARGET_ROWS",
+        "ROWS_WRITTEN",
+        "INSERTED",
+        "UPDATED",
+        "DELETED",
+        "REJECTED",
+        "DUPLICATES",
+        "DURATION_SECONDS",
+    ],
+)
+def test_pipeline_numeric_facts_have_three_valued_evaluations(fact):
+    condition = parse(f"u.{fact} = 2", Scope.PIPELINE)
+    for count, expected in ((2, True), (1, False), (None, None)):
+        facts = Facts("SUCCESS", {fact: count}, duration_seconds=count, scope=Scope.PIPELINE)
+        assert evaluate(condition, lambda _, facts=facts: facts) is expected

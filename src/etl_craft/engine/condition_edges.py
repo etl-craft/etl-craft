@@ -1,4 +1,4 @@
-"""Derive ``CFG_TASK_DEPENDENCY`` from each task's ``RUN_CONDITION``.
+"""Derive task and pipeline edges from their conditions.
 
 A task's condition names the tasks it waits on; ``deploy`` and re-parse write those names as
 edges, which the scheduler, gates, graphs and catalog read. A team never writes an edge. An edge
@@ -11,8 +11,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from graphlib import CycleError, TopologicalSorter
 from itertools import pairwise
+from typing import Any
 
-from sqlalchemy.engine import Connection
+from sqlalchemy.engine import Connection, Row
 
 from etl_craft.core.conditions import Condition, Ref, Scope, parse
 from etl_craft.core.errors import ConditionError
@@ -140,30 +141,36 @@ def _refuse_cycles(
             statement(conn, "condition_edges_elsewhere"), {"project_id": project_id}
         )
     }
+    _check_graph(edges, {labels[task.task_id]: task.condition for task in tasks}, Scope.TASK)
+
+
+def _check_graph(
+    edges: set[tuple[str, str]], local: dict[str, Condition | None], scope: Scope
+) -> None:
     graph: dict[str, set[str]] = {}
-    for task, upstream in edges:
-        graph.setdefault(task, set()).add(upstream)
+    for source, upstream in edges:
+        graph.setdefault(source, set()).add(upstream)
     try:
         TopologicalSorter(graph).prepare()
     except CycleError as error:
         cycle = tuple(reversed(error.args[1][:-1]))
         start = min(range(len(cycle)), key=cycle.__getitem__)
         loop = (*cycle[start:], *cycle[:start], cycle[start])
-        local = {labels[task.task_id]: task for task in tasks}
-        pair = next(((a, b) for a, b in pairwise(loop) if a in local), None)
-        where = "RUN_CONDITION"
-        if pair is not None:
-            source = local[pair[0]]
-            assert source.condition is not None
-            target = tuple(pair[1].split("."))
-            ref = next(
-                ref for ref in source.condition.refs if target[-len(ref.parts) :] == ref.parts
-            )
-            where = f"{source.label} RUN_CONDITION position {ref.position}"
+        column = "RUN_CONDITION" if scope == Scope.TASK else "START_CONDITION"
+        noun = scope.value.lower()
+        where = column
+        for source, upstream in pairwise(loop):
+            condition = local.get(source)
+            if condition is None:
+                continue
+            target = tuple(upstream.split("."))
+            ref = next(ref for ref in condition.refs if target[-len(ref.parts) :] == ref.parts)
+            where = f"{source.split('.', 1)[1]} {column} position {ref.position}"
+            break
         raise ConditionError(
-            f"{where}: names form a cycle: "
-            f"value {' -> '.join(loop)}; expected each task to wait "
-            "only on tasks that do not wait on it; remove one of these names"
+            f"{where}: names form a cycle: value {' -> '.join(loop)}; expected each "
+            f"{noun} to wait only on {noun}s that do not wait on it; "
+            "remove one of these names"
         ) from error
 
 
@@ -172,10 +179,93 @@ def _label(conn: Connection, task_id: int) -> str:
     return str(row.label)
 
 
+def _wanted_pipelines(conn: Connection, project_id: int) -> set[tuple[int, int]]:
+    rows = conn.execute(statement(conn, "condition_pipelines")).all()
+    active = {(row.project_code, row.pipeline_code): row for row in rows if row.active}
+    local: dict[str, Condition | None] = {}
+    labels = {row.pipeline_id: f"{row.project_code}.{row.pipeline_code}" for row in rows}
+    wanted: set[tuple[int, int]] = set()
+    for row in active.values():
+        if row.project_id != project_id or not (text := (row.start_condition or "").strip()):
+            continue
+        try:
+            condition = parse(text, Scope.PIPELINE)
+        except ConditionError as error:
+            raise ConditionError(
+                f"{row.pipeline_code} START_CONDITION {error}; correct the condition and deploy"
+            ) from error
+        local[labels[row.pipeline_id]] = condition
+        for ref in condition.refs:
+            target = _pipeline_target(active, row.project_code, row.pipeline_code, ref)
+            wanted.add((row.pipeline_id, target.pipeline_id))
+    edges = {(labels[source], labels[target]) for source, target in wanted}
+    edges.update(
+        (labels[row.pipeline_id], labels[row.depends_on_pipeline_id])
+        for row in conn.execute(
+            statement(conn, "condition_pipeline_edges"), {"project_id": project_id}
+        )
+        if row.project_id != project_id and row.active_flag == "Y"
+    )
+    _check_graph(edges, local, Scope.PIPELINE)
+    return wanted
+
+
+def _pipeline_target(
+    active: dict[tuple[str, str], Row[Any]], project_code: str, pipeline_code: str, ref: Ref
+) -> Row[Any]:
+    project, pipeline = (project_code, ref.parts[0]) if len(ref.parts) == 1 else ref.parts
+    where = f"{pipeline_code} START_CONDITION position {ref.position}: value {ref.name!r}"
+    if (project, pipeline) == (project_code, pipeline_code):
+        raise ConditionError(
+            f"{where} names this pipeline; expected another pipeline; remove the self-reference"
+        )
+    target = active.get((project, pipeline))
+    if target is None:
+        candidates = [code for owner, code in active if owner == project]
+        hints = (
+            suggest(pipeline, candidates)
+            if candidates
+            else suggest(project, sorted({owner for owner, _ in active}))
+        )
+        hint = f"; did you mean {hints[0]}?" if hints else ""
+        raise ConditionError(
+            f"{where}; expected an active project and pipeline{hint}; "
+            "correct the name or deploy the upstream definitions first"
+        )
+    return target
+
+
+def _derive_pipeline_edges(conn: Connection, project_id: int, wanted: set[tuple[int, int]]) -> int:
+    existing = {
+        (row.pipeline_id, row.depends_on_pipeline_id): row
+        for row in conn.execute(
+            statement(conn, "condition_pipeline_edges"), {"project_id": project_id}
+        )
+        if row.project_id == project_id
+    }
+    changed = 0
+    for key, row in existing.items():
+        flag = "Y" if key in wanted else "N"
+        if row.active_flag != flag:
+            conn.execute(
+                statement(conn, "condition_pipeline_edge_activate"),
+                {"pipeline_dependency_id": row.pipeline_dependency_id, "active_flag": flag},
+            )
+            changed += 1
+    for source, target in wanted.difference(existing):
+        conn.execute(
+            statement(conn, "condition_pipeline_edge_insert"),
+            {"pipeline_id": source, "depends_on_pipeline_id": target},
+        )
+        changed += 1
+    return changed
+
+
 def problem(conn: Connection, project_id: int) -> str | None:
     """Return the first condition that does not parse or names an unknown task, without writing."""
     try:
         _wanted(conn, project_id)
+        _wanted_pipelines(conn, project_id)
     except ConditionError as error:
         return str(error)
     return None
@@ -184,7 +274,8 @@ def problem(conn: Connection, project_id: int) -> str | None:
 def derive_edges(conn: Connection, project_id: int) -> int:
     """Write the edges every active task's condition names; return how many changed."""
     wanted = _wanted(conn, project_id)
-    changed = 0
+    pipeline_edges = _wanted_pipelines(conn, project_id)
+    changed = _derive_pipeline_edges(conn, project_id, pipeline_edges)
     existing = {
         (int(row.task_id), int(row.depends_on_task_id)): row
         for row in conn.execute(statement(conn, "condition_edges"), {"project_id": project_id})

@@ -4,7 +4,7 @@ from collections.abc import Sequence
 
 from sqlalchemy.engine import Connection
 
-from etl_craft.core.enums import DependencyType, Handler, SqlAction, YesNo
+from etl_craft.core.enums import EdgeKind, Handler, SqlAction, YesNo
 from etl_craft.dialects.query_analysis import output_columns
 from etl_craft.engine.protection_events import target_identity
 from etl_craft.engine.queries import statement
@@ -35,7 +35,7 @@ def graph_problems(
         for edge in edges
         if edge.depends_on_pipeline_id == pipeline_id
         and edge.depends_on_handler == Handler.FILE_VALIDATION
-        and edge.kind == DependencyType.SUCCESS
+        and edge.kind == EdgeKind.SUCCESS
     ]
     row = conn.execute(statement(conn, "stewardship_pipeline"), {"pipeline_id": pipeline_id}).one()
     if row.stewardable_flag == YesNo.YES and len(validators) != 1:

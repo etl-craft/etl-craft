@@ -55,7 +55,7 @@ it("shows the real selection outline and line rather than a decorative icon",asy
 
 it("uses dependency line patterns and the visible repair label",async()=>{
  const {dependencyEntries}=await import("@/components/diagram-key");
- const rows=dependencyEntries([{dependency_type:"FAILURE",consume_repairs:"N"},{dependency_type:"HAS_DATA"}]);
+ const rows=dependencyEntries([{edge_kind:"FAILURE",consume_repairs:"N"},{edge_kind:"HAS_DATA"}]);
  const {container}=render(<>{rows.map(row=><span key={row.id}>{row.sample}</span>)}</>);
  expect(container.querySelector(".lucide-ban")).toBeNull();
  expect(container.querySelector(".lucide-database")).not.toBeNull();

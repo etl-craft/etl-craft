@@ -259,9 +259,9 @@ etl-craft run --pipeline-code SALES_DAILY --backfill 2026-09-01:2026-09-07 \
 
 Runs the pipeline once for each date, oldest first, each a run of its own as of its date: SQL
 tasks read it as [`$$run_date`](sql-tasks.md#the-pipeline-id-tokens), scripts as
-`task.run_date`. Backfill runs leave the scheduled runs as they were: they check no dependency on
-other pipelines and consume no upstream run (each run records that as a `GATE_BYPASS` with the
-reason), and scripts get no offset and store none. The backfill stops at the first run that does
+`task.run_date`. Backfills evaluate conditions against [assumed delivery](dependencies.md#start-conditions)
+and consume no upstream run. Each run records the backfill reason in `GATE_BYPASS`.
+Scripts get no offset and store none. The backfill stops at the first run that does
 not end `SUCCESS` or `SKIPPED`, and says how to take up from that date once it is fixed. It runs
 at most 366 dates, and not while the pipeline has a run in progress or is paused.
 

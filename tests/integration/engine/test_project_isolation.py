@@ -171,13 +171,17 @@ def test_project_edit_and_dependency_permissions(isolation, tmp_path):
 
     admin, _ = isolation
     admin = replace(
-        admin, config=replace(admin.config, artifacts=Artifacts((tmp_path / "artifacts").as_uri()))
+        admin,
+        config=replace(
+            admin.config,
+            config_path=tmp_path / "craft-connector.yml",
+            artifacts=Artifacts((tmp_path / "artifacts").as_uri()),
+        ),
     )
     folder = tmp_path / "changes"
     folder.mkdir()
-    (folder / "pipeline_dependencies.csv").write_text(
-        "PIPELINE_CODE,DEPENDS_ON_PROJECT_CODE,DEPENDS_ON_PIPELINE_CODE,DEPENDENCY_TYPE\n"
-        "OPEN,finance,OPEN,SUCCESS\n"
+    (folder / "pipelines.csv").write_text(
+        "PIPELINE_CODE,START_CONDITION\nOPEN,finance.OPEN.SUCCESS\n"
     )
     for name, role in (("reader", ApiRole.VIEWER), ("operator", ApiRole.OPERATOR)):
         ctx = caller(admin, name, role)
@@ -194,20 +198,18 @@ def test_project_edit_and_dependency_permissions(isolation, tmp_path):
     manager = caller(admin, "manager")
     with pytest.raises(ResourceNotFoundError) as caught:
         deploy_config(manager, folder)
-    for part in ("pipeline_dependencies.csv line 2", "sales", "finance", "CAN_VIEW", "manager"):
+    for part in ("pipelines.csv line 2", "sales", "finance", "CAN_VIEW", "manager"):
         assert part in str(caught.value)
-    (folder / "pipeline_dependencies.csv").write_text(
-        "PIPELINE_CODE,DEPENDS_ON_PROJECT_CODE,DEPENDS_ON_PIPELINE_CODE,DEPENDENCY_TYPE\n"
-        "OPEN,missing,OPEN,SUCCESS\n"
+    (folder / "pipelines.csv").write_text(
+        "PIPELINE_CODE,START_CONDITION\nOPEN,missing.OPEN.SUCCESS\n"
     )
     with pytest.raises(ResourceNotFoundError) as missing:
         deploy_config(manager, folder)
     assert str(caught.value).replace("'finance'", "'selected'") == str(missing.value).replace(
         "'missing'", "'selected'"
     )
-    (folder / "pipeline_dependencies.csv").write_text(
-        "PIPELINE_CODE,DEPENDS_ON_PROJECT_CODE,DEPENDS_ON_PIPELINE_CODE,DEPENDENCY_TYPE\n"
-        "OPEN,finance,OPEN,SUCCESS\n"
+    (folder / "pipelines.csv").write_text(
+        "PIPELINE_CODE,START_CONDITION\nOPEN,finance.OPEN.SUCCESS\n"
     )
     grant(admin, "finance", "manager", Permission.CAN_VIEW)
     done = deploy_config(manager, folder).config

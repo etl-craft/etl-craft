@@ -212,6 +212,11 @@ def bindings(sql, name=""):
         },
         "condition_skips": {"run_id": 1, "result": "UNSATISFIED"},
         "condition_task_label": {"task_id": 1},
+        "condition_pipeline_edge_activate": {"pipeline_dependency_id": 2, "active_flag": "N"},
+        "condition_pipeline_edge_insert": {"pipeline_id": 2, "depends_on_pipeline_id": 1},
+        "pipeline_run_facts": {"run_id": 1},
+        "rename_start_conditions": {"pipeline_id": 1},
+        "rename_start_condition_update": {"pipeline_id": 2, "rule": "PLAN_1.SUCCESS"},
         "task_run_facts": {"task_run_id": 1},
         "access_allowed": {"action": "run"},
         "access_list": {"project": "default"},
@@ -437,6 +442,14 @@ FULL_READS = {
         "active_schedule_definitions",
         "cfg_pipelines",
     ): "Lists schedules across all active pipelines.",
+    (
+        "condition_pipelines",
+        "cfg_pipelines",
+    ): "Reads active names to resolve conditions across projects.",
+    (
+        "condition_pipeline_edges",
+        "cfg_pipelines",
+    ): "Checks cycles across projects and retains local edge identities.",
     ("active_tasks", "cfg_pipelines"): "Lists tasks across all active pipelines.",
     (
         "active_task_dependency_edges",

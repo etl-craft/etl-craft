@@ -143,7 +143,8 @@ EXPECTED = {
     enums.ApiRole: {"viewer", "operator", "developer", "admin", "agent"},
     enums.SlaStatus: {"MET", "BREACHED"},
     enums.RefreshType: {"FULL", "INCREMENTAL"},
-    enums.DependencyType: {"SUCCESS", "FAILURE", "ALWAYS", "HAS_DATA"},
+    enums.AlertTrigger: {"FAILURE", "SUCCESS", "COMPLETED_WITH_ERRORS", "SLA_BREACH", "LOST"},
+    enums.EdgeKind: {"SUCCESS", "FAILURE", "ALWAYS", "HAS_DATA", "CONDITION"},
     enums.Handler: {
         "FILE_VALIDATION",
         "PYTHON",

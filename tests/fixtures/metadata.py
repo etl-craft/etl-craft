@@ -70,6 +70,14 @@ def add_task(conn, pipeline_id, code, handler="SQL", **params):
     return task_id
 
 
+CONDITION_FLAGS = {
+    "SUCCESS": "SUCCESS",
+    "FAILURE": "FAILED",
+    "ALWAYS": "FINISHED",
+    "HAS_DATA": "HAS_DATA",
+}
+
+
 def add_dependency(
     conn, pipeline_id, task_id, depends_on, kind="SUCCESS", *, upstream_pipeline=None
 ):
@@ -84,8 +92,7 @@ def add_dependency(
         ),
         {"task": depends_on},
     ).one()
-    fact = {"SUCCESS": "SUCCESS", "FAILURE": "FAILED", "ALWAYS": "FINISHED", "HAS_DATA": "HAS_DATA"}
-    parts = [upstream.task_code, fact[kind]]
+    parts = [upstream.task_code, CONDITION_FLAGS[kind]]
     if (upstream_pipeline or upstream.pipeline_id) != pipeline_id:
         parts.insert(0, upstream.pipeline_code)
     if upstream.project_id != project_id:
@@ -110,15 +117,35 @@ def add_dependency(
 
 
 def add_pipeline_dependency(conn, pipeline_id, depends_on, kind="SUCCESS"):
-    return insert(
-        conn,
-        "INSERT INTO CFG_PIPELINE_DEPENDENCY (PIPELINE_ID, DEPENDS_ON_PIPELINE_ID, "
-        "DEPENDENCY_TYPE) VALUES (:p, :d, :k)",
-        "PIPELINE_DEPENDENCY_ID",
-        p=pipeline_id,
-        d=depends_on,
-        k=kind,
+    upstream = conn.execute(
+        text(
+            "SELECT p.PIPELINE_CODE AS pipeline_code, p.PROJECT_ID AS project_id, "
+            "j.PROJECT_CODE AS project_code FROM CFG_PIPELINES p JOIN CFG_PROJECTS j "
+            "ON j.PROJECT_ID=p.PROJECT_ID WHERE p.PIPELINE_ID=:upstream"
+        ),
+        {"upstream": depends_on},
+    ).one()
+    project_id = pipeline_project_id(conn, pipeline_id)
+    name = upstream.pipeline_code
+    if upstream.project_id != project_id:
+        name = f"{upstream.project_code}.{name}"
+    reference = f"{name}.{CONDITION_FLAGS[kind]}"
+    conn.execute(
+        text(
+            "UPDATE CFG_PIPELINES SET START_CONDITION = CASE "
+            "WHEN START_CONDITION IS NULL THEN :ref ELSE START_CONDITION || ' AND ' || :ref END "
+            "WHERE PIPELINE_ID=:pipeline"
+        ),
+        {"ref": reference, "pipeline": pipeline_id},
     )
+    derive_edges(conn, project_id)
+    return conn.execute(
+        text(
+            "SELECT PIPELINE_DEPENDENCY_ID FROM CFG_PIPELINE_DEPENDENCY "
+            "WHERE PIPELINE_ID=:pipeline AND DEPENDS_ON_PIPELINE_ID=:upstream"
+        ),
+        {"pipeline": pipeline_id, "upstream": depends_on},
+    ).scalar_one()
 
 
 def start_run(conn, pipeline_id, *, run_date=None, backfill=False):
