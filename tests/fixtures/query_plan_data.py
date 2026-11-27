@@ -461,4 +461,29 @@ def seed_query_plans(conn, *, pipelines=1000, tasks=20, days=10):
                 ),
                 {"count": pipelines * days},
             )
+        seed_inbound_conditions(conn, pipeline=pipelines + 1, task=pipelines * tasks + 1)
     conn.exec_driver_sql("ANALYZE")
+
+
+def seed_inbound_conditions(conn, *, pipeline, task):
+    """Give a small project retired upstreams named by a larger project's conditions."""
+    queries = (
+        "INSERT INTO CFG_PROJECTS (PROJECT_ID,PROJECT_CODE,PROJECT_NAME,DEFAULT_POOL,"
+        "CREATED_BY,CREATE_DATE,UPDATED_BY,UPDATED_DATE) OVERRIDING SYSTEM VALUE "
+        "VALUES (2,'plan_upstream','plan upstream','default','plan',now(),'plan',now())",
+        "INSERT INTO CFG_PIPELINES (PIPELINE_ID,PROJECT_ID,PIPELINE_CODE,PIPELINE_NAME,"
+        "REFRESH_TYPE,ACTIVE_FLAG,CREATED_BY,CREATE_DATE,UPDATED_BY,UPDATED_DATE) "
+        "OVERRIDING SYSTEM VALUE VALUES (:pipeline,2,'PLAN_UPSTREAM','plan upstream',"
+        "'FULL','N','plan',now(),'plan',now())",
+        "INSERT INTO CFG_TASKS (TASK_ID,PIPELINE_ID,TASK_CODE,TASK_TYPE,HANDLER,ACTIVE_FLAG,"
+        "CREATED_BY,CREATE_DATE,UPDATED_BY,UPDATED_DATE) OVERRIDING SYSTEM VALUE "
+        "VALUES (:task,:pipeline,'extract','ETL','SQL','N','plan',now(),'plan',now())",
+        "INSERT INTO CFG_PIPELINE_DEPENDENCY (PIPELINE_DEPENDENCY_ID,PIPELINE_ID,"
+        "DEPENDS_ON_PIPELINE_ID,CREATED_BY,CREATE_DATE,UPDATED_BY,UPDATED_DATE) "
+        "OVERRIDING SYSTEM VALUE VALUES (:pipeline,1,:pipeline,'plan',now(),'plan',now())",
+        "INSERT INTO CFG_TASK_DEPENDENCY (TASK_DEPENDENCY_ID,PIPELINE_ID,TASK_ID,"
+        "DEPENDS_ON_PIPELINE_ID,DEPENDS_ON_TASK_ID,CREATED_BY,CREATE_DATE,UPDATED_BY,UPDATED_DATE) "
+        "OVERRIDING SYSTEM VALUE VALUES (:task,1,1,:pipeline,:task,'plan',now(),'plan',now())",
+    )
+    for sql in queries:
+        conn.execute(text(sql), {"pipeline": pipeline, "task": task})

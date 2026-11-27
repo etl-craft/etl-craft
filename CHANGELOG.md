@@ -6,6 +6,10 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+- Deploy and config plan refuse to retire an upstream still named by another project's
+  active run or start condition. Validate reports existing breaks on the upstream row.
+  Diagnostics count dependencies the caller cannot view without revealing their names.
+
 - Set `START_CONDITION` in `pipelines.csv` to gate a pipeline on upstream run
   status, counts or duration. Deploy and re-parse derive the edges. The consuming
   pipeline's `CONSUME_REPAIRS` applies to both pipeline and task conditions.
