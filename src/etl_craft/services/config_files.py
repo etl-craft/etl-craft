@@ -46,6 +46,7 @@ from etl_craft.engine.repository.config_rows import (
     Value,
 )
 from etl_craft.engine.repository.pipelines import selected_project
+from etl_craft.services.condition_safety import PipelineVisibility, broken_conditions
 from etl_craft.services.config_export import export_config as export_config
 from etl_craft.services.config_models import (
     Change as Change,
@@ -263,6 +264,7 @@ def sync_config(
     *,
     apply: bool,
     authorize: Callable[[Connection, ConfigFiles], None] | None = None,
+    condition_visibility: PipelineVisibility | None = None,
 ) -> ConfigSync:
     """Merge ``files`` into the ``CFG_`` tables; with ``apply`` false, roll it all back.
 
@@ -289,6 +291,11 @@ def sync_config(
                     merged, warnings = merge_rows(conn, files, config, authorize)
                     changes.extend(merged)
                     _derive_config_edges(conn, files, int(project.project_id))
+                    broken = broken_conditions(
+                        conn, int(project.project_id), config.project, condition_visibility
+                    )
+                    if broken:
+                        raise ConditionError("\n".join(item.message for item in broken))
                     findings = (*warnings, *validate_on(conn, config).findings)
                 if not apply or any(f.status is Status.FAIL for f in findings):
                     raise _RollBackError
