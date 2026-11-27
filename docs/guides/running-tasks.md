@@ -34,7 +34,7 @@ etl-craft run --reason "requested data load" --pipeline-code SALES_DAILY --task-
 ```
 
 The first command runs only the selected task. The second includes every active descendant
-from `CFG_TASK_DEPENDENCY`, in dependency order. The selected ids are stored on the new run;
+from the graph derived from [run conditions](dependencies.md), in dependency order. The selected ids are stored on the new run;
 restarting a supervisor cannot expand it to unrelated tasks. No existing pipeline run is
 adopted. Use `--run-key operator:orders` to name a new selection, or its exact `--run-id` or
 `--run-key` with the original selection options to resume unfinished work. Successful tasks

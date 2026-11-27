@@ -12,10 +12,11 @@ these rows; each change records its actor and before/after values. See also
 flowchart LR
     P[CFG_PIPELINES] --> T[CFG_TASKS]
     T --> TP[CFG_TASK_PARAMETERS]
-    T --> TD[CFG_TASK_DEPENDENCY]
-    P --> PD[CFG_PIPELINE_DEPENDENCY]
     T --> BR[CFG_BUSINESS_RULES]
 ```
+
+Set `RUN_CONDITION` on task rows and `START_CONDITION` on pipeline rows to define
+[execution dependencies](dependencies.md).
 
 Every `CFG_` row has `ACTIVE_FLAG` (`Y` or `N`): setting it to `N` retires the row without
 deleting it, and only active rows are read. Codes are unique among active rows, so a retired

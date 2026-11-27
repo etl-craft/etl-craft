@@ -136,9 +136,10 @@ etl-craft pause --project sales --reason "Maintenance"
 
 Project API routes use `/api/v1/projects/sales/...`; deployment accounts, tokens, groups,
 agent claims and health routes keep their deployment paths. Exact execution IDs must belong
-to the selected project. Cross-project dependencies retain their upstream IDs and recorded
-consumption decisions; set `DEPENDS_ON_PROJECT_CODE` in the dependency CSV to name another
-project, or leave it empty for the selected project.
+to the selected project. Name a cross-project upstream in a task's `RUN_CONDITION` as
+`project.pipeline.task.FACT` or in a pipeline's `START_CONDITION` as `project.pipeline.FACT`.
+Deploy derives the edges from those conditions. Cross-project dependencies retain their
+upstream IDs and recorded consumption decisions.
 
 Cloning copies only the selected project's rows and retained history, plus shared deployment
 configuration and runtime records. Credential hashes are excluded. As with the static catalog,

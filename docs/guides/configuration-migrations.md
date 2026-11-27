@@ -197,12 +197,11 @@ failures of, every task they report on; `validate` reports an alert that does no
 
 ### Retiring rows
 
-Retiring a task also retires its parameters, its business rules, its dependencies and the
-dependencies on it; retiring a pipeline retires its tasks that way, and the pipeline
-dependencies both ways. A task that waited on a retired one starts without it from then on, so
-review what waited on it. A retired code remains reserved. The example reactivates `publish` with the same task ID,
-updates its script setting, and reactivates its existing dependency rows. Run and configuration
-history continue to refer to the original task.
+Retiring a task also retires its parameters and business rules. Retiring a pipeline retires
+its tasks. Before retiring an upstream, change the active conditions that still name it or
+retire the dependent definitions. The engine derives dependency edges from those conditions.
+The example reactivates `publish` with the same task ID and updates its script setting.
+Run and configuration history continue to refer to the original task.
 
 ```sql
 --8<-- "docs/examples/migrations/0006_retire_and_reactivate_targets.sql"

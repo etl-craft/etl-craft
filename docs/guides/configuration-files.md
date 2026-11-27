@@ -21,8 +21,9 @@ etl-craft/
 
 The files hold the selected project's pipeline metadata. An administrator creates the project
 first with `etl-craft project add --project sales --reason "New team"`; deploy requires
-that project to exist. Dependency rows may set `DEPENDS_ON_PROJECT_CODE` for another project;
-an empty value selects this project. Applying them never retires another project's rows.
+that project to exist. Use a project-qualified name in a
+[run or start condition](dependencies.md) to reference another project. Deploy changes only
+the selected project's configuration rows.
 All eight files are optional. Submit any subset; a header-only file changes nothing. A folder
 with no known file fails with nothing to apply. Unknown CSV filenames are refused with a
 suggestion, so a misspelling cannot silently drop a change.
@@ -57,7 +58,7 @@ Missing files and rows remain untouched. See the [multi-project layout and CI ex
 | Command | Does |
 |---|---|
 | `etl-craft config export` | writes the Engine DB's rows as config files: the starting point for a project whose pipelines are in the Engine DB already. It refuses to overwrite files there unless given `--force`. It also seeds [source definitions](lineage.md#source-definitions-and-stars) from existing warehouse tables. With `--as-of`, it writes the rows as they stood at a moment instead (see [Configuration as of a moment](#configuration-as-of-a-moment)) |
-| `etl-craft config plan` | shows what `apply` would change and runs [`validate`](validating.md) on the result, then rolls it all back. Exits 1 when `validate` fails |
+| `etl-craft config plan` | shows what `deploy` would change and runs [`validate`](validating.md) on the result, then rolls it all back. Exits 1 when `validate` fails |
 | `etl-craft deploy` | makes the changes, in one transaction, unless `validate` fails the result: then it changes nothing and exits 1; then loads seeds and re-parses (see [Deploying](#deploying)) |
 
 Each takes `--config-dir PATH` for a folder other than `config/`, and `--format json` for a
@@ -152,7 +153,7 @@ see [Pipelines and tasks](pipelines-and-tasks.md),
 Each handler's guide lists its task parameters. All handlers accept
 `FAIL_PIPELINE_IF_FAILED` and `FAIL_PIPELINE_IF_NOT_RUN`; see
 [How a pipeline run ends](dependencies.md#how-a-pipeline-run-ends). Pipeline
-`CONSUME_REPAIRS` defaults to `Y` for task conditions that read other pipelines.
+`CONSUME_REPAIRS` defaults to `Y` for task and start conditions that read other pipelines.
 
 Values are written as follows:
 
