@@ -36,6 +36,11 @@ def benchmark(engine):
             WHERE PIPELINE_RUN_ID > 124950
         """)
         conn.exec_driver_sql("""
+            UPDATE AUD_TASK_RUN_LOG
+            SET STATUS='IN-PROGRESS', END_DATE=NULL
+            WHERE PIPELINE_RUN_ID > 124950
+        """)
+        conn.exec_driver_sql("""
             INSERT INTO AUD_TASK_ATTEMPTS
                 (TASK_RUN_ID, ATTEMPT_NUMBER, STATUS, STARTED_AT, ENDED_AT, POOL)
             SELECT t.TASK_RUN_ID, 1, CASE WHEN t.PIPELINE_RUN_ID > 124950 THEN 'RUNNING' ELSE 'SUCCESS' END,
