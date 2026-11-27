@@ -130,12 +130,12 @@ Agents | Pool | Free | Heartbeat            Agents [Pool ▾]
 
 On mobile the task detail takes the full content width and keeps the selected attempt and Back target. Sortable statistics use the existing compact row/card behavior. Logs keep a scroll region local to the stream. Support, audit and delivery open existing views with exact run scope. Later comparisons use two columns at 1440 and paired values per metric at 390, with persistent run IDs. Later trend charts have a numeric table in both themes.
 
-- [Home, dark 1440](assets/monitoring/home-dark-1440.png) already places a failure in Needs attention, scoped to one project. At handoff the operator must repeat the scan across projects. Keep the analytics and link to Monitor.
-- [Runs, light 390](assets/monitoring/runs-light-390.png) stacks correctly, but the failed card omits cause and waiting/late context. Reuse compact cards for incident evidence. The unlabeled visible project picker makes interpreting scope difficult on mobile.
-- [Failed run, dark 390](assets/monitoring/failed-dark-390.png) already exposes Recover and Show task. First error navigation, metrics and a short handoff are absent from the first screen. Keep that recovery entry and make investigation available before graph traversal.
-- [Pipeline, light 1440](assets/monitoring/pipeline-light-1440.png) has run grid, audit and an empty delivery panel. A locally seeded alert can be configured without a dispatched delivery. Tell the operator whether delivery evidence exists and offer the existing diagnostics.
-- [Agents, light 1440](assets/monitoring/agents-light-1440.png) mentions agent-less deployments only after the instruction to start an agent. Make the active deployment model clear first.
-- [Catalog, dark 390](assets/monitoring/catalog-dark-390.png) before building the catalog has an actionable rebuild instruction. After `generate-docs`, the CLI wrote 62 pages and reported two missing column-lineage inputs. Keep the remediation and surface incomplete lineage where users act on it.
+- Home places a failure in Needs attention, scoped to one project; at handoff the operator must repeat the scan across projects. Keep the analytics and link to Monitor.
+- Runs stacks correctly, but the failed card omits cause and waiting/late context. Reuse compact cards for incident evidence; the unlabeled mobile project picker makes scope difficult.
+- The failed run exposes Recover and Show task, but first-error navigation, metrics and a short handoff are absent from the first screen.
+- The pipeline page has run grid, audit and an empty delivery panel; tell the operator whether delivery evidence exists and offer diagnostics.
+- Agents mentions agent-less deployments only after the instruction to start an agent; make the active deployment model clear first.
+- Catalog before building has an actionable rebuild instruction; after generation it reported missing column-lineage inputs. Keep remediation and surface incomplete lineage where users act on it.
 - CLI `history --pipeline-code DEMO --all` found failed run 3 and successful run 4. `status --pipeline-code DEMO` refused with exit 9 and printed explicit candidates. Use `status --pipeline-code DEMO --run-id 3` in the Quick Start recovery example. This preserves exact selection. The first failed run and second successful run had different IDs. `doctor` returned 34 OK checks, no warnings or failures in this environment.
 
 ### Reference reading
@@ -226,49 +226,13 @@ A budget for one page feed does not eliminate shell calls or subsequent polling.
 
 PR #476 records the owner’s answers. The pre-0.9.0 scope includes Monitor and the Home strip, missing scheduled occurrences and SLA evidence, typed attempt anchors and resource evidence, inline triage, selected-stream event filters, the redacted alert/handoff, and the bind-limit defect. Cross-run search and the other previously deferred capabilities stay deferred. Summary storage has a measured-budget exception only. A definition cache, if justified, is private, conditional and latest-only.
 
-## Interactive visual review
+## Visual review
 
-The local review uses synthetic fixture data and imports the real UI components and tokens.
-Home uses the shipped `components/overview.tsx` for daily activity, Needs attention,
-headline figures, pipeline health and latest runs. The incident strip sits between
-the Home header and those analytics. The time range controls change the analytics,
-and the live incident strip keeps its own active/recent scope. The fixture uses the
-navigation group names and icons from the product shell, with direct links for review.
-The fixture is under the design assets and runs outside the product app and wheel. From the
-repository root with UI dependencies installed, start it with:
+Screens are approved by the owner on the implementation PR that builds them: real pages with
+seeded data at 1440 and 390 px, light and dark. The prototype is at commit `c3771533` on the
+kept branch for reference. Nothing is stored in the repository.
 
-```bash
-export TMPDIR="$HOME/.cache/etl-craft-tmp"
-mkdir -p "$TMPDIR"
-systemd-run --user --scope --quiet node docs/development/assets/monitoring/review/serve.mjs \
-  > "$TMPDIR/monitoring-review.log" 2>&1
-```
-
-Open [the local visual review](http://127.0.0.1:8746/). Run the capture from a second terminal:
-
-```bash
-export TMPDIR="$HOME/.cache/etl-craft-tmp"
-systemd-run --user --scope --quiet .venv/bin/python \
-  docs/development/assets/monitoring/review/capture.py > "$TMPDIR/monitoring-capture.log" 2>&1
-```
-
-Owner review is one screen at a time. Keep screenshots in sync with feedback and mark a
-screen approved only when the owner approves it personally.
-
-| Screen | Approval | 1440 light | 1440 dark | 390 light | 390 dark |
-| --- | --- | --- | --- | --- | --- |
-| Home and incident strip | Pending | [1440 light](assets/monitoring/review/home-light-1440.png) | [1440 dark](assets/monitoring/review/home-dark-1440.png) | [390 light](assets/monitoring/review/home-light-390.png) | [390 dark](assets/monitoring/review/home-dark-390.png) |
-| Monitor | Pending | [1440 light](assets/monitoring/review/monitor-light-1440.png) | [1440 dark](assets/monitoring/review/monitor-dark-1440.png) | [390 light](assets/monitoring/review/monitor-light-390.png) | [390 dark](assets/monitoring/review/monitor-dark-390.png) |
-| Task summary and Logs | Pending | [1440 light](assets/monitoring/review/task-logs-light-1440.png) | [1440 dark](assets/monitoring/review/task-logs-dark-1440.png) | [390 light](assets/monitoring/review/task-logs-light-390.png) | [390 dark](assets/monitoring/review/task-logs-dark-390.png) |
-| SQL / script | Pending | [1440 light](assets/monitoring/review/task-sql-light-1440.png) | [1440 dark](assets/monitoring/review/task-sql-dark-1440.png) | [390 light](assets/monitoring/review/task-sql-light-390.png) | [390 dark](assets/monitoring/review/task-sql-dark-390.png) |
-| Details | Pending | [1440 light](assets/monitoring/review/task-details-light-1440.png) | [1440 dark](assets/monitoring/review/task-details-dark-1440.png) | [390 light](assets/monitoring/review/task-details-light-390.png) | [390 dark](assets/monitoring/review/task-details-dark-390.png) |
-| Attempts | Pending | [1440 light](assets/monitoring/review/task-attempts-light-1440.png) | [1440 dark](assets/monitoring/review/task-attempts-dark-1440.png) | [390 light](assets/monitoring/review/task-attempts-light-390.png) | [390 dark](assets/monitoring/review/task-attempts-dark-390.png) |
-| PYTHON without counts | Pending | [1440 light](assets/monitoring/review/task-python-light-1440.png) | [1440 dark](assets/monitoring/review/task-python-dark-1440.png) | [390 light](assets/monitoring/review/task-python-light-390.png) | [390 dark](assets/monitoring/review/task-python-dark-390.png) |
-| Running task | Pending | [1440 light](assets/monitoring/review/task-running-light-1440.png) | [1440 dark](assets/monitoring/review/task-running-dark-1440.png) | [390 light](assets/monitoring/review/task-running-light-390.png) | [390 dark](assets/monitoring/review/task-running-dark-390.png) |
-| Waiting task | Pending | [1440 light](assets/monitoring/review/task-waiting-light-1440.png) | [1440 dark](assets/monitoring/review/task-waiting-dark-1440.png) | [390 light](assets/monitoring/review/task-waiting-light-390.png) | [390 dark](assets/monitoring/review/task-waiting-dark-390.png) |
-| Run Statistics | Pending | [1440 light](assets/monitoring/review/statistics-light-1440.png) | [1440 dark](assets/monitoring/review/statistics-dark-1440.png) | [390 light](assets/monitoring/review/statistics-light-390.png) | [390 dark](assets/monitoring/review/statistics-dark-390.png) |
-| Agent monitor | Pending | [1440 light](assets/monitoring/review/agents-light-1440.png) | [1440 dark](assets/monitoring/review/agents-dark-1440.png) | [390 light](assets/monitoring/review/agents-light-390.png) | [390 dark](assets/monitoring/review/agents-dark-390.png) |
-| Alert content | Pending | [1440 light](assets/monitoring/review/alert-light-1440.png) | [1440 dark](assets/monitoring/review/alert-dark-1440.png) | [390 light](assets/monitoring/review/alert-light-390.png) | [390 dark](assets/monitoring/review/alert-dark-390.png) |
+Owner approval is recorded on each implementation PR; this planning PR stores no screenshots.
 
 ## Owner questions
 

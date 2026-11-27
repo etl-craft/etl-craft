@@ -10345,14 +10345,17 @@ per pipeline run to that page and record before/after measurements in its PR.
 
 **Slices.**
 
-1. **S7.BB.1 Design and owner review.** Run the fixture-only prototype locally. Review each
-   screen/tab with the owner and record approved 1440/390 light/dark captures.
+1. **S7.BB.1 Design and owner review.** The owner approves each screen on the PR that builds it:
+   the real pages with seeded data at 1440 and 390 px, light and dark. Screenshots are attached
+   to the PR and not committed.
 2. **S7.BB.2 Attempt evidence.** Store typed first/last attempt anchors with archive-aware resolution
    and capture the exact child’s `wait4(pid, ...)` resource result at exit. Preserve timeout and
    cancel polling with `WNOHANG`, normalize Linux KiB versus macOS byte RSS, and store unsupported
    values as NULL; do not assume a supervisor runs only one child.
 3. **S7.BB.3 Run/task views.** Add inline attempt triage and run Statistics. Use the last 20 successful
-   runs for medians and amber ▲/▼ for values beyond 3× or below ⅓.
+   runs for medians and amber ▲/▼ for values beyond 3× or below ⅓. Show the warehouse’s native
+   SQLSTATE or vendor code when the driver provides one. Add an “Open in catalog” link to the
+   existing task mapping page.
 4. **S7.BB.4 Selected-stream log events.** Filter and jump to the first recorded error.
 5. **S7.BB.5 Waiting and agents.** Explain recorded blockers and show current attempts
    with Linux-only live samples, sample age and free eligible slots; macOS shows “Not sampled.”
@@ -10363,7 +10366,8 @@ per pipeline run to that page and record before/after measurements in its PR.
 
 **Done when.**
 
-- [ ] The owner personally approves every screen and tab before approving this plan.
+- [ ] The owner approves each screen on the PR that builds it: the real pages with seeded data at
+      1440 and 390 px, light and dark. Screenshots are attached to the PR and not committed.
 - [ ] Selected tasks show failure, counts and resource evidence in one feed and preserve
       missing/zero distinctions and exact attempt links.
 - [ ] Log events, waits and capacity show recorded evidence, including missing or stale data.
@@ -10452,6 +10456,10 @@ Engine DBs. A gate that merely finishes is not a pass.
       uniqueness and stable ordering across batch boundaries.
 - [ ] Record query sizes and elapsed costs in release evidence. Per-PR CI uses small
       checks only, including a reduced SQLite bind-limit fixture.
+- [ ] Statement count does not grow with pipeline count: a fixed number per query kind plus one
+      per 400-name batch, proven at 500 and 5,000 pipelines. At 5,000 pipelines and 50,000 tasks,
+      SQLite and PostgreSQL cold build ≤5 minutes, warm rebuild ≤60 seconds and one-pipeline
+      re-parse ≤10 seconds, recorded in release evidence.
 
 ### S7.AX Pipeline, run and task views
 
