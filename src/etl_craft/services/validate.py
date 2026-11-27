@@ -49,6 +49,7 @@ from etl_craft.engine.repository.business_rules import fetch_business_rules_for_
 from etl_craft.engine.repository.dependencies import fetch_pipeline_graph
 from etl_craft.engine.repository.pipelines import (
     PIPELINE_PARAMETER_KINDS,
+    current_project_id,
     pipeline_parameter_problems,
     resolve_pipeline_id,
 )
@@ -85,6 +86,7 @@ from etl_craft.services.calendar_checks import (
     holiday_lists_ending,
     schedule_problems,
 )
+from etl_craft.services.condition_safety import PipelineVisibility, broken_conditions
 from etl_craft.services.doctor import Status
 from etl_craft.services.lineage import (
     dialect_and_catalog,
@@ -151,12 +153,24 @@ class _Metadata:
 
 
 @configured_project
-def validate(engine: Engine, config: ConnectorConfig, pipeline_code: str | None = None) -> Report:
+def validate(
+    engine: Engine,
+    config: ConnectorConfig,
+    pipeline_code: str | None = None,
+    *,
+    condition_visibility: PipelineVisibility | None = None,
+) -> Report:
     """Check the warehouse driver and metadata without running tasks."""
     if config.warehouse is not None:
         build_warehouse_engine(config).dispose()
     with read_snapshot(engine) as conn:
-        return validate_snapshot(conn, engine, config, pipeline_code)
+        report = validate_snapshot(conn, engine, config, pipeline_code)
+        for item in broken_conditions(
+            conn, current_project_id(), config.project, condition_visibility
+        ):
+            if pipeline_code is None or item.upstream.partition(".")[0] == pipeline_code:
+                report.fail(item.upstream, item.message)
+        return report
 
 
 def validate_snapshot(

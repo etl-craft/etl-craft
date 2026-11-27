@@ -16,7 +16,10 @@ from etl_craft.services import doctor, lineage, validate
 from etl_craft.services.operations.agents import AgentsView, list_agents
 from etl_craft.services.operations.config_files import resolve_as_of
 from etl_craft.services.operations.context import OperationContext
-from etl_craft.services.operations.permissions import visible_codes
+from etl_craft.services.operations.permissions import (
+    condition_visibility,
+    pipeline_access,
+)
 from etl_craft.services.operations.requests import (
     LineageInput,
     LineageReparseInput,
@@ -67,10 +70,25 @@ def check_configuration(ctx: OperationContext, request: NoInput) -> DoctorView:
 
 def validate_metadata(ctx: OperationContext, request: ValidateInput) -> validate.Report:
     """Validate metadata and files under the caller's actor without running tasks."""
-    report = validate.validate(ctx.engine, ctx.config, request.pipeline_code)
+    report = validate.validate(
+        ctx.engine,
+        ctx.config,
+        request.pipeline_code,
+        condition_visibility=lambda conn: condition_visibility(conn, ctx),
+    )
     if request.tag or ctx.role != ApiRole.ADMIN:
         with ctx.engine.connect() as conn:
-            codes = visible_codes(conn, ctx, tagged_pipelines(conn, request.tag))
+            access = pipeline_access(conn, ctx)
+            codes = {
+                code: identity
+                for code, identity in tagged_pipelines(conn, request.tag).items()
+                if access.permits(code)
+            }
+            permitted = (
+                codes.keys()
+                if request.tag
+                else {code for code in access.roles if access.permits(code)}
+            )
             if request.pipeline_code is not None:
                 codes = {code: i for code, i in codes.items() if code == request.pipeline_code}
             tasks = sum(
@@ -81,7 +99,7 @@ def validate_metadata(ctx: OperationContext, request: ValidateInput) -> validate
         report.findings = [
             finding
             for finding in report.findings
-            if finding.where.partition(".")[0] in codes
+            if finding.where.partition(".")[0] in permitted
             or finding.where == "seeds"
             or finding.where.startswith("seed ")
         ]

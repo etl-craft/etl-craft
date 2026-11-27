@@ -216,7 +216,7 @@ item's text, or work done early under another item.
 | S7.BB Run monitoring | Planned | | Attempt evidence, agent capacity, Home counts, and Monitor with missed starts and SLA |
 | S7.BC Incident handoff | Planned | | Recovery guidance, alert identity and existing support evidence from the run |
 | S7.BD Bounded catalog lineage lookup | Planned | | Bounded definition and history reads at 5,000 pipelines and 50,000 tasks per project |
-| S7.BE Cross-project condition safety | Planned | | Refuse definition changes that would break another project's conditions |
+| S7.BE Cross-project condition safety | Done | #478 | Refuse definition changes that would break another project's conditions |
 | S7.O Package and demo repositories | Done | #317, #318 | Small package demo, public demo seed and pinned candidate evidence validation |
 | S7.P Obvious failures do not stop 1.0.0 | In progress | #173, #178 | Audit done (#173); the log-folder and port checks close their catalog rows (#178); item 4 keeps the catalog current |
 | S7.Q A generic ANSI SQL warehouse | Moved after 0.9.0 | | A `generic` dialect over SQLAlchemy for rare databases: ANSI SQL only, NULL-safe column comparison for merges, refusals for anything without an ANSI form |
@@ -241,6 +241,10 @@ item's text, or work done early under another item.
 - Write `docs/reference/design.md` before the release.
 
 #### Item notes
+
+- **S7.BE Choices that differ from the item text.** Inbound checks use the stable derived
+  edges. The refusal identifies the dependent and condition field without a character position,
+  which the edges do not store. A config rename retires the old key and inserts the new key.
 
 - **S7.BA guide.** See [Run conditions](../guides/dependencies.md) for grammar, facts,
   three-valued evaluation, binding, recorded decisions, fail options and refusals.

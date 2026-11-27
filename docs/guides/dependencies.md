@@ -105,6 +105,17 @@ comparison such as `load.REJECTED = 0` and choose a fact available for the
 condition's scope. Remove self-references or one link in a cycle, and use only
 active upstreams in projects you can view.
 
+## Changing a task other projects name
+
+Deploy and config plan refuse to retire a task or pipeline still named by an active
+condition in another project. Retiring the old key and adding a new key follows the same
+rule. Validate reports existing broken inbound conditions on the upstream row.
+
+Change the downstream condition or deactivate the task or pipeline that owns it, then
+deploy that project first. Once its condition no longer names the old upstream, deploy
+the upstream change. If you cannot view the dependent, the refusal says
+`a task in another project depends on <upstream>; ask an administrator`.
+
 ## How a pipeline run ends
 
 The pipeline run is a container for its task runs. Each task, including an

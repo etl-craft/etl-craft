@@ -203,6 +203,8 @@ VALUES = {
 
 def bindings(sql, name=""):
     overrides = {
+        "broken_inbound_start_conditions": {"project_id": 2},
+        "broken_inbound_task_conditions": {"project_id": 2},
         "condition_edge_activate": {"task_dependency_id": 2, "active_flag": "N"},
         "condition_edge_insert": {
             "pipeline_id": 1,

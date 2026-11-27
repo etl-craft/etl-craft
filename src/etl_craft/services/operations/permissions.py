@@ -97,6 +97,18 @@ def project_permission(conn: Connection, ctx: OperationContext) -> Permission | 
     return tuple(Permission)[row.level - 1] if row is not None else None
 
 
+def condition_visibility(conn: Connection, ctx: OperationContext) -> set[int]:
+    """Read project and pipeline permissions together for inbound condition diagnostics."""
+    if ctx.role is None or ctx.role == ApiRole.AGENT:
+        return set()
+    params = visibility_parameters(ctx, None) | {"project_limit": 2**63 - 1}
+    return {
+        int(row.pipeline_id)
+        for row in conn.execute(statement(conn, "permission_effective"), params)
+        if row.pipeline_id is not None and row.level
+    }
+
+
 def project_not_found(code: str | None) -> ResourceNotFoundError:
     """Use the same response for an absent project and a hidden one."""
     return ResourceNotFoundError(

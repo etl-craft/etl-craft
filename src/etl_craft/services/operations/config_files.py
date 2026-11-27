@@ -31,6 +31,7 @@ from etl_craft.services.config_models import TagAccessChange
 from etl_craft.services.operations.authorization import allows
 from etl_craft.services.operations.context import OperationContext
 from etl_craft.services.operations.permissions import (
+    condition_visibility,
     pipeline_access,
     project_permission,
     require_project,
@@ -128,7 +129,14 @@ def sync_folder(
         check_dependencies(conn, completed, ctx=ctx)
         changes.extend(tag_access_changes(conn, ctx, completed))
 
-    done = config_files.sync_config(ctx.engine, config, files, apply=apply, authorize=authorize)
+    done = config_files.sync_config(
+        ctx.engine,
+        config,
+        files,
+        apply=apply,
+        authorize=authorize,
+        condition_visibility=lambda conn: condition_visibility(conn, ctx),
+    )
     from etl_craft.engine.standing_pauses import current
 
     with ctx.engine.connect() as conn:
