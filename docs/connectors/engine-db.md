@@ -61,7 +61,8 @@ Engine:
 Each Engine DB ships its own `schema.sql` with the same tables and columns, and the same rules:
 one active row per code, one `IN-PROGRESS` run per pipeline, one task-run row per task per run,
 and the value lists every `CHECK` constraint enforces. See
-[Dependencies and run conditions](../guides/dependencies.md) for what the dependency tables mean.
+[Run conditions](../guides/dependencies.md) for how the engine derives dependencies from pipeline
+and task definitions.
 
 ## Team-owned configuration tables
 

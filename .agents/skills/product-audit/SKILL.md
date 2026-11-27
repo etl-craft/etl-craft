@@ -63,7 +63,8 @@ candidate as it will be published: the wheel and images, not the repository chec
 - Cover:
   - sign-in, sign-out, session expiry and returning users;
   - navigation, search, filters, sorting and large lists;
-  - empty, loading, error and success states;
+  - every page distinguishes no data, not measured, expired, archive unavailable, permission-filtered, controller or agent unavailable, and loading, and never shows any of them as zero;
+  - error and success states;
   - browser back, forward and refresh;
   - every button giving feedback;
   - version, help and settings being findable.

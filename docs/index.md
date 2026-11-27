@@ -11,8 +11,8 @@ and runs the work against one **warehouse**. The controller schedules and superv
 ## Core ideas
 
 **Pipelines are data, not code.** A pipeline is a row in `CFG_PIPELINES`; its tasks are rows in
-`CFG_TASKS`; the order between them comes from `CFG_TASK_DEPENDENCY` and
-`CFG_PIPELINE_DEPENDENCY`. Changing a pipeline means changing rows, reviewed like any other
+`CFG_TASKS`. The engine derives execution order from [run and start conditions](guides/dependencies.md)
+on those rows. Changing a pipeline means changing rows, reviewed like any other
 change.
 
 **One verb runs everything.** `etl-craft run --pipeline-code X` runs a pipeline by dispatching
@@ -51,7 +51,7 @@ flowchart LR
 ```
 
 Each finished task records its outcome in `AUD_TASK_RUN_LOG`; the next wave is resolved from
-those outcomes and the dependency rows.
+those outcomes and the dependency graph derived from conditions.
 
 ## How the code is organised
 

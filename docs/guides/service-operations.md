@@ -198,10 +198,8 @@ a run with `--init-only` exits 0 while the controller runs it.
 
 ## Actor scopes and run writers
 
-`ActorKind` lives in `core.enums` and contains `USER`, `SERVICE` and `SYSTEM`; its existing
-import through `core.actor` also works. Replace the old `HUMAN` kind with `USER`, and
-`SCHEDULE`, `ORCHESTRATOR` and `WORKER` with `SERVICE`. Historical audit values remain
-unchanged. Authenticate once and use the returned identity and current role in
+`ActorKind` lives in `core.enums` and contains `USER`, `SERVICE` and `SYSTEM`.
+Authenticate once and use the returned identity and current role in
 `OperationContext`; library calls that write directly must use `acting_as` explicitly.
 An unset `current_actor()` raises `ConfigurationError`. Database connection reads used for
 authentication do not invent an actor.

@@ -11,7 +11,12 @@ Use a task code followed by a fact, such as `load.SUCCESS`, `pipeline.load.FAILE
 combine expressions with `NOT`, `AND`, and `OR`, in that order of precedence.
 Parentheses group expressions, and `AT_LEAST(2, a.SUCCESS, b.SUCCESS, c.SUCCESS)`
 requires at least two of the three expressions to be true. The threshold must be
-between one and the number of expressions.
+between one and the number of expressions, with at least two expressions. The
+last part of a reference is always the fact. Task conditions use
+`task.FACT`, `pipeline.task.FACT` or `project.pipeline.task.FACT`. Start
+conditions use `pipeline.FACT` or `project.pipeline.FACT`. Conditions support
+boolean combinations and typed comparisons. Arithmetic, templating and other
+functions are unavailable.
 
 | Facts | Values |
 |---|---|
@@ -22,6 +27,9 @@ between one and the number of expressions.
 
 Compare numeric facts with `=`, `<>`, `<`, `<=`, `>`, or `>=`. Use `=` or `<>`
 for status and error class, for example `load.STATUS = FAILED`.
+Use boolean facts directly, for example `load.FINISHED AND NOT load.FAILED`.
+A skipped task contributes zero to counts. A measurement the handler did not
+report remains unknown.
 
 The package demo's `DEMO.setup_fact` waits for
 `interactions.SUCCESS AND interactions.ROWS_WRITTEN > 0 AND retire_agents.SUCCESS`.
@@ -30,7 +38,10 @@ See the [demo metadata](https://github.com/etl-craft/etl-craft/blob/main/example
 ## When a task starts
 
 A true expression makes the task ready. A false expression skips it. An unknown
-expression waits. For example, `a.SUCCESS OR b.SUCCESS` is true as soon as either
+expression waits. `NOT` leaves an unknown value unknown. False decides an
+`AND` even if the other operand is unknown, and true decides an `OR` in the
+same situation. `AT_LEAST` is false once even counting all unknown terms cannot
+reach the threshold. For example, `a.SUCCESS OR b.SUCCESS` is true as soon as either
 task succeeds. A count that a handler does not report is unknown. If no upstream
 can still change the answer, an unknown expression also skips the task. The
 engine records the reason and the values it read in `AUD_GATE_DECISIONS`.
@@ -42,8 +53,9 @@ Tasks already successful or skipped under the run stay settled.
 ## Dependencies on other pipelines
 
 A reference to another pipeline reads the latest finished output. The gate can
-wait for an upstream run still in progress and checks that the output was not
-already consumed. A successful task consumes the output recorded at admission.
+wait up to `Orchestration.Gate_wait_minutes` for a fresh output and checks that
+the output was not already consumed. A successful task consumes the output
+recorded at admission. Backfill runs are not eligible upstream outputs.
 Set `CONSUME_REPAIRS=N` on the consuming pipeline to accept only a new run
 identity for both task conditions and the start condition.
 
@@ -86,13 +98,17 @@ self-references and cycles through start conditions, including across projects.
 
 ## Refusals
 
-Correct a misspelling such as `load.SUCESS` to `load.SUCCESS`. Use a numeric fact
-in a comparison such as `load.REJECTED = 0`. Remove self-references or one link
-in a cycle, and use only active tasks in projects you can view.
+Deploy, config plan, validate and re-parse can refuse an invalid condition. Use
+the named task or pipeline and expression position to find the error. Correct a
+misspelling such as `load.SUCESS` to `load.SUCCESS`. Use a numeric fact in a
+comparison such as `load.REJECTED = 0` and choose a fact available for the
+condition's scope. Remove self-references or one link in a cycle, and use only
+active upstreams in projects you can view.
 
 ## How a pipeline run ends
 
-Each task, including an alert, accepts these options in `task_parameters.csv`.
+The pipeline run is a container for its task runs. Each task, including an
+alert, accepts these options in `task_parameters.csv`.
 
 | Option | Default | Effect when set to `Y` |
 |---|---|---|

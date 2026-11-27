@@ -216,6 +216,7 @@ item's text, or work done early under another item.
 | S7.BB Run monitoring | Planned | | Attempt evidence, agent capacity, Home counts, and Monitor with missed starts and SLA |
 | S7.BC Incident handoff | Planned | | Recovery guidance, alert identity and existing support evidence from the run |
 | S7.BD Bounded catalog lineage lookup | Planned | | Bounded definition and history reads at 5,000 pipelines and 50,000 tasks per project |
+| S7.BE Cross-project condition safety | Planned | | Refuse definition changes that would break another project's conditions |
 | S7.O Package and demo repositories | Done | #317, #318 | Small package demo, public demo seed and pinned candidate evidence validation |
 | S7.P Obvious failures do not stop 1.0.0 | In progress | #173, #178 | Audit done (#173); the log-folder and port checks close their catalog rows (#178); item 4 keeps the catalog current |
 | S7.Q A generic ANSI SQL warehouse | Moved after 0.9.0 | | A `generic` dialect over SQLAlchemy for rare databases: ANSI SQL only, NULL-safe column comparison for merges, refusals for anything without an ANSI form |
@@ -234,17 +235,22 @@ item's text, or work done early under another item.
 
 ### Handover notes
 
-- **S7.BA design.** The design note is [run-conditions.md](run-conditions.md): grammar, facts,
-  three-valued evaluation, cross-pipeline binding, the derived `CFG_CONDITION_EDGES` table, the
-  decision record, the fail options and the refusals. S7.BA.2 starts after the owner approves it.
+#### Before the 0.9.0 release PR
+
+- Keep the completed roadmap sections and their IDs available until they are trimmed in the release PR.
+- Write `docs/reference/design.md` before the release.
+
+#### Item notes
+
+- **S7.BA guide.** See [Run conditions](../guides/dependencies.md) for grammar, facts,
+  three-valued evaluation, binding, recorded decisions, fail options and refusals.
 - **S7.BA.2 Choices that differ from the item text.**
   - The engine retains `CFG_TASK_DEPENDENCY` for derived edges with stable identifiers, preserving
     dependency consumption history.
-  - Conditions use `SUCCESS` (owner decision 1 in [run-conditions.md](run-conditions.md)).
+  - Conditions use `SUCCESS`, as documented in [Run conditions](../guides/dependencies.md).
   - The pipeline is a container. Every task, including ALERT, accepts both fail options.
     `FAIL_PIPELINE_IF_FAILED` defaults to `Y` and optional tasks set it to `N`.
     `FAIL_PIPELINE_IF_NOT_RUN` defaults to `N`. Engine trouble always fails the run.
-    This supersedes the design note's defaults and status rules (owner, 2026-11-27).
   - `examples/demo` is converted in S7.BA.2 because the installed-wheel gate seeds it;
     the Support Insights repository conversion stays in the follow-up slice.
   - **Acceptance availability.** SQLite and PostgreSQL, installed-wheel demos, and UI checks
@@ -10355,14 +10361,19 @@ per pipeline run to that page and record before/after measurements in its PR.
 3. **S7.BB.3 Run/task views.** Add inline attempt triage and run Statistics. Use the last 20 successful
    runs for medians and amber ▲/▼ for values beyond 3× or below ⅓. Show the warehouse’s native
    SQLSTATE or vendor code when the driver provides one. Add an “Open in catalog” link to the
-   existing task mapping page.
+   existing task mapping page. A rejected count opens counts by rule or recorded reason. Show
+   queue time from attempt queued to started beside execution time and link to S7.AX.4 step
+   timings in the log. Show a warehouse query ID only where the handler already records it.
+   Use existing evidence without new tables. Reject row detail and export stay after 1.0.0.
 4. **S7.BB.4 Selected-stream log events.** Filter and jump to the first recorded error.
 5. **S7.BB.5 Waiting and agents.** Explain recorded blockers and show current attempts
    with Linux-only live samples, sample age and free eligible slots; macOS shows “Not sampled.”
 6. **S7.BB.6 Monitor and Home.** Page active and recent evidence within the read budget.
    Include overdue SLAs, recorded breaches and unstarted schedule ticks past a fixed grace
    of the lesser of five minutes and the schedule interval. Omit paused/holiday/pre-definition ticks and reconcile catch-up by exact key. Each backlog
-   occurrence leaves Late when its run starts.
+   occurrence leaves Late when its run starts. Link each missed start to a bounded preview of
+   the next occurrences in project time, using `engine/schedule_ticks` and showing the calendar,
+   pause or start condition that affects each occurrence.
 
 **Done when.**
 
@@ -10374,6 +10385,8 @@ per pipeline run to that page and record before/after measurements in its PR.
 - [ ] Monitor and Home counts use the same visibility filter and reveal no hidden totals.
 - [ ] Match a missed tick once through catch-up until its run starts, even when a delayed
       run was queued first. Test holidays, pause, definition start and schedule edits.
+- [ ] Schedule previews agree with scheduler behavior in tests for DST, holiday shifts and catch-up.
+- [ ] Reject counts drill into recorded summaries, and task timings and query IDs use recorded evidence.
 - [ ] Monitor shows environment badges and stays within the measured read budgets.
 - [ ] Browser checks cover the proposed panels at 1440 and 390 px in light and dark.
 
@@ -10460,6 +10473,36 @@ Engine DBs. A gate that merely finishes is not a pass.
       per 400-name batch, proven at 500 and 5,000 pipelines. At 5,000 pipelines and 50,000 tasks,
       SQLite and PostgreSQL cold build ≤5 minutes, warm rebuild ≤60 seconds and one-pipeline
       re-parse ≤10 seconds, recorded in release evidence.
+
+### S7.BE Cross-project condition safety
+
+**Problem.** Edge derivation resolves conditions for the deploying project. Deactivating or
+renaming a task or pipeline named by another project's `RUN_CONDITION` or `START_CONDITION` can
+succeed. The downstream edge can then retain an inactive target or a stale name. Its gate never
+binds again and runs skip after the wait budget without naming the broken reference.
+
+**Change.** Before 0.9.0, make `deploy`, `config plan` and `validate` share a check for inbound
+references from active downstream conditions. Refuse a change that would break a reference,
+even if a rename preserves the target ID. Compare the proposed state against the active
+condition text and check deploy before committing. For a visible reference, name the downstream
+project, pipeline, task (for a task condition), condition field and reference position. Tell the
+operator to change the downstream condition first or deactivate the downstream task (or pipeline
+for a start condition). If the caller cannot view the dependent scope, refuse with “a task in
+another project depends on it; ask an administrator” and omit the other project's identifiers.
+
+**Not in this item.** Rewriting downstream definitions, a general impact report, new tables,
+or changing gate evaluation and wait budgets.
+
+**Slices.** One PR. Share the inbound check across the three paths and cover its diagnostics
+and rollback behavior in both Engine DB suites.
+
+**Done when.**
+
+- [ ] SQLite and PostgreSQL cover a cross-project task, a cross-project pipeline and a rename.
+- [ ] Each operation refuses the invalid change, and a refused deploy leaves definitions and
+      edges unchanged.
+- [ ] Visible diagnostics name the dependent and condition position. Hidden diagnostics give
+      only the administrator remedy. Existing within-project refusals remain unchanged.
 
 ### S7.AX Pipeline, run and task views
 
@@ -11244,26 +11287,43 @@ CI can gate a deploy on it.
 Owner, 2026-11-26: etl-craft is built to do what PowerCenter does, minus the visual designer;
 pipelines stay code. These come after 1.0.0, each designed when it is taken up:
 
-- **Events between branches:** a branch raises a named event and another waits for it
-  (PowerCenter Event-Raise and Event-Wait), where a dependency on the last task is not enough.
-- **Suspend on error:** a failed task leaves the run suspended while other branches finish; the
-  operator fixes the cause and resumes from the failed task, with an optional alert.
-- **Impact analysis:** for a table, column or task, every task that reads or writes it, in
-  `deploy --plan` and the catalog.
-- **Test load:** run a task on N source rows into a scratch copy of its target and report
-  counts, rejects and rule results.
-- **Compare runs:** two runs side by side: definition version, parameters, counts and durations.
+1. **Definition and dependency reports and deploy impact.** Compare retained published
+   definitions and report which tasks read or write a table or column in the catalog and deploy
+   preview. Identify incomplete lineage.
+2. **Reject investigation.** Add authorized row detail and export to the recorded count
+   breakdown, with redaction and retention rules.
+3. **Bounded test load.** Run a bounded source sample into an isolated scratch target and report
+   counts, rejects and rule results. Rollback mode is excluded.
+4. **Run comparison.** Compare two explicitly selected runs, including pinned definitions,
+   redacted inputs, counts and durations.
+5. **Run input files.** Read local typed overrides through the existing admission path.
+6. **Pipeline-specific follow-ups.** Require a concrete pipeline for each of suspend on error,
+   named events, finite schedules and masked clones.
+
+Other deferred work:
+
 - **Alert variables:** run and task statistics in alert templates, and the task log attached.
-- **Masking on clone:** mask declared sensitive columns when cloning to non-production.
-- **Schedule end options:** end after N runs or on a date.
 - **Team metadata fields** on objects beyond tags.
 - **Operational follow-ups:** scoped cross-run event search, per-task drift, delivery escalation,
-  audit export and reject drilldown.
+  and audit export.
 - **Definition and history scale follow-ups:** private conditional definition reads and terminal
   summaries only with measured wins, subject to the S7.BB budget exception. Preserve pinned
   historical definitions and retention holds.
-- **Reusable parameter files and definition comparison:** local typed overrides through the
-  existing admission path, and a semantic comparison of retained versions.
+- **Closed error-code taxonomy**, if needed in addition to native warehouse codes.
+
+Rejected:
+
+- Pre/post-session hooks duplicate ordinary tasks and conditions.
+- Target connection groups conflict with one warehouse per project.
+- Execution profiles and session configuration objects lack a second caller.
+- Commit-point controls conflict with managed SQL owning its writes.
+- A lookup abstraction duplicates warehouse SQL joins.
+- A pushdown optimizer duplicates the warehouse's execution planning for managed SQL.
+- General partitioning needs a measured workload and a recovery contract before reconsideration.
+- Code-level workflow composition would add a second authoring model alongside config rows.
+- Real-time message recovery would add a separate execution model alongside bounded ETL runs.
+- A task Summary tab or separate detail page duplicates the approved panel, which opens on Logs
+  and shows the summary inline.
 
 ## After 1.0.0: provider integration follow-ups
 
