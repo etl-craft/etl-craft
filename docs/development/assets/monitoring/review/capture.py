@@ -11,7 +11,6 @@ SCREENS = {
     "monitor": {"view": "Monitor"},
     "task-logs": {"view": "Task"},
     "task-sql": {"view": "Task", "tab": "SQL / script"},
-    "task-mapping": {"view": "Task", "tab": "Mapping"},
     "task-details": {"view": "Task", "tab": "Details"},
     "task-attempts": {"view": "Task", "tab": "Attempts"},
     "task-python": {"view": "Task", "task": "python"},
@@ -41,12 +40,15 @@ with sync_playwright() as playwright:
                 assert not errors, errors
                 page.screenshot(path=ROOT / f"{name}-{theme}-{width}.png", full_page=True)
             page.goto(URL + "?view=Home")
+            expect(page.get_by_text("Pipelines, least healthy first")).to_be_visible()
+            page.get_by_role("button", name="24 h").click()
+            expect(page.get_by_text("1 of 7 runs failed")).to_be_visible()
             page.get_by_role("link", name="Failing").click()
             assert "PRIVATE_RECON" not in page.locator("main").inner_text()
             assert "NIGHTLY_LEDGER" in page.locator("main").inner_text()
             page.goto(URL + "?view=Task")
             page.get_by_role("button", name="First error").click()
-            assert page.locator("#first-error").is_visible()
+            expect(page.locator("#first-error")).to_be_visible()
             page.get_by_role("tab", name="Attempts").click()
             page.get_by_role("button", name="Open archived log").click()
             expect(page.get_by_text("Attempt 1 log was archived.", exact=True)).to_be_visible()

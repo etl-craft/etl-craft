@@ -10348,7 +10348,9 @@ per pipeline run to that page and record before/after measurements in its PR.
 1. **S7.BB.1 Design and owner review.** Run the fixture-only prototype locally. Review each
    screen/tab with the owner and record approved 1440/390 light/dark captures.
 2. **S7.BB.2 Attempt evidence.** Store typed first/last attempt anchors with archive-aware resolution
-   and capture isolated `getrusage(RUSAGE_CHILDREN)` evidence at exit, with unsupported values NULL.
+   and capture the exact child’s `wait4(pid, ...)` resource result at exit. Preserve timeout and
+   cancel polling with `WNOHANG`, normalize Linux KiB versus macOS byte RSS, and store unsupported
+   values as NULL; do not assume a supervisor runs only one child.
 3. **S7.BB.3 Run/task views.** Add inline attempt triage and run Statistics. Use the last 20 successful
    runs for medians and amber ▲/▼ for values beyond 3× or below ⅓.
 4. **S7.BB.4 Selected-stream log events.** Filter and jump to the first recorded error.
@@ -10436,6 +10438,12 @@ historical definitions or retention.
 seeds 5,000 pipelines and 50,000 tasks in one project on each of SQLite and PostgreSQL.
 It performs catalog build, lineage, deploy, re-parse and validate, including warm and
 incremental reads and a populated history that stresses trigger links.
+
+The gate also measures a cold catalog build separately from warm reads. A cold build must
+have a fixed statement ceiling and elapsed-time ceiling independent of pipeline count; the
+initial proposal is ≤50,000 statements and ≤60 seconds per 5,000-pipeline project on each
+Engine DB. If that cannot be met after bounded reads, this becomes a separate pre-0.9.0
+catalog-build item with before/after measurements. A gate that merely finishes is not a pass.
 
 **Done when.**
 
