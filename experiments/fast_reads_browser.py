@@ -99,12 +99,16 @@ def run(size, demo):
                         and not os.environ.get("FAST_READS_SKIP_LOAD_TEST")):
                         from fast_reads_runs import benchmark
                         benchmark(ctx.engine)
-                    if size < 5000 or os.environ.get("FAST_READS_LARGE_CATALOG"):
-                        catalog = collect_catalog(ctx.engine, ctx.config, record_lineage=False)
+                    prepared = os.environ.get("FAST_READS_CATALOG_FILE")
+                    if size < 5000 or os.environ.get("FAST_READS_LARGE_CATALOG") or prepared:
                         output = root / "catalog"
                         output.mkdir(parents=True, exist_ok=True)
                         (output / ".etl-craft-catalog").write_text('{"project":"default"}')
-                        (output / "catalog.json").write_bytes(encode(index_triggers(catalog)))
+                        if prepared:
+                            shutil.copy2(prepared, output / "catalog.json")
+                        else:
+                            catalog = collect_catalog(ctx.engine, ctx.config, record_lineage=False)
+                            (output / "catalog.json").write_bytes(encode(index_triggers(catalog)))
             if (root / "catalog").exists():
                 prepare_site_lock(root / "catalog")
             pipeline = "SCALE_0" if size else "DEMO"
@@ -127,7 +131,7 @@ def run(size, demo):
                         continue
                     if os.environ.get("FAST_READS_CATALOG_ONLY") and name not in {"catalog", "lineage"}:
                         continue
-                    if size == 5000 and not os.environ.get("FAST_READS_LARGE_CATALOG") and name in {"catalog", "lineage"}:
+                    if size == 5000 and not os.environ.get("FAST_READS_LARGE_CATALOG") and not os.environ.get("FAST_READS_CATALOG_FILE") and name in {"catalog", "lineage"}:
                         continue
                     browser, page, _ = open_page(pw, viewport={"width": 1440, "height": 950})
                     try:
