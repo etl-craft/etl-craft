@@ -17,6 +17,7 @@ from browser.test_react_ui import open_page, sign_in
 from fixtures.catalog_scale import seed_catalog
 from etl_craft.core.actor import SYSTEM_ACTOR, acting_as
 from etl_craft.services.catalog.collect import collect_catalog
+from etl_craft.services.catalog.storage import prepare_site_lock
 from etl_craft.services.operations import catalog_pages
 from fast_reads import encode, index_triggers
 
@@ -94,7 +95,7 @@ def run(size, demo):
                         if not seed_database:
                             seed_catalog(conn, prefix="SCALE", pipelines=size, tasks=10, runs=25)
                         conn.exec_driver_sql("UPDATE AUD_PIPELINES_RUN_LOG SET RUN_DATE = date(START_DATE) WHERE RUN_DATE IS NULL")
-                    if size == 5000:
+                    if size == 5000 and not os.environ.get("FAST_READS_CATALOG_ONLY"):
                         from fast_reads_runs import benchmark
                         benchmark(ctx.engine)
                     if size < 5000 or os.environ.get("FAST_READS_LARGE_CATALOG"):
@@ -103,6 +104,8 @@ def run(size, demo):
                         output.mkdir(parents=True, exist_ok=True)
                         (output / ".etl-craft-catalog").write_text('{"project":"default"}')
                         (output / "catalog.json").write_bytes(encode(index_triggers(catalog)))
+            if (root / "catalog").exists():
+                prepare_site_lock(root / "catalog")
             pipeline = "SCALE_0" if size else "DEMO"
             with ctx.engine.connect() as conn:
                 run_id = conn.exec_driver_sql(
