@@ -213,7 +213,9 @@ item's text, or work done early under another item.
 | S7.AY ROW_IDs derived from the task run | Done | #470 | `ROW_ID = TASK_RUN_ID × 2^32 + n` on every warehouse; `AUD_TARGET_ROW_IDS`, the reservation report and ROW_ID generators are gone |
 | S7.AZ Re-parse, not refresh | Done | #472 | `pipelines re-parse`, `lineage --re-parse`, re-parse routes, actions, UI labels, Engine DB names and docs; "refresh" means data only |
 | S7.BA Run conditions on task and pipeline rows | In progress | [#474](https://github.com/etl-craft/etl-craft/pull/474), [#475](https://github.com/etl-craft/etl-craft/pull/475) | S7.BA.2 and S7.BA.3 done. Tasks declare run conditions and pipelines declare start conditions. Support Insights remains a follow-up. |
-| S7.BB Run monitoring | Planned | | Task statistics, failure information, log events, per-task resources and an agent monitor in the S7.AX views |
+| S7.BB Run monitoring | Planned | | Attempt evidence, wait reasons, agent capacity and a scoped Monitor feed |
+| S7.BC Incident handoff | Planned | | Recovery guidance, alert identity and existing support evidence from the run |
+| S7.BD Bounded catalog lineage lookup | Planned | | Catalog publication with large task definitions |
 | S7.O Package and demo repositories | Done | #317, #318 | Small package demo, public demo seed and pinned candidate evidence validation |
 | S7.P Obvious failures do not stop 1.0.0 | In progress | #173, #178 | Audit done (#173); the log-folder and port checks close their catalog rows (#178); item 4 keeps the catalog current |
 | S7.Q A generic ANSI SQL warehouse | Moved after 0.9.0 | | A `generic` dialect over SQLAlchemy for rare databases: ANSI SQL only, NULL-safe column comparison for merges, refusals for anything without an ANSI form |
@@ -10325,47 +10327,78 @@ them) and user-defined workflow variables (passing values between tasks).
 
 ### S7.BB Run monitoring
 
-Owner, 2026-11-26, from the PowerCenter 10.5.1 Workflow Monitor chapters (behaviour reference
-only): the run, task and agent views show what PowerCenter's Workflow Monitor shows. PowerCenter
-is the more intuitive monitor and Airflow the more familiar layout; these views add
-PowerCenter's information to the approved S7.AX layout without changing its navigation.
+**Problem.** Operators need an exact attempt diagnosis during a failure and a cross-project
+view of late and waiting loads at shift handoff. The current run and project views expose
+part of the evidence across several requests and screens.
 
-**Change.**
+**Change.** Follow [Monitoring and operability for 0.9.0](monitoring-and-operability.md).
+Preserve the pipeline and run workspaces, add bounded statistics and structured evidence,
+extend Agents, and add a read-only Monitor scoped to visible projects.
 
-1. **Task statistics.** For a task instance: source rows read and failed, target rows applied
-   and affected, inserted, updated, deleted, rejected and duplicates, throughput (rows a second)
-   and duration, each beside the median of the task's recent successful runs. Only counts its
-   handler produces are shown.
-2. **Run statistics.** The run page lists every task's rows, throughput and duration in one
-   sortable table.
-3. **Failure information.** First and last error, the failure class, a stable error code (the
-   error class's exit code name), the failing step and a link to its log line.
-4. **Log events.** The Logs tab filters by severity and step, jumps to the first error, and
-   shows condition evaluations (S7.BA) as events beside the S7.AX.4 context and outcome blocks.
-5. **Resources.** Agents sample each task process: peak CPU and peak memory are recorded on the
-   attempt and shown in its statistics. An agent monitor lists every agent's running attempts
-   with process id, CPU, memory, swap, pool and free slots.
-6. **Waiting.** A task waiting for a slot shows that state and its wait reason in the grid and
-   the run.
+**Not in this item.** Global log text search, missed schedule occurrences, suspend on error,
+trends, run comparison and a new retention default.
 
-**Slices.** Each is one pull request, in this order.
+**Slices.**
 
-1. **S7.BB.1 Layout:** a design of where each panel goes at 1440 and 390 px, light and dark,
-   built on the S7.AX views; the owner approves it before any code.
-2. **S7.BB.2 Data:** attempt resource samples, error codes and the statistics in one request
-   per page, with statement budgets.
-3. **S7.BB.3 Task and run statistics and failure information.**
-4. **S7.BB.4 Log events.**
-5. **S7.BB.5 Agent monitor and waiting state.**
+1. **S7.BB.1 Design and owner review.** Agree on screens, data, query budgets and public surface.
+2. **S7.BB.2 Attempt evidence.** Store typed failure anchors and approved attempt resources;
+   reuse handler counts and bound the baseline query on both Engine DBs.
+3. **S7.BB.3 Run/task views.** Extend the failure card, task panel and run Statistics.
+4. **S7.BB.4 Selected-stream log events.** Filter and jump to the first recorded error.
+5. **S7.BB.5 Waiting and agents.** Explain recorded blockers and show current attempts
+   with sample age and free eligible slots.
+6. **S7.BB.6 Monitor.** Add authorized active/recent incident and SLA views with keyset
+   continuation and measured query plans.
 
 **Done when.**
 
-- [ ] The owner approved the layout before S7.BB.2.
-- [ ] Clicking a task shows its statistics, failure information and resources in the first
-      screen from one request, with a recorded statement budget.
-- [ ] The log filters by severity and step and jumps to the first error.
-- [ ] The agent monitor shows each agent's running tasks with CPU and memory.
-- [ ] Browser tests cover each panel at 1440 and 390 px, light and dark.
+- [ ] The owner approves the design and public surface before implementation.
+- [ ] Selected tasks show failure, counts and resource evidence in one feed and preserve
+      missing/zero distinctions and exact attempt links.
+- [ ] Log events, waits and capacity show recorded evidence, including missing or stale data.
+- [ ] Monitor respects visibility before selection and stays within the measured read budgets.
+- [ ] Browser checks cover the proposed panels at 1440 and 390 px in light and dark.
+
+### S7.BC Incident handoff
+
+**Problem.** During a failure the operator has to assemble the exact run identity, delivery
+status and recovery evidence across screens and CLI commands.
+
+**Change.** Use the existing run, audit, recovery preview, download and doctor paths.
+Add a redacted incident handoff, improve the standard alert payload and explain exact
+run selection and recovery in the Quick Start.
+
+**Not in this item.** New recovery mutations, a support bundle command, log attachments,
+delivery escalation and audit export.
+
+**Slices.** S7.BC.1 ships the run handoff, alert payload and guided CLI recovery together
+after the owner approves the disclosure contract.
+
+**Done when.**
+
+- [ ] The handoff opens the exact authorized run and the existing recovery and audit views.
+- [ ] Alerts retain delivery deduplication and omit sensitive contents, including when
+      the trusted link is unavailable.
+- [ ] The Quick Start walks through a deliberate failure and explicit run selection.
+
+### S7.BD Bounded catalog lineage lookup
+
+**Problem.** A seeded SQLite project with 50,000 SQL tasks cannot build a catalog because
+the lineage lookup exceeds the database bind limit.
+
+**Change.** Bound the existing task/hash lookup without changing its semantics. Keep
+publication atomic and measure the warm and incremental builds separately.
+
+**Not in this item.** A new definition document or API, browser caching and changes to
+historical definitions or retention.
+
+**Slices.** S7.BD.1 bounds the lookup and verifies its results and cost on both Engine DBs.
+
+**Done when.**
+
+- [ ] The catalog can read more lineage pairs than one SQLite statement accepts.
+- [ ] Batch boundaries preserve hash matching, project scope, failure exclusions and ordering.
+- [ ] The scale reproduction and statement costs are recorded without extending mandatory CI.
 
 ### S7.AX Pipeline, run and task views
 
@@ -11163,6 +11196,12 @@ pipelines stay code. These come after 1.0.0, each designed when it is taken up:
 - **Masking on clone:** mask declared sensitive columns when cloning to non-production.
 - **Schedule end options:** end after N runs or on a date.
 - **Team metadata fields** on objects beyond tags.
+- **Operational follow-ups:** scoped cross-run event search, missed schedule occurrences,
+  per-task drift, delivery escalation, audit export and reject drilldown.
+- **Definition and history scale follow-ups:** private conditional definition reads and terminal
+  summaries only with measured wins. Preserve pinned historical definitions and retention holds.
+- **Reusable parameter files and definition comparison:** local typed overrides through the
+  existing admission path, and a semantic comparison of retained versions.
 
 ## After 1.0.0: provider integration follow-ups
 
