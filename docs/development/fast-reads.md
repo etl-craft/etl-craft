@@ -1,6 +1,6 @@
 # Fast catalog, definitions and runs
 
-Owner discussion. The Engine DB remains authoritative. This study changes no shipped code, schema, configuration or release gate. [Monitoring and operability](monitoring-and-operability.md#scale-and-storage) sets the baseline. [S7.BD](road-to-1.0.0.md#s7bd-bounded-catalog-lineage-lookup) already owns the large-project catalog blocker. Its budgets remain cold build ≤5 minutes, warm rebuild ≤60 seconds and one-pipeline re-parse ≤10 seconds. Monitor retains the proposed 250 KiB first page and local PostgreSQL warm p95 ≤500 ms, with a fixed statement count.
+Owner decisions and supporting measurements. The Engine DB remains authoritative. This study changes no shipped code, schema, configuration or release gate. [Monitoring and operability](monitoring-and-operability.md#scale-and-storage) sets the baseline. [S7.BD](road-to-1.0.0.md#s7bd-bounded-catalog-lineage-lookup) already owns the large-project catalog blocker. Its budgets remain cold build ≤5 minutes, warm rebuild ≤60 seconds and one-pipeline re-parse ≤10 seconds. Monitor retains the proposed 250 KiB first page and local PostgreSQL warm p95 ≤500 ms, with a fixed statement count.
 
 ## What runs today
 
@@ -116,7 +116,7 @@ The history bottleneck in this sample is the optional attempt filter even with t
 
 ## PostgreSQL invalidation
 
-On local PostgreSQL, 100 committed changes reached two listening connections. A single version SELECT took 0.101 ms median and 0.142 ms p95 across 200 reads. Commit to notification consumption took 0.865 ms median and 1.118 ms p95 across two serially consumed listeners. These are small-message local transport measurements, without API authorization or deployment work. A notification moves invalidation work off the request only if a reliable recovery protocol can replace the durable version check. Reconnect needs to re-read the durable version and discard any uncertain local generation. A reader can still race notification delivery in normal operation. Use the durable check as the correctness rule, with an optional notification as a prewarm hint if a later benchmark justifies two long-lived listeners. A single SQLite process can invalidate locally after commit, but its HTTP validator still needs a durable version across restart and all supported writer paths.
+On local PostgreSQL, 100 committed changes reached two listening connections. A single version SELECT took 0.101 ms median and 0.142 ms p95 across 200 reads. Commit to notification consumption took 0.865 ms median and 1.118 ms p95 across two serially consumed listeners. These are small-message local transport measurements, without API authorization or deployment work. A notification moves invalidation work off the request only if a reliable recovery protocol can replace the durable version check. Reconnect needs to re-read the durable version and discard any uncertain local generation. A reader can still race notification delivery in normal operation. Every API replica checks the stored version on each request. The design has no notification subscriptions. SQLite uses the same stored-version check in its single API process.
 
 ## Publication and access contract
 
@@ -126,28 +126,24 @@ Use `Cache-Control: private, no-cache`. Include representation identity and effe
 
 | Scenario | Proposed result |
 | --- | --- |
-| Engine DB unavailable | Refuse definition requests, including conditional hits, because current authorization cannot be established. An already open page can show its last successful response marked unavailable for refresh, with its timestamp. |
+| Engine DB unavailable | Refuse definition requests, including conditional hits, because current authorization cannot be established. An already open page retains its displayed content and shows a “can't refresh” notice. |
 | Deploy or re-parse commits during assembly | Discard a build that observes a changed generation before publication. Rebuild against the new version or return retriable unavailability. A request that finishes against its earlier consistent snapshot carries that revision. A new request checks the new revision. |
 | Grants revoked while shard is resident | Refuse the next unauthorized request including matching validators. Rebuild any representation whose visible edges or list changed. An already rendered response was disclosed before revocation. The next revalidation clears inaccessible content and marks failures. |
 | Build fails halfway | Keep incomplete data private to the builder. Refuse the new generation explicitly until a retry succeeds. A consistent previous generation stays useful only where it is still authoritative. |
 | API restarts | Resolve authorization and version before using the first body. Measure lazy first-request cost and transient duplicate builds before choosing an eager startup policy. |
 
-## Proposed release order and costs
+## Owner decisions and release order
 
-| Timing | Recommendation | Implementation cost and gate |
-| --- | --- | --- |
-| Before 0.9.0 | Keep S7.BD first. Bound the existing build and remove measured redundant work in document assembly. | One PR within S7.BD where the change fits, with unchanged API and schema. Measure full cold, warm and single-pipeline re-parse on both Engine DBs. |
-| Before 0.9.0 | Profile and bound Home Insights and selected-run status on their existing paths. | One read/UI slice if justified by the profile. Preserve the current actions and split or defer slow panels only where their intended use allows it. No schema change proposed. |
-| Before 0.9.0 | Keep the indexed ID keyset and bounded live Monitor reads. Test selective and empty-match history, recent terminal runs and wide grids before an index proposal. | Existing Monitor and history work. Any proven index is a schema change on both dialects. Measure writes and size as well as read improvements. |
-| Before 0.9.0, subject to owner scope | Prototype a scoped catalog index and persisted detail slices for large-catalog readiness. The existing representation missed Chromium readiness at 5,000 pipelines. The isolated file-slice replay reached the lineage tab in 0.86 seconds. | One experimental follow-up, then up to two implementation PRs for operation/representation and UI. Preserve whole-project file semantics for existing callers. No new setting, service or core dependency. |
-| After 0.9.0 | Consider per-process RAM for scoped definitions only if the same-shape benchmark beats persisted slices. | One PR behind the existing operation if a cheap durable version covers every writer. Needs multi-copy/restart and real-grant tests. |
-| After 0.9.0 | Consider a bounded ended-run cache only for a measured repeated selected-run read that misses budget. | One PR if a durable validator already covers reopen, terminal transition and evidence retention. Otherwise return for schema approval. Retention, erasure, grants and reopen can change evidence under the same run ID. |
-| Rejected for current scope | Run-summary tables, a changes-since cursor and notification-only invalidation. | No budget miss in a representative PostgreSQL comparison has been attributed to a missing summary or cursor. A summary would add a finalization write, migration in both dialects and backfill. A changes cursor needs commit-ordered events, scoped removal/tombstones, a bounded replay window and refresh on gaps. Use the same authorization on replay and on full refresh. |
+1. Finish [S7.BD](road-to-1.0.0.md#s7bd-bounded-catalog-lineage-lookup) first. Add the indexed trigger-reference lookup and keep the output-equality test. The measured assembly time fell from 110.5 s to 25.9 s.
+2. Implement [S7.BF Scoped catalog reads](road-to-1.0.0.md#s7bf-scoped-catalog-reads) before 0.9.0, after S7.BD. Persist one slice per pipeline and a project index with the pipeline list, cross-pipeline table-level lineage edges and search entries. Use the index to preserve search and follow-lineage navigation. Apply grants to the served slices and index rows.
+3. Refuse new definition requests during an Engine DB outage. Open pages retain displayed content with a “can't refresh” notice. Cached definitions are never served stale.
+4. Each API replica checks the stored version on every request. Notification subscriptions are out of scope.
+5. Use persisted slices. Reconsider in-process RAM only with a same-shape benchmark.
+6. In [S7.BB.6](road-to-1.0.0.md#s7bb-run-monitoring), measure the authenticated PostgreSQL Monitor and sparse-filter history before proposing storage changes. Change storage only for a confirmed budget miss on the affected page.
 
-## Owner questions
-
-1. **Which catalog work belongs before 0.9.0?** Finish S7.BD and fix measured assembly hot spots, or add the scoped index and detail representation now. The latter might shrink first load but expands access and UI contracts before the browser comparison is complete. **Recommendation:** keep S7.BD first and prototype a scoped initial representation before 0.9.0. Require a browser benefit with equivalent access and navigation before shipping it.
-2. **What should a definition endpoint do during an Engine DB outage?** Refuse until authorization can be checked, or allow explicitly labelled older data under an approved offline authorization policy. Offline delivery adds a revocation window. **Recommendation:** refuse the endpoint and label data already visible in an open page.
-3. **How should two API copies notice changes?** Check the durable version per request, or also subscribe to notifications to prewarm. The latter adds reconnect handling and does not remove the need to recover from missed events. **Recommendation:** start with the durable check if sharding proceeds.
-4. **Where should scoped definitions live if their browser shape wins?** Use a persisted slice from the current publication path, or keep canonical shards in each API process. RAM can remove file reads but adds peak memory, restart work and replica invalidation. **Recommendation:** benchmark the same index and detail representations via both paths and start with persisted slices if latency is comparable.
-5. **What triggers a live-read storage change?** Keep bounded polling and add an index or summary only when a representative read remains over budget, or commit to a change cursor or summary ahead of evidence. The latter adds write and recovery contracts across both Engine DBs. **Recommendation:** measure the Monitor page, selected live panels and sparse history filters separately before choosing storage.
+S7.BD stays one PR. S7.BF has two slices for publication and authorized reads, then browser
+navigation and evidence. Preserve the existing catalog operation and its whole-project file
+semantics for existing callers. The plan adds no core dependency, server or setting. If a
+stored version covering all definition writers requires a schema change, bring that change
+back for approval. Consider ended-run caching after 0.9.0 only for a measured miss and with
+a reopen-safe validator. Run-summary storage and a live changes cursor stay out of this plan.

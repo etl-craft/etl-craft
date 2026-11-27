@@ -217,6 +217,7 @@ item's text, or work done early under another item.
 | S7.BC Incident handoff | Planned | | Recovery guidance, alert identity and existing support evidence from the run |
 | S7.BD Bounded catalog lineage lookup | Planned | | Bounded definition and history reads at 5,000 pipelines and 50,000 tasks per project |
 | S7.BE Cross-project condition safety | Done | #478 | Refuse definition changes that would break another project's conditions |
+| S7.BF Scoped catalog reads | Planned | | Before 0.9.0, after S7.BD. Persisted slices with grant-filtered search and cross-pipeline lineage |
 | S7.O Package and demo repositories | Done | #317, #318 | Small package demo, public demo seed and pinned candidate evidence validation |
 | S7.P Obvious failures do not stop 1.0.0 | In progress | #173, #178 | Audit done (#173); the log-folder and port checks close their catalog rows (#178); item 4 keeps the catalog current |
 | S7.Q A generic ANSI SQL warehouse | Moved after 0.9.0 | | A `generic` dialect over SQLAlchemy for rare databases: ANSI SQL only, NULL-safe column comparison for merges, refusals for anything without an ANSI form |
@@ -10377,7 +10378,10 @@ per pipeline run to that page and record before/after measurements in its PR.
    of the lesser of five minutes and the schedule interval. Omit paused/holiday/pre-definition ticks and reconcile catch-up by exact key. Each backlog
    occurrence leaves Late when its run starts. Link each missed start to a bounded preview of
    the next occurrences in project time, using `engine/schedule_ticks` and showing the calendar,
-   pause or start condition that affects each occurrence.
+   pause or start condition that affects each occurrence. Measure the authenticated Monitor feed
+   on local PostgreSQL and project history with sparse and absent filter matches. Include
+   broad and restricted viewers. A confirmed budget miss on the affected page is required
+   to propose a storage change.
 
 **Done when.**
 
@@ -10391,7 +10395,11 @@ per pipeline run to that page and record before/after measurements in its PR.
       run was queued first. Test holidays, pause, definition start and schedule edits.
 - [ ] Schedule previews agree with scheduler behavior in tests for DST, holiday shifts and catch-up.
 - [ ] Reject counts drill into recorded summaries, and task timings and query IDs use recorded evidence.
-- [ ] Monitor shows environment badges and stays within the measured read budgets.
+- [ ] Monitor shows environment badges. Record authenticated local PostgreSQL warm p95,
+      initial bytes and statement counts at scale. The first Monitor page stays within
+      250 KiB and 500 ms warm p95, with a fixed statement count as the project grows.
+      Record the same measures for sparse and empty-match project history filters, including
+      deep keyset pages. Tie any storage change to a confirmed miss on its page.
 - [ ] Browser checks cover the proposed panels at 1440 and 390 px in light and dark.
 
 ### S7.BC Incident handoff
@@ -10431,6 +10439,9 @@ the same limit even when per-pipeline result counts are bounded.
 **Change.** Bound every data-dependent name or ID list in the catalog, lineage, deploy,
 re-parse and validate paths. Use bounded chunks or a typed/joined set. Preserve exclusion
 semantics over the full input, project scope, ordering and atomic publication.
+Index catalog trigger references once by target pipeline and reuse that lookup during
+document assembly. At 5,000 pipelines, the prototype reduced document assembly from
+110.5 s to 25.9 s with identical output.
 
 **Query inventory from `git grep`.**
 
@@ -10455,8 +10466,8 @@ semantics over the full input, project scope, ordering and atomic publication.
 **Not in this item.** A new definition document or API, browser caching and changes to
 historical definitions or retention.
 
-**Slices.** S7.BD.1 fixes the listed reads and adds release-gate evidence. The slow gate
-seeds 5,000 pipelines and 50,000 tasks in one project on each of SQLite and PostgreSQL.
+**Slices.** S7.BD.1 fixes the listed reads, indexes trigger references and adds release-gate
+evidence. The slow gate seeds 5,000 pipelines and 50,000 tasks in one project on each of SQLite and PostgreSQL.
 It performs catalog build, lineage, deploy, re-parse and validate, including warm and
 incremental reads and a populated history that stresses trigger links.
 
@@ -10471,6 +10482,8 @@ Engine DBs. A gate that merely finishes is not a pass.
 - [ ] The slow release gate passes the one-project size target on both Engine DBs.
 - [ ] Results preserve hash matching, project scope, full failure exclusions, trigger-link
       uniqueness and stable ordering across batch boundaries.
+- [ ] Keep an output-equality test for the indexed trigger lookup, covering pipelines with
+      and without trigger references and multiple triggers for the same target.
 - [ ] Record query sizes and elapsed costs in release evidence. Per-PR CI uses small
       checks only, including a reduced SQLite bind-limit fixture.
 - [ ] Statement count does not grow with pipeline count: a fixed number per query kind plus one
@@ -10507,6 +10520,45 @@ and rollback behavior in both Engine DB suites.
       edges unchanged.
 - [ ] Visible diagnostics name the dependent and condition position. Hidden diagnostics give
       only the administrator remedy. Existing within-project refusals remain unchanged.
+
+### S7.BF Scoped catalog reads
+
+**Problem.** At 5,000 pipelines and 50,000 tasks the catalog sent 466 MB, and Chromium
+missed the 10-second readiness window. A persisted 90 KB slice reached the selected
+lineage tab in 0.86 seconds. Project-wide navigation needs an index to work with slices.
+See [Fast catalog, definitions and runs](fast-reads.md).
+
+**Change.** Before 0.9.0, after S7.BD, publish one persisted slice per pipeline plus a
+project index with the pipeline list, cross-pipeline table-level lineage edges and search
+entries. Use the index to follow lineage and search across pipelines with today's navigation.
+Apply current grants to every served slice and index row, including references inside a row.
+A hidden pipeline's name, objects and edges must never appear. An object independently visible
+through another pipeline may retain that visible relationship.
+
+Publish the index and slices together as one complete version. Every API replica checks access
+and the stored version on each request, including before returning 304. Deploy and re-parse
+advance the version used for the affected definitions. When the Engine DB is unavailable,
+refuse new requests. Open pages retain their displayed content with a “can't refresh” notice.
+
+**Not in this item.** Per-process RAM caches, notification subscriptions, offline or stale
+serving, retained catalog generations, or run-read storage. A future RAM proposal needs a
+same-shape benchmark.
+
+**Slices.** S7.BF.1 adds persisted publication and grant-filtered reads through the catalog
+operation. S7.BF.2 switches browser navigation to the index and slices and verifies readiness.
+
+**Done when.**
+
+- [ ] On a local Chromium run at 5,000 pipelines and 50,000 tasks, every catalog view is
+      usable within 2 seconds on fresh navigation and reload. Measure from navigation or
+      selection until the view's primary content and controls are ready, including search
+      results and lineage traversal. Record total response bytes and per-request bytes.
+- [ ] Search and follow-lineage preserve authorized navigation across pipelines. Exercise a
+      hidden pipeline on a lineage path and in search. Verify that its name, objects and edges
+      are absent from both index responses and slices.
+- [ ] Exercise deploy and re-parse with a page open, grant revocation including conditional
+      requests, publication failure, and Engine DB outage. Verify complete versions, refusal
+      of new reads during the outage, and the refresh notice on the open page.
 
 ### S7.AX Pipeline, run and task views
 
