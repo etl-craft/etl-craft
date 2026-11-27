@@ -95,7 +95,8 @@ def run(size, demo):
                         if not seed_database:
                             seed_catalog(conn, prefix="SCALE", pipelines=size, tasks=10, runs=25)
                         conn.exec_driver_sql("UPDATE AUD_PIPELINES_RUN_LOG SET RUN_DATE = date(START_DATE) WHERE RUN_DATE IS NULL")
-                    if size == 5000 and not os.environ.get("FAST_READS_CATALOG_ONLY"):
+                    if (size == 5000 and not os.environ.get("FAST_READS_CATALOG_ONLY")
+                        and not os.environ.get("FAST_READS_SKIP_LOAD_TEST")):
                         from fast_reads_runs import benchmark
                         benchmark(ctx.engine)
                     if size < 5000 or os.environ.get("FAST_READS_LARGE_CATALOG"):
@@ -119,13 +120,14 @@ def run(size, demo):
                     ("home", ""), ("history", "/runs"), ("grid", f"/pipelines/{pipeline}"),
                     ("graph", f"/pipelines/{pipeline}"), ("run", f"/runs/{pipeline}/{run_id}"),
                     ("task", f"/pipelines/{pipeline}?run={run_id}"), ("catalog", "/catalog"),
-                    ("lineage", "/catalog/tables/scale.scale_t_0?tab=lineage" if size else "/catalog"),
+                    ("lineage", "/catalog/tables/scale.scale_t_0?tab=lineage" if size else "/catalog/tables/dm.area_summary?tab=lineage"),
                 ):
+                    selection = os.environ.get("FAST_READS_PAGES")
+                    if selection and name not in selection.split(","):
+                        continue
                     if os.environ.get("FAST_READS_CATALOG_ONLY") and name not in {"catalog", "lineage"}:
                         continue
                     if size == 5000 and not os.environ.get("FAST_READS_LARGE_CATALOG") and name in {"catalog", "lineage"}:
-                        continue
-                    if not size and name == "lineage":
                         continue
                     browser, page, _ = open_page(pw, viewport={"width": 1440, "height": 950})
                     try:
@@ -156,6 +158,8 @@ def run(size, demo):
                                     page.get_by_role("heading", name="Home", exact=True).wait_for(timeout=10000)
                                 elif name in {"catalog", "lineage"}:
                                     page.get_by_role("tree", name="Catalog objects").wait_for(timeout=10000)
+                                    if name == "lineage":
+                                        page.get_by_role("tab", name="Lineage diagram", selected=True).wait_for(timeout=10000)
                                 elif name == "run":
                                     page.get_by_role("heading", name=f"Run #{run_id}", exact=True).wait_for(timeout=10000)
                                 else:
@@ -163,7 +167,7 @@ def run(size, demo):
                                 print(size, name, phase, "usable", round(perf_counter()-start, 3), flush=True)
                                 page.wait_for_load_state("networkidle", timeout=12000)
                             except Error:
-                                print(size, name, phase, "readiness selector missed", flush=True)
+                                print(size, name, phase, "benchmark deadline passed", flush=True)
                             finally:
                                 page.remove_listener("request", requested)
                             print("requests", requests, flush=True)
