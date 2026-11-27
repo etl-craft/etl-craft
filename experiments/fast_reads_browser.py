@@ -109,6 +109,8 @@ def run(size, demo):
                         else:
                             catalog = collect_catalog(ctx.engine, ctx.config, record_lineage=False)
                             (output / "catalog.json").write_bytes(encode(index_triggers(catalog)))
+                            if exported := os.environ.get("FAST_READS_EXPORT_CATALOG"):
+                                shutil.copy2(output / "catalog.json", exported)
             if (root / "catalog").exists():
                 prepare_site_lock(root / "catalog")
             pipeline = "SCALE_0" if size else "DEMO"
