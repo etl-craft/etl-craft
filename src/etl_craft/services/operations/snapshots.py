@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 from datetime import UTC, datetime
+from statistics import median
 
 from sqlalchemy import Boolean
 from sqlalchemy.engine import Connection, RowMapping
@@ -28,7 +29,14 @@ from etl_craft.engine.repository.pipelines import fetch_pipeline_detail
 from etl_craft.engine.repository.triggers import fetch_trigger_links
 from etl_craft.engine.run_scopes import TaskSelection
 from etl_craft.engine.runlog import as_date
-from etl_craft.services.operations.models import AttemptView, PipelineView, RunView, TaskRunView
+from etl_craft.services.operations.models import (
+    AttemptView,
+    MetricMedian,
+    PipelineView,
+    RunView,
+    TaskRunView,
+    TaskSuccessCohort,
+)
 
 
 def timestamp(value: object) -> datetime | None:
@@ -139,7 +147,49 @@ def task_run_view(
     ).one_or_none()
     if row is None:
         return None
-    return task_document(conn, row._mapping)
+    return replace(
+        task_document(conn, row._mapping), success_cohort=success_cohort(conn, row.task_id)
+    )
+
+
+def success_cohort(conn: Connection, task_id: int) -> TaskSuccessCohort:
+    """Calculate medians from one bounded read, excluding absent metric values."""
+    rows = (
+        conn.execute(
+            statement(conn, "operation_task_success_cohort"),
+            {"task_id": task_id, "status": RunStatus.SUCCESS},
+        )
+        .mappings()
+        .all()
+    )
+    samples: dict[str, list[int | float]] = {
+        name: []
+        for name in (
+            "source_count",
+            "target_count",
+            "insert_count",
+            "update_count",
+            "delete_count",
+            "rows_written",
+            "reject_count",
+            "duplicate_count",
+            "duration_seconds",
+        )
+    }
+    for row in rows:
+        for name, value in row.items():
+            if name in samples and value is not None:
+                samples[name].append(value)
+        start, end = timestamp(row["start_date"]), timestamp(row["end_date"])
+        if start is not None and end is not None:
+            samples["duration_seconds"].append((end - start).total_seconds())
+    return TaskSuccessCohort(
+        len(rows),
+        {
+            key: MetricMedian(median(values) if values else None, len(values))
+            for key, values in samples.items()
+        },
+    )
 
 
 def task_document(conn: Connection, row: RowMapping) -> TaskRunView:

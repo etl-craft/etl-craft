@@ -43,6 +43,7 @@ from etl_craft.core.faults import fault_point
 from etl_craft.core.graph import build_graph
 from etl_craft.core.text import byte_tail
 from etl_craft.engine import controls, run_scopes, runlog, transitions
+from etl_craft.engine.attempt_resources import record_resources
 from etl_craft.engine.process_reservations import connection_slot
 from etl_craft.engine.project_scope import configured_project
 from etl_craft.engine.queries import statement
@@ -669,7 +670,6 @@ def _start_and_record(
     child: ChildOptions,
     claim: tuple[str, Path],
 ) -> TaskOutcome:
-    """Start the bound attempt's task process, wait for it, and record how it ended."""
     assert config.config_path is not None
     owner, log_path = claim
     argv = _child_argv(config, spec, child, owner)
@@ -693,7 +693,6 @@ def _start_and_record(
                     argv=(sys.executable, *argv),
                     timeout_seconds=spec.timeout_seconds,
                     log_path=log_path,
-                    # Output reaches the log as it is written, so a hang or a kill loses none of it.
                     env={
                         **child_environment(config, host=True),
                         "PYTHONUNBUFFERED": "1",
@@ -708,6 +707,7 @@ def _start_and_record(
             cancel=stop,
             on_started=lambda pid: attempt_started(engine, spec.attempt_id, owner, pid),
         )
+    record_resources(engine, spec.attempt_id, owner, result.resources)
     query_error = None
     queries_ended = control_flow.process_local_queries(config)
     if not queries_ended or result.cancelled or result.timed_out or result.returncode < 0:

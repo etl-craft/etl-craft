@@ -97,6 +97,7 @@ def test_sql_attempt_round_trips_include_supervisor_and_child(
     )
     assert queries["engine_clock"] == 1
     assert queries["window_clock_floor"] == 1
+    assert queries["record_attempt_resources"] == 1
     assert observed == budgets["attempt"], (
         "One CREATE_TABLE attempt's round trips changed; investigate growth or record the "
         f"improvement with ETL_CRAFT_RECORD_QUERY_BUDGET=1. Observed: {observed}; by query: "

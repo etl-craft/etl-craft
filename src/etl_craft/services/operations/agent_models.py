@@ -92,6 +92,8 @@ class AgentTask(AgentRequest):
     exit_code: int | None = None
     pid: int | None = None
     process_start: str | None = None
+    peak_rss_bytes: int | None = None
+    cpu_seconds: float | None = None
     failure: Failure | None = None
     queries_ended: bool = False
 

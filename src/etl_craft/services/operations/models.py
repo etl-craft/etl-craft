@@ -124,6 +124,8 @@ class AttemptView:
     failure_class: FailureClass = FailureClass.UNKNOWN
     failure_source: str | None = None
     failure_code: str | None = None
+    peak_rss_bytes: int | None = None
+    cpu_seconds: float | None = None
     retry_on: str | None = None
     retry_reason: str | None = None
     item_progress: str | None = None
@@ -139,6 +141,22 @@ class AttemptView:
 
     run_label: str = ""
     task_run_label: str = ""
+
+
+@dataclass(frozen=True)
+class MetricMedian:
+    """A cohort metric and the number of recorded observations used for it."""
+
+    median: float | None
+    sample_size: int
+
+
+@dataclass(frozen=True)
+class TaskSuccessCohort:
+    """Statistics over the most recent successful runs of one task."""
+
+    run_count: int
+    metrics: dict[str, MetricMedian]
 
 
 @dataclass(frozen=True)
@@ -177,6 +195,7 @@ class TaskRunView:
 
     run_label: str = ""
     child_run_labels: tuple[str, ...] = ()
+    success_cohort: TaskSuccessCohort | None = None
 
 
 @dataclass(frozen=True)

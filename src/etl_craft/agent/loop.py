@@ -577,6 +577,8 @@ class AgentLoop:
                         pid=outcome.pid,
                         process_start=outcome.process_start,
                         error_message=reason,
+                        peak_rss_bytes=outcome.peak_rss_bytes,
+                        cpu_seconds=outcome.cpu_seconds,
                     ),
                 )
                 return False
@@ -585,6 +587,8 @@ class AgentLoop:
             queries_ended=queries_ended,
             pid=outcome.pid,
             process_start=outcome.process_start,
+            peak_rss_bytes=outcome.peak_rss_bytes,
+            cpu_seconds=outcome.cpu_seconds,
         )
         self.client.call(ActionName.AGENT_REPORT, ending)
         return True

@@ -1,19 +1,25 @@
 """Real script attempts preserve classification and the admission policy."""
 
+import os
+import re
+import subprocess
+import sys
 from dataclasses import replace
 
 import pytest
-from sqlalchemy import text
+from sqlalchemy import event, text
 
 from etl_craft.core.actor import current_actor
 from etl_craft.core.enums import ActionName, ApiRole, FailureClass, RetryOn, RunStatus
+from etl_craft.engine.attempt_resources import AttemptResources, record_resources
 from etl_craft.engine.repository.catalog import fetch_task_runs
 from etl_craft.engine.repository.pipelines import selected_project
 from etl_craft.execution.attempt_types import TaskRun
 from etl_craft.execution.pipeline import run_pipeline
 from etl_craft.services.operations.context import OperationContext
+from etl_craft.services.operations.snapshots import success_cohort, task_run_view
 from fixtures.actions import act
-from fixtures.metadata import add_pipeline, add_task
+from fixtures.metadata import add_pipeline, add_task, finish_run, start_run, task_run
 from integration.execution.test_pipeline import config as config
 
 
@@ -82,12 +88,94 @@ def test_script_failure_policy_and_historical_explanation(
     )
     run_id = outcome.pipeline_run_id
     explanation = act(ctx, ActionName.EXPLAIN, pipeline_code="P", task_code="load", run_id=run_id)
+    for attempt in explanation.task.attempts:
+        assert attempt.peak_rss_bytes is not None and attempt.peak_rss_bytes > 0
+        assert attempt.cpu_seconds is not None and attempt.cpu_seconds >= 0
+        assert attempt.owner_id is not None
+        record_resources(engine, attempt.attempt_id, attempt.owner_id, AttemptResources(0, 0))
+    refreshed = act(ctx, ActionName.EXPLAIN, pipeline_code="P", task_code="load", run_id=run_id)
+    assert refreshed.task.attempts == explanation.task.attempts
+    with engine.connect() as conn:
+        cohort = success_cohort(conn, task_id)
+    assert cohort.run_count == int(status == RunStatus.SUCCESS)
+    assert cohort.metrics["duration_seconds"].sample_size == cohort.run_count
+    assert cohort.metrics["reject_count"].sample_size == 0
+    assert cohort.metrics["reject_count"].median is None
     reason = explanation.task.attempts[0].retry_reason
     assert f"{kind}: {exception}" in reason
     assert f"RETRY_ON={policy}" in reason
     assert reason in history.failure_reasons[0]
     status_view = act(ctx, ActionName.STATUS, pipeline_code="P", run_id=run_id)
     assert status_view.tasks[0].explanation.task.attempts[0].retry_reason == reason
+
+
+def test_selected_task_cohort_breaks_ties_and_stays_in_budget(engine_db):
+    with engine_db.engine.begin() as conn:
+        pipeline = add_pipeline(conn, "P")
+        task_id = add_task(conn, pipeline, "load", "PYTHON")
+        for value in range(21):
+            run_id = start_run(conn, pipeline)
+            task_run_id = task_run(conn, task_id, run_id, target_count=value)
+            finish_run(conn, run_id)
+        conn.execute(text("UPDATE AUD_TASK_RUN_LOG SET END_DATE = '2026-01-01 00:00:00+00:00'"))
+        reads = []
+
+        def count_read(_conn, _cursor, statement, *_args):
+            reads.append(statement)
+
+        event.listen(conn, "before_cursor_execute", count_read)
+        try:
+            with selected_project(1):
+                view = task_run_view(conn, pipeline, task_run_id=task_run_id)
+        finally:
+            event.remove(conn, "before_cursor_execute", count_read)
+    # Baseline: summary, attempts, applied pause, and trigger links.
+    assert len(reads) <= 4 + 2
+    assert view is not None and view.success_cohort is not None
+    assert view.success_cohort.run_count == 20
+    metric = view.success_cohort.metrics["target_count"]
+    assert (metric.median, metric.sample_size) == (10.5, 20)
+
+
+def test_supervisor_crash_after_reap_leaves_resource_evidence_absent(engine_db, config):
+    config.python_scripts_dir.mkdir(exist_ok=True)
+    (config.python_scripts_dir / "load.py").write_text(
+        "from etl_craft.scripting import ScriptResult\ndef run():\n    return ScriptResult(1)\n"
+    )
+    with engine_db.engine.begin() as conn:
+        pipeline = add_pipeline(conn, "P")
+        add_task(conn, pipeline, "load", "PYTHON", SCRIPT_FILE="python_scripts/load.py")
+    program = """
+import sys
+from dataclasses import replace
+from etl_craft.config import load_config
+from etl_craft.core.actor import SYSTEM_ACTOR, acting_as
+from etl_craft.engine.connection import engine_db
+from etl_craft.engine.repository.pipelines import selected_project
+from etl_craft.execution.pipeline import run_pipeline
+config = load_config(sys.argv[1])
+config = replace(config, artifacts=replace(config.artifacts, store=None))
+engine = engine_db(config)
+engine.update_execution_options(reparse_required=False)
+with acting_as(SYSTEM_ACTOR), selected_project(1):
+    run_pipeline(engine, config, "P")
+"""
+    result = subprocess.run(
+        [sys.executable, "-c", program, str(config.config_path)],
+        env=os.environ | {"ETL_CRAFT_FAULT": "supervisor.before_attempt_resources:kill"},
+        capture_output=True,
+        timeout=45,
+    )
+    assert result.returncode == 137, re.findall(rb"[\w.]+Error:", result.stderr)
+    with engine_db.engine.connect() as conn:
+        evidence = conn.execute(
+            text(
+                "SELECT STATUS AS status, PEAK_RSS_BYTES AS rss, CPU_SECONDS AS cpu "
+                "FROM AUD_TASK_ATTEMPTS"
+            )
+        ).one()
+    assert evidence.status == RunStatus.SUCCESS
+    assert evidence.rss is None and evidence.cpu is None
 
 
 def test_validate_names_the_task_and_allowed_retry_policies(engine_db, config):

@@ -1,15 +1,53 @@
 import os
 import signal
-import subprocess
 import sys
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
+from types import SimpleNamespace
 
 import pytest
 
+from etl_craft.execution import processes
 from etl_craft.execution.processes import ChildResult, ChildSpec, run_child
 
 pytestmark = pytest.mark.unit
+
+
+@pytest.mark.parametrize(
+    ("platform", "reported", "expected"),
+    [("linux", 2, 2048), ("darwin", 2, 2), ("linux", 0, 0), ("linux", -1, None)],
+)
+def test_peak_rss_units(monkeypatch, platform, reported, expected):
+    monkeypatch.setattr(processes, "sys", SimpleNamespace(platform=platform))
+    assert processes._rss_bytes(SimpleNamespace(ru_maxrss=reported)) == expected
+
+
+def test_concurrent_children_keep_their_own_wait_evidence(monkeypatch):
+    real_wait4 = os.wait4
+    barrier = threading.Barrier(2, timeout=10)
+    observed = {}
+
+    def wait4(pid, options):
+        reaped, status, usage = real_wait4(pid, options)
+        if reaped:
+            observed[reaped] = (processes._rss_bytes(usage), usage.ru_utime + usage.ru_stime)
+        return reaped, status, usage
+
+    monkeypatch.setattr(os, "wait4", wait4)
+    with ThreadPoolExecutor(2) as pool:
+        results = list(
+            pool.map(
+                lambda size: run_child(
+                    python(f"data = bytearray({size})"), on_started=lambda _pid: barrier.wait()
+                ),
+                (1024, 32 * 1024 * 1024),
+            )
+        )
+    assert len(observed) == 2
+    for result in results:
+        assert result.succeeded
+        assert (result.peak_rss_bytes, result.cpu_seconds) == observed[result.pid]
 
 
 def python(code: str, **kwargs) -> ChildSpec:
@@ -42,6 +80,8 @@ def test_a_successful_child():
     assert result.output_tail == "hello\n"
     assert result.describe() == "exited with code 0"
     assert result.elapsed_seconds >= 0
+    assert result.peak_rss_bytes is not None and result.peak_rss_bytes > 0
+    assert result.cpu_seconds is not None and result.cpu_seconds >= 0
 
 
 def test_a_failing_child_keeps_its_exit_code_and_stderr():
@@ -78,6 +118,7 @@ def test_a_child_past_its_time_limit_is_stopped():
     assert not result.succeeded
     assert result.describe() == "timed out after 0.5s and was killed"
     assert result.output_tail == "started\n"
+    assert result.peak_rss_bytes is not None and result.cpu_seconds is not None
 
 
 def test_a_child_that_ignores_sigterm_is_killed_after_the_grace_period():
@@ -151,18 +192,18 @@ def test_the_child_leads_its_own_session():
 
 def test_an_interrupted_wait_stops_the_child_and_propagates(monkeypatch, tmp_path):
     pid_file = tmp_path / "child.pid"
-    real_wait = subprocess.Popen.wait
+    real_wait4 = os.wait4
     calls = []
 
-    def interrupted_wait(self, timeout=None):
+    def interrupted_wait(pid, options):
         if not calls:
-            calls.append(self.pid)
+            calls.append(pid)
             while not pid_file.exists():
                 time.sleep(0.01)
             raise KeyboardInterrupt
-        return real_wait(self, timeout=timeout)
+        return real_wait4(pid, options)
 
-    monkeypatch.setattr(subprocess.Popen, "wait", interrupted_wait)
+    monkeypatch.setattr(os, "wait4", interrupted_wait)
     code = f"import os, time; open({str(pid_file)!r}, 'w').write('x'); time.sleep(60)"
     with pytest.raises(KeyboardInterrupt):
         run_child(python(code), kill_grace_seconds=5)
@@ -180,6 +221,7 @@ def test_a_cancelled_child_is_stopped():
         cancel=cancel,
     )
     assert result.cancelled and not result.timed_out
+    assert result.peak_rss_bytes is not None and result.cpu_seconds is not None
     assert result.describe() == "was interrupted and stopped by its supervisor"
     assert time.monotonic() - started < 10
 
