@@ -141,6 +141,18 @@
       "engine_transactions": 4
     }
   },
+  "run_statistics": {
+    "sqlite": {
+      "engine_connections": 0,
+      "engine_statements": 11,
+      "engine_transactions": 5
+    },
+    "postgresql": {
+      "engine_connections": 0,
+      "engine_statements": 16,
+      "engine_transactions": 5
+    }
+  },
   "pipeline_grid": {
     "postgresql": {
       "engine_connections": 0,

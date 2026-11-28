@@ -12,8 +12,9 @@ import uvicorn
 
 from etl_craft.api.app import create_app
 from etl_craft.cli.console import console
+from etl_craft.config import ConnectionProfile
 from etl_craft.core.actor import SYSTEM_ACTOR, Actor, ActorKind, acting_as
-from etl_craft.core.enums import ActionName, ApiRole
+from etl_craft.core.enums import ActionName, ApiRole, AuthMode
 from etl_craft.engine.schema import init_db
 from etl_craft.services.operations import OperationContext
 from fixtures.actions import act
@@ -65,6 +66,18 @@ def site(tmp_path, request, browser_tls):
     with acting_as(SYSTEM_ACTOR):
         init_db(db.engine)
     config = db.config
+    if getattr(request, "param", None) == "statistics":
+        config = replace(
+            config,
+            warehouse=ConnectionProfile(
+                "WAREHOUSE",
+                "test",
+                f"jdbc:duckdb:{tmp_path / 'triage.duckdb'}",
+                "",
+                AuthMode.NONE,
+                schema="main",
+            ),
+        )
     if getattr(request, "param", None) == "sso":
         config = replace(
             config,

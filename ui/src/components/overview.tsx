@@ -127,7 +127,7 @@ function PipelineRow({ code, p }: { code: string; p: PipelineInsight }) {
           {p.failed ? <i className="rounded-full bg-bad-solid" style={{ width: share(p.failed) }} /> : null}
           {other ? <i className="rounded-full bg-idle-solid" style={{ width: share(other) }} /> : null}
         </span>
-        <span className={cn("num text-right text-[13px]", p.failed ? "text-bad" : "text-fg")}>{p.success_rate === null ? "—" : percent(p.success_rate)}</span>
+        <span className="num text-right text-[13px] text-fg">{p.success_rate === null ? "—" : percent(p.success_rate)}</span>
         <span className="num text-right text-xs text-muted">{p.average_seconds === null ? "—" : seconds(p.average_seconds)}</span>
       </Link>
     </li>

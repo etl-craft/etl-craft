@@ -285,6 +285,8 @@ class ActionName(StrEnum):
     STEPS = "steps"
     STATUS = "status"
     RUN_DETAIL = "run detail"
+    RUN_STATISTICS = "run statistics"
+    REJECT_BREAKDOWN = "reject breakdown"
     CAPABILITIES = "capabilities"
     DEPLOYMENT_CAPABILITIES = "deployment capabilities"
     CONTROL_REQUEST = "control-request"

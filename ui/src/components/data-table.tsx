@@ -147,6 +147,8 @@ export function DataTable<T>({
   highlight,
   find,
   stacked = false,
+  externalSort,
+  multiline = false,
 }: {
   data: T[];
   columns: Column<T>[];
@@ -166,6 +168,9 @@ export function DataTable<T>({
   find?: boolean;
   /** Runs keep all fields in labelled cards below 480 px. */
   stacked?: boolean;
+  /** State for a table whose caller sorts across pages before selecting these rows. */
+  externalSort?: { id: string; desc: boolean; change: (id: string, desc: boolean) => void };
+  multiline?: boolean;
 }) {
   const [sorting, setSorting] = React.useState<SortingState>(initialSort ?? []);
   // The filter text lives in the address, so a filtered list can be shared or reloaded: one parameter per table.
@@ -183,11 +188,12 @@ export function DataTable<T>({
   const table = useReactTable({
     data,
     columns: prepared,
-    state: { sorting, columnSizing: sizing, globalFilter: find ? query : "" },
+    state: { sorting: externalSort ? [{ id: externalSort.id, desc: externalSort.desc }] : sorting, columnSizing: sizing, globalFilter: find ? query : "" },
     globalFilterFn: "includesString",
     // Every column counts, whatever its first row holds: the default leaves out a column whose first value is empty.
     getColumnCanGlobalFilter: () => true,
     onSortingChange: setSorting,
+    manualSorting: !!externalSort,
     onColumnSizingChange: setSizing,
     columnResizeMode: "onChange",
     defaultColumn: { minSize: 64, maxSize: 900, sortDescFirst: false },
@@ -259,7 +265,9 @@ export function DataTable<T>({
               return (
                 <Th key={header.id} title={typeof header.column.columnDef.header==="string"?header.column.columnDef.header:undefined} style={{ width: widthOf(header.column) }} className="truncate" aria-sort={sorted === "asc" ? "ascending" : sorted === "desc" ? "descending" : "none"}>
                   {header.column.getCanSort() ? (
-                    <button type="button" className="hit-target relative inline-flex max-w-[calc(100%-12px)] cursor-pointer items-center gap-1" onClick={header.column.getToggleSortingHandler()}>
+                    <button type="button" className="hit-target relative inline-flex max-w-[calc(100%-12px)] cursor-pointer items-center gap-1" onClick={externalSort
+                      ? () => externalSort.change(header.column.id, sorted === "asc")
+                      : header.column.getToggleSortingHandler()}>
                       {flexRender(header.column.columnDef.header, header.getContext())}
                       {sorted === "asc" ? <ArrowUp className="size-3" aria-hidden /> : sorted === "desc" ? <ArrowDown className="size-3" aria-hidden /> : null}
                     </button>
@@ -316,7 +324,7 @@ export function DataTable<T>({
             ) : null}
             {row.getVisibleCells().map((cell) => (
               <Td key={cell.id} data-label={stacked ? String(cell.column.columnDef.header) : undefined} style={{ width: widthOf(cell.column) }} title={hover(cell.getValue())}>
-                <div className={cn("table-cell-content max-w-full break-words leading-snug", wrap ? "line-clamp-2" : "truncate")}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</div>
+                <div className={cn("table-cell-content max-w-full break-words leading-snug", multiline ? undefined : wrap ? "line-clamp-2" : "truncate")}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</div>
               </Td>
             ))}
           </tr>

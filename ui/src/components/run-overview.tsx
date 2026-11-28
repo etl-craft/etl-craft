@@ -1,3 +1,5 @@
+import { RejectBreakdown } from "@/components/reject-breakdown";
+import { AttemptStatistics, FailureSummary } from "@/components/attempt-triage";
 import { OptionalTask } from "@/components/dependency-mark";
 import { TaskDefinitionPanel } from "@/components/task-definition-panel";
 import { copyRunLabel } from "@/components/run-label";
@@ -20,16 +22,11 @@ import { formatDuration } from "@/lib/format";
 import { Tabs } from "@/components/tabs";
 import { handlerLabel, words } from "@/lib/labels";
 import { When, useNow } from "@/components/when";
-import { itemsPath, runPath } from "@/lib/routes";
-import type { Capabilities, ControlView, Explanation, GridCell, RunView, Steps, TaskHistory } from "@/lib/types";
+import { catalogPath, itemsPath, runPath } from "@/lib/routes";
+import type { Capabilities, ControlView, Explanation, GridCell, RunView, Steps } from "@/lib/types";
 
-function Why({ code, pipeline, runId, task }: { code: string; pipeline: string; runId: number; task: string }) {
-  const why = useQuery({
-    queryKey: ["explain", code, pipeline, runId, task],
-    queryFn: () => getJson<Explanation>(`${project(code)}/explanations`, { pipeline_code: pipeline, run_id: runId, task_code: task }),
-  });
-  if (!why.data) return why.isError ? <Notice>{(why.error as Error).message}</Notice> : null;
-  const { dependencies, run_condition: condition, retry_at: retry } = why.data;
+function Why({ explanation }: { explanation: Explanation }) {
+  const { dependencies, run_condition: condition, retry_at: retry } = explanation;
   return (
     <section className="grid gap-2" aria-label="Why this task is in this state">
       <h3 className="m-0 text-sm font-semibold">Dependencies</h3>
@@ -105,20 +102,30 @@ export function TaskDetails({ code, pipeline, run, task, handler, cell, tab, try
       (area?.parentElement ?? panel.current)?.scrollIntoView({ block: "nearest" });
     }
   }, []);
+  const [rejectAttempt, setRejectAttempt] = React.useState<number>();
+  const [jump, setJump] = React.useState<{ attempt: number; line: number | "timings"; click: number } | null>(null);
   const runId = run.pipeline_run_id;
   const now = useNow();
-  const history = useQuery({
-    queryKey: ["task-history", code, pipeline, runId, task, run.end_date],
-    queryFn: () => getJson<TaskHistory>(`${project(code)}/history`, { pipeline_code: pipeline, run_id: runId, task_code: task }),
+  const explanation = useQuery({
+    queryKey: ["explain", code, pipeline, runId, task, run.end_date],
+    queryFn: () => getJson<Explanation>(`${project(code)}/explanations`, { pipeline_code: pipeline, run_id: runId, task_code: task }),
     refetchInterval: run.status === "IN-PROGRESS" ? 3_000 : false,
   });
-  const summary = history.data?.entries[0];
+  const summary = explanation.data?.task;
   const attempts = summary?.attempts ?? [];
   const latest = attempts.at(-1);
   const attempt = tryNumber === null ? latest : attempts.find(item => item.attempt_number === tryNumber);
   const start = attempt?.started_at ?? cell?.start_date;
   const end = attempt ? attempt.ended_at : cell?.end_date;
   const selectedTab = taskTabs.some(item => item.id === tab) ? tab : "logs";
+  function showLog(line: number | "timings") {
+    if (!attempt) return;
+    setJump(previous => ({ attempt: attempt.attempt_id, line, click: (previous?.click ?? 0) + 1 }));
+    if (selectedTab !== "logs") onTab("logs");
+  }
+  const logJump = jump && jump.attempt === attempt?.attempt_id ? jump : undefined;
+  const anchor = attempt?.first_error;
+  const firstLine = anchor?.state === "LIVE" || anchor?.state === "ARCHIVED" ? anchor.line : null;
   const status = attempt?.status ?? taskStatus(summary?.status ?? cell?.status ?? null, run);
   return <section ref={panel} aria-label={`Task ${task}`} className="grid scroll-mt-14 gap-3">
     <div className="flex flex-wrap items-center gap-2">
@@ -126,32 +133,40 @@ export function TaskDetails({ code, pipeline, run, task, handler, cell, tab, try
       <StatusBadge status={status} />
       <span className="text-xs text-muted">Run #{runId}</span>
       {handler ? <span className="text-xs text-muted">{handlerLabel(handler)}</span> : null}
+      <Link className="text-xs text-accent hover:underline" to={catalogPath(code, "tasks", `${pipeline}.${task}`, "mapping")}>Open in catalog</Link>
       {attempt && attempt.attempt_number > 1 ? <span className="text-xs">Try {attempt.attempt_number}</span> : null}
     </div>
     <FactList inline>
       {start ? <Fact inline label="Started"><When iso={start} now={!end ? Math.max(now, Date.parse(start)) : now} /></Fact> : null}
       {end ? <Fact inline label="Ended"><When iso={end} /></Fact> : null}
-      {start ? <Fact inline label="Duration">{formatDuration(start, end ?? null, now)}</Fact> : null}
+      {start && !attempt ? <Fact inline label="Duration">{formatDuration(start, end ?? null, now)}</Fact> : null}
     </FactList>
     {attempts.length > 1 ? <SelectField compact label="Try" value={String(tryNumber ?? "")} onChange={(value) => onTry(value ? Number(value) : null)}>
       <option value="">Latest ({latest?.attempt_number})</option>
       {attempts.filter(item => item !== latest).map(item => <option key={item.attempt_id} value={item.attempt_number}>{item.attempt_number}</option>)}
     </SelectField> : null}
+    {attempt ? <>
+      <FailureSummary attempt={attempt} onLine={showLog} />
+      <AttemptStatistics attempt={attempt} metrics={summary?.success_cohort?.metrics} now={now}
+        onRejects={attempt === latest && !LIVE.has(attempt.status) ? () => setRejectAttempt(attempt.attempt_id) : undefined}
+        onTimings={handler === "SQL" || handler === "SQL_SCRIPT" ? () => showLog("timings") : undefined} />
+    </> : null}
+    {attempt && rejectAttempt === attempt.attempt_id && attempt === latest ? <RejectBreakdown code={code} run={run} task={task} close={() => setRejectAttempt(undefined)} /> : null}
     <Tabs tabs={taskTabs} value={selectedTab} onChange={onTab} panelId="task-instance-tab" />
     <div role="tabpanel" id="task-instance-tab" aria-labelledby={`tab-${selectedTab}`} className="grid gap-3">
-    {history.isError ? <Notice>{history.error.message}</Notice> : null}
-    {history.isPending ? <Loading what="task history" /> : null}
-    {history.isSuccess && tryNumber !== null && !attempt ? <Notice>Try {tryNumber} is not recorded for {task} in run #{runId}.</Notice> : null}
-    {selectedTab === "logs" && attempt ? (attempt.log_path || LIVE.has(attempt.status)
-      ? <AttemptLog key={attempt.attempt_id} code={code} attempt={attempt} open embedded jumpToError={firstError || isFailure(attempt.status)} />
+    {explanation.isError ? <Notice>{explanation.error.message}</Notice> : null}
+    {explanation.isPending ? <Loading what="selected task" /> : null}
+    {explanation.isSuccess && tryNumber !== null && !attempt ? <Notice>Try {tryNumber} is not recorded for {task} in run #{runId}.</Notice> : null}
+    {selectedTab === "logs" && attempt ? (attempt.log_path || firstLine !== null || LIVE.has(attempt.status)
+      ? <AttemptLog key={`${attempt.attempt_id}:${logJump?.click ?? 0}`} code={code} attempt={attempt} open embedded jumpToError={firstError || isFailure(attempt.status)} firstLine={firstLine} revealError={firstError || tryNumber !== null} jump={logJump} />
       : <p className="m-0 text-sm text-muted">No log was recorded for this attempt.</p>) : null}
-    {selectedTab === "logs" && history.isSuccess && !attempt && tryNumber === null ? <p className="text-sm text-muted">This task has no stored attempt log yet.</p> : null}
+    {selectedTab === "logs" && explanation.isSuccess && !attempt && tryNumber === null ? <p className="text-sm text-muted">This task has no stored attempt log yet.</p> : null}
     {selectedTab === "source" ? <TaskSource code={code} pipeline={pipeline} runId={runId} task={task} attemptId={attempt?.attempt_id} /> : null}
     {selectedTab === "details" ? <>
       {attempt ? <AttemptDetails code={code} attempt={attempt} hideLog /> : null}
       <ScopeControls code={code} pipeline={pipeline} runId={runId} task={task} />
       {handler === "PYTHON" ? <Link to={itemsPath(code, pipeline, runId, task)} className="text-accent hover:underline">Items</Link> : null}
-      {summary && summary.status !== "SUCCESS" ? <Why code={code} pipeline={pipeline} runId={runId} task={task} /> : null}
+      {explanation.data && summary && summary.status !== "SUCCESS" ? <Why explanation={explanation.data} /> : null}
       <Disclosure>
         <DisclosureSummary>Task definition and history</DisclosureSummary>
         <TaskDefinitionPanel code={code} pipeline={pipeline} task={task} />

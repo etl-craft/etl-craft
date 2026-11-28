@@ -364,3 +364,23 @@ html[data-density="compact"] td:has([data-run-chart]) { padding-block: 2px; }
 .timeline-attempt { background: linear-gradient(90deg, var(--ok-solid) 0 50%, var(--bad-solid) 50%); }
 .timeline-bar[data-open] { mask-image: linear-gradient(to right, #000 80%, transparent); }
 .timeline-bar:focus-visible { outline: 2px solid var(--accent); }
+
+.evidence-table :is(th, td) {
+  padding: 0.25rem 0.375rem;
+  overflow-wrap: anywhere;
+  vertical-align: top;
+}
+.evidence-table th[scope="row"] { border-bottom: 1px solid var(--border); }
+@media (width < 480px) {
+  .evidence-table :is(table, tbody) { padding: 0; }
+  .evidence-table tbody { gap: 0.375rem; }
+  .evidence-table tbody tr { grid-template-columns: minmax(0, 1fr); }
+  .evidence-table td {
+    display: grid;
+    grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+    gap: 0.5rem;
+    padding: 0.25rem 0.375rem;
+  }
+  .evidence-table td::before { margin: 0; text-align: left; }
+  .evidence-table th[scope="row"] { display: block; background: var(--surface-2); }
+}

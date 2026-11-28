@@ -1,3 +1,5 @@
+import { FailureSummary } from "@/components/attempt-triage";
+import { RunStatistics, useRunStatistics } from "@/components/run-statistics";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
@@ -28,7 +30,7 @@ import { useDocumentTitle } from "@/title";
 
 const views = [
   { id: "graph", label: "Graph" }, { id: "list", label: "List" },
-  { id: "gantt", label: "Gantt" }, { id: "events", label: "Events" },
+  { id: "gantt", label: "Gantt" }, { id: "events", label: "Events" }, { id: "statistics", label: "Statistics" },
 ];
 const eventLabels: Record<string, string> = {
   RUN_STARTED: "Run started", RUN_ENDED: "Run ended",
@@ -70,16 +72,17 @@ export function RunPage() {
   const id = data?.pipeline_run_id;
   const selection = { pipeline_code: pipeline, run_id: id };
   const addressed = id !== undefined && data?.pipeline_code === pipeline;
+  const stats = useRunStatistics(code, view === "statistics" && addressed ? data : undefined);
   const steps = useQuery({
     queryKey: ["steps", code, pipeline, id, data?.end_date],
     queryFn: () => getJson<Steps>(`${base}/steps`, selection),
-    enabled: addressed,
+    enabled: addressed && view !== "statistics",
     refetchInterval: () => live(data),
   });
   const status = useQuery({
     queryKey: ["run-status", code, pipeline, id, data?.end_date],
     queryFn: () => getJson<RunStatusView>(`${base}/status`, selection),
-    enabled: addressed,
+    enabled: addressed && view !== "statistics",
     refetchInterval: () => live(data),
   });
   const info = useProjectInfo(code).project;
@@ -112,7 +115,8 @@ export function RunPage() {
   const alerts = waves.filter((name) => byStep.get(name)?.handler === "ALERT" && !graph?.depends_on[name]?.length);
   const order = [...waves.filter((name) => !alerts.includes(name)), ...alerts.sort()];
   const statuses = Object.fromEntries(status.data?.tasks.map((item) => [item.task_code, taskStatus(item.status, data)]) ?? []);
-  const failures = [...byTask.values()].filter((item): item is TaskRunView => item != null && isFailure(item.status));
+  const failureTasks = view === "statistics" ? stats.data?.tasks ?? [] : [...byTask.values()];
+  const failures = failureTasks.flatMap(item => item != null && isFailure(item.status) ? [item] : []);
   const tolerated = data.status === "SUCCESS";
   const failureTitle = tolerated ? "Tolerated failures" : "Failed tasks";
   const optional = steps.data?.steps.filter(step => step.parameters?.FAIL_PIPELINE_IF_FAILED?.toUpperCase() === "N").map(step => step.task_code);
@@ -140,7 +144,8 @@ export function RunPage() {
           const failed = item.attempts.findLast((attempt) => isFailure(attempt.status));
           return <li key={item.task_code} className="flex flex-wrap items-center gap-2 text-sm">
             <strong>{item.task_code}</strong>
-            {failed ? <span>Try {failed.attempt_number} of {item.attempt_count}</span> : null}
+            {failed ? <span>Try {failed.attempt_number} of {failed === item.attempts.at(-1) ? failed.attempt_number : item.attempts.at(-1)?.attempt_number}</span> : null}
+            {failed ? <FailureSummary attempt={failed} compact /> : null}
             <span className="min-w-0 break-words">{(failed?.error_message ?? item.error_message)?.split("\n")[0]}</span>
             <Button size="sm" onClick={() => selectTask(item.task_code, true, failed === item.attempts.at(-1) ? undefined : failed?.attempt_number)} aria-label={`Show task ${item.task_code}`}>Show task</Button>
           </li>;
@@ -151,8 +156,8 @@ export function RunPage() {
       <section className="grid min-w-0 content-start gap-3">
         <Tabs tabs={views} value={view} onChange={(value) => change("view", value)} panelId="run-view" />
         <div id="run-view" role="tabpanel" aria-labelledby={`tab-${view}`} className="grid min-w-0 gap-3">
-          {error ? <Notice>{error.message}</Notice> : null}
-          {view !== "events" && !error && (!graph || !steps.data) ? <Loading what="run tasks" /> : null}
+          {view !== "statistics" && error ? <Notice>{error.message}</Notice> : null}
+          {view !== "events" && view !== "statistics" && !error && (!graph || !steps.data) ? <Loading what="run tasks" /> : null}
           {view === "graph" && graph ? <RunGraph graph={graph} statuses={statuses} blocked={blocked} optional={optional} focused={task} onFocus={selectTask} onOpen={selectTask} /> : null}
           {view === "list" && graph && status.data && steps.data ? <TaskList rows={order.map((name) => ({
             name, status: statuses[name] ?? "NOT_STARTED", handler: byStep.get(name)?.handler,
@@ -164,11 +169,12 @@ export function RunPage() {
             <RunTimeline run={data} order={order} selected={task} onTask={selectTask} critical={critical && graph ? criticalPath(graph, byTask) : undefined} />
           </> : null}
           {view === "events" ? <RunEvents code={code} run={data} /> : null}
+          {view === "statistics" ? <RunStatistics code={code} run={data} stats={stats} onTask={selectTask} /> : null}
         </div>
       </section>
       {task ? <aside className="grid min-w-0 content-start gap-2 rounded-md border border-border bg-surface p-3 max-lg:order-first">
         <Button className="justify-self-end" size="sm" onClick={() => selectTask(null)}>Close task</Button>
-        <TaskDetails key={`${id}:${task}`} code={code} pipeline={pipeline} run={data} task={task} handler={byStep.get(task)?.handler}
+        <TaskDetails key={`${id}:${task}`} code={code} pipeline={pipeline} run={data} task={task} handler={byStep.get(task)?.handler ?? stats.data?.tasks.find(row => row.task_code === task)?.handler}
           tab={params.get("taskTab") ?? "logs"} tryNumber={params.has("try") ? Number(params.get("try")) : null}
           firstError={params.has("error")} onTab={(value) => change("taskTab", value)} onTry={(value) => change("try", value === null ? null : String(value))} />
       </aside> : null}

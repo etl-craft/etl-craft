@@ -138,6 +138,31 @@ task again or without its dependencies, or relax dependency gates), see
 dependencies and creates or resumes the selected run. A running controller picks it up.
 Another scheduler can [submit a run over HTTP](../deploying/http-api.md#starting-runs-from-another-scheduler).
 
+## Inspecting runs and tasks in the browser
+
+Select a task in the pipeline or run workspace. The task panel opens on **Logs**.
+Use the try selector to inspect an earlier attempt or **Open in catalog** to see the
+task's mapping. Failed attempts show the recorded first and last errors, including the
+step, ExitCode name and native warehouse code when available. **Go to line** opens the
+recorded location in that try's log. The panel identifies archived, expired, unreadable
+and unrecorded locations.
+
+The attempt statistics table lists each recorded metric with its current value, median and
+sample size. It includes counts of zero and reports
+queue and execution time, throughput when read count and positive duration are known,
+and peak memory and average CPU cores when measured. CPU cores are CPU seconds divided
+by execution seconds. Detached PYTHON child processes are outside the resource sample.
+Medians use up to 20 successful runs of the same task. Each metric gives its own sample
+size. Amber ▲ and ▼ mark values strictly above three times or below one third of a
+positive median.
+
+Open **Statistics** on the run page to compare final attempts across tasks. Sort by any
+column and page through groups of 100 tasks. The URL preserves the sort. Expand **Earlier
+tries** to see previous attempts. Select a positive final-attempt reject count on either
+the task panel or Statistics to see the retained row counts by recorded reason. If the breakdown is unavailable, the dialog reports the
+recorded count and, when available, the last confirmed target retention removal after
+that task run.
+
 ## SLA
 
 Every run of a pipeline with `SLA_IN_HOURS` is marked in `AUD_PIPELINES_RUN_LOG.SLA_STATUS`:

@@ -1268,3 +1268,47 @@ def test_recovery_preview_has_the_same_http_refusal_as_submission(api, action):
     assert preview.status_code == actual.status_code == 409
     assert preview.json()["message"] == actual.json()["message"]
     assert "requires ended ownership" in preview.json()["message"]
+
+
+def test_statistics_read_is_scoped_and_preserves_absent_attempt_values(api):
+    ctx, client, creds, run, attempt = api
+    token = headers(creds[ApiRole.VIEWER])
+    path = f"/api/v1/projects/default/runs/{run}/statistics"
+    result = client.get(path, headers=token)
+    assert result.status_code == 200, result.text
+    [task] = result.json()["tasks"]
+    assert task["task_code"] == "T"
+    assert task["duration"] == {"median": None, "sample_size": 0}
+    [row] = task["attempts"]
+    assert row["attempt_id"] == attempt
+    assert row["source_count"] is None
+    assert row["peak_rss_bytes"] is None
+
+    from fixtures.actions import act
+
+    act(
+        ctx,
+        ActionName.ACCESS_REVOKE,
+        project="default",
+        audience="viewer",
+        role="CAN_VIEW",
+        reason="restrict pipeline",
+    )
+    act(
+        ctx,
+        ActionName.ACCESS_REVOKE,
+        project="default",
+        audience="operator",
+        role="CAN_RUN",
+        reason="restrict pipeline",
+    )
+    for denied in (
+        client.get(path, headers=token),
+        client.get(
+            "/api/v1/projects/default/reject-breakdown",
+            params={"pipeline_code": "P", "run_id": run, "task_code": "T"},
+            headers=token,
+        ),
+    ):
+        assert denied.status_code in (403, 404), denied.text
+        assert "attempts" not in denied.json() and "rows" not in denied.json()

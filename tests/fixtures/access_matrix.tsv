@@ -1319,6 +1319,28 @@ rehash plan	manage_sales	-	allow
 rehash plan	runner_role	-	allow
 rehash plan	rehash_action	-	allow
 rehash plan	agent	-	deny
+reject breakdown	admin	P1	allow
+reject breakdown	admin	P2	allow
+reject breakdown	developer	P1	allow
+reject breakdown	developer	P2	allow
+reject breakdown	operator	P1	allow
+reject breakdown	operator	P2	allow
+reject breakdown	viewer	P1	allow
+reject breakdown	viewer	P2	allow
+reject breakdown	view_p1	P1	allow
+reject breakdown	view_p1	P2	allow
+reject breakdown	upload_t1	P1	allow
+reject breakdown	upload_t1	P2	allow
+reject breakdown	run_p1	P1	allow
+reject breakdown	run_p1	P2	allow
+reject breakdown	manage_sales	P1	allow
+reject breakdown	manage_sales	P2	allow
+reject breakdown	runner_role	P1	allow
+reject breakdown	runner_role	P2	allow
+reject breakdown	rehash_action	P1	allow
+reject breakdown	rehash_action	P2	allow
+reject breakdown	agent	P1	deny
+reject breakdown	agent	P2	deny
 rename	admin	P1	allow
 rename	admin	P2	allow
 rename	developer	P1	deny
@@ -1473,6 +1495,28 @@ run log	rehash_action	P1	allow
 run log	rehash_action	P2	allow
 run log	agent	P1	deny
 run log	agent	P2	deny
+run statistics	admin	P1	allow
+run statistics	admin	P2	allow
+run statistics	developer	P1	allow
+run statistics	developer	P2	allow
+run statistics	operator	P1	allow
+run statistics	operator	P2	allow
+run statistics	viewer	P1	allow
+run statistics	viewer	P2	allow
+run statistics	view_p1	P1	allow
+run statistics	view_p1	P2	allow
+run statistics	upload_t1	P1	allow
+run statistics	upload_t1	P2	allow
+run statistics	run_p1	P1	allow
+run statistics	run_p1	P2	allow
+run statistics	manage_sales	P1	allow
+run statistics	manage_sales	P2	allow
+run statistics	runner_role	P1	allow
+run statistics	runner_role	P2	allow
+run statistics	rehash_action	P1	allow
+run statistics	rehash_action	P2	allow
+run statistics	agent	P1	deny
+run statistics	agent	P2	deny
 run zip	admin	P1	allow
 run zip	admin	P2	allow
 run zip	developer	P1	allow
