@@ -218,6 +218,7 @@ item's text, or work done early under another item.
 | S7.BD Bounded catalog lineage lookup | Planned | | Bounded definition and history reads at 5,000 pipelines and 50,000 tasks per project |
 | S7.BE Cross-project condition safety | Done | #478 | Refuse definition changes that would break another project's conditions |
 | S7.BF Scoped catalog reads | Planned | | Before 0.9.0, after S7.BD. Persisted slices with grant-filtered search and cross-pipeline lineage |
+| S7.BG Operator workspaces | Planned | | Six sidebar destinations, Pipelines as Monitor, and selection panes for operational investigation |
 | S7.O Package and demo repositories | Done | #317, #318 | Small package demo, public demo seed and pinned candidate evidence validation |
 | S7.P Obvious failures do not stop 1.0.0 | In progress | #173, #178 | Audit done (#173); the log-folder and port checks close their catalog rows (#178); item 4 keeps the catalog current |
 | S7.Q A generic ANSI SQL warehouse | Moved after 0.9.0 | | A `generic` dialect over SQLAlchemy for rare databases: ANSI SQL only, NULL-safe column comparison for merges, refusals for anything without an ANSI form |
@@ -235,6 +236,10 @@ item's text, or work done early under another item.
 | S8.I Support Insights on current main | Done | #449, support-insights#30 | `ALERT` tasks with `EMAIL` channels and `deploy` replace removed handlers and commands; the demo pins current main. The walkthrough found the 60-second `--api` read deadline (fixed in #449) |
 
 ### Handover notes
+
+- **S7.BG navigation decision.** The [operator workspaces plan](operator-workspaces.md)
+  supersedes the sidebar grouping in S7.AS and the side-by-side operational task panel in
+  S7.AS/S7.AX. Keep the Catalog explorer. S7.BB.6 publishes Monitor inside Pipelines.
 
 - **S7.BB.2 Choices that differ from the item text.** The owner split the slice into S7.BB.2a
   (attempt resources and the selected-task cohort, #480) and S7.BB.2b (typed error anchors and
@@ -10581,6 +10586,40 @@ operation. S7.BF.2 switches browser navigation to the index and slices and verif
 - [ ] Exercise deploy and re-parse with a page open, grant revocation including conditional
       requests, publication failure, and Engine DB outage. Verify complete versions, refusal
       of new reads during the outage, and the refresh notice on the open page.
+
+### S7.BG Operator workspaces
+
+**Problem.** Operators must choose between several project pages to investigate a missing
+run. Opening a task beside the grid reduces the width available to compare neighboring tasks.
+
+**Where.** The React shell, route helpers, dashboard, pipeline and run pages, shared task
+details and split pane, Maintenance, Console and Admin. The approved
+[page inventory and interaction design](operator-workspaces.md) covers the other entry points.
+
+**Change and slices.** Deliver each slice as a cohesive PR with the relevant UI guides,
+changelog, tests and screenshots. S7.BB retains ownership of new monitoring reads.
+
+1. **S7.BG.1 Navigation and lists.** Six sidebar destinations, header project chooser,
+   project dashboard links, Maintenance landing, Pipeline list filters, uploads and historical
+   calendar. Preserve old links and read permissions. Surface the available operational
+   evidence in Pipelines. S7.BB.6 supplies the complete default Monitor view.
+2. **S7.BG.2 Operational panes.** Full-width pipeline/run views, resizable lower details,
+   contextual attempt evidence, item and log expansion, mobile navigation and focus restoration.
+3. **S7.BG.3 Remaining pages.** Apply list/detail selection to Agents, Groups and Roles.
+   Verify the Maintenance forms, Console, Admin sections, header utilities and catalog links
+   against the inventory. Retain layouts that already meet it.
+
+**Tests and done when.**
+
+- [ ] The sidebar, project scope, filtered lists, historical calendar and bookmarked selections
+      work on direct entry, refresh and Back. Include a task-only pause and a schedule with no next run.
+- [ ] An operator can move from a Home failure to its first error and switch to a second
+      task with the grid position intact. The panes work by keyboard and on phones, restore
+      focus and distinguish absent evidence from zero.
+- [ ] Every page has the destination and layout in the inventory. Verify permissions with
+      a diagnostics reader and a restricted project user. Existing Catalog traversal works.
+- [ ] The owner approves each changed screen on its implementation PR at 1440 and 390 px
+      in light and dark. Check usable grid and log height on a laptop.
 
 ### S7.AX Pipeline, run and task views
 
