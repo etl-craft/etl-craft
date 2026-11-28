@@ -126,16 +126,6 @@ class AttemptView:
     failure_code: str | None = None
     peak_rss_bytes: int | None = None
     cpu_seconds: float | None = None
-    first_error_line: int | None = None
-    first_error_step: str | None = None
-    first_error_class: str | None = None
-    first_error_exit_code: str | None = None
-    first_error_failure_class: str | None = None
-    last_error_line: int | None = None
-    last_error_step: str | None = None
-    last_error_class: str | None = None
-    last_error_exit_code: str | None = None
-    last_error_failure_class: str | None = None
     retry_on: str | None = None
     retry_reason: str | None = None
     item_progress: str | None = None

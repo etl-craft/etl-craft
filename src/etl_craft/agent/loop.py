@@ -577,6 +577,8 @@ class AgentLoop:
                         pid=outcome.pid,
                         process_start=outcome.process_start,
                         error_message=reason,
+                        peak_rss_bytes=outcome.peak_rss_bytes,
+                        cpu_seconds=outcome.cpu_seconds,
                     ),
                 )
                 return False

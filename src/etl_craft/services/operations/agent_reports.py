@@ -493,6 +493,9 @@ def _cancel(ctx: OperationContext, request: AgentTask) -> AgentReply:
                 reason="agent confirmed tagged queries absent",
                 checks=("tagged_queries_absent",),
             )
+    if _ending_identity(row, request) and ctx.credential_attempt_id is None:
+        resources = AttemptResources(request.peak_rss_bytes, request.cpu_seconds)
+        record_resources(ctx.engine, request.attempt_id, owner, resources)
     from etl_craft.execution.control_flow import advance
 
     advance(

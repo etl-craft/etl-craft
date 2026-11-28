@@ -1,7 +1,7 @@
 # Service operations
 
 Attempt documents expose nullable `peak_rss_bytes` and `cpu_seconds` values from the exact child
-wait result, plus nullable first/last error anchors. Missing values remain distinct from a genuine
+wait result. Missing values remain distinct from a genuine
 zero; detached processes started by a `PYTHON` task are not included.
 
 Every action (a run, a mark, a control, a sign-in, a token, a docs build) is one row of the

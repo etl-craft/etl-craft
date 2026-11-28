@@ -3,6 +3,7 @@ import signal
 import sys
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from types import SimpleNamespace
 
 import pytest
@@ -20,6 +21,33 @@ pytestmark = pytest.mark.unit
 def test_peak_rss_units(monkeypatch, platform, reported, expected):
     monkeypatch.setattr(processes, "sys", SimpleNamespace(platform=platform))
     assert processes._rss_bytes(SimpleNamespace(ru_maxrss=reported)) == expected
+
+
+def test_concurrent_children_keep_their_own_wait_evidence(monkeypatch):
+    real_wait4 = os.wait4
+    barrier = threading.Barrier(2, timeout=10)
+    observed = {}
+
+    def wait4(pid, options):
+        reaped, status, usage = real_wait4(pid, options)
+        if reaped:
+            observed[reaped] = (processes._rss_bytes(usage), usage.ru_utime + usage.ru_stime)
+        return reaped, status, usage
+
+    monkeypatch.setattr(os, "wait4", wait4)
+    with ThreadPoolExecutor(2) as pool:
+        results = list(
+            pool.map(
+                lambda size: run_child(
+                    python(f"data = bytearray({size})"), on_started=lambda _pid: barrier.wait()
+                ),
+                (1024, 32 * 1024 * 1024),
+            )
+        )
+    assert len(observed) == 2
+    for result in results:
+        assert result.succeeded
+        assert (result.peak_rss_bytes, result.cpu_seconds) == observed[result.pid]
 
 
 def python(code: str, **kwargs) -> ChildSpec:

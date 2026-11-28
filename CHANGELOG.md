@@ -7,9 +7,8 @@ All notable changes are recorded here. The format follows
 ## [Unreleased]
 
 - Attempt evidence now records nullable peak RSS bytes and CPU seconds from the exact child
-  `wait4` result, plus optional first and last error anchors and existing failure codes. Selected
-  task responses expose the evidence additively; detached processes started by a PYTHON task are
-  not included.
+  `wait4` result. Selected task responses include medians and sample sizes from up to 20 successful
+  runs. Resource evidence excludes detached processes started by a PYTHON task.
 
 - Deploy and config plan refuse to retire an upstream still named by another project's
   active run or start condition. Validate reports existing breaks on the upstream row.

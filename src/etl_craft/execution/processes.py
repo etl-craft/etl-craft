@@ -254,7 +254,10 @@ def _reap_child(
             timed_out, stopped = True, True
             logger.warning("pid %s exceeded its %gs limit; stopping it", process.pid, timeout)
             _stop_group(process, birth, grace_seconds)
-        time.sleep(CANCEL_POLL_SECONDS)
+        remaining = (
+            CANCEL_POLL_SECONDS if deadline is None or stopped else deadline - time.monotonic()
+        )
+        interrupts.sleep(max(0, min(CANCEL_POLL_SECONDS, remaining)))
 
 
 def _reap_after_stop(

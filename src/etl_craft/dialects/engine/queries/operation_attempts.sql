@@ -30,13 +30,7 @@ SELECT p.PIPELINE_ID AS pipeline_id, r.PIPELINE_RUN_ID AS pipeline_run_id,
        a.NOT_BEFORE AS not_before, a.RETRYABLE AS retryable,
        a.FAILURE_CLASS AS failure_class, a.FAILURE_SOURCE AS failure_source,
        a.FAILURE_CODE AS failure_code, a.RETRY_ON AS retry_on,
-       a.PEAK_RSS_BYTES AS peak_rss_bytes, a.CPU_SECONDS AS cpu_seconds,
-       a.FIRST_ERROR_LINE AS first_error_line, a.FIRST_ERROR_STEP AS first_error_step,
-       a.FIRST_ERROR_CLASS AS first_error_class, a.FIRST_ERROR_EXIT_CODE AS first_error_exit_code,
-       a.FIRST_ERROR_FAILURE_CLASS AS first_error_failure_class,
-       a.LAST_ERROR_LINE AS last_error_line, a.LAST_ERROR_STEP AS last_error_step,
-       a.LAST_ERROR_CLASS AS last_error_class, a.LAST_ERROR_EXIT_CODE AS last_error_exit_code,
-       a.LAST_ERROR_FAILURE_CLASS AS last_error_failure_class
+       a.PEAK_RSS_BYTES AS peak_rss_bytes, a.CPU_SECONDS AS cpu_seconds
 FROM AUD_TASK_ATTEMPTS a
 JOIN AUD_TASK_RUN_LOG r ON r.TASK_RUN_ID = a.TASK_RUN_ID
 JOIN AUD_PIPELINES_RUN_LOG p ON p.PIPELINE_RUN_ID = r.PIPELINE_RUN_ID
