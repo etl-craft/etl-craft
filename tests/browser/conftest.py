@@ -1,5 +1,7 @@
 """A served etl-craft UI over HTTPS, with an admin and a viewer account, for browser tests."""
 
+import base64
+import hashlib
 import socket
 import subprocess
 import threading
@@ -20,8 +22,45 @@ from fixtures.engine_db import sqlite_engine_db
 PASSWORD = "correct horse battery"
 
 
+@pytest.fixture(scope="session", autouse=True)
+def browser_tls(tmp_path_factory):
+    folder = tmp_path_factory.mktemp("browser-tls")
+    cert, key = folder / "cert.pem", folder / "key.pem"
+    subprocess.run(
+        [
+            "openssl",
+            "req",
+            "-x509",
+            "-newkey",
+            "rsa:2048",
+            "-nodes",
+            "-days",
+            "1",
+            "-addext",
+            "subjectAltName=DNS:localhost",
+            "-subj",
+            "/CN=localhost",
+            "-keyout",
+            str(key),
+            "-out",
+            str(cert),
+        ],
+        check=True,
+        capture_output=True,
+    )
+    public_key = subprocess.check_output(["openssl", "x509", "-in", str(cert), "-pubkey", "-noout"])
+    der = subprocess.check_output(
+        ["openssl", "pkey", "-pubin", "-outform", "DER"], input=public_key
+    )
+    pin = base64.b64encode(hashlib.sha256(der).digest()).decode()
+    with pytest.MonkeyPatch.context() as env:
+        env.setenv("ETL_CRAFT_TEST_BROWSER_SPKI", pin)
+        yield cert, key
+
+
 @pytest.fixture
-def site(tmp_path, request):
+def site(tmp_path, request, browser_tls):
+    cert, key = browser_tls
     db = sqlite_engine_db(tmp_path)
     with acting_as(SYSTEM_ACTOR):
         init_db(db.engine)
@@ -36,27 +75,6 @@ def site(tmp_path, request):
     ctx = OperationContext(db.engine, config, Actor("owner", ActorKind.USER), role=ApiRole.ADMIN)
     act(ctx, ActionName.ACCOUNT_ADD, name="owner", role=ApiRole.ADMIN, password=PASSWORD)
     act(ctx, ActionName.ACCOUNT_ADD, name="alice", role=ApiRole.VIEWER, password=PASSWORD)
-    cert, key = tmp_path / "cert.pem", tmp_path / "key.pem"
-    subprocess.run(
-        [
-            "openssl",
-            "req",
-            "-x509",
-            "-newkey",
-            "rsa:2048",
-            "-nodes",
-            "-days",
-            "1",
-            "-subj",
-            "/CN=localhost",
-            "-keyout",
-            str(key),
-            "-out",
-            str(cert),
-        ],
-        check=True,
-        capture_output=True,
-    )
     ready = threading.Event()
 
     class Server(uvicorn.Server):

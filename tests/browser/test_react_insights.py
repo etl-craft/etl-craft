@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 from playwright.sync_api import expect, sync_playwright
 from sqlalchemy import text
-from test_react_ui import open_page, sign_in
+from test_react_ui import open_page, sign_in, wait_for_fonts
 
 from etl_craft.core.actor import Actor, ActorKind, acting_as
 from etl_craft.core.enums import ActionName, RunStatus
@@ -376,7 +376,7 @@ def test_chart_renderers_load_on_home_without_changing_run_or_catalog_charts(sce
         page.keyboard.press("Escape")
         expect(page.get_by_role("menu")).not_to_be_visible()
         assert not pending
-        page.evaluate("() => document.fonts.ready.then(() => true)")
+        wait_for_fonts(page)
         page.goto(url + "/ui/projects/default/catalog/pipelines/ORDERS?tab=runs")
         page.get_by_role("button", name="Run durations, newest on the right").click()
         expect(page.get_by_role("menu").get_by_role("menuitem")).to_have_count(6)

@@ -80,6 +80,14 @@ def test_the_built_assets_are_served_to_the_shell(scene):
     assert served.status_code == 200 and "javascript" in served.headers["content-type"]
 
 
+def test_the_bundled_inter_font_is_served_as_woff2(scene):
+    font = next((ui_spa.BUNDLE / "assets").glob("inter-latin-wght-normal-*.woff2"))
+    response = scene.get(f"/ui/assets/{font.name}")
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "font/woff2"
+    assert response.content.startswith(b"wOF2")
+
+
 def test_a_missing_bundle_fails_with_the_remedy(scene, monkeypatch, tmp_path):
     sign_in(scene)
     monkeypatch.setattr(ui_spa, "BUNDLE", tmp_path / "spa")

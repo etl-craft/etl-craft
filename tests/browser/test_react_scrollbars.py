@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 from playwright.sync_api import expect, sync_playwright
 from test_react_lineage import mappings as mappings
-from test_react_ui import sign_in
+from test_react_ui import launch_chromium, sign_in
 
 pytestmark = pytest.mark.browser
 
@@ -23,7 +23,7 @@ def test_application_scrollbars_work_without_native_browser_chrome(mappings, wid
         "graph": "/ui/projects/default/pipelines/ORDERS?view=graph",
     }
     with sync_playwright() as pw:
-        browser = getattr(pw, engine).launch()
+        browser = launch_chromium(pw) if engine == "chromium" else getattr(pw, engine).launch()
         page = browser.new_page(
             ignore_https_errors=True, viewport={"width": width, "height": 1000}, color_scheme=scheme
         )
@@ -123,7 +123,7 @@ def test_application_scrollbars_work_without_native_browser_chrome(mappings, wid
 def test_touch_thumb_drag_and_column_swipe_do_not_pan_the_canvas(mappings):
     _, url = mappings
     with sync_playwright() as pw:
-        browser = pw.chromium.launch()
+        browser = launch_chromium(pw)
         page = browser.new_page(
             ignore_https_errors=True,
             viewport={"width": 390, "height": 1000},

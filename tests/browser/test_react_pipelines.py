@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 from playwright.sync_api import expect, sync_playwright
 from sqlalchemy import text
-from test_react_ui import open_page, pause_item, sign_in
+from test_react_ui import open_page, pause_item, sign_in, wait_for_fonts
 
 from etl_craft.core.actor import Actor, ActorKind, acting_as
 from etl_craft.core.enums import ActionName, RunStatus
@@ -645,7 +645,7 @@ def test_run_dialog_follows_governance_and_keeps_production_confirmation(site):
         browser, page, problems = open_page(pw)
         sign_in(page, url, "/ui/projects/default/pipelines/REASONS")
         expect(page.get_by_role("button", name="Run now", exact=True)).to_be_visible()
-        page.evaluate("() => document.fonts.ready.then(() => true)")
+        wait_for_fonts(page)
         for environment, governance in (("DEV", "STRICT"), ("DEV", "RELAXED"), ("PROD", "STRICT")):
             act(
                 ctx,
@@ -656,7 +656,7 @@ def test_run_dialog_follows_governance_and_keeps_production_confirmation(site):
                 reason="set test governance",
             )
             page.goto(url + "/ui/projects/default/pipelines/REASONS")
-            page.evaluate("() => document.fonts.ready.then(() => true)")
+            wait_for_fonts(page)
             page.get_by_role("button", name="Run now", exact=True).click()
             dialog = page.get_by_role("dialog")
             reason = dialog.get_by_label("Reason", exact=False)
@@ -962,7 +962,7 @@ def test_workspace_order_breakpoint_and_run_selection_round_trip(scene, width):
     with sync_playwright() as pw:
         browser, page, problems = open_page(pw, viewport={"width": width, "height": 900})
         sign_in(page, url, "/ui/projects/default/pipelines/OPS")
-        page.evaluate("document.fonts.ready")
+        wait_for_fonts(page)
         grid = page.get_by_role("table", name="Run grid")
         headers = grid.locator("thead th a")
         expect(headers).not_to_have_count(0)
@@ -992,7 +992,7 @@ def test_workspace_order_breakpoint_and_run_selection_round_trip(scene, width):
         assert (
             f"/runs/OPS/{run}" in page.url and "task=LOAD" in page.url and "view=graph" in page.url
         )
-        page.evaluate("document.fonts.ready")
+        wait_for_fonts(page)
         page.reload()
         expect(page.get_by_label("Task LOAD", exact=True)).to_be_visible()
         assert problems == []
@@ -1036,7 +1036,7 @@ def test_pipeline_list_shows_dependencies_and_links_the_latest_run(scene):
         assert len(capabilities) == 1 and "pipeline_codes=" in capabilities[0]
         latest = row.get_by_role("link", name=re.compile(r"^#\d+$"))
         expect(latest).to_have_attribute("href", re.compile(r"/runs/OPS/\d+$"))
-        page.evaluate("document.fonts.ready")
+        wait_for_fonts(page)
         latest.click()
         expect(page.get_by_role("heading", name=re.compile(r"^Run #"))).to_be_visible()
         assert problems == []

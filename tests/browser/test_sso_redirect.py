@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 from playwright.sync_api import expect, sync_playwright
-from test_react_ui import open_page
+from test_react_ui import open_page, wait_for_fonts
 
 from etl_craft.core.enums import ActionName, ApiRole
 from fixtures.actions import act
@@ -28,7 +28,7 @@ def test_sso_browser_returns_signed_in_without_a_copy_code_panel(site):
         browser, page, problems = open_page(pw)
         page.goto(url + "/ui/signin?return_to=/ui/projects/default")
         expect(page.get_by_role("button", name="Sign in with SSO")).to_be_visible()
-        page.evaluate("() => document.fonts.ready")
+        wait_for_fonts(page)
         with page.expect_request(lambda request: "/authorize?" in request.url, timeout=5000):
             page.get_by_role("button", name="Sign in with SSO").click()
         page.wait_for_url(url + "/ui/projects/default", timeout=10_000)
@@ -82,7 +82,7 @@ def test_sign_out_follows_provider_discovery_and_revokes_local_session(site, iss
         page.get_by_role("button", name="Sign in with SSO").click()
         page.wait_for_url(url + "/ui")
         expect(page.get_by_role("heading", name="Home", exact=True)).to_be_visible()
-        page.evaluate("() => document.fonts.ready")
+        wait_for_fonts(page)
         page.get_by_role("button", name=re.compile(r"^Account menu: ")).click()
         page.get_by_role("menuitem", name="Sign out", exact=True).click()
         expect(page.get_by_role("heading", name="Sign in to etl-craft")).to_be_visible()
