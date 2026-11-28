@@ -406,7 +406,12 @@ def _commit_end(ctx: OperationContext, request: AgentTask) -> AgentReply:
         fence(conn, request.attempt_id, owner)
         observed = _ending_identity(row, request) and ctx.credential_attempt_id is None
         if request.failure is not None:
-            transitions.record_attempt_failure(conn, request.attempt_id, request.failure)
+            transitions.record_attempt_failure(
+                conn,
+                request.attempt_id,
+                request.failure,
+                anchors=request.error_anchors if status == AttemptStatus.FAILED else None,
+            )
         if status == AttemptStatus.CANCELLED and request.queries_ended:
             attempt_cancellation.acknowledge_cancellation(conn, request.attempt_id, owner)
         transitions.finish_attempt(

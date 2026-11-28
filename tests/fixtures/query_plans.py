@@ -145,6 +145,12 @@ VALUES = {
     "full_refresh_plan": None,
     "peak_rss_bytes": 1024,
     "cpu_seconds": 0.25,
+    "first_sequence": 1,
+    "first_offset": 20,
+    "first_line": 2,
+    "last_sequence": 2,
+    "last_offset": 40,
+    "last_line": 3,
     "exclusive": "Y",
     "kind": "SYSTEM",
     "actor_kind": "SYSTEM",
@@ -621,6 +627,8 @@ FULL_READS.update(
 
 FULL_READS.update(
     {
+        ("api_attempt", "aud_engine_identity"): "One deployment identity.",
+        ("operation_attempts", "aud_engine_identity"): "One deployment identity.",
         (
             "archive_origin",
             "aud_engine_identity",

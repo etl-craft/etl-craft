@@ -675,8 +675,13 @@ def secret_cluster(empty_engine_db, cli_project, monkeypatch, request):
     return cluster
 
 
-@pytest.mark.parametrize("fails", [False, True])
-def test_agent_receives_secrets_by_pipe_and_masks_all_output(secret_cluster, monkeypatch, fails):
+@pytest.mark.parametrize("ending", ["success", "failure", "upload_retry"])
+def test_agent_receives_secrets_by_pipe_and_masks_all_output(
+    secret_cluster, monkeypatch, tmp_path, ending
+):
+    from etl_craft.services.operations.requests import AttemptId
+
+    fails = ending != "success"
     p, url, token, agent_dir = secret_cluster
     path = agent_dir / "python_scripts/load.py"
     path.write_text(
@@ -715,7 +720,28 @@ def test_agent_receives_secrets_by_pipe_and_masks_all_output(secret_cluster, mon
     assert code == 0, output
     monkeypatch.delenv("SOURCE_TOKEN")
     monkeypatch.setenv("ETL_CRAFT_TOKEN", token.token)
-    agent = p.start("agent", "--api", url, "--project-dir", str(agent_dir), "--drain-seconds", "0")
+    with monkeypatch.context() as agent_env:
+        if ending == "upload_retry":
+            injection = tmp_path / "upload-injection"
+            injection.mkdir()
+            (injection / "sitecustomize.py").write_text(
+                "from etl_craft.agent.client import AgentClient\n"
+                "from etl_craft.core.enums import ActionName\n"
+                "from etl_craft.core.errors import ServerError\n"
+                "original = AgentClient.call\n"
+                "failed = False\n"
+                "def call(self, name, request, **kwargs):\n"
+                "    global failed\n"
+                "    if name == ActionName.AGENT_LOG and not failed:\n"
+                "        failed = True\n"
+                "        raise ServerError('test interrupted log upload')\n"
+                "    return original(self, name, request, **kwargs)\n"
+                "AgentClient.call = call\n"
+            )
+            agent_env.setenv("PYTHONPATH", str(injection))
+        agent = p.start(
+            "agent", "--api", url, "--project-dir", str(agent_dir), "--drain-seconds", "0"
+        )
     try:
         p.wait_for(
             "SELECT STATUS FROM AUD_TASK_ATTEMPTS",
@@ -724,14 +750,37 @@ def test_agent_receives_secrets_by_pipe_and_masks_all_output(secret_cluster, mon
         )
         with p.engine.connect() as conn:
             attempt = conn.execute(
-                text("SELECT ERROR_MESSAGE AS error,TASK_LOG AS log FROM AUD_TASK_ATTEMPTS")
+                text(
+                    "SELECT ATTEMPT_ID AS id, ERROR_MESSAGE AS error, TASK_LOG AS log, "
+                    "FIRST_ERROR_SEQUENCE AS first_sequence, LAST_ERROR_SEQUENCE AS last_sequence, "
+                    "FIRST_ERROR_OFFSET AS first_offset, LAST_ERROR_OFFSET AS last_offset, "
+                    "FIRST_ERROR_LINE AS first_line, LAST_ERROR_LINE AS last_line "
+                    "FROM AUD_TASK_ATTEMPTS"
+                )
             ).one()
             chunks = conn.execute(
-                text("SELECT CONTENT AS content FROM AUD_ATTEMPT_LOG_CHUNKS")
+                text(
+                    "SELECT CONTENT AS content FROM AUD_ATTEMPT_LOG_CHUNKS ORDER BY SEQUENCE_NUMBER"
+                )
             ).all()
+        raw = "".join(row.content for row in chunks).encode()
         assert "task-private-test-value" not in str(attempt)
-        assert "task-private-test-value" not in "".join(row.content for row in chunks)
-        assert "[REDACTED]" in "".join(row.content for row in chunks)
+        assert b"task-private-test-value" not in raw and b"[REDACTED]" in raw
+        if fails:
+            assert attempt.first_sequence == attempt.last_sequence == 1
+            assert attempt.first_offset == attempt.last_offset
+            assert attempt.first_line == attempt.last_line
+            if ending == "upload_retry":
+                assert attempt.first_offset is attempt.first_line is None
+            else:
+                assert raw[: attempt.first_offset].count(b"\n") + 1 == attempt.first_line
+                assert b"[event 1]" in raw[attempt.first_offset :].splitlines()[0]
+            ctx = OperationContext(p.engine, p.config, SYSTEM_ACTOR, role=ApiRole.ADMIN)
+            evidence = invoke(ctx, ActionName.ATTEMPT, AttemptId(attempt_id=attempt.id)).first_error
+            assert evidence is not None and evidence.event.error_class == "PermanentError"
+            assert evidence.text is not None and "[event 1]" in evidence.text
+        else:
+            assert attempt.first_sequence is attempt.last_sequence is None
         assert "task-private-test-value" not in agent.output
         for path in agent_dir.rglob("*"):
             if path.is_file():

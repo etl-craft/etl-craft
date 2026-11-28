@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import sys
 import time
 from collections.abc import Iterator
@@ -20,6 +21,7 @@ from datetime import UTC, datetime
 from enum import StrEnum
 from typing import IO, Any
 
+from etl_craft.core.error_anchors import MARKER_NONCE_ENV
 from etl_craft.core.errors import UsageError
 from etl_craft.core.redaction import mask_log
 from etl_craft.core.text import mask_arguments
@@ -80,6 +82,10 @@ class ContextFilter(logging.Filter):
                 setattr(record, name, value)
         rendered = " ".join(f"{name}={value}" for name, value in fields.items())
         record.context = f" [{rendered}]" if rendered else ""
+        sequence = getattr(record, "event_sequence", None)
+        if type(sequence) is int and sequence > 0:
+            nonce = os.environ.get(MARKER_NONCE_ENV, "")
+            record.msg = f"{nonce}[event {sequence}] {record.msg}"
         return True
 
 

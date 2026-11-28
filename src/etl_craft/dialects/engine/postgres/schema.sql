@@ -640,6 +640,20 @@ CREATE TABLE AUD_TASK_ATTEMPTS (
     FAILURE_CLASS          VARCHAR NOT NULL DEFAULT 'UNKNOWN' CHECK (FAILURE_CLASS IN ('TRANSIENT','PERMANENT','UNKNOWN')),
     FAILURE_SOURCE         VARCHAR,
     FAILURE_CODE           VARCHAR,
+    FIRST_ERROR_SEQUENCE BIGINT,
+    FIRST_ERROR_OFFSET BIGINT,
+    FIRST_ERROR_LINE BIGINT,
+    FIRST_ERROR_STEP VARCHAR,
+    FIRST_ERROR_ERROR_CLASS VARCHAR,
+    FIRST_ERROR_EXIT_CODE VARCHAR,
+    FIRST_ERROR_FAILURE_CLASS VARCHAR,
+    LAST_ERROR_SEQUENCE BIGINT,
+    LAST_ERROR_OFFSET BIGINT,
+    LAST_ERROR_LINE BIGINT,
+    LAST_ERROR_STEP VARCHAR,
+    LAST_ERROR_ERROR_CLASS VARCHAR,
+    LAST_ERROR_EXIT_CODE VARCHAR,
+    LAST_ERROR_FAILURE_CLASS VARCHAR,
     PEAK_RSS_BYTES         BIGINT,
     CPU_SECONDS            DOUBLE PRECISION,
     RETRY_ON               VARCHAR CHECK (RETRY_ON IN ('NONE','TRANSIENT','TRANSIENT_AND_UNKNOWN','ANY')),
@@ -2078,10 +2092,25 @@ BEGIN
                 AND (
                     (OLD.LOG_PATH IS NULL AND NEW.LOG_PATH IS NOT NULL
                      AND to_jsonb(NEW) - 'log_path' = to_jsonb(OLD) - 'log_path')
-                    OR (OLD.PEAK_RSS_BYTES IS NULL AND OLD.CPU_SECONDS IS NULL
-                        AND (NEW.PEAK_RSS_BYTES IS NOT NULL OR NEW.CPU_SECONDS IS NOT NULL)
-                        AND to_jsonb(NEW) - ARRAY['peak_rss_bytes','cpu_seconds']
-                          = to_jsonb(OLD) - ARRAY['peak_rss_bytes','cpu_seconds'])
+                    OR (((OLD.PEAK_RSS_BYTES IS NULL AND OLD.CPU_SECONDS IS NULL)
+                          OR (NEW.PEAK_RSS_BYTES IS NOT DISTINCT FROM OLD.PEAK_RSS_BYTES
+                              AND NEW.CPU_SECONDS IS NOT DISTINCT FROM OLD.CPU_SECONDS))
+                        AND ((OLD.FIRST_ERROR_OFFSET IS NULL AND OLD.FIRST_ERROR_LINE IS NULL
+                              AND NEW.FIRST_ERROR_OFFSET IS NOT NULL AND NEW.FIRST_ERROR_LINE IS NOT NULL
+                              AND OLD.FIRST_ERROR_SEQUENCE IS NOT NULL)
+                          OR (NEW.FIRST_ERROR_OFFSET IS NOT DISTINCT FROM OLD.FIRST_ERROR_OFFSET
+                              AND NEW.FIRST_ERROR_LINE IS NOT DISTINCT FROM OLD.FIRST_ERROR_LINE))
+                        AND ((OLD.LAST_ERROR_OFFSET IS NULL AND OLD.LAST_ERROR_LINE IS NULL
+                              AND NEW.LAST_ERROR_OFFSET IS NOT NULL AND NEW.LAST_ERROR_LINE IS NOT NULL
+                              AND OLD.LAST_ERROR_SEQUENCE IS NOT NULL)
+                          OR (NEW.LAST_ERROR_OFFSET IS NOT DISTINCT FROM OLD.LAST_ERROR_OFFSET
+                              AND NEW.LAST_ERROR_LINE IS NOT DISTINCT FROM OLD.LAST_ERROR_LINE))
+                        AND (NEW.PEAK_RSS_BYTES IS DISTINCT FROM OLD.PEAK_RSS_BYTES
+                          OR NEW.CPU_SECONDS IS DISTINCT FROM OLD.CPU_SECONDS
+                          OR NEW.FIRST_ERROR_OFFSET IS DISTINCT FROM OLD.FIRST_ERROR_OFFSET
+                          OR NEW.LAST_ERROR_OFFSET IS DISTINCT FROM OLD.LAST_ERROR_OFFSET)
+                        AND to_jsonb(NEW) - ARRAY['peak_rss_bytes','cpu_seconds','first_error_offset','first_error_line','last_error_offset','last_error_line']
+                          = to_jsonb(OLD) - ARRAY['peak_rss_bytes','cpu_seconds','first_error_offset','first_error_line','last_error_offset','last_error_line'])
                 )
             ) THEN
                 RAISE EXCEPTION 'AUD_TASK_ATTEMPTS terminal rows are immutable; queue a new attempt';

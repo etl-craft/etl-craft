@@ -385,3 +385,15 @@ def test_a_failing_sql_task_log_explains_the_failure(project):
     assert "missing_column" in bad.split("task failed after ", 1)[1]
     assert "correct the task's SQL or the objects it reads" in bad
     assert "PERMANENT failure" in bad
+    with engine.connect() as conn:
+        anchors = conn.execute(
+            text(
+                "SELECT FIRST_ERROR_STEP AS first_step, LAST_ERROR_STEP AS last_step, "
+                "FIRST_ERROR_SEQUENCE AS first_sequence, LAST_ERROR_SEQUENCE AS last_sequence, "
+                "LAST_ERROR_EXIT_CODE AS last_exit_code FROM AUD_TASK_ATTEMPTS "
+                "WHERE FAILURE_CLASS = 'PERMANENT'"
+            )
+        ).one()
+    assert anchors.first_step == anchors.last_step == "stage the SELECT"
+    assert anchors.first_sequence < anchors.last_sequence
+    assert anchors.last_exit_code == "HANDLER"

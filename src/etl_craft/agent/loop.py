@@ -101,6 +101,7 @@ class RunningTask:
     sequence: int = 0
     read_offset: int = 0
     pending: str = ""
+    positions_preserved: bool = True
     decoder: codecs.IncrementalDecoder = field(
         default_factory=lambda: codecs.getincrementaldecoder("utf-8")("replace")
     )
@@ -493,18 +494,7 @@ class AgentLoop:
             self._complete(task, future.result())
             return
         if task.pending:
-            self.client.call(
-                ActionName.AGENT_LOG,
-                AgentLog(
-                    version=__version__,
-                    attempt_id=task.attempt_id,
-                    sequence=task.sequence,
-                    content=task.pending,
-                ),
-            )
-            fault_point("agent.after_log_upload")
-            task.sequence += 1
-            task.pending = ""
+            self._upload_log(task)
         output = task.folder / "output"
         if output.is_file():
             with output.open("rb") as stream:
@@ -522,6 +512,26 @@ class AgentLoop:
             if task.pending:
                 return
         self._complete(task, future.result())
+
+    def _upload_log(self, task: RunningTask) -> None:
+        try:
+            receipt = self.client.call(
+                ActionName.AGENT_LOG,
+                AgentLog(
+                    version=__version__,
+                    attempt_id=task.attempt_id,
+                    sequence=task.sequence,
+                    content=task.pending,
+                ),
+            )
+        except ServerError:
+            task.positions_preserved = False
+            raise
+        if "\ufffd" in task.pending or receipt.data == {"log_redacted": True}:
+            task.positions_preserved = False
+        fault_point("agent.after_log_upload")
+        task.sequence += 1
+        task.pending = ""
 
     def _complete(self, task: RunningTask, outcome: ChildResult) -> None:
         """Keep a pending cancellation owned until its queries are confirmed stopped."""
@@ -582,8 +592,16 @@ class AgentLoop:
                     ),
                 )
                 return False
+        anchors = ending.error_anchors
+        if anchors is not None and task.positions_preserved:
+            anchors = replace(
+                anchors,
+                first_position=outcome.first_error_position,
+                last_position=outcome.last_error_position,
+            )
         ending = replace(
             ending,
+            error_anchors=anchors,
             queries_ended=queries_ended,
             pid=outcome.pid,
             process_start=outcome.process_start,

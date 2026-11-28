@@ -14,6 +14,7 @@ import socket
 import time
 
 from etl_craft.config.targets import active_warehouse, parse_warehouse_url
+from etl_craft.core.error_anchors import error_fields
 from etl_craft.core.errors import EtlCraftError
 from etl_craft.core.failures import Failure
 from etl_craft.core.redaction import public_parameters
@@ -108,6 +109,7 @@ def failed(error: BaseException, failure: Failure) -> None:
         failure.source,
         code,
         error if isinstance(error, EtlCraftError) else f"{type(error).__name__}: {error}",
+        extra=error_fields(logger, error, failure),
     )
 
 

@@ -13,6 +13,7 @@ def upload(ctx: OperationContext, request: AgentLog) -> AgentReply:
     """Acknowledge an identical retry; never replace a committed chunk or leave a sequence gap."""
     agent_id = check_agent(ctx, request)
     content = str(mask_arguments({"message": request.content})["message"])
+    reply = AgentReply() if content == request.content else AgentReply({"log_redacted": True})
     data = content.encode()
     if len(data) > 65536:
         raise UsageError(
@@ -35,7 +36,7 @@ def upload(ctx: OperationContext, request: AgentLog) -> AgentReply:
                     f"attempt {request.attempt_id}, sequence {request.sequence}: hash differs; "
                     "resend the original chunk"
                 )
-            return AgentReply()
+            return reply
         last = conn.execute(
             statement(conn, "agent_chunk_last"), {"attempt_id": request.attempt_id}
         ).one_or_none()
@@ -58,4 +59,4 @@ def upload(ctx: OperationContext, request: AgentLog) -> AgentReply:
                 "now": conn.execute(statement(conn, "agent_now")).scalar_one(),
             },
         )
-    return AgentReply()
+    return reply

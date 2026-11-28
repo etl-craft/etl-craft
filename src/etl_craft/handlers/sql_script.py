@@ -12,9 +12,11 @@ from sqlalchemy.engine import Engine
 from sqlalchemy.engine.interfaces import DBAPICursor
 
 from etl_craft.config.project import sql_script
+from etl_craft.core.error_anchors import error_fields
 from etl_craft.core.errors import HandlerError, SqlGuardError
 from etl_craft.core.faults import fault_point
 from etl_craft.core.text import mask_arguments, split_statements, sql_parts
+from etl_craft.dialects.failure_evidence import classify
 from etl_craft.engine.task_store import TaskStore
 from etl_craft.handlers.python_scripts import parse_input_params
 from etl_craft.handlers.registry import HandlerResult, TaskContext, task_store
@@ -142,7 +144,14 @@ def _execute(cursor: DBAPICursor, warehouse: Engine, script: Script, index: int,
             f"SQL_SCRIPT {script.name} statement {index} failed: {short}: {detail}; "
             "correct the file before retrying from statement 1"
         )
-        logger.error("%s (%.6fs)", message, time.monotonic() - started)
+        logger.error(
+            "%s (%.6fs)",
+            message,
+            time.monotonic() - started,
+            extra=error_fields(
+                logger, error, classify(error), step=f"SQL_SCRIPT statement {index}"
+            ),
+        )
         raise HandlerError(message) from error
     rows = cursor.rowcount
     logger.info(

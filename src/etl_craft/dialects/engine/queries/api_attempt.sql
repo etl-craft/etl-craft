@@ -30,8 +30,42 @@ SELECT p.PIPELINE_ID AS pipeline_id, r.PIPELINE_RUN_ID AS pipeline_run_id,
        a.NOT_BEFORE AS not_before, a.RETRYABLE AS retryable,
        a.FAILURE_CLASS AS failure_class, a.FAILURE_SOURCE AS failure_source,
        a.FAILURE_CODE AS failure_code, a.RETRY_ON AS retry_on,
+       a.FIRST_ERROR_SEQUENCE AS first_sequence,
+       a.FIRST_ERROR_STEP AS first_step,
+       a.FIRST_ERROR_ERROR_CLASS AS first_error_class,
+       a.FIRST_ERROR_EXIT_CODE AS first_exit_name,
+       a.FIRST_ERROR_FAILURE_CLASS AS first_class,
+       a.FIRST_ERROR_OFFSET AS first_offset,
+       a.FIRST_ERROR_LINE AS first_line,
+       a.LAST_ERROR_SEQUENCE AS last_sequence,
+       a.LAST_ERROR_STEP AS last_step,
+       a.LAST_ERROR_ERROR_CLASS AS last_error_class,
+       a.LAST_ERROR_EXIT_CODE AS last_exit_name,
+       a.LAST_ERROR_FAILURE_CLASS AS last_class,
+       a.LAST_ERROR_OFFSET AS last_offset,
+       a.LAST_ERROR_LINE AS last_line,
+       a.LOG_REMOVED_AT AS log_removed_at, cfg.PROJECT_ID AS log_project_id,
+       cfg.PIPELINE_CODE AS log_pipeline_code, task.TASK_CODE AS log_task_code,
+       (SELECT ENGINE_ID FROM AUD_ENGINE_IDENTITY WHERE IDENTITY_ID = 1) AS log_engine_id,
+       CASE WHEN a.LOG_PATH IS NULL AND a.FIRST_ERROR_SEQUENCE IS NOT NULL THEN
+           (WITH RECURSIVE preview(sequence, content, end_offset) AS (
+                SELECT c.SEQUENCE_NUMBER, c.CONTENT, c.BYTE_OFFSET + c.BYTE_LENGTH
+                FROM AUD_ATTEMPT_LOG_CHUNKS c
+                WHERE c.ATTEMPT_ID = a.ATTEMPT_ID AND c.SEQUENCE_NUMBER = 0
+                UNION ALL
+                SELECT c.SEQUENCE_NUMBER, previous.content || c.CONTENT,
+                       c.BYTE_OFFSET + c.BYTE_LENGTH
+                FROM preview previous
+                JOIN AUD_ATTEMPT_LOG_CHUNKS c
+                  ON c.ATTEMPT_ID = a.ATTEMPT_ID AND c.SEQUENCE_NUMBER = previous.sequence + 1
+                WHERE previous.sequence < 15 AND previous.end_offset < 65536
+            )
+            SELECT content FROM preview ORDER BY sequence DESC LIMIT 1)
+       END AS log_initial_chunk,
        (SELECT 1 AS has_item FROM AUD_TASK_ITEMS item WHERE item.ATTEMPT_ID=a.ATTEMPT_ID LIMIT 1) AS has_items
 FROM AUD_TASK_ATTEMPTS a
 JOIN AUD_TASK_RUN_LOG r ON r.TASK_RUN_ID = a.TASK_RUN_ID
 JOIN AUD_PIPELINES_RUN_LOG p ON p.PIPELINE_RUN_ID = r.PIPELINE_RUN_ID
+JOIN CFG_PIPELINES cfg ON cfg.PIPELINE_ID = p.PIPELINE_ID
+JOIN CFG_TASKS task ON task.TASK_ID = r.TASK_ID
 WHERE a.ATTEMPT_ID = :attempt_id

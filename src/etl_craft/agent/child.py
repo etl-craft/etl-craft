@@ -20,6 +20,7 @@ from etl_craft.core import log
 from etl_craft.core.alerts import HTTP_TIMEOUT, RETRY_DELAYS
 from etl_craft.core.counts import Counts
 from etl_craft.core.enums import ActionName, AgentReport, AttemptStatus, Handler
+from etl_craft.core.error_anchors import capture_errors, recorded_errors
 from etl_craft.core.errors import ConfigurationError, EtlCraftError, ExitCode
 from etl_craft.core.text import mask_arguments
 from etl_craft.core.time import as_utc
@@ -73,7 +74,12 @@ def _arguments() -> argparse.Namespace:
 
 
 def main() -> int:
-    """Run one handler, leaving the parent to upload final logs before committing its ending."""
+    """Run one handler with its own error sequence."""
+    with capture_errors():
+        return _run()
+
+
+def _run() -> int:
     args = _arguments()
     signal.signal(signal.SIGTERM, _interrupt)
     log.configure("INFO", "text")
@@ -144,6 +150,7 @@ def main() -> int:
             result,
             error_message=str(error),
             failure=failure,
+            error_anchors=recorded_errors(),
             exit_code=error.exit_code if isinstance(error, EtlCraftError) else ExitCode.UNEXPECTED,
         )
         raise

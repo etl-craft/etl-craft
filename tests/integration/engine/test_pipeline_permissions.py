@@ -281,11 +281,28 @@ def test_dependency_views_keep_only_the_restricted_pipeline_name(scene):
 
 
 def test_ids_cannot_bypass_restrictions_for_attempts_logs_or_controls(scene):
+    from etl_craft.core.enums import AttemptStatus, FailureClass
+    from etl_craft.core.error_anchors import ErrorAnchors, ErrorEvent
+    from etl_craft.core.failures import Failure
+
     ctx, reader, _, _, _, _, run, task = scene
     grant(ctx)
     with acting_as(OWNER), ctx.engine.begin() as conn:
         binding = transitions.find_or_create_task_run(conn, task, run)
         attempt = transitions.queue_attempt(conn, binding.task_run_id, OWNER)
+        transitions.claim_attempt(
+            conn,
+            attempt,
+            OWNER,
+            owner="test",
+            lease_expires_at=datetime.now(UTC) + timedelta(minutes=1),
+        )
+        failure = Failure(FailureClass.PERMANENT, "PermanentError")
+        error = ErrorEvent(1, "private-anchor-content", "PermanentError", "PERMANENT", failure.kind)
+        transitions.record_attempt_failure(
+            conn, attempt, failure, anchors=ErrorAnchors(error, error)
+        )
+        transitions.finish_attempt(conn, attempt, AttemptStatus.FAILED, OWNER, owner="test")
     control = act(
         ctx,
         ActionName.CONTROL,
@@ -297,10 +314,14 @@ def test_ids_cannot_bypass_restrictions_for_attempts_logs_or_controls(scene):
     for action, fields in (
         (ActionName.ATTEMPT, {"attempt_id": attempt}),
         (ActionName.LOGS, {"attempt_id": attempt}),
+        (ActionName.EXPLAIN, {"pipeline_code": "PRIVATE", "run_id": run, "task_code": "secret"}),
         (ActionName.CONTROL_REQUEST, {"control_id": control.control_id}),
     ):
-        with pytest.raises(ResourceNotFoundError, match=r"PRIVATE.*missing or not permitted"):
+        with pytest.raises(
+            ResourceNotFoundError, match=r"PRIVATE.*missing or not permitted"
+        ) as denied:
             act(reader, action, **fields)
+        assert "private-anchor-content" not in str(denied.value)
 
 
 def test_run_admission_persists_sso_ids_after_session_revocation(metadata_project):

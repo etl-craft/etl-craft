@@ -23,6 +23,7 @@ from sqlalchemy.engine import Connection, CursorResult
 from sqlalchemy.exc import SQLAlchemyError, StatementError
 
 from etl_craft.core.enums import SqlAction, TableFormat
+from etl_craft.core.error_anchors import error_fields
 from etl_craft.core.errors import HandlerError, SqlGuardError
 from etl_craft.core.redaction import mask_text
 from etl_craft.core.text import qualify, split_object_ref
@@ -176,7 +177,13 @@ class Session:
         try:
             return self.dialect.describe_select(self.conn, sql)
         except SQLAlchemyError as error:
-            logger.error("stage the SELECT failed; the statement was:\n%s", sql)
+            logger.error(
+                "stage the SELECT failed; the statement was:\n%s",
+                sql,
+                extra=error_fields(
+                    logger, error, self.dialect.classify_failure(error), step="stage the SELECT"
+                ),
+            )
             self._fail("stage the SELECT", error)
 
     def _shape(self, name: str) -> Sequence[tuple[str, str, int | None, int | None, str]]:
@@ -209,7 +216,12 @@ class Session:
         try:
             result = self.conn.execute(text(sql), self.bindings | dict(params or {}))
         except SQLAlchemyError as error:
-            logger.error("%s failed; the statement was:\n%s", step, sql)
+            logger.error(
+                "%s failed; the statement was:\n%s",
+                step,
+                sql,
+                extra=error_fields(logger, error, self.dialect.classify_failure(error), step=step),
+            )
             self._fail(step, error)
         elapsed = time.monotonic() - started
         rows = result.rowcount if result.returns_rows is False and result.rowcount >= 0 else None
@@ -238,7 +250,12 @@ class Session:
         try:
             self.dialect.create_table_as(self.conn, name, select_sql, self.params)
         except SQLAlchemyError as error:
-            logger.error("%s failed; the SELECT was:\n%s", step, select_sql)
+            logger.error(
+                "%s failed; the SELECT was:\n%s",
+                step,
+                select_sql,
+                extra=error_fields(logger, error, self.dialect.classify_failure(error), step=step),
+            )
             self._fail(step, error)
         logger.info("%s (%.2fs)", step, time.monotonic() - started)
 
@@ -251,7 +268,12 @@ class Session:
         try:
             self.dialect.backup_table(self.conn, name, f"({select_sql}) etl_src")
         except SQLAlchemyError as error:
-            logger.error("%s failed; the SELECT was:\n%s", step, select_sql)
+            logger.error(
+                "%s failed; the SELECT was:\n%s",
+                step,
+                select_sql,
+                extra=error_fields(logger, error, self.dialect.classify_failure(error), step=step),
+            )
             self._fail(step, error)
         logger.info("%s", step)
 
