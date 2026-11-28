@@ -9,7 +9,7 @@ import pytest
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 from playwright.sync_api import expect, sync_playwright
 from sqlalchemy import text
-from test_react_ui import PASSWORD, open_page, sign_in
+from test_react_ui import PASSWORD, open_page, sign_in, wait_for_fonts
 
 from etl_craft.core.actor import Actor, ActorKind, acting_as
 from etl_craft.core.enums import ActionName, ApiRole
@@ -356,7 +356,7 @@ def test_failed_identity_refresh_does_not_end_a_live_session(scene):
         page.clock.install()
         sign_in(page, url, "/ui/projects/default/pipelines/ORDERS")
         expect(page.get_by_role("heading", name="ORDERS")).to_be_visible()
-        page.evaluate("() => document.fonts.ready")
+        wait_for_fonts(page)
         page.route("**/api/v1/whoami*", lambda route: route.abort("failed"))
         with page.expect_event(
             "requestfailed", predicate=lambda request: "/api/v1/whoami" in request.url

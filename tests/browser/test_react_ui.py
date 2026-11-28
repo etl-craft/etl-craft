@@ -48,12 +48,32 @@ def scene(site):
     return ctx, url, good, bad
 
 
+def wait_for_fonts(page):
+    """Allow layout to settle within a bounded window, including with fallback fonts."""
+    page.evaluate(
+        """() => new Promise(resolve => {
+            const timeout = setTimeout(resolve, 1000);
+            document.fonts.ready.then(() => {
+                clearTimeout(timeout);
+                resolve();
+            });
+        })"""
+    )
+
+
+def launch_chromium(pw, **options):
+    """Trust only the browser fixture's certificate at Chromium's network layer."""
+    pin = os.environ["ETL_CRAFT_TEST_BROWSER_SPKI"]
+    return pw.chromium.launch(args=[f"--ignore-certificate-errors-spki-list={pin}"], **options)
+
+
 def sign_in(page, url, destination="/ui", name="owner"):
     page.goto(url + "/ui/signin?return_to=" + quote(destination, safe=""))
     page.get_by_label("Account name", exact=True).fill(name)
     page.get_by_label("Password", exact=True).fill(PASSWORD)
     page.get_by_role("button", name="Sign in", exact=True).click()
     page.wait_for_url(url + destination)
+    wait_for_fonts(page)
 
 
 @pytest.mark.parametrize("scheme,width", (("light", 1440), ("dark", 1440), ("light", 390)))
@@ -144,8 +164,8 @@ def pause_item(scope, name, pipeline="OPS"):
 
 
 def open_page(pw, *, show_scrollbars=False, **options):
-    browser = pw.chromium.launch(
-        ignore_default_args=["--hide-scrollbars"] if show_scrollbars else None
+    browser = launch_chromium(
+        pw, ignore_default_args=["--hide-scrollbars"] if show_scrollbars else None
     )
     page = browser.new_context(ignore_https_errors=True, **options).new_page()
     page.context.set_default_timeout(10_000)  # a loaded runner needs more than 5 s
@@ -160,6 +180,20 @@ def open_page(pw, *, show_scrollbars=False, **options):
     )
     page.on("pageerror", lambda e: problems.append(str(e)))
     return browser, page, problems
+
+
+def test_home_renders_when_inter_is_unavailable(site):
+    _, url = site
+    with sync_playwright() as pw:
+        browser, page, _ = open_page(pw)
+        failed = []
+        page.on("requestfailed", lambda request: failed.append(request.url))
+        page.route("**/inter-latin-wght-normal-*.woff2", lambda route: route.abort())
+        sign_in(page, url)
+        expect(page.get_by_role("heading", name="Home", exact=True)).to_be_visible()
+        assert any("/inter-latin-wght-normal-" in path for path in failed)
+        assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+        browser.close()
 
 
 def test_home_runs_and_run_detail_lead_to_a_confirmed_recovery(scene):
