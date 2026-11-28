@@ -83,3 +83,16 @@ def test_capabilities_and_project_history_statement_budgets(pages):
     assert counts[0] == counts[1]
     assert counts[1][0] == budget["pipeline_capabilities"][ctx.engine.dialect.name]
     assert counts[1][1] == budget["project_history"][ctx.engine.dialect.name]
+
+
+def test_run_statistics_statement_budget(pages):
+    ctx, expected = pages
+    budget = json.loads(BUDGETS.read_text())["run_statistics"][ctx.engine.dialect.name]
+    for code, cells in expected.items():
+        history = act(ctx, ActionName.HISTORY, pipeline_code=code, all=True, limit=1)
+        run_id = history.entries[0].pipeline_run_id
+        _, baseline = measured(ctx, ActionName.RUN_DETAIL, run_id=run_id)
+        view, counts = measured(ctx, ActionName.RUN_STATISTICS, run_id=run_id)
+        assert len(view.tasks) == cells // 25
+        assert counts["engine_statements"] <= baseline["engine_statements"] + 2
+        assert counts == budget

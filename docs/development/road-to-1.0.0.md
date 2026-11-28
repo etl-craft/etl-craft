@@ -213,7 +213,7 @@ item's text, or work done early under another item.
 | S7.AY ROW_IDs derived from the task run | Done | #470 | `ROW_ID = TASK_RUN_ID × 2^32 + n` on every warehouse; `AUD_TARGET_ROW_IDS`, the reservation report and ROW_ID generators are gone |
 | S7.AZ Re-parse, not refresh | Done | #472 | `pipelines re-parse`, `lineage --re-parse`, re-parse routes, actions, UI labels, Engine DB names and docs; "refresh" means data only |
 | S7.BA Run conditions on task and pipeline rows | In progress | [#474](https://github.com/etl-craft/etl-craft/pull/474), [#475](https://github.com/etl-craft/etl-craft/pull/475) | S7.BA.2 and S7.BA.3 done. Tasks declare run conditions and pipelines declare start conditions. Support Insights remains a follow-up. |
-| S7.BB Run monitoring | In progress | #480, #481 | S7.BB.2a and S7.BB.2b done. Selected-task reads include resources, the success cohort, and authorized error anchors. S7.BB.3 next. |
+| S7.BB Run monitoring | In progress | #480, #481, #483 | S7.BB.2a, S7.BB.2b and S7.BB.3 done. Run Statistics and the shared task panel show recorded evidence. S7.BB.4 next. |
 | S7.BC Incident handoff | Planned | | Recovery guidance, alert identity and existing support evidence from the run |
 | S7.BD Bounded catalog lineage lookup | Planned | | Bounded definition and history reads at 5,000 pipelines and 50,000 tasks per project |
 | S7.BE Cross-project condition safety | Done | #478 | Refuse definition changes that would break another project's conditions |
@@ -248,6 +248,15 @@ item's text, or work done early under another item.
 - **S7.BB.2b Acceptance availability.** Local capture, crash recovery, and authorized reads
   ran on SQLite and PostgreSQL. Real PostgreSQL agents covered acknowledged log uploads
   and the bounded fallback after an interrupted upload.
+
+- **S7.BB.3 Choices that differ from the item text.** Reject breakdowns use the final
+  attempt and retained warehouse reasons. Missing rows report the stored count and any
+  confirmed later removal at target scope. The retention audit does not identify affected
+  task runs.
+
+- **S7.BB.3 Acceptance availability.** SQLite and PostgreSQL covered the statement budget
+  and pipeline permissions. DuckDB covered retained warehouse rejects. Chromium covered
+  1440 and 390 px in light and dark. Owner visual approval is required on the PR.
 
 #### Before the 0.9.0 release PR
 
@@ -11378,6 +11387,7 @@ Other deferred work:
 - **Definition and history scale follow-ups:** private conditional definition reads and terminal
   summaries only with measured wins, subject to the S7.BB budget exception. Preserve pinned
   historical definitions and retention holds.
+- **Reject evidence:** reject row detail, export, and reject removal recorded per task run.
 - **Closed error-code taxonomy**, if needed in addition to native warehouse codes.
 
 Rejected:

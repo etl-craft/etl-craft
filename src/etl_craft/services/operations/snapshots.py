@@ -22,7 +22,7 @@ from etl_craft.core.error_anchors import ErrorEvent
 from etl_craft.core.errors import RunStateError, UsageError
 from etl_craft.core.failures import retry_reason
 from etl_craft.core.restart import restart_note
-from etl_craft.core.time import as_utc
+from etl_craft.core.time import as_utc, elapsed_seconds
 from etl_craft.engine.logs import LIVE_ATTEMPTS, LogAttempt
 from etl_craft.engine.queries import statement
 from etl_craft.engine.repository.business_rules import fetch_rule_observations
@@ -180,15 +180,19 @@ def success_cohort(conn: Connection, task_id: int) -> TaskSuccessCohort:
             "reject_count",
             "duplicate_count",
             "duration_seconds",
+            "queue_seconds",
+            "rows_per_second",
+            "peak_rss_bytes",
+            "average_cores",
         )
     }
     for row in rows:
         for name, value in row.items():
             if name in samples and value is not None:
                 samples[name].append(value)
-        start, end = timestamp(row["start_date"]), timestamp(row["end_date"])
-        if start is not None and end is not None:
-            samples["duration_seconds"].append((end - start).total_seconds())
+        for name, value in _attempt_samples(row).items():
+            if value is not None:
+                samples[name].append(value)
     return TaskSuccessCohort(
         len(rows),
         {
@@ -196,6 +200,25 @@ def success_cohort(conn: Connection, task_id: int) -> TaskSuccessCohort:
             for key, values in samples.items()
         },
     )
+
+
+def _attempt_samples(row: RowMapping) -> dict[str, float | None]:
+    if row.attempt_id is None:
+        started, ended = timestamp(row.start_date), timestamp(row.end_date)
+    else:
+        started, ended = timestamp(row.started_at), timestamp(row.ended_at)
+    duration = elapsed_seconds(started, ended)
+    queue = elapsed_seconds(timestamp(row.queued_at), started)
+    return {
+        "duration_seconds": duration,
+        "queue_seconds": queue,
+        "rows_per_second": row.source_count / duration
+        if duration and row.source_count is not None
+        else None,
+        "average_cores": row.cpu_seconds / duration
+        if duration and row.cpu_seconds is not None
+        else None,
+    }
 
 
 def task_document(

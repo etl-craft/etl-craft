@@ -6,6 +6,11 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+- The shared run and pipeline task panel shows typed failure evidence, exact error-line
+  jumps, and recorded attempt statistics with recent success medians. The run's Statistics
+  tab sorts and pages tasks, expands earlier tries, and opens the final try's retained reject
+  reason counts.
+
 - Failed attempts record typed first and last error events with their outcome. Selected-task
   and attempt reads can resolve the events against authorized live or archived logs and report
   when a stream expired, could not be read, or has no recorded location.

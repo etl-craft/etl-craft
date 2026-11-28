@@ -1,4 +1,5 @@
 import { Disclosure, DisclosureSummary } from "@/components/dropdown";
+import { AttemptStatistics } from "@/components/attempt-triage";
 import { useQuery } from "@tanstack/react-query";
 import { When, useNow } from "@/components/when";
 import { Download } from "lucide-react";
@@ -9,21 +10,10 @@ import { Button } from "@/components/ui/button";
 import { unavailableAction, useActionAvailability } from "@/hooks";
 import { ApiError, getText, project } from "@/lib/api";
 import { downloadFile } from "@/lib/download";
-import { formatDuration } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { words } from "@/lib/labels";
 import type { AttemptView } from "@/lib/types";
 
-const ROWS = [
-  ["source_count", "Rows in"],
-  ["insert_count", "Inserted"],
-  ["update_count", "Updated"],
-  ["delete_count", "Deleted"],
-  ["rows_written", "Rows written"],
-  ["reject_count", "Rejected"],
-  ["duplicate_count", "Duplicates"],
-  ["target_count", "Target rows"],
-] as const satisfies readonly (readonly [keyof AttemptView, string])[];
 const evidence = (kind: string | null, actor: string | null, reason: string | null) =>
   kind ? [words(kind), actor, reason].filter(Boolean).join(" · ") : null;
 const ERROR = /\b(ERROR|FATAL|CRITICAL|Traceback)\b/;
@@ -31,7 +21,7 @@ const WARNING = /\bWARN(ING)?\b/;
 export const LIVE = new Set(["QUEUED", "CLAIMED", "RUNNING"]);
 
 /** An attempt's log, fetched on demand and kept fresh while the attempt is still running. */
-export function AttemptLog({ code, attempt, open = false, embedded = false, jumpToError = false }: { code: string; attempt: Pick<AttemptView, "attempt_id" | "status">; open?: boolean; embedded?: boolean; jumpToError?: boolean }) {
+export function AttemptLog({ code, attempt, open = false, embedded = false, jumpToError = false, revealError = false, firstLine, jump }: { code: string; attempt: Pick<AttemptView, "attempt_id" | "status">; open?: boolean; embedded?: boolean; jumpToError?: boolean; revealError?: boolean; firstLine?: number | null; jump?: { line: number | "timings" } }) {
   const [shown, setShown] = React.useState(open);
   const availability = useActionAvailability(code, undefined, true, { attempt_id: attempt.attempt_id });
   const logReason = unavailableAction(availability, "/attempts/{attempt_id}/log", "GET");
@@ -47,14 +37,15 @@ export function AttemptLog({ code, attempt, open = false, embedded = false, jump
   const [find, setFind] = React.useState("");
   const [level, setLevel] = React.useState("");
   const [match, setMatch] = React.useState<number | null>(null);
-  const [follow, setFollow] = React.useState(LIVE.has(attempt.status));
+  const [follow, setFollow] = React.useState(!jump && LIVE.has(attempt.status));
   const box = React.useRef<HTMLPreElement>(null);
   const needle = find.trim().toLowerCase();
   const errorLine = lines.findIndex((line) => ERROR.test(line));
   const lineId = (index: number) => `attempt-${attempt.attempt_id}-line-${index + 1}`;
   const prefix = `#attempt-${attempt.attempt_id}-line-`;
   const anchor = window.location.hash.startsWith(prefix) ? Number(window.location.hash.slice(prefix.length)) - 1 : -1;
-  const requested = anchor >= 0 && anchor < lines.length ? anchor : jumpToError ? errorLine : -1;
+  const jumpIndex = jump?.line === "timings" ? lines.findIndex((line) => /\(\d+(?:\.\d+)?s\)\s*$/.test(line)) : jump ? jump.line - 1 : -1;
+  const requested = jumpIndex >= 0 && jumpIndex < lines.length ? jumpIndex : anchor >= 0 && anchor < lines.length ? anchor : jumpToError ? (firstLine == null ? errorLine : firstLine - 1) : -1;
   const offset = requested >= 0 ? Math.max(0, requested - 100) : Math.max(0, lines.length - 400);
   const entries = lines.map((line, index) => ({
     line, index, level: ERROR.test(line) ? "error" : WARNING.test(line) ? "warning" : "other",
@@ -81,8 +72,10 @@ export function AttemptLog({ code, attempt, open = false, embedded = false, jump
   React.useEffect(() => {
     if (requested >= 0 && !needle && !level) {
       jumpToLine(requested);
+      if (jump) box.current?.focus();
+      else if (revealError) box.current?.scrollIntoView({ block: "nearest" });
     }
-  }, [requested, needle, level, log.data, jumpToLine]);
+  }, [requested, needle, level, log.data, jumpToLine, jump, revealError]);
   return (
     <div className="grid gap-2">
       <div className="flex flex-wrap items-center gap-3">
@@ -164,17 +157,13 @@ export function AttemptDetails({ code, attempt, heading, showLog = false, hideLo
       <FactList className="gap-3 sm:grid-cols-4 lg:grid-cols-4">
         {attempt.started_at ? <Fact label="Started"><When iso={attempt.started_at} now={Math.max(now, Date.parse(attempt.started_at))} /></Fact> : null}
         {attempt.ended_at ? <Fact label="Ended"><When iso={attempt.ended_at} /></Fact> : null}
-        {attempt.started_at ? <Fact label="Duration">{formatDuration(attempt.started_at, attempt.ended_at, now)}</Fact> : null}
-        {/* Only what was measured: a count the handler does not report is left out, not shown as "Not measured". */}
-        {ROWS.filter(([key]) => attempt[key] !== null).map(([key, label]) => (
-          <Fact key={key} label={label}>{(attempt[key] as number).toLocaleString("en-GB")}</Fact>
-        ))}
         {attempt.watermark_to ? (
           <Fact label="Watermark">
             <span className="break-all">{attempt.watermark_from ?? "start"} → {attempt.watermark_to}</span>
           </Fact>
         ) : null}
       </FactList>
+      {hideLog ? null : <AttemptStatistics attempt={attempt} now={now} />}
       {failed ? <FailureDetails failure={attempt}>
         <FactList className="mt-3 gap-3 sm:grid-cols-4 lg:grid-cols-4">
           <Fact label="Attempt id">{attempt.attempt_id}</Fact>

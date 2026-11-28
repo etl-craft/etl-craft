@@ -114,6 +114,17 @@ export interface Graph {
   depends_on: Record<string, [string, string][]>;
 }
 
+export interface AttemptError {
+  event: { sequence: number; step: string | null; error_class: string; exit_code: string; failure_class: string };
+  offset: number | null;
+  line: number | null;
+  state: "LIVE" | "ARCHIVED" | "EXPIRED" | "READ_FAILED" | "MISSING" | null;
+  text: string | null;
+  message: string | null;
+}
+
+export type MetricMedian = { median: number | null; sample_size: number };
+
 export interface AttemptView {
   attempt_id: number;
   attempt_number: number;
@@ -142,6 +153,11 @@ export interface AttemptView {
   failure_class: string;
   failure_source: string | null;
   failure_code: string | null;
+  first_error?: AttemptError | null;
+  last_error?: AttemptError | null;
+  first_error_message?: string | null;
+  peak_rss_bytes?: number | null;
+  cpu_seconds?: number | null;
   retry_on: string | null;
   retry_reason: string | null;
   retryable: boolean;
@@ -174,6 +190,7 @@ export interface TaskRunView {
   duplicate_count: number | null;
   error_message: string | null;
   attempts: AttemptView[];
+  success_cohort?: { run_count: number; metrics: Record<string, MetricMedian> } | null;
   item_progress: string | null;
   run_label?: string;
   task_run_label?: string;
@@ -209,6 +226,7 @@ export interface Dependency {
 }
 
 export interface Explanation {
+  task?: TaskRunView | null;
   run_condition: string;
   condition_met: boolean | null;
   dependencies: Dependency[];

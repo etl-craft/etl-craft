@@ -2426,6 +2426,8 @@ SELECT r.ROLE_ID, v.column1 FROM CFG_ROLES r, (VALUES
     ('pipelines'),
     ('rehash plan'),
     ('run detail'),
+    ('run statistics'),
+    ('reject breakdown'),
     ('run log'),
     ('run zip'),
     ('search'),

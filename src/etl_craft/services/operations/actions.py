@@ -74,9 +74,11 @@ from etl_craft.services.operations import (
     previews,
     processes,
     project_health,
+    reject_breakdown,
     renames,
     retention,
     run_log,
+    run_statistics,
     run_zip,
     runs,
     search,
@@ -248,6 +250,12 @@ _ROWS = (
            scope=ActionScope.PIPELINE),
     Action(ActionName.RUN_DETAIL, inspect.get_run, RunId, models.RunView, VIEWER, GET,
            f"{API}/runs/{{run_id}}",
+           scope=ActionScope.PIPELINE),
+    Action(ActionName.RUN_STATISTICS, run_statistics.run_statistics, RunId,
+           run_statistics.RunStatistics, VIEWER, GET,
+           f"{API}/runs/{{run_id}}/statistics", scope=ActionScope.PIPELINE),
+    Action(ActionName.REJECT_BREAKDOWN, reject_breakdown.reject_breakdown, TaskSelection,
+           reject_breakdown.RejectBreakdown, VIEWER, GET, f"{API}/reject-breakdown",
            scope=ActionScope.PIPELINE),
     Action(ActionName.CAPABILITIES, capabilities.project_capabilities, CapabilitiesInput,
            capabilities.CapabilitiesView | capabilities.ActionAvailabilityView,
@@ -626,6 +634,7 @@ def project_settings(ctx: OperationContext, name: ActionName, request: object) -
         ActionName.DATA_EDIT,
         ActionName.DATA_UNLOCK,
         ActionName.DATA_PROVENANCE,
+        ActionName.REJECT_BREAKDOWN,
     }:
         return ctx
     from etl_craft.config.project import project_config
