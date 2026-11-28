@@ -147,7 +147,8 @@ step, ExitCode name and native warehouse code when available. **Go to line** ope
 recorded location in that try's log. The panel identifies archived, expired, unreadable
 and unrecorded locations.
 
-The statistics strip shows the counts the handler recorded, including zero. It reports
+The attempt statistics table lists each recorded metric with its current value, median and
+sample size. It includes counts of zero and reports
 queue and execution time, throughput when read count and positive duration are known,
 and peak memory and average CPU cores when measured. CPU cores are CPU seconds divided
 by execution seconds. Detached PYTHON child processes are outside the resource sample.
@@ -157,8 +158,8 @@ positive median.
 
 Open **Statistics** on the run page to compare final attempts across tasks. Sort by any
 column and page through groups of 100 tasks. The URL preserves the sort. Expand **Earlier
-tries** to see previous attempts. A positive final-attempt reject count opens retained
-counts by recorded reason. If the breakdown is unavailable, the dialog reports the
+tries** to see previous attempts. Select a positive final-attempt reject count on either
+the task panel or Statistics to see the retained row counts by recorded reason. If the breakdown is unavailable, the dialog reports the
 recorded count and, when available, the last confirmed target retention removal after
 that task run.
 

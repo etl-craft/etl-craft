@@ -1,3 +1,4 @@
+import { RejectBreakdown } from "@/components/reject-breakdown";
 import { AttemptStatistics, FailureSummary } from "@/components/attempt-triage";
 import { OptionalTask } from "@/components/dependency-mark";
 import { TaskDefinitionPanel } from "@/components/task-definition-panel";
@@ -101,6 +102,7 @@ export function TaskDetails({ code, pipeline, run, task, handler, cell, tab, try
       (area?.parentElement ?? panel.current)?.scrollIntoView({ block: "nearest" });
     }
   }, []);
+  const [rejectAttempt, setRejectAttempt] = React.useState<number>();
   const [jump, setJump] = React.useState<{ attempt: number; line: number | "timings"; click: number } | null>(null);
   const runId = run.pipeline_run_id;
   const now = useNow();
@@ -146,8 +148,10 @@ export function TaskDetails({ code, pipeline, run, task, handler, cell, tab, try
     {attempt ? <>
       <FailureSummary attempt={attempt} onLine={showLog} />
       <AttemptStatistics attempt={attempt} metrics={summary?.success_cohort?.metrics} now={now}
+        onRejects={attempt === latest && !LIVE.has(attempt.status) ? () => setRejectAttempt(attempt.attempt_id) : undefined}
         onTimings={handler === "SQL" || handler === "SQL_SCRIPT" ? () => showLog("timings") : undefined} />
     </> : null}
+    {attempt && rejectAttempt === attempt.attempt_id && attempt === latest ? <RejectBreakdown code={code} run={run} task={task} close={() => setRejectAttempt(undefined)} /> : null}
     <Tabs tabs={taskTabs} value={selectedTab} onChange={onTab} panelId="task-instance-tab" />
     <div role="tabpanel" id="task-instance-tab" aria-labelledby={`tab-${selectedTab}`} className="grid gap-3">
     {explanation.isError ? <Notice>{explanation.error.message}</Notice> : null}

@@ -29,7 +29,7 @@ it.each([
   render(<FailureSummary attempt={{ ...attempt, first_error: {...anchor, state, message}, last_error: null }} onLine={jump} />);
   expect(screen.getByText(label, {exact: false})).toBeInTheDocument();
   expect(screen.getByText("Last error was not recorded for try 2.")).toBeInTheDocument();
-  expect(screen.getByText("Native code 23505")).toBeInTheDocument();
+  expect(screen.getByRole("row", { name: /Native code 23505 23505/ })).toBeInTheDocument();
   const link = screen.queryByRole("button", { name: /Go to line 4/ });
   if (state === "ARCHIVED") {
     fireEvent.click(link!);
@@ -40,7 +40,7 @@ it.each([
 it("distinguishes absent from zero and derives throughput, queue time and CPU", () => {
   render(<AttemptStatistics attempt={attempt} now={0} metrics={{source_count: {median: 1_400_000, sample_size: 12}}} />);
   expect(screen.getByText("1.2k")).toBeInTheDocument();
-  expect(screen.getByText("med 1.4M, n=12")).toBeInTheDocument();
+  expect(screen.getByRole("row", { name: /Read 1.2k.*1.4M 12/ })).toBeInTheDocument();
   expect(screen.getByText("0")).toBeInTheDocument();
   expect(screen.getByText("600")).toBeInTheDocument();
   expect(screen.getByText("3s")).toBeInTheDocument();

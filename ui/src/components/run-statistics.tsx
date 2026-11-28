@@ -1,22 +1,20 @@
 import { useQuery, type UseQueryResult } from "@tanstack/react-query";
-import { useId, useState } from "react";
+import { useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { compactCount, cores, executionSeconds, interval, MedianMark, memory, perSecond } from "@/components/attempt-triage";
 import { Loading, Notice, SelectField } from "@/components/common";
 import { DataTable, columnsOf } from "@/components/data-table";
 import { StatusBadge } from "@/components/status";
 import { Button } from "@/components/ui/button";
-import { Dialog } from "@/components/ui/dialog";
 import { useNow } from "@/components/when";
 import { getJson, project } from "@/lib/api";
-import { formatSeconds, formatTime } from "@/lib/format";
-import { useTimezone } from "@/hooks";
+import { formatSeconds } from "@/lib/format";
+import { RejectBreakdown } from "@/components/reject-breakdown";
 import type { AttemptView, MetricMedian, RunView } from "@/lib/types";
 
 type Attempt = { exit_name?: string | null } & Pick<AttemptView, "attempt_id" | "attempt_number" | "status" | "started_at" | "ended_at" | "source_count" | "rows_written" | "reject_count" | "peak_rss_bytes" | "cpu_seconds" | "error_message" | "failure_code">;
 type Task = { task_code: string; status: string | null; handler: string; error_message: string | null; attempts: Attempt[]; duration: MetricMedian };
 type Row = { task: Task; attempt?: Attempt; earlier?: boolean };
-type Breakdown = { rows: { reason: string; count: number }[]; reject_table: string | null; recorded_count: number; retention_removed_at: string | null };
 
 const pageSize = 100;
 const formats = {
@@ -130,27 +128,4 @@ export function RunStatistics({ code, run, stats, onTask }: {
     </nav> : null}
     {rejectTask ? <RejectBreakdown code={code} run={run} task={rejectTask} close={() => setRejectTask(null)} /> : null}
   </div>;
-}
-
-function RejectBreakdown({ code, run, task, close }: { code: string; run: RunView; task: string; close: () => void }) {
-  const title = useId();
-  const timezone = useTimezone();
-  const result = useQuery({
-    queryKey: ["reject-breakdown", code, run.pipeline_run_id, task],
-    staleTime: 0,
-    queryFn: () => getJson<Breakdown>(`${project(code)}/reject-breakdown`, { pipeline_code: run.pipeline_code, run_id: run.pipeline_run_id, task_code: task }),
-  });
-  const data = result.data;
-  return <Dialog open onClose={close} labelledBy={title}>
-    <div className="grid gap-3 p-4">
-      <h2 id={title} className="font-semibold">Reject breakdown · {task}</h2>
-      {result.isPending ? <Loading what="reject breakdown" /> : null}
-      {result.isError ? <Notice>{result.error.message}</Notice> : null}
-      {data?.rows.length ? <ul>{data.rows.map(row => <li key={row.reason}>{row.reason} · {compactCount(row.count)}</li>)}</ul> : data ? <p>
-        Reject breakdown unavailable.{data.reject_table && data.recorded_count > 0 ? <> This task recorded {data.recorded_count.toLocaleString("en-GB")} rejects; their rows are no longer in {data.reject_table}.</> : null}
-        {data.retention_removed_at ? <> Retention last removed rows from this target on <time dateTime={data.retention_removed_at}>{formatTime(data.retention_removed_at, timezone)}</time>.</> : null}
-      </p> : null}
-      <Button className="justify-self-end" onClick={close}>Close</Button>
-    </div>
-  </Dialog>;
 }

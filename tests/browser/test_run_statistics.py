@@ -168,8 +168,8 @@ def test_task_triage_and_run_statistics(triage, scheme, width):
             shoot(page, f"statistics-earlier-tries-{scheme}-{width}")
         table.get_by_role("button", name="Reject breakdown for LOAD").click()
         reject = page.get_by_role("dialog", name="Reject breakdown · LOAD")
-        expect(reject.get_by_text("invalid integer · 8")).to_be_visible()
-        expect(reject.get_by_text("overflow · 2")).to_be_visible()
+        expect(reject.get_by_role("row").filter(has_text="invalid integer")).to_contain_text("8")
+        expect(reject.get_by_role("row").filter(has_text="overflow")).to_contain_text("2")
         shoot(page, f"statistics-rejects-{scheme}-{width}")
         reject.get_by_role("button", name="Close").click()
         for task in ("LOAD", "PYTHON_JOB", "LIVE", "COMPACT", "RETRY", "EXPIRED"):
@@ -179,10 +179,18 @@ def test_task_triage_and_run_statistics(triage, scheme, width):
             expect(panel.get_by_role("link", name="Open in catalog")).to_have_attribute(
                 "href", f"/ui/projects/default/catalog/tasks/TRIAGE.{task}?tab=mapping"
             )
-            expect(panel.get_by_role("region", name="Attempt statistics")).to_be_visible()
+            metrics = panel.get_by_role("table", name="Attempt statistics")
+            expect(metrics).to_be_visible()
+            if width == 390:
+                assert metrics.evaluate("(table) => table.scrollWidth <= table.clientWidth")
+                expect(metrics.locator("thead")).to_be_hidden()
+            else:
+                expect(metrics.get_by_role("columnheader", name="This try")).to_be_visible()
             failure = panel.get_by_role("region", name="Failure summary")
             if task in {"LOAD", "EXPIRED"}:
-                expect(failure.get_by_text("Native code 23505")).to_be_visible()
+                expect(failure.get_by_role("row").filter(has_text="Native code")).to_contain_text(
+                    "23505"
+                )
                 if task == "EXPIRED":
                     expect(failure.get_by_text("log expired", exact=False).first).to_be_visible()
                 else:
@@ -204,7 +212,13 @@ def test_task_triage_and_run_statistics(triage, scheme, width):
             if width == 390:
                 panel.evaluate("(node) => node.scrollIntoView({block: 'start'})")
             shoot(page, f"task-{task.lower()}-{scheme}-{width}")
+            if task in {"LOAD", "EXPIRED"}:
+                metrics.evaluate("(table) => table.scrollIntoView({block: 'start'})")
+                shoot(page, f"task-{task.lower()}-metrics-{scheme}-{width}")
             if task == "LOAD":
+                metrics.get_by_role("button", name="Reject breakdown for 10 rows").click()
+                expect(page.get_by_role("table", name="Rejected rows by reason")).to_be_visible()
+                page.get_by_role("dialog").get_by_role("button", name="Close").click()
                 link.click()
                 expect(panel.locator("pre[aria-label='Attempt log']")).to_be_focused()
                 expect(
