@@ -10,6 +10,7 @@ from __future__ import annotations
 import logging
 import os
 import resource
+import secrets
 import shutil
 import signal
 import subprocess
@@ -24,10 +25,12 @@ from pathlib import Path
 from typing import IO
 
 from etl_craft.core import interrupts
+from etl_craft.core.error_anchors import MARKER_NONCE_ENV, ErrorPosition
 from etl_craft.core.errors import ConfigurationError, RunStateError
 from etl_craft.core.faults import fault_point
 from etl_craft.engine.attempt_resources import AttemptResources
 from etl_craft.execution.leases import process_start
+from etl_craft.execution.log_positions import LogPositions
 from etl_craft.execution.reconcile import stop_process
 
 logger = logging.getLogger(__name__)
@@ -60,6 +63,7 @@ class ChildSpec:
     cwd: Path | None = None
     input_data: bytes | None = field(default=None, repr=False)
     redacted_values: tuple[str, ...] = field(default=(), repr=False)
+    track_error_positions: bool = False
 
 
 @dataclass(frozen=True)
@@ -82,11 +86,18 @@ class ChildResult:
     process_start: str | None = None
     peak_rss_bytes: int | None = None
     cpu_seconds: float | None = None
+    first_error_position: ErrorPosition | None = None
+    last_error_position: ErrorPosition | None = None
 
     @property
     def resources(self) -> AttemptResources:
         """Return the resource observation for persistence."""
-        return AttemptResources(self.peak_rss_bytes, self.cpu_seconds)
+        return AttemptResources(
+            self.peak_rss_bytes,
+            self.cpu_seconds,
+            self.first_error_position,
+            self.last_error_position,
+        )
 
     @property
     def succeeded(self) -> bool:
@@ -122,13 +133,15 @@ def run_child(
         start_offset = output.tell()
         started = time.monotonic()
         interrupts.checkpoint()
-        process = _launch(spec, output)
+        nonce = secrets.token_hex(16) if spec.track_error_positions else None
+        positions = LogPositions(output) if nonce is not None or spec.redacted_values else None
+        process = _launch(spec, output, nonce)
         birth = process_start(process.pid)
         logger.debug("started pid %s: %s", process.pid, " ".join(spec.argv))
         timed_out = cancelled = False
         status = None
         peak_rss = cpu_seconds = None
-        with _task_pipes(process, spec, output, cancel) as task_cancel:
+        with _task_pipes(process, spec, positions, cancel, nonce=nonce) as task_cancel:
             try:
                 if on_started is not None:
                     on_started(process.pid)
@@ -159,6 +172,8 @@ def run_child(
         process_start=birth,
         peak_rss_bytes=peak_rss,
         cpu_seconds=cpu_seconds,
+        first_error_position=None if positions is None else positions.first,
+        last_error_position=None if positions is None else positions.last,
     )
     logger.debug("pid %s %s after %.1fs", process.pid, result.describe(), elapsed)
     return result
@@ -168,23 +183,31 @@ def run_child(
 def _task_pipes(
     process: subprocess.Popen[bytes],
     spec: ChildSpec,
-    output: IO[bytes],
+    positions: LogPositions | None,
     cancel: threading.Event | None,
+    *,
+    nonce: str | None,
 ) -> Iterator[threading.Event | None]:
     """Drain output and feed credentials while supervision retains its timeout and cancellation."""
-    from etl_craft.execution.secret_pipe import capture_output, send_input
+    from etl_craft.execution.secret_pipe import RedactedOutput, capture_output, send_input
 
     threads = []
     finished = threading.Event()
     failures: list[OSError] = []
-    if spec.redacted_values or spec.input_data is not None:
+    if positions is not None or spec.input_data is not None:
         cancel = cancel or threading.Event()
-    if spec.redacted_values:
+    if positions is not None:
         assert process.stdout is not None and cancel is not None
         threads.append(
             threading.Thread(
                 target=capture_output,
-                args=(process.stdout, output, spec.redacted_values, cancel, failures, finished),
+                args=(
+                    process.stdout,
+                    RedactedOutput(positions, spec.redacted_values, nonce),
+                    cancel,
+                    failures,
+                    finished,
+                ),
                 daemon=True,
             )
         )
@@ -212,14 +235,17 @@ def _task_pipes(
         )
 
 
-def _launch(spec: ChildSpec, output: IO[bytes]) -> subprocess.Popen[bytes]:
-    """Choose private stdin and filtered stdout only for credential-bearing tasks."""
+def _launch(spec: ChildSpec, output: IO[bytes], nonce: str | None) -> subprocess.Popen[bytes]:
+    """Keep input private and canonicalize output for tracked or credential-bearing tasks."""
+    env = None if spec.env is None else dict(spec.env)
+    if nonce is not None:
+        env = {**(os.environ if env is None else env), MARKER_NONCE_ENV: nonce}
     return subprocess.Popen(
         spec.argv,
         stdin=subprocess.PIPE if spec.input_data is not None else subprocess.DEVNULL,
-        stdout=subprocess.PIPE if spec.redacted_values else output,
+        stdout=subprocess.PIPE if nonce is not None or spec.redacted_values else output,
         stderr=subprocess.STDOUT,
-        env=None if spec.env is None else dict(spec.env),
+        env=env,
         cwd=spec.cwd,
         start_new_session=True,
     )

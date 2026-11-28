@@ -4,6 +4,22 @@ Attempt documents expose nullable `peak_rss_bytes` and `cpu_seconds` values from
 wait result. Missing values remain distinct from a genuine
 zero; detached processes started by a `PYTHON` task are not included.
 
+Attempt documents include nullable `first_error` and `last_error`. Each contains an `event`
+with its attempt-local `sequence`, `step` when recorded, `error_class`, `exit_code` name and
+`failure_class`. The attempt's `failure_code` still carries the warehouse SQLSTATE or vendor
+code when available. When only one error was recorded, both fields refer to that event.
+Running and successful attempts have no anchors.
+
+The selected-task explanation and attempt detail resolve anchors using the raw-log scope.
+On a match they return `offset` in bytes from the start of the canonical stream, a one-based
+`line`, and `text` capped at 16 KiB. The `state` is `LIVE`, `ARCHIVED`, `EXPIRED`,
+`READ_FAILED`, or `MISSING`. Expiry, read failure, and missing location include a `message`.
+A failed attempt without captured evidence includes `first_error_message`. When a position
+is absent, resolution scans up to the first MiB of a published stream or the first 16 chunks
+and 64 KiB of a shared stream awaiting publication. Other views can
+return stored evidence with unresolved state and text. The raw-log endpoint accepts the
+resolved byte offset.
+
 Every action (a run, a mark, a control, a sign-in, a token, a docs build) is one row of the
 action table in `etl_craft.services.operations.actions`. The CLI, the HTTP API and Python
 callers reach it the same way: build the action's request and call

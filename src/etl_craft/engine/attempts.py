@@ -1,10 +1,11 @@
 """Attempt identity reads and failure evidence written with lifecycle transitions."""
 
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 
 from sqlalchemy.engine import Connection
 
 from etl_craft.core.enums import AttemptStatus, FailureClass, RetryOn
+from etl_craft.core.error_anchors import ErrorAnchors
 from etl_craft.core.errors import StaleTransitionError
 from etl_craft.core.failures import Failure
 from etl_craft.engine.queries import statement
@@ -33,7 +34,12 @@ def active_attempt(conn: Connection, task_run_id: int) -> ActiveAttempt | None:
 
 
 def record_attempt_failure(
-    conn: Connection, attempt_id: int, failure: Failure, *, overwrite: bool = True
+    conn: Connection,
+    attempt_id: int,
+    failure: Failure,
+    *,
+    overwrite: bool = True,
+    anchors: ErrorAnchors | None = None,
 ) -> None:
     """Store classification with the ending, using the policy captured at admission."""
     row = conn.execute(
@@ -50,6 +56,7 @@ def record_attempt_failure(
     result = conn.execute(
         statement(conn, "transition_attempt_failure"),
         {
+            **_anchor_values(anchors),
             "attempt_id": attempt_id,
             "overwrite": overwrite,
             "failure_class": failure.kind,
@@ -64,6 +71,21 @@ def record_attempt_failure(
             f"attempt_id={attempt_id}: failure evidence found no live attempt; "
             "expected QUEUED, CLAIMED or RUNNING; refresh the attempt before recording its outcome"
         )
+
+
+def _anchor_values(anchors: ErrorAnchors | None) -> dict[str, object]:
+    keys = ("sequence", "step", "error_class", "exit_code", "failure_class", "offset", "line")
+    values: dict[str, object] = {}
+    for prefix in ("first", "last"):
+        fields: dict[str, object] = dict.fromkeys(keys)
+        if anchors is not None:
+            event = anchors.first if prefix == "first" else anchors.last
+            position = anchors.first_position if prefix == "first" else anchors.last_position
+            fields.update(asdict(event))
+            if position is not None and position.sequence == event.sequence:
+                fields.update(offset=position.offset, line=position.line)
+        values.update({f"{prefix}_{key}": value for key, value in fields.items()})
+    return values
 
 
 def record_attempt_ending(conn: Connection, attempt_id: int, status: str, retryable: bool) -> None:

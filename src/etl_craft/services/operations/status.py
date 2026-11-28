@@ -288,12 +288,15 @@ def _snapshots(
     selector: runlog.RunSelector,
     policy: GatePolicy,
     task_code: str | None = None,
+    ctx: OperationContext | None = None,
 ) -> list[TaskSnapshot]:
     from etl_craft.engine.run_definitions import for_run
 
     selected = runlog.select_run(conn, pipeline_id, selector)
     with for_run(conn, selected.pipeline_run_id):
-        return _admitted_snapshots(conn, pipeline_id, selected.pipeline_run_id, policy, task_code)
+        return _admitted_snapshots(
+            conn, pipeline_id, selected.pipeline_run_id, policy, task_code, ctx
+        )
 
 
 def _gate_decisions(conn: Connection, run_id: int) -> Sequence[RowMapping]:
@@ -327,6 +330,7 @@ def _admitted_snapshots(
     run_id: int,
     policy: GatePolicy,
     task_code: str | None,
+    ctx: OperationContext | None,
 ) -> list[TaskSnapshot]:
     """Explain the admitted graph against live outcomes and operator controls."""
     if task_code is not None:
@@ -359,7 +363,11 @@ def _admitted_snapshots(
         if task_code is not None and definition.task_code != task_code:
             continue
         task = task_run_view(
-            conn, pipeline_id, pipeline_run_id=run.pipeline_run_id, task_id=definition.task_id
+            conn,
+            pipeline_id,
+            pipeline_run_id=run.pipeline_run_id,
+            task_id=definition.task_id,
+            ctx=ctx,
         )
         dependencies, cross_facts = _dependencies(
             conn, graph, state, codes, definition.task_id, task, decisions, policy, run.backfill
@@ -720,7 +728,9 @@ def explain_task(ctx: OperationContext, request: TaskSelection) -> Explanation:
     pipeline_code, task_code, selector = request.pipeline_code, request.task_code, request.selector
     with read_snapshot(ctx.engine) as conn:
         pipeline_id = resolve_pipeline_id(conn, pipeline_code)
-        snapshots = _snapshots(conn, pipeline_id, selector, ctx.config.dependency_gates, task_code)
+        snapshots = _snapshots(
+            conn, pipeline_id, selector, ctx.config.dependency_gates, task_code, ctx
+        )
         dependents = visible_dependents(conn, ctx, pipeline_code)
         from etl_craft.engine.repository.tasks import (
             fetch_task_execution_detail,

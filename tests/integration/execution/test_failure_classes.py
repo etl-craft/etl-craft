@@ -89,6 +89,24 @@ def test_script_failure_policy_and_historical_explanation(
     run_id = outcome.pipeline_run_id
     explanation = act(ctx, ActionName.EXPLAIN, pipeline_code="P", task_code="load", run_id=run_id)
     for attempt in explanation.task.attempts:
+        if attempt.status == RunStatus.FAILED:
+            first, last = attempt.first_error, attempt.last_error
+            assert first is not None and last is not None
+            assert first.event.error_class == exception
+            assert first.event.failure_class == kind
+            assert last.event.exit_code == (
+                "HANDLER" if exception == "LookupError" else exception.removesuffix("Error").upper()
+            )
+            assert first.event.sequence == 1
+            assert last.event.sequence == (2 if exception == "LookupError" else 1)
+            assert first.offset is not None and last.offset is not None
+            assert first.state == last.state == "LIVE"
+            raw = b"".join(act(ctx, ActionName.LOGS, attempt_id=attempt.attempt_id))
+            for anchor in (first, last):
+                assert raw[: anchor.offset].count(b"\n") + 1 == anchor.line
+                assert raw[anchor.offset :].splitlines()[0].decode() == anchor.text
+        else:
+            assert attempt.first_error is attempt.last_error is None
         assert attempt.peak_rss_bytes is not None and attempt.peak_rss_bytes > 0
         assert attempt.cpu_seconds is not None and attempt.cpu_seconds >= 0
         assert attempt.owner_id is not None
@@ -137,10 +155,16 @@ def test_selected_task_cohort_breaks_ties_and_stays_in_budget(engine_db):
     assert (metric.median, metric.sample_size) == (10.5, 20)
 
 
-def test_supervisor_crash_after_reap_leaves_resource_evidence_absent(engine_db, config):
+@pytest.mark.parametrize("failed", [False, True])
+def test_supervisor_crash_after_reap_leaves_resource_evidence_absent(engine_db, config, failed):
     config.python_scripts_dir.mkdir(exist_ok=True)
     (config.python_scripts_dir / "load.py").write_text(
-        "from etl_craft.scripting import ScriptResult\ndef run():\n    return ScriptResult(1)\n"
+        "from etl_craft.scripting import PermanentError, ScriptResult\ndef run():\n"
+        + (
+            "    raise PermanentError('recorded before reap')\n"
+            if failed
+            else "    return ScriptResult(1)\n"
+        )
     )
     with engine_db.engine.begin() as conn:
         pipeline = add_pipeline(conn, "P")
@@ -170,12 +194,21 @@ with acting_as(SYSTEM_ACTOR), selected_project(1):
     with engine_db.engine.connect() as conn:
         evidence = conn.execute(
             text(
-                "SELECT STATUS AS status, PEAK_RSS_BYTES AS rss, CPU_SECONDS AS cpu "
+                "SELECT ATTEMPT_ID AS attempt_id, STATUS AS status, PEAK_RSS_BYTES AS rss, "
+                "CPU_SECONDS AS cpu, FIRST_ERROR_OFFSET AS anchor_offset "
                 "FROM AUD_TASK_ATTEMPTS"
             )
         ).one()
-    assert evidence.status == RunStatus.SUCCESS
-    assert evidence.rss is None and evidence.cpu is None
+    assert evidence.status == (RunStatus.FAILED if failed else RunStatus.SUCCESS)
+    assert evidence.rss is evidence.cpu is evidence.anchor_offset is None
+    ctx = OperationContext(engine_db.engine, config, current_actor(), role=ApiRole.VIEWER)
+    attempt = act(ctx, ActionName.ATTEMPT, attempt_id=evidence.attempt_id)
+    if failed:
+        assert attempt.first_error is not None
+        assert attempt.first_error.state == "LIVE"
+        assert "recorded before reap" in attempt.first_error.text
+    else:
+        assert attempt.first_error is attempt.last_error is None
 
 
 def test_validate_names_the_task_and_allowed_retry_policies(engine_db, config):
@@ -223,3 +256,73 @@ def test_admission_fills_only_an_unrecorded_queued_policy(engine_db, config, pre
             {"id": queued},
         ).scalar_one()
     assert policy == ("ANY" if previous_policy is None else "NONE")
+
+
+def test_retry_keeps_the_different_errors_and_the_selected_task_budget(engine_db, config):
+    script = config.python_scripts_dir / "load.py"
+    script.parent.mkdir(exist_ok=True)
+    script.write_text(
+        "from etl_craft.scripting import PermanentError, TransientError\n"
+        "def run(task):\n"
+        "    flag = task.config.host_dir / 'attempt-one-seen'\n"
+        "    if flag.exists():\n"
+        "        raise PermanentError('second error')\n"
+        "    flag.touch()\n"
+        "    raise TransientError('first error')\n"
+    )
+    engine = engine_db.engine
+    with engine.begin() as conn:
+        pipeline = add_pipeline(conn, "P")
+        add_task(
+            conn,
+            pipeline,
+            "load",
+            "PYTHON",
+            SCRIPT_FILE="python_scripts/load.py",
+            RETRIES="1",
+            RETRY_DELAY_SECONDS="0",
+            RETRY_ON="TRANSIENT",
+        )
+    outcome = run_pipeline(engine, config, "P")
+    assert outcome.status == RunStatus.FAILED
+    read_counts = []
+
+    def count_read(_conn, _cursor, _statement, *_args):
+        read_counts.append(1)
+
+    ctx = OperationContext(engine, config, current_actor(), role=ApiRole.VIEWER)
+    with engine.connect() as conn, selected_project(1):
+        selected = act(
+            ctx,
+            ActionName.EXPLAIN,
+            pipeline_code="P",
+            task_code="load",
+            run_id=outcome.pipeline_run_id,
+        ).task
+        assert selected is not None
+        task_run_view(conn, pipeline, task_run_id=selected.task_run_id)
+        event.listen(conn, "before_cursor_execute", count_read)
+        try:
+            task_run_view(conn, pipeline, task_run_id=selected.task_run_id)
+            original_count = len(read_counts)
+            read_counts.clear()
+            task = task_run_view(conn, pipeline, task_run_id=selected.task_run_id, ctx=ctx)
+        finally:
+            event.remove(conn, "before_cursor_execute", count_read)
+    assert len(read_counts) == original_count <= 6
+    assert task is not None
+    first, second = task.attempts
+    for attempt, name, detail in (
+        (first, "TransientError", "first error"),
+        (second, "PermanentError", "second error"),
+    ):
+        anchor = attempt.first_error
+        assert anchor is not None and anchor == attempt.last_error
+        assert anchor.event.error_class == name and anchor.event.sequence == 1
+        assert anchor.text is not None and detail in anchor.text
+    with engine.connect() as conn, selected_project(1):
+        unresolved = task_run_view(conn, pipeline, task_run_id=selected.task_run_id)
+        assert unresolved is not None
+        assert [a.first_error.offset for a in unresolved.attempts] == [
+            a.first_error.offset for a in task.attempts
+        ]

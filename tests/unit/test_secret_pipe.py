@@ -58,7 +58,8 @@ def test_overlapping_secret_prefix_waits_for_the_longer_value(monkeypatch):
     import threading
     from unittest.mock import Mock
 
-    from etl_craft.execution.secret_pipe import capture_output
+    from etl_craft.execution.log_positions import LogPositions
+    from etl_craft.execution.secret_pipe import RedactedOutput, capture_output
 
     chunks = iter([b"shared-prefix", b"-private-tail", b""])
     monkeypatch.setattr("os.read", lambda fd, size: next(chunks))
@@ -67,8 +68,7 @@ def test_overlapping_secret_prefix_waits_for_the_longer_value(monkeypatch):
     output = io.BytesIO()
     capture_output(
         source,
-        output,
-        ("shared-prefix", "shared-prefix-private-tail"),
+        RedactedOutput(LogPositions(output), ("shared-prefix", "shared-prefix-private-tail"), None),
         threading.Event(),
         [],
         threading.Event(),
@@ -126,3 +126,35 @@ def test_claim_provider_is_a_closed_name():
     assert work.secret_provider is SecretsSource.FILE
     with pytest.raises(ServerError, match="secret_provider"):
         from_json(Work, claim | {"secret_provider": "not-a-provider"})
+
+
+def test_error_marker_sequence_survives_secret_redaction():
+    from io import BytesIO
+
+    from etl_craft.core.error_anchors import ErrorPosition
+    from etl_craft.execution.log_positions import LogPositions
+    from etl_craft.execution.secret_pipe import RedactedOutput
+
+    output = BytesIO(b"setup\n")
+    positions = LogPositions(output)
+    capture = RedactedOutput(positions, ("1", "hidden\nvalue"), "nonce")
+    capture.write(b"hidden\n")
+    capture.write(b"value\nerror: non")
+    capture.write(b"ce[event 1] secret 1\n", final=True)
+    assert output.getvalue() == b"setup\n[REDACTED]\nerror: [event 1] secret [REDACTED]\n"
+    assert positions.first == positions.last == ErrorPosition(1, 17, 3)
+
+
+def test_tracked_log_flushes_short_live_output_without_waiting_for_a_marker():
+    from io import BytesIO
+
+    from etl_craft.execution.log_positions import LogPositions
+    from etl_craft.execution.secret_pipe import RedactedOutput
+
+    output = BytesIO()
+    capture = RedactedOutput(LogPositions(output), (), "nonce")
+    capture.write(b"ready\n")
+    assert output.getvalue() == b"ready\n"
+    capture.write(b"error: no")
+    capture.write(b"nce[event 1] detail\n")
+    assert output.getvalue() == b"ready\nerror: [event 1] detail\n"

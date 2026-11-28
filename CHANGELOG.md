@@ -6,6 +6,10 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+- Failed attempts record typed first and last error events with their outcome. Selected-task
+  and attempt reads can resolve the events against authorized live or archived logs and report
+  when a stream expired, could not be read, or has no recorded location.
+
 - Attempt evidence now records nullable peak RSS bytes and CPU seconds from the exact child
   `wait4` result. Selected task responses include medians and sample sizes from up to 20 successful
   runs. Resource evidence excludes detached processes started by a PYTHON task.

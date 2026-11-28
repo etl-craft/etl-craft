@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import date, datetime
+from enum import StrEnum
 from typing import Any, ClassVar
 
 from etl_craft.core.business_rules import RuleObservation
@@ -17,6 +18,7 @@ from etl_craft.core.enums import (
     TriggerKind,
 )
 from etl_craft.core.enums_timeline import TimelineKind, WaitOutcome
+from etl_craft.core.error_anchors import ErrorEvent
 from etl_craft.engine.repository.intervention_rows import Intervention
 from etl_craft.engine.repository.pauses import Pause, Resume
 from etl_craft.engine.standing_pauses import TaskPause
@@ -82,6 +84,28 @@ class RunView:
     """Recorded queue, wait and execution intervals; filled only by the single-run read."""
 
 
+class AnchorState(StrEnum):
+    """Availability of a location in the canonical attempt log."""
+
+    LIVE = "LIVE"
+    ARCHIVED = "ARCHIVED"
+    EXPIRED = "EXPIRED"
+    READ_FAILED = "READ_FAILED"
+    MISSING = "MISSING"
+
+
+@dataclass(frozen=True)
+class AttemptError:
+    """A recorded error and its location when the log is available."""
+
+    event: ErrorEvent
+    offset: int | None
+    line: int | None
+    state: AnchorState | None = None
+    text: str | None = None
+    message: str | None = None
+
+
 @dataclass(frozen=True)
 class AttemptView:
     """An attempt's stored outcome and ownership, beneath its task run."""
@@ -126,6 +150,9 @@ class AttemptView:
     failure_code: str | None = None
     peak_rss_bytes: int | None = None
     cpu_seconds: float | None = None
+    first_error: AttemptError | None = None
+    last_error: AttemptError | None = None
+    first_error_message: str | None = None
     retry_on: str | None = None
     retry_reason: str | None = None
     item_progress: str | None = None

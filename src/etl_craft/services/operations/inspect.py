@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Generator, Iterator
+from collections.abc import Iterator
 from dataclasses import replace
 from datetime import UTC, datetime
 
@@ -12,19 +12,14 @@ from sqlalchemy.engine import Connection
 from etl_craft.core.conditions import edge_kind, is_plain, pipeline_edge_kind
 from etl_craft.core.enums import ActionName, ApiRole, EdgeKind, RunStatus
 from etl_craft.core.errors import ConfigurationError, ResourceNotFoundError
-from etl_craft.core.file_bytes import open_regular
 from etl_craft.core.graph import TaskNode, build_graph
 from etl_craft.core.restart import restart_note
 from etl_craft.core.time import as_utc
 from etl_craft.engine.connection import read_snapshot
 from etl_craft.engine.logs import (
     LIVE_ATTEMPTS,
-    LogAttempt,
-    log_key,
-    log_location,
     read_log_attempt,
     shared_log,
-    stored_log,
 )
 from etl_craft.engine.queries import statement
 from etl_craft.engine.repository.audit_reads import fetch_audit_records
@@ -44,7 +39,7 @@ from etl_craft.engine.repository.tasks import (
 )
 from etl_craft.engine.run_definitions import for_run
 from etl_craft.engine.runlog import select_run
-from etl_craft.execution.attempt_records import local_attempt_log
+from etl_craft.services.operations.attempt_log_stream import canonical_log
 from etl_craft.services.operations.context import OperationContext
 from etl_craft.services.operations.models import (
     ActionView,
@@ -443,7 +438,7 @@ def get_attempt(ctx: OperationContext, request: AttemptId) -> AttemptView:
         ).one_or_none()
         if row is None:
             raise ResourceNotFoundError(f"attempt_id={request.attempt_id}: attempt does not exist")
-        view = attempt_document(row._mapping)
+        view = attempt_document(row._mapping, ctx=ctx)
         if row.has_items:
             from etl_craft.engine.items import attempt_summaries
 
@@ -477,19 +472,7 @@ def attempt_log(ctx: OperationContext, request: LogInput) -> Iterator[bytes]:
             f"attempt_id={attempt_id}: log pending upload; expected acknowledged log bytes; "
             "wait for the agent or controller to publish the log"
         )
-    if "://" in row.log_path:
-        key = log_key(
-            row.engine_id, row.project_id, row.pipeline_run_id, row.task_run_id, attempt_id
-        )
-        expected_location = log_location(ctx.config, key)
-        if row.log_path != expected_location:
-            raise ResourceNotFoundError(
-                f"attempt_id={attempt_id}: LOG_PATH={row.log_path!r}; expected "
-                f"{expected_location!r}; restore the original Logs.Store and canonical identity"
-            )
-        source = stored_log(ctx.config, key, request.offset)
-    else:
-        source = local_log(ctx, row, request.offset)
+    source = canonical_log(ctx, row, request.offset)
     try:
         first = next(source, None)
     except (ConfigurationError, ResourceNotFoundError):
@@ -510,20 +493,3 @@ def attempt_log(ctx: OperationContext, request: LogInput) -> Iterator[bytes]:
             source.close()
 
     return chunks()
-
-
-def local_log(ctx: OperationContext, row: LogAttempt, offset: int) -> Generator[bytes, None, None]:
-    """Hold each local path ancestor while reading, refusing symlinks and special files."""
-    path = local_attempt_log(ctx.config, row)
-    try:
-        with open_regular(
-            ctx.config.log_dir.absolute(),
-            path.relative_to(ctx.config.log_dir.absolute()).as_posix(),
-        ) as stream:
-            stream.seek(offset)
-            while data := stream.read(65536):
-                yield data
-    except ConfigurationError as error:
-        raise ResourceNotFoundError(
-            f"attempt_id={row.attempt_id}: log file is unavailable; {error}"
-        ) from error

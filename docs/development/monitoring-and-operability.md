@@ -11,6 +11,20 @@ child, for success, failure, timeout and cancellation. The write only applies wh
 are NULL. Resource evidence is outside the terminal outcome transaction. A supervisor crash
 between reap and commit leaves both fields NULL, which the read presents as absent.
 
+Error events have attempt-local sequence markers. A local child commits the first and last
+event metadata with its outcome, independently of the log writer. The local supervisor
+observes canonical positions after redaction and publishes them in the same idempotent
+post-reap write as resource evidence.
+
+A remote child saves the event metadata in its result. The agent supervisor acknowledges
+log uploads before submitting the existing outcome report, which includes anchors and the
+positions it could verify against the uploaded bytes. If upload required a retry or changed
+the bytes, positions remain NULL. Remote resources retain their separate write.
+
+The authorized reader checks a recorded position first, then scans a bounded window for
+the marker when the position is absent or no longer matches. An unrecorded position
+remains NULL on the attempt row.
+
 **Before 0.9.0.** Every failed load creates triage work. The demo failed-run card already identifies `flaky_feed` and opens the task. `ui/src/pages/run.tsx`, `components/grid-task-details.tsx`, `components/run-overview.tsx` and `services/operations/run_log.py` already provide the run workspace, attempt context, links and lifecycle log. `task_run_facts.sql`, `operation_attempts.sql`, `AUD_TASK_RUN_LOG` and `AUD_TASK_ATTEMPTS` have counts, timings and failure classes. Preserve existing recovery and raw log downloads. Extend the same task panel and run workspace.
 
 - Show the selected try and typed first and last errors captured per attempt: log line and step, failure class and existing `FAILURE_CODE` when the driver supplied a SQLSTATE or vendor code. Keep each attempt anchor stable across retries. Resolve it through the authorized log reader to the archived object when available, or say “Attempt 12 log was archived” when an exact line cannot be opened. Distinguish archive, expiry and read failure. Legacy attempts without a captured anchor show “First error was not recorded for attempt 12. Open the raw log for recorded detail.”

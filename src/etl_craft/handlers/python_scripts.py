@@ -33,8 +33,10 @@ from sqlalchemy.engine import Engine
 
 from etl_craft.config.model import PYTHON_SCRIPTS_DIRNAME
 from etl_craft.config.project import python_script
-from etl_craft.core.enums import OffsetType, ScriptKind
+from etl_craft.core.enums import FailureClass, OffsetType, ScriptKind
+from etl_craft.core.error_anchors import error_fields
 from etl_craft.core.errors import HandlerError, PermanentError, TransientError
+from etl_craft.core.failures import Failure
 from etl_craft.core.log import capture_all_loggers
 from etl_craft.core.script_kinds import reported_count, script_kind
 from etl_craft.engine.repository.offsets import StoredOffset
@@ -229,7 +231,16 @@ def load_script(path: Path, name: str, entry_name: str = "run") -> Callable[...,
         sys.modules.pop(module_name, None)
         if not isinstance(error, Exception):
             raise
-        logger.exception("importing %s failed", path)
+        logger.exception(
+            "importing %s failed",
+            path,
+            extra=error_fields(
+                logger,
+                error,
+                Failure(FailureClass.UNKNOWN, type(error).__name__),
+                step="import script",
+            ),
+        )
         raise HandlerError(
             f"SCRIPT_FILE={name!r}: importing it failed: {type(error).__name__}: {error}"
         ) from error
@@ -319,7 +330,13 @@ def _call(entry: Callable[..., Any], task: ScriptTask, name: str) -> Any:
             "exception and success by returning a ScriptResult"
         ) from error
     except Exception as error:
-        logger.exception("%s raised", name)
+        logger.exception(
+            "%s raised",
+            name,
+            extra=error_fields(
+                logger, error, Failure(FailureClass.UNKNOWN, type(error).__name__), step=name
+            ),
+        )
         raise HandlerError(
             f"{name} failed: {type(error).__name__}: {error} (the traceback is in the attempt's "
             "log)"

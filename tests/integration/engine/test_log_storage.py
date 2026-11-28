@@ -421,3 +421,45 @@ def test_published_log_acknowledgments_are_idempotent_without_rewriting_terminal
     publish(ctx, attempt)
     assert state(ctx, attempt).log_path == location
     assert read(ctx, attempt) == b"immutable published log"
+
+
+def test_anchor_opens_archived_log_and_distinguishes_read_failure_and_expiry(log_scene, tmp_path):
+    from etl_craft.core.enums import FailureClass
+    from etl_craft.core.error_anchors import ErrorAnchors, ErrorEvent
+    from etl_craft.core.failures import Failure
+    from fixtures.actions import act
+
+    ctx, attempt, _, _ = log_scene
+    append(ctx, attempt, 0, "setup é\n2026-01-01T00:00:00Z ERROR task: [eve")
+    append(ctx, attempt, 1, "nt 1] diagnosed\n")
+    event = ErrorEvent(1, "setup", "PermanentError", "PERMANENT", FailureClass.PERMANENT)
+    failure = Failure(FailureClass.PERMANENT, "PermanentError")
+    with ctx.engine.begin() as conn:
+        transitions.record_attempt_failure(
+            conn, attempt, failure, anchors=ErrorAnchors(event, event)
+        )
+        transitions.finish_attempt(conn, attempt, AttemptStatus.FAILED, SYSTEM_ACTOR, owner="7")
+    live = act(ctx, ActionName.ATTEMPT, attempt_id=attempt).first_error
+    assert live is not None and live.state == "LIVE"
+    assert live.text == "2026-01-01T00:00:00Z ERROR task: [event 1] diagnosed"
+    publish(ctx, attempt)
+    archived = act(ctx, ActionName.ATTEMPT, attempt_id=attempt).first_error
+    assert archived is not None and archived.state == "ARCHIVED"
+    assert (archived.offset, archived.line, archived.text) == (
+        len("setup é\n".encode()),
+        2,
+        "2026-01-01T00:00:00Z ERROR task: [event 1] diagnosed",
+    )
+    next((tmp_path / "store").rglob("*.log")).unlink()
+    failed = act(ctx, ActionName.ATTEMPT, attempt_id=attempt).first_error
+    assert failed is not None and failed.state == "READ_FAILED"
+    assert failed.message == "Attempt 1 log could not be read. Retry the log read."
+    with retaining(), ctx.engine.begin() as conn:
+        conn.execute(
+            text("UPDATE AUD_TASK_ATTEMPTS SET LOG_REMOVED_AT=:removed WHERE ATTEMPT_ID=:id"),
+            {"removed": datetime(2026, 1, 1, tzinfo=UTC), "id": attempt},
+        )
+    expired = act(ctx, ActionName.ATTEMPT, attempt_id=attempt).first_error
+    assert expired is not None and expired.state == "EXPIRED"
+    assert expired.message == "Attempt 1 log expired on 2026-01-01"
+    assert failed.text is expired.text is None

@@ -50,6 +50,31 @@ def test_concurrent_children_keep_their_own_wait_evidence(monkeypatch):
         assert (result.peak_rss_bytes, result.cpu_seconds) == observed[result.pid]
 
 
+def test_concurrent_children_keep_their_own_error_positions(tmp_path):
+    from etl_craft.core.error_anchors import ErrorPosition
+
+    barrier = threading.Barrier(2, timeout=10)
+
+    def run(sequence):
+        lead = "header\n" * sequence
+        code = (
+            "import os; "
+            f"print({lead!r} + 'ERROR task: ' + os.environ['ETL_CRAFT_LOG_MARKER_NONCE']"
+            f" + '[event {sequence}] detail')"
+        )
+        path = tmp_path / f"{sequence}.log"
+        result = run_child(
+            python(code, log_path=path, track_error_positions=True),
+            on_started=lambda _pid: barrier.wait(),
+        )
+        assert path.read_bytes()[len(lead) :] == f"ERROR task: [event {sequence}] detail\n".encode()
+        assert result.first_error_position == result.last_error_position
+        return result.first_error_position
+
+    with ThreadPoolExecutor(2) as pool:
+        assert list(pool.map(run, (1, 3))) == [ErrorPosition(1, 7, 2), ErrorPosition(3, 21, 4)]
+
+
 def python(code: str, **kwargs) -> ChildSpec:
     return ChildSpec(argv=(sys.executable, "-c", code), **kwargs)
 

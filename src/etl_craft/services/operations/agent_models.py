@@ -6,6 +6,7 @@ from typing import ClassVar
 from etl_craft.core.agent_resources import AgentResources
 from etl_craft.core.counts import Counts
 from etl_craft.core.enums import AgentCommand, AgentReport, AgentStatus, AttemptStatus, SlotKind
+from etl_craft.core.error_anchors import ErrorAnchors
 from etl_craft.core.errors import UsageError
 from etl_craft.core.failures import Failure
 from etl_craft.core.items import ItemRecord
@@ -95,6 +96,7 @@ class AgentTask(AgentRequest):
     peak_rss_bytes: int | None = None
     cpu_seconds: float | None = None
     failure: Failure | None = None
+    error_anchors: ErrorAnchors | None = None
     queries_ended: bool = False
 
 

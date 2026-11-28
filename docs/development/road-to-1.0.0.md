@@ -213,7 +213,7 @@ item's text, or work done early under another item.
 | S7.AY ROW_IDs derived from the task run | Done | #470 | `ROW_ID = TASK_RUN_ID × 2^32 + n` on every warehouse; `AUD_TARGET_ROW_IDS`, the reservation report and ROW_ID generators are gone |
 | S7.AZ Re-parse, not refresh | Done | #472 | `pipelines re-parse`, `lineage --re-parse`, re-parse routes, actions, UI labels, Engine DB names and docs; "refresh" means data only |
 | S7.BA Run conditions on task and pipeline rows | In progress | [#474](https://github.com/etl-craft/etl-craft/pull/474), [#475](https://github.com/etl-craft/etl-craft/pull/475) | S7.BA.2 and S7.BA.3 done. Tasks declare run conditions and pipelines declare start conditions. Support Insights remains a follow-up. |
-| S7.BB Run monitoring | In progress | #480 | S7.BB.2a done (attempt resources and selected-task cohort). S7.BB.2b next (typed error anchors and authorized log resolution). |
+| S7.BB Run monitoring | In progress | #480, #481 | S7.BB.2a and S7.BB.2b done. Selected-task reads include resources, the success cohort, and authorized error anchors. S7.BB.3 next. |
 | S7.BC Incident handoff | Planned | | Recovery guidance, alert identity and existing support evidence from the run |
 | S7.BD Bounded catalog lineage lookup | Planned | | Bounded definition and history reads at 5,000 pipelines and 50,000 tasks per project |
 | S7.BE Cross-project condition safety | Done | #478 | Refuse definition changes that would break another project's conditions |
@@ -241,6 +241,13 @@ item's text, or work done early under another item.
   authorized log resolution after #480 merges).
 - **S7.BB.2a Acceptance availability.** Local unit, Engine DB, execution and agent API tests
   covered the slice, including repeated supervision and attempt endings on SQLite and PostgreSQL.
+- **S7.BB.2b Choices that differ from the item text.** Local children commit typed sequences
+  with outcomes and local supervisors attach canonical positions with their resource write.
+  Remote supervisors submit verified positions with the existing outcome report. The authorized
+  reader can recover a missing position from the sequence marker.
+- **S7.BB.2b Acceptance availability.** Local capture, crash recovery, and authorized reads
+  ran on SQLite and PostgreSQL. Real PostgreSQL agents covered acknowledged log uploads
+  and the bounded fallback after an interrupted upload.
 
 #### Before the 0.9.0 release PR
 

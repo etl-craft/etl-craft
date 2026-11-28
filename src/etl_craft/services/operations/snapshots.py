@@ -18,10 +18,12 @@ from etl_craft.core.enums import (
     TriggerKind,
     YesNo,
 )
+from etl_craft.core.error_anchors import ErrorEvent
 from etl_craft.core.errors import RunStateError, UsageError
 from etl_craft.core.failures import retry_reason
 from etl_craft.core.restart import restart_note
 from etl_craft.core.time import as_utc
+from etl_craft.engine.logs import LIVE_ATTEMPTS, LogAttempt
 from etl_craft.engine.queries import statement
 from etl_craft.engine.repository.business_rules import fetch_rule_observations
 from etl_craft.engine.repository.pauses import fetch_open_pause
@@ -29,7 +31,10 @@ from etl_craft.engine.repository.pipelines import fetch_pipeline_detail
 from etl_craft.engine.repository.triggers import fetch_trigger_links
 from etl_craft.engine.run_scopes import TaskSelection
 from etl_craft.engine.runlog import as_date
+from etl_craft.services.operations.attempt_log_stream import resolve_error
+from etl_craft.services.operations.context import OperationContext
 from etl_craft.services.operations.models import (
+    AttemptError,
     AttemptView,
     MetricMedian,
     PipelineView,
@@ -129,6 +134,7 @@ def task_run_view(
     task_run_id: int | None = None,
     pipeline_run_id: int | None = None,
     task_id: int | None = None,
+    ctx: OperationContext | None = None,
 ) -> TaskRunView | None:
     """Read a task run by its id or by an exact task and pipeline-run pair."""
     if task_run_id is None and (pipeline_run_id is None or task_id is None):
@@ -148,7 +154,7 @@ def task_run_view(
     if row is None:
         return None
     return replace(
-        task_document(conn, row._mapping), success_cohort=success_cohort(conn, row.task_id)
+        task_document(conn, row._mapping, ctx=ctx), success_cohort=success_cohort(conn, row.task_id)
     )
 
 
@@ -192,7 +198,9 @@ def success_cohort(conn: Connection, task_id: int) -> TaskSuccessCohort:
     )
 
 
-def task_document(conn: Connection, row: RowMapping) -> TaskRunView:
+def task_document(
+    conn: Connection, row: RowMapping, *, ctx: OperationContext | None = None
+) -> TaskRunView:
     """Convert a task summary and its attempts into one public document."""
     from etl_craft.engine.standing_pauses import applied
 
@@ -214,7 +222,7 @@ def task_document(conn: Connection, row: RowMapping) -> TaskRunView:
         statement(conn, "operation_attempts").columns(retryable=Boolean),
         {"task_run_id": values["task_run_id"]},
     ):
-        attempts.append(attempt_document(attempt._mapping))
+        attempts.append(attempt_document(attempt._mapping, ctx=ctx))
     attempts = [
         replace(a, item_progress=str(by_attempt[a.attempt_id])) if a.attempt_id in by_attempt else a
         for a in attempts
@@ -241,7 +249,7 @@ def task_document(conn: Connection, row: RowMapping) -> TaskRunView:
     )
 
 
-def attempt_document(row: RowMapping) -> AttemptView:
+def attempt_document(row: RowMapping, *, ctx: OperationContext | None = None) -> AttemptView:
     """Normalize the same attempt document for task inspection and direct API reads."""
     captured = dict(row)
     captured.pop("has_items", None)
@@ -267,4 +275,55 @@ def attempt_document(row: RowMapping) -> AttemptView:
         captured["failure_code"],
         captured["retry_on"],
     )
-    return AttemptView(**captured)
+    lookup = LogAttempt(
+        row.attempt_id,
+        captured.pop("log_engine_id"),
+        captured.pop("log_project_id"),
+        row.pipeline_run_id,
+        row.task_run_id,
+        row.attempt_number,
+        captured.pop("log_pipeline_code"),
+        captured.pop("log_task_code"),
+        captured["status"],
+        row.owner_id,
+        row.log_path,
+        captured.pop("log_removed_at"),
+    )
+    initial = captured.pop("log_initial_chunk")
+    first = _anchor(captured, "first")
+    last = _anchor(captured, "last")
+    if ctx is not None:
+        first = None if first is None else resolve_error(ctx, lookup, first, initial)
+        if last is not None:
+            last = (
+                first
+                if first is not None and first.event.sequence == last.event.sequence
+                else resolve_error(ctx, lookup, last, initial)
+            )
+    message = (
+        f"First error was not recorded for attempt {row.attempt_number}. Open the raw log."
+        if first is None and lookup.status not in LIVE_ATTEMPTS | {AttemptStatus.SUCCESS}
+        else None
+    )
+    return AttemptView(**captured, first_error=first, last_error=last, first_error_message=message)
+
+
+def _anchor(values: dict[str, object], prefix: str) -> AttemptError | None:
+    key = f"{prefix}_"
+    sequence = values.pop(key + "sequence")
+    step = values.pop(key + "step")
+    error_class = values.pop(key + "error_class")
+    exit_name = values.pop(key + "exit_name")
+    kind = values.pop(key + "class")
+    offset = values.pop(key + "offset")
+    line = values.pop(key + "line")
+    if sequence is None:
+        return None
+    assert isinstance(sequence, int)
+    assert step is None or isinstance(step, str)
+    assert isinstance(error_class, str) and isinstance(exit_name, str) and isinstance(kind, str)
+    assert offset is None or isinstance(offset, int)
+    assert line is None or isinstance(line, int)
+    return AttemptError(
+        ErrorEvent(sequence, step, error_class, exit_name, FailureClass(kind)), offset, line
+    )

@@ -34,6 +34,7 @@ from etl_craft.core import log
 from etl_craft.core.actor import SYSTEM_ACTOR, acting_as, current_actor
 from etl_craft.core.definitions import using
 from etl_craft.core.enums import AttemptStatus, ControlAcknowledgement, Handler, RunStatus
+from etl_craft.core.error_anchors import capture_errors, error_fields, recorded_errors
 from etl_craft.core.errors import EtlCraftError, ExitCode, HandlerError
 from etl_craft.core.faults import fault_point
 from etl_craft.core.ownership import attempt_holder
@@ -112,7 +113,7 @@ def _run_bound(
     trigger: Callable[[Engine, TaskContext], int] | None = None,
     alert: Callable[[Engine, TaskContext], HandlerResult] | None = None,
 ) -> int:
-    with log.log_context(task_run_id=args.task_run_id):
+    with capture_errors(), log.log_context(task_run_id=args.task_run_id):
         identity = _identity.get()
         if identity is not None:
             try:
@@ -147,7 +148,13 @@ def _run_bound(
                 ),
             )
         except EtlCraftError as error:
-            logger.error("could not start the task: %s", error)
+            logger.error(
+                "could not start the task: %s",
+                error,
+                extra=error_fields(
+                    logger, error, classify_failure(error, config), step="prepare task"
+                ),
+            )
             _record_failure(engine, args.task_run_id, error, config)
             return error.exit_code
         if args.task_secrets_stdin:
@@ -208,7 +215,19 @@ def run_handler(
         _task_failed(engine, context, error)
         return error.exit_code
     except Exception as error:
-        logger.exception("task failed with an unexpected %s", type(error).__name__)
+        logger.exception(
+            "task failed with an unexpected %s",
+            type(error).__name__,
+            extra=error_fields(
+                logger,
+                error,
+                classify_failure(
+                    error,
+                    context.config,
+                    script=context.handler in {Handler.PYTHON, Handler.FILE_VALIDATION},
+                ),
+            ),
+        )
         _task_failed(engine, context, error)
         return ExitCode.UNEXPECTED
     with engine.begin() as conn:
@@ -250,7 +269,9 @@ def _record_failure(
     task_log.failed(error, failure)
     with engine.begin() as conn:
         if identity is not None:
-            transitions.record_attempt_failure(conn, identity[0], failure)
+            transitions.record_attempt_failure(
+                conn, identity[0], failure, anchors=recorded_errors()
+            )
         finish_task_run(
             conn,
             task_run_id,
